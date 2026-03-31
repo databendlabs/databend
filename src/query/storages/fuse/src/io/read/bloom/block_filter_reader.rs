@@ -40,10 +40,8 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use parquet::arrow::ArrowSchemaConverter;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 use parquet::schema::types::SchemaDescPtr;
-use parquet::thrift::TSerializable;
-use thrift::protocol::TCompactInputProtocol;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
@@ -280,10 +278,9 @@ fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
     }
 
     let remaining = data.len() - footer_len as usize;
-    let mut prot = TCompactInputProtocol::new(&data[remaining..]);
-    let thrift_meta = FileMetaData::read_from_in_protocol(&mut prot)
+    let parquet_meta = ParquetMetaDataReader::decode_metadata(&data[remaining..])
         .map_err(|err| ErrorCode::StorageOther(format!("read bloom index meta failed, {err}")))?;
-    BloomIndexMeta::try_from(thrift_meta)
+    BloomIndexMeta::try_from(parquet_meta)
 }
 
 #[async_trait::async_trait]

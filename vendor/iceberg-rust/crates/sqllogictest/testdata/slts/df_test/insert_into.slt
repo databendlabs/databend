@@ -1,0 +1,119 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Verify the table is initially empty
+query IT rowsort
+SELECT * FROM default.default.test_unpartitioned_table
+----
+
+# Insert a single row and verify the count
+query I
+INSERT INTO default.default.test_unpartitioned_table VALUES (1, 'Alice')
+----
+1
+
+# Verify the inserted row
+query IT rowsort
+SELECT * FROM default.default.test_unpartitioned_table
+----
+1 Alice
+
+# Insert multiple rows and verify the count
+query I
+INSERT INTO default.default.test_unpartitioned_table VALUES (2, 'Bob'), (3, 'Charlie')
+----
+2
+
+# Verify all rows
+query IT rowsort
+SELECT * FROM default.default.test_unpartitioned_table
+----
+1 Alice
+2 Bob
+3 Charlie
+
+# Insert with NULL value and verify the count
+query I
+INSERT INTO default.default.test_unpartitioned_table VALUES (4, NULL)
+----
+1
+
+# Verify NULL handling
+query IT rowsort
+SELECT * FROM default.default.test_unpartitioned_table
+----
+1 Alice
+2 Bob
+3 Charlie
+4 NULL
+
+# Test partitioned table - verify initially empty
+query ITT rowsort
+SELECT * FROM default.default.test_partitioned_table
+----
+
+# Insert single row into partitioned table
+query I
+INSERT INTO default.default.test_partitioned_table VALUES (1, 'electronics', 'laptop')
+----
+1
+
+# Verify the inserted row in partitioned table
+query ITT rowsort
+SELECT * FROM default.default.test_partitioned_table
+----
+1 electronics laptop
+
+# Insert multiple rows with different partition values
+query I
+INSERT INTO default.default.test_partitioned_table VALUES (2, 'electronics', 'phone'), (3, 'books', 'novel'), (4, 'books', 'textbook'), (5, 'clothing', 'shirt')
+----
+4
+
+# Verify all rows in partitioned table
+query ITT rowsort
+SELECT * FROM default.default.test_partitioned_table
+----
+1 electronics laptop
+2 electronics phone
+3 books novel
+4 books textbook
+5 clothing shirt
+
+# Insert with NULL value in optional column
+query I
+INSERT INTO default.default.test_partitioned_table VALUES (6, 'electronics', NULL)
+----
+1
+
+# Verify NULL handling in partitioned table
+query ITT rowsort
+SELECT * FROM default.default.test_partitioned_table
+----
+1 electronics laptop
+2 electronics phone
+3 books novel
+4 books textbook
+5 clothing shirt
+6 electronics NULL
+
+# Verify partition filtering works
+query ITT rowsort
+SELECT * FROM default.default.test_partitioned_table WHERE category = 'books'
+----
+3 books novel
+4 books textbook

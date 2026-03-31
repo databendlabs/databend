@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -58,8 +60,6 @@ use futures::stream;
 use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
 use opendal::Operator;
-use parquet::basic::Compression as ParquetCompression;
-use parquet::basic::Encoding as ParquetEncoding;
 use parquet::format::Type as ParquetPhysicalType;
 
 use crate::BlockReadResult;
@@ -392,15 +392,15 @@ impl<'a> FuseEncodingImpl<'a> {
         column_name_filter: Arc<Option<String>>,
     ) -> Result<Vec<EncodingRow>> {
         let file_meta = read_thrift_file_metadata(operator, &location, Some(file_size)).await?;
-        if file_meta.row_groups.len() != 1 {
+        if file_meta.row_groups().len() != 1 {
             return Err(ErrorCode::ParquetFileInvalid(format!(
                 "invalid parquet file {}, expects one row group but got {}",
                 location,
-                file_meta.row_groups.len()
+                file_meta.row_groups().len()
             )));
         }
-        let row_group = &file_meta.row_groups[0];
-        let columns = &row_group.columns;
+        let row_group = &file_meta.row_groups()[0];
+        let columns = row_group.columns();
         let mut block_rows = Vec::new();
 
         for field in fields.iter() {
@@ -647,32 +647,31 @@ fn parquet_encodings_to_string(encodings: &[parquet::format::Encoding]) -> Strin
 }
 
 fn parquet_encoding_to_string(encoding: parquet::format::Encoding) -> &'static str {
-    match ParquetEncoding::try_from(encoding) {
-        Ok(ParquetEncoding::PLAIN) => "plain",
-        Ok(ParquetEncoding::PLAIN_DICTIONARY) => "plain_dictionary",
-        Ok(ParquetEncoding::RLE) => "rle",
-        #[allow(deprecated)]
-        Ok(ParquetEncoding::BIT_PACKED) => "bit_packed",
-        Ok(ParquetEncoding::DELTA_BINARY_PACKED) => "delta_binary_packed",
-        Ok(ParquetEncoding::DELTA_LENGTH_BYTE_ARRAY) => "delta_length_byte_array",
-        Ok(ParquetEncoding::DELTA_BYTE_ARRAY) => "delta_byte_array",
-        Ok(ParquetEncoding::RLE_DICTIONARY) => "rle_dictionary",
-        Ok(ParquetEncoding::BYTE_STREAM_SPLIT) => "byte_stream_split",
-        Err(_) => "unknown",
+    match encoding {
+        parquet::format::Encoding::PLAIN => "plain",
+        parquet::format::Encoding::PLAIN_DICTIONARY => "plain_dictionary",
+        parquet::format::Encoding::RLE => "rle",
+        parquet::format::Encoding::BIT_PACKED => "bit_packed",
+        parquet::format::Encoding::DELTA_BINARY_PACKED => "delta_binary_packed",
+        parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY => "delta_length_byte_array",
+        parquet::format::Encoding::DELTA_BYTE_ARRAY => "delta_byte_array",
+        parquet::format::Encoding::RLE_DICTIONARY => "rle_dictionary",
+        parquet::format::Encoding::BYTE_STREAM_SPLIT => "byte_stream_split",
+        parquet::format::Encoding(_) => "unknown",
     }
 }
 
 fn parquet_codec_to_string(codec: parquet::format::CompressionCodec) -> String {
-    match ParquetCompression::try_from(codec) {
-        Ok(ParquetCompression::UNCOMPRESSED) => "uncompressed".to_string(),
-        Ok(ParquetCompression::SNAPPY) => "snappy".to_string(),
-        Ok(ParquetCompression::GZIP(_)) => "gzip".to_string(),
-        Ok(ParquetCompression::LZO) => "lzo".to_string(),
-        Ok(ParquetCompression::BROTLI(_)) => "brotli".to_string(),
-        Ok(ParquetCompression::LZ4) => "lz4".to_string(),
-        Ok(ParquetCompression::ZSTD(_)) => "zstd".to_string(),
-        Ok(ParquetCompression::LZ4_RAW) => "lz4_raw".to_string(),
-        Err(_) => format!("compression_codec({})", codec.0),
+    match codec {
+        parquet::format::CompressionCodec::UNCOMPRESSED => "uncompressed".to_string(),
+        parquet::format::CompressionCodec::SNAPPY => "snappy".to_string(),
+        parquet::format::CompressionCodec::GZIP => "gzip".to_string(),
+        parquet::format::CompressionCodec::LZO => "lzo".to_string(),
+        parquet::format::CompressionCodec::BROTLI => "brotli".to_string(),
+        parquet::format::CompressionCodec::LZ4 => "lz4".to_string(),
+        parquet::format::CompressionCodec::ZSTD => "zstd".to_string(),
+        parquet::format::CompressionCodec::LZ4_RAW => "lz4_raw".to_string(),
+        parquet::format::CompressionCodec(code) => format!("compression_codec({code})"),
     }
 }
 

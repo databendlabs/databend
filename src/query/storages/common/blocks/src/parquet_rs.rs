@@ -26,10 +26,10 @@ use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Encoding;
 use parquet::file::metadata::KeyValue;
+use parquet::file::metadata::ParquetMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::properties::WriterVersion;
-use parquet::format::FileMetaData;
 use parquet::schema::types::ColumnPath;
 
 /// Disable dictionary encoding once the NDV-to-row ratio is greater than this threshold.
@@ -50,7 +50,7 @@ pub fn blocks_to_parquet(
     compression: TableCompression,
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
-) -> Result<FileMetaData> {
+) -> Result<ParquetMetaData> {
     blocks_to_parquet_with_stats(
         table_schema,
         blocks,
@@ -80,7 +80,7 @@ pub fn blocks_to_parquet_with_stats(
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
     column_stats: Option<&StatisticsOfColumns>,
-) -> Result<FileMetaData> {
+) -> Result<ParquetMetaData> {
     assert!(!blocks.is_empty());
 
     // Writer properties cannot be tweaked after ArrowWriter creation, so we mirror the behavior of
@@ -178,7 +178,7 @@ pub fn build_parquet_writer_properties(
     let mut builder = WriterProperties::builder()
         .set_compression(compression.into())
         // use `usize::MAX` to effectively limit the number of row groups to 1
-        .set_max_row_group_size(usize::MAX)
+        .set_max_row_group_row_count(Some(usize::MAX))
         .set_encoding(Encoding::PLAIN)
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)

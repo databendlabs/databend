@@ -1,0 +1,39 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: Iceberg Rust Epic Feature
+description: Create an epic issue to act as a parent issue with some sub issues
+labels: epic
+body:
+  - type: textarea
+    attributes:
+      label: What's the feature are you trying to implement?
+      description: Please describe what you are trying to do.
+      placeholder: >
+        A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]
+        (This section helps Iceberg developers understand the context and *why* for this feature, in addition to the *what*)
+  - type: dropdown
+    attributes:
+      label: Willingness to contribute
+      description: >
+        The Apache Iceberg community encourages feature contributions. Would you or another member of your organization be willing to contribute to this feature for the Apache Iceberg Rust codebase?
+      options:
+        - I can contribute to this feature independently
+        - I would be willing to contribute to this feature with guidance from the Iceberg Rust community
+        - I cannot contribute to this feature at this time

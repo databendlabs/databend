@@ -1,0 +1,53 @@
+{
+  "metadata-location": "s3://warehouse/database/table/metadata.json",
+  "metadata": {
+    "format-version": 1,
+    "table-uuid": "bf289591-dcc0-4234-ad4f-5c3eed811a29",
+    "location": "s3://warehouse/database/table",
+    "last-updated-ms": 1657810967051,
+    "last-column-id": 3,
+    "schema": {
+      "type": "struct",
+      "schema-id": 0,
+      "identifier-field-ids": [2],
+      "fields": [
+        {"id": 1, "name": "foo", "required": false, "type": "string"},
+        {"id": 2, "name": "bar", "required": true, "type": "int"},
+        {"id": 3, "name": "baz", "required": false, "type": "boolean"}
+      ]
+    },
+    "current-schema-id": 0,
+    "schemas": [
+      {
+        "type": "struct",
+        "schema-id": 0,
+        "identifier-field-ids": [2],
+        "fields": [
+          {"id": 1, "name": "foo", "required": false, "type": "string"},
+          {"id": 2, "name": "bar", "required": true, "type": "int"},
+          {"id": 3, "name": "baz", "required": false, "type": "boolean"}
+        ]
+      }
+    ],
+    "partition-spec": [],
+    "default-spec-id": 0,
+    "last-partition-id": 999,
+    "default-sort-order-id": 0,
+    "sort-orders": [{"order-id": 0, "fields": []}],
+    "properties": {
+      "write.delete.parquet.compression-codec": "zstd",
+      "write.metadata.compression-codec": "gzip",
+      "write.summary.partition-limit": "100",
+      "write.parquet.compression-codec": "zstd"
+    },
+    "current-snapshot-id": -1,
+    "refs": {},
+    "snapshots": [],
+    "snapshot-log": [],
+    "metadata-log": []
+  },
+  "config": {
+    "client.factory": "io.tabular.iceberg.catalog.TabularAwsClientFactory",
+    "region": "us-west-2"
+  }
+}

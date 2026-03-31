@@ -40,7 +40,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use uuid::Uuid;
 
 use super::old_version_generator;
@@ -74,7 +74,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<FileMetaData>, RawBlockHLL)> {
+    ) -> Result<(BlockMeta, Option<ParquetMetaData>, RawBlockHLL)> {
         let (location, block_id) = if !self.is_greater_than_v5 {
             let location_generator = old_version_generator::TableMetaLocationGenerator::with_prefix(
                 self.location_generator.prefix().to_string(),
@@ -139,7 +139,7 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Option<Location>, Option<FileMetaData>)> {
+    ) -> Result<(u64, Option<Location>, Option<ParquetMetaData>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);

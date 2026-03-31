@@ -25,6 +25,9 @@ use parquet::column::page::PageIterator;
 use parquet::column::page::PageReader;
 use parquet::errors::Result as ParquetResult;
 use parquet::file::metadata::ColumnChunkMetaData;
+use parquet::file::metadata::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::RowGroupMetaData;
 use parquet::file::serialized_reader::SerializedPageReader;
 use parquet::schema::types::SchemaDescriptor;
 
@@ -65,10 +68,26 @@ impl<'a> RowGroupImplBuilder<'a> {
     }
 
     pub fn build(self) -> RowGroupImpl {
+        let row_group = RowGroupMetaData::builder(self.schema_descriptor.into())
+            .set_num_rows(self.num_rows as i64)
+            .set_column_metadata(self.column_chunk_metadatas.values().cloned().collect())
+            .build()
+            .unwrap();
         RowGroupImpl {
             num_rows: self.num_rows,
             column_chunks: self.column_chunks,
             column_chunk_metadatas: self.column_chunk_metadatas,
+            parquet_meta: ParquetMetaData::new(
+                FileMetaData::new(
+                    0,
+                    self.num_rows as i64,
+                    None,
+                    None,
+                    self.schema_descriptor.into(),
+                    None,
+                ),
+                vec![row_group],
+            ),
         }
     }
 }
@@ -78,6 +97,7 @@ pub struct RowGroupImpl {
     num_rows: usize,
     column_chunks: HashMap<usize, Buffer>,
     column_chunk_metadatas: HashMap<usize, ColumnChunkMetaData>,
+    parquet_meta: ParquetMetaData,
 }
 
 impl RowGroups for RowGroupImpl {
@@ -100,6 +120,14 @@ impl RowGroups for RowGroupImpl {
         Ok(Box::new(PageIteratorImpl {
             reader: Some(Ok(page_reader)),
         }))
+    }
+
+    fn row_groups(&self) -> Box<dyn Iterator<Item = &RowGroupMetaData> + '_> {
+        Box::new(self.parquet_meta.row_groups().iter())
+    }
+
+    fn metadata(&self) -> &databend_storages_common_cache::ParquetMetaData {
+        &self.parquet_meta
     }
 }
 

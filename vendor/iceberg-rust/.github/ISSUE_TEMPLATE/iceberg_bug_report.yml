@@ -1,0 +1,64 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: Iceberg Rust Bug Report 🐞
+description: Problems, bugs and issues with Apache Iceberg Rust
+labels: bug
+
+body:
+  - type: dropdown
+    attributes:
+      label: Apache Iceberg Rust version
+      description: What Apache Iceberg Rust version are you using?
+      multiple: false
+      options:
+        - 0.6.0 (latest version)
+        - 0.5.1
+        - 0.4.0
+        - 0.3.0
+        - 0.2.0
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: Describe the bug
+      description: >
+        Describe the problem, what to expect, and how to reproduce.
+        You can include files by dragging and dropping them here.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: To Reproduce
+      placeholder: >
+        Steps to reproduce the behavior:
+  - type: textarea
+    attributes:
+      label: Expected behavior
+      placeholder: >
+        A clear and concise description of what you expected to happen.
+  - type: dropdown
+    attributes:
+      label: Willingness to contribute
+      description: >
+        The Apache Iceberg community encourages bug fix contributions. Would you or another member of your organization be willing to contribute a fix for this bug to the Apache Iceberg codebase?
+      options:
+        - I can contribute a fix for this bug independently
+        - I would be willing to contribute a fix for this bug with guidance from the Iceberg community
+        - I cannot contribute a fix for this bug at this time

@@ -1,0 +1,49 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+name: "Close Stale Issues"
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+permissions:
+  # All other permissions are set to none
+  issues: write
+
+jobs:
+  stale:
+    if: github.repository_owner == 'apache'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/stale@v10.1.1
+        with:
+          stale-issue-label: 'stale'
+          exempt-issue-labels: 'not-stale'
+          days-before-issue-stale: 180
+          days-before-issue-close: 14
+          # Only close stale issues, leave PRs alone
+          days-before-pr-stale: -1
+          stale-issue-message: >
+            This issue has been automatically marked as stale because it has been open for 180 days
+            with no activity. It will be closed in next 14 days if no further activity occurs. To
+            permanently prevent this issue from being considered stale, add the label 'not-stale',
+            but commenting on the issue is preferred when possible.
+          close-issue-message: >
+            This issue has been closed because it has not received any activity in the last 14 days
+            since being marked as 'stale'

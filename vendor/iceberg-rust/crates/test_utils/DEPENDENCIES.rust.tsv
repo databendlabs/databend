@@ -1,0 +1,22 @@
+crate	Apache-2.0	MIT	Unicode-3.0
+cfg-if@1.0.4	X	X	
+iceberg_test_utils@0.8.0	X		
+lazy_static@1.5.0	X	X	
+log@0.4.29	X	X	
+nu-ansi-term@0.50.3		X	
+once_cell@1.21.3	X	X	
+pin-project-lite@0.2.16	X	X	
+proc-macro2@1.0.103	X	X	
+quote@1.0.42	X	X	
+sharded-slab@0.1.7		X	
+smallvec@1.15.1	X	X	
+syn@2.0.111	X	X	
+thread_local@1.1.9	X	X	
+tracing@0.1.43		X	
+tracing-attributes@0.1.31		X	
+tracing-core@0.1.35		X	
+tracing-log@0.2.0		X	
+tracing-subscriber@0.3.22		X	
+unicode-ident@1.0.22	X	X	X
+windows-link@0.2.1	X	X	
+windows-sys@0.61.2	X	X	

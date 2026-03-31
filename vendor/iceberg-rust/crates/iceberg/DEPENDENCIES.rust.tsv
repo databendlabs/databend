@@ -1,0 +1,316 @@
+crate	0BSD	Apache-2.0	Apache-2.0 WITH LLVM-exception	BSD-2-Clause	BSD-3-Clause	BSL-1.0	CC0-1.0	CDLA-Permissive-2.0	ISC	LGPL-2.1-or-later	MIT	Unicode-3.0	Unlicense	Zlib
+adler2@2.0.1	X	X									X			
+ahash@0.8.12		X									X			
+aho-corasick@1.1.4											X		X	
+alloc-no-stdlib@2.0.4					X									
+alloc-stdlib@0.2.2					X									
+android_system_properties@0.1.5		X									X			
+anyhow@1.0.100		X									X			
+apache-avro@0.21.0		X												
+array-init@2.1.0		X									X			
+arrayvec@0.7.6		X									X			
+arrow-arith@57.1.0		X												
+arrow-array@57.1.0		X												
+arrow-buffer@57.1.0		X												
+arrow-cast@57.1.0		X												
+arrow-data@57.1.0		X												
+arrow-ipc@57.1.0		X												
+arrow-ord@57.1.0		X												
+arrow-schema@57.1.0		X												
+arrow-select@57.1.0		X												
+arrow-string@57.1.0		X												
+as-any@0.3.2		X									X			
+async-lock@3.4.1		X									X			
+async-trait@0.1.89		X									X			
+atoi@2.0.0											X			
+atomic-waker@1.1.2		X									X			
+autocfg@1.5.0		X									X			
+backon@1.6.0		X												
+base64@0.22.1		X									X			
+bigdecimal@0.4.9		X									X			
+bimap@0.6.3		X									X			
+bitflags@2.10.0		X									X			
+block-buffer@0.10.4		X									X			
+bon@3.8.1		X									X			
+bon-macros@3.8.1		X									X			
+brotli@8.0.2					X						X			
+brotli-decompressor@5.0.0					X						X			
+bumpalo@3.19.0		X									X			
+bytemuck@1.24.0		X									X			X
+byteorder@1.5.0											X		X	
+bytes@1.11.0											X			
+cc@1.2.49		X									X			
+cfg-if@1.0.4		X									X			
+chrono@0.4.42		X									X			
+concurrent-queue@2.5.0		X									X			
+const-oid@0.9.6		X									X			
+const-random@0.1.18		X									X			
+const-random-macro@0.1.16		X									X			
+core-foundation-sys@0.8.7		X									X			
+cpufeatures@0.2.17		X									X			
+crc32c@0.6.8		X									X			
+crc32fast@1.5.0		X									X			
+crossbeam-channel@0.5.15		X									X			
+crossbeam-epoch@0.9.18		X									X			
+crossbeam-utils@0.8.21		X									X			
+crunchy@0.2.4											X			
+crypto-common@0.1.7		X									X			
+darling@0.20.11											X			
+darling@0.21.3											X			
+darling_core@0.20.11											X			
+darling_core@0.21.3											X			
+darling_macro@0.20.11											X			
+darling_macro@0.21.3											X			
+derive_builder@0.20.2		X									X			
+derive_builder_core@0.20.2		X									X			
+derive_builder_macro@0.20.2		X									X			
+digest@0.10.7		X									X			
+displaydoc@0.2.5		X									X			
+dissimilar@1.0.10		X												
+either@1.15.0		X									X			
+equivalent@1.0.2		X									X			
+event-listener@5.4.1		X									X			
+event-listener-strategy@0.5.4		X									X			
+expect-test@1.5.1		X									X			
+fastrand@2.3.0		X									X			
+find-msvc-tools@0.1.5		X									X			
+flatbuffers@25.9.23		X												
+flate2@1.1.5		X									X			
+fnv@1.0.7		X									X			
+form_urlencoded@1.2.2		X									X			
+futures@0.3.31		X									X			
+futures-channel@0.3.31		X									X			
+futures-core@0.3.31		X									X			
+futures-executor@0.3.31		X									X			
+futures-io@0.3.31		X									X			
+futures-macro@0.3.31		X									X			
+futures-sink@0.3.31		X									X			
+futures-task@0.3.31		X									X			
+futures-util@0.3.31		X									X			
+generic-array@0.14.7											X			
+getrandom@0.2.16		X									X			
+getrandom@0.3.4		X									X			
+gloo-timers@0.3.0		X									X			
+half@2.7.1		X									X			
+hashbrown@0.16.1		X									X			
+heck@0.5.0		X									X			
+hex@0.4.3		X									X			
+hmac@0.12.1		X									X			
+home@0.5.11		X									X			
+http@1.4.0		X									X			
+http-body@1.0.1											X			
+http-body-util@0.1.3											X			
+httparse@1.10.1		X									X			
+hyper@1.8.1											X			
+hyper-rustls@0.27.7		X							X		X			
+hyper-util@0.1.19											X			
+iana-time-zone@0.1.64		X									X			
+iana-time-zone-haiku@0.1.2		X									X			
+iceberg@0.8.0		X												
+iceberg_test_utils@0.8.0		X												
+icu_collections@2.1.1												X		
+icu_locale_core@2.1.1												X		
+icu_normalizer@2.1.1												X		
+icu_normalizer_data@2.1.1												X		
+icu_properties@2.1.1												X		
+icu_properties_data@2.1.1												X		
+icu_provider@2.1.1												X		
+ident_case@1.0.1		X									X			
+idna@1.1.0		X									X			
+idna_adapter@1.2.1		X									X			
+integer-encoding@3.0.4											X			
+ipnet@2.11.0		X									X			
+iri-string@0.7.9		X									X			
+itertools@0.13.0		X									X			
+itoa@1.0.15		X									X			
+jiff@0.2.16											X		X	
+jiff-tzdb@0.1.4											X		X	
+jiff-tzdb-platform@0.1.3											X		X	
+jobserver@0.1.34		X									X			
+js-sys@0.3.83		X									X			
+lazy_static@1.5.0		X									X			
+lexical-core@1.0.6		X									X			
+lexical-parse-float@1.0.6		X									X			
+lexical-parse-integer@1.0.6		X									X			
+lexical-util@1.0.7		X									X			
+lexical-write-float@1.0.6		X									X			
+lexical-write-integer@1.0.6		X									X			
+libc@0.2.178		X									X			
+libm@0.2.15											X			
+libz-rs-sys@0.5.3														X
+litemap@0.8.1												X		
+lock_api@0.4.14		X									X			
+log@0.4.29		X									X			
+lz4_flex@0.12.0											X			
+md-5@0.10.6		X									X			
+memchr@2.7.6											X		X	
+miniz_oxide@0.8.9		X									X			X
+mio@1.1.1											X			
+moka@0.12.11		X									X			
+murmur3@0.5.2		X									X			
+nu-ansi-term@0.50.3											X			
+num-bigint@0.4.6		X									X			
+num-complex@0.4.6		X									X			
+num-integer@0.1.46		X									X			
+num-traits@0.2.19		X									X			
+once_cell@1.21.3		X									X			
+opendal@0.55.0		X												
+ordered-float@2.10.1											X			
+ordered-float@4.6.0											X			
+parking@2.2.1		X									X			
+parking_lot@0.12.5		X									X			
+parking_lot_core@0.9.12		X									X			
+parquet@57.1.0		X												
+paste@1.0.15		X									X			
+percent-encoding@2.3.2		X									X			
+pin-project-lite@0.2.16		X									X			
+pin-utils@0.1.0		X									X			
+pkg-config@0.3.32		X									X			
+portable-atomic@1.11.1		X									X			
+portable-atomic-util@0.2.4		X									X			
+potential_utf@0.1.4												X		
+ppv-lite86@0.2.21		X									X			
+prettyplease@0.2.37		X									X			
+proc-macro2@1.0.103		X									X			
+quad-rand@0.2.3											X			
+quick-xml@0.38.4											X			
+quote@1.0.42		X									X			
+r-efi@5.3.0		X								X	X			
+rand@0.8.5		X									X			
+rand@0.9.2		X									X			
+rand_chacha@0.3.1		X									X			
+rand_chacha@0.9.0		X									X			
+rand_core@0.6.4		X									X			
+rand_core@0.9.3		X									X			
+redox_syscall@0.5.18											X			
+regex@1.12.2		X									X			
+regex-automata@0.4.13		X									X			
+regex-lite@0.1.8		X									X			
+regex-syntax@0.8.8		X									X			
+reqsign@0.16.5		X												
+reqwest@0.12.25		X									X			
+ring@0.17.14		X							X					
+roaring@0.11.2		X									X			
+rust_decimal@1.39.0											X			
+rustc_version@0.4.1		X									X			
+rustls@0.23.35		X							X		X			
+rustls-pki-types@1.13.1		X									X			
+rustls-webpki@0.103.8									X					
+rustversion@1.0.22		X									X			
+ryu@1.0.20		X				X								
+scopeguard@1.2.0		X									X			
+semver@1.0.27		X									X			
+seq-macro@0.3.6		X									X			
+serde@1.0.228		X									X			
+serde_bytes@0.11.19		X									X			
+serde_core@1.0.228		X									X			
+serde_derive@1.0.228		X									X			
+serde_json@1.0.145		X									X			
+serde_repr@0.1.20		X									X			
+serde_urlencoded@0.7.1		X									X			
+serde_with@3.16.1		X									X			
+serde_with_macros@3.16.1		X									X			
+sha1@0.10.6		X									X			
+sha2@0.10.9		X									X			
+sharded-slab@0.1.7											X			
+shlex@1.3.0		X									X			
+simd-adler32@0.3.8											X			
+simdutf8@0.1.5		X									X			
+slab@0.4.11											X			
+smallvec@1.15.1		X									X			
+snap@1.1.1					X									
+socket2@0.6.1		X									X			
+stable_deref_trait@1.2.1		X									X			
+strsim@0.11.1											X			
+strum@0.27.2											X			
+strum_macros@0.27.2											X			
+subtle@2.6.1					X									
+syn@2.0.111		X									X			
+sync_wrapper@1.0.2		X												
+synstructure@0.13.2											X			
+tagptr@0.2.0		X									X			
+thiserror@2.0.17		X									X			
+thiserror-impl@2.0.17		X									X			
+thread_local@1.1.9		X									X			
+thrift@0.17.0		X												
+tiny-keccak@2.0.2							X							
+tinystr@0.8.2												X		
+tokio@1.48.0											X			
+tokio-macros@2.6.0											X			
+tokio-rustls@0.26.4		X									X			
+tokio-util@0.7.17											X			
+tower@0.5.2											X			
+tower-http@0.6.8											X			
+tower-layer@0.3.3											X			
+tower-service@0.3.3											X			
+tracing@0.1.43											X			
+tracing-attributes@0.1.31											X			
+tracing-core@0.1.35											X			
+tracing-log@0.2.0											X			
+tracing-subscriber@0.3.22											X			
+try-lock@0.2.5											X			
+twox-hash@2.1.2											X			
+typed-builder@0.20.1		X									X			
+typed-builder-macro@0.20.1		X									X			
+typenum@1.19.0		X									X			
+unicode-ident@1.0.22		X									X	X		
+untrusted@0.9.0									X					
+url@2.5.7		X									X			
+utf8_iter@1.0.4		X									X			
+uuid@1.19.0		X									X			
+version_check@0.9.5		X									X			
+want@0.3.1											X			
+wasi@0.11.1+wasi-snapshot-preview1		X	X								X			
+wasip2@1.0.1+wasi-0.2.4		X	X								X			
+wasm-bindgen@0.2.106		X									X			
+wasm-bindgen-futures@0.4.56		X									X			
+wasm-bindgen-macro@0.2.106		X									X			
+wasm-bindgen-macro-support@0.2.106		X									X			
+wasm-bindgen-shared@0.2.106		X									X			
+wasm-streams@0.4.2		X									X			
+web-sys@0.3.83		X									X			
+webpki-roots@1.0.4								X						
+windows-core@0.62.2		X									X			
+windows-implement@0.60.2		X									X			
+windows-interface@0.59.3		X									X			
+windows-link@0.2.1		X									X			
+windows-result@0.4.1		X									X			
+windows-strings@0.5.1		X									X			
+windows-sys@0.52.0		X									X			
+windows-sys@0.59.0		X									X			
+windows-sys@0.60.2		X									X			
+windows-sys@0.61.2		X									X			
+windows-targets@0.52.6		X									X			
+windows-targets@0.53.5		X									X			
+windows_aarch64_gnullvm@0.52.6		X									X			
+windows_aarch64_gnullvm@0.53.1		X									X			
+windows_aarch64_msvc@0.52.6		X									X			
+windows_aarch64_msvc@0.53.1		X									X			
+windows_i686_gnu@0.52.6		X									X			
+windows_i686_gnu@0.53.1		X									X			
+windows_i686_gnullvm@0.52.6		X									X			
+windows_i686_gnullvm@0.53.1		X									X			
+windows_i686_msvc@0.52.6		X									X			
+windows_i686_msvc@0.53.1		X									X			
+windows_x86_64_gnu@0.52.6		X									X			
+windows_x86_64_gnu@0.53.1		X									X			
+windows_x86_64_gnullvm@0.52.6		X									X			
+windows_x86_64_gnullvm@0.53.1		X									X			
+windows_x86_64_msvc@0.52.6		X									X			
+windows_x86_64_msvc@0.53.1		X									X			
+wit-bindgen@0.46.0		X	X								X			
+writeable@0.6.2												X		
+yoke@0.8.1												X		
+yoke-derive@0.8.1												X		
+zerocopy@0.8.31		X		X							X			
+zerocopy-derive@0.8.31		X		X							X			
+zerofrom@0.1.6												X		
+zerofrom-derive@0.1.6												X		
+zeroize@1.8.2		X									X			
+zerotrie@0.2.3												X		
+zerovec@0.11.5												X		
+zerovec-derive@0.11.2												X		
+zlib-rs@0.5.3														X
+zstd@0.13.3											X			
+zstd-safe@7.2.4		X									X			
+zstd-sys@2.0.16+zstd.1.5.7		X									X			

@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: Copyright The Lance Authors
+
+syntax = "proto3";
+
+package lance.table;
+
+// NOTE: Do *NOT* add new index details here.  Add them to the index.proto file instead.
+// This file is in the lance.table package namespace while the index.proto file is in the
+// lance.index package namespace.
+//
+// These are only here for forward compatibility.  Older versions of Lance expect btree indexes
+// to have lance.table in the package namespace.
+//
+// If you need to modify these messages (e.g. to add new fields to btree or bitmap) then
+// it is ok to modify them here.
+
+// Currently many of these are empty messages because all needed details are either hard-coded (e.g.
+// filenames) or stored in the index itself.  However, we may want to add more details in the
+// future, in particular we can add details that may be useful for planning queries (e.g. don't
+// force us to load the index until we know we can make use of it)
+
+message BTreeIndexDetails {}
+message BitmapIndexDetails {}
+message LabelListIndexDetails {}
+message NGramIndexDetails {}
+message ZoneMapIndexDetails {}
+message InvertedIndexDetails {
+  // Marking this field as optional as old versions of the index store blank details and we
+  // need to make sure we have a proper optional field to detect this.
+  optional string base_tokenizer = 1;
+  string language = 2;
+  bool with_position = 3;
+  optional uint32 max_token_length = 4;
+  bool lower_case = 5;
+  bool stem = 6;
+  bool remove_stop_words = 7;
+  bool ascii_folding = 8;
+  uint32 min_ngram_length = 9;
+  uint32 max_ngram_length = 10;
+  bool prefix_only = 11;
+}

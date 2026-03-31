@@ -1,0 +1,163 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: "Nightly PyPI Build"
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Runs at midnight UTC every day
+  workflow_dispatch: # Allows manual triggering
+
+env:
+  rust_msrv: "1.87"
+
+permissions:
+  contents: read
+
+jobs:
+  set-version:
+    runs-on: ubuntu-latest
+    outputs:
+      timestamp: ${{ steps.set-ts.outputs.TIMESTAMP }}
+    steps:
+      - name: Generate version timestamp
+        id: set-ts
+        run: echo "TIMESTAMP=$(date +'%Y%m%d%H%M%S')" >> "$GITHUB_OUTPUT"
+
+  sdist:
+    needs: set-version
+    if: github.repository == 'apache/iceberg-rust' # Only run for apache repo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/overwrite-package-version # Overwrite package version with timestamp
+        with:
+          timestamp: ${{ needs.set-version.outputs.TIMESTAMP }}
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: "bindings/python"
+          command: sdist
+          args: -o dist
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v6
+        with:
+          name: wheels-sdist
+          path: bindings/python/dist
+
+  wheels:
+    needs: set-version
+    if: github.repository == 'apache/iceberg-rust' # Only run for apache repo
+    runs-on: "${{ matrix.os }}"
+    strategy:
+      matrix:
+        include:
+          - { os: windows-latest }
+          - { os: macos-latest, target: "universal2-apple-darwin" }
+          - { os: ubuntu-latest, target: "x86_64" }
+          - {
+              os: ubuntu-latest,
+              target: "aarch64",
+              manylinux: "manylinux_2_28",
+            }
+          - { os: ubuntu-latest, target: "armv7l" }
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/actions/overwrite-package-version # Overwrite package version with timestamp
+        with:
+          timestamp: ${{ needs.set-version.outputs.TIMESTAMP }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: 3.12
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup-builder
+        with:
+          rust-version: ${{ env.rust_msrv }}
+
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          working-directory: "bindings/python"
+          command: build
+          args: --release -o dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v6
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.target }}
+          path: bindings/python/dist
+
+  testpypi-publish:
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/pyiceberg-core
+
+    permissions:
+      id-token: write # IMPORTANT: mandatory for trusted publishing
+
+    steps:
+      - name: Download all the dists
+        uses: actions/download-artifact@v7
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: bindings/python/dist
+      - name: List downloaded artifacts
+        run: ls -R bindings/python/dist
+      - name: Publish to TestPyPI
+        id: publish-testpypi
+        continue-on-error: true
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+          packages-dir: bindings/python/dist
+          verbose: true
+      - name: Display error message on publish failure
+        if: steps.publish-testpypi.outcome == 'failure'
+        run: |
+          echo "::error::Failed to publish to TestPyPI"
+          echo ""
+          echo "⚠️  TestPyPI Publish Failed"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo ""
+          echo "This may be due to TestPyPI storage limits."
+          echo "See: https://docs.pypi.org/project-management/storage-limits"
+          echo ""
+          echo "To resolve this issue, use the pypi-cleanup utility to clean up old TestPyPI artifacts:"
+          echo "https://pypi.org/project/pypi-cleanup/"
+          echo ""
+          echo "  uvx pypi-cleanup --package pyiceberg-core --host https://test.pypi.org/ \\"
+          echo "    --verbose -d 10 --do-it --username <username>"
+          echo ""
+          echo "Requirements:"
+          echo "  • Must be a maintainer for pyiceberg-core on TestPyPI"
+          echo "    (https://test.pypi.org/project/pyiceberg-core)"
+          echo "  • Requires TestPyPI password and 2FA"
+          echo "  • ⚠️  ONLY do this for TestPyPI, NOT for production PyPI!"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          exit 1

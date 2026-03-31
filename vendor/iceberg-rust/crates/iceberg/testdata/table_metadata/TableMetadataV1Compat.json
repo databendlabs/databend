@@ -1,0 +1,111 @@
+{
+  "current-schema-id": 0,
+  "current-snapshot-id": 917896971991367610,
+  "default-sort-order-id": 0,
+  "default-spec-id": 0,
+  "format-version": 1,
+  "last-column-id": 4,
+  "last-partition-id": 999,
+  "last-updated-ms": 1727773114005,
+  "location": "s3://bucket/warehouse/iceberg/glue.db/table_name",
+  "metadata-log": [
+    {
+      "metadata-file": "s3://bucket/warehouse/iceberg/glue.db/table_name/metadata/00405-a3e8a93b-cc7f-430b-a731-6fa4357fb94e.metadata.json",
+      "timestamp-ms": 1727772184043
+    }
+  ],
+  "partition-specs": [
+    {
+      "fields": [],
+      "spec-id": 0
+    }
+  ],
+  "partition-statistics-files": [],
+  "properties": {
+    "owner": "spark",
+    "history.expire.max-snapshot-age-ms": "18000000",
+    "write.metadata.previous-versions-max": "20",
+    "stampisoend": "20241001085028951",
+    "write.metadata.delete-after-commit.enabled": "true",
+    "history.expire.max-ref-age-ms": "2592000000",
+    "write.distribution-mode": "range",
+    "write.merge.distribution-mode": "range",
+    "history.expire.min-snapshots-to-keep": "5"
+  },
+  "refs": {
+    "main": {
+      "snapshot-id": 917896971991367610,
+      "type": "branch"
+    }
+  },
+  "schemas": [
+    {
+      "fields": [
+        {
+          "id": 1,
+          "name": "record_id",
+          "required": false,
+          "type": "long"
+        },
+        {
+          "id": 2,
+          "name": "record_time",
+          "required": false,
+          "type": "timestamptz"
+        },
+        {
+          "id": 3,
+          "name": "id",
+          "required": false,
+          "type": "long"
+        },
+        {
+          "id": 4,
+          "name": "name",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "schema-id": 0,
+      "type": "struct"
+    }
+  ],
+  "snapshot-log": [
+    {
+      "snapshot-id": 917896971991367610,
+      "timestamp-ms": 1727766315299
+    }
+  ],
+  "snapshots": [
+    {
+      "manifest-list": "s3://bucket/warehouse/iceberg/glue.db/table_name/metadata/snap-917896971991367610-1-d466808b-46f1-4486-a655-e50d07014597.avro",
+      "schema-id": 0,
+      "snapshot-id": 917896971991367610,
+      "summary": {
+        "added-data-files": "1",
+        "total-equality-deletes": "0",
+        "added-records": "3",
+        "deleted-data-files": "1",
+        "deleted-records": "3",
+        "total-records": "3",
+        "removed-files-size": "1366",
+        "changed-partition-count": "1",
+        "total-position-deletes": "0",
+        "added-files-size": "1366",
+        "total-delete-files": "0",
+        "total-files-size": "1366",
+        "total-data-files": "1",
+        "operation": "overwrite"
+      },
+      "timestamp-ms": 1727766315299
+    }
+  ],
+  "sort-orders": [
+    {
+      "fields": [],
+      "order-id": 0
+    }
+  ],
+  "statistics-files": [],
+  "table-uuid": "3276010d-7b1d-488c-98d8-9025fc4fde6b"
+}
