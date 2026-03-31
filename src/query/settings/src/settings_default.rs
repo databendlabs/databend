@@ -1584,6 +1584,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_partitioned_hash_join", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables partitioned hash join for shuffle join.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("s3_storage_class", DefaultSettingValue {
                     value: {
                         let storage_class = Self::extract_s3_storage_class_config(&global_conf).unwrap_or_default();

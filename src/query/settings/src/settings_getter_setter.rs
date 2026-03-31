@@ -1168,6 +1168,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_experimental_new_join")? == 1)
     }
 
+    pub fn get_enable_partitioned_hash_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_partitioned_hash_join")? != 0)
+    }
+
     pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {
         let s3_storage_class_setting = self.try_get_string("s3_storage_class")?;
         S3StorageClass::from_str(&s3_storage_class_setting).map_err(|e| {
