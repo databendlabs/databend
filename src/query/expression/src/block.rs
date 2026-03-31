@@ -907,6 +907,19 @@ impl DataBlock {
             })
             .sum()
     }
+
+    pub fn maybe_gc(self) -> DataBlock {
+        let mut columns = Vec::with_capacity(self.entries.len());
+
+        for entry in self.entries {
+            columns.push(match entry {
+                BlockEntry::Column(column) => BlockEntry::Column(column.maybe_gc()),
+                BlockEntry::Const(s, d, n) => BlockEntry::Const(s, d, n),
+            });
+        }
+
+        DataBlock::new(columns, self.num_rows)
+    }
 }
 
 impl Eq for Box<dyn BlockMetaInfo> {}
