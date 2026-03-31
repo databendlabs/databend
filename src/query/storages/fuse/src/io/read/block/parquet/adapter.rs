@@ -79,14 +79,7 @@ impl<'a> RowGroupImplBuilder<'a> {
             column_chunks: self.column_chunks,
             column_chunk_metadatas: self.column_chunk_metadatas,
             parquet_meta: ParquetMetaData::new(
-                FileMetaData::new(
-                    0,
-                    self.num_rows as i64,
-                    None,
-                    None,
-                    schema_descriptor,
-                    None,
-                ),
+                FileMetaData::new(0, self.num_rows as i64, None, None, schema_descriptor, None),
                 vec![row_group],
             ),
         }

@@ -420,14 +420,13 @@ impl<'a> FuseEncodingImpl<'a> {
                 // Missing column caused by schema evolutions
                 continue;
             };
-            let compressed_size =
-                u64::try_from(column_chunk.compressed_size()).map_err(|_| {
-                    ErrorCode::ParquetFileInvalid(format!(
-                        "invalid parquet file {}, compressed size overflow for column {}",
-                        location,
-                        field.name()
-                    ))
-                })?;
+            let compressed_size = u64::try_from(column_chunk.compressed_size()).map_err(|_| {
+                ErrorCode::ParquetFileInvalid(format!(
+                    "invalid parquet file {}, compressed size overflow for column {}",
+                    location,
+                    field.name()
+                ))
+            })?;
             let uncompressed_size =
                 u64::try_from(column_chunk.uncompressed_size()).map_err(|_| {
                     ErrorCode::ParquetFileInvalid(format!(
@@ -630,7 +629,9 @@ fn native_level_two_encoding(page_body: &PageBody) -> Option<String> {
 }
 
 fn parquet_encodings_to_string(encodings: impl Iterator<Item = ParquetEncoding>) -> String {
-    let encodings = encodings.map(parquet_encoding_to_string).collect::<Vec<_>>();
+    let encodings = encodings
+        .map(parquet_encoding_to_string)
+        .collect::<Vec<_>>();
     if encodings.is_empty() {
         "unknown".to_string()
     } else {

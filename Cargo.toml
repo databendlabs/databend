@@ -624,12 +624,12 @@ map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }
 openraft-rt = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }
 # Keep ORC on a local patch while the upstream crate has not caught up with Arrow 58 yet.
-lance-arrow = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
-lance-core = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
-lance-encoding = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
-lance-file = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
-lance-io = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
-lance-table = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
+lance-arrow = { git = "https://github.com/SkyFan2002/lance.git", rev = "d47ca5a1ed3fa80534a902a678961beca8e2e279" }
+lance-core = { git = "https://github.com/SkyFan2002/lance.git", rev = "d47ca5a1ed3fa80534a902a678961beca8e2e279" }
+lance-encoding = { git = "https://github.com/SkyFan2002/lance.git", rev = "d47ca5a1ed3fa80534a902a678961beca8e2e279" }
+lance-file = { git = "https://github.com/SkyFan2002/lance.git", rev = "d47ca5a1ed3fa80534a902a678961beca8e2e279" }
+lance-io = { git = "https://github.com/SkyFan2002/lance.git", rev = "d47ca5a1ed3fa80534a902a678961beca8e2e279" }
+lance-table = { git = "https://github.com/SkyFan2002/lance.git", rev = "d47ca5a1ed3fa80534a902a678961beca8e2e279" }
 orc-rust = { git = "https://github.com/SkyFan2002/orc-rust.git", rev = "6b32f1adec3e3850fbb303c97f16681e175d54bb" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
