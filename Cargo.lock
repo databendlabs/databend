@@ -7836,7 +7836,7 @@ dependencies = [
 [[package]]
 name = "fsst"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow-array 58.1.0",
  "rand 0.9.2",
@@ -9966,7 +9966,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=db28794b73307c6c588c717131526533b0e11070#db28794b73307c6c588c717131526533b0e11070"
 dependencies = [
  "anyhow",
  "apache-avro 0.21.0",
@@ -10021,7 +10021,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-glue"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=db28794b73307c6c588c717131526533b0e11070#db28794b73307c6c588c717131526533b0e11070"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10036,7 +10036,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=db28794b73307c6c588c717131526533b0e11070#db28794b73307c6c588c717131526533b0e11070"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10058,7 +10058,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=db28794b73307c6c588c717131526533b0e11070#db28794b73307c6c588c717131526533b0e11070"
 dependencies = [
  "async-trait",
  "chrono",
@@ -10078,7 +10078,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-s3tables"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=db28794b73307c6c588c717131526533b0e11070#db28794b73307c6c588c717131526533b0e11070"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10776,7 +10776,7 @@ dependencies = [
 [[package]]
 name = "lance-arrow"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
@@ -10795,7 +10795,7 @@ dependencies = [
 [[package]]
 name = "lance-bitpacking"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrayref",
  "paste",
@@ -10805,7 +10805,7 @@ dependencies = [
 [[package]]
 name = "lance-core"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
@@ -10840,7 +10840,7 @@ dependencies = [
 [[package]]
 name = "lance-encoding"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
@@ -10879,7 +10879,7 @@ dependencies = [
 [[package]]
 name = "lance-file"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
@@ -10913,7 +10913,7 @@ dependencies = [
 [[package]]
 name = "lance-io"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow 58.1.0",
  "arrow-arith 58.1.0",
@@ -10950,7 +10950,7 @@ dependencies = [
 [[package]]
 name = "lance-namespace"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow 58.1.0",
  "async-trait",
@@ -10976,7 +10976,7 @@ dependencies = [
 [[package]]
 name = "lance-table"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c#c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c"
 dependencies = [
  "arrow 58.1.0",
  "arrow-array 58.1.0",

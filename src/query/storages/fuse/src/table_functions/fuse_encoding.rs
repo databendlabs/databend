@@ -60,7 +60,9 @@ use futures::stream;
 use futures::stream::StreamExt;
 use futures::stream::TryStreamExt;
 use opendal::Operator;
-use parquet::format::Type as ParquetPhysicalType;
+use parquet::basic::Compression as ParquetCompression;
+use parquet::basic::Encoding as ParquetEncoding;
+use parquet::basic::Type as ParquetPhysicalType;
 
 use crate::BlockReadResult;
 use crate::FuseStorageFormat;
@@ -418,15 +420,8 @@ impl<'a> FuseEncodingImpl<'a> {
                 // Missing column caused by schema evolutions
                 continue;
             };
-            let chunk_meta = column_chunk.meta_data.as_ref().ok_or_else(|| {
-                ErrorCode::ParquetFileInvalid(format!(
-                    "invalid parquet file {}, meta data of column {} is empty",
-                    location, column_id
-                ))
-            })?;
-
             let compressed_size =
-                u64::try_from(chunk_meta.total_compressed_size).map_err(|_| {
+                u64::try_from(column_chunk.compressed_size()).map_err(|_| {
                     ErrorCode::ParquetFileInvalid(format!(
                         "invalid parquet file {}, compressed size overflow for column {}",
                         location,
@@ -434,7 +429,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     ))
                 })?;
             let uncompressed_size =
-                u64::try_from(chunk_meta.total_uncompressed_size).map_err(|_| {
+                u64::try_from(column_chunk.uncompressed_size()).map_err(|_| {
                     ErrorCode::ParquetFileInvalid(format!(
                         "invalid parquet file {}, uncompressed size overflow for column {}",
                         location,
@@ -442,7 +437,7 @@ impl<'a> FuseEncodingImpl<'a> {
                     ))
                 })?;
 
-            let physical_type = parquet_physical_type_to_string(chunk_meta.type_);
+            let physical_type = parquet_physical_type_to_string(column_chunk.column_type());
             block_rows.push(EncodingRow {
                 table_name: table_name.as_str().to_string(),
                 storage_format,
@@ -452,8 +447,8 @@ impl<'a> FuseEncodingImpl<'a> {
                 validity_size: None,
                 compressed_size,
                 uncompressed_size,
-                level_one: parquet_encodings_to_string(&chunk_meta.encodings),
-                level_two: Some(parquet_codec_to_string(chunk_meta.codec)),
+                level_one: parquet_encodings_to_string(column_chunk.encodings()),
+                level_two: Some(parquet_codec_to_string(column_chunk.compression())),
             });
         }
 
@@ -634,44 +629,39 @@ fn native_level_two_encoding(page_body: &PageBody) -> Option<String> {
     }
 }
 
-fn parquet_encodings_to_string(encodings: &[parquet::format::Encoding]) -> String {
+fn parquet_encodings_to_string(encodings: impl Iterator<Item = ParquetEncoding>) -> String {
+    let encodings = encodings.map(parquet_encoding_to_string).collect::<Vec<_>>();
     if encodings.is_empty() {
         "unknown".to_string()
     } else {
-        encodings
-            .iter()
-            .map(|encoding| parquet_encoding_to_string(*encoding))
-            .collect::<Vec<_>>()
-            .join(",")
+        encodings.join(",")
     }
 }
 
-fn parquet_encoding_to_string(encoding: parquet::format::Encoding) -> &'static str {
+fn parquet_encoding_to_string(encoding: ParquetEncoding) -> &'static str {
     match encoding {
-        parquet::format::Encoding::PLAIN => "plain",
-        parquet::format::Encoding::PLAIN_DICTIONARY => "plain_dictionary",
-        parquet::format::Encoding::RLE => "rle",
-        parquet::format::Encoding::BIT_PACKED => "bit_packed",
-        parquet::format::Encoding::DELTA_BINARY_PACKED => "delta_binary_packed",
-        parquet::format::Encoding::DELTA_LENGTH_BYTE_ARRAY => "delta_length_byte_array",
-        parquet::format::Encoding::DELTA_BYTE_ARRAY => "delta_byte_array",
-        parquet::format::Encoding::RLE_DICTIONARY => "rle_dictionary",
-        parquet::format::Encoding::BYTE_STREAM_SPLIT => "byte_stream_split",
-        parquet::format::Encoding(_) => "unknown",
+        ParquetEncoding::PLAIN => "plain",
+        ParquetEncoding::PLAIN_DICTIONARY => "plain_dictionary",
+        ParquetEncoding::RLE => "rle",
+        ParquetEncoding::BIT_PACKED => "bit_packed",
+        ParquetEncoding::DELTA_BINARY_PACKED => "delta_binary_packed",
+        ParquetEncoding::DELTA_LENGTH_BYTE_ARRAY => "delta_length_byte_array",
+        ParquetEncoding::DELTA_BYTE_ARRAY => "delta_byte_array",
+        ParquetEncoding::RLE_DICTIONARY => "rle_dictionary",
+        ParquetEncoding::BYTE_STREAM_SPLIT => "byte_stream_split",
     }
 }
 
-fn parquet_codec_to_string(codec: parquet::format::CompressionCodec) -> String {
+fn parquet_codec_to_string(codec: ParquetCompression) -> String {
     match codec {
-        parquet::format::CompressionCodec::UNCOMPRESSED => "uncompressed".to_string(),
-        parquet::format::CompressionCodec::SNAPPY => "snappy".to_string(),
-        parquet::format::CompressionCodec::GZIP => "gzip".to_string(),
-        parquet::format::CompressionCodec::LZO => "lzo".to_string(),
-        parquet::format::CompressionCodec::BROTLI => "brotli".to_string(),
-        parquet::format::CompressionCodec::LZ4 => "lz4".to_string(),
-        parquet::format::CompressionCodec::ZSTD => "zstd".to_string(),
-        parquet::format::CompressionCodec::LZ4_RAW => "lz4_raw".to_string(),
-        parquet::format::CompressionCodec(code) => format!("compression_codec({code})"),
+        ParquetCompression::UNCOMPRESSED => "uncompressed".to_string(),
+        ParquetCompression::SNAPPY => "snappy".to_string(),
+        ParquetCompression::GZIP(_) => "gzip".to_string(),
+        ParquetCompression::LZO => "lzo".to_string(),
+        ParquetCompression::BROTLI(_) => "brotli".to_string(),
+        ParquetCompression::LZ4 => "lz4".to_string(),
+        ParquetCompression::ZSTD(_) => "zstd".to_string(),
+        ParquetCompression::LZ4_RAW => "lz4_raw".to_string(),
     }
 }
 
@@ -685,7 +675,6 @@ fn parquet_physical_type_to_string(ty: ParquetPhysicalType) -> &'static str {
         ParquetPhysicalType::DOUBLE => "DOUBLE",
         ParquetPhysicalType::BYTE_ARRAY => "BYTE_ARRAY",
         ParquetPhysicalType::FIXED_LEN_BYTE_ARRAY => "FIXED_LEN_BYTE_ARRAY",
-        parquet::format::Type(_) => "UNKNOWN",
     }
 }
 

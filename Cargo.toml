@@ -291,13 +291,13 @@ lru = "0.12"
 perf-event2 = "0.7.4"
 
 ## in branch dev
-iceberg = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d", features = [
+iceberg = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "db28794b73307c6c588c717131526533b0e11070", features = [
     "storage-all",
 ] }
-iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d" }
-iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d" }
-iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d" }
-iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d" }
+iceberg-catalog-glue = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "db28794b73307c6c588c717131526533b0e11070" }
+iceberg-catalog-hms = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "db28794b73307c6c588c717131526533b0e11070" }
+iceberg-catalog-rest = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "db28794b73307c6c588c717131526533b0e11070" }
+iceberg-catalog-s3tables = { version = "0.8.0", git = "https://github.com/SkyFan2002/iceberg-rust.git", rev = "db28794b73307c6c588c717131526533b0e11070" }
 
 # Explicitly specify compatible AWS SDK versions
 aws-config = "1.5.18"
@@ -624,12 +624,12 @@ map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }
 openraft-rt = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }
 # Keep ORC on a local patch while the upstream crate has not caught up with Arrow 58 yet.
-lance-arrow = { git = "https://github.com/SkyFan2002/lance.git", rev = "3157a8c1c6402f36efe232d932cba189044d514a" }
-lance-core = { git = "https://github.com/SkyFan2002/lance.git", rev = "3157a8c1c6402f36efe232d932cba189044d514a" }
-lance-encoding = { git = "https://github.com/SkyFan2002/lance.git", rev = "3157a8c1c6402f36efe232d932cba189044d514a" }
-lance-file = { git = "https://github.com/SkyFan2002/lance.git", rev = "3157a8c1c6402f36efe232d932cba189044d514a" }
-lance-io = { git = "https://github.com/SkyFan2002/lance.git", rev = "3157a8c1c6402f36efe232d932cba189044d514a" }
-lance-table = { git = "https://github.com/SkyFan2002/lance.git", rev = "3157a8c1c6402f36efe232d932cba189044d514a" }
+lance-arrow = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
+lance-core = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
+lance-encoding = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
+lance-file = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
+lance-io = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
+lance-table = { git = "https://github.com/SkyFan2002/lance.git", rev = "c8b4d2af41fe283b606b5b3fda7e89fd5393ec2c" }
 orc-rust = { git = "https://github.com/SkyFan2002/orc-rust.git", rev = "6b32f1adec3e3850fbb303c97f16681e175d54bb" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }

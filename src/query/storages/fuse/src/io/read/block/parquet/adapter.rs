@@ -68,7 +68,8 @@ impl<'a> RowGroupImplBuilder<'a> {
     }
 
     pub fn build(self) -> RowGroupImpl {
-        let row_group = RowGroupMetaData::builder(self.schema_descriptor.into())
+        let schema_descriptor = Arc::new(self.schema_descriptor.clone());
+        let row_group = RowGroupMetaData::builder(schema_descriptor.clone())
             .set_num_rows(self.num_rows as i64)
             .set_column_metadata(self.column_chunk_metadatas.values().cloned().collect())
             .build()
@@ -83,7 +84,7 @@ impl<'a> RowGroupImplBuilder<'a> {
                     self.num_rows as i64,
                     None,
                     None,
-                    self.schema_descriptor.into(),
+                    schema_descriptor,
                     None,
                 ),
                 vec![row_group],
