@@ -69,7 +69,7 @@ select id, to_hex(v) from fmt_bin where id in (4,5) order by id
 query TT
 select to_hex(X'ABCD'), length(X'ABCD')
 ----
-ABCD 2
+abcd 2
 
 statement ok
 set binary_output_format = 'hex'
