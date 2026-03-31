@@ -242,7 +242,7 @@ impl IPhysicalPlan for ChunkFilter {
         let projection: BTreeSet<usize> = (0..self.input.output_schema()?.fields.len()).collect();
         for predicate in self.predicates.iter() {
             if let Some(predicate) = predicate {
-                f.push(Box::new(builder.filter_transform_builder(
+                f.push(Box::new(builder.filter_transform_builder::<true>(
                     &[predicate.clone()],
                     projection.clone(),
                 )?));
