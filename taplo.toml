@@ -44,6 +44,9 @@ include = ["src/**/Cargo.toml", "tests/**/Cargo.toml"]
 exclude = [
     "src/**/fuzz/Cargo.toml",
     "src/bendpy/Cargo.toml",
+    # Top-level composition crates need `path + default-features = false`
+    # to trim the query dependency graph, which cannot be expressed through
+    # the current `workspace = true`-only schema.
     "src/binaries/Cargo.toml",
     "src/query/ee/Cargo.toml",
     "src/query/service/Cargo.toml",
