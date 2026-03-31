@@ -28,6 +28,7 @@ use std::time::Duration;
 
 use databend_meta::runtime_api as server_rt;
 use databend_meta_client::runtime_api as client_rt;
+use tonic_013::Request;
 
 use crate::DatabendMetrics;
 use crate::DatabendRuntime;
@@ -126,17 +127,17 @@ impl client_rt::SpawnApi for DatabendRuntime {
         <Self as server_rt::SpawnApi>::unlimited_future(fut)
     }
 
-    fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
+    fn prepare_request<T>(request: Request<T>) -> Request<T> {
         <DatabendRuntime as server_rt::SpawnApi>::prepare_request(request)
     }
 
     fn trace_request<'a, T, F, Fut, R>(
         name: &'static str,
-        request: tonic::Request<T>,
+        request: Request<T>,
         f: F,
     ) -> client_rt::BoxFuture<'a, R>
     where
-        F: FnOnce(tonic::Request<T>) -> Fut,
+        F: FnOnce(Request<T>) -> Fut,
         Fut: Future<Output = R> + Send + 'a,
         R: Send + 'a,
     {

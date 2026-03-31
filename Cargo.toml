@@ -483,6 +483,7 @@ tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
 tonic = { version = "0.14.5", features = ["transport", "codegen", "tls-native-roots"] }
 tonic-build = { version = "0.14.5" }
+tonic-prost = { version = "0.14.5" }
 tonic-prost-build = { version = "0.14.5" }
 tonic-reflection = { version = "0.14.5" }
 tower = { version = "0.5.1", features = ["util"] }

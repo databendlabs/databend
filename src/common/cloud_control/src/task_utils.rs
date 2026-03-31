@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use chrono::DateTime;
+use chrono::FixedOffset;
 use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -165,7 +166,7 @@ impl TryFrom<crate::pb::Task> for Task {
                             value.next_scheduled_at
                         ))
                     })
-                    .map(|d| d.with_timezone(&Utc))
+                    .map(|d: DateTime<FixedOffset>| d.with_timezone(&Utc))
             })
             .transpose()?;
 
@@ -180,7 +181,7 @@ impl TryFrom<crate::pb::Task> for Task {
                             value.last_suspended_at
                         ))
                     })
-                    .map(|d| d.with_timezone(&Utc))
+                    .map(|d: DateTime<FixedOffset>| d.with_timezone(&Utc))
             })
             .transpose()?;
         let schedule = match value.schedule_options {

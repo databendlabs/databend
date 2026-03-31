@@ -26,6 +26,11 @@ use crate::kv_pb_api::errors::PbApiReadError;
 use crate::kv_pb_api::errors::PbDecodeError;
 use crate::kv_pb_api::errors::PbEncodeError;
 
+#[allow(deprecated)]
+fn prost_decode_error(message: impl Into<String>) -> prost::DecodeError {
+    prost::DecodeError::new(message.into())
+}
+
 /// Encode a `FromToProto` value to protobuf bytes, with transparent zstd compression.
 ///
 /// Delegates to [`compress::GLOBAL_ENCODER`].
@@ -36,7 +41,7 @@ pub fn encode_pb<T: FromToProto>(value: &T) -> Result<Vec<u8>, PbEncodeError> {
 /// Decode protobuf bytes (possibly zstd-compressed) to a `FromToProto` value.
 pub fn decode_pb<T: FromToProto>(buf: &[u8]) -> Result<T, PbDecodeError> {
     let buf = compress::decode_value(buf)
-        .map_err(|e| PbDecodeError::from(prost::DecodeError::new(e.to_string())))?;
+        .map_err(|e| PbDecodeError::from(prost_decode_error(e.to_string())))?;
     let p: T::PB = prost::Message::decode(buf.as_ref()).map_err(PbDecodeError::from)?;
     T::from_pb(p).map_err(PbDecodeError::from)
 }

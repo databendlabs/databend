@@ -3788,6 +3788,7 @@ dependencies = [
  "serde",
  "tokio",
  "tonic 0.14.5",
+ "tonic-prost",
  "tonic-prost-build",
  "tower 0.5.2",
 ]
@@ -4239,6 +4240,7 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tonic 0.13.1",
  "tonic 0.14.5",
  "uuid",
  "zstd 0.12.4",
@@ -4522,6 +4524,7 @@ dependencies = [
  "prost-build 0.14.3",
  "semver",
  "tonic 0.14.5",
+ "tonic-prost",
  "tonic-prost-build",
 ]
 
@@ -5866,7 +5869,7 @@ dependencies = [
  "sub-cache",
  "test-harness",
  "tokio",
- "tonic 0.14.5",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -5888,7 +5891,7 @@ dependencies = [
  "test-harness",
  "thiserror 1.0.69",
  "tokio",
- "tonic 0.14.5",
+ "tonic 0.13.1",
 ]
 
 [[package]]
@@ -5967,7 +5970,7 @@ dependencies = [
  "databend-meta-client 260205.4.0",
  "fastrace",
  "tokio",
- "tonic 0.14.5",
+ "tonic 0.13.1",
 ]
 
 [[package]]
