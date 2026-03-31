@@ -6445,7 +6445,7 @@ CreateTable(
         as_query: Some(
             Query {
                 span: Some(
-                    21..38,
+                    20..48,
                 ),
                 with: None,
                 body: Select(

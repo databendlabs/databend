@@ -37,7 +37,7 @@ use databend_common_pipeline::sources::EmptySource;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
-use databend_common_pipeline_transforms::build_compact_block_no_split_pipeline;
+use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::DataDistribution;
@@ -231,9 +231,11 @@ impl IPhysicalPlan for Recluster {
                 sort_pipeline_builder
                     .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
-                // Compact after merge sort.
+                // Compact after merge sort. This ordered compactor keeps block growth bounded
+                // without requiring a hard post-sort size cap, since final serialized sizes are
+                // not known yet and over-splitting here would create small fragmented blocks.
                 let max_threads = settings.get_max_threads()? as usize;
-                build_compact_block_no_split_pipeline(
+                build_ordered_compact_pipeline(
                     &mut builder.main_pipeline,
                     block_thresholds,
                     max_threads,

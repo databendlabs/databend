@@ -224,6 +224,35 @@ mod test {
     }
 
     #[test]
+    fn test_text_output_header_and_null_display() -> Result<()> {
+        let (schema, block) = gen_schema_and_block(
+            vec![TableField::new(
+                "c1",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            )],
+            vec![Int32Type::from_opt_data(vec![Some(1i32), None])],
+        );
+
+        let settings = Settings::create(Tenant::new_literal("default"));
+        let options = BTreeMap::from([
+            ("type".to_string(), "text".to_string()),
+            ("output_header".to_string(), "true".to_string()),
+            ("null_display".to_string(), "NULL".to_string()),
+        ]);
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)?;
+        let mut output_format =
+            get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
+
+        let prefix = String::from_utf8(output_format.serialize_prefix()?)?;
+        let body = String::from_utf8(output_format.serialize_block(&block)?)?;
+
+        assert_eq!(prefix, "c1\n");
+        assert_eq!(body, "1\nNULL\n");
+        Ok(())
+    }
+
+    #[test]
     fn test_data_block_nullable() -> Result<()> {
         test_data_block(true)
     }
