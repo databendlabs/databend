@@ -81,7 +81,6 @@ use crate::interpreters::interpreter_notification_desc::DescNotificationInterpre
 #[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
-#[cfg(feature = "sql-script")]
 use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_create::CreateProcedureInterpreter;
 use crate::interpreters::interpreter_procedure_drop::DropProcedureInterpreter;
@@ -163,13 +162,6 @@ fn task_support_disabled(op: &str) -> ErrorCode {
 fn stage_disabled(op: &str) -> ErrorCode {
     ErrorCode::Unimplemented(format!(
         "{op} requires cargo feature 'storage-stage', rebuild with it enabled"
-    ))
-}
-
-#[cfg(not(feature = "sql-script"))]
-fn sql_script_disabled(op: &str) -> ErrorCode {
-    ErrorCode::Unimplemented(format!(
-        "{op} requires cargo feature 'sql-script', rebuild with it enabled"
     ))
 }
 
@@ -908,13 +900,10 @@ impl InterpreterFactory {
             Plan::InsertMultiTable(p) => {
                 Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
             }
-            #[cfg(feature = "sql-script")]
             Plan::ExecuteImmediate(p) => Ok(Arc::new(ExecuteImmediateInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            #[cfg(not(feature = "sql-script"))]
-            Plan::ExecuteImmediate(_) => Err(sql_script_disabled("EXECUTE IMMEDIATE")),
             Plan::CreateSequence(p) => Ok(Arc::new(CreateSequenceInterpreter::try_create(
                 ctx,
                 *p.clone(),
@@ -960,13 +949,10 @@ impl InterpreterFactory {
             Plan::DescProcedure(p) => {
                 Ok(Arc::new(DescProcedureInterpreter::try_create(*p.clone())?))
             }
-            #[cfg(feature = "sql-script")]
             Plan::CallProcedure(p) => Ok(Arc::new(CallProcedureInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            #[cfg(not(feature = "sql-script"))]
-            Plan::CallProcedure(_) => Err(sql_script_disabled("CALL PROCEDURE")),
             Plan::ShowWorkloadGroups => {
                 Ok(Arc::new(ShowWorkloadGroupsInterpreter::try_create(ctx)?))
             }

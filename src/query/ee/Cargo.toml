@@ -10,7 +10,6 @@ version = { workspace = true }
 [features]
 default = [
     "simd",
-    "sql-script",
     "script-udf",
     "cloud-control",
     "task-support",
@@ -18,7 +17,6 @@ default = [
     "storage-stage",
 ]
 simd = ["databend-query/simd"]
-sql-script = ["databend-query/sql-script"]
 script-udf = ["databend-query/script-udf"]
 cloud-control = ["databend-query/cloud-control"]
 task-support = ["databend-query/task-support"]
