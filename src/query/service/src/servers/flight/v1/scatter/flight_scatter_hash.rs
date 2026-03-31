@@ -25,6 +25,7 @@ use databend_common_expression::FunctionID;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::Value;
+use databend_common_expression::aggregate::combine_group_hash_column;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::AnyType;
@@ -35,6 +36,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use strength_reduce::StrengthReducedU64;
 
 use crate::servers::flight::v1::scatter::flight_scatter::FlightScatter;
 
@@ -43,6 +45,8 @@ pub struct HashFlightScatter {
     func_ctx: FunctionContext,
     hash_key: Vec<Expr>,
     scatter_size: usize,
+    raw_hash_keys: Vec<Expr>,
+    hash_key_data_types: Vec<DataType>,
 }
 
 impl HashFlightScatter {
@@ -60,23 +64,25 @@ impl HashFlightScatter {
                 local_pos,
             );
         }
-        let hash_key = hash_keys
+        let raw_hash_keys: Vec<Expr> = hash_keys
             .iter()
-            .map(|key| {
-                check_function(
-                    None,
-                    "siphash",
-                    &[],
-                    &[key.as_expr(&BUILTIN_FUNCTIONS)],
-                    &BUILTIN_FUNCTIONS,
-                )
-            })
+            .map(|key| key.as_expr(&BUILTIN_FUNCTIONS))
+            .collect();
+        let hash_key_data_types: Vec<DataType> = raw_hash_keys
+            .iter()
+            .map(|expr| expr.data_type().clone())
+            .collect();
+        let hash_key = raw_hash_keys
+            .iter()
+            .map(|expr| check_function(None, "siphash", &[], &[expr.clone()], &BUILTIN_FUNCTIONS))
             .collect::<Result<_>>()?;
 
         Ok(Box::new(Self {
             func_ctx,
             scatter_size,
             hash_key,
+            raw_hash_keys,
+            hash_key_data_types,
         }))
     }
 }
@@ -87,6 +93,8 @@ struct OneHashKeyFlightScatter {
     func_ctx: FunctionContext,
     indices_scalar: Expr,
     default_scatter_index: u64,
+    hash_key_expr: Expr,
+    hash_key_data_type: DataType,
 }
 
 impl OneHashKeyFlightScatter {
@@ -101,6 +109,8 @@ impl OneHashKeyFlightScatter {
         } else {
             0
         };
+        let hash_key_expr = hash_key.as_expr(&BUILTIN_FUNCTIONS);
+        let hash_key_data_type = hash_key_expr.data_type().clone();
         let indices_scalar = check_function(
             None,
             "modulo",
@@ -110,7 +120,7 @@ impl OneHashKeyFlightScatter {
                     None,
                     "siphash",
                     &[],
-                    &[hash_key.as_expr(&BUILTIN_FUNCTIONS)],
+                    &[hash_key_expr.clone()],
                     &BUILTIN_FUNCTIONS,
                 )?,
                 Expr::constant(
@@ -126,6 +136,8 @@ impl OneHashKeyFlightScatter {
             func_ctx,
             indices_scalar,
             default_scatter_index,
+            hash_key_expr,
+            hash_key_data_type,
         }))
     }
 }
@@ -155,9 +167,15 @@ impl FlightScatter for OneHashKeyFlightScatter {
     fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
-        let indices = evaluator.run(&self.indices_scalar).unwrap();
-        let indices = get_hash_values(indices, num, self.default_scatter_index)?;
-        Ok(Some(indices.to_vec()))
+        let value = evaluator.run(&self.hash_key_expr)?;
+        let column = value.convert_to_full_column(&self.hash_key_data_type, num);
+        let mut hashes = vec![0u64; num];
+        combine_group_hash_column::<true>(&column, &mut hashes);
+        let m = StrengthReducedU64::new(self.scatter_size as u64);
+        for h in hashes.iter_mut() {
+            *h = *h % m;
+        }
+        Ok(Some(hashes))
     }
 }
 
@@ -195,18 +213,26 @@ impl FlightScatter for HashFlightScatter {
     fn scatter_indices(&self, data_block: &DataBlock) -> Result<Option<Vec<u64>>> {
         let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
-        let indices = if !self.hash_key.is_empty() {
-            let mut hash_keys = Vec::with_capacity(self.hash_key.len());
-            for expr in &self.hash_key {
-                let indices = evaluator.run(expr).unwrap();
-                let indices = get_hash_values(indices, num, 0)?;
-                hash_keys.push(indices)
+        let mut hashes = vec![0u64; num];
+        for (i, (expr, dt)) in self
+            .raw_hash_keys
+            .iter()
+            .zip(&self.hash_key_data_types)
+            .enumerate()
+        {
+            let value = evaluator.run(expr)?;
+            let column = value.convert_to_full_column(dt, num);
+            if i == 0 {
+                combine_group_hash_column::<true>(&column, &mut hashes);
+            } else {
+                combine_group_hash_column::<false>(&column, &mut hashes);
             }
-            self.combine_hash_keys(&hash_keys, num)
-        } else {
-            Ok(vec![0; num])
-        }?;
-        Ok(Some(indices))
+        }
+        let m = StrengthReducedU64::new(self.scatter_size as u64);
+        for h in hashes.iter_mut() {
+            *h = *h % m;
+        }
+        Ok(Some(hashes))
     }
 }
 
