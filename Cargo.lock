@@ -1053,7 +1053,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=83baa7ad1d57d5ada563a4f796d11054c7b56327#83baa7ad1d57d5ada563a4f796d11054c7b56327"
+source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=a0a2bb369cdd96dea3da3d61e190db4c79119da4#a0a2bb369cdd96dea3da3d61e190db4c79119da4"
 dependencies = [
  "anyhow",
  "arrow-array 58.1.0",
@@ -7836,10 +7836,9 @@ dependencies = [
 [[package]]
 name = "fsst"
 version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a7cb31412f3f09e2e0487281b2920fd4c19aba352c3db6e93e7d63d8f2081eb"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
- "arrow-array 56.2.0",
+ "arrow-array 58.1.0",
  "rand 0.9.2",
 ]
 
@@ -9967,7 +9966,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=e486de10e21dfa87804530db108f2f002980bc05#e486de10e21dfa87804530db108f2f002980bc05"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
 dependencies = [
  "anyhow",
  "apache-avro 0.21.0",
@@ -10022,7 +10021,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-glue"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=e486de10e21dfa87804530db108f2f002980bc05#e486de10e21dfa87804530db108f2f002980bc05"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10037,7 +10036,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=e486de10e21dfa87804530db108f2f002980bc05#e486de10e21dfa87804530db108f2f002980bc05"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10059,7 +10058,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=e486de10e21dfa87804530db108f2f002980bc05#e486de10e21dfa87804530db108f2f002980bc05"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
 dependencies = [
  "async-trait",
  "chrono",
@@ -10079,7 +10078,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-s3tables"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=e486de10e21dfa87804530db108f2f002980bc05#e486de10e21dfa87804530db108f2f002980bc05"
+source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d#d1948d0ca49e5901c2e1b3eb7a1a205dc7c71c0d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10777,7 +10776,7 @@ dependencies = [
 [[package]]
 name = "lance-arrow"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=6adb764ba7997fea33530cdececbed294953c0c6#6adb764ba7997fea33530cdececbed294953c0c6"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
@@ -10796,8 +10795,7 @@ dependencies = [
 [[package]]
 name = "lance-bitpacking"
 version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ab4c7e3d69d4318e4078c38f3bba4e24d70eed8dad01ef2646a3639da59cdcf"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrayref",
  "paste",
@@ -10807,7 +10805,7 @@ dependencies = [
 [[package]]
 name = "lance-core"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=6adb764ba7997fea33530cdececbed294953c0c6#6adb764ba7997fea33530cdececbed294953c0c6"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
@@ -10842,7 +10840,7 @@ dependencies = [
 [[package]]
 name = "lance-encoding"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=6adb764ba7997fea33530cdececbed294953c0c6#6adb764ba7997fea33530cdececbed294953c0c6"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
@@ -10881,7 +10879,7 @@ dependencies = [
 [[package]]
 name = "lance-file"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=6adb764ba7997fea33530cdececbed294953c0c6#6adb764ba7997fea33530cdececbed294953c0c6"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
@@ -10915,7 +10913,7 @@ dependencies = [
 [[package]]
 name = "lance-io"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=6adb764ba7997fea33530cdececbed294953c0c6#6adb764ba7997fea33530cdececbed294953c0c6"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrow 58.1.0",
  "arrow-arith 58.1.0",
@@ -10924,7 +10922,7 @@ dependencies = [
  "arrow-cast 58.1.0",
  "arrow-data 58.1.0",
  "arrow-schema 58.1.0",
- "arrow-select 56.2.0",
+ "arrow-select 58.1.0",
  "async-recursion",
  "async-trait",
  "byteorder",
@@ -10952,10 +10950,9 @@ dependencies = [
 [[package]]
 name = "lance-namespace"
 version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f89added88947b232179e39c400dd6091498be7cfe29cefd464c0bf31d6f3ad"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
- "arrow 56.2.0",
+ "arrow 58.1.0",
  "async-trait",
  "bytes",
  "lance-core",
@@ -10979,7 +10976,7 @@ dependencies = [
 [[package]]
 name = "lance-table"
 version = "1.0.4"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=6adb764ba7997fea33530cdececbed294953c0c6#6adb764ba7997fea33530cdececbed294953c0c6"
+source = "git+https://github.com/SkyFan2002/lance.git?rev=3157a8c1c6402f36efe232d932cba189044d514a#3157a8c1c6402f36efe232d932cba189044d514a"
 dependencies = [
  "arrow 58.1.0",
  "arrow-array 58.1.0",
@@ -12732,7 +12729,7 @@ dependencies = [
 [[package]]
 name = "orc-rust"
 version = "0.6.0"
-source = "git+https://github.com/SkyFan2002/orc-rust.git?rev=c0373cc9e298063fb3a00f87c76718c7ea6a8425#c0373cc9e298063fb3a00f87c76718c7ea6a8425"
+source = "git+https://github.com/SkyFan2002/orc-rust.git?rev=6b32f1adec3e3850fbb303c97f16681e175d54bb#6b32f1adec3e3850fbb303c97f16681e175d54bb"
 dependencies = [
  "arrow 58.1.0",
  "async-trait",
