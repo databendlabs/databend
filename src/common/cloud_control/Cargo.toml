@@ -21,7 +21,7 @@ tonic = { workspace = true }
 lenient_semver = { workspace = true }
 prost-build = { workspace = true }
 semver = { workspace = true }
-tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

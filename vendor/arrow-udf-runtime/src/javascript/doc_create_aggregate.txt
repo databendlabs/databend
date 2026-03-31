@@ -1,0 +1,32 @@
+# // this piece of code is included in the documentation
+#
+# use arrow_udf_runtime::javascript::{AggregateOptions, Runtime};
+# use arrow_schema::{DataType, Field, Schema};
+# use arrow_array::{ArrayRef, BooleanArray, Int32Array, RecordBatch};
+# use std::sync::Arc;
+#
+# let mut runtime = Runtime::new().await.unwrap();
+# runtime.add_aggregate(
+#     "sum",
+#     DataType::Int32,
+#     DataType::Int32,
+#     r#"
+#     export function create_state() {
+#         return 0;
+#     }
+#     export function accumulate(state, value) {
+#         return state + value;
+#     }
+#     export function retract(state, value) {
+#         return state - value;
+#     }
+#     export function merge(state1, state2) {
+#         return state1 + state2;
+#     }
+#     "#,
+#     AggregateOptions::default().return_null_on_null_input(),
+# )
+# .await
+# .unwrap();
+// suppose we have created a sum aggregate function
+// see the example in `add_aggregate`

@@ -16,7 +16,7 @@ tonic = { workspace = true }
 lenient_semver = { workspace = true }
 prost-build = { workspace = true }
 semver = { workspace = true }
-tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "num-traits"]

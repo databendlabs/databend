@@ -1,0 +1,31 @@
+# // this piece of code is included in the documentation
+#
+# use arrow_udf_runtime::python::Runtime;
+# use arrow_udf_runtime::CallMode;
+# use arrow_schema::{DataType, Field, Schema};
+# use arrow_array::{ArrayRef, BooleanArray, Int32Array, RecordBatch};
+# use std::sync::Arc;
+#
+# let mut runtime = Runtime::new().unwrap();
+# runtime.add_aggregate(
+#     "sum",
+#     DataType::Int32,
+#     DataType::Int32,
+#     CallMode::ReturnNullOnNullInput,
+#     r#"
+# def create_state():
+#     return 0
+#
+# def accumulate(state, value):
+#     return state + value
+#
+# def retract(state, value):
+#     return state - value
+#
+# def merge(state1, state2):
+#     return state1 + state2
+# "#,
+# )
+# .unwrap();
+// suppose we have created an aggregate function `sum`
+// see the example in `add_aggregate`
