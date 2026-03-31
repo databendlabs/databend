@@ -1352,6 +1352,8 @@ impl TableContext for QueryContext {
         let binary_output_format = settings.get_binary_output_format()?;
         let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
         let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
+        let enable_auto_detect_datetime_format =
+            settings.get_enable_auto_detect_datetime_format()?;
         let week_start = settings.get_week_start()? as u8;
         let date_format_style = settings.get_date_format_style()?;
         let random_function_seed = settings.get_random_function_seed()?;
@@ -1368,6 +1370,7 @@ impl TableContext for QueryContext {
             binary_output_format,
             parse_datetime_ignore_remainder,
             enable_strict_datetime_parser,
+            enable_auto_detect_datetime_format,
             random_function_seed,
             week_start,
             date_format_style,

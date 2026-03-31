@@ -91,12 +91,14 @@ impl Settings {
             .map(|s| s == "rounding")
             .unwrap_or(true);
         let disable_variant_check = self.get_disable_variant_check()?;
+        let enable_auto_detect_datetime_format = self.get_enable_auto_detect_datetime_format()?;
         Ok(InputFormatSettings {
             jiff_timezone,
             geometry_format,
             binary_format,
             is_rounding_mode,
             disable_variant_check,
+            enable_auto_detect_datetime_format,
         })
     }
 
