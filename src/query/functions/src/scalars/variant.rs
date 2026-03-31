@@ -57,7 +57,6 @@ use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::clamp_date;
-use databend_common_expression::types::date::string_to_date;
 use databend_common_expression::types::interval::string_to_interval;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
@@ -66,9 +65,7 @@ use databend_common_expression::types::number::*;
 use databend_common_expression::types::string::StringColumnBuilder;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::clamp_timestamp;
-use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
-use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
 use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_expression::types::variant::cast_scalars_to_variants;
 use databend_common_expression::vectorize_with_builder_1_arg;
@@ -76,9 +73,10 @@ use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
+use databend_functions_scalar_datetime::datetime::parse_date_with_auto;
+use databend_functions_scalar_datetime::datetime::parse_timestamp_tz_with_auto;
+use databend_functions_scalar_datetime::datetime::parse_timestamp_with_auto;
 use jiff::Timestamp;
-use jiff::Unit;
-use jiff::civil::date;
 use jiff::tz::TimeZone;
 use jsonb::OwnedJsonb;
 use jsonb::RawJsonb;
@@ -1375,7 +1373,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
                 return;
             }
-            match cast_to_date(val, &ctx.func_ctx.tz) {
+            match cast_to_date(
+                val,
+                &ctx.func_ctx.tz,
+                ctx.func_ctx.enable_auto_detect_datetime_format,
+            ) {
                 Ok(Some(date)) => output.push(date),
                 Ok(None) => output.push_null(),
                 Err(err) => {
@@ -1396,7 +1398,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 output.push_null();
                 return;
             }
-            match cast_to_date(val, &ctx.func_ctx.tz) {
+            match cast_to_date(
+                val,
+                &ctx.func_ctx.tz,
+                ctx.func_ctx.enable_auto_detect_datetime_format,
+            ) {
                 Ok(Some(date)) => output.push(date),
                 _ => output.push_null(),
             }
@@ -1414,7 +1420,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.push_null();
                     return;
                 }
-                match cast_to_timestamp(val, &ctx.func_ctx.tz) {
+                match cast_to_timestamp(
+                    val,
+                    &ctx.func_ctx.tz,
+                    ctx.func_ctx.enable_auto_detect_datetime_format,
+                ) {
                     Ok(Some(ts)) => output.push(ts),
                     Ok(None) => output.push_null(),
                     Err(err) => {
@@ -1437,7 +1447,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.push_null();
                     return;
                 }
-                match cast_to_timestamp(val, &ctx.func_ctx.tz) {
+                match cast_to_timestamp(
+                    val,
+                    &ctx.func_ctx.tz,
+                    ctx.func_ctx.enable_auto_detect_datetime_format,
+                ) {
                     Ok(Some(ts)) => output.push(ts),
                     _ => output.push_null(),
                 }
@@ -1456,7 +1470,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.push_null();
                     return;
                 }
-                match cast_to_timestamp_tz(val, &ctx.func_ctx.tz) {
+                match cast_to_timestamp_tz(
+                    val,
+                    &ctx.func_ctx.tz,
+                    ctx.func_ctx.enable_auto_detect_datetime_format,
+                ) {
                     Ok(Some(ts)) => output.push(ts),
                     Ok(None) => output.push_null(),
                     Err(err) => {
@@ -1479,7 +1497,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.push_null();
                     return;
                 }
-                match cast_to_timestamp_tz(val, &ctx.func_ctx.tz) {
+                match cast_to_timestamp_tz(
+                    val,
+                    &ctx.func_ctx.tz,
+                    ctx.func_ctx.enable_auto_detect_datetime_format,
+                ) {
                     Ok(Some(ts)) => output.push(ts),
                     _ => output.push_null(),
                 }
@@ -3437,26 +3459,29 @@ fn object_pick_or_delete_fn(
     }
 }
 
-fn cast_to_date(val: &[u8], tz: &TimeZone) -> Result<Option<i32>, jsonb::Error> {
+fn cast_to_date(
+    val: &[u8],
+    tz: &TimeZone,
+    enable_auto_detect_datetime_format: bool,
+) -> Result<Option<i32>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
         JsonbValue::Date(date) => Ok(Some(clamp_date(date.value as i64))),
-        JsonbValue::String(s) => string_to_date(s.as_bytes(), tz)
+        JsonbValue::String(s) => parse_date_with_auto(&s, tz, enable_auto_detect_datetime_format)
+            .map(Some)
             .map_err(|e| {
                 jsonb::Error::Message(format!("unable to cast to type `DATE` {}.", e.message()))
-            })
-            .and_then(|d| {
-                d.since((Unit::Day, date(1970, 1, 1)))
-                    .map_err(|e| jsonb::Error::Message(format!("{}", e)))
-                    .map(|d| d.get_days())
-            })
-            .map(Some),
+            }),
         _ => Err(jsonb::Error::InvalidJsonType),
     }
 }
 
-fn cast_to_timestamp(val: &[u8], tz: &TimeZone) -> Result<Option<i64>, jsonb::Error> {
+fn cast_to_timestamp(
+    val: &[u8],
+    tz: &TimeZone,
+    enable_auto_detect_datetime_format: bool,
+) -> Result<Option<i64>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
@@ -3465,19 +3490,25 @@ fn cast_to_timestamp(val: &[u8], tz: &TimeZone) -> Result<Option<i64>, jsonb::Er
             clamp_timestamp(&mut val);
             Ok(Some(val))
         }
-        JsonbValue::String(s) => string_to_timestamp(s.as_bytes(), tz)
-            .map_err(|e| {
-                jsonb::Error::Message(format!(
-                    "unable to cast to type `TIMESTAMP` {}.",
-                    e.message()
-                ))
-            })
-            .map(|ts| Some(ts.timestamp().as_microsecond())),
+        JsonbValue::String(s) => {
+            parse_timestamp_with_auto(&s, tz, enable_auto_detect_datetime_format)
+                .map(Some)
+                .map_err(|e| {
+                    jsonb::Error::Message(format!(
+                        "unable to cast to type `TIMESTAMP` {}.",
+                        e.message()
+                    ))
+                })
+        }
         _ => Err(jsonb::Error::InvalidJsonType),
     }
 }
 
-fn cast_to_timestamp_tz(val: &[u8], tz: &TimeZone) -> Result<Option<timestamp_tz>, jsonb::Error> {
+fn cast_to_timestamp_tz(
+    val: &[u8],
+    tz: &TimeZone,
+    enable_auto_detect_datetime_format: bool,
+) -> Result<Option<timestamp_tz>, jsonb::Error> {
     let value = jsonb::from_slice(val)?;
     match value {
         JsonbValue::Null => Ok(None),
@@ -3494,14 +3525,16 @@ fn cast_to_timestamp_tz(val: &[u8], tz: &TimeZone) -> Result<Option<timestamp_tz
                 offset.seconds(),
             )))
         }
-        JsonbValue::String(s) => string_to_timestamp_tz(s.as_bytes(), || tz)
-            .map_err(|e| {
-                jsonb::Error::Message(format!(
-                    "unable to cast to type `TIMESTAMP_TZ` {}.",
-                    e.message()
-                ))
-            })
-            .map(Some),
+        JsonbValue::String(s) => {
+            parse_timestamp_tz_with_auto(&s, tz, enable_auto_detect_datetime_format)
+                .map(Some)
+                .map_err(|e| {
+                    jsonb::Error::Message(format!(
+                        "unable to cast to type `TIMESTAMP_TZ` {}.",
+                        e.message()
+                    ))
+                })
+        }
         _ => Err(jsonb::Error::InvalidJsonType),
     }
 }
