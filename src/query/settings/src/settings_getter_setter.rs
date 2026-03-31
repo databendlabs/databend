@@ -859,6 +859,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_strict_datetime_parser")? != 0)
     }
 
+    pub fn get_enable_auto_detect_datetime_format(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_detect_datetime_format")? != 0)
+    }
+
     pub fn get_enable_dst_hour_fix(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_dst_hour_fix")? != 0)
     }
