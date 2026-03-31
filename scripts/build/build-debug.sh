@@ -38,7 +38,7 @@ else
 	*)
 		echo "Unknown QUERY_FEATURE_PROFILE: $QUERY_FEATURE_PROFILE"
 		echo "Supported profiles: default, full, lean, stage"
-		echo "Or set QUERY_FEATURES explicitly, for example: QUERY_FEATURES=simd,virtual-column"
+		echo "Or set QUERY_FEATURES explicitly, for example: QUERY_FEATURES=simd,storage-stage"
 		exit 1
 		;;
 	esac

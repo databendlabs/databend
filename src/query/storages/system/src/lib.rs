@@ -75,7 +75,6 @@ mod temp_files_table;
 mod user_functions_table;
 mod users_table;
 mod util;
-#[cfg(feature = "virtual-column")]
 mod virtual_columns_table;
 mod zero_table;
 
@@ -155,7 +154,6 @@ pub use temp_files_table::TempFilesTable;
 pub use user_functions_table::UserFunctionsTable;
 pub use users_table::UsersTable;
 pub use util::generate_default_catalog_meta;
-#[cfg(feature = "virtual-column")]
 pub use virtual_columns_table::VirtualColumnsTable;
 pub use zero_table::ZeroTable;
 

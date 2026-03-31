@@ -13,17 +13,12 @@ default = [
     "script-udf",
     "cloud-control",
     "task-support",
-    "virtual-column",
     "storage-stage",
 ]
 simd = ["databend-query/simd"]
 script-udf = ["databend-query/script-udf"]
 cloud-control = ["databend-query/cloud-control"]
 task-support = ["databend-query/task-support"]
-virtual-column = [
-    "databend-query/virtual-column",
-    "dep:databend-enterprise-virtual-column",
-]
 storage-stage = ["databend-query/storage-stage"]
 
 [dependencies]
@@ -62,7 +57,7 @@ databend-enterprise-storage-encryption = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
-databend-enterprise-virtual-column = { workspace = true, optional = true }
+databend-enterprise-virtual-column = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-runtime = { workspace = true }
 databend-query = { path = "../service", default-features = false }
