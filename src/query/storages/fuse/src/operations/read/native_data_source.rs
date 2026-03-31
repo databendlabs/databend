@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_expression::BlockMetaInfo;
-
 use crate::io::NativeSourceData;
-use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 
 pub enum NativeDataSource {
     AggIndex(NativeSourceData),
     Normal(NativeSourceData),
 }
-
-#[typetag::serde(name = "fuse_data_source")]
-impl BlockMetaInfo for DataSourceWithMeta<NativeDataSource> {}

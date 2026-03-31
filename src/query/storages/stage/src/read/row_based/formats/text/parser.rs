@@ -24,7 +24,7 @@ use crate::read::row_based::batch::NdJsonRowBatchIter;
 use crate::read::row_based::batch::NdjsonRowBatch;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
-use crate::read::row_based::formats::tsv::separator::TextRowSeparator;
+use crate::read::row_based::formats::text::separator::TextRowSeparator;
 
 pub struct TextFieldReader<'a> {
     row: &'a [u8],

@@ -104,6 +104,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
+use databend_common_users::UserApiProvider;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
@@ -128,6 +129,8 @@ static TEST_BUILD_INFO: BuildInfo = BuildInfo {
 thread_local! {
     static INIT_TESTING_GLOBALS: std::sync::Once = const { std::sync::Once::new() };
     static THREAD_CATALOG_MANAGER: std::cell::OnceCell<Arc<CatalogManager>> =
+        const { std::cell::OnceCell::new() };
+    static THREAD_USER_API_PROVIDER: std::cell::OnceCell<Arc<UserApiProvider>> =
         const { std::cell::OnceCell::new() };
 }
 
@@ -654,6 +657,35 @@ pub struct LiteTableContext {
 }
 
 impl LiteTableContext {
+    async fn init_user_api_provider(tenant: &Tenant) -> Result<Arc<UserApiProvider>> {
+        if let Some(user_api_provider) = THREAD_USER_API_PROVIDER.with(|cell| cell.get().cloned()) {
+            return Ok(user_api_provider);
+        }
+
+        let user_api_provider =
+            UserApiProvider::try_create_simple(RpcClientConf::empty(), tenant).await?;
+        THREAD_USER_API_PROVIDER.with(|cell| {
+            assert!(
+                cell.set(user_api_provider.clone()).is_ok(),
+                "user api provider should be initialized once per thread"
+            );
+        });
+        GlobalInstance::set(user_api_provider.clone());
+
+        Ok(user_api_provider)
+    }
+
+    async fn reset_user_api_state(&self) -> Result<()> {
+        let user_api_provider = UserApiProvider::instance();
+        for udf in user_api_provider.list_udf(&self.tenant).await? {
+            user_api_provider
+                .drop_udf(&self.tenant, &udf.name, true)
+                .await??;
+        }
+
+        Ok(())
+    }
+
     pub fn configure_for_optimizer_case(&self, auto_stats: bool) -> Result<()> {
         let settings = self.get_settings();
         settings.set_enable_auto_materialize_cte(0)?;
@@ -705,6 +737,7 @@ impl LiteTableContext {
         let tenant = Tenant::new_literal("default");
         let settings = Settings::create(tenant.clone());
         let shared_settings = Settings::create(tenant.clone());
+        Self::init_user_api_provider(&tenant).await?;
         let catalog_manager = if let Some(catalog_manager) =
             THREAD_CATALOG_MANAGER.with(|cell| cell.get().cloned())
         {
@@ -743,7 +776,7 @@ impl LiteTableContext {
             .into();
         default_catalog.clear_tables();
 
-        Ok(Arc::new(Self {
+        let ctx = Arc::new(Self {
             catalog_manager,
             default_catalog,
             settings,
@@ -777,7 +810,9 @@ impl LiteTableContext {
             runtime_filter_ready: RwLock::new(HashMap::new()),
             queued_duration: RwLock::new(Duration::default()),
             next_table_id: AtomicU64::new(1),
-        }))
+        });
+        ctx.reset_user_api_state().await?;
+        Ok(ctx)
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
@@ -836,6 +871,47 @@ impl LiteTableContext {
     pub async fn register_table_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
         self.register_table_sql_with_stats(sql, None, HashMap::new())
             .await
+    }
+
+    pub async fn register_setup_sql(self: &Arc<Self>, sql: &str) -> Result<()> {
+        let planner = Planner::new(self.clone());
+        let extras = planner.parse_sql(sql)?;
+
+        match &extras.statement {
+            Statement::CreateTable(_) => self.register_table_sql(sql).await,
+            Statement::CreateUDF(_) => {
+                let metadata = Arc::new(RwLock::new(Metadata::default()));
+                let name_resolution_ctx =
+                    NameResolutionContext::try_from(self.get_settings().as_ref())?;
+                let binder = databend_common_sql::Binder::new(
+                    self.clone(),
+                    self.catalog_manager.clone(),
+                    name_resolution_ctx,
+                    metadata,
+                );
+                match binder.bind(&extras.statement).await? {
+                    Plan::CreateUDF(plan) => {
+                        UserApiProvider::instance()
+                            .add_udf(&self.tenant, plan.udf.clone(), &plan.create_option)
+                            .await
+                    }
+                    _ => unreachable!("create udf statement must bind to create udf plan"),
+                }
+            }
+            Statement::DropUDF {
+                if_exists,
+                udf_name,
+            } => {
+                let name_resolution_ctx =
+                    NameResolutionContext::try_from(self.get_settings().as_ref())?;
+                let udf_name = normalize_identifier(udf_name, &name_resolution_ctx).to_string();
+                UserApiProvider::instance()
+                    .drop_udf(&self.tenant, &udf_name, *if_exists)
+                    .await??;
+                Ok(())
+            }
+            _ => unsupported("lite sql harness setup from unsupported SQL"),
+        }
     }
 
     pub async fn register_table_sql_with_stats(
@@ -1431,6 +1507,12 @@ impl TableContext for LiteTableContext {
         unsupported("table_ctx::drop_recursive_cte_temp_table")
     }
 
+    fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {}
+
+    fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        Ok(vec![])
+    }
+
     fn get_next_broadcast_id(&self) -> u32 {
         0
     }
@@ -1469,6 +1551,35 @@ mod tests {
         )]
     }
 
+    fn test_udaf_sql() -> &'static str {
+        r#"
+CREATE OR REPLACE FUNCTION weighted_avg (a INT, b INT) STATE { sum INT, weight INT } RETURNS FLOAT
+LANGUAGE javascript AS $$
+export function create_state() {
+    return {sum: 0, weight: 0};
+}
+export function accumulate(state, value, weight) {
+    state.sum += value * weight;
+    state.weight += weight;
+    return state;
+}
+export function retract(state, value, weight) {
+    state.sum -= value * weight;
+    state.weight -= weight;
+    return state;
+}
+export function merge(state1, state2) {
+    state1.sum += state2.sum;
+    state1.weight += state2.weight;
+    return state1;
+}
+export function finish(state) {
+    return state.sum / state.weight;
+}
+$$
+"#
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_fake_tables_have_unique_ids() -> Result<()> {
         let ctx = LiteTableContext::create().await?;
@@ -1503,6 +1614,63 @@ mod tests {
         assert!(
             ctx2.default_catalog
                 .get_table(&ctx2.tenant, "default", "t1")
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_register_setup_sql_supports_udaf() -> Result<()> {
+        let ctx = LiteTableContext::create().await?;
+        ctx.register_table_with_stats(
+            "default",
+            "t",
+            vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
+            ],
+            None,
+            HashMap::new(),
+        )?;
+        ctx.register_setup_sql(test_udaf_sql()).await?;
+
+        let plan = ctx.bind_sql("SELECT weighted_avg(a, b) FROM t").await?;
+        assert!(matches!(plan, Plan::Query { .. }));
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_create_clears_registered_udfs() -> Result<()> {
+        let ctx1 = LiteTableContext::create().await?;
+        ctx1.register_table_with_stats(
+            "default",
+            "t",
+            vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
+            ],
+            None,
+            HashMap::new(),
+        )?;
+        ctx1.register_setup_sql(test_udaf_sql()).await?;
+        ctx1.bind_sql("SELECT weighted_avg(a, b) FROM t").await?;
+
+        let ctx2 = LiteTableContext::create().await?;
+        ctx2.register_table_with_stats(
+            "default",
+            "t",
+            vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
+            ],
+            None,
+            HashMap::new(),
+        )?;
+
+        assert!(
+            ctx2.bind_sql("SELECT weighted_avg(a, b) FROM t")
                 .await
                 .is_err()
         );

@@ -30,6 +30,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_table_meta::table::TableCompression;
 use opendal::Operator;
 
+use crate::io::BlockReadContext;
 use crate::io::BlockReader;
 
 #[derive(Clone)]
@@ -38,7 +39,6 @@ pub struct AggIndexReader {
 
     pub(super) reader: Arc<BlockReader>,
     pub(super) compression: TableCompression,
-    pub(crate) ctx: Arc<dyn TableContext>,
 
     func_ctx: FunctionContext,
     selection: Vec<(Expr, Option<usize>)>,
@@ -80,7 +80,6 @@ impl AggIndexReader {
         Ok(Self {
             index_id: agg.index_id,
             reader,
-            ctx,
             func_ctx,
             selection,
             filter,
@@ -94,6 +93,16 @@ impl AggIndexReader {
     #[inline(always)]
     pub fn index_id(&self) -> u64 {
         self.index_id
+    }
+
+    #[inline(always)]
+    pub fn compression(&self) -> TableCompression {
+        self.compression
+    }
+
+    #[inline(always)]
+    pub fn block_read_context(&self) -> BlockReadContext {
+        self.reader.read_context()
     }
 
     pub(super) fn apply_agg_info(&self, block: DataBlock) -> Result<DataBlock> {

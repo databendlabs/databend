@@ -67,6 +67,9 @@ pub struct MutationSource {
     pub table_index: IndexType,
     pub table_info: TableInfo,
     pub filters: Option<Filters>,
+    pub display_filters: Option<Filters>,
+    #[serde(default)]
+    pub has_hidden_secure_filters: bool,
     pub output_schema: DataSchemaRef,
     pub input_type: MutationType,
     pub read_partition_columns: ColumnSet,
@@ -113,6 +116,8 @@ impl IPhysicalPlan for MutationSource {
             table_index: self.table_index,
             table_info: self.table_info.clone(),
             filters: self.filters.clone(),
+            display_filters: self.display_filters.clone(),
+            has_hidden_secure_filters: self.has_hidden_secure_filters,
             output_schema: self.output_schema.clone(),
             input_type: self.input_type.clone(),
             read_partition_columns: self.read_partition_columns.clone(),
@@ -238,10 +243,24 @@ impl PhysicalPlanBuilder {
         &mut self,
         mutation_source: &databend_common_sql::plans::MutationSource,
     ) -> Result<PhysicalPlan> {
-        let filters = if !mutation_source.predicates.is_empty() {
+        let all_predicates: Vec<ScalarExpr> = mutation_source
+            .secure_predicates
+            .iter()
+            .chain(mutation_source.user_predicates.iter())
+            .cloned()
+            .collect();
+        let filters = if !all_predicates.is_empty() {
             Some(create_push_down_filters(
                 &self.ctx.get_function_context()?,
-                &mutation_source.predicates,
+                &all_predicates,
+            )?)
+        } else {
+            None
+        };
+        let display_filters = if !mutation_source.user_predicates.is_empty() {
+            Some(create_push_down_filters(
+                &self.ctx.get_function_context()?,
+                &mutation_source.user_predicates,
             )?)
         } else {
             None
@@ -283,6 +302,8 @@ impl PhysicalPlanBuilder {
             output_schema,
             table_info: mutation_info.table_info.clone(),
             filters,
+            display_filters,
+            has_hidden_secure_filters: !mutation_source.secure_predicates.is_empty(),
             input_type: mutation_source.mutation_type.clone(),
             read_partition_columns: mutation_source.read_partition_columns.clone(),
             truncate_table,

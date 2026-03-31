@@ -51,8 +51,11 @@ impl Binder {
             aliases,
         );
         let (mut scalar, _) = scalar_binder.bind(having)?;
-        let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&mut scalar)?;
+        AggregateRewriter::rewrite_expr(
+            &mut bind_context.aggregate_info,
+            self.metadata.clone(),
+            &mut scalar,
+        )?;
         Ok(scalar)
     }
 
@@ -77,7 +80,7 @@ impl Binder {
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check
             let mut having = having;
-            let mut grouping_checker = GroupingChecker::new(bind_context);
+            let mut grouping_checker = GroupingChecker::new(bind_context, None);
             grouping_checker.visit(&mut having)?;
             having
         } else {

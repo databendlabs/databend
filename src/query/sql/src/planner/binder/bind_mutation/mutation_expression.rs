@@ -27,6 +27,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::Symbol;
 use databend_common_expression::TableSchema;
+use log::error;
 
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -50,6 +51,7 @@ use crate::plans::Filter;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MutationSource;
+use crate::plans::Operator;
 use crate::plans::RelOperator;
 use crate::plans::SubqueryExpr;
 use crate::plans::Visitor;
@@ -152,8 +154,10 @@ impl MutationExpression {
                     update_stream_columns = false;
                 }
                 let is_lazy_table = {
+                    let settings = binder.ctx.get_settings();
                     let metadata = binder.metadata.read();
                     *mutation_strategy != MutationStrategy::NotMatchedOnly
+                        && settings.get_enable_merge_into_row_fetch()?
                         && metadata
                             .table(target_table_index)
                             .table()
@@ -259,13 +263,20 @@ impl MutationExpression {
                         columns: bind_context.column_set(),
                         table_index: target_table_index,
                         mutation_type: mutation_type.clone(),
-                        predicates: vec![],
+                        secure_predicates: vec![],
+                        user_predicates: vec![],
                         predicate_column_index: None,
                         read_partition_columns: Default::default(),
                     };
 
-                    s_expr =
-                        SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation_source)));
+                    // Direct mutation must evaluate row-access predicates inside MutationSource.
+                    // Keeping SecureFilter outside would filter rewritten blocks instead of
+                    // constraining the target rows that participate in the mutation.
+                    s_expr = Self::replace_scan_with_mutation_source(
+                        &s_expr,
+                        mutation_source,
+                        Vec::new(),
+                    )?;
 
                     if !predicates.is_empty() {
                         s_expr = SExpr::create_unary(
@@ -458,6 +469,61 @@ impl MutationExpression {
             }
         }
     }
+
+    /// Replace the Scan leaf node with a MutationSource while removing SecureFilter wrappers.
+    fn replace_scan_with_mutation_source(
+        s_expr: &SExpr,
+        mutation_source: MutationSource,
+        mut secure_predicates: Vec<ScalarExpr>,
+    ) -> Result<SExpr> {
+        match s_expr.plan() {
+            RelOperator::Scan(_) => {
+                let mut mutation_source = mutation_source;
+                mutation_source.secure_predicates = secure_predicates;
+                Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
+                    mutation_source,
+                ))))
+            }
+            RelOperator::SecureFilter(secure_filter) => {
+                if s_expr.arity() != 1 {
+                    error!(
+                        "Expected unary SecureFilter above Scan in mutation target, \
+                         got arity {} for {:?}",
+                        s_expr.arity(),
+                        s_expr.plan().rel_op(),
+                    );
+                    return Err(ErrorCode::Internal(
+                        "Expected unary SecureFilter above Scan in mutation target".to_string(),
+                    ));
+                }
+                secure_predicates.extend(secure_filter.predicates.clone());
+                Self::replace_scan_with_mutation_source(
+                    s_expr.unary_child(),
+                    mutation_source,
+                    secure_predicates,
+                )
+            }
+            _ => {
+                if s_expr.arity() != 1 {
+                    error!(
+                        "Expected unary operator above Scan in mutation target, \
+                         got {:?} with arity {}",
+                        s_expr.plan().rel_op(),
+                        s_expr.arity(),
+                    );
+                    return Err(ErrorCode::Internal(
+                        "Expected unary operator above Scan in mutation target".to_string(),
+                    ));
+                }
+                let child = Self::replace_scan_with_mutation_source(
+                    s_expr.unary_child(),
+                    mutation_source,
+                    secure_predicates,
+                )?;
+                Ok(s_expr.replace_children(vec![Arc::new(child)]))
+            }
+        }
+    }
 }
 
 impl Binder {
@@ -566,10 +632,9 @@ impl Binder {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::AsyncFunctionCall(_)
                     | ScalarExpr::UDFCall(_)
-            )
+            ) || scalar.is_aggregate()
         };
 
         let mut finder = Finder::new(&f);

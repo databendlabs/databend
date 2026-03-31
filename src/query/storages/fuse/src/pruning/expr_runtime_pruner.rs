@@ -34,6 +34,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use super::profile_guard::ProfileGuard;
 use crate::FuseBlockPartInfo;
 use crate::pruning::bloom_pruner::should_prune_runtime_inlist_by_bloom_index;
 
@@ -85,6 +86,8 @@ impl ExprRuntimePruner {
     /// Prune a partition based on expressions.
     /// Returns true if the partition should be pruned.
     pub async fn prune(&self, part: &PartInfoPtr) -> Result<bool> {
+        let _profile_guard =
+            ProfileGuard::new(ProfileStatisticsName::RuntimeFilterInlistMinMaxTime);
         if self.exprs.is_empty() {
             return Ok(false);
         }
