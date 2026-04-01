@@ -254,6 +254,12 @@ impl Processor for TransformPartitionedHashJoin {
                     if !state.finished {
                         state.finished = true;
                         self.join.add_block(None)?;
+
+                        if let Some(builder) = self.runtime_filter_builder.take() {
+                            let spill_happened = self.join.is_spill_happened();
+                            let packet = builder.finish(spill_happened)?;
+                            self.shared_rf_packets.merge_packet(packet)?;
+                        }
                     }
                     return Ok(());
                 };
@@ -322,12 +328,6 @@ impl Processor for TransformPartitionedHashJoin {
         self.stage = match &mut self.stage {
             Stage::Build(_) => {
                 let wait_res = self.stage_sync_barrier.wait().await;
-
-                if let Some(builder) = self.runtime_filter_builder.take() {
-                    let spill_happened = self.join.is_spill_happened();
-                    let packet = builder.finish(spill_happened)?;
-                    self.shared_rf_packets.merge_packet(packet)?;
-                }
 
                 let rf_build_elapsed = self.instant.elapsed() - elapsed;
                 let _wait_res = self.stage_sync_barrier.wait().await;

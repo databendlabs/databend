@@ -152,6 +152,12 @@ impl Processor for TransformHashJoin {
                     if !state.finished {
                         state.finished = true;
                         self.join.add_block(None)?;
+
+                        if let Some(builder) = self.runtime_filter_builder.take() {
+                            let spill_happened = self.join.is_spill_happened();
+                            let packet = builder.finish(spill_happened)?;
+                            self.join.add_runtime_filter_packet(packet)?;
+                        }
                     }
                     return Ok(());
                 };
@@ -222,14 +228,6 @@ impl Processor for TransformHashJoin {
 
         self.stage = match &mut self.stage {
             Stage::Build(_) => {
-                if let Some(builder) = self.runtime_filter_builder.take() {
-                    let spill_happened = self.join.is_spill_happened();
-                    // Disable runtime filters once spilling occurs to avoid partial-build filters
-                    // being globalized across the cluster, which can prune valid probe rows.
-                    let packet = builder.finish(spill_happened)?;
-                    self.join.add_runtime_filter_packet(packet)?;
-                }
-
                 let rf_build_elapsed = self.instant.elapsed() - elapsed;
                 let _wait_res = self.stage_sync_barrier.wait().await;
                 let before_wait = self.instant.elapsed();
