@@ -102,6 +102,7 @@ pub enum CacheClearanceLevel {
 }
 
 /// Where all the caches reside
+#[derive(Service)]
 pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,
@@ -136,8 +137,6 @@ pub struct CacheManager {
     /// In non-EE mode, disk caches are always disabled.
     allows_on_disk_cache: AtomicBool,
 }
-
-impl Service for CacheManager {}
 
 impl CacheManager {
     /// Initialize the caches according to the relevant configurations.

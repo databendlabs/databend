@@ -23,7 +23,9 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use databend_common_base::base::AnyServiceProvider;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::InnerConfigSymbol;
 use databend_common_base::base::Service;
 use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::ServiceRegistry;
@@ -52,6 +54,7 @@ use crate::sessions::session::Session;
 use crate::sessions::session_ctx::SessionServices;
 use crate::sessions::session_mgr_metrics::SessionManagerMetricsCollector;
 
+#[derive(Service)]
 pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
     pub(in crate::sessions) active_sessions: Arc<RwLock<HashMap<String, Weak<Session>>>>,
@@ -64,7 +67,7 @@ pub struct SessionManager {
     pub(in crate::sessions) mysql_basic_conn_id: AtomicU32,
 }
 
-impl ServiceProvider for SessionManager {
+impl AnyServiceProvider for SessionManager {
     fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
         self.default_services.read().get_service_any(type_id)
     }
@@ -77,6 +80,8 @@ impl ServiceRegistry for SessionManager {
             .insert_service_any(type_id, service);
     }
 }
+
+impl ServiceProvider<InnerConfigSymbol> for SessionManager {}
 
 impl SessionManager {
     pub fn init(conf: &InnerConfig) -> Result<()> {
@@ -546,5 +551,3 @@ impl SessionManager {
         Ok(all_temp_tables)
     }
 }
-
-impl Service for SessionManager {}

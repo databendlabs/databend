@@ -35,14 +35,13 @@ struct CachedRoles {
     cached_at: Instant,
 }
 
+#[derive(Service)]
 pub struct RoleCacheManager {
     user_manager: Arc<UserApiProvider>,
     cache: Arc<RwLock<HashMap<Tenant, CachedRoles>>>,
     polling_interval: Duration,
     polling_join_handle: Option<JoinHandle<()>>,
 }
-
-impl Service for RoleCacheManager {}
 
 impl RoleCacheManager {
     pub fn init() -> Result<()> {

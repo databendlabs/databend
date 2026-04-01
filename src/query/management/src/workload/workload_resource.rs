@@ -72,11 +72,10 @@ struct WorkloadGroupResourceManagerInner {
     online_workload_group: Mutex<HashMap<String, Weak<WorkloadGroupResource>>>,
 }
 
+#[derive(Service)]
 pub struct WorkloadGroupResourceManager {
     inner: Arc<WorkloadGroupResourceManagerInner>,
 }
-
-impl Service for WorkloadGroupResourceManager {}
 
 impl WorkloadGroupResourceManagerInner {
     pub fn new(

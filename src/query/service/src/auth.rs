@@ -37,11 +37,10 @@ use serde::Serialize;
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::Session;
 
+#[derive(Service)]
 pub struct AuthMgr {
     jwt_auth: Option<JwtAuthenticator>,
 }
-
-impl Service for AuthMgr {}
 
 #[derive(Debug, Serialize)]
 pub enum CredentialType {

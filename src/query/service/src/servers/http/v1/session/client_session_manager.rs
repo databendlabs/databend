@@ -62,6 +62,7 @@ struct SessionState {
     pub temp_tbl_mgr: TempTblMgrRef,
 }
 
+#[derive(Service)]
 pub struct ClientSessionManager {
     /// cache of tokens to avoid request for MetaServer on each auth.
     ///
@@ -91,8 +92,6 @@ pub struct ClientSessionManager {
     pub max_idle_time: Duration,
     pub min_refresh_interval: Duration,
 }
-
-impl Service for ClientSessionManager {}
 
 impl ClientSessionManager {
     pub fn instance() -> Arc<ClientSessionManager> {

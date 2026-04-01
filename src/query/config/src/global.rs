@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::Service;
 use databend_common_exception::Result;
 
 use crate::InnerConfig;
@@ -54,5 +53,3 @@ impl GlobalConfig {
             && config.query.common.warehouse_id.is_empty()
     }
 }
-
-impl Service for InnerConfig {}

@@ -26,14 +26,13 @@ use crate::worker_client::WorkerClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
+#[derive(Service)]
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
     pub notification_client: Arc<NotificationClient>,
     pub worker_client: Arc<WorkerClient>,
     pub timeout: Duration,
 }
-
-impl Service for CloudControlApiProvider {}
 
 impl CloudControlApiProvider {
     pub async fn new(endpoint: String, timeout: u64) -> Result<Arc<CloudControlApiProvider>> {

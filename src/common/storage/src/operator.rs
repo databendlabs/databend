@@ -553,15 +553,13 @@ impl RetryInterceptor for DatabendRetryInterceptor {
 /// # Notes
 ///
 /// All data accessed via this operator will be persisted.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Service)]
 pub struct DataOperator {
     operator: Operator,
     spill_operator: Operator,
     params: StorageParams,
     spill_params: Option<StorageParams>,
 }
-
-impl Service for DataOperator {}
 
 impl DataOperator {
     /// Get the operator from PersistOperator

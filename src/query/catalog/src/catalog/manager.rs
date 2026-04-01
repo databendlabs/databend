@@ -47,6 +47,7 @@ use super::CatalogCreator;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
+#[derive(Service)]
 pub struct CatalogManager {
     pub meta: MetaStore,
 
@@ -59,8 +60,6 @@ pub struct CatalogManager {
     pub catalog_creators: HashMap<CatalogType, Arc<dyn CatalogCreator>>,
     pub catalog_caches: RwLock<HashMap<String, Arc<dyn Catalog>>>,
 }
-
-impl Service for CatalogManager {}
 
 impl CatalogManager {
     /// Fetch catalog manager from global instance.

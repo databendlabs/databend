@@ -21,9 +21,12 @@ use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::base::AnyServiceProvider;
+use databend_common_base::base::InnerConfigSymbol;
 use databend_common_base::base::Service;
 use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::ServiceRegistry;
+use databend_common_base::base::SessionManagerSymbol;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
@@ -47,7 +50,7 @@ pub struct SessionServices {
     items: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
 }
 
-impl ServiceProvider for SessionServices {
+impl AnyServiceProvider for SessionServices {
     fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
         self.items.get(&type_id).cloned()
     }
@@ -440,8 +443,12 @@ impl SessionContext {
     }
 }
 
-impl ServiceProvider for SessionContext {
+impl AnyServiceProvider for SessionContext {
     fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
         self.services.get_service_any(type_id)
     }
 }
+
+impl ServiceProvider<InnerConfigSymbol> for SessionContext {}
+
+impl ServiceProvider<SessionManagerSymbol> for SessionContext {}

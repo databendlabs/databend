@@ -115,6 +115,7 @@ impl Queries {
     }
 }
 
+#[derive(Service)]
 pub struct HttpQueryManager {
     pub(crate) start_instant: Instant,
     pub(crate) server_info: ServerInfo,
@@ -122,8 +123,6 @@ pub struct HttpQueryManager {
     #[allow(clippy::type_complexity)]
     pub(crate) txn_managers: Arc<Mutex<HashMap<String, (TxnManagerRef, JoinHandle<()>)>>>,
 }
-
-impl Service for HttpQueryManager {}
 
 impl HttpQueryManager {
     #[async_backtrace::framed]

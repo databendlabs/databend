@@ -79,6 +79,7 @@ use tokio::time::sleep;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 
+#[derive(Service)]
 pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,
@@ -90,8 +91,6 @@ pub struct ClusterDiscovery {
     flight_address: String,
     lru_cache: parking_lot::Mutex<LruCache<String, CachedNode>>,
 }
-
-impl Service for ClusterDiscovery {}
 
 // avoid leak FlightClient to common-xxx
 #[async_trait::async_trait]

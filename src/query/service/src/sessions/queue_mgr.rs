@@ -32,9 +32,9 @@ use std::time::SystemTime;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::base::Service;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::base::escape_for_key;
+use databend_common_base::base::service_symbol;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
@@ -765,6 +765,5 @@ impl QueueData for QueryEntry {
     }
 }
 
+#[service_symbol]
 pub type QueriesQueueManager = QueueManager<QueryEntry>;
-
-impl Service for QueueManager<QueryEntry> {}

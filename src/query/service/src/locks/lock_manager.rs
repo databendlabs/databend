@@ -35,12 +35,11 @@ use tokio::sync::mpsc;
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
 
+#[derive(Service)]
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
     tx: mpsc::UnboundedSender<u64>,
 }
-
-impl Service for LockManager {}
 
 impl LockManager {
     pub fn init() -> Result<()> {

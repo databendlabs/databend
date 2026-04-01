@@ -143,11 +143,10 @@ async fn create_flight_client(
     }
 }
 
+#[derive(Service)]
 pub struct DataExchangeManager {
     queries_coordinator: ReentrantMutex<SyncUnsafeCell<HashMap<String, QueryCoordinator>>>,
 }
-
-impl Service for DataExchangeManager {}
 
 impl DataExchangeManager {
     pub fn init() -> Result<()> {

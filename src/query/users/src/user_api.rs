@@ -57,6 +57,7 @@ use tokio::sync::Mutex;
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
 
+#[derive(Service)]
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
@@ -73,8 +74,6 @@ pub struct UserApiProvider {
 
     builtin: BuiltIn,
 }
-
-impl Service for UserApiProvider {}
 
 impl UserApiProvider {
     #[async_backtrace::framed]

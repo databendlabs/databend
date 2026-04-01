@@ -3419,6 +3419,7 @@ dependencies = [
  "concurrent-queue",
  "crc32fast",
  "databend-base",
+ "databend-common-base-macros",
  "databend-common-exception",
  "enquote",
  "futures",
@@ -3453,6 +3454,15 @@ dependencies = [
  "tokio",
  "unicode-segmentation",
  "uuid",
+]
+
+[[package]]
+name = "databend-common-base-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]

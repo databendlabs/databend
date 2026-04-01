@@ -34,13 +34,12 @@ use crate::errors::meta_service_error;
 use crate::workload::workload_api::WorkloadApi;
 pub static WORKLOAD_META_KEY_PREFIX: &str = "__fd_workloads";
 
+#[derive(Service)]
 pub struct WorkloadMgr {
     metastore: MetaStore,
     workload_key_prefix: String,
     workload_index_prefix: String,
 }
-
-impl Service for WorkloadMgr {}
 
 impl WorkloadMgr {
     pub fn create(metastore: MetaStore, tenant: &str) -> Result<Self> {

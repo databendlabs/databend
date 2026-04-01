@@ -64,11 +64,10 @@ pub trait LicenseManager: Sync + Send {
     }
 }
 
+#[derive(Service)]
 pub struct LicenseManagerSwitch {
     manager: Box<dyn LicenseManager>,
 }
-
-impl Service for LicenseManagerSwitch {}
 
 impl LicenseManagerSwitch {
     pub fn create(manager: Box<dyn LicenseManager>) -> LicenseManagerSwitch {
