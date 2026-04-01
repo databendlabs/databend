@@ -59,6 +59,8 @@ pub use crate::metrics::StorageMetricsLayer;
 
 mod runtime_layer;
 
+pub mod dummy_delete_layer;
+
 mod column_node;
 pub use column_node::ColumnNode;
 pub use column_node::ColumnNodes;
