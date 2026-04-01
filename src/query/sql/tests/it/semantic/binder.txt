@@ -247,6 +247,67 @@ status: error
 code: 1065
 message: Window specification and arguments cannot contain aggregate functions
 
+=== window_order_reuses_having_aggregate ===
+description: A window ORDER BY clause should be able to reuse an aggregate introduced later by HAVING.
+sql: SELECT row_number() OVER (ORDER BY sum(number)) FROM t HAVING sum(number) > 0
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY sum(number)) (#2) AS (#2)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [sum(number) (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [sum(number) (#1) AS (#1)]
+            └── Filter
+                ├── filters: [gt(sum(number) (#1), 0)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_order_by_aggregate ===
+description: A window ORDER BY clause should be able to reuse an aggregate introduced later by ORDER BY.
+sql: SELECT row_number() OVER (ORDER BY sum(number)) FROM t ORDER BY sum(number)
+status: ok
+Sort
+├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1), row_number() OVER (ORDER BY sum(number)) (#2) AS (#2)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [sum(number) (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [sum(number) (#1) AS (#1)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
 === window_order_rejects_window_alias_expansion ===
 description: A window ORDER BY clause must still reject aliases that expand to a prior window expression.
 sql: SELECT row_number() OVER () AS rn, row_number() OVER (ORDER BY rn) FROM t

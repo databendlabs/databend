@@ -90,6 +90,7 @@ benchmark/clickbench/results
 .lycheecache
 
 .claude
+.codex
 
 # tmp
 tmp

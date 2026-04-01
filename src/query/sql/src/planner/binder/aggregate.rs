@@ -891,8 +891,7 @@ impl Binder {
             }
         }
 
-        let original_context = bind_context.expr_context.clone();
-        bind_context.set_expr_context(ExprContext::GroupClaue);
+        let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
 
         let group_by = Self::expand_group(group_by.clone())?;
         match &group_by {
@@ -920,7 +919,7 @@ impl Binder {
             }
             _ => unreachable!(),
         }
-        bind_context.set_expr_context(original_context);
+        bind_context.expr_context = original_context;
         Ok(())
     }
 
@@ -1447,6 +1446,34 @@ impl Binder {
 
             Ok((scalar.clone(), scalar.data_type()?))
         }
+    }
+
+    pub(super) fn bind_and_rewrite_aggregate_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        expr_context: ExprContext,
+        expr: &Expr,
+    ) -> Result<ScalarExpr> {
+        let original_context = bind_context.replace_expr_context(expr_context);
+
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            aliases,
+        );
+
+        let (mut result, _) = scalar_binder.bind(expr)?;
+        AggregateRewriter::rewrite_expr(
+            &mut bind_context.aggregate_info,
+            self.metadata.clone(),
+            &mut result,
+        )?;
+
+        bind_context.expr_context = original_context;
+        Ok(result)
     }
 }
 

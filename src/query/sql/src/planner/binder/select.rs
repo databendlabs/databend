@@ -75,8 +75,7 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        let last_expr_context = bind_context.expr_context.clone();
-        bind_context.set_expr_context(ExprContext::WhereClause);
+        let last_expr_context = bind_context.replace_expr_context(ExprContext::WhereClause);
 
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -103,7 +102,7 @@ impl Binder {
             predicates: split_conjunctions(&scalar),
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
-        bind_context.set_expr_context(last_expr_context);
+        bind_context.expr_context = last_expr_context;
 
         Ok((new_expr, scalar))
     }
@@ -308,8 +307,7 @@ impl Binder {
         if distinct {
             let mut select_info =
                 SelectInfo::from_columns(new_bind_context.all_column_bindings().to_vec());
-            new_expr =
-                self.bind_distinct(left_span, &mut new_bind_context, &mut select_info, new_expr)?;
+            new_expr = self.bind_distinct(left_span, &mut select_info, new_expr)?;
         }
 
         Ok((new_expr, new_bind_context))
@@ -381,7 +379,7 @@ impl Binder {
 
         // then apply distinct
         let mut select_info = SelectInfo::from_columns(left_context.all_column_bindings().to_vec());
-        let s_expr = self.bind_distinct(left_span, &mut left_context, &mut select_info, s_expr)?;
+        let s_expr = self.bind_distinct(left_span, &mut select_info, s_expr)?;
         Ok((s_expr, left_context))
     }
 

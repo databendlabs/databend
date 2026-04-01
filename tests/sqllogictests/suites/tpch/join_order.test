@@ -541,11 +541,11 @@ HashJoin: INNER
 │       ├── Build
 │       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── Scan: default.tpch_test.nation (#5) (read rows: 25)
+│       │       │   └── Scan: default.tpch_test.nation (#8) (read rows: 25)
 │       │       └── Probe
-│       │           └── Scan: default.tpch_test.supplier (#4) (read rows: 10000)
+│       │           └── Scan: default.tpch_test.supplier (#7) (read rows: 10000)
 │       └── Probe
-│           └── Scan: default.tpch_test.partsupp (#3) (read rows: 800000)
+│           └── Scan: default.tpch_test.partsupp (#6) (read rows: 800000)
 └── Probe
     └── HashJoin: INNER
         ├── Build

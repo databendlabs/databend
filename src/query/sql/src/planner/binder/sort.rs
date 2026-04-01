@@ -62,7 +62,7 @@ impl Binder {
         order_by: &[OrderByExpr],
         distinct: bool,
     ) -> Result<OrderItems> {
-        bind_context.set_expr_context(ExprContext::OrderByClause);
+        bind_context.expr_context = ExprContext::OrderByClause;
         let settings = self.ctx.get_settings();
         let default_nulls_first = settings.get_nulls_first();
 
