@@ -3394,6 +3394,7 @@ dependencies = [
  "fast-float2",
  "fastrace",
  "goldenfile",
+ "hex",
  "indent",
  "itertools 0.13.0",
  "logos",
@@ -6212,6 +6213,7 @@ dependencies = [
  "tantivy-fst",
  "thiserror 1.0.69",
  "unicase",
+ "xorf",
  "xorfilter-rs",
  "zerocopy",
 ]
@@ -6831,7 +6833,7 @@ checksum = "d6add3b8cff394282be81f3fc1a0605db594ed69890078ca6e2cab1c408bcf04"
 [[package]]
 name = "dtparse"
 version = "2.0.0"
-source = "git+https://github.com/datafuse-extras/dtparse.git?rev=30e28ca#30e28ca916b3563d98495d00063fa896cdb1cafe"
+source = "git+https://github.com/datafuse-extras/dtparse.git?rev=7a9e40f#7a9e40f9ed21a2ad7b6392c85c406a6eeee4114c"
 dependencies = [
  "chrono",
  "lazy_static",
@@ -19227,6 +19229,16 @@ name = "xmlparser"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
+
+[[package]]
+name = "xorf"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45e820b97864028eb5069aabf2d90ad7bc279a0ed0292f1306451ce4b91adc13"
+dependencies = [
+ "libm",
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "xorfilter-rs"

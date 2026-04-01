@@ -55,6 +55,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::is_valid_approx_distinct_columns;
 use crate::interpreters::common::table_option_validation::is_valid_block_per_segment;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
+use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
@@ -173,6 +174,7 @@ impl Interpreter for SetOptionsInterpreter {
 
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&self.plan.set_options, table.schema())?;
+        is_valid_bloom_index_type(&self.plan.set_options)?;
         is_valid_approx_distinct_columns(&self.plan.set_options, table.schema())?;
 
         if let Some(new_snapshot_location) =

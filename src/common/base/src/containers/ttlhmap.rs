@@ -48,12 +48,12 @@ where K: Eq + Hash
 impl<K, V> TtlHashMap<K, V>
 where K: Eq + Hash
 {
-    /// Create `TtlHashMap` with time-to-leval, `CleanPolicy::ReadModify` will be take for this initialization
+    /// Create `TtlHashMap` with time-to-live, `CleanPolicy::ReadModify` will be take for this initialization
     pub fn new(ttl: Duration) -> Self {
         Self::new_with_clean_policy(ttl, CleanPolicy::ReadModify)
     }
 
-    /// Create `TtlHashMap` with time-to-leval and `CleanPolicy`
+    /// Create `TtlHashMap` with time-to-live and `CleanPolicy`
     pub fn new_with_clean_policy(ttl: Duration, clean_policy: CleanPolicy) -> Self {
         TtlHashMap {
             map: HashMap::new(),
