@@ -36,6 +36,15 @@ enum PhysicalJoinType {
     },
 }
 
+fn asof_hash_join_type(join_type: JoinType) -> JoinType {
+    match join_type {
+        JoinType::Asof => JoinType::Inner,
+        JoinType::LeftAsof => JoinType::Left,
+        JoinType::RightAsof => JoinType::Right,
+        _ => join_type,
+    }
+}
+
 // Choose physical join type by join conditions
 fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
     if join.equi_conditions.is_empty() && join.join_type.is_any_join() {
@@ -131,6 +140,31 @@ impl PhysicalPlanBuilder {
         // 2. Build physical plan.
         // Choose physical join type by join conditions
         if join.join_type.is_asof_join() {
+            if !join.equi_conditions.is_empty() {
+                // Binder rewrites ASOF into:
+                //   1. the original inequality; and
+                //   2. a window-derived boundary that guarantees at most one build row
+                //      matches inside each equi-key partition.
+                //
+                // When equi conditions are present, we can therefore reuse the existing
+                // hash join path to first shrink candidates by the equi keys, then apply
+                // the ASOF residual predicates as post-join filters.
+                let mut hash_join = join.clone();
+                hash_join.join_type = asof_hash_join_type(hash_join.join_type);
+
+                return self
+                    .build_hash_join(
+                        &hash_join,
+                        s_expr,
+                        required,
+                        others_required,
+                        left_required,
+                        right_required,
+                        stat_info,
+                    )
+                    .await;
+            }
+
             let left_prop = s_expr.left_child().derive_relational_prop()?;
             let right_prop = s_expr.right_child().derive_relational_prop()?;
 
