@@ -26,4 +26,5 @@ pub use global::get_global_runtime_filter_packet;
 pub use interface::build_and_push_down_runtime_filter;
 pub use local_builder::RuntimeFilterLocalBuilder;
 pub use merge::merge_join_runtime_filter_packets;
+pub use merge::merge_two_runtime_filter_packets;
 pub use packet::JoinRuntimeFilterPacket;

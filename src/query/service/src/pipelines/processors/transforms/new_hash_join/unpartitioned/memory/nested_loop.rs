@@ -89,8 +89,8 @@ impl<T: Join> Join for NestedLoopJoin<T> {
         self.inner.final_build()
     }
 
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
-        self.inner.add_runtime_filter_packet(packet);
+    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) -> Result<()> {
+        self.inner.add_runtime_filter_packet(packet)
     }
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {

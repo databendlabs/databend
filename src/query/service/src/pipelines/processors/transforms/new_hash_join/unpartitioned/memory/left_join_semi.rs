@@ -37,7 +37,7 @@ use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
-use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
+use crate::pipelines::processors::transforms::merge_two_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::probe_stream::ProbeStream;
@@ -107,21 +107,27 @@ impl Join for SemiLeftHashJoin {
         self.basic_hash_join.final_build::<false>()
     }
 
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
-        let locked = self.basic_state.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.basic_state.packets.as_mut().push(packet);
+    fn add_runtime_filter_packet(&self, mut packet: JoinRuntimeFilterPacket) -> Result<()> {
+        loop {
+            let locked = self.basic_state.mutex.lock();
+            let _locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+            let rf_packets = self.basic_state.packets.as_mut();
+
+            if rf_packets.is_empty() {
+                rf_packets.push(packet);
+                return Ok(());
+            }
+
+            let other = rf_packets.pop().unwrap();
+            drop(_locked);
+            packet = merge_two_runtime_filter_packets(packet, other)?;
+        }
     }
 
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {
-        let packets = std::mem::take(self.basic_state.packets.as_mut());
-        merge_join_runtime_filter_packets(
-            packets,
-            self.inlist_threshold,
-            self.bloom_threshold,
-            self.min_max_threshold,
-            self.spatial_threshold,
-        )
+        let mut packets = std::mem::take(self.basic_state.packets.as_mut());
+        Ok(packets.pop().unwrap_or_default())
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

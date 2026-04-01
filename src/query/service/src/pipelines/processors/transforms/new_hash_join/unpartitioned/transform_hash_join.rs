@@ -227,7 +227,7 @@ impl Processor for TransformHashJoin {
                     // Disable runtime filters once spilling occurs to avoid partial-build filters
                     // being globalized across the cluster, which can prune valid probe rows.
                     let packet = builder.finish(spill_happened)?;
-                    self.join.add_runtime_filter_packet(packet);
+                    self.join.add_runtime_filter_packet(packet)?;
                 }
 
                 let rf_build_elapsed = self.instant.elapsed() - elapsed;

@@ -44,7 +44,7 @@ use super::PartitionedRightSemiJoin;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
-use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
+use crate::pipelines::processors::transforms::merge_two_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::FinishedJoin;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinStream;
@@ -61,16 +61,25 @@ impl SharedRuntimeFilterPackets {
         })
     }
 
-    pub fn add_packet(&self, packet: JoinRuntimeFilterPacket) {
-        let locked = self.packets.lock();
-        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-        locked.push(packet);
+    pub fn merge_packet(&self, mut my_packet: JoinRuntimeFilterPacket) -> Result<()> {
+        loop {
+            let locked = self.packets.lock();
+            let mut guard = locked.unwrap_or_else(PoisonError::into_inner);
+
+            if guard.is_empty() {
+                guard.push(my_packet);
+                return Ok(());
+            }
+
+            let other = guard.pop().unwrap();
+            drop(guard);
+            my_packet = merge_two_runtime_filter_packets(my_packet, other)?;
+        }
     }
 
-    pub fn take_packets(&self) -> Vec<JoinRuntimeFilterPacket> {
-        let locked = self.packets.lock();
-        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-        std::mem::take(&mut *locked)
+    pub fn take_packet(&self) -> Option<JoinRuntimeFilterPacket> {
+        let mut guard = self.packets.lock().unwrap_or_else(PoisonError::into_inner);
+        guard.pop()
     }
 }
 
@@ -317,7 +326,7 @@ impl Processor for TransformPartitionedHashJoin {
                 if let Some(builder) = self.runtime_filter_builder.take() {
                     let spill_happened = self.join.is_spill_happened();
                     let packet = builder.finish(spill_happened)?;
-                    self.shared_rf_packets.add_packet(packet);
+                    self.shared_rf_packets.merge_packet(packet)?;
                 }
 
                 let rf_build_elapsed = self.instant.elapsed() - elapsed;
@@ -325,14 +334,10 @@ impl Processor for TransformPartitionedHashJoin {
                 let before_wait = self.instant.elapsed();
 
                 if wait_res.is_leader() {
-                    let packets = self.shared_rf_packets.take_packets();
-                    let packet = merge_join_runtime_filter_packets(
-                        packets,
-                        self.rf_desc.inlist_threshold,
-                        self.rf_desc.bloom_threshold,
-                        self.rf_desc.min_max_threshold,
-                        self.rf_desc.spatial_threshold,
-                    )?;
+                    let packet = self
+                        .shared_rf_packets
+                        .take_packet()
+                        .unwrap_or_else(|| JoinRuntimeFilterPacket::complete_without_filters(0));
                     info!(
                         "spilled: false, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
                         packet.packets.as_ref().map_or(0, |p| p.len()),

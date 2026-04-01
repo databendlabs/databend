@@ -32,7 +32,9 @@ pub trait Join: Send + Sync + 'static {
     /// returns its progress. Once all batches are consumed it returns `None` to signal completion.
     fn final_build(&mut self) -> Result<Option<ProgressValues>>;
 
-    fn add_runtime_filter_packet(&self, _packet: JoinRuntimeFilterPacket) {}
+    fn add_runtime_filter_packet(&self, _packet: JoinRuntimeFilterPacket) -> Result<()> {
+        Ok(())
+    }
 
     /// Generate runtime filter packet for the given filter description.
     fn build_runtime_filter(&self) -> Result<JoinRuntimeFilterPacket> {

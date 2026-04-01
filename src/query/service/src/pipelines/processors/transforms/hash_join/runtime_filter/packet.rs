@@ -45,7 +45,7 @@ pub struct RuntimeFilterPacket {
     pub id: usize,
     pub inlist: Option<Column>,
     pub min_max: Option<SerializableDomain>,
-    pub bloom: Option<Vec<u64>>,
+    pub bloom: Option<Vec<u8>>,
     pub spatial: Option<SpatialPacket>,
 }
 
@@ -161,7 +161,7 @@ impl TryInto<DataBlock> for JoinRuntimeFilterPacket {
                     bloom_pos = Some(entities.len());
 
                     let builder = ArrayColumnBuilder {
-                        builder: ColumnBuilder::Number(NumberColumnBuilder::UInt64(bloom_filter)),
+                        builder: ColumnBuilder::Number(NumberColumnBuilder::UInt8(bloom_filter)),
                         offsets: vec![0, len],
                     };
                     entities.push(Column::Array(Box::new(builder.build())));
@@ -228,7 +228,7 @@ impl TryFrom<DataBlock> for JoinRuntimeFilterPacket {
                     let array_column = column.into_array().expect("it's a bug");
                     let bloom_value_column = array_column.index(0).expect("It's a bug");
                     bloom = Some(match bloom_value_column {
-                        Column::Number(NumberColumn::UInt64(v)) => v.to_vec(),
+                        Column::Number(NumberColumn::UInt8(v)) => v.to_vec(),
                         _ => unreachable!("Unexpected runtime bloom filter column type"),
                     })
                 }

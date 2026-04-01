@@ -212,7 +212,7 @@ impl Join for HybridHashJoin {
         }
     }
 
-    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {
+    fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) -> Result<()> {
         match &self.mode {
             HybridJoinMode::Memory(join) => join.add_runtime_filter_packet(packet),
             HybridJoinMode::Grace(join) => join.add_runtime_filter_packet(packet),
