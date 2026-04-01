@@ -85,16 +85,6 @@ impl FuseTable {
             table_meta.cluster_key_v2 = None;
         }
 
-        // Intentionally preserve current table-level governance metadata when the historical
-        // snapshot keeps the same schema. Branch/time-travel snapshot navigation is designed to
-        // restore snapshot-carried metadata (schema, clustering, statistics), but not to rewind
-        // later governance-only table_meta changes such as constraints, policies, or index
-        // options when the column layout itself is unchanged.
-        if table_meta.schema.as_ref() == &snapshot.schema {
-            return Ok(());
-        }
-
-        let snapshot_leaf_column_ids = snapshot.schema.to_leaf_column_id_set();
         let mut historical_schema = snapshot.schema.clone();
         historical_schema.next_column_id = self
             .table_info
@@ -102,6 +92,18 @@ impl FuseTable {
             .schema
             .next_column_id()
             .max(historical_schema.next_column_id());
+
+        // Intentionally preserve current table-level governance metadata when the historical
+        // snapshot keeps the same schema after normalizing the allocator cursor. Branch/time-
+        // travel snapshot navigation is designed to restore snapshot-carried metadata (schema,
+        // clustering, statistics), but not to rewind later governance-only table_meta changes
+        // such as constraints, policies, or index options when the column layout itself is
+        // unchanged.
+        if table_meta.schema.as_ref() == &historical_schema {
+            return Ok(());
+        }
+
+        let snapshot_leaf_column_ids = historical_schema.to_leaf_column_id_set();
 
         table_meta.fill_field_comments();
         let comment_by_column_id = table_meta
