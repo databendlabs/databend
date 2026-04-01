@@ -65,6 +65,7 @@ use crate::config::CredentialChainConfig;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
+use crate::dummy_delete_layer::DummyDeleteLayer;
 use crate::runtime_layer::RuntimeLayer;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
@@ -233,6 +234,8 @@ fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) ->
             op = op.layer(ConcurrentLimitLayer::new(permits));
         }
     }
+
+    op = op.layer(DummyDeleteLayer);
 
     Ok(op)
 }
