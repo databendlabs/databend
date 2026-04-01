@@ -107,11 +107,13 @@ impl Settings {
         })?;
         let geometry_format = self.get_geometry_output_format()?;
         let binary_format = self.get_binary_output_format()?;
+        let http_json_result_mode = self.get_http_json_result_mode()?;
         let format_null_as_str = self.get_format_null_as_str()?;
         Ok(OutputFormatSettings {
             jiff_timezone,
             geometry_format,
             binary_format,
+            http_json_result_mode,
             format_null_as_str,
         })
     }

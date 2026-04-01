@@ -174,6 +174,7 @@ def test_query_lifecycle_finalized(rows):
             "timezone": "Asia/Shanghai",
             "geometry_output_format": f"{geometry_output_format}",
             "binary_output_format": f"{binary_output_format}",
+            "http_json_result_mode": "display",
         },
         "session": {
             "catalog": "default",
