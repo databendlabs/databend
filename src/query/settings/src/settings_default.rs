@@ -1585,7 +1585,7 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("enable_partitioned_hash_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1),
                     desc: "Enables partitioned hash join for shuffle join.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
