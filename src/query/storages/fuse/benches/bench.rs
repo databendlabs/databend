@@ -41,6 +41,7 @@ mod dummy {
     use databend_common_expression::TableSchemaRef;
     use databend_common_native::read::NativeColumnsReader;
     use databend_common_storages_fuse::FuseStorageFormat;
+    use databend_common_storages_fuse::index::BloomIndexType;
     use databend_common_storages_fuse::io::WriteSettings;
     use databend_common_storages_fuse::io::serialize_block;
     use databend_storages_common_table_meta::table::TableCompression;
@@ -145,6 +146,7 @@ mod dummy {
         let write_settings = WriteSettings {
             storage_format,
             table_compression: compression,
+            bloom_index_type: BloomIndexType::default(),
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary,

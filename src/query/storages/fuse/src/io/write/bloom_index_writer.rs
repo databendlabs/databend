@@ -28,6 +28,7 @@ use databend_common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::NgramArgs;
 use databend_storages_common_index::filters::BlockFilter;
 use databend_storages_common_io::ReadSettings;
@@ -94,12 +95,17 @@ impl BloomIndexState {
         ctx: Arc<dyn TableContext>,
         block: &DataBlock,
         location: Location,
+        bloom_index_type: BloomIndexType,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: &[NgramArgs],
     ) -> Result<Option<Self>> {
         // write index
-        let mut builder =
-            BloomIndexBuilder::create(ctx.get_function_context()?, bloom_columns_map, ngram_args)?;
+        let mut builder = BloomIndexBuilder::create(
+            ctx.get_function_context()?,
+            bloom_index_type,
+            bloom_columns_map,
+            ngram_args,
+        )?;
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {
@@ -128,6 +134,7 @@ pub struct BloomIndexRebuilder {
     pub table_schema: TableSchemaRef,
     pub table_dal: Operator,
     pub storage_format: FuseStorageFormat,
+    pub bloom_index_type: BloomIndexType,
     pub bloom_columns_map: BTreeMap<FieldIndex, TableField>,
     pub ngram_args: Vec<NgramArgs>,
 }
@@ -172,6 +179,7 @@ impl BloomIndexRebuilder {
         assert_eq!(bloom_index_location.1, BlockFilter::VERSION);
         let mut builder = BloomIndexBuilder::create(
             self.table_ctx.get_function_context()?,
+            self.bloom_index_type,
             self.bloom_columns_map.clone(),
             &self.ngram_args,
         )?;
