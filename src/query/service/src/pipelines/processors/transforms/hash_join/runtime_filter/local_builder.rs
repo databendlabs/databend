@@ -230,7 +230,7 @@ impl SingleFilterBuilder {
                 None
             };
 
-            let bloom = self.bloom_filter.take().map(|f| f.to_bytes());
+            let bloom = self.bloom_filter.take().map(|f| f.into_u32s());
 
             Ok(RuntimeFilterPacket {
                 id: self.id,

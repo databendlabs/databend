@@ -278,13 +278,13 @@ fn build_min_max_filter(
 }
 
 fn build_bloom_filter(
-    bloom_bytes: Vec<u8>,
+    bloom_words: Vec<u32>,
     probe_key: &Expr<String>,
 ) -> Result<RuntimeFilterBloom> {
     let probe_column = resolve_probe_column_ref(probe_key);
     let column_name = probe_column.id.to_string();
-    let filter = Sbbf::from_bytes(&bloom_bytes)
-        .ok_or_else(|| ErrorCode::Internal("Invalid bloom filter bytes in runtime filter"))?;
+    let filter = Sbbf::from_u32s(bloom_words)
+        .ok_or_else(|| ErrorCode::Internal("Invalid bloom filter data in runtime filter"))?;
     Ok(RuntimeFilterBloom {
         column_name,
         filter: Arc::new(filter),
@@ -372,7 +372,7 @@ mod tests {
             bloom: Some({
                 let mut f = Sbbf::new_with_ndv_fpp(100, 0.01).unwrap();
                 f.insert_hash_batch(&[11, 22]);
-                f.to_bytes()
+                f.into_u32s()
             }),
             spatial: None,
         });

@@ -307,33 +307,26 @@ impl Sbbf {
         self.0.capacity() * std::mem::size_of::<Block>()
     }
 
-    /// Serialize the bloom filter to bytes (little-endian).
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(self.0.len() * size_of::<Block>());
-        for block in &self.0 {
-            for word in &block.0 {
-                bytes.extend_from_slice(&word.to_le_bytes());
-            }
-        }
-        bytes
+    /// Zero-copy serialize to Vec<u32>, consuming self.
+    pub fn into_u32s(self) -> Vec<u32> {
+        let mut blocks = std::mem::ManuallyDrop::new(self.0);
+        let ptr = blocks.as_mut_ptr() as *mut u32;
+        let len = blocks.len() * 8;
+        let cap = blocks.capacity() * 8;
+        unsafe { Vec::from_raw_parts(ptr, len, cap) }
     }
 
-    /// Deserialize a bloom filter from bytes (little-endian).
-    /// Returns None if bytes length is not a multiple of 32 (Block size).
-    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.is_empty() || !bytes.len().is_multiple_of(size_of::<Block>()) {
+    /// Zero-copy deserialize from Vec<u32>.
+    /// Returns None if length is not a multiple of 8 (one Block = 8 x u32).
+    pub fn from_u32s(words: Vec<u32>) -> Option<Self> {
+        if words.is_empty() || !words.len().is_multiple_of(8) {
             return None;
         }
-        let num_blocks = bytes.len() / size_of::<Block>();
-        let mut blocks = Vec::with_capacity(num_blocks);
-        for chunk in bytes.chunks_exact(size_of::<Block>()) {
-            let mut words = [0u32; 8];
-            for (i, word_bytes) in chunk.chunks_exact(4).enumerate() {
-                words[i] = u32::from_le_bytes(word_bytes.try_into().unwrap());
-            }
-            blocks.push(Block(words));
-        }
-        Some(Self(blocks))
+        let mut words = std::mem::ManuallyDrop::new(words);
+        let len = words.len() / 8;
+        let cap = words.capacity() / 8;
+        let ptr = words.as_mut_ptr() as *mut Block;
+        Some(Self(unsafe { Vec::from_raw_parts(ptr, len, cap) }))
     }
 }
 
@@ -565,21 +558,21 @@ mod tests {
         let hashes: Vec<u64> = (0..500).collect();
         filter.insert_hash_batch(&hashes);
 
-        let bytes = filter.to_bytes();
-        let restored = Sbbf::from_bytes(&bytes).unwrap();
+        let words = filter.into_u32s();
+        let restored = Sbbf::from_u32s(words).unwrap();
 
         for hash in &hashes {
-            assert_eq!(filter.check_hash(*hash), restored.check_hash(*hash));
+            assert!(restored.check_hash(*hash));
         }
     }
 
     #[test]
-    fn test_sbbf_from_bytes_invalid() {
-        assert!(Sbbf::from_bytes(&[]).is_none());
-        assert!(Sbbf::from_bytes(&[0; 31]).is_none());
-        assert!(Sbbf::from_bytes(&[0; 33]).is_none());
-        assert!(Sbbf::from_bytes(&[0; 32]).is_some());
-        assert!(Sbbf::from_bytes(&[0; 64]).is_some());
+    fn test_sbbf_from_u32s_invalid() {
+        assert!(Sbbf::from_u32s(vec![]).is_none());
+        assert!(Sbbf::from_u32s(vec![0; 7]).is_none());
+        assert!(Sbbf::from_u32s(vec![0; 9]).is_none());
+        assert!(Sbbf::from_u32s(vec![0; 8]).is_some());
+        assert!(Sbbf::from_u32s(vec![0; 16]).is_some());
     }
 
     #[test]
@@ -593,10 +586,10 @@ mod tests {
             f2.insert_hash(i);
         }
 
-        let bytes1 = f1.to_bytes();
-        let bytes2 = f2.to_bytes();
-        let mut restored1 = Sbbf::from_bytes(&bytes1).unwrap();
-        let restored2 = Sbbf::from_bytes(&bytes2).unwrap();
+        let words1 = f1.into_u32s();
+        let words2 = f2.into_u32s();
+        let mut restored1 = Sbbf::from_u32s(words1).unwrap();
+        let restored2 = Sbbf::from_u32s(words2).unwrap();
         restored1.union(&restored2);
 
         for i in 0..100 {

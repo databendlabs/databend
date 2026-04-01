@@ -159,21 +159,21 @@ fn merge_min_max(
     Some(SerializableDomain { min, max })
 }
 
-fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u8>> {
+fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u32>> {
     if packets
         .iter()
         .any(|packet| packet.get(&rf_id).unwrap().bloom.is_none())
     {
         return None;
     }
-    let first_bytes = packets[0].get(&rf_id).unwrap().bloom.as_ref().unwrap();
-    let mut merged = Sbbf::from_bytes(first_bytes)?;
+    let first = packets[0].get(&rf_id).unwrap().bloom.clone().unwrap();
+    let mut merged = Sbbf::from_u32s(first)?;
     for packet in packets.iter().skip(1) {
-        let other_bytes = packet.get(&rf_id).unwrap().bloom.as_ref().unwrap();
-        let other = Sbbf::from_bytes(other_bytes)?;
+        let other_words = packet.get(&rf_id).unwrap().bloom.clone().unwrap();
+        let other = Sbbf::from_u32s(other_words)?;
         merged.union(&other);
     }
-    Some(merged.to_bytes())
+    Some(merged.into_u32s())
 }
 
 fn merge_spatial(
@@ -250,12 +250,12 @@ pub fn merge_two_runtime_filter_packets(
         if let Some(mut b_pkt) = b_packets.get(&id).cloned() {
             // Merge bloom via Sbbf::union
             let bloom = match (a_pkt.bloom.take(), b_pkt.bloom.take()) {
-                (Some(a_bytes), Some(b_bytes)) => {
+                (Some(a_words), Some(b_words)) => {
                     if let (Some(mut a_filter), Some(b_filter)) =
-                        (Sbbf::from_bytes(&a_bytes), Sbbf::from_bytes(&b_bytes))
+                        (Sbbf::from_u32s(a_words), Sbbf::from_u32s(b_words))
                     {
                         a_filter.union(&b_filter);
-                        Some(a_filter.to_bytes())
+                        Some(a_filter.into_u32s())
                     } else {
                         None
                     }
@@ -341,10 +341,10 @@ mod tests {
         builder.build()
     }
 
-    fn make_bloom(hashes: &[u64]) -> Vec<u8> {
+    fn make_bloom(hashes: &[u64]) -> Vec<u32> {
         let mut filter = Sbbf::new_with_ndv_fpp(100, 0.01).unwrap();
         filter.insert_hash_batch(hashes);
-        filter.to_bytes()
+        filter.into_u32s()
     }
 
     #[test]
@@ -416,7 +416,7 @@ mod tests {
         assert_eq!(merged.build_rows, 11);
         assert!(packet.inlist.is_none());
         // Bloom should be a merged Sbbf containing all hashes
-        let merged_filter = Sbbf::from_bytes(packet.bloom.as_ref().unwrap()).unwrap();
+        let merged_filter = Sbbf::from_u32s(packet.bloom.unwrap()).unwrap();
         for h in &[1u64, 2, 3, 4] {
             assert!(merged_filter.check_hash(*h));
         }
