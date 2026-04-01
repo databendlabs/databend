@@ -72,13 +72,9 @@ use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpr
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
 use crate::interpreters::interpreter_inspect_warehouse::InspectWarehouseInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_notification_alter::AlterNotificationInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_notification_create::CreateNotificationInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_notification_desc::DescNotificationInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_notification_drop::DropNotificationInterpreter;
 use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_procedure_call::CallProcedureInterpreter;
@@ -131,26 +127,15 @@ use crate::interpreters::interpreter_unassign_warehouse_nodes::UnassignWarehouse
 use crate::interpreters::interpreter_unset_workload_group_quotas::UnsetWorkloadGroupQuotasInterpreter;
 use crate::interpreters::interpreter_use_warehouse::UseWarehouseInterpreter;
 use crate::interpreters::interpreter_view_describe::DescribeViewInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
-#[cfg(feature = "cloud-control")]
 use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactory;
-
-#[cfg(not(feature = "cloud-control"))]
-fn cloud_control_disabled(op: &str) -> ErrorCode {
-    ErrorCode::Unimplemented(format!(
-        "{op} requires cargo feature 'cloud-control', rebuild with it enabled"
-    ))
-}
 
 #[cfg(not(feature = "task-support"))]
 fn task_support_disabled(op: &str) -> ErrorCode {
@@ -192,10 +177,7 @@ impl InterpreterFactory {
             Plan::ShowWarehouses => Ok(Arc::new(ShowWarehousesInterpreter::try_create(
                 ctx.clone(),
             )?)),
-            #[cfg(feature = "cloud-control")]
             Plan::ShowWorkers => Ok(Arc::new(ShowWorkersInterpreter::try_create(ctx.clone())?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::ShowWorkers => Err(cloud_control_disabled("SHOW WORKERS")),
             Plan::ShowOnlineNodes => Ok(Arc::new(ShowOnlineNodesInterpreter::try_create(
                 ctx.clone(),
             )?)),
@@ -207,24 +189,18 @@ impl InterpreterFactory {
                 ctx.clone(),
                 *v.clone(),
             )?)),
-            #[cfg(feature = "cloud-control")]
             Plan::CreateWorker(v) => Ok(Arc::new(CreateWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::CreateWorker(_) => Err(cloud_control_disabled("CREATE WORKER")),
             Plan::DropWarehouse(v) => Ok(Arc::new(DropWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
-            #[cfg(feature = "cloud-control")]
             Plan::DropWorker(v) => Ok(Arc::new(DropWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::DropWorker(_) => Err(cloud_control_disabled("DROP WORKER")),
             Plan::ResumeWarehouse(v) => Ok(Arc::new(ResumeWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
@@ -237,13 +213,10 @@ impl InterpreterFactory {
                 ctx.clone(),
                 *v.clone(),
             )?)),
-            #[cfg(feature = "cloud-control")]
             Plan::AlterWorker(v) => Ok(Arc::new(AlterWorkerInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::AlterWorker(_) => Err(cloud_control_disabled("ALTER WORKER")),
             Plan::InspectWarehouse(v) => Ok(Arc::new(InspectWarehouseInterpreter::try_create(
                 ctx.clone(),
                 *v.clone(),
@@ -856,34 +829,22 @@ impl InterpreterFactory {
             Plan::Begin => Ok(Arc::new(BeginInterpreter::try_create(ctx)?)),
             Plan::Commit => Ok(Arc::new(CommitInterpreter::try_create(ctx)?)),
             Plan::Abort => Ok(Arc::new(AbortInterpreter::try_create(ctx)?)),
-            #[cfg(feature = "cloud-control")]
             Plan::CreateNotification(p) => Ok(Arc::new(CreateNotificationInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::CreateNotification(_) => Err(cloud_control_disabled("CREATE NOTIFICATION")),
-            #[cfg(feature = "cloud-control")]
             Plan::AlterNotification(p) => Ok(Arc::new(AlterNotificationInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::AlterNotification(_) => Err(cloud_control_disabled("ALTER NOTIFICATION")),
-            #[cfg(feature = "cloud-control")]
             Plan::DropNotification(p) => Ok(Arc::new(DropNotificationInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::DropNotification(_) => Err(cloud_control_disabled("DROP NOTIFICATION")),
-            #[cfg(feature = "cloud-control")]
             Plan::DescNotification(p) => Ok(Arc::new(DescNotificationInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            #[cfg(not(feature = "cloud-control"))]
-            Plan::DescNotification(_) => Err(cloud_control_disabled("DESC NOTIFICATION")),
             Plan::InsertMultiTable(p) => {
                 Ok(InsertMultiTableInterpreter::try_create(ctx, *p.clone())?)
             }

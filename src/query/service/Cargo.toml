@@ -11,21 +11,13 @@ edition = { workspace = true }
 default = [
     "simd",
     "script-udf",
-    "cloud-control",
     "task-support",
     "storage-stage",
 ]
 simd = ["databend-common-column/simd"]
 script-udf = ["dep:arrow-udf-runtime"]
 python-udf = ["script-udf", "arrow-udf-runtime/python"]
-cloud-control = [
-    "dep:databend-common-cloud-control",
-    "databend-common-sql/cloud-control",
-    "databend-common-storages-system/cloud-control",
-]
 task-support = [
-    "dep:databend-common-cloud-control",
-    "databend-common-storages-system/cloud-control",
     "databend-common-storages-system/task-support",
 ]
 storage-stage = [
@@ -73,7 +65,7 @@ databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-catalog = { workspace = true }
-databend-common-cloud-control = { workspace = true, optional = true }
+databend-common-cloud-control = { workspace = true }
 databend-common-column = { workspace = true }
 databend-common-compress = { workspace = true }
 databend-common-config = { workspace = true }

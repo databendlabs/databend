@@ -45,9 +45,7 @@ use databend_common_storages_system::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 use databend_common_storages_system::MallocStatsTotalsTable;
 use databend_common_storages_system::MetricsTable;
-#[cfg(feature = "cloud-control")]
 use databend_common_storages_system::NotificationHistoryTable;
-#[cfg(feature = "cloud-control")]
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
@@ -189,9 +187,7 @@ impl SystemDatabase {
                 ),
                 ConstraintsTable::create(sys_db_meta.next_table_id()),
             ]);
-            #[cfg(feature = "cloud-control")]
             table_list.push(NotificationsTable::create(sys_db_meta.next_table_id()));
-            #[cfg(feature = "cloud-control")]
             table_list.push(NotificationHistoryTable::create(
                 sys_db_meta.next_table_id(),
             ));

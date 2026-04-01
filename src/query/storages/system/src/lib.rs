@@ -43,9 +43,7 @@ mod malloc_stats_table;
 #[cfg(feature = "jemalloc")]
 mod malloc_stats_totals_table;
 mod metrics_table;
-#[cfg(feature = "cloud-control")]
 mod notification_history_table;
-#[cfg(feature = "cloud-control")]
 mod notifications_table;
 mod one_table;
 mod password_policies_table;
@@ -107,11 +105,8 @@ pub use malloc_stats_table::MallocStatsTable;
 #[cfg(feature = "jemalloc")]
 pub use malloc_stats_totals_table::MallocStatsTotalsTable;
 pub use metrics_table::MetricsTable;
-#[cfg(feature = "cloud-control")]
 pub use notification_history_table::NotificationHistoryTable;
-#[cfg(feature = "cloud-control")]
 pub use notifications_table::NotificationsTable;
-#[cfg(feature = "cloud-control")]
 pub use notifications_table::parse_notifications_to_datablock;
 pub use one_table::OneTable;
 pub use password_policies_table::PasswordPoliciesTable;

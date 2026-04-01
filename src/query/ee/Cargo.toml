@@ -11,13 +11,11 @@ version = { workspace = true }
 default = [
     "simd",
     "script-udf",
-    "cloud-control",
     "task-support",
     "storage-stage",
 ]
 simd = ["databend-query/simd"]
 script-udf = ["databend-query/script-udf"]
-cloud-control = ["databend-query/cloud-control"]
 task-support = ["databend-query/task-support"]
 storage-stage = ["databend-query/storage-stage"]
 
