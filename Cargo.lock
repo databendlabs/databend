@@ -3763,7 +3763,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "thrift",
  "tokio",
  "typetag",
  "uuid",
@@ -5018,7 +5017,6 @@ dependencies = [
  "parquet 58.1.0",
  "rand 0.8.5",
  "serde",
- "thrift",
  "tokio",
  "typetag",
 ]

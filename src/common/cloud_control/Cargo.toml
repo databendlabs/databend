@@ -29,5 +29,8 @@ anyhow = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost"]
+
 [lints]
 workspace = true

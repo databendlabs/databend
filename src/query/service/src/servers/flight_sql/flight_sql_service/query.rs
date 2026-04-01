@@ -114,9 +114,15 @@ impl FlightSqlServiceImpl {
             .to_record_batch_with_dataschema(data_schema)
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
         let mut dictionary_tracker = writer::DictionaryTracker::new(false);
+        let mut compression_context = writer::CompressionContext::default();
 
         let (_encoded_dictionaries, encoded_batch) = data_gen
-            .encoded_batch(&batch, &mut dictionary_tracker, options)
+            .encode(
+                &batch,
+                &mut dictionary_tracker,
+                options,
+                &mut compression_context,
+            )
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
 
         Ok(encoded_batch.into())

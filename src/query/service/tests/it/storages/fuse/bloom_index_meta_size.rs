@@ -35,6 +35,7 @@ use databend_query::test_kits::*;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
+use databend_storages_common_cache::ParquetMetaData;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -46,7 +47,6 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::Versioned;
 use opendal::Operator;
-use parquet::format::FileMetaData;
 use sysinfo::System;
 use sysinfo::get_current_pid;
 use uuid::Uuid;
@@ -384,7 +384,7 @@ where T: Clone + Into<CacheValue<T>> {
 }
 
 #[allow(dead_code)]
-async fn setup() -> databend_common_exception::Result<FileMetaData> {
+async fn setup() -> databend_common_exception::Result<ParquetMetaData> {
     let fields = (0..23)
         .map(|_| TableField::new("id", TableDataType::Number(NumberDataType::Int32)))
         .collect::<Vec<_>>();

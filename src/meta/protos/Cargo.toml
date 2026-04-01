@@ -20,7 +20,7 @@ semver = { workspace = true }
 tonic-prost-build = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["num-derive", "num-traits"]
+ignored = ["num-derive", "num-traits", "tonic-prost"]
 
 [lints]
 workspace = true
