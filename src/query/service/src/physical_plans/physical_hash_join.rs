@@ -72,6 +72,7 @@ use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HashJoinProbeState;
 use crate::pipelines::processors::transforms::RuntimeFiltersDesc;
+use crate::pipelines::processors::transforms::SharedRuntimeFilterPackets;
 use crate::pipelines::processors::transforms::TransformHashJoin;
 use crate::pipelines::processors::transforms::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::TransformHashJoinProbe;
@@ -507,6 +508,7 @@ impl HashJoin {
 
         let barrier = databend_common_base::base::Barrier::new(output_len);
         let stage_sync_barrier = Arc::new(barrier);
+        let shared_rf_packets = SharedRuntimeFilterPackets::create();
         let mut join_sinks = Vec::with_capacity(output_len * 2);
         let mut join_pipe_items = Vec::with_capacity(output_len);
         for (build_sink, probe_sink) in build_sinks.into_iter().zip(probe_sinks.into_iter()) {
@@ -533,6 +535,7 @@ impl HashJoin {
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
+                shared_rf_packets.clone(),
             )?;
 
             join_pipe_items.push(PipeItem::create(

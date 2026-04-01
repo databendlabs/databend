@@ -34,4 +34,5 @@ pub use partitioned_build::PartitionedHashJoinState;
 pub use right_join::PartitionedRightJoin;
 pub use right_join_anti::PartitionedRightAntiJoin;
 pub use right_join_semi::PartitionedRightSemiJoin;
+pub use transform_hash_join::SharedRuntimeFilterPackets;
 pub use transform_hash_join::TransformPartitionedHashJoin;

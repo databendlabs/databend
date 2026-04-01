@@ -17,6 +17,8 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::PoisonError;
 use std::time::Instant;
 
 use databend_common_base::base::Barrier;
@@ -40,11 +42,37 @@ use super::PartitionedRightAntiJoin;
 use super::PartitionedRightJoin;
 use super::PartitionedRightSemiJoin;
 use crate::pipelines::processors::HashJoinDesc;
+use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::RuntimeFilterLocalBuilder;
+use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::FinishedJoin;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::Join;
 use crate::pipelines::processors::transforms::new_hash_join::common::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::common::runtime_filter::RuntimeFiltersDesc;
+
+pub struct SharedRuntimeFilterPackets {
+    packets: Mutex<Vec<JoinRuntimeFilterPacket>>,
+}
+
+impl SharedRuntimeFilterPackets {
+    pub fn create() -> Arc<Self> {
+        Arc::new(SharedRuntimeFilterPackets {
+            packets: Mutex::new(Vec::new()),
+        })
+    }
+
+    pub fn add_packet(&self, packet: JoinRuntimeFilterPacket) {
+        let locked = self.packets.lock();
+        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+        locked.push(packet);
+    }
+
+    pub fn take_packets(&self) -> Vec<JoinRuntimeFilterPacket> {
+        let locked = self.packets.lock();
+        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+        std::mem::take(&mut *locked)
+    }
+}
 
 pub struct TransformPartitionedHashJoin {
     build_port: Arc<InputPort>,
@@ -59,6 +87,7 @@ pub struct TransformPartitionedHashJoin {
     projection: BTreeSet<usize>,
     rf_desc: Arc<RuntimeFiltersDesc>,
     runtime_filter_builder: Option<RuntimeFilterLocalBuilder>,
+    shared_rf_packets: Arc<SharedRuntimeFilterPackets>,
     instant: Instant,
 }
 
@@ -71,6 +100,7 @@ impl TransformPartitionedHashJoin {
         stage_sync_barrier: Arc<Barrier>,
         projection: BTreeSet<usize>,
         rf_desc: Arc<RuntimeFiltersDesc>,
+        shared_rf_packets: Arc<SharedRuntimeFilterPackets>,
     ) -> Result<ProcessorPtr> {
         let runtime_filter_builder = RuntimeFilterLocalBuilder::try_create(
             &rf_desc.func_ctx,
@@ -90,6 +120,7 @@ impl TransformPartitionedHashJoin {
                 rf_desc,
                 projection,
                 stage_sync_barrier,
+                shared_rf_packets,
                 joined_data: None,
                 runtime_filter_builder,
                 stage: Stage::Build(BuildState {
@@ -175,6 +206,7 @@ impl Processor for TransformPartitionedHashJoin {
                 self.stage = Stage::Finished;
                 let mut finished = FinishedJoin::create();
                 std::mem::swap(&mut finished, &mut self.join);
+                self.stage_sync_barrier.reduce_quorum(1);
                 drop(finished);
             }
 
@@ -285,7 +317,7 @@ impl Processor for TransformPartitionedHashJoin {
                 if let Some(builder) = self.runtime_filter_builder.take() {
                     let spill_happened = self.join.is_spill_happened();
                     let packet = builder.finish(spill_happened)?;
-                    self.join.add_runtime_filter_packet(packet);
+                    self.shared_rf_packets.add_packet(packet);
                 }
 
                 let rf_build_elapsed = self.instant.elapsed() - elapsed;
@@ -293,11 +325,16 @@ impl Processor for TransformPartitionedHashJoin {
                 let before_wait = self.instant.elapsed();
 
                 if wait_res.is_leader() {
-                    let spilled = self.join.is_spill_happened();
-                    let packet = self.join.build_runtime_filter()?;
+                    let packets = self.shared_rf_packets.take_packets();
+                    let packet = merge_join_runtime_filter_packets(
+                        packets,
+                        self.rf_desc.inlist_threshold,
+                        self.rf_desc.bloom_threshold,
+                        self.rf_desc.min_max_threshold,
+                        self.rf_desc.spatial_threshold,
+                    )?;
                     info!(
-                        "spilled: {}, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
-                        spilled,
+                        "spilled: false, globalize runtime filter: total {}, disable_all_due_to_spill: {}",
                         packet.packets.as_ref().map_or(0, |p| p.len()),
                         packet.disable_all_due_to_spill
                     );

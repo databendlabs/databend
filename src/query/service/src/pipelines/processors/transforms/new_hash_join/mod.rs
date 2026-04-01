@@ -19,6 +19,7 @@ pub mod unpartitioned;
 pub use common::join::Join;
 pub use common::join::JoinStream;
 pub use common::runtime_filter::RuntimeFiltersDesc;
+pub use partitioned::SharedRuntimeFilterPackets;
 pub use partitioned::TransformPartitionedHashJoin;
 pub use unpartitioned::HashJoinFactory;
 pub use unpartitioned::TransformHashJoin;
