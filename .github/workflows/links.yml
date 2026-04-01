@@ -22,15 +22,19 @@ jobs:
 
       - name: Link Checker
         id: lychee
-        uses: lycheeverse/lychee-action@v1.8.0
+        uses: lycheeverse/lychee-action@v2.8.0
         with:
           args: >-
-            --base .
+            --accept 100..=103,200..=299,429
             --cache
             --max-cache-age 1d .
+            --exclude-all-private
             --exclude 'https://github\.com/datafuselabs/databend/issues/.*'
             --exclude 'https?://github\.com/databendlabs/databend/issues/.*'
             --exclude 'https?://twitter\.com(?:/.*$)?$'
+            --exclude-path './src/query/ast/tests/it/testdata/'
+            --exclude-path './src/query/service/tests/it/storages/testdata/'
+
       - name: Save lychee cache
         uses: actions/cache/save@v3
         if: always()

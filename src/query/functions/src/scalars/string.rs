@@ -1056,6 +1056,16 @@ fn substr(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
         return;
     }
 
+    if str.is_ascii() {
+        substr_ascii(builder, str, pos, len);
+        return;
+    }
+
+    if len == 1 && pos > 0 {
+        substr_one_char(builder, str, pos);
+        return;
+    }
+
     let char_len = str.chars().count();
     let start = if pos > 0 {
         (pos - 1).min(char_len as i64) as usize
@@ -1067,4 +1077,82 @@ fn substr(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
 
     builder.put_char_iter(str.chars().skip(start).take(len as usize));
     builder.commit_row();
+}
+
+#[inline]
+fn substr_ascii(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
+    let byte_len = str.len();
+    let start = if pos > 0 {
+        (pos - 1).min(byte_len as i64) as usize
+    } else {
+        byte_len
+            .checked_sub(pos.unsigned_abs() as usize)
+            .unwrap_or(byte_len)
+    };
+
+    let end = start.saturating_add(len as usize).min(byte_len);
+    builder.put_slice(&str.as_bytes()[start..end]);
+    builder.commit_row();
+}
+
+#[inline]
+fn substr_one_char(builder: &mut StringColumnBuilder, str: &str, pos: i64) {
+    let target = (pos - 1) as usize;
+    let bytes = str.as_bytes();
+    let mut byte_idx = 0;
+    let mut char_idx = 0;
+
+    while byte_idx < bytes.len() {
+        if char_idx == target {
+            let start = byte_idx;
+            byte_idx += 1;
+            while byte_idx < bytes.len() && is_utf8_continuation_byte(bytes[byte_idx]) {
+                byte_idx += 1;
+            }
+            builder.put_slice(&bytes[start..byte_idx]);
+            builder.commit_row();
+            return;
+        }
+
+        byte_idx += 1;
+        while byte_idx < bytes.len() && is_utf8_continuation_byte(bytes[byte_idx]) {
+            byte_idx += 1;
+        }
+        char_idx += 1;
+    }
+
+    builder.commit_row();
+}
+
+#[inline]
+fn is_utf8_continuation_byte(byte: u8) -> bool {
+    (byte & 0b1100_0000) == 0b1000_0000
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::string::StringColumnBuilder;
+
+    use super::substr;
+
+    fn eval_substr(input: &str, pos: i64, len: u64) -> String {
+        let mut builder = StringColumnBuilder::with_capacity(1);
+        substr(&mut builder, input, pos, len);
+        builder.build_scalar()
+    }
+
+    #[test]
+    fn test_substr_ascii_fast_path() {
+        assert_eq!(eval_substr("abcdef", 2, 3), "bcd");
+        assert_eq!(eval_substr("abcdef", -2, 2), "ef");
+        assert_eq!(eval_substr("abcdef", 20, 1), "");
+    }
+
+    #[test]
+    fn test_substr_single_char_fast_path() {
+        assert_eq!(eval_substr("abcdef", 3, 1), "c");
+        assert_eq!(eval_substr("你好世界", 3, 1), "世");
+        assert_eq!(eval_substr("a你b", 2, 1), "你");
+        assert_eq!(eval_substr("こんにちは", 2, 1), "ん");
+    }
 }

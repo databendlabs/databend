@@ -51,11 +51,11 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformResortAddOn;
 
 impl PipelineBuilder {
-    pub(crate) fn filter_transform_builder(
+    pub(crate) fn filter_transform_builder<const GC: bool>(
         &self,
         predicates: &[RemoteExpr],
         projections: BTreeSet<usize>,
-    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<>> {
+    ) -> Result<impl Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr> + use<GC>> {
         let predicate = predicates
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
@@ -73,7 +73,7 @@ impl PipelineBuilder {
         let max_block_size = self.settings.get_max_block_size()? as usize;
         let fun_ctx = self.func_ctx.clone();
         Ok(move |input, output| {
-            Ok(ProcessorPtr::create(TransformFilter::create(
+            Ok(ProcessorPtr::create(TransformFilter::<GC>::create(
                 input,
                 output,
                 predicate.clone(),

@@ -421,7 +421,8 @@ impl InteractiveWorkerBase {
                 context.update_init_query_id(query_id);
 
                 // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, _, _guard) = interpreter_plan_sql(context.clone(), query, true).await?;
+                let (plan, _, _guard) =
+                    interpreter_plan_sql(context.clone(), query, true, None).await?;
 
                 let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
                 let has_result_set = plan.has_result_set();

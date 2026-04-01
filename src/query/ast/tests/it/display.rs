@@ -44,3 +44,14 @@ fn test_multi_table_insert_parse_error() {
         assert!(parse_sql(&tokens, Dialect::PostgreSQL).is_err());
     }
 }
+
+#[test]
+fn test_like_escape_display_escapes_escape_literal() {
+    for sql in [
+        r#"SELECT 'a' LIKE 'a' ESCAPE '''';"#,
+        r#"SELECT 'a' LIKE ANY ('a', 'b') ESCAPE '''';"#,
+        r#"SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE '''';"#,
+    ] {
+        test_stmt_display(sql);
+    }
+}

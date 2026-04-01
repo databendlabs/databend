@@ -34,6 +34,22 @@ impl<'a> MutationSourceFormatter<'a> {
     pub fn create(inner: &'a MutationSource) -> Box<dyn PhysicalFormat + 'a> {
         Box::new(MutationSourceFormatter { inner })
     }
+
+    fn format_filters(&self) -> String {
+        let mut filters = Vec::new();
+        if self.inner.has_hidden_secure_filters {
+            filters.push("SECURE POLICY REDACTED".to_string());
+        }
+        if let Some(display_filters) = &self.inner.display_filters {
+            filters.push(
+                display_filters
+                    .filter
+                    .as_expr(&BUILTIN_FUNCTIONS)
+                    .sql_display(),
+            );
+        }
+        filters.join(", ")
+    }
 }
 
 impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
@@ -46,12 +62,7 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
         let table = ctx.metadata.table(self.inner.table_index);
         let table_name = table.qualified_name();
 
-        let filters = self
-            .inner
-            .filters
-            .as_ref()
-            .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            .unwrap_or_default();
+        let filters = self.format_filters();
 
         let mut node_children = vec![
             FormatTreeNode::new(format!("table: {table_name}")),
@@ -86,8 +97,8 @@ impl<'a> PhysicalFormat for MutationSourceFormatter<'a> {
         let table = ctx.metadata.table(self.inner.table_index).clone();
         let table_name = table.qualified_name();
         let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
-        if let Some(filters) = &self.inner.filters {
-            let filter = filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+        let filter = self.format_filters();
+        if !filter.is_empty() {
             children.push(FormatTreeNode::new(format!("filters: [{filter}]")));
         }
 

@@ -330,6 +330,7 @@ mod tests {
     use databend_storages_common_cache::CachedObject;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
+    use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
     use databend_storages_common_table_meta::meta::Versioned;
     use databend_storages_common_table_meta::table::TableCompression;
@@ -353,8 +354,12 @@ mod tests {
         )]);
         let field = schema.field_with_name("y")?;
         let bloom_columns_map = BTreeMap::from([(0usize, field.clone())]);
-        let mut builder =
-            BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map, &[])?;
+        let mut builder = BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::default(),
+            bloom_columns_map,
+            &[],
+        )?;
         let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2, 3, 4])]);
         builder.add_block(&block)?;
         let bloom_index = builder.finalize()?.unwrap();

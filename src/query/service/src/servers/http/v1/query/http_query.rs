@@ -88,6 +88,8 @@ pub struct HttpQueryRequest {
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
     pub stage_attachment: Option<StageAttachmentConf>,
+    #[serde(default)]
+    pub params: Option<serde_json::Value>,
 }
 
 impl HttpQueryRequest {
@@ -156,6 +158,7 @@ impl Debug for HttpQueryRequest {
             .field("pagination", &self.pagination)
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
+            .field("params", &self.params)
             .finish()
     }
 }
@@ -816,7 +819,11 @@ impl HttpQuery {
         Ok(response)
     }
 
-    pub async fn start_query(&mut self, sql: String) -> Result<()> {
+    pub async fn start_query(
+        &mut self,
+        sql: String,
+        params: Option<serde_json::Value>,
+    ) -> Result<()> {
         let (block_sender, query_context) = {
             let state = &mut self.execute_state.lock().state;
             let ExecuteState::Starting(state) = state else {
@@ -838,6 +845,7 @@ impl HttpQuery {
                 if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
                     query_state.clone(),
                     sql,
+                    params,
                     query_session,
                     query_context.clone(),
                     block_sender,

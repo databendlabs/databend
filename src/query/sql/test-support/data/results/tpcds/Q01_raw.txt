@@ -17,7 +17,7 @@ Limit
             │               ├── group items: []
             │               ├── aggregate functions: [sum(Sum(sr_return_amt) (#144)) AS (#145), count(Sum(sr_return_amt) (#144)) AS (#146)]
             │               └── EvalScalar
-            │                   ├── scalars: [Sum(sr_return_amt) (#144) AS (#144), Sum(sr_return_amt) (#144) AS (#144)]
+            │                   ├── scalars: [Sum(sr_return_amt) (#144) AS (#144)]
             │                   └── Filter
             │                       ├── filters: [eq(store_returns.sr_store_sk (#7), store_returns.sr_store_sk (#103))]
             │                       └── EvalScalar
