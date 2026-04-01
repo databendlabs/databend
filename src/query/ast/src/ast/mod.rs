@@ -16,6 +16,7 @@
 mod common;
 mod expr;
 mod format;
+mod param_substitution;
 mod query;
 pub mod quote;
 pub(crate) mod statements;
@@ -23,5 +24,6 @@ pub(crate) mod statements;
 pub use common::*;
 pub use expr::*;
 pub use format::*;
+pub use param_substitution::substitute_params;
 pub use query::*;
 pub use statements::*;

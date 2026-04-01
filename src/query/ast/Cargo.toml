@@ -15,6 +15,7 @@ enum-as-inner = { workspace = true }
 ethnum = { workspace = true }
 fast-float2 = { workspace = true }
 fastrace = { workspace = true }
+hex = { workspace = true }
 indent = { workspace = true }
 itertools = { workspace = true }
 logos = { workspace = true }

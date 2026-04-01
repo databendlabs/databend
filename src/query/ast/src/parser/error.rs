@@ -183,6 +183,23 @@ impl From<ParseIntError> for ErrorKind {
     }
 }
 
+impl From<hex::FromHexError> for ErrorKind {
+    fn from(err: hex::FromHexError) -> Self {
+        let msg = match err {
+            hex::FromHexError::InvalidHexCharacter { .. } => {
+                "unable to parse hex literal because it contains invalid characters"
+            }
+            hex::FromHexError::OddLength => {
+                "unable to parse hex literal because it has an odd number of digits"
+            }
+            hex::FromHexError::InvalidStringLength => {
+                "unable to parse hex literal because it has an invalid length"
+            }
+        };
+        ErrorKind::Other(msg)
+    }
+}
+
 /// Suggests corrections using intelligent syntax pattern matching
 fn suggest_keyword_correction(
     _span_text: &str,

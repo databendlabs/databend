@@ -88,14 +88,11 @@ impl Binder {
             aliases,
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
-        let contains_agg_or_window = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
-            )
+        let f = |scalar: &ScalarExpr| {
+            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
         };
 
-        let mut finder = Finder::new(&contains_agg_or_window);
+        let mut finder = Finder::new(&f);
         finder.visit(&scalar)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
@@ -512,8 +509,8 @@ impl Binder {
             || stmt.having.is_some()
             || stmt.distinct
             || stmt.qualify.is_some()
-            || !bind_context.aggregate_info.group_items.is_empty()
-            || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || bind_context.aggregate_info.has_group_items()
+            || bind_context.aggregate_info.has_aggregate_calls()
             || bind_context.has_srf_recursive()
         {
             return Ok(());

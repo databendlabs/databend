@@ -63,6 +63,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
 use super::native_data_source::NativeDataSource;
+use super::read_data_source::ReadDataSource;
 use super::util::add_data_block_meta;
 use super::util::need_reserve_block_info;
 use crate::DEFAULT_ROW_PER_PAGE;
@@ -895,9 +896,15 @@ impl Processor for NativeDeserializeDataTransform {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(block_meta) = data_block.take_meta() {
-                if let Some(source_meta) = DataSourceWithMeta::downcast_from(block_meta) {
+                if let Some(source_meta) =
+                    DataSourceWithMeta::<ReadDataSource>::downcast_from(block_meta)
+                {
                     self.parts = VecDeque::from(source_meta.meta);
-                    self.columns = VecDeque::from(source_meta.data);
+                    self.columns = source_meta
+                        .data
+                        .into_iter()
+                        .map(ReadDataSource::into_native)
+                        .collect::<Result<VecDeque<_>>>()?;
                     return Ok(Event::Sync);
                 }
             }

@@ -312,6 +312,18 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
+                let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let empty_field_as = reader
+                    .options
+                    .remove(OPT_EMPTY_FIELD_AS)
+                    .map(|s| EmptyFieldAs::from_str(&s))
+                    .transpose()?
+                    .unwrap_or(EmptyFieldAs::FieldDefault);
+                let error_on_column_count_mismatch = reader.take_bool(
+                    OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
+                    default.error_on_column_count_mismatch,
+                )?;
+                let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Text(TextFileFormatParams {
                     compression,
                     headers,
@@ -320,6 +332,10 @@ impl FileFormatParams {
                     nan_display,
                     quote,
                     escape,
+                    null_display,
+                    error_on_column_count_mismatch,
+                    empty_field_as,
+                    output_header,
                 })
             }
             _ => {
@@ -523,7 +539,7 @@ impl Default for CsvFileFormatParams {
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
             allow_quoted_nulls: false,
-            empty_field_as: Default::default(),
+            empty_field_as: EmptyFieldAs::Null,
             quoted_empty_field_as: EmptyFieldAs::String,
             output_header: false,
             binary_format: Default::default(),
@@ -544,14 +560,28 @@ impl CsvFileFormatParams {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TextFileFormatParams {
     pub compression: StageFileCompression,
+
+    // basic
     pub headers: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
-    pub nan_display: String,
     pub escape: String,
+    // not used
     pub quote: String,
+    pub error_on_column_count_mismatch: bool,
+
+    // load only options
+    pub empty_field_as: EmptyFieldAs,
+
+    // header
+    pub output_header: bool,
+
+    // field encoding/decoding
+    pub nan_display: String,
+    pub null_display: String,
 }
 
 impl Default for TextFileFormatParams {
@@ -561,9 +591,14 @@ impl Default for TextFileFormatParams {
             headers: 0,
             field_delimiter: "\t".to_string(),
             record_delimiter: "\n".to_string(),
-            nan_display: "NaN".to_string(),
             escape: "\\".to_string(),
-            quote: "\'".to_string(),
+            // not used, only for compat
+            quote: "\"".to_string(),
+            error_on_column_count_mismatch: true,
+            empty_field_as: EmptyFieldAs::FieldDefault,
+            output_header: false,
+            nan_display: "NaN".to_string(),
+            null_display: NULL_BYTES_ESCAPE.to_string(),
         }
     }
 }
@@ -928,16 +963,20 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = TEXT COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' QUOTE = '{}' \
-                     SKIP_HEADER = {} \
-                     NAN_DISPLAY = '{}'",
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' \
+                     SKIP_HEADER = {} OUTPUT_HEADER = {} \
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.escape),
-                    escape_string(&params.quote),
                     params.headers,
+                    params.output_header,
+                    escape_string(&params.null_display),
                     escape_string(&params.nan_display),
+                    params.empty_field_as,
+                    params.error_on_column_count_mismatch,
                 )
             }
             FileFormatParams::Xml(params) => {
@@ -1069,7 +1108,7 @@ fn parse_null_if(null_if: Option<String>) -> Result<Vec<String>> {
 mod tests {
     use super::*;
 
-    fn get_tsv_params(options: BTreeMap<String, String>) -> TextFileFormatParams {
+    fn get_text_params(options: BTreeMap<String, String>) -> TextFileFormatParams {
         let params =
             FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
                 .expect("tsv file format options should parse");
@@ -1080,12 +1119,33 @@ mod tests {
     }
 
     #[test]
-    fn test_tsv_field_delimiter_empty_string() {
+    fn test_text_field_delimiter_empty_string() {
         let mut options = BTreeMap::new();
         options.insert("type".to_string(), "TEXT".to_string());
         options.insert("field_delimiter".to_string(), "".to_string());
 
-        let params = get_tsv_params(options);
+        let params = get_text_params(options);
         assert_eq!(params.field_delimiter, "".to_string());
+    }
+
+    #[test]
+    fn test_text_extended_options() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert(
+            "error_on_column_count_mismatch".to_string(),
+            "false".to_string(),
+        );
+        options.insert("skip_header".to_string(), "2".to_string());
+        options.insert("output_header".to_string(), "true".to_string());
+        options.insert("null_display".to_string(), "NULL".to_string());
+        options.insert("empty_field_as".to_string(), "string".to_string());
+
+        let params = get_text_params(options);
+        assert!(!params.error_on_column_count_mismatch);
+        assert_eq!(params.headers, 2);
+        assert!(params.output_header);
+        assert_eq!(params.null_display, "NULL");
+        assert_eq!(params.empty_field_as, EmptyFieldAs::String);
     }
 }

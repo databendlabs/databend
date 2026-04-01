@@ -15,10 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_expression::types::DataType;
 
-use crate::MetadataRef;
-use crate::binder::MutationType;
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
@@ -32,11 +29,16 @@ use crate::plans::RelOperator;
 pub struct RuleMergeFilterIntoMutation {
     id: RuleID,
     matchers: Vec<Matcher>,
-    metadata: MetadataRef,
+}
+
+impl Default for RuleMergeFilterIntoMutation {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RuleMergeFilterIntoMutation {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new() -> Self {
         Self {
             id: RuleID::MergeFilterIntoMutation,
             // Filter
@@ -49,7 +51,6 @@ impl RuleMergeFilterIntoMutation {
                     children: vec![],
                 }],
             }],
-            metadata,
         }
     }
 }
@@ -62,21 +63,11 @@ impl Rule for RuleMergeFilterIntoMutation {
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
         let mut mutation: MutationSource = s_expr.child(0)?.plan().clone().try_into()?;
-        mutation
-            .read_partition_columns
-            .extend(filter.predicates.iter().flat_map(|v| v.used_columns()));
-        mutation.predicates = filter.predicates;
+        mutation.user_predicates.extend(filter.predicates);
 
-        if mutation.mutation_type == MutationType::Update {
-            let column_index = self
-                .metadata
-                .write()
-                .add_derived_column("_predicate".to_string(), DataType::Boolean);
-            mutation.predicate_column_index = Some(column_index);
-        }
-
-        let new_expr = SExpr::create_leaf(Arc::new(RelOperator::MutationSource(mutation)));
-        state.add_result(new_expr);
+        state.add_result(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
+            mutation,
+        ))));
         Ok(())
     }
 

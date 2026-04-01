@@ -47,8 +47,10 @@ use crate::tenant::Tenant;
 
 mod ident;
 mod ops;
+mod refs;
 
 pub use ident::*;
+pub use refs::*;
 
 // serde is required by [`TableInfo`]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

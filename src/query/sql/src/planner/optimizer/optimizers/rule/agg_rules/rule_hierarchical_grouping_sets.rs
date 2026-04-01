@@ -402,7 +402,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         )?;
 
         // Step 4: Assemble the complete plan
-        let union_result = self.create_union_all(&union_branches, eval_scalar)?;
+        let union_result = self.create_union_all(&union_branches, eval_scalar, grouping_id_index)?;
 
         // Step 5: Chain all CTEs in correct dependency order
         // Sequence semantics: left executes first, right executes after
@@ -777,6 +777,12 @@ impl RuleHierarchicalGroupingSetsToUnion {
         let null_group_ids: Vec<Symbol> = agg
             .group_items
             .iter()
+            .filter(|item| {
+                !matches!(
+                    &item.scalar,
+                    ScalarExpr::BoundColumnRef(col) if col.column.column_name == "_grouping_id"
+                )
+            })
             .map(|i| i.index)
             .filter(|index| !group_columns.contains(index))
             .collect();
@@ -793,21 +799,45 @@ impl RuleHierarchicalGroupingSetsToUnion {
             visitor.visit(&mut scalar_item.scalar)?;
         }
 
+        if !eval_scalar
+            .items
+            .iter()
+            .any(|item| item.index == grouping_id_index)
+        {
+            eval_scalar.items.push(ScalarItem {
+                index: grouping_id_index,
+                scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::Number(NumberScalar::UInt32(grouping_id)),
+                    span: None,
+                }),
+            });
+        }
+
         Ok(())
     }
 
     /// Create UNION ALL combining all final branches
-    fn create_union_all(&self, branches: &[SExpr], eval_scalar: &EvalScalar) -> Result<SExpr> {
+    fn create_union_all(
+        &self,
+        branches: &[SExpr],
+        eval_scalar: &EvalScalar,
+        grouping_id_index: Symbol,
+    ) -> Result<SExpr> {
         if branches.is_empty() {
             return Err(databend_common_exception::ErrorCode::Internal(
                 "No branches for union".to_string(),
             ));
         }
 
+        let mut output_indexes: Vec<Symbol> = eval_scalar.items.iter().map(|x| x.index).collect();
+        if !output_indexes.contains(&grouping_id_index) {
+            output_indexes.push(grouping_id_index);
+        }
+
         let mut result = branches[0].clone();
         for branch in branches.iter().skip(1) {
             let left_outputs: Vec<(Symbol, Option<ScalarExpr>)> =
-                eval_scalar.items.iter().map(|x| (x.index, None)).collect();
+                output_indexes.iter().map(|x| (*x, None)).collect();
             let right_outputs = left_outputs.clone();
 
             let union_plan = UnionAll {
@@ -815,7 +845,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 right_outputs,
                 cte_scan_names: vec![],
                 logical_recursive_cte_id: None,
-                output_indexes: eval_scalar.items.iter().map(|x| x.index).collect(),
+                output_indexes: output_indexes.clone(),
             };
             result = SExpr::create_binary(Arc::new(union_plan.into()), result, branch.clone());
         }
@@ -824,6 +854,15 @@ impl RuleHierarchicalGroupingSetsToUnion {
     }
 
     fn calculate_grouping_id(&self, group_columns: &[Symbol], all_groups: &[ScalarItem]) -> u32 {
+        let all_groups: Vec<&ScalarItem> = all_groups
+            .iter()
+            .filter(|item| {
+                !matches!(
+                    &item.scalar,
+                    ScalarExpr::BoundColumnRef(col) if col.column.column_name == "_grouping_id"
+                )
+            })
+            .collect();
         let mask = (1 << all_groups.len()) - 1;
         let mut id = 0;
 

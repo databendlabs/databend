@@ -14,9 +14,9 @@
 
 mod csv;
 mod ndjson;
-mod tsv;
+mod text;
 
 pub use csv::CsvInputFormat;
 pub use ndjson::NdJsonInputFormat;
-pub use tsv::TextInputFormat;
-pub use tsv::parse_tsv_records_for_infer_schema;
+pub use text::TextInputFormat;
+pub use text::parse_tsv_records_for_infer_schema;

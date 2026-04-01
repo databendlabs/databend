@@ -1604,11 +1604,21 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             })
         },
     );
-    let hex_uint = map_res(literal_hex_str, |str| {
+    let hex_uint = map_res(mysql_literal_hex_str, |str| {
         Ok(ExprElement::Literal {
             value: parse_uint(str, 16).map_err(nom::Err::Failure)?,
         })
     });
+    let binary = map_res(
+        rule! {
+            PGLiteralHex
+        },
+        |token| {
+            Ok(ExprElement::Literal {
+                value: parse_binary(token.text()).map_err(nom::Err::Failure)?,
+            })
+        },
+    );
     let decimal_float = map_res(
         verify(
             rule! {
@@ -1757,7 +1767,8 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         LiteralCodeString => with_span!(code_string).parse(i),
         LiteralInteger => with_span!(decimal_uint).parse(i),
         LiteralFloat => with_span!(rule!{ #decimal_float | #dot_number_map_access }).parse(i),
-        MySQLLiteralHex | PGLiteralHex => with_span!(hex_uint).parse(i),
+        MySQLLiteralHex => with_span!(hex_uint).parse(i),
+        PGLiteralHex => with_span!(binary).parse(i),
         TRUE | FALSE => with_span!(boolean).parse(i),
         NULL => with_span!(null).parse(i),
         ROW => with_span!(column_row).parse(i),
@@ -1921,7 +1932,13 @@ pub fn literal(i: Input) -> IResult<Literal> {
         },
         |token| parse_uint(token.text(), 10).map_err(nom::Err::Failure),
     );
-    let mut hex_uint = map_res(literal_hex_str, |str| {
+    let mut binary = map_res(
+        rule! {
+            PGLiteralHex
+        },
+        |token| parse_binary(token.text()).map_err(nom::Err::Failure),
+    );
+    let mut hex_uint = map_res(mysql_literal_hex_str, |str| {
         parse_uint(str, 16).map_err(nom::Err::Failure)
     });
     let mut decimal_float = map_res(
@@ -1936,7 +1953,8 @@ pub fn literal(i: Input) -> IResult<Literal> {
         LiteralCodeString => code_string.parse(i),
         LiteralInteger => decimal_uint.parse(i),
         LiteralFloat => decimal_float.parse(i),
-        MySQLLiteralHex | PGLiteralHex => hex_uint(i),
+        MySQLLiteralHex => hex_uint(i),
+        PGLiteralHex => binary.parse(i),
         TRUE | FALSE => boolean.parse(i),
         NULL => null.parse(i),
     );
@@ -1949,25 +1967,13 @@ pub fn literal(i: Input) -> IResult<Literal> {
     )))
 }
 
-pub fn literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
+pub fn mysql_literal_hex_str(i: Input<'_>) -> IResult<'_, &str> {
     // 0XFFFF
-    let mysql_hex = map(
+    map(
         rule! {
             MySQLLiteralHex
         },
         |token| &token.text()[2..],
-    );
-    // x'FFFF'
-    let pg_hex = map(
-        rule! {
-            PGLiteralHex
-        },
-        |token| &token.text()[2..token.text().len() - 1],
-    );
-
-    rule!(
-        #mysql_hex
-        | #pg_hex
     )
     .parse(i)
 }
@@ -1980,7 +1986,7 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
         },
         |token| u64::from_str_radix(token.text(), 10).map_err(|e| nom::Err::Failure(e.into())),
     );
-    let hex = map_res(literal_hex_str, |lit| {
+    let hex = map_res(mysql_literal_hex_str, |lit| {
         u64::from_str_radix(lit, 16).map_err(|e| nom::Err::Failure(e.into()))
     });
 
@@ -1999,7 +2005,7 @@ pub fn literal_i64(i: Input) -> IResult<i64> {
         },
         |token| i64::from_str_radix(token.text(), 10).map_err(|e| nom::Err::Failure(e.into())),
     );
-    let hex = map_res(literal_hex_str, |lit| {
+    let hex = map_res(mysql_literal_hex_str, |lit| {
         i64::from_str_radix(lit, 16).map_err(|e| nom::Err::Failure(e.into()))
     });
 
@@ -2840,6 +2846,11 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
             scale: 0,
         })
     }
+}
+
+pub fn parse_binary(text: &str) -> Result<Literal, ErrorKind> {
+    let text = &text[2..text.len() - 1];
+    Ok(Literal::Binary(hex::decode(text)?))
 }
 
 fn try_negate_literal(literal: &Literal) -> Option<Literal> {

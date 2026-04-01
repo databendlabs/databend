@@ -175,6 +175,19 @@ impl Scan {
     }
 }
 
+fn reduce_ndv_by_datum_range(ndv: Ndv, min: &Datum, max: &Datum) -> Ndv {
+    match (max, min) {
+        (Datum::UInt(m), Datum::UInt(n)) if m >= n => {
+            ndv.reduce(m.saturating_sub(*n).saturating_add(1) as _)
+        }
+        (Datum::Int(m), Datum::Int(n)) if m >= n => {
+            ndv.reduce(m.saturating_add(1).saturating_sub(*n) as _)
+        }
+        _ if max == min => Ndv::Stat(1.0),
+        _ => ndv,
+    }
+}
+
 impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
@@ -282,14 +295,7 @@ impl Operator for Scan {
                 };
 
                 // Alter ndv based on min and max if the datum is uint or int.
-                let ndv = match (&max, &min) {
-                    (Datum::UInt(m), Datum::UInt(n)) if m >= n => ndv.reduce((m - n + 1) as _),
-                    (Datum::Int(m), Datum::Int(n)) if m >= n => {
-                        ndv.reduce(m.saturating_add(1).saturating_sub(*n) as _)
-                    }
-                    _ if max == min => Ndv::Stat(1.0),
-                    _ => ndv,
-                };
+                let ndv = reduce_ndv_by_datum_range(ndv, &min, &max);
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
@@ -365,5 +371,21 @@ impl Operator for Scan {
         Err(ErrorCode::Internal(
             "Cannot compute required property for children of scan".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_reduce_ndv_by_uint_full_range_saturates() {
+        let reduced = reduce_ndv_by_datum_range(
+            Ndv::Stat((u64::MAX as f64) + 1.0),
+            &Datum::UInt(0),
+            &Datum::UInt(u64::MAX),
+        );
+
+        assert_eq!(reduced.value(), u64::MAX as f64);
     }
 }
