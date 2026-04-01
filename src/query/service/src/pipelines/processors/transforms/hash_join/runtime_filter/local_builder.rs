@@ -95,10 +95,10 @@ impl SingleFilterBuilder {
             },
             bloom_filter: if desc.enable_bloom_runtime_filter && bloom_threshold > 0 {
                 let ndv = match desc.build_table_rows {
-                    Some(rows) => (rows as u64).min(bloom_threshold as u64),
+                    Some(rows) => rows.min(bloom_threshold as u64),
                     None => bloom_threshold as u64,
                 };
-                Some(Sbbf::new_with_ndv_fpp(ndv, 0.01).map_err(|e| ErrorCode::Internal(e))?)
+                Some(Sbbf::new_with_ndv_fpp(ndv, 0.01).map_err(ErrorCode::Internal)?)
             } else {
                 None
             },

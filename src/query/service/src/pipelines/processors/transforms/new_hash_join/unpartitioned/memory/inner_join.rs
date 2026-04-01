@@ -50,10 +50,6 @@ pub struct InnerHashJoin {
     pub(crate) function_ctx: FunctionContext,
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
-    pub(crate) inlist_threshold: usize,
-    pub(crate) bloom_threshold: usize,
-    pub(crate) min_max_threshold: usize,
-    pub(crate) spatial_threshold: usize,
 }
 
 impl InnerHashJoin {
@@ -66,10 +62,6 @@ impl InnerHashJoin {
         nested_loop_join_threshold: usize,
     ) -> Result<Self> {
         let block_size = settings.get_max_block_size()? as usize;
-        let inlist_threshold = settings.get_inlist_runtime_filter_threshold()? as usize;
-        let bloom_threshold = settings.get_bloom_runtime_filter_threshold()? as usize;
-        let min_max_threshold = settings.get_min_max_runtime_filter_threshold()? as usize;
-        let spatial_threshold = settings.get_spatial_runtime_filter_threshold()? as usize;
 
         let context = PerformanceContext::create(block_size, desc.clone(), function_ctx.clone());
 
@@ -88,10 +80,6 @@ impl InnerHashJoin {
             function_ctx,
             basic_state: state,
             performance_context: context,
-            inlist_threshold,
-            bloom_threshold,
-            min_max_threshold,
-            spatial_threshold,
         })
     }
 }

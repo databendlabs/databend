@@ -321,7 +321,7 @@ impl Sbbf {
     /// Deserialize a bloom filter from bytes (little-endian).
     /// Returns None if bytes length is not a multiple of 32 (Block size).
     pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.is_empty() || bytes.len() % size_of::<Block>() != 0 {
+        if bytes.is_empty() || !bytes.len().is_multiple_of(size_of::<Block>()) {
             return None;
         }
         let num_blocks = bytes.len() / size_of::<Block>();
