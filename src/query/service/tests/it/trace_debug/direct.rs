@@ -18,6 +18,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::DataBlock;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::interpreters::interpreter_plan_sql;
+use databend_query::test_kits::TestFixture;
 use fastrace::collector::SpanRecord;
 use fastrace::future::FutureExt;
 use fastrace::prelude::*;
@@ -67,10 +68,9 @@ enum DirectExecutionOutcome {
 }
 
 async fn dump_direct_sql_trace(
+    fixture: &TestFixture,
     sql: &str,
-    _config: &DirectTraceDebugConfig,
 ) -> anyhow::Result<Vec<SpanRecord>> {
-    let fixture = setup_trace_debug_fixture().await?;
     let capture = trace_capture_handle();
     capture.reset();
 
@@ -175,10 +175,12 @@ fn test_dump_direct_sql_trace_debug() -> anyhow::Result<()> {
         TraceDebugRuntimeFlavor::MultiThread,
         || async move {
             let config = DirectTraceDebugConfig::from_env();
+            let fixture = setup_trace_debug_fixture().await?;
+            let _capture = trace_capture_handle();
             let mut spans = Vec::new();
 
             for sql in &config.sqls {
-                spans.extend(dump_direct_sql_trace(sql, &config).await?);
+                spans.extend(dump_direct_sql_trace(&fixture, sql).await?);
             }
 
             let export = build_trace_debug_otlp_export(&spans);
