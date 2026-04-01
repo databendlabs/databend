@@ -51,7 +51,7 @@ pub fn merge_join_runtime_filter_packets(
     let should_merge_bloom = total_build_rows < bloom_threshold;
     let should_merge_min_max = total_build_rows < min_max_threshold;
 
-    let packets = packets
+    let mut packets = packets
         .into_iter()
         .filter_map(|packet| packet.packets)
         .collect::<Vec<_>>();
@@ -63,26 +63,27 @@ pub fn merge_join_runtime_filter_packets(
         ));
     }
 
+    let keys: Vec<usize> = packets[0].keys().copied().collect();
     let mut result = HashMap::new();
-    for id in packets[0].keys() {
-        result.insert(*id, RuntimeFilterPacket {
-            id: *id,
+    for id in keys {
+        result.insert(id, RuntimeFilterPacket {
+            id,
             inlist: if should_merge_inlist {
-                merge_inlist(&packets, *id)?
+                merge_inlist(&packets, id)?
             } else {
                 None
             },
             min_max: if should_merge_min_max {
-                merge_min_max(&packets, *id)
+                merge_min_max(&packets, id)
             } else {
                 None
             },
             bloom: if should_merge_bloom {
-                merge_bloom(&packets, *id)
+                merge_bloom(&mut packets, id)
             } else {
                 None
             },
-            spatial: merge_spatial(&packets, *id, spatial_threshold)?,
+            spatial: merge_spatial(&packets, id, spatial_threshold)?,
         });
     }
 
@@ -159,17 +160,21 @@ fn merge_min_max(
     Some(SerializableDomain { min, max })
 }
 
-fn merge_bloom(packets: &[HashMap<usize, RuntimeFilterPacket>], rf_id: usize) -> Option<Vec<u32>> {
+fn merge_bloom(
+    packets: &mut [HashMap<usize, RuntimeFilterPacket>],
+    rf_id: usize,
+) -> Option<Vec<u32>> {
     if packets
         .iter()
         .any(|packet| packet.get(&rf_id).unwrap().bloom.is_none())
     {
         return None;
     }
-    let first = packets[0].get(&rf_id).unwrap().bloom.clone().unwrap();
+
+    let first = packets[0].get_mut(&rf_id).unwrap().bloom.take().unwrap();
     let mut merged = Sbbf::from_u32s(first)?;
-    for packet in packets.iter().skip(1) {
-        let other_words = packet.get(&rf_id).unwrap().bloom.clone().unwrap();
+    for packet in packets.iter_mut().skip(1) {
+        let other_words = packet.get_mut(&rf_id).unwrap().bloom.take().unwrap();
         let other = Sbbf::from_u32s(other_words)?;
         merged.union(&other);
     }
