@@ -39,8 +39,15 @@ enum PhysicalJoinType {
 fn asof_hash_join_type(join_type: JoinType) -> JoinType {
     match join_type {
         JoinType::Asof => JoinType::Inner,
-        JoinType::LeftAsof => JoinType::Left,
-        JoinType::RightAsof => JoinType::Right,
+        // ASOF rewrite swaps children to:
+        //   probe = window(original right)
+        //   build = original left
+        //
+        // HashJoin preserves the probe side for LEFT joins and the build side
+        // for RIGHT joins, so outer ASOF joins need the opposite mapping here
+        // to preserve the original SQL null-preserving side.
+        JoinType::LeftAsof => JoinType::Right,
+        JoinType::RightAsof => JoinType::Left,
         _ => join_type,
     }
 }

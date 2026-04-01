@@ -68,6 +68,21 @@ order by t.id
 5 NULL
 6 NULL
 
+# Right ASOF should preserve unmatched build-side rows from the original
+# `prices` table after the ASOF rewrite swaps the physical children.
+query II
+select p.price, t.id
+from asof_eq_trades t
+asof right join asof_eq_prices p
+    on t.symbol = p.symbol and t.wh >= p.wh
+order by p.price, t.id
+----
+10 1
+11 4
+20 2
+20 3
+21 NULL
+
 statement ok
 drop table asof_eq_trades
 
