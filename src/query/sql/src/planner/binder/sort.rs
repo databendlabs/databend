@@ -29,6 +29,7 @@ use crate::binder::project::SelectInfo;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::window::WindowRewriter;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::GroupingChecker;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
@@ -103,11 +104,17 @@ impl Binder {
                     );
                     let (bound_expr, _) = scalar_binder.bind(&order.expr)?;
 
-                    if let Some((idx, _)) = aliases
+                    if let Some((idx, (_, scalar))) = aliases
                         .iter()
                         .enumerate()
                         .find(|(_, (_, scalar))| bound_expr.eq(scalar))
                     {
+                        if bind_context.in_grouping {
+                            let mut group_checker = GroupingChecker::new(bind_context, None);
+                            let mut scalar = scalar.clone();
+                            group_checker.visit(&mut scalar)?;
+                        }
+
                         // The order by expression is in the select list.
                         let asc = order.asc.unwrap_or(true);
                         order_items.push(OrderItem {

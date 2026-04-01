@@ -81,6 +81,10 @@ fn test_decode_v32_tsv_file_format_params() -> anyhow::Result<()> {
             nan_display: "nan".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
+            null_display: "\\N".to_string(),
+            error_on_column_count_mismatch: true,
+            empty_field_as: EmptyFieldAs::FieldDefault,
+            output_header: false,
         })
     };
     common::test_pb_from_to(func_name!(), want())?;

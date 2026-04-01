@@ -150,6 +150,7 @@ pub struct ResultFormatSettings {
     pub timezone: String,
     pub geometry_output_format: String,
     pub binary_output_format: String,
+    pub http_json_result_mode: String,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -625,7 +626,7 @@ pub(crate) async fn query_handler(
                 Ok(req.fail_to_start_sql(err).into_response())
             }
             Ok(mut query) => {
-                if let Err(err) = query.start_query(sql.clone()).await {
+                if let Err(err) = query.start_query(sql.clone(), req.params.clone()).await {
                     let err = err.display_with_sql(&sql);
                     error!("Failed to start SQL query, error: {:?}", err);
                     ctx.set_fail();

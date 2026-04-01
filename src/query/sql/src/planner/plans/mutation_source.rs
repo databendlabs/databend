@@ -17,12 +17,15 @@ use std::sync::Arc;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::PREDICATE_COLUMN_NAME;
 use databend_common_expression::Symbol;
 use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
 
 use super::ScalarExpr;
 use crate::ColumnSet;
 use crate::IndexType;
+use crate::MetadataRef;
 use crate::binder::MutationType;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::PhysicalProperty;
@@ -40,7 +43,8 @@ pub struct MutationSource {
     pub columns: ColumnSet,
     pub table_index: IndexType,
     pub mutation_type: MutationType,
-    pub predicates: Vec<ScalarExpr>,
+    pub secure_predicates: Vec<ScalarExpr>,
+    pub user_predicates: Vec<ScalarExpr>,
     pub predicate_column_index: Option<Symbol>,
     pub read_partition_columns: ColumnSet,
 }
@@ -72,7 +76,11 @@ impl Operator for MutationSource {
     }
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
-        Box::new(self.predicates.iter())
+        Box::new(
+            self.secure_predicates
+                .iter()
+                .chain(self.user_predicates.iter()),
+        )
     }
 
     fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
@@ -112,5 +120,45 @@ impl Operator for MutationSource {
         Err(ErrorCode::Internal(
             "Cannot compute required property for children of MutationSource".to_string(),
         ))
+    }
+}
+
+impl MutationSource {
+    pub fn all_predicates(&self) -> impl Iterator<Item = &ScalarExpr> + '_ {
+        self.secure_predicates
+            .iter()
+            .chain(self.user_predicates.iter())
+    }
+
+    pub fn has_predicates(&self) -> bool {
+        !self.secure_predicates.is_empty() || !self.user_predicates.is_empty()
+    }
+
+    pub fn refresh_read_partition_columns(&mut self) {
+        self.read_partition_columns = self
+            .all_predicates()
+            .flat_map(|predicate| predicate.used_columns())
+            .collect();
+    }
+
+    /// Return all predicates (secure + user) as an owned Vec.
+    /// Used to populate `Mutation::direct_filter` for push-down.
+    pub fn all_predicates_cloned(&self) -> Vec<ScalarExpr> {
+        self.all_predicates().cloned().collect()
+    }
+
+    pub fn ensure_mutation_predicate_column_if_needed(
+        &mut self,
+        metadata: &MetadataRef,
+    ) -> Option<Symbol> {
+        if self.mutation_type != MutationType::Update || !self.has_predicates() {
+            return None;
+        }
+
+        Some(*self.predicate_column_index.get_or_insert_with(|| {
+            metadata
+                .write()
+                .add_derived_column(PREDICATE_COLUMN_NAME.to_string(), DataType::Boolean)
+        }))
     }
 }

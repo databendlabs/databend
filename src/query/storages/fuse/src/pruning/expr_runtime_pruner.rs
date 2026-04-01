@@ -34,6 +34,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 
+use super::profile_guard::ProfileGuard;
 use crate::FuseBlockPartInfo;
 use crate::pruning::bloom_pruner::should_prune_runtime_inlist_by_bloom_index;
 
@@ -85,6 +86,8 @@ impl ExprRuntimePruner {
     /// Prune a partition based on expressions.
     /// Returns true if the partition should be pruned.
     pub async fn prune(&self, part: &PartInfoPtr) -> Result<bool> {
+        let _profile_guard =
+            ProfileGuard::new(ProfileStatisticsName::RuntimeFilterInlistMinMaxTime);
         if self.exprs.is_empty() {
             return Ok(false);
         }
@@ -231,6 +234,7 @@ mod tests {
     use databend_storages_common_blocks::blocks_to_parquet;
     use databend_storages_common_cache::CacheManager;
     use databend_storages_common_index::BloomIndexBuilder;
+    use databend_storages_common_index::BloomIndexType;
     use databend_storages_common_index::filters::BlockFilter;
     use databend_storages_common_io::ReadSettings;
     use databend_storages_common_table_meta::meta::ColumnStatistics;
@@ -428,8 +432,12 @@ mod tests {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         let (_, field) = schema.column_with_name("y").unwrap();
         let bloom_columns_map = BTreeMap::from([(0usize, field.clone())]);
-        let mut builder =
-            BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map, &[])?;
+        let mut builder = BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::default(),
+            bloom_columns_map,
+            &[],
+        )?;
         builder.add_block(block)?;
         let bloom_index = builder.finalize()?.unwrap();
 

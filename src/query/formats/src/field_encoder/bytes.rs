@@ -41,7 +41,6 @@ use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
 use databend_common_io::constants::NAN_BYTES_SNAKE;
-use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::constants::NULL_BYTES_UPPER;
 use databend_common_io::constants::TRUE_BYTES_LOWER;
 use databend_common_io::constants::TRUE_BYTES_NUM;
@@ -65,21 +64,21 @@ use crate::OutputCommonSettings;
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::field_encoder::helpers::write_quoted_string;
 
-pub struct FieldEncoderValues {
+pub struct FieldEncoderBytes {
     pub common_settings: OutputCommonSettings,
 
     pub escape_char: u8,
     pub quote_char: u8,
 }
 
-impl FieldEncoderValues {
+impl FieldEncoderBytes {
     pub fn create_for_csv(
         params: &CsvFileFormatParams,
         mut settings: OutputFormatSettings,
     ) -> Self {
         settings.binary_format = params.binary_format.to_display_format();
         settings.geometry_format = params.geometry_format;
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
@@ -94,11 +93,11 @@ impl FieldEncoderValues {
     }
 
     pub fn create_for_tsv(params: &TextFileFormatParams, settings: OutputFormatSettings) -> Self {
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
+                null_bytes: params.null_display.as_bytes().to_vec(),
                 nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 settings: settings.clone(),
@@ -108,27 +107,12 @@ impl FieldEncoderValues {
         }
     }
 
-    pub fn create_for_http_handler(settings: &OutputFormatSettings) -> Self {
-        FieldEncoderValues {
-            common_settings: OutputCommonSettings {
-                true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
-                settings: settings.clone(),
-            },
-            escape_char: b'\\',
-            quote_char: b'"',
-        }
-    }
-
     // JDBC only accept "NaN" and "Infinity".
     // mysql python client will decode to python float, which is printed as 'nan' and 'inf'
     // so we still use 'nan' and 'inf' in logic test.
     // https://github.com/datafuselabs/databend/discussions/8941
     pub fn create_for_mysql_handler(settings: &OutputFormatSettings) -> Self {
-        FieldEncoderValues {
+        FieldEncoderBytes {
             common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),

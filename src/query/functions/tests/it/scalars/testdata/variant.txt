@@ -1109,6 +1109,15 @@ output domain  : {123..=123}
 output         : 123
 
 
+ast            : as_integer(parse_json('123.0'))
+raw expr       : as_integer(parse_json('123.0'))
+checked expr   : as_integer<Variant>(CAST<String>("123.0" AS Variant))
+optimized expr : 123_i64
+output type    : Int64 NULL
+output domain  : {123..=123}
+output         : 123
+
+
 ast            : as_float(parse_json('"ab"'))
 raw expr       : as_float(parse_json('"ab"'))
 checked expr   : as_float<Variant>(CAST<String>("\"ab\"" AS Variant))
@@ -1448,6 +1457,15 @@ output         : false
 ast            : is_integer(parse_json('123'))
 raw expr       : is_integer(parse_json('123'))
 checked expr   : is_integer<Variant>(CAST<String>("123" AS Variant))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : is_integer(parse_json('123.0'))
+raw expr       : is_integer(parse_json('123.0'))
+checked expr   : is_integer<Variant>(CAST<String>("123.0" AS Variant))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1831,6 +1849,24 @@ error:
 
 
 
+ast            : to_uint64(parse_json('123.0'))
+raw expr       : to_uint64(parse_json('123.0'))
+checked expr   : CAST<Variant>(CAST<String>("123.0" AS Variant) AS UInt64 NULL)
+optimized expr : 123_u64
+output type    : UInt64 NULL
+output domain  : {123..=123}
+output         : 123
+
+
+ast            : to_uint64(parse_json('"456.5"'))
+raw expr       : to_uint64(parse_json('"456.5"'))
+checked expr   : CAST<Variant>(CAST<String>("\"456.5\"" AS Variant) AS UInt64 NULL)
+optimized expr : 457_u64
+output type    : UInt64 NULL
+output domain  : {457..=457}
+output         : 457
+
+
 error: 
   --> SQL:1:1
   |
@@ -1855,6 +1891,24 @@ optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
+
+
+ast            : to_int64(parse_json('123.5'))
+raw expr       : to_int64(parse_json('123.5'))
+checked expr   : CAST<Variant>(CAST<String>("123.5" AS Variant) AS Int64 NULL)
+optimized expr : 124_i64
+output type    : Int64 NULL
+output domain  : {124..=124}
+output         : 124
+
+
+ast            : to_int64(parse_json('"-456.2"'))
+raw expr       : to_int64(parse_json('"-456.2"'))
+checked expr   : CAST<Variant>(CAST<String>("\"-456.2\"" AS Variant) AS Int64 NULL)
+optimized expr : -456_i64
+output type    : Int64 NULL
+output domain  : {-456..=-456}
+output         : -456
 
 
 error: 
@@ -2366,6 +2420,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : try_to_uint64(parse_json('789.0'))
+raw expr       : try_to_uint64(parse_json('789.0'))
+checked expr   : TRY_CAST<Variant>(CAST<String>("789.0" AS Variant) AS UInt64 NULL)
+optimized expr : 789_u64
+output type    : UInt64 NULL
+output domain  : {789..=789}
+output         : 789
+
+
 ast            : try_to_uint64(parse_json('"abc"'))
 raw expr       : try_to_uint64(parse_json('"abc"'))
 checked expr   : TRY_CAST<Variant>(CAST<String>("\"abc\"" AS Variant) AS UInt64 NULL)
@@ -2391,6 +2454,15 @@ optimized expr : -123_i64
 output type    : Int64 NULL
 output domain  : {-123..=-123}
 output         : -123
+
+
+ast            : try_to_int64(parse_json('"789.5"'))
+raw expr       : try_to_int64(parse_json('"789.5"'))
+checked expr   : TRY_CAST<Variant>(CAST<String>("\"789.5\"" AS Variant) AS Int64 NULL)
+optimized expr : 790_i64
+output type    : Int64 NULL
+output domain  : {790..=790}
+output         : 790
 
 
 ast            : try_to_int64(parse_json('"abc"'))
@@ -2576,7 +2648,7 @@ evaluation:
 | Row 0  | 'true'                               | 1          |
 | Row 1  | '123'                                | 123        |
 | Row 2  | '-100'                               | -100       |
-| Row 3  | '12.34'                              | NULL       |
+| Row 3  | '12.34'                              | 12         |
 | Row 4  | NULL                                 | NULL       |
 | Row 5  | '"2020-01-01"'                       | NULL       |
 | Row 6  | '"2021-01-01 20:00:00"'              | NULL       |
@@ -2587,7 +2659,7 @@ evaluation (internal):
 | Column | Data                                                                                                                                          |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | Column(NullableColumn { column: StringColumn[true, 123, -100, 12.34, , "2020-01-01", "2021-01-01 20:00:00", "abc"], validity: [0b11101111] }) |
-| Output | NullableColumn { column: Int64([1, 123, -100, 0, 0, 0, 0, 0]), validity: [0b00000111] }                                                       |
+| Output | NullableColumn { column: Int64([1, 123, -100, 12, 0, 0, 0, 0]), validity: [0b00001111] }                                                      |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -2603,7 +2675,7 @@ evaluation:
 | Row 0  | 'true'                               | 1           |
 | Row 1  | '123'                                | 123         |
 | Row 2  | '-100'                               | NULL        |
-| Row 3  | '12.34'                              | NULL        |
+| Row 3  | '12.34'                              | 12          |
 | Row 4  | NULL                                 | NULL        |
 | Row 5  | '"2020-01-01"'                       | NULL        |
 | Row 6  | '"2021-01-01 20:00:00"'              | NULL        |
@@ -2614,7 +2686,7 @@ evaluation (internal):
 | Column | Data                                                                                                                                          |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 | s      | Column(NullableColumn { column: StringColumn[true, 123, -100, 12.34, , "2020-01-01", "2021-01-01 20:00:00", "abc"], validity: [0b11101111] }) |
-| Output | NullableColumn { column: UInt64([1, 123, 0, 0, 0, 0, 0, 0]), validity: [0b00000011] }                                                         |
+| Output | NullableColumn { column: UInt64([1, 123, 0, 12, 0, 0, 0, 0]), validity: [0b00001011] }                                                        |
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
 
 

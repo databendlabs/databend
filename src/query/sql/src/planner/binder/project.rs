@@ -201,7 +201,7 @@ impl Binder {
     ) -> Result<ScalarExpr> {
         let mut scalar = scalar.clone();
         if Self::use_grouping_projection(bind_context) {
-            let mut grouping_checker = GroupingChecker::new(bind_context, false);
+            let mut grouping_checker = GroupingChecker::new(bind_context, None);
             grouping_checker.visit(&mut scalar)?;
         } else {
             let mut window_checker = WindowChecker::new(bind_context);

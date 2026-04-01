@@ -24,7 +24,7 @@ use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::NumberScalar;
-use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_formats::field_encoder::FieldEncoderBytes;
 use databend_common_io::prelude::OutputFormatSettings;
 use futures_util::StreamExt;
 use log::error;
@@ -76,7 +76,7 @@ pub struct DFQueryResultWriter<'a, W: AsyncWrite + Send + Unpin> {
 fn write_field<W: AsyncWrite + Unpin>(
     row_writer: &mut RowWriter<W>,
     column: &ExprColumn,
-    encoder: &FieldEncoderValues,
+    encoder: &FieldEncoderBytes,
     buf: &mut Vec<u8>,
     row_index: usize,
 ) -> Result<()> {
@@ -302,7 +302,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                     };
 
                     let num_rows = block.num_rows();
-                    let encoder = FieldEncoderValues::create_for_mysql_handler(format);
+                    let encoder = FieldEncoderBytes::create_for_mysql_handler(format);
                     let mut buf = Vec::<u8>::new();
 
                     let columns = block

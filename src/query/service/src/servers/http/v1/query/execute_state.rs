@@ -374,6 +374,7 @@ impl ExecuteState {
     pub(crate) async fn try_start_query(
         executor: Arc<Mutex<Executor>>,
         sql: String,
+        params: Option<serde_json::Value>,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         mut block_sender: Sender,
@@ -383,7 +384,7 @@ impl ExecuteState {
         info!("Preparing to plan SQL query");
 
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true)
+        let (plan, _, queue_guard) = interpreter_plan_sql(ctx.clone(), &sql, true, params.as_ref())
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
@@ -413,10 +414,16 @@ impl ExecuteState {
             .with_context(make_error)?
             .as_str()
             .to_string();
+        let http_json_result_mode = settings
+            .get_http_json_result_mode()
+            .with_context(make_error)?
+            .as_str()
+            .to_string();
         let result_format_settings = Some(ResultFormatSettings {
             timezone,
             geometry_output_format,
             binary_output_format,
+            http_json_result_mode,
         });
 
         let running_state = ExecuteRunning {
