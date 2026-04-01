@@ -1029,6 +1029,7 @@ pub enum Literal {
     },
     // Quoted string literal value
     String(String),
+    Binary(Vec<u8>),
     Boolean(bool),
     Null,
 }
@@ -1076,6 +1077,9 @@ impl Display for Literal {
             }
             Literal::String(val) => {
                 write!(f, "{}", QuotedString(val, '\''))
+            }
+            Literal::Binary(val) => {
+                write!(f, "X'{}'", hex::encode_upper(val))
             }
             Literal::Boolean(val) => {
                 if *val {
