@@ -249,6 +249,7 @@ async fn test_fuse_do_vacuum_virtual_column_replaced_block_keeps_schema() -> any
     let mut new_snap = TableSnapshot::try_from_previous(
         snapshot.clone(),
         Some(fuse_table.get_table_info().ident.seq),
+        fuse_table.cluster_type(),
         TestFixture::default_table_meta_timestamps(),
     )?;
     let mut segs = snapshot.segments.clone();

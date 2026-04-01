@@ -219,6 +219,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let snapshot_1 = TableSnapshot::try_from_previous(
         snapshot_0.clone(),
         None,
+        fuse_table.cluster_type(),
         TestFixture::default_table_meta_timestamps(),
     )?;
     let snapshot_loc_1 =
@@ -240,6 +241,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
         None,
+        fuse_table.cluster_type(),
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_2.table_statistics_location = Some(table_statistics_location);

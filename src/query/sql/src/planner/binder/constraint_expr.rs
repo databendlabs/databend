@@ -52,6 +52,7 @@ pub struct ConstraintExprBinder {
 impl ConstraintExprBinder {
     pub fn try_new(ctx: Arc<dyn TableContext>, schema: DataSchemaRef) -> Result<Self> {
         let settings = ctx.get_settings();
+        let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
         let mut bind_context = BindContext::new();
         let mut metadata = Metadata::default();
         for field in schema.fields().iter() {
@@ -73,7 +74,7 @@ impl ConstraintExprBinder {
         Ok(ConstraintExprBinder {
             bind_context,
             ctx,
-            dialect: Dialect::PostgreSQL,
+            dialect,
             name_resolution_ctx,
             metadata,
             schema,

@@ -133,6 +133,9 @@ impl FuseTable {
                     .unwrap_or_default()
             })
             .collect();
+        // Virtual columns are table-level derived metadata and are not versioned in snapshots.
+        // Snapshot navigation cannot prove that the current virtual schema is valid for the
+        // historical point, so clear it conservatively.
         table_meta.virtual_schema = None;
         table_meta.column_mask_policy = None;
         table_meta.row_access_policy = None;

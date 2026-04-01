@@ -208,6 +208,7 @@ impl SinkAnalyzeState {
         let mut new_snapshot = TableSnapshot::try_from_previous(
             snapshot.clone(),
             Some(table.get_table_info().ident.seq),
+            table.cluster_type(),
             self.ctx
                 .get_table_meta_timestamps(table, Some(snapshot.clone()))?,
         )?;

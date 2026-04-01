@@ -168,6 +168,7 @@ impl TableSnapshot {
     pub fn try_from_previous(
         previous: Arc<TableSnapshot>,
         prev_table_seq: Option<u64>,
+        current_cluster_type: Option<ClusterType>,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Result<Self> {
         // the timestamp of the new snapshot will be adjusted by the `new` method
@@ -178,7 +179,7 @@ impl TableSnapshot {
             previous.summary.clone(),
             previous.segments.clone(),
             previous.cluster_key_meta.clone(),
-            previous.cluster_type,
+            current_cluster_type,
             previous.table_statistics_location.clone(),
             table_meta_timestamps,
         )

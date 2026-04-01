@@ -73,6 +73,7 @@ pub async fn generate_snapshot_with_segments(
     let mut new_snapshot = TableSnapshot::try_from_previous(
         current_snapshot,
         Some(fuse_table.get_table_info().ident.seq),
+        fuse_table.cluster_type(),
         TestFixture::default_table_meta_timestamps(),
     )?;
     new_snapshot.segments = segment_locations;
@@ -297,6 +298,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let mut snapshot_2 = TableSnapshot::try_from_previous(
         Arc::new(snapshot_1.clone()),
         None,
+        fuse_table.cluster_type(),
         TestFixture::default_table_meta_timestamps(),
     )?;
     snapshot_2.segments = locations;

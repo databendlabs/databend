@@ -32,7 +32,6 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog::Catalog;
@@ -1016,7 +1015,7 @@ async fn bind_index_source_columns(
 ) -> Result<BTreeMap<ColumnId, String>> {
     let settings = ctx.get_settings();
     let tokens = tokenize_sql(query)?;
-    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+    let (stmt, _) = parse_sql(&tokens, settings.get_sql_dialect().unwrap_or_default())?;
     let mut binder = Binder::new(
         ctx,
         CatalogManager::instance(),

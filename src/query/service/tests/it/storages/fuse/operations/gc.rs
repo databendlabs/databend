@@ -92,6 +92,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> anyhow::Result<()> {
         let orphan_snapshot = TableSnapshot::try_from_previous(
             current_snapshot.clone(),
             None,
+            fuse_table.cluster_type(),
             TestFixture::default_table_meta_timestamps(),
         )?;
         orphan_snapshot

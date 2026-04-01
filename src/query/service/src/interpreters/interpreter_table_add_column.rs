@@ -257,6 +257,7 @@ where
             Some(TableSnapshot::try_from_previous(
                 prev.clone(),
                 Some(fuse_tbl.get_table_info().ident.seq),
+                fuse_tbl.cluster_type(),
                 ctx.get_table_meta_timestamps(fuse_tbl, Some(prev.clone()))?,
             )?)
         } else {

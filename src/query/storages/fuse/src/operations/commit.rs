@@ -350,6 +350,7 @@ impl FuseTable {
             let mut snapshot_tobe_committed = TableSnapshot::try_from_previous(
                 latest_snapshot.clone(),
                 Some(latest_table_info.ident.seq),
+                self.cluster_type(),
                 table_meta_timestamps,
             )?;
 
