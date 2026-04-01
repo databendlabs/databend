@@ -29,6 +29,7 @@ use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::GetTaskDependentsRequest;
 use databend_common_cloud_control::pb::Task;
+use databend_common_cloud_control::task_utils;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::DataBlock;
@@ -199,7 +200,7 @@ impl TaskDependentsSource {
 
         for task in tasks {
             let task = task.clone();
-            let tsk: databend_common_cloud_control::task_utils::Task = task.try_into()?;
+            let tsk: task_utils::Task = task.try_into()?;
             created_on.push(tsk.created_at.timestamp_micros());
             name.push(tsk.task_name.clone());
             owner.push(tsk.owner.clone());

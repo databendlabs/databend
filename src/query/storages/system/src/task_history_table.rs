@@ -20,7 +20,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
-use databend_common_cloud_control::task_utils::TaskRun;
+use databend_common_cloud_control::pb::TaskRun;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -69,6 +69,7 @@ pub fn parse_task_runs_to_datablock(task_runs: Vec<TaskRun>) -> Result<DataBlock
     let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(task_runs.len());
 
     for task_run in task_runs {
+        let task_run: databend_common_cloud_control::task_utils::TaskRun = task_run.try_into()?;
         name.push(task_run.task_name);
         id.push(task_run.task_id);
         owner.push(task_run.owner);
@@ -215,12 +216,7 @@ impl AsyncSystemTable for TaskHistoryTable {
             .flat_map(|r| r.task_runs)
             .collect::<Vec<_>>();
 
-        let task_runs = trs
-            .into_iter()
-            .map(TaskRun::try_from)
-            .collect::<Result<Vec<_>>>()?;
-
-        parse_task_runs_to_datablock(task_runs)
+        parse_task_runs_to_datablock(trs)
     }
 }
 
