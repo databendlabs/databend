@@ -623,6 +623,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("broadcast_join_max_build_rows", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(30_000_000),
+                    desc: "Maximum estimated build-side rows for broadcast join when partitioned hash join is enabled. 0 means no limit.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
                 ("grouping_sets_to_union", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables grouping sets to union.",
