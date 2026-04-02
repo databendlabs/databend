@@ -38,6 +38,7 @@ use databend_query::test_kits::append_string_sample_data;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_io::ReadSettings;
+use futures_util::TryStreamExt;
 use tantivy::schema::IndexRecordOption;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -93,7 +94,11 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
         segment_locs: None,
     };
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     let new_table = table.refresh(ctx.as_ref()).await?;
     let new_fuse_table = FuseTable::create_without_refresh_table_info(
