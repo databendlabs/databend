@@ -14,10 +14,12 @@
 
 mod block_builder;
 mod decompressor;
+mod encoding_transformer;
 mod reader;
 mod separator;
 
 pub use block_builder::BlockBuilder;
 pub use decompressor::Decompressor;
+pub use encoding_transformer::EncodingTransformer;
 pub use reader::BytesReader;
 pub use separator::Separator;

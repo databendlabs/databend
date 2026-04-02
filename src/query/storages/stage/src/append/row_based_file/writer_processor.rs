@@ -20,15 +20,20 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::CompressCodec;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_storages_common_stage::CopyIntoLocationInfo;
+use encoding_rs::EncoderResult;
+use encoding_rs::Encoding;
+use encoding_rs::UTF_8;
 use opendal::Operator;
 
 use super::buffers::FileOutputBuffers;
@@ -89,6 +94,61 @@ impl RowBasedFileWriter {
             unload_output,
             unload_output_blocks: None,
         })))
+    }
+}
+
+fn resolve_output_encoding(format: &FileFormatParams) -> Result<Option<(&str, &'static Encoding)>> {
+    let label = match format {
+        FileFormatParams::Csv(params) => params.encoding.as_str(),
+        FileFormatParams::Text(params) => params.encoding.as_str(),
+        _ => return Ok(None),
+    };
+
+    let encoding = Encoding::for_label_no_replacement(label.trim().as_bytes())
+        .ok_or_else(|| ErrorCode::BadArguments(format!("unsupported file encoding '{}'", label)))?;
+    if encoding == UTF_8 {
+        Ok(None)
+    } else {
+        Ok(Some((label, encoding)))
+    }
+}
+
+fn transcode_output(data: Vec<u8>, format: &FileFormatParams) -> Result<Vec<u8>> {
+    let Some((label, encoding)) = resolve_output_encoding(format)? else {
+        return Ok(data);
+    };
+
+    let mut encoder = encoding.new_encoder();
+    let capacity = encoder
+        .max_buffer_length_from_utf8_if_no_unmappables(data.len())
+        .ok_or_else(|| {
+            ErrorCode::BadBytes(format!(
+                "failed to encode unload data with encoding '{}': output too large",
+                label
+            ))
+        })?;
+    let src = std::str::from_utf8(&data).map_err(|err| {
+        ErrorCode::BadBytes(format!(
+            "failed to encode unload data with encoding '{}': invalid internal utf-8: {}",
+            label, err
+        ))
+    })?;
+    let mut output = vec![0; capacity];
+    let (result, read, written) =
+        encoder.encode_from_utf8_without_replacement(src, &mut output, true);
+    match result {
+        EncoderResult::InputEmpty => {
+            debug_assert_eq!(read, src.len());
+            output.truncate(written);
+            Ok(output)
+        }
+        EncoderResult::OutputFull => {
+            unreachable!("reserved enough output buffer for unload transcoding")
+        }
+        EncoderResult::Unmappable(ch) => Err(ErrorCode::BadBytes(format!(
+            "failed to encode unload data with encoding '{}': character '{}' is not representable",
+            label, ch
+        ))),
     }
 }
 
@@ -157,6 +217,7 @@ impl Processor for RowBasedFileWriter {
         for b in buffers.buffers {
             output.extend_from_slice(b.buffer.as_slice());
         }
+        output = transcode_output(output, &self.info.stage.file_format_params)?;
         let input_bytes = output.len();
         if let Some(compression) = self.compression {
             output = if compression == CompressAlgorithm::Zip {
@@ -191,5 +252,47 @@ impl Processor for RowBasedFileWriter {
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_meta_app::principal::CsvFileFormatParams;
+    use databend_common_meta_app::principal::TextFileFormatParams;
+    use encoding_rs::GBK;
+
+    use super::*;
+
+    #[test]
+    fn test_transcode_output_csv_gbk() {
+        let format = FileFormatParams::Csv(CsvFileFormatParams {
+            encoding: "gbk".to_string(),
+            ..CsvFileFormatParams::default()
+        });
+
+        let got = transcode_output("张三,1\n".as_bytes().to_vec(), &format).unwrap();
+        let (want, _, had_errors) = GBK.encode("张三,1\n");
+        assert!(!had_errors);
+        assert_eq!(got, want.as_ref());
+    }
+
+    #[test]
+    fn test_transcode_output_text_utf8_passthrough() {
+        let format = FileFormatParams::Text(TextFileFormatParams::default());
+        let input = "hello\t1\n".as_bytes().to_vec();
+
+        let got = transcode_output(input.clone(), &format).unwrap();
+        assert_eq!(got, input);
+    }
+
+    #[test]
+    fn test_transcode_output_unmappable_char() {
+        let format = FileFormatParams::Csv(CsvFileFormatParams {
+            encoding: "gbk".to_string(),
+            ..CsvFileFormatParams::default()
+        });
+
+        let err = transcode_output("😀,1\n".as_bytes().to_vec(), &format).unwrap_err();
+        assert!(err.message().contains("not representable"));
     }
 }

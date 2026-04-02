@@ -33,6 +33,7 @@ databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
 databend-storages-common-stage = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+encoding_rs = { workspace = true }
 enum-as-inner = { workspace = true }
 futures = { workspace = true }
 jsonb = { workspace = true }
