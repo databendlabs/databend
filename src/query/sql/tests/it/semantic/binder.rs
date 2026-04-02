@@ -187,6 +187,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t",
         },
         SqlTestCase {
+            name: "order_by_window_alias_does_not_seed_window_aggregate",
+            description: "ORDER BY on a window alias must not pre-register aggregates that only appear inside that alias's window specification.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) AS rn FROM t ORDER BY rn",
+        },
+        SqlTestCase {
             name: "window_order_reuses_having_aggregate",
             description: "A window ORDER BY clause should be able to reuse an aggregate introduced later by HAVING.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],

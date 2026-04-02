@@ -871,11 +871,12 @@ impl ContainsSubqueryVisitor {
 }
 
 #[derive(Visitor)]
-#[visitor(Expr(enter), ColumnRef(enter), Query)]
+#[visitor(Expr, ColumnRef(enter), Query)]
 struct AggregatePrepassScanner<'a> {
     name_resolution_ctx: &'a crate::NameResolutionContext,
     ast_aliases: &'a AggregatePrepassAliases,
     query_depth: usize,
+    window_depth: usize,
     expanding_aliases: HashSet<String>,
     fragments: Vec<AggregatePrepassFragment>,
 }
@@ -890,6 +891,7 @@ impl AggregatePrepassScanner<'_> {
             name_resolution_ctx,
             ast_aliases,
             query_depth: 0,
+            window_depth: 0,
             expanding_aliases: HashSet::new(),
             fragments: Vec::new(),
         };
@@ -898,6 +900,14 @@ impl AggregatePrepassScanner<'_> {
     }
 
     fn enter_expr(&mut self, expr: &Expr) {
+        if Self::is_window_expr(expr) {
+            self.window_depth += 1;
+        }
+
+        if self.window_depth > 0 {
+            return;
+        }
+
         if self.query_depth > 0 {
             return;
         }
@@ -911,8 +921,14 @@ impl AggregatePrepassScanner<'_> {
         }
     }
 
+    fn exit_expr(&mut self, expr: &Expr) {
+        if Self::is_window_expr(expr) {
+            self.window_depth -= 1;
+        }
+    }
+
     fn enter_column_ref(&mut self, column: &ColumnRef) {
-        if self.query_depth > 0 {
+        if self.query_depth > 0 || self.window_depth > 0 {
             return;
         }
 
@@ -941,6 +957,16 @@ impl AggregatePrepassScanner<'_> {
             expr: expr.clone(),
             contains_subquery: Binder::aggregate_prepass_contains_subquery(expr),
         });
+    }
+
+    fn is_window_expr(expr: &Expr) -> bool {
+        match expr {
+            Expr::CountAll {
+                window: Some(_), ..
+            } => true,
+            Expr::FunctionCall { func, .. } => func.window.is_some(),
+            _ => false,
+        }
     }
 
     fn find_aggregate_prepass_alias<'a>(
