@@ -251,6 +251,7 @@ dyn-clone = "1.0.9"
 educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
 either = "1.9"
 enquote = "1.1.0"
+encoding_rs = "0.8.35"
 enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
 enumflags2 = { version = "0.7.7", features = ["serde"] }

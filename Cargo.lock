@@ -4804,6 +4804,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "encoding_rs",
  "enum-as-inner",
  "futures",
  "jsonb",
