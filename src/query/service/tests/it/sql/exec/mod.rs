@@ -168,4 +168,5 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
 }
 
 mod get_table_bind_test;
+mod range_join;
 mod window;
