@@ -7,8 +7,6 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["task-support"]
-task-support = []
 jemalloc = ["databend-common-base/jemalloc", "tikv-jemalloc-ctl"]
 
 [dependencies]
@@ -28,7 +26,7 @@ databend-common-meta-api = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-metrics = { workspace = true }
 databend-common-pipeline = { workspace = true }
-databend-common-sql = { path = "../../sql", default-features = false }
+databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 databend-common-storages-basic = { workspace = true }
 databend-common-storages-fuse = { workspace = true }

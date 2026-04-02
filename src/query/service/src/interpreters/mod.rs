@@ -253,7 +253,6 @@ pub use interpreter_password_policy_desc::DescPasswordPolicyInterpreter;
 pub use interpreter_password_policy_drop::DropPasswordPolicyInterpreter;
 pub use interpreter_privilege_grant::GrantPrivilegeInterpreter;
 pub use interpreter_privilege_revoke::RevokePrivilegeInterpreter;
-pub use interpreter_procedure_call::CallProcedureInterpreter;
 pub use interpreter_procedure_desc::DescProcedureInterpreter;
 pub use interpreter_replace::ReplaceInterpreter;
 pub use interpreter_role_alter::AlterRoleInterpreter;

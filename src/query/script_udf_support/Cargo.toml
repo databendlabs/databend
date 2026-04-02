@@ -27,7 +27,7 @@ databend-common-expression = { workspace = true }
 databend-common-functions = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-pipeline-transforms = { workspace = true }
-databend-common-sql = { path = "../sql", default-features = false }
+databend-common-sql = { workspace = true }
 databend-common-storage = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
