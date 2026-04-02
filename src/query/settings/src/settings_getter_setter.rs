@@ -364,6 +364,14 @@ impl Settings {
         self.try_get_u64("bloom_runtime_filter_threshold")
     }
 
+    pub fn get_bloom_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
+        self.try_get_u64("bloom_runtime_filter_selectivity_threshold")
+    }
+
+    pub fn get_bloom_runtime_filter_sampling_frequency(&self) -> Result<u64> {
+        self.try_get_u64("bloom_runtime_filter_sampling_frequency")
+    }
+
     pub fn get_min_max_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("min_max_runtime_filter_threshold")
     }

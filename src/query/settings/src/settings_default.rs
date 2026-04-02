@@ -574,6 +574,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
+                ("bloom_runtime_filter_selectivity_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(40),
+                    desc: "Probe-side selectivity threshold (percentage) for bloom runtime filters. If a bloom filter filters less than this percentage of rows, it is temporarily disabled. Default 40 means 40%.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
+                ("bloom_runtime_filter_sampling_frequency", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(32),
+                    desc: "Number of block evaluations between re-checks of bloom runtime filter selectivity. After this many evaluations, counters reset and selectivity is re-evaluated.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("max_execute_time_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum query execution time in seconds. Setting it to 0 means no limit.",

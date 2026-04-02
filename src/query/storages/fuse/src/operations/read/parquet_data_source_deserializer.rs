@@ -233,7 +233,7 @@ impl Processor for DeserializeDataTransform {
 
                     let (mut data_block, row_selection, bitmap_selection) = self
                         .read_state
-                        .as_ref()
+                        .as_mut()
                         .unwrap()
                         .deserialize_and_filter(columns_chunks, part)?;
 

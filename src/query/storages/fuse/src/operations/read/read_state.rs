@@ -44,11 +44,67 @@ use crate::io::DataItem;
 use crate::io::RowSelection;
 use crate::pruning::ExprBloomFilter;
 
+const DEFAULT_MIN_INPUT_ROWS: usize = 40960;
+
+#[derive(Clone)]
+pub struct BloomFilterSelectivity {
+    input_rows: usize,
+    filtered_rows: usize,
+    eval_counter: usize,
+    always_true: bool,
+    sampling_frequency: usize,
+    selectivity_threshold: usize,
+    min_input_rows: usize,
+}
+
+impl BloomFilterSelectivity {
+    pub fn new(selectivity_threshold: usize, sampling_frequency: usize) -> Self {
+        Self {
+            input_rows: 0,
+            filtered_rows: 0,
+            eval_counter: 0,
+            always_true: false,
+            sampling_frequency,
+            selectivity_threshold,
+            min_input_rows: DEFAULT_MIN_INPUT_ROWS,
+        }
+    }
+
+    pub fn should_skip(&self) -> bool {
+        self.always_true
+    }
+
+    pub fn update(&mut self, block_input_rows: usize, block_filtered_rows: usize) {
+        self.input_rows += block_input_rows;
+        self.filtered_rows += block_filtered_rows;
+        self.eval_counter += 1;
+
+        if self.eval_counter >= self.sampling_frequency {
+            self.judge_selectivity();
+            self.reset();
+        }
+    }
+
+    fn judge_selectivity(&mut self) {
+        if self.input_rows >= self.min_input_rows {
+            let selectivity_pct = (self.filtered_rows * 100) / self.input_rows;
+            self.always_true = selectivity_pct < self.selectivity_threshold;
+        }
+    }
+
+    fn reset(&mut self) {
+        self.input_rows = 0;
+        self.filtered_rows = 0;
+        self.eval_counter = 0;
+    }
+}
+
 #[derive(Clone)]
 pub struct BloomRuntimeFilterRef {
     pub column_index: FieldIndex,
     pub filter: RuntimeBloomFilter,
     pub stats: Arc<RuntimeFilterStats>,
+    pub selectivity: BloomFilterSelectivity,
 }
 
 pub struct ReadState {
@@ -98,6 +154,11 @@ impl ReadState {
 
         let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
 
+        let settings = ctx.get_settings();
+        let selectivity_threshold =
+            settings.get_bloom_runtime_filter_selectivity_threshold()? as usize;
+        let sampling_frequency = settings.get_bloom_runtime_filter_sampling_frequency()? as usize;
+
         let runtime_filters: Vec<BloomRuntimeFilterRef> = runtime_filter_entries
             .into_iter()
             .filter_map(|entry| {
@@ -107,6 +168,10 @@ impl ReadState {
                     column_index,
                     filter: bloom.filter,
                     stats: entry.stats,
+                    selectivity: BloomFilterSelectivity::new(
+                        selectivity_threshold,
+                        sampling_frequency,
+                    ),
                 })
             })
             .collect();
@@ -147,16 +212,24 @@ impl ReadState {
     }
 
     pub fn runtime_filter(
-        &self,
+        &mut self,
         block: &DataBlock,
-        _num_rows: usize,
+        num_rows: usize,
     ) -> Result<Option<MutableBitmap>> {
         let bloom_start = Instant::now();
 
         let mut bitmaps = vec![];
-        for runtime_filter in &self.runtime_filters {
+        for runtime_filter in &mut self.runtime_filters {
+            if runtime_filter.selectivity.should_skip() {
+                continue;
+            }
+
             let probe_column = block.get_by_offset(runtime_filter.column_index).to_column();
             let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
+
+            let filtered_rows = bitmap.null_count();
+            runtime_filter.selectivity.update(num_rows, filtered_rows);
+
             bitmaps.push(bitmap);
         }
 
@@ -175,7 +248,7 @@ impl ReadState {
     }
 
     pub fn deserialize_and_filter(
-        &self,
+        &mut self,
         columns_chunks: HashMap<ColumnId, DataItem>,
         part: &FuseBlockPartInfo,
     ) -> Result<(DataBlock, Option<RowSelection>, Option<Bitmap>)> {
