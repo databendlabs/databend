@@ -656,7 +656,7 @@ fn test_estimated_scalar_repeat_size() {
     {
         let scalar = ScalarRef::String("abc");
         let ty = DataType::String;
-        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+        assert_estimated_scalar_repeat_size_with_gc(scalar, num_rows, ty);
     }
 
     // string
