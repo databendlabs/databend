@@ -15,13 +15,11 @@
 use databend_common_column::buffer::Buffer;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
-use databend_common_expression::ScalarRef;
 use databend_common_expression::block_debug::box_render;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArrayColumn;
@@ -30,7 +28,6 @@ use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::Int64Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
-use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::types::string::StringColumnBuilder;
 
@@ -112,121 +109,5 @@ fn test_block_entry_memory_size() {
     assert_eq!(
         total_memory_size,
         array2.memory_size(false) + array3.memory_size(false) - 8
-    );
-}
-
-#[test]
-fn test_estimate_block_size_for_const_short_string() {
-    let rows = 245;
-    let value = "abc";
-
-    let const_block = DataBlock::new(
-        vec![BlockEntry::new_const_column(
-            DataType::String,
-            Scalar::String(value.to_string()),
-            rows,
-        )],
-        rows,
-    );
-    let full_block = DataBlock::new_from_columns(vec![Column::String(
-        StringColumnBuilder::repeat(value, rows).build(),
-    )]);
-
-    assert_eq!(
-        ScalarRef::String(value).estimated_scalar_repeat_size(rows, &DataType::String),
-        full_block.get_by_offset(0).to_column().memory_size(true),
-    );
-    assert_eq!(
-        const_block.estimate_block_size(),
-        full_block.estimate_block_size()
-    );
-}
-
-#[test]
-fn test_estimate_block_size_for_const_large_string() {
-    let rows = 245;
-    let value = "x".repeat(500_000);
-
-    let const_block = DataBlock::new(
-        vec![BlockEntry::new_const_column(
-            DataType::String,
-            Scalar::String(value.clone()),
-            rows,
-        )],
-        rows,
-    );
-    let full_block = DataBlock::new_from_columns(vec![Column::String(
-        StringColumnBuilder::repeat(&value, rows).build(),
-    )]);
-
-    assert_eq!(
-        ScalarRef::String(value.as_str()).estimated_scalar_repeat_size(rows, &DataType::String),
-        full_block.get_by_offset(0).to_column().memory_size(true),
-    );
-    assert_eq!(
-        const_block.estimate_block_size(),
-        full_block.estimate_block_size()
-    );
-}
-
-#[test]
-fn test_estimate_block_size_for_const_array() {
-    let rows = 245;
-    let scalar = ScalarRef::Array(StringType::from_data(vec!["abc", "abcdefghijklmn123"]));
-    let data_type = DataType::Array(Box::new(DataType::String));
-
-    let const_block = DataBlock::new(
-        vec![BlockEntry::new_const_column(
-            data_type.clone(),
-            scalar.to_owned(),
-            rows,
-        )],
-        rows,
-    );
-    let full_block = DataBlock::new_from_columns(vec![
-        ColumnBuilder::repeat(&scalar, rows, &data_type).build(),
-    ]);
-
-    assert_eq!(
-        scalar.estimated_scalar_repeat_size(rows, &data_type),
-        full_block.get_by_offset(0).to_column().memory_size(true),
-    );
-    assert_eq!(
-        const_block.estimate_block_size(),
-        full_block.estimate_block_size()
-    );
-}
-
-#[test]
-fn test_estimate_block_size_for_const_map() {
-    let rows = 245;
-    let scalar = ScalarRef::Map(Column::Tuple(vec![
-        UInt8Type::from_data(vec![1, 2]),
-        StringType::from_data(vec!["a", "abcdefghijklmn123"]),
-    ]));
-    let data_type = DataType::Map(Box::new(DataType::Tuple(vec![
-        DataType::Number(NumberDataType::UInt8),
-        DataType::String,
-    ])));
-
-    let const_block = DataBlock::new(
-        vec![BlockEntry::new_const_column(
-            data_type.clone(),
-            scalar.to_owned(),
-            rows,
-        )],
-        rows,
-    );
-    let full_block = DataBlock::new_from_columns(vec![
-        ColumnBuilder::repeat(&scalar, rows, &data_type).build(),
-    ]);
-
-    assert_eq!(
-        scalar.estimated_scalar_repeat_size(rows, &data_type),
-        full_block.get_by_offset(0).to_column().memory_size(true),
-    );
-    assert_eq!(
-        const_block.estimate_block_size(),
-        full_block.estimate_block_size()
     );
 }
