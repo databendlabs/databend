@@ -562,8 +562,8 @@ impl Settings {
         self.try_get_u64("spill_global_backoff_max_sleep_ms")
     }
 
-    pub fn get_spill_global_backoff_low_query_ratio(&self) -> Result<u64> {
-        self.try_get_u64("spill_global_backoff_low_query_ratio")
+    pub fn get_min_query_memory_usage(&self) -> Result<u64> {
+        self.try_get_u64("min_query_memory_usage")
     }
 
     pub fn get_window_partition_spilling_memory_ratio(&self) -> Result<usize> {

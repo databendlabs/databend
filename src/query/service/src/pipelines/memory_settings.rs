@@ -156,13 +156,12 @@ impl MemorySettingsExt for MemorySettings {
         }
 
         let max_sleep_ms = settings.get_spill_global_backoff_max_sleep_ms()?;
-        let low_query_ratio = settings.get_spill_global_backoff_low_query_ratio()? as f64 / 100.0;
-        let low_query_memory_bytes = (max_memory_usage as f64 * low_query_ratio) as u64;
+        let min_query_memory_usage = settings.get_min_query_memory_usage()?;
 
-        if max_sleep_ms > 0 && max_memory_usage != 0 {
+        if max_sleep_ms > 0 && min_query_memory_usage > 0 {
             builder = builder.with_spill_backoff(Some(SpillBackoffSettings {
                 max_sleep_ms,
-                low_query_memory_bytes,
+                min_query_memory_usage,
             }));
         }
 
@@ -406,7 +405,7 @@ mod tests {
 
         settings.set_setting("max_memory_usage".into(), "1000".into())?;
         settings.set_setting("spill_global_backoff_max_sleep_ms".into(), "100".into())?;
-        settings.set_setting("spill_global_backoff_low_query_ratio".into(), "25".into())?;
+        settings.set_setting("min_query_memory_usage".into(), "250".into())?;
 
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
 
@@ -414,7 +413,7 @@ mod tests {
             memory_settings.spill_backoff,
             Some(SpillBackoffSettings {
                 max_sleep_ms: 100,
-                low_query_memory_bytes: 250,
+                min_query_memory_usage: 250,
             })
         );
         Ok(())
@@ -426,7 +425,26 @@ mod tests {
         let ctx = fixture.new_query_ctx().await?;
         let settings = ctx.get_settings();
 
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
         settings.set_setting("spill_global_backoff_max_sleep_ms".into(), "0".into())?;
+        settings.set_setting("min_query_memory_usage".into(), "250".into())?;
+
+        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
+
+        assert_eq!(memory_settings.spill_backoff, None);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_aggregate_spill_backoff_disabled_when_min_query_memory_usage_is_zero()
+    -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
+        settings.set_setting("spill_global_backoff_max_sleep_ms".into(), "100".into())?;
+        settings.set_setting("min_query_memory_usage".into(), "0".into())?;
 
         let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
 

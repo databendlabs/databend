@@ -729,12 +729,12 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=60_000)),
                 }),
-                ("spill_global_backoff_low_query_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(10),
-                    desc: "A query is considered low-memory for global-pressure sleep backoff when its memory usage ratio is at or below this percent of max_memory_usage.",
+                ("min_query_memory_usage", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "A query is considered low-memory for global-pressure sleep backoff when its memory usage in bytes is at or below this threshold. 0 disables this sleep backoff.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=100)),
+                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("window_partition_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),

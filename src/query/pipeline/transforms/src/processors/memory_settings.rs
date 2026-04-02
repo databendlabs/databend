@@ -33,12 +33,12 @@ pub enum SpillDecision {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpillBackoffSettings {
     pub max_sleep_ms: u64,
-    pub low_query_memory_bytes: u64,
+    pub min_query_memory_usage: u64,
 }
 
 impl SpillBackoffSettings {
     fn should_backoff(&self, query_usage: usize) -> bool {
-        query_usage <= self.low_query_memory_bytes as usize
+        query_usage <= self.min_query_memory_usage as usize
     }
 }
 
@@ -488,7 +488,7 @@ mod tests {
             query_memory_tracking: Some(query_mem),
             spill_backoff: Some(SpillBackoffSettings {
                 max_sleep_ms: 500,
-                low_query_memory_bytes: 50,
+                min_query_memory_usage: 50,
             }),
             ..Default::default()
         };
@@ -520,7 +520,7 @@ mod tests {
             query_memory_tracking: Some(query_mem),
             spill_backoff: Some(SpillBackoffSettings {
                 max_sleep_ms: 500,
-                low_query_memory_bytes: 50,
+                min_query_memory_usage: 50,
             }),
             ..Default::default()
         };
@@ -546,7 +546,7 @@ mod tests {
             query_memory_tracking: Some(query_mem.clone()),
             spill_backoff: Some(SpillBackoffSettings {
                 max_sleep_ms: 1000,
-                low_query_memory_bytes: 50,
+                min_query_memory_usage: 50,
             }),
             ..Default::default()
         };
