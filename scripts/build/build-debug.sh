@@ -16,6 +16,41 @@ if [[ $(uname -a) =~ Darwin ]]; then
 	export JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000
 fi
 
-cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --bin=databend-sqllogictests --bin=databend-sqlsmith
+QUERY_FEATURE_PROFILE="${QUERY_FEATURE_PROFILE:-default}"
+QUERY_FEATURES="${QUERY_FEATURES:-}"
+
+query_build_args=()
+
+if [[ -n "$QUERY_FEATURES" ]]; then
+	query_build_args=(--no-default-features --features "$QUERY_FEATURES")
+	echo "Building databend-query with explicit QUERY_FEATURES=$QUERY_FEATURES"
+else
+	case "$QUERY_FEATURE_PROFILE" in
+	default | full) ;;
+	lean)
+		query_build_args=(--no-default-features --features "simd")
+		echo "Building databend-query with QUERY_FEATURE_PROFILE=lean (features: simd)"
+		;;
+	stage)
+		query_build_args=(--no-default-features --features "simd,storage-stage")
+		echo "Building databend-query with QUERY_FEATURE_PROFILE=stage (features: simd,storage-stage)"
+		;;
+	*)
+		echo "Unknown QUERY_FEATURE_PROFILE: $QUERY_FEATURE_PROFILE"
+		echo "Supported profiles: default, full, lean, stage"
+		echo "Or set QUERY_FEATURES explicitly, for example: QUERY_FEATURES=simd,storage-stage"
+		exit 1
+		;;
+	esac
+fi
+
+if [[ ${#query_build_args[@]} -eq 0 ]]; then
+	cargo build --bin=databend-query --bin=databend-meta --bin=databend-metactl --bin=databend-sqllogictests --bin=databend-sqlsmith
+else
+	cargo build -p databend-binaries --bin=databend-query "${query_build_args[@]}"
+	cargo build -p databend-meta-binaries --bin=databend-meta --bin=databend-metactl
+	cargo build -p databend-sqllogictests --bin=databend-sqllogictests
+	cargo build -p databend-sqlsmith --bin=databend-sqlsmith
+fi
 
 echo "All done..."
