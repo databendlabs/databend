@@ -722,6 +722,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("spill_global_backoff_max_sleep_ms", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(2000),
+                    desc: "Maximum total sleep time in milliseconds for one spill decision under global-pressure backoff. 0 disables this sleep backoff.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=60_000)),
+                }),
+                ("spill_global_backoff_low_query_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "A query is considered low-memory for global-pressure sleep backoff when its memory usage ratio is at or below this percent of max_memory_usage.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("window_partition_spilling_memory_ratio", DefaultSettingValue {
                     value: UserSettingValue::UInt64(60),
                     desc: "Sets the maximum memory ratio in bytes that a window partitioner can use before spilling data to storage during query execution.",

@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::mem;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -32,6 +33,8 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::SpillBackoffState;
+use databend_common_pipeline_transforms::SpillDecision;
 
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::aggregator::AggregateMeta;
@@ -77,6 +80,7 @@ pub struct NewTransformFinalAggregate {
     spiller: NewAggregateSpiller<LocalPartitionStream>,
     settings: MemorySettings,
     max_aggregate_spill_level: usize,
+    spill_backoff_state: SpillBackoffState,
 }
 
 impl NewTransformFinalAggregate {
@@ -90,7 +94,7 @@ impl NewTransformFinalAggregate {
         rx: Receiver<FinalAggregateTask>,
     ) -> Result<Box<dyn Processor>> {
         let settings = ctx.get_settings();
-        let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()?;
+        let max_aggregate_spill_level = settings.get_max_aggregate_spill_level()? as usize;
 
         let hashtable = AggregateHashTable::new(
             params.group_data_types.clone(),
@@ -130,7 +134,8 @@ impl NewTransformFinalAggregate {
             _id,
             spiller,
             settings: MemorySettings::from_aggregate_settings(&ctx)?,
-            max_aggregate_spill_level: max_aggregate_spill_level as usize,
+            max_aggregate_spill_level,
+            spill_backoff_state: SpillBackoffState::default(),
         }))
     }
 }
@@ -209,11 +214,27 @@ impl NewTransformFinalAggregate {
             }
         }
 
-        if need_check_spill && self.settings.check_spill() {
+        // If already trigger spilled for this task, we continue to spill the remaining part
+        if self.spilled_occurred || (need_check_spill && self.should_spill_now()) {
             self.spill_out()?;
         }
 
         Ok(())
+    }
+
+    fn should_spill_now(&mut self) -> bool {
+        loop {
+            match self
+                .settings
+                .check_spill_with_backoff(&mut self.spill_backoff_state)
+            {
+                SpillDecision::NoSpill => return false,
+                SpillDecision::SpillNow => return true,
+                SpillDecision::Sleep(sleep_ms) => {
+                    std::thread::sleep(Duration::from_millis(sleep_ms));
+                }
+            }
+        }
     }
 
     fn spill_out(&mut self) -> Result<()> {
