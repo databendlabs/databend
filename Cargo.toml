@@ -152,6 +152,9 @@ databend-meta-plugin-semaphore = { path = "src/meta/plugins/semaphore" }
 databend-meta-runtime = { path = "src/meta/runtime" }
 databend-meta-ver = { path = "src/meta/ver" }
 databend-query = { path = "src/query/service" }
+databend-query-script-udf-support = { path = "src/query/script_udf_support" }
+databend-query-storage-stage-support = { path = "src/query/storage_stage_support" }
+databend-query-task-support = { path = "src/query/task_support" }
 databend-sqllogictests = { path = "tests/sqllogictests" }
 databend-storages-common-blocks = { path = "src/query/storages/common/blocks" }
 databend-storages-common-cache = { path = "src/query/storages/common/cache" }

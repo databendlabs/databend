@@ -26,6 +26,7 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
+use databend_common_cloud_control::task_utils::TaskRun;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -43,8 +44,9 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::plans::task_run_schema;
 use databend_common_storages_factory::Table;
-use databend_common_storages_system::parse_task_runs_to_datablock;
 use jiff::tz::TimeZone;
+
+use crate::system_tables::parse_task_runs_to_datablock;
 
 pub struct TaskHistoryTable {
     table_info: TableInfo,
@@ -68,8 +70,6 @@ impl TaskHistoryTable {
                 schema: infer_table_schema(&task_run_schema())
                     .expect("failed to infer table schema"),
                 engine: String::from(table_func_name),
-                // Assuming that created_on is unnecessary for function table,
-                // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: DateTime::from_timestamp(0, 0).unwrap(),
                 updated_on: DateTime::from_timestamp(0, 0).unwrap(),
                 ..Default::default()
@@ -77,7 +77,7 @@ impl TaskHistoryTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(TaskHistoryTable {
+        Ok(Arc::new(Self {
             table_info,
             args_parsed,
             table_args,
@@ -102,7 +102,6 @@ impl Table for TaskHistoryTable {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        // dummy statistics
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
@@ -121,7 +120,6 @@ impl Table for TaskHistoryTable {
             |output| TaskHistorySource::create(ctx.clone(), output, self.args_parsed.clone()),
             1,
         )?;
-
         Ok(())
     }
 }
@@ -133,17 +131,18 @@ struct TaskHistorySource {
 }
 
 impl TaskHistorySource {
-    pub fn create(
+    fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         args_parsed: TableHistoryArgsParsed,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.get_scan_progress(), output, TaskHistorySource {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, Self {
             ctx,
             args_parsed,
             is_finished: false,
         })
     }
+
     async fn build_request(&self) -> Result<ShowTaskRunsRequest> {
         let tenant = self.ctx.get_tenant();
         let available_roles = self.ctx.get_all_available_roles().await?;
@@ -153,14 +152,14 @@ impl TaskHistorySource {
                 .args_parsed
                 .scheduled_time_range_start
                 .clone()
-                .unwrap_or("".to_string()),
+                .unwrap_or_default(),
             scheduled_time_end: self
                 .args_parsed
                 .scheduled_time_range_end
                 .clone()
-                .unwrap_or("".to_string()),
-            task_name: self.args_parsed.task_name.clone().unwrap_or("".to_string()),
-            result_limit: self.args_parsed.result_limit.unwrap_or(0), // 0 means default
+                .unwrap_or_default(),
+            task_name: self.args_parsed.task_name.clone().unwrap_or_default(),
+            result_limit: self.args_parsed.result_limit.unwrap_or(0),
             error_only: self.args_parsed.error_only.unwrap_or(false),
             owners: available_roles
                 .into_iter()
@@ -186,8 +185,8 @@ impl AsyncSource for TaskHistorySource {
             return Ok(None);
         }
         self.is_finished = true;
-        let config = GlobalConfig::instance();
-        if config
+
+        if GlobalConfig::instance()
             .query
             .common
             .cloud_control_grpc_server_address
@@ -197,6 +196,7 @@ impl AsyncSource for TaskHistorySource {
                 "cannot view system.task_history table without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
+
         let cloud_api = CloudControlApiProvider::instance();
         let tenant = self.ctx.get_tenant();
         let query_id = self.ctx.get_id();
@@ -217,11 +217,17 @@ impl AsyncSource for TaskHistorySource {
             .get_task_client()
             .show_task_runs_full(cfg, req)
             .await?;
-        let trs = resp
+        let task_runs = resp
             .into_iter()
             .flat_map(|r| r.task_runs)
             .collect::<Vec<_>>();
-        parse_task_runs_to_datablock(trs).map(Some)
+        parse_task_runs_to_datablock(
+            task_runs
+                .into_iter()
+                .map(TaskRun::try_from)
+                .collect::<Result<Vec<_>>>()?,
+        )
+        .map(Some)
     }
 }
 
@@ -266,12 +272,12 @@ fn parse_date_or_timestamp(v: &Scalar) -> Option<String> {
                 .unwrap(),
         )
     } else {
-        return None;
+        None
     }
 }
 
 impl TableHistoryArgsParsed {
-    pub fn parse(table_args: &TableArgs) -> databend_common_exception::Result<Self> {
+    fn parse(table_args: &TableArgs) -> Result<Self> {
         let args = table_args.expect_all_named("task_history")?;
 
         let mut task_name = None;

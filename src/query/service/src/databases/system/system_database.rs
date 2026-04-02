@@ -49,10 +49,6 @@ use databend_common_storages_system::NotificationHistoryTable;
 use databend_common_storages_system::NotificationsTable;
 use databend_common_storages_system::OneTable;
 use databend_common_storages_system::PasswordPoliciesTable;
-#[cfg(feature = "task-support")]
-use databend_common_storages_system::PrivateTaskHistoryTable;
-#[cfg(feature = "task-support")]
-use databend_common_storages_system::PrivateTasksTable;
 use databend_common_storages_system::ProceduresTable;
 use databend_common_storages_system::ProcessesTable;
 use databend_common_storages_system::QueryCacheTable;
@@ -65,10 +61,6 @@ use databend_common_storages_system::TableFunctionsTable;
 use databend_common_storages_system::TablesTableWithHistory;
 use databend_common_storages_system::TablesTableWithoutHistory;
 use databend_common_storages_system::TagsTable;
-#[cfg(feature = "task-support")]
-use databend_common_storages_system::TaskHistoryTable;
-#[cfg(feature = "task-support")]
-use databend_common_storages_system::TasksTable;
 use databend_common_storages_system::TempFilesTable;
 use databend_common_storages_system::TerseStreamsTable;
 use databend_common_storages_system::UserFunctionsTable;
@@ -85,6 +77,14 @@ use databend_common_version::DATABEND_CREDITS_NAMES;
 use databend_common_version::DATABEND_CREDITS_VERSIONS;
 use databend_common_version::DATABEND_OPT_LEVEL;
 use databend_meta_client::types::SeqV;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::system_tables::PrivateTaskHistoryTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::system_tables::PrivateTasksTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::system_tables::TaskHistoryTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::system_tables::TasksTable;
 
 use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;

@@ -72,6 +72,8 @@ pub mod test_kits;
 mod global_services;
 #[cfg(feature = "task-support")]
 pub mod task;
+#[cfg(feature = "task-support")]
+mod task_support_context;
 
 pub mod physical_plans;
 

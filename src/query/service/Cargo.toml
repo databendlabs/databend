@@ -15,13 +15,13 @@ default = [
     "storage-stage",
 ]
 simd = ["databend-common-column/simd"]
-script-udf = ["dep:arrow-udf-runtime"]
-python-udf = ["script-udf", "arrow-udf-runtime/python"]
+script-udf = ["databend-query-script-udf-support/script-udf"]
+python-udf = ["script-udf", "databend-query-script-udf-support/python-udf"]
 task-support = [
-    "databend-common-storages-system/task-support",
+    "dep:databend-query-task-support",
 ]
 storage-stage = [
-    "dep:databend-common-storages-stage",
+    "databend-query-storage-stage-support/storage-stage",
 ]
 disable_initial_exec_tls = ["databend-common-base/disable_initial_exec_tls"]
 jemalloc = ["databend-common-storages-system/jemalloc"]
@@ -38,7 +38,6 @@ arrow-ipc = { workspace = true }
 arrow-json = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
-arrow-udf-runtime = { workspace = true, optional = true }
 async-backtrace = { workspace = true }
 async-channel = { workspace = true }
 async-compat = { workspace = true }
@@ -99,7 +98,6 @@ databend-common-storages-iceberg = { workspace = true }
 databend-common-storages-information-schema = { workspace = true }
 databend-common-storages-orc = { workspace = true }
 databend-common-storages-parquet = { workspace = true }
-databend-common-storages-stage = { path = "../storages/stage", optional = true, default-features = false }
 databend-common-storages-stream = { workspace = true }
 databend-common-storages-system = { path = "../storages/system", default-features = false }
 databend-common-telemetry = { workspace = true }
@@ -118,6 +116,9 @@ databend-enterprise-virtual-column = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-meta-plugin-semaphore = { workspace = true }
 databend-meta-runtime = { workspace = true }
+databend-query-script-udf-support = { workspace = true }
+databend-query-storage-stage-support = { workspace = true }
+databend-query-task-support = { workspace = true, optional = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-index = { workspace = true }

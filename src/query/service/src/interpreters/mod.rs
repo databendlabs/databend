@@ -203,8 +203,6 @@ mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
 mod interpreter_virtual_column_vacuum;
-#[cfg(feature = "task-support")]
-mod task;
 mod util;
 
 pub use access::ManagementModeAccess;

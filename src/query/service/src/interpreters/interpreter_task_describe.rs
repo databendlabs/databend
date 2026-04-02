@@ -16,11 +16,11 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_sql::plans::DescribeTaskPlan;
-use databend_common_storages_system::parse_tasks_to_datablock;
+use databend_query_task_support::TaskInterpreter;
+use databend_query_task_support::TaskInterpreterManager;
+use databend_query_task_support::system_tables::parse_tasks_to_datablock;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::task::TaskInterpreter;
-use crate::interpreters::task::TaskInterpreterManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -49,7 +49,7 @@ impl Interpreter for DescribeTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let Some(task) = TaskInterpreterManager::build(&self.ctx)?
+        let Some(task) = TaskInterpreterManager::build(self.ctx.as_ref())?
             .describe_task(&self.ctx, &self.plan)
             .await?
         else {

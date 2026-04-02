@@ -39,7 +39,7 @@ use databend_common_sql::plans::InsertValue;
 use databend_common_sql::plans::Plan;
 use databend_common_storages_fuse::operations::TransformConstraintVerify;
 #[cfg(feature = "storage-stage")]
-use databend_common_storages_stage::build_streaming_load_pipeline;
+use databend_query_storage_stage_support::build_streaming_load_pipeline;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use log::info;
 

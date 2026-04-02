@@ -13,9 +13,12 @@ Databend Query is a Distributed Query Engine at scale.
 - [`management`](./management/) contains query-side management utilities such as cluster and quota support.
 - [`pipeline`](./pipeline/) implements the execution pipeline and scheduling framework for physical operators.
 - [`script`](./script/) contains script execution support used by the query service.
+- [`script_udf_support`](./script_udf_support/) contains optional script UDF integrations that are wired into the query service through the `script-udf` cargo feature.
 - [`service`](./service/) is the `databend-query` service crate and runtime integration layer.
 - [`settings`](./settings/) defines global and session settings.
 - [`sql`](./sql/) contains SQL-side planning, binding, optimization, and related execution support. Read `./sql/README.md` for crate structure and shared optimizer test-support entry points.
+- [`storage_stage_support`](./storage_stage_support/) contains optional stage-storage integrations that are wired into the query service through the `storage-stage` cargo feature.
+- [`task_support`](./task_support/) contains optional task support integrations that are wired into the query service through the `task-support` cargo feature.
 - [`storages`](./storages/) contains table engines and storage-layer integrations, including Fuse and related indexing components.
 - [`users`](./users/) implements user, role, and access-control support.
 - [`ee`](./ee/) contains enterprise query functionality.

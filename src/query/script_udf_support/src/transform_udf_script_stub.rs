@@ -18,20 +18,20 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_pipeline_transforms::processors::Transform;
 
-use crate::physical_plans::UdfFunctionDesc;
+use crate::ScriptUdfFunctionDesc;
 
 pub struct TransformUdfScript;
 
 impl TransformUdfScript {
     pub fn new(
         _func_ctx: FunctionContext,
-        _funcs: Vec<UdfFunctionDesc>,
+        _funcs: Vec<ScriptUdfFunctionDesc>,
         _script_runtimes: (),
     ) -> Self {
         Self
     }
 
-    pub fn init_runtime(_funcs: &[UdfFunctionDesc]) -> Result<()> {
+    pub fn init_runtime(_funcs: &[ScriptUdfFunctionDesc]) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "Script UDF runtime is disabled, rebuild with cargo feature 'script-udf'",
         ))

@@ -22,7 +22,6 @@ pub mod hash_join_table;
 mod materialized_cte;
 mod new_hash_join;
 pub(crate) mod range_join;
-mod runtime_pool;
 pub mod sort;
 mod transform_async_function;
 mod transform_branched_async_function;
@@ -35,15 +34,12 @@ mod transform_recursive_cte_source;
 mod transform_resort_addon;
 mod transform_resort_addon_without_source_schema;
 mod transform_srf;
-#[cfg(feature = "script-udf")]
-mod transform_udf_script;
-#[cfg(not(feature = "script-udf"))]
-mod transform_udf_script_stub;
 mod transform_udf_server;
 mod window;
 
 pub use broadcast::BroadcastSinkProcessor;
 pub use broadcast::BroadcastSourceProcessor;
+pub use databend_query_script_udf_support::TransformUdfScript;
 pub use hash_join::*;
 pub use materialized_cte::CTESource;
 pub use materialized_cte::MaterializedCteSink;
@@ -69,9 +65,5 @@ pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithoutSourceSchema;
 pub use transform_resort_addon_without_source_schema::build_expression_transform;
 pub use transform_srf::TransformSRF;
-#[cfg(feature = "script-udf")]
-pub use transform_udf_script::TransformUdfScript;
-#[cfg(not(feature = "script-udf"))]
-pub use transform_udf_script_stub::TransformUdfScript;
 pub use transform_udf_server::TransformUdfServer;
 pub use window::*;

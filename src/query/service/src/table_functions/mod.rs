@@ -13,8 +13,6 @@
 // limitations under the License.
 
 mod async_crash_me;
-#[cfg(feature = "task-support")]
-mod cloud;
 mod copy_history;
 mod fuse_vacuum2;
 #[cfg(feature = "storage-stage")]

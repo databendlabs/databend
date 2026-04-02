@@ -45,9 +45,9 @@ use databend_common_sql::plans::UDFType;
 use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
-use super::runtime_pool::Pool;
-use super::runtime_pool::RuntimeBuilder;
-use crate::physical_plans::UdfFunctionDesc;
+use crate::ScriptUdfFunctionDesc;
+use crate::runtime_pool::Pool;
+use crate::runtime_pool::RuntimeBuilder;
 
 pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),
@@ -60,7 +60,7 @@ static PY_VERSION: LazyLock<String> =
     LazyLock::new(|| venv::detect_python_version().unwrap_or("3.12".to_string()));
 
 impl ScriptRuntime {
-    pub fn try_create(func: &UdfFunctionDesc, _temp_dir: Option<TempDir>) -> Result<Self> {
+    pub fn try_create(func: &ScriptUdfFunctionDesc, _temp_dir: Option<TempDir>) -> Result<Self> {
         let UDFType::Script(box UDFScriptCode { language, code, .. }) = &func.udf_type else {
             unreachable!()
         };
@@ -150,7 +150,7 @@ if '{dir}' not in sys.path:
 
     pub fn handle_execution(
         &self,
-        func: &UdfFunctionDesc,
+        func: &ScriptUdfFunctionDesc,
         input_batch: &RecordBatch,
     ) -> Result<RecordBatch> {
         let result_batch = match self {
@@ -215,7 +215,7 @@ if '{dir}' not in sys.path:
 
     #[cfg(feature = "python-udf")]
     fn python_error_from_batch(
-        func: &UdfFunctionDesc,
+        func: &ScriptUdfFunctionDesc,
         batch: &RecordBatch,
     ) -> Result<Option<String>> {
         let schema = DataSchema::try_from(&(*batch.schema())).map_err(|err| {
@@ -275,7 +275,7 @@ if '{dir}' not in sys.path:
     }
 
     #[cfg(feature = "python-udf")]
-    fn collect_stage_sys_paths(func: &UdfFunctionDesc, temp_dir: &TempDir) -> Vec<String> {
+    fn collect_stage_sys_paths(func: &ScriptUdfFunctionDesc, temp_dir: &TempDir) -> Vec<String> {
         match &func.udf_type {
             UDFType::Script(box UDFScriptCode {
                 imports_stage_info, ..
@@ -550,14 +550,14 @@ if "DATABEND_RESTRICTED_PYTHON" not in sys._xoptions:
 }
 
 pub struct TransformUdfScript {
-    funcs: Vec<UdfFunctionDesc>,
+    funcs: Vec<ScriptUdfFunctionDesc>,
     script_runtimes: RuntimeTimeRes,
 }
 
 impl TransformUdfScript {
     pub fn new(
         _func_ctx: FunctionContext,
-        funcs: Vec<UdfFunctionDesc>,
+        funcs: Vec<ScriptUdfFunctionDesc>,
         script_runtimes: RuntimeTimeRes,
     ) -> Self {
         Self {
@@ -592,7 +592,7 @@ impl Transform for TransformUdfScript {
 type RuntimeTimeRes = BTreeMap<String, (Arc<ScriptRuntime>, Option<TempDir>)>;
 
 impl TransformUdfScript {
-    pub fn init_runtime(funcs: &[UdfFunctionDesc]) -> Result<RuntimeTimeRes> {
+    pub fn init_runtime(funcs: &[ScriptUdfFunctionDesc]) -> Result<RuntimeTimeRes> {
         let mut script_runtimes = BTreeMap::new();
         for func in funcs {
             let (code, code_str) = match &func.udf_type {
@@ -712,7 +712,7 @@ impl TransformUdfScript {
 
     fn prepare_block_entries(
         &self,
-        func: &UdfFunctionDesc,
+        func: &ScriptUdfFunctionDesc,
         data_block: &DataBlock,
     ) -> Result<Vec<BlockEntry>> {
         // construct input record_batch
@@ -812,7 +812,7 @@ impl TransformUdfScript {
 
     fn update_datablock(
         &self,
-        func: &UdfFunctionDesc,
+        func: &ScriptUdfFunctionDesc,
         result_batch: RecordBatch,
         data_block: &mut DataBlock,
     ) -> Result<()> {
