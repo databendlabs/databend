@@ -17,10 +17,13 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -28,6 +31,9 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 use indexmap::Equivalent;
 use itertools::Itertools;
 
@@ -57,8 +63,8 @@ use crate::plans::GroupingSets;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UDAFCall;
-use crate::plans::Visitor;
-use crate::plans::VisitorMut;
+use crate::plans::Visitor as ScalarVisitor;
+use crate::plans::VisitorMut as ScalarVisitorMut;
 use crate::plans::walk_expr_mut;
 
 /// Information for `GROUPING SETS`.
@@ -748,7 +754,7 @@ struct ExistingAggregateRewriter<'a> {
     error_message: &'a str,
 }
 
-impl<'a> VisitorMut<'a> for ExistingAggregateRewriter<'a> {
+impl<'a> ScalarVisitorMut<'a> for ExistingAggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         match expr {
             ScalarExpr::AggregateFunction(aggregate) => {
@@ -801,7 +807,7 @@ impl<'a> VisitorMut<'a> for ExistingAggregateRewriter<'a> {
     }
 }
 
-impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
+impl<'a> ScalarVisitorMut<'a> for AggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         match expr {
             ScalarExpr::AggregateFunction(aggregate) => {
@@ -845,6 +851,126 @@ impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
     }
 }
 
+type AggregatePrepassAliases = Vec<(String, Expr)>;
+
+struct AggregatePrepassFragment {
+    expr: Expr,
+    contains_subquery: bool,
+}
+
+#[derive(Default, Visitor)]
+#[visitor(Query(enter))]
+struct ContainsSubqueryVisitor {
+    found: bool,
+}
+
+impl ContainsSubqueryVisitor {
+    fn enter_query(&mut self, _query: &Query) {
+        self.found = true;
+    }
+}
+
+#[derive(Visitor)]
+#[visitor(Expr(enter), ColumnRef(enter), Query)]
+struct AggregatePrepassScanner<'a> {
+    name_resolution_ctx: &'a crate::NameResolutionContext,
+    ast_aliases: &'a AggregatePrepassAliases,
+    query_depth: usize,
+    expanding_aliases: HashSet<String>,
+    fragments: Vec<AggregatePrepassFragment>,
+}
+
+impl AggregatePrepassScanner<'_> {
+    fn scan(
+        name_resolution_ctx: &crate::NameResolutionContext,
+        ast_aliases: &AggregatePrepassAliases,
+        expr: &Expr,
+    ) -> Vec<AggregatePrepassFragment> {
+        let mut scanner = AggregatePrepassScanner {
+            name_resolution_ctx,
+            ast_aliases,
+            query_depth: 0,
+            expanding_aliases: HashSet::new(),
+            fragments: Vec::new(),
+        };
+        expr.drive(&mut scanner);
+        scanner.fragments
+    }
+
+    fn enter_expr(&mut self, expr: &Expr) {
+        if self.query_depth > 0 {
+            return;
+        }
+
+        match expr {
+            Expr::CountAll { window: None, .. } => self.record_fragment(expr),
+            Expr::FunctionCall { func, .. } if Binder::is_aggregate_prepass_target(func) => {
+                self.record_fragment(expr)
+            }
+            _ => {}
+        }
+    }
+
+    fn enter_column_ref(&mut self, column: &ColumnRef) {
+        if self.query_depth > 0 {
+            return;
+        }
+
+        let Some((alias, alias_expr)) =
+            Self::find_aggregate_prepass_alias(self.name_resolution_ctx, column, self.ast_aliases)
+        else {
+            return;
+        };
+
+        if self.expanding_aliases.insert(alias.clone()) {
+            alias_expr.drive(self);
+            self.expanding_aliases.remove(&alias);
+        }
+    }
+
+    fn enter_query(&mut self, _query: &Query) {
+        self.query_depth += 1;
+    }
+
+    fn exit_query(&mut self, _query: &Query) {
+        self.query_depth -= 1;
+    }
+
+    fn record_fragment(&mut self, expr: &Expr) {
+        self.fragments.push(AggregatePrepassFragment {
+            expr: expr.clone(),
+            contains_subquery: Binder::aggregate_prepass_contains_subquery(expr),
+        });
+    }
+
+    fn find_aggregate_prepass_alias<'a>(
+        name_resolution_ctx: &crate::NameResolutionContext,
+        column: &ColumnRef,
+        ast_aliases: &'a AggregatePrepassAliases,
+    ) -> Option<(String, &'a Expr)> {
+        if column.database.is_some() || column.table.is_some() {
+            return None;
+        }
+
+        let ColumnID::Name(ident) = &column.column else {
+            return None;
+        };
+
+        let alias = normalize_identifier(ident, name_resolution_ctx).name;
+        let mut matches = ast_aliases
+            .iter()
+            .filter(|(candidate, _)| candidate == &alias)
+            .map(|(_, expr)| expr);
+
+        let expr = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+
+        Some((alias, expr))
+    }
+}
+
 impl Binder {
     /// Analyze aggregates in select clause, this will rewrite aggregate functions.
     /// See [`AggregateRewriter`] for more details.
@@ -862,6 +988,63 @@ impl Binder {
         }
 
         Ok(())
+    }
+
+    pub(super) fn collect_aggregate_prepass_aliases<'a>(
+        &self,
+        select_list: &'a SelectList<'a>,
+    ) -> AggregatePrepassAliases {
+        select_list
+            .items
+            .iter()
+            .filter_map(|item| match item.select_target {
+                SelectTarget::AliasedExpr { expr, .. } => {
+                    Some((item.alias.clone(), expr.as_ref().clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(super) fn pre_register_aggregate_fragments(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        ast_aliases: &AggregatePrepassAliases,
+        expr_context: ExprContext,
+        expr: &Expr,
+    ) -> Result<()> {
+        for fragment in AggregatePrepassScanner::scan(&self.name_resolution_ctx, ast_aliases, expr)
+        {
+            if fragment.contains_subquery {
+                continue;
+            }
+
+            let _ = self.bind_and_rewrite_aggregate_expr(
+                bind_context,
+                aliases,
+                expr_context,
+                &fragment.expr,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn is_aggregate_prepass_target(func: &ASTFunctionCall) -> bool {
+        if func.window.is_some() {
+            return false;
+        }
+
+        let func_name = func.name.name.to_lowercase();
+        AggregateFunctionFactory::instance().contains(func_name.as_str())
+            || func_name.eq_ignore_ascii_case("grouping")
+    }
+
+    fn aggregate_prepass_contains_subquery(expr: &Expr) -> bool {
+        let mut detector = ContainsSubqueryVisitor::default();
+        expr.drive(&mut detector);
+        detector.found
     }
 
     /// We have supported three kinds of `group by` items:
@@ -891,8 +1074,7 @@ impl Binder {
             }
         }
 
-        let original_context = bind_context.expr_context.clone();
-        bind_context.set_expr_context(ExprContext::GroupClaue);
+        let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
 
         let group_by = Self::expand_group(group_by.clone())?;
         match &group_by {
@@ -920,7 +1102,7 @@ impl Binder {
             }
             _ => unreachable!(),
         }
-        bind_context.set_expr_context(original_context);
+        bind_context.expr_context = original_context;
         Ok(())
     }
 
@@ -1447,6 +1629,34 @@ impl Binder {
 
             Ok((scalar.clone(), scalar.data_type()?))
         }
+    }
+
+    pub(super) fn bind_and_rewrite_aggregate_expr(
+        &mut self,
+        bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
+        expr_context: ExprContext,
+        expr: &Expr,
+    ) -> Result<ScalarExpr> {
+        let original_context = bind_context.replace_expr_context(expr_context);
+
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            aliases,
+        );
+
+        let (mut result, _) = scalar_binder.bind(expr)?;
+        AggregateRewriter::rewrite_expr(
+            &mut bind_context.aggregate_info,
+            self.metadata.clone(),
+            &mut result,
+        )?;
+
+        bind_context.expr_context = original_context;
+        Ok(result)
     }
 }
 

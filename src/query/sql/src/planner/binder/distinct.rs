@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_exception::Result;
 
-use crate::BindContext;
 use crate::binder::Binder;
 use crate::binder::project::SelectInfo;
 use crate::optimizer::ir::SExpr;
@@ -28,7 +27,6 @@ impl Binder {
     pub fn bind_distinct(
         &self,
         span: Span,
-        _bind_context: &mut BindContext,
         select_info: &mut SelectInfo,
         child: SExpr,
     ) -> Result<SExpr> {

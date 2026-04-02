@@ -325,7 +325,7 @@ impl Binder {
         select_info: SelectInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_context.set_expr_context(ExprContext::SelectClause);
+        bind_context.expr_context = ExprContext::SelectClause;
         let plan = select_info.into_projection_plan()?;
         let eval_scalar = EvalScalar { items: plan.items };
         let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
@@ -354,7 +354,7 @@ impl Binder {
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
-        input_context.set_expr_context(ExprContext::SelectClause);
+        input_context.expr_context = ExprContext::SelectClause;
 
         let mut output = SelectList::default();
         let mut prev_aliases = Vec::new();

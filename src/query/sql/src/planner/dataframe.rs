@@ -289,12 +289,9 @@ impl Dataframe {
         let mut select_info = self
             .binder
             .analyze_projection(&self.bind_context, &select_list)?;
-        self.s_expr = self.binder.bind_distinct(
-            None,
-            &mut self.bind_context,
-            &mut select_info,
-            self.s_expr,
-        )?;
+        self.s_expr = self
+            .binder
+            .bind_distinct(None, &mut select_info, self.s_expr)?;
         self.apply_select_output(select_info)
     }
 

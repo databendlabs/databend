@@ -43,7 +43,7 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         qualify: &Expr,
     ) -> Result<ScalarExpr> {
-        bind_context.set_expr_context(ExprContext::QualifyClause);
+        bind_context.expr_context = ExprContext::QualifyClause;
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -63,7 +63,7 @@ impl Binder {
         qualify: ScalarExpr,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_context.set_expr_context(ExprContext::QualifyClause);
+        bind_context.expr_context = ExprContext::QualifyClause;
 
         let scalar = {
             let mut qualify = qualify;

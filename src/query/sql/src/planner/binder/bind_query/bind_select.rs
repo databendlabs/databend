@@ -54,6 +54,7 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::binder::ExprContext;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -142,6 +143,27 @@ impl Binder {
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
+        let aggregate_prepass_aliases = self.collect_aggregate_prepass_aliases(&select_list);
+
+        if let Some(having) = &stmt.having {
+            self.pre_register_aggregate_fragments(
+                &mut from_context,
+                &semantic_aliases,
+                &aggregate_prepass_aliases,
+                ExprContext::HavingClause,
+                having,
+            )?;
+        }
+
+        for order in order_by {
+            self.pre_register_aggregate_fragments(
+                &mut from_context,
+                &semantic_aliases,
+                &aggregate_prepass_aliases,
+                ExprContext::OrderByClause,
+                &order.expr,
+            )?;
+        }
 
         // `analyze_window` should behind `analyze_aggregate_select`,
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
@@ -247,7 +269,7 @@ impl Binder {
         }
 
         if stmt.distinct {
-            s_expr = self.bind_distinct(stmt.span, &mut from_context, &mut select_info, s_expr)?;
+            s_expr = self.bind_distinct(stmt.span, &mut select_info, s_expr)?;
         }
 
         s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::plans::Plan;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
@@ -184,6 +185,18 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "A window ORDER BY clause must not introduce a new aggregate expression.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_having_aggregate",
+            description: "A window ORDER BY clause should be able to reuse an aggregate introduced later by HAVING.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t HAVING sum(number) > 0",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_order_by_aggregate",
+            description: "A window ORDER BY clause should be able to reuse an aggregate introduced later by ORDER BY.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t ORDER BY sum(number)",
         },
         SqlTestCase {
             name: "window_order_rejects_window_alias_expansion",
@@ -383,6 +396,47 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
         write_case_header(&mut file, case)?;
         let outcome = bind_case(case).await?;
         write_case_outcome(&mut file, &outcome)?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_clause_prepass_skips_subquery_metadata_side_effects() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "having_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) FROM t HAVING EXISTS (SELECT 1 FROM t AS inner_t WHERE inner_t.number > 0)",
+        },
+        SqlTestCase {
+            name: "having_alias_and_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) AS s FROM t HAVING s > 0 AND EXISTS (SELECT 1 FROM t AS inner_t WHERE inner_t.number > 0)",
+        },
+        SqlTestCase {
+            name: "order_by_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number FROM t ORDER BY (SELECT max(number) FROM t AS inner_t)",
+        },
+    ];
+
+    for case in cases {
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(case.sql).await?;
+        let Plan::Query { metadata, .. } = plan else {
+            panic!("expected query plan for {}", case.name);
+        };
+
+        let table_count = metadata.read().tables().len();
+        assert_eq!(
+            table_count, 2,
+            "{} should only keep metadata for the outer query and the final subquery bind",
+            case.name
+        );
     }
 
     Ok(())
