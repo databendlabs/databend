@@ -77,60 +77,27 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         }
     }
 
-    /// Get the bucket mask for external hash computation.
-    pub fn bucket_mask(&self) -> usize {
-        self.bucket_mask
-    }
-
-    /// Build the hash table from precomputed bucket numbers.
-    /// `bucket_nums[i]` is the bucket for row i (1-based indexing, skip index 0).
-    pub fn build(&mut self, bucket_nums: &[usize]) {
-        // bucket_nums[0] is unused (sentinel), actual rows start at index 1
-        for (i, bucket_num) in bucket_nums.iter().enumerate().skip(1) {
-            let bucket = bucket_num & self.bucket_mask;
-            self.next[i] = self.first[bucket];
-            self.first[bucket] = I::from_usize(i);
+    /// Create a direct-mapping hash table where keys are used as array indices.
+    /// `range` is `max_key - min_key`; the caller subtracts min_key before insertion/probe.
+    pub fn new_direct(num_rows: usize, range: usize) -> Self {
+        CompactJoinHashTable {
+            first: vec![I::ZERO; range + 1],
+            next: vec![I::ZERO; num_rows + 1],
+            bucket_mask: 0,
         }
     }
 
-    pub fn insert_chunk(&mut self, hashes: &[u64], row_offset: usize) {
-        let mask = self.bucket_mask;
-        for (i, h) in hashes.iter().enumerate() {
+    pub fn insert_chunk<const DIRECT: bool>(&mut self, vals: &[u64], row_offset: usize) {
+        for (i, v) in vals.iter().enumerate() {
             let row_index = row_offset + i;
-            let bucket = (*h as usize) & mask;
+            let bucket = match DIRECT {
+                true => *v as usize,
+                false => (*v as usize) & self.bucket_mask,
+            };
+
             self.next[row_index] = self.first[bucket];
             self.first[bucket] = I::from_usize(row_index);
         }
-    }
-
-    pub fn insert_chunk_with_validity(
-        &mut self,
-        hashes: &[u64],
-        row_offset: usize,
-        validity: &databend_common_column::bitmap::Bitmap,
-    ) {
-        let mask = self.bucket_mask;
-        for (i, h) in hashes.iter().enumerate() {
-            if !validity.get_bit(i) {
-                continue;
-            }
-            let row_index = row_offset + i;
-            let bucket = (*h as usize) & mask;
-            self.next[row_index] = self.first[bucket];
-            self.first[bucket] = I::from_usize(row_index);
-        }
-    }
-
-    /// Get the first row index in the given bucket.
-    #[inline(always)]
-    pub fn first_index(&self, bucket: usize) -> I {
-        unsafe { *self.first.get_unchecked(bucket & self.bucket_mask) }
-    }
-
-    /// Get the next row index in the chain.
-    #[inline(always)]
-    pub fn next_index(&self, row_index: I) -> I {
-        unsafe { *self.next.get_unchecked(row_index.to_usize()) }
     }
 
     fn calc_bucket_count(num_rows: usize) -> usize {
@@ -142,13 +109,13 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         target.next_power_of_two()
     }
 
-    pub fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
+    pub fn probe<const DIRECT: bool>(&self, vals: &mut [u64], bitmap: Option<Bitmap>) -> usize {
         let mut valids = None;
 
         if let Some(bitmap) = bitmap {
             if bitmap.null_count() == bitmap.len() {
-                hashes.iter_mut().for_each(|hash| {
-                    *hash = 0;
+                vals.iter_mut().for_each(|v| {
+                    *v = 0;
                 });
                 return 0;
             } else if bitmap.null_count() > 0 {
@@ -157,34 +124,49 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         }
 
         let mut count = 0;
+        let first_len = self.first.len();
 
         match valids {
             Some(valids) => {
-                valids
-                    .iter()
-                    .zip(hashes.iter_mut())
-                    .for_each(|(valid, hash)| {
-                        if valid {
-                            let bucket = (*hash as usize) & self.bucket_mask;
-                            if self.first[bucket] != I::default() {
-                                *hash = self.first[bucket].to_usize() as u64;
-                                count += 1;
-                            } else {
-                                *hash = 0;
+                for (valid, val) in valids.iter().zip(vals.iter_mut()) {
+                    if valid {
+                        let bucket = match DIRECT {
+                            false => (*val as usize) & self.bucket_mask,
+                            true if (*val as usize) < first_len => *val as usize,
+                            true => {
+                                *val = 0;
+                                continue;
                             }
+                        };
+
+                        if self.first[bucket] != I::default() {
+                            *val = self.first[bucket].to_usize() as u64;
+                            count += 1;
                         } else {
-                            *hash = 0;
+                            *val = 0;
                         }
-                    });
+                    } else {
+                        *val = 0;
+                    }
+                }
             }
             None => {
-                hashes.iter_mut().for_each(|hash| {
-                    let bucket = (*hash as usize) & self.bucket_mask;
+                vals.iter_mut().for_each(|val| {
+                    let bucket = if DIRECT {
+                        let b = *val as usize;
+                        if b >= first_len {
+                            *val = 0;
+                            return;
+                        }
+                        b
+                    } else {
+                        (*val as usize) & self.bucket_mask
+                    };
                     if self.first[bucket] != I::default() {
-                        *hash = self.first[bucket].to_usize() as u64;
+                        *val = self.first[bucket].to_usize() as u64;
                         count += 1;
                     } else {
-                        *hash = 0;
+                        *val = 0;
                     }
                 });
             }

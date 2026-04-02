@@ -126,6 +126,9 @@ impl BuildKeysStates {
     }
 }
 
+/// Maximum key range for direct hash join (same as Doris: 1 << 23 = 8M).
+const DIRECT_JOIN_MAX_RANGE: u64 = 1 << 23;
+
 /// Per-thread build state for partitioned hash join.
 pub struct PartitionedHashJoinState {
     pub chunks: Vec<DataBlock>,
@@ -138,6 +141,9 @@ pub struct PartitionedHashJoinState {
 
     pub num_rows: usize,
     pub build_block_idx: usize,
+
+    pub direct_join: bool,
+    pub min_key: u256,
 
     pub visited: Vec<Vec<u8>>,
     pub desc: Arc<HashJoinDesc>,
@@ -163,6 +169,8 @@ impl PartitionedHashJoinState {
             desc,
             function_ctx,
             build_block_idx: 0,
+            direct_join: false,
+            min_key: u256::ZERO,
             visited: vec![],
             accumulator: FixedSizeChunkAccumulator::new(CHUNK_SIZE),
         }
@@ -248,9 +256,6 @@ impl PartitionedHashJoinState {
         }
 
         if self.build_block_idx == 0 {
-            // Allocate hash table with known total rows
-            self.hash_table = CompactJoinHashTable::new(self.num_rows);
-
             if let Some(first_chunk) = self.chunks.first() {
                 self.column_types = (0..first_chunk.num_columns())
                     .map(|offset| first_chunk.get_by_offset(offset).data_type())
@@ -268,20 +273,96 @@ impl PartitionedHashJoinState {
                 }
                 self.columns = columns;
             }
+
+            // Decide whether to use direct mapping
+            let direct_range = match &self.build_keys_states {
+                BuildKeysStates::UInt8(_) => Some((u256::ZERO, u8::MAX as u64)),
+                BuildKeysStates::UInt16(_) => Some((u256::ZERO, u16::MAX as u64)),
+                BuildKeysStates::UInt32(bufs) => scan_min_max_u32(bufs),
+                BuildKeysStates::UInt64(bufs) => scan_min_max_u64(bufs),
+                BuildKeysStates::UInt128(bufs) => scan_min_max_u128(bufs),
+                BuildKeysStates::UInt256(bufs) => scan_min_max_u256(bufs),
+                _ => None,
+            };
+
+            match direct_range {
+                Some((min_key, range)) => {
+                    self.direct_join = true;
+                    self.min_key = min_key;
+                    self.hash_table =
+                        CompactJoinHashTable::new_direct(self.num_rows, range as usize);
+                }
+                None => {
+                    self.hash_table = CompactJoinHashTable::new(self.num_rows);
+                }
+            };
         }
 
         let row_offset = CHUNK_SIZE * self.build_block_idx + 1;
-        let keys_state = self.build_keys_states.get(self.build_block_idx);
+        let idx = self.build_block_idx;
 
-        with_hash_method!(|T| match &self.method {
-            HashMethodKind::T(method) => {
-                let mut hashes = Vec::with_capacity(CHUNK_SIZE);
-                method.build_keys_hashes(&keys_state, &mut hashes);
-                self.hash_table.insert_chunk(&hashes, row_offset);
-                self.build_block_idx += 1;
+        if self.direct_join {
+            match &self.build_keys_states {
+                BuildKeysStates::UInt8(states) => {
+                    let min_t = self.min_key.as_u8();
+                    let adjusted: Vec<u64> = states[idx]
+                        .iter()
+                        .map(|k| k.wrapping_sub(min_t) as u64)
+                        .collect();
+                    self.hash_table.insert_chunk::<true>(&adjusted, row_offset);
+                }
+                BuildKeysStates::UInt16(states) => {
+                    let min_t = self.min_key.as_u16();
+                    let adjusted: Vec<u64> = states[idx]
+                        .iter()
+                        .map(|k| k.wrapping_sub(min_t) as u64)
+                        .collect();
+                    self.hash_table.insert_chunk::<true>(&adjusted, row_offset);
+                }
+                BuildKeysStates::UInt32(states) => {
+                    let min_t = self.min_key.as_u32();
+                    let adjusted: Vec<u64> = states[idx]
+                        .iter()
+                        .map(|k| k.wrapping_sub(min_t) as u64)
+                        .collect();
+                    self.hash_table.insert_chunk::<true>(&adjusted, row_offset);
+                }
+                BuildKeysStates::UInt64(states) => {
+                    let min_t = self.min_key.as_u64();
+                    let adjusted: Vec<u64> =
+                        states[idx].iter().map(|k| k.wrapping_sub(min_t)).collect();
+                    self.hash_table.insert_chunk::<true>(&adjusted, row_offset);
+                }
+                BuildKeysStates::UInt128(states) => {
+                    let min_t = self.min_key.as_u128();
+                    let adjusted: Vec<u64> = states[idx]
+                        .iter()
+                        .map(|k| k.wrapping_sub(min_t) as u64)
+                        .collect();
+                    self.hash_table.insert_chunk::<true>(&adjusted, row_offset);
+                }
+                BuildKeysStates::UInt256(states) => {
+                    let min_t = self.min_key;
+                    let adjusted: Vec<u64> = states[idx]
+                        .iter()
+                        .map(|k| k.wrapping_sub(min_t).as_u64())
+                        .collect();
+                    self.hash_table.insert_chunk::<true>(&adjusted, row_offset);
+                }
+                _ => unreachable!(),
             }
-        });
+        } else {
+            let keys_state = self.build_keys_states.get(idx);
+            with_hash_method!(|T| match &self.method {
+                HashMethodKind::T(method) => {
+                    let mut hashes = Vec::with_capacity(CHUNK_SIZE);
+                    method.build_keys_hashes(&keys_state, &mut hashes);
+                    self.hash_table.insert_chunk::<false>(&hashes, row_offset);
+                }
+            });
+        }
 
+        self.build_block_idx += 1;
         match self.build_block_idx == self.chunks.len() {
             true => Ok(None),
             false => Ok(Some(ProgressValues { rows: 0, bytes: 0 })),
@@ -295,13 +376,20 @@ impl PartitionedHashJoinState {
         let num_rows = data.num_rows();
         let (keys_block, valids) = data.into_raw();
         let keys = ProjectedBlock::from(keys_block.columns());
-        let mut hashes = Vec::with_capacity(num_rows);
 
+        if self.direct_join {
+            return self.probe_direct::<MATCHED, MATCH_FIRST>(keys, num_rows, valids);
+        }
+
+        let mut hashes = Vec::with_capacity(num_rows);
         let (keys_state, matched_rows) = with_hash_method!(|T| match &self.method {
             HashMethodKind::T(method) => {
                 let keys_state = method.build_keys_state(keys, num_rows)?;
                 method.build_keys_hashes(&keys_state, &mut hashes);
-                (keys_state, self.hash_table.probe(&mut hashes, valids))
+                (
+                    keys_state,
+                    self.hash_table.probe::<false>(&mut hashes, valids),
+                )
             }
         });
 
@@ -315,7 +403,7 @@ impl PartitionedHashJoinState {
         Ok(match (&self.method, &self.build_keys_states) {
             (HashMethodKind::KeysU8(_), BuildKeysStates::UInt8(states)) => {
                 let probe_keys = u8::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u8, MATCHED, MATCH_FIRST, u32>::new(
+                PrimitiveProbeStream::<'a, u8, MATCHED, MATCH_FIRST, false, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -324,7 +412,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU16(_), BuildKeysStates::UInt16(states)) => {
                 let probe_keys = u16::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u16, MATCHED, MATCH_FIRST, u32>::new(
+                PrimitiveProbeStream::<'a, u16, MATCHED, MATCH_FIRST, false, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -333,7 +421,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU32(_), BuildKeysStates::UInt32(states)) => {
                 let probe_keys = u32::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u32, MATCHED, MATCH_FIRST, u32>::new(
+                PrimitiveProbeStream::<'a, u32, MATCHED, MATCH_FIRST, false, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -342,7 +430,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU64(_), BuildKeysStates::UInt64(states)) => {
                 let probe_keys = u64::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u64, MATCHED, MATCH_FIRST, u32>::new(
+                PrimitiveProbeStream::<'a, u64, MATCHED, MATCH_FIRST, false, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -351,7 +439,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU128(_), BuildKeysStates::UInt128(states)) => {
                 let probe_keys = u128::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u128, MATCHED, MATCH_FIRST, u32>::new(
+                PrimitiveProbeStream::<'a, u128, MATCHED, MATCH_FIRST, false, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -360,7 +448,7 @@ impl PartitionedHashJoinState {
             }
             (HashMethodKind::KeysU256(_), BuildKeysStates::UInt256(states)) => {
                 let probe_keys = u256::downcast_owned(keys_state).unwrap();
-                PrimitiveProbeStream::<'a, u256, MATCHED, MATCH_FIRST, u32>::new(
+                PrimitiveProbeStream::<'a, u256, MATCHED, MATCH_FIRST, false, u32>::new(
                     hashes,
                     states,
                     probe_keys,
@@ -383,6 +471,145 @@ impl PartitionedHashJoinState {
                 }
                 _ => unreachable!(),
             },
+            _ => unreachable!(),
+        })
+    }
+
+    fn probe_direct<'a, const MATCHED: bool, const MATCH_FIRST: bool>(
+        &'a self,
+        keys: ProjectedBlock<'_>,
+        num_rows: usize,
+        valids: Option<Bitmap>,
+    ) -> Result<Box<dyn ProbeStream + 'a>> {
+        let keys_state = with_hash_method!(|T| match &self.method {
+            HashMethodKind::T(method) => method.build_keys_state(keys, num_rows)?,
+        });
+
+        Ok(match &self.build_keys_states {
+            BuildKeysStates::UInt8(bufs) => {
+                let min_t = self.min_key.as_u8();
+                let probe_keys = u8::downcast_owned(keys_state).unwrap();
+                let mut adjusted: Vec<u64> = probe_keys
+                    .iter()
+                    .map(|k| k.wrapping_sub(min_t) as u64)
+                    .collect();
+
+                if self.hash_table.probe::<true>(&mut adjusted, valids) == 0 {
+                    return match MATCHED {
+                        true => Ok(Box::new(EmptyProbeStream)),
+                        false => Ok(AllUnmatchedProbeStream::create(adjusted.len())),
+                    };
+                }
+                PrimitiveProbeStream::<'a, u8, MATCHED, MATCH_FIRST, true, u32>::new(
+                    adjusted,
+                    bufs,
+                    probe_keys,
+                    &self.hash_table.next,
+                )
+            }
+            BuildKeysStates::UInt16(bufs) => {
+                let min_t = self.min_key.as_u16();
+                let probe_keys = u16::downcast_owned(keys_state).unwrap();
+                let mut adjusted: Vec<u64> = probe_keys
+                    .iter()
+                    .map(|k| k.wrapping_sub(min_t) as u64)
+                    .collect();
+
+                if self.hash_table.probe::<true>(&mut adjusted, valids) == 0 {
+                    return match MATCHED {
+                        true => Ok(Box::new(EmptyProbeStream)),
+                        false => Ok(AllUnmatchedProbeStream::create(adjusted.len())),
+                    };
+                }
+                PrimitiveProbeStream::<'a, u16, MATCHED, MATCH_FIRST, true, u32>::new(
+                    adjusted,
+                    bufs,
+                    probe_keys,
+                    &self.hash_table.next,
+                )
+            }
+            BuildKeysStates::UInt32(bufs) => {
+                let min_t = self.min_key.as_u32();
+                let probe_keys = u32::downcast_owned(keys_state).unwrap();
+                let mut adjusted: Vec<u64> = probe_keys
+                    .iter()
+                    .map(|k| k.wrapping_sub(min_t) as u64)
+                    .collect();
+
+                if self.hash_table.probe::<true>(&mut adjusted, valids) == 0 {
+                    return match MATCHED {
+                        true => Ok(Box::new(EmptyProbeStream)),
+                        false => Ok(AllUnmatchedProbeStream::create(adjusted.len())),
+                    };
+                }
+                PrimitiveProbeStream::<'a, u32, MATCHED, MATCH_FIRST, true, u32>::new(
+                    adjusted,
+                    bufs,
+                    probe_keys,
+                    &self.hash_table.next,
+                )
+            }
+            BuildKeysStates::UInt64(bufs) => {
+                let min_t = self.min_key.as_u64();
+                let probe_keys = u64::downcast_owned(keys_state).unwrap();
+                let mut adjusted: Vec<u64> =
+                    probe_keys.iter().map(|k| k.wrapping_sub(min_t)).collect();
+
+                if self.hash_table.probe::<true>(&mut adjusted, valids) == 0 {
+                    return match MATCHED {
+                        true => Ok(Box::new(EmptyProbeStream)),
+                        false => Ok(AllUnmatchedProbeStream::create(adjusted.len())),
+                    };
+                }
+                PrimitiveProbeStream::<'a, u64, MATCHED, MATCH_FIRST, true, u32>::new(
+                    adjusted,
+                    bufs,
+                    probe_keys,
+                    &self.hash_table.next,
+                )
+            }
+            BuildKeysStates::UInt128(bufs) => {
+                let min_t = self.min_key.as_u128();
+                let probe_keys = u128::downcast_owned(keys_state).unwrap();
+                let mut adjusted: Vec<u64> = probe_keys
+                    .iter()
+                    .map(|k| k.wrapping_sub(min_t) as u64)
+                    .collect();
+
+                if self.hash_table.probe::<true>(&mut adjusted, valids) == 0 {
+                    return match MATCHED {
+                        true => Ok(Box::new(EmptyProbeStream)),
+                        false => Ok(AllUnmatchedProbeStream::create(adjusted.len())),
+                    };
+                }
+                PrimitiveProbeStream::<'a, u128, MATCHED, MATCH_FIRST, true, u32>::new(
+                    adjusted,
+                    bufs,
+                    probe_keys,
+                    &self.hash_table.next,
+                )
+            }
+            BuildKeysStates::UInt256(bufs) => {
+                let min_t = self.min_key;
+                let probe_keys = u256::downcast_owned(keys_state).unwrap();
+                let mut adjusted: Vec<u64> = probe_keys
+                    .iter()
+                    .map(|k| k.wrapping_sub(min_t).as_u64())
+                    .collect();
+
+                if self.hash_table.probe::<true>(&mut adjusted, valids) == 0 {
+                    return match MATCHED {
+                        true => Ok(Box::new(EmptyProbeStream)),
+                        false => Ok(AllUnmatchedProbeStream::create(adjusted.len())),
+                    };
+                }
+                PrimitiveProbeStream::<'a, u256, MATCHED, MATCH_FIRST, true, u32>::new(
+                    adjusted,
+                    bufs,
+                    probe_keys,
+                    &self.hash_table.next,
+                )
+            }
             _ => unreachable!(),
         })
     }
@@ -424,6 +651,7 @@ struct PrimitiveProbeStream<
     T: Send + Sync + PartialEq,
     const MATCHED: bool,
     const MATCH_FIRST: bool,
+    const DIRECT: bool,
     I: RowIndex = u32,
 > {
     key_idx: usize,
@@ -435,8 +663,11 @@ struct PrimitiveProbeStream<
     matched_num_rows: usize,
 }
 
-impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex>
-    PrimitiveProbeStream<'a, T, MATCHED, MATCH_FIRST, I>
+impl<'a, T, const MATCHED: bool, const MATCH_FIRST: bool, const DIRECT: bool, I>
+    PrimitiveProbeStream<'a, T, MATCHED, MATCH_FIRST, DIRECT, I>
+where
+    T: Send + Sync + PartialEq,
+    I: RowIndex,
 {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
@@ -457,8 +688,11 @@ impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, const MATCH_FIRST: boo
     }
 }
 
-impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex>
-    ProbeStream for PrimitiveProbeStream<'a, T, MATCHED, MATCH_FIRST, I>
+impl<'a, T, const MATCHED: bool, const MATCH_FIRST: bool, const DIRECT: bool, I> ProbeStream
+    for PrimitiveProbeStream<'a, T, MATCHED, MATCH_FIRST, DIRECT, I>
+where
+    I: RowIndex,
+    T: Send + Sync + PartialEq,
 {
     fn advance(&mut self, res: &mut ProbedRows, max_rows: usize) -> Result<()> {
         while self.key_idx < self.probe_keys.len() {
@@ -488,9 +722,12 @@ impl<'a, T: Send + Sync + PartialEq, const MATCHED: bool, const MATCH_FIRST: boo
             while self.build_idx != 0 {
                 let row_ptr = flat_to_row_ptr(self.build_idx);
 
-                if self.probe_keys[self.key_idx]
-                    == self.build_keys[row_ptr.chunk_index as usize][row_ptr.row_index as usize]
-                {
+                let key_match = DIRECT
+                    || self.probe_keys[self.key_idx]
+                        == self.build_keys[row_ptr.chunk_index as usize]
+                            [row_ptr.row_index as usize];
+
+                if key_match {
                     res.matched_build.push(row_ptr);
                     res.matched_probe.push(self.key_idx as u64);
                     self.matched_num_rows += 1;
@@ -632,4 +869,77 @@ impl<'a, const MATCHED: bool, const MATCH_FIRST: bool, I: RowIndex> ProbeStream
 
         Ok(())
     }
+}
+
+/// Scan min/max with short-circuit per chunk. Returns Some((min as u256, range)) if range <= threshold.
+fn scan_min_max_u32(buffers: &[Buffer<u32>]) -> Option<(u256, u64)> {
+    let mut min_val = u32::MAX;
+    let mut max_val = u32::MIN;
+    for buf in buffers {
+        for &k in buf.iter() {
+            min_val = min_val.min(k);
+            max_val = max_val.max(k);
+        }
+        if (max_val as u64).wrapping_sub(min_val as u64) > DIRECT_JOIN_MAX_RANGE {
+            return None;
+        }
+    }
+    if min_val > max_val {
+        return None;
+    }
+    Some((u256::from(min_val), (max_val as u64) - (min_val as u64)))
+}
+
+fn scan_min_max_u64(buffers: &[Buffer<u64>]) -> Option<(u256, u64)> {
+    let mut min_val = u64::MAX;
+    let mut max_val = u64::MIN;
+    for buf in buffers {
+        for &k in buf.iter() {
+            min_val = min_val.min(k);
+            max_val = max_val.max(k);
+        }
+        if max_val.wrapping_sub(min_val) > DIRECT_JOIN_MAX_RANGE {
+            return None;
+        }
+    }
+    if min_val > max_val {
+        return None;
+    }
+    Some((u256::from(min_val), max_val - min_val))
+}
+
+fn scan_min_max_u128(buffers: &[Buffer<u128>]) -> Option<(u256, u64)> {
+    let mut min_val = u128::MAX;
+    let mut max_val = u128::MIN;
+    for buf in buffers {
+        for &k in buf.iter() {
+            min_val = min_val.min(k);
+            max_val = max_val.max(k);
+        }
+        if max_val.wrapping_sub(min_val) > DIRECT_JOIN_MAX_RANGE as u128 {
+            return None;
+        }
+    }
+    if min_val > max_val {
+        return None;
+    }
+    Some((u256::from(min_val), (max_val - min_val) as u64))
+}
+
+fn scan_min_max_u256(buffers: &[Buffer<u256>]) -> Option<(u256, u64)> {
+    let mut min_val = u256::MAX;
+    let mut max_val = u256::MIN;
+    for buf in buffers {
+        for &k in buf.iter() {
+            min_val = min_val.min(k);
+            max_val = max_val.max(k);
+        }
+        if max_val.wrapping_sub(min_val) > u256::from(DIRECT_JOIN_MAX_RANGE) {
+            return None;
+        }
+    }
+    if min_val > max_val {
+        return None;
+    }
+    Some((min_val, (max_val - min_val).as_u64()))
 }
