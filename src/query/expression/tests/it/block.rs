@@ -20,6 +20,7 @@ use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::FromData;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::block_debug::box_render;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::ArrayColumn;
@@ -109,5 +110,32 @@ fn test_block_entry_memory_size() {
     assert_eq!(
         total_memory_size,
         array2.memory_size(false) + array3.memory_size(false) - 8
+    );
+}
+
+#[test]
+fn test_estimate_block_size_for_const_large_string() {
+    let rows = 245;
+    let value = "x".repeat(500_000);
+
+    let const_block = DataBlock::new(
+        vec![BlockEntry::new_const_column(
+            DataType::String,
+            Scalar::String(value.clone()),
+            rows,
+        )],
+        rows,
+    );
+    let full_block = DataBlock::new_from_columns(vec![Column::String(
+        StringColumnBuilder::repeat(&value, rows).build(),
+    )]);
+
+    assert_eq!(
+        ScalarRef::String(value.as_str()).estimated_scalar_repeat_size(rows, &DataType::String),
+        full_block.get_by_offset(0).to_column().memory_size(true),
+    );
+    assert_eq!(
+        const_block.estimate_block_size(),
+        full_block.estimate_block_size()
     );
 }
