@@ -17,4 +17,7 @@ pub mod traits;
 mod transforms;
 
 pub use memory_settings::MemorySettings;
+pub use memory_settings::SpillBackoffSettings;
+pub use memory_settings::SpillBackoffState;
+pub use memory_settings::SpillDecision;
 pub use transforms::*;

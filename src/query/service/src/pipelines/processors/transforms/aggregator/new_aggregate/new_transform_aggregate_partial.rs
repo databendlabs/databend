@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::vec;
 
 use bumpalo::Bump;
@@ -30,6 +31,8 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::SpillBackoffState;
+use databend_common_pipeline_transforms::SpillDecision;
 use databend_common_pipeline_transforms::processors::AccumulatingTransform;
 use databend_common_pipeline_transforms::processors::AccumulatingTransformer;
 
@@ -128,6 +131,7 @@ pub struct NewTransformPartialAggregate {
     params: Arc<AggregatorParams>,
     statistics: AggregationStatistics,
     settings: MemorySettings,
+    spill_backoff_state: SpillBackoffState,
     spillers: Spiller,
     is_row_shuffle: bool,
 }
@@ -163,6 +167,7 @@ impl NewTransformPartialAggregate {
                 hash_table,
                 probe_state: ProbeState::default(),
                 settings: MemorySettings::from_aggregate_settings(&ctx)?,
+                spill_backoff_state: SpillBackoffState::default(),
                 statistics: AggregationStatistics::new("NewPartialAggregate"),
                 spillers,
                 is_row_shuffle,
@@ -270,7 +275,7 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         self.execute_one_block(block)?;
 
-        if self.settings.check_spill() {
+        if self.should_spill_now() {
             self.spill_out()?;
         }
 
@@ -309,5 +314,22 @@ impl AccumulatingTransform for NewTransformPartialAggregate {
                 blocks
             }
         })
+    }
+}
+
+impl NewTransformPartialAggregate {
+    fn should_spill_now(&mut self) -> bool {
+        loop {
+            match self
+                .settings
+                .check_spill_with_backoff(&mut self.spill_backoff_state)
+            {
+                SpillDecision::NoSpill => return false,
+                SpillDecision::SpillNow => return true,
+                SpillDecision::Sleep(sleep_ms) => {
+                    std::thread::sleep(Duration::from_millis(sleep_ms));
+                }
+            }
+        }
     }
 }
