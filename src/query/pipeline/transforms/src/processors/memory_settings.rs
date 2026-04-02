@@ -20,7 +20,6 @@ use bytesize::ByteSize;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
-use log::info;
 
 const GLOBAL_PRESSURE_SLEEP_BACKOFF_INIT_MS: u64 = 200;
 
@@ -45,8 +44,8 @@ impl SpillBackoffSettings {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SpillBackoffState {
-    consumed_sleep_ms: u64,
-    attempts: u32,
+    pub consumed_sleep_ms: u64,
+    pub attempts: u32,
 }
 
 impl SpillBackoffState {
@@ -253,27 +252,8 @@ impl MemorySettings {
             }
 
             match backoff_state.next_sleep_ms(spill_backoff.max_sleep_ms) {
-                Some(sleep_ms) => {
-                    info!(
-                        "Spill backoff: sleeping {}ms (query_usage={}, threshold={}, consumed={}ms/{}ms, attempt={})",
-                        sleep_ms,
-                        ByteSize(query_usage as u64),
-                        ByteSize(spill_backoff.low_query_memory_bytes),
-                        backoff_state.consumed_sleep_ms,
-                        spill_backoff.max_sleep_ms,
-                        backoff_state.attempts,
-                    );
-                    SpillDecision::Sleep(sleep_ms)
-                }
-                None => {
-                    info!(
-                        "Spill backoff: budget exhausted, proceeding to spill (query_usage={}, consumed={}ms/{}ms)",
-                        ByteSize(query_usage as u64),
-                        backoff_state.consumed_sleep_ms,
-                        spill_backoff.max_sleep_ms,
-                    );
-                    SpillDecision::SpillNow
-                }
+                Some(sleep_ms) => SpillDecision::Sleep(sleep_ms),
+                None => SpillDecision::SpillNow,
             }
         })();
 
