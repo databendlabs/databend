@@ -30,6 +30,21 @@ TableScan
 └── estimated rows: 5.00
 
 query T
+explain select * from t1 where s like '%%%%%';
+----
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [s (#0)]
+├── read rows: 5
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [is_not_null(t1.s (#0))], limit: NONE]
+└── estimated rows: 5.00
+
+query T
 explain select * from t1 where s like 'abcd%' order by s;
 ----
 Sort(Single)
