@@ -1019,6 +1019,13 @@ async fn bind_index_source_columns(
     // Persisted index SQL should not be reparsed with the caller session dialect, otherwise
     // compatibility checks become session-dependent for the same stored definition.
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+    // The binder inherits the session's current catalog/database for name resolution.
+    // This is safe because:
+    // 1. Catalog: only the default catalog is used in practice; even if mismatched, bind
+    //    failure conservatively blocks the operation rather than allowing unsafe changes.
+    // 2. Database: CREATE AGGREGATING INDEX requires the session to be in the target
+    //    database, and the persisted query is fully database-qualified (e.g.
+    //    `SELECT a FROM test.t`), so resolution does not depend on the session database.
     let mut binder = Binder::new(
         ctx.clone(),
         CatalogManager::instance(),

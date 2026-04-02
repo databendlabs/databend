@@ -31,5 +31,25 @@ ALTER TABLE t_modify_idx MODIFY COLUMN b STRING
 statement ok
 DROP AGGREGATING INDEX IF EXISTS idx_modify
 
+## Cross-database: index should work even when session is in a different database.
+## CREATE AGGREGATING INDEX requires the session to be in the target database,
+## but the persisted query is database-qualified, so validation resolves correctly
+## regardless of the caller's current database.
+
+statement ok
+CREATE OR REPLACE TABLE t_cross_db(a INT, b INT)
+
+statement ok
+CREATE AGGREGATING INDEX idx_cross AS SELECT a, b FROM t_cross_db WHERE b > 1
+
+statement ok
+USE default
+
+statement error AGGREGATING index 'idx_cross' references column 'b' that does not exist in the target schema
+ALTER TABLE db_05_0013.t_cross_db DROP COLUMN b
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_cross
+
 statement ok
 DROP DATABASE db_05_0013
