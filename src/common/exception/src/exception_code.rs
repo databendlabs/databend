@@ -359,8 +359,8 @@ build_exceptions! {
 
 // Index Errors [1503, 1601-1603, 2720-2726]
 build_exceptions! {
-    /// Column referenced by inverted index
-    ColumnReferencedByInvertedIndex(1111),
+    /// Column referenced by index
+    ColumnReferencedByIndex(1111),
     /// Invalid row ID index
     InvalidRowIdIndex(1503),
     /// Unsupported index

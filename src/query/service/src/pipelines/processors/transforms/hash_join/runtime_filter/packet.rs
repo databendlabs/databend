@@ -31,6 +31,8 @@ use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 
+use crate::physical_plans::SpatialRuntimeFilterMode;
+
 /// Represents a runtime filter that can be transmitted and merged.
 ///
 /// # Fields
@@ -67,6 +69,7 @@ impl Debug for RuntimeFilterPacket {
 pub struct SpatialPacket {
     pub valid: bool,
     pub srid: Option<i32>,
+    pub mode: SpatialRuntimeFilterMode,
     pub rtrees: Vec<u8>,
 }
 

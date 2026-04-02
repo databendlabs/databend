@@ -3497,10 +3497,10 @@ impl<'a> TypeChecker<'a> {
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
                     match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
-                        databend_common_expression::Expr::Constant(Constant {
-                                                                       scalar,
-                                                                       ..
-                                                                   }) => Ok(scalar.get_i64()),
+                        EExpr::Constant(Constant {
+                            scalar,
+                            ..
+                        }) => Ok(scalar.get_i64()),
                         _ => Err(ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"))),
                     }
                 }).transpose()?.flatten().unwrap_or(default))
