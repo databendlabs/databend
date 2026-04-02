@@ -3594,6 +3594,33 @@ output domain  : {"bc"..="bc"}
 output         : 'bc'
 
 
+ast            : substr('abcdef', 2, 3)
+raw expr       : substr('abcdef', 2, 3)
+checked expr   : substr<String, Int64, UInt64>("abcdef", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(3_u8 AS UInt64))
+optimized expr : "bcd"
+output type    : String
+output domain  : {"bcd"..="bcd"}
+output         : 'bcd'
+
+
+ast            : substr('abcdef', -2, 2)
+raw expr       : substr('abcdef', -2, 2)
+checked expr   : substr<String, Int64, UInt64>("abcdef", CAST<Int8>(-2_i8 AS Int64), CAST<UInt8>(2_u8 AS UInt64))
+optimized expr : "ef"
+output type    : String
+output domain  : {"ef"..="ef"}
+output         : 'ef'
+
+
+ast            : substr('abcdef', 20, 1)
+raw expr       : substr('abcdef', 20, 1)
+checked expr   : substr<String, Int64, UInt64>("abcdef", CAST<UInt8>(20_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
 ast            : substr('你好世界', 3)
 raw expr       : substr('你好世界', 3)
 checked expr   : substr<String, Int64>("你好世界", CAST<UInt8>(3_u8 AS Int64))
@@ -3603,6 +3630,24 @@ output domain  : {"世界"..="世界"}
 output         : '世界'
 
 
+ast            : substr('你好世界', 3, 1)
+raw expr       : substr('你好世界', 3, 1)
+checked expr   : substr<String, Int64, UInt64>("你好世界", CAST<UInt8>(3_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : "世"
+output type    : String
+output domain  : {"世"..="世"}
+output         : '世'
+
+
+ast            : substr('a你b', 2, 1)
+raw expr       : substr('a你b', 2, 1)
+checked expr   : substr<String, Int64, UInt64>("a你b", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : "你"
+output type    : String
+output domain  : {"你"..="你"}
+output         : '你'
+
+
 ast            : substr('こんにちは', 2)
 raw expr       : substr('こんにちは', 2)
 checked expr   : substr<String, Int64>("こんにちは", CAST<UInt8>(2_u8 AS Int64))
@@ -3610,6 +3655,15 @@ optimized expr : "んにちは"
 output type    : String
 output domain  : {"んにちは"..="んにちは"}
 output         : 'んにちは'
+
+
+ast            : substr('こんにちは', 2, 1)
+raw expr       : substr('こんにちは', 2, 1)
+checked expr   : substr<String, Int64, UInt64>("こんにちは", CAST<UInt8>(2_u8 AS Int64), CAST<UInt8>(1_u8 AS UInt64))
+optimized expr : "ん"
+output type    : String
+output domain  : {"ん"..="ん"}
+output         : 'ん'
 
 
 ast            : substr('abc', pos, len)
