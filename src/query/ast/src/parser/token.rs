@@ -671,6 +671,10 @@ pub enum TokenKind {
     ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
+    #[token("ENCODING", ignore(ascii_case))]
+    ENCODING,
+    #[token("ENCODING_ERROR", ignore(ascii_case))]
+    ENCODING_ERROR,
     #[token("END", ignore(ascii_case))]
     END,
     #[token("ENDPOINT", ignore(ascii_case))]
