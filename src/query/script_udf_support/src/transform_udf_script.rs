@@ -614,7 +614,7 @@ impl TransformUdfScript {
 
                     let stage_fingerprints = Self::collect_stage_fingerprints(imports_stage_info)?;
 
-                    let temp_dir = if !dependencies.is_empty() || !stage_fingerprints.is_empty() {
+                    if !dependencies.is_empty() || !stage_fingerprints.is_empty() {
                         let key =
                             venv::PyVenvKeyEntry::new(&dependencies, stage_fingerprints.clone());
                         let mut w = venv::PY_VENV_CACHE.write();
@@ -658,9 +658,7 @@ impl TransformUdfScript {
                         }
                     } else {
                         None
-                    };
-
-                    temp_dir
+                    }
                 }
                 _ => None,
             };
@@ -963,14 +961,14 @@ mod venv {
 
     impl Drop for TempDirInner {
         fn drop(&mut self) {
-            if let Err(e) = fs::remove_dir_all(&self.path) {
-                if !matches!(e.kind(), io::ErrorKind::NotFound) {
-                    log::warn!(
-                        "Failed to remove python udf temp dir {:?}: {}",
-                        self.path,
-                        e
-                    );
-                }
+            if let Err(e) = fs::remove_dir_all(&self.path)
+                && !matches!(e.kind(), io::ErrorKind::NotFound)
+            {
+                log::warn!(
+                    "Failed to remove python udf temp dir {:?}: {}",
+                    self.path,
+                    e
+                );
             }
         }
     }
@@ -1165,14 +1163,14 @@ mod venv {
 
     impl Drop for PyVenvCacheEntry {
         fn drop(&mut self) {
-            if let Err(e) = fs::remove_file(&self.archive_path) {
-                if !matches!(e.kind(), io::ErrorKind::NotFound) {
-                    log::warn!(
-                        "Failed to remove python udf cache archive {:?}: {}",
-                        self.archive_path,
-                        e
-                    );
-                }
+            if let Err(e) = fs::remove_file(&self.archive_path)
+                && !matches!(e.kind(), io::ErrorKind::NotFound)
+            {
+                log::warn!(
+                    "Failed to remove python udf cache archive {:?}: {}",
+                    self.archive_path,
+                    e
+                );
             }
         }
     }
