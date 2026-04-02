@@ -40,7 +40,7 @@ q4.parquet	655	1
 {"id":"load-q4","stats":{"rows":1,"bytes":30}}
 <<<<
 >>>> select * from streaming_load_parquet;
-my_null NULL	2021-01-01
+my_null	NULL	2021-01-01
 <<<<
 >>>> truncate table streaming_load_parquet
 --'2021-01-01' as c3, 'my_null' as c1
