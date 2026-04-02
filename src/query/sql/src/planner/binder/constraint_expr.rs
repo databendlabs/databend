@@ -51,8 +51,16 @@ pub struct ConstraintExprBinder {
 
 impl ConstraintExprBinder {
     pub fn try_new(ctx: Arc<dyn TableContext>, schema: DataSchemaRef) -> Result<Self> {
-        let settings = ctx.get_settings();
         let dialect = ctx.get_settings().get_sql_dialect().unwrap_or_default();
+        Self::try_new_with_dialect(ctx, schema, dialect)
+    }
+
+    fn try_new_with_dialect(
+        ctx: Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+        dialect: Dialect,
+    ) -> Result<Self> {
+        let settings = ctx.get_settings();
         let mut bind_context = BindContext::new();
         let mut metadata = Metadata::default();
         for field in schema.fields().iter() {
@@ -149,7 +157,13 @@ pub fn validate_constraints_by_schema(
         return Ok(());
     }
 
-    let mut binder = ConstraintExprBinder::try_new(ctx, Arc::new(schema.into()))?;
+    // Persisted constraint expressions should not be reparsed with the caller session dialect,
+    // otherwise schema validation becomes session-dependent for the same stored metadata.
+    let mut binder = ConstraintExprBinder::try_new_with_dialect(
+        ctx,
+        Arc::new(schema.into()),
+        Dialect::PostgreSQL,
+    )?;
     for (name, constraint) in constraints {
         if binder.parse_and_bind(name, &constraint.expr()).is_err() {
             return Err(ErrorCode::IllegalReference(format!(
