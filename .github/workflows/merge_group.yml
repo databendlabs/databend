@@ -4,6 +4,10 @@ on:
   merge_group:
 
 jobs:
+  # GitHub branch protection / rulesets use one required-check list for both PRs
+  # and merge queue entries. That means every required PR check name must also be
+  # reported during `merge_group`. We satisfy that rule by keeping the PR gate
+  # names here, while making the merge-queue side of those gates no-op.
   title:
     runs-on: ubuntu-latest
     steps:
@@ -15,6 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Skip CLA check
+        shell: bash
+        run: exit 0
+
+  description:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip description check
         shell: bash
         run: exit 0
 
@@ -48,37 +59,74 @@ jobs:
             echo "no src file changes detected" >> $GITHUB_STEP_SUMMARY
           fi
 
-  linux:
+  linux_check:
     needs: changes
     if: needs.changes.outputs.any_src_changed == 'true'
-    uses: ./.github/workflows/reuse.linux.yml
-    secrets: inherit
-    with:
-      build_profile: ci
-      runner_provider: aws
-      license_type: enterprise
-      telemetry_source: "pr-test"
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 8c
+      - aws
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/check
+        timeout-minutes: 60
+        with:
+          github_token: ${{ github.token }}
+
+  mac_check:
+    needs: changes
+    if: needs.changes.outputs.any_src_changed == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/check
+        timeout-minutes: 60
+        with:
+          github_token: ${{ github.token }}
 
   ready:
     if: always()
     runs-on: ubuntu-latest
     needs:
       - changes
-      - linux
+      - linux_check
+      - mac_check
     steps:
+      # We reuse the same required `ready` check name in both contexts:
+      # PRs use `ready` as the full validation gate, while merge queue uses the
+      # same name as a lightweight aggregate over Linux/macOS check-only jobs.
+      # This keeps PR checks unchanged and makes merge queue perform only the
+      # reduced validation that we want.
       - name: Check Ready to Merge
         uses: actions/github-script@v7
         env:
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
-          LINUX_BUILD_RESULT: ${{ needs.linux.result }}
+          LINUX_CHECK_RESULT: ${{ needs.linux_check.result }}
+          MAC_CHECK_RESULT: ${{ needs.mac_check.result }}
         with:
           script: |
             if (process.env.SRC_CHANGED == 'false') {
               core.info('No source file changes detected, skipping');
               return;
             }
-            if (process.env.LINUX_BUILD_RESULT == 'success') {
-              core.info('Linux build succeeded, ready to merge');
+            if (process.env.LINUX_CHECK_RESULT != 'success') {
+              core.setFailed(`Linux check failed (${process.env.LINUX_CHECK_RESULT}), not ready to merge`);
               return;
             }
-            core.setFailed('Build failed, not ready to merge');
+            if (process.env.MAC_CHECK_RESULT != 'success') {
+              core.setFailed(`macOS check failed (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
+              return;
+            }
+            if (process.env.LINUX_CHECK_RESULT == 'success' && process.env.MAC_CHECK_RESULT == 'success') {
+              core.info('Linux and macOS checks succeeded, ready to merge');
+              return;
+            }
+            core.setFailed('Checks failed, not ready to merge');
