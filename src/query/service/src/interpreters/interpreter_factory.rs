@@ -108,6 +108,18 @@ use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPoli
 use crate::interpreters::interpreter_table_tag_create::CreateTableTagInterpreter;
 use crate::interpreters::interpreter_table_tag_drop::DropTableTagInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::interpreter_task_drop::DropTaskInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::interpreter_task_execute::ExecuteTaskInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
@@ -119,18 +131,6 @@ use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
 use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
 use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
 use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
-#[cfg(feature = "task-support")]
-use crate::interpreters::task::AlterTaskInterpreter;
-#[cfg(feature = "task-support")]
-use crate::interpreters::task::CreateTaskInterpreter;
-#[cfg(feature = "task-support")]
-use crate::interpreters::task::DescribeTaskInterpreter;
-#[cfg(feature = "task-support")]
-use crate::interpreters::task::DropTaskInterpreter;
-#[cfg(feature = "task-support")]
-use crate::interpreters::task::ExecuteTaskInterpreter;
-#[cfg(feature = "task-support")]
-use crate::interpreters::task::ShowTasksInterpreter;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
