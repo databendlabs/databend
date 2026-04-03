@@ -32,11 +32,11 @@ use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 
 use crate::OutputCommonSettings;
-use crate::field_encoder::FieldEncoderValues;
+use crate::field_encoder::FieldEncoderBytes;
 use crate::field_encoder::helpers::write_json_string;
 
 pub struct FieldEncoderJSON {
-    pub simple: FieldEncoderValues,
+    pub simple: FieldEncoderBytes,
     pub quote_denormals: bool,
     pub escape_forward_slashes: bool,
 }
@@ -44,7 +44,7 @@ pub struct FieldEncoderJSON {
 impl FieldEncoderJSON {
     pub fn create(settings: OutputFormatSettings) -> Self {
         FieldEncoderJSON {
-            simple: FieldEncoderValues {
+            simple: FieldEncoderBytes {
                 common_settings: OutputCommonSettings {
                     true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                     false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),

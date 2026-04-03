@@ -1005,18 +1005,20 @@ fn register_like(registry: &mut FunctionRegistry) {
 }
 
 fn calc_like_domain(lhs: &StringDomain, pattern: String) -> Option<FunctionDomain<BooleanType>> {
+    let is_all_percent_pattern = !pattern.is_empty() && pattern.bytes().all(|c| c == b'%');
     match generate_like_pattern(pattern.as_bytes(), 1) {
         LikePattern::StartOfPercent(v) if v.is_empty() => {
+            Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
+        }
+        LikePattern::Constant(true) if is_all_percent_pattern => {
             Some(FunctionDomain::Domain(ALL_TRUE_DOMAIN))
         }
         LikePattern::OrdinalStr(_) => Some(lhs.domain_eq(&StringDomain {
             min: pattern.clone(),
             max: Some(pattern),
         })),
-        LikePattern::EndOfPercent(_) => {
-            let mut pat_str = pattern;
-            // remove the last char '%'
-            pat_str.pop();
+        LikePattern::EndOfPercent(v) => {
+            let pat_str = std::str::from_utf8(v.as_ref()).ok()?.to_string();
             let pat_len = pat_str.chars().count();
             let other = StringDomain {
                 min: pat_str.clone(),
@@ -1361,4 +1363,113 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
     };
 
     left.iter().eq(right.iter())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::FunctionContext;
+    use databend_common_expression::types::string::StringDomain;
+    use jsonb::OwnedJsonb;
+
+    use super::*;
+
+    #[test]
+    fn test_calc_like_domain_repeated_trailing_percent_matches_normalized_prefix() {
+        let matching = StringDomain {
+            min: "ababac".to_string(),
+            max: Some("ababac".to_string()),
+        };
+        let non_matching = StringDomain {
+            min: "aba".to_string(),
+            max: Some("aba".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&matching, "abab%".to_string()),
+            calc_like_domain(&matching, "abab%%%%%".to_string()),
+            "repeated trailing % should fold like a single trailing %"
+        );
+        assert_eq!(
+            calc_like_domain(&non_matching, "abab%%%%%".to_string()),
+            calc_like_domain(&non_matching, "abab%".to_string()),
+            "non-matching prefixes should also stay consistent"
+        );
+    }
+
+    #[test]
+    fn test_calc_like_domain_all_percent_matches_single_percent() {
+        let domain = StringDomain {
+            min: "".to_string(),
+            max: Some("zzz".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&domain, "%".to_string()),
+            calc_like_domain(&domain, "%%%%%".to_string()),
+            "repeated all-% patterns should fold like a single %"
+        );
+    }
+
+    #[test]
+    fn test_calc_like_domain_empty_pattern_does_not_fold_to_all_true() {
+        let domain = StringDomain {
+            min: "".to_string(),
+            max: Some("zzz".to_string()),
+        };
+
+        assert_eq!(
+            calc_like_domain(&domain, "".to_string()),
+            None,
+            "empty patterns should not reuse repeated all-% folding"
+        );
+    }
+
+    #[test]
+    fn test_variant_like_repeated_percent_preserves_simple_scalar_semantics() {
+        let like = variant_vectorize_like_jsonb();
+        let value = Value::<VariantType>::Scalar(
+            r#"{"name":"abab"}"#.parse::<OwnedJsonb>().unwrap().to_vec(),
+        );
+        let escape = Value::<StringType>::Scalar("".to_string());
+        let func_ctx = FunctionContext::default();
+        let mut ctx = EvalContext {
+            generics: &[],
+            num_rows: 1,
+            func_ctx: &func_ctx,
+            validity: None,
+            errors: None,
+            suppress_error: false,
+            strict_eval: false,
+        };
+
+        let leading = like(
+            value.clone(),
+            Value::<StringType>::Scalar("%abab".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let repeated_leading = like(
+            value.clone(),
+            Value::<StringType>::Scalar("%%%%abab".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let trailing = like(
+            value.clone(),
+            Value::<StringType>::Scalar("abab%".to_string()),
+            escape.clone(),
+            &mut ctx,
+        );
+        let repeated_trailing = like(
+            value,
+            Value::<StringType>::Scalar("abab%%%%".to_string()),
+            escape,
+            &mut ctx,
+        );
+
+        assert!(matches!(leading, Value::Scalar(false)));
+        assert_eq!(leading, repeated_leading);
+        assert!(matches!(trailing, Value::Scalar(false)));
+        assert_eq!(trailing, repeated_trailing);
+    }
 }

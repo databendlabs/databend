@@ -50,7 +50,6 @@ use crate::TypeChecker;
 use crate::WindowChecker;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::binder::aggregate::find_replaced_aggregate_function;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowInfo;
@@ -95,8 +94,7 @@ impl Binder {
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
             // This item is a grouping sets item, its data type should be nullable.
-            let is_grouping_sets_item = agg_info.grouping_sets.is_some()
-                && agg_info.group_items_map.contains_key(&item.scalar);
+            let is_grouping_sets_item = agg_info.is_grouping_sets_item(&item.scalar);
 
             let mut column_binding = match &item.scalar {
                 ScalarExpr::BoundColumnRef(column_ref) => {
@@ -108,13 +106,13 @@ impl Binder {
                 ScalarExpr::AggregateFunction(agg) => {
                     // Replace to bound column to reduce duplicate derived column bindings.
                     debug_assert!(!is_grouping_sets_item);
-                    find_replaced_aggregate_function(
-                        agg_info,
-                        &agg.display_name,
-                        &agg.return_type,
-                        &item.alias,
-                    )
-                    .unwrap()
+                    agg_info
+                        .lookup_aggregate_function_column(agg, &item.alias)
+                        .unwrap()
+                }
+                ScalarExpr::UDAFCall(udaf) => {
+                    debug_assert!(!is_grouping_sets_item);
+                    agg_info.lookup_udaf_call_column(udaf, &item.alias).unwrap()
                 }
                 ScalarExpr::WindowFunction(win) => {
                     find_replaced_window_function(window_info, win, &item.alias).unwrap()
@@ -182,7 +180,7 @@ impl Binder {
             .map(|(_, item)| {
                 if bind_context.in_grouping {
                     let mut scalar = item.scalar.clone();
-                    let mut grouping_checker = GroupingChecker::new(bind_context);
+                    let mut grouping_checker = GroupingChecker::new(bind_context, None);
                     grouping_checker.visit(&mut scalar)?;
 
                     if let Some(x) = columns.iter_mut().find(|x| x.index == item.index) {

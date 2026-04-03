@@ -1338,6 +1338,16 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("http_json_result_mode", DefaultSettingValue {
+                    value: UserSettingValue::String("display".to_owned()),
+                    desc: "Controls how HTTP query JSON data is encoded (display or driver).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "display".into(),
+                        "driver".into(),
+                    ])),
+                }),
                 ("binary_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("hex".to_owned()),
                     desc: "Controls how BINARY columns are rendered (HEX, BASE64, UTF-8, or UTF-8-LOSSY).",

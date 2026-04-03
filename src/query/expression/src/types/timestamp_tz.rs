@@ -23,7 +23,6 @@ use databend_common_io::datetime::parse_standard_timestamp as parse_iso_timestam
 use jiff::civil::Date;
 use jiff::civil::Time;
 use jiff::fmt;
-use jiff::tz;
 use jiff::tz::TimeZone;
 
 use super::ArgType;
@@ -237,12 +236,11 @@ pub fn string_to_timestamp_tz<'a, F: FnOnce() -> &'a TimeZone>(
     match time.offset() {
         None => {
             let datetime = time.to_datetime()?;
-            let timestamp = tz::offset(0).to_timestamp(datetime)?;
-            let offset = fn_tz().to_offset(timestamp);
+            let zoned = datetime.to_zoned(fn_tz().clone())?;
 
             Ok(timestamp_tz::new(
-                timestamp.as_microsecond() - (offset.seconds() as i64 * 1_000_000),
-                offset.seconds(),
+                zoned.timestamp().as_microsecond(),
+                zoned.offset().seconds(),
             ))
         }
         Some(offset) => {

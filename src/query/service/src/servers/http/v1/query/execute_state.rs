@@ -414,10 +414,16 @@ impl ExecuteState {
             .with_context(make_error)?
             .as_str()
             .to_string();
+        let http_json_result_mode = settings
+            .get_http_json_result_mode()
+            .with_context(make_error)?
+            .as_str()
+            .to_string();
         let result_format_settings = Some(ResultFormatSettings {
             timezone,
             geometry_output_format,
             binary_output_format,
+            http_json_result_mode,
         });
 
         let running_state = ExecuteRunning {

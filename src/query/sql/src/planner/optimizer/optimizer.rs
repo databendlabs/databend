@@ -18,9 +18,12 @@ use async_recursion::async_recursion;
 use databend_common_ast::ast::ExplainKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Symbol;
 use log::info;
 
 use crate::InsertInputSource;
+use crate::MetadataRef;
+use crate::ScalarExpr;
 use crate::binder::MutationStrategy;
 use crate::binder::MutationType;
 use crate::binder::target_probe;
@@ -51,7 +54,6 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
 use crate::plans::Mutation;
-use crate::plans::MutationSource;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
@@ -415,29 +417,63 @@ async fn optimize_mutation(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Res
             }
         }
         MutationType::Update | MutationType::Delete => {
-            // Helper function to find MutationSource in a chain of operators
-            fn find_mutation_source(s_expr: &SExpr) -> Option<&MutationSource> {
+            #[allow(clippy::type_complexity)]
+            fn finalize_mutation_source(
+                s_expr: &SExpr,
+                metadata: &MetadataRef,
+            ) -> Result<Option<(SExpr, bool, Vec<ScalarExpr>, Option<Symbol>)>> {
                 match s_expr.plan() {
-                    RelOperator::MutationSource(rel) => Some(rel),
-                    RelOperator::Udf(_) | RelOperator::EvalScalar(_) => {
-                        if s_expr.arity() == 1 {
-                            find_mutation_source(s_expr.unary_child())
+                    RelOperator::MutationSource(rel) => {
+                        let mut rel = rel.clone();
+                        rel.refresh_read_partition_columns();
+                        let is_truncate =
+                            rel.mutation_type == MutationType::Delete && !rel.has_predicates();
+                        let direct_filter = rel.all_predicates_cloned();
+                        let predicate_column_index =
+                            rel.ensure_mutation_predicate_column_if_needed(metadata);
+                        let new_s_expr =
+                            SExpr::create_leaf(Arc::new(RelOperator::MutationSource(rel)));
+                        Ok(Some((
+                            new_s_expr,
+                            is_truncate,
+                            direct_filter,
+                            predicate_column_index,
+                        )))
+                    }
+                    RelOperator::Udf(_) | RelOperator::EvalScalar(_) if s_expr.arity() == 1 => {
+                        if let Some((child, is_truncate, direct_filter, pred_idx)) =
+                            finalize_mutation_source(s_expr.unary_child(), metadata)?
+                        {
+                            Ok(Some((
+                                s_expr.replace_children(vec![Arc::new(child)]),
+                                is_truncate,
+                                direct_filter,
+                                pred_idx,
+                            )))
                         } else {
-                            None
+                            Ok(None)
                         }
                     }
-                    _ => None,
+                    _ => Ok(None),
                 }
             }
 
-            if let Some(rel) = find_mutation_source(&input_s_expr) {
-                if rel.mutation_type == MutationType::Delete && rel.predicates.is_empty() {
-                    mutation.truncate_table = true;
-                }
-                mutation.direct_filter = rel.predicates.clone();
-                if let Some(index) = rel.predicate_column_index {
-                    mutation.required_columns.insert(index);
-                    mutation.predicate_column_index = Some(index);
+            // finalize_mutation_source only applies to Direct strategy where the
+            // plan tree contains a MutationSource leaf. Non-direct mutations
+            // (e.g., UPDATE ... FROM, subquery cases) have Join/Filter roots
+            // with no MutationSource node.
+            if mutation.strategy == MutationStrategy::Direct {
+                let metadata = opt_ctx.get_metadata();
+                if let Some((new_s_expr, is_truncate, direct_filter, pred_idx)) =
+                    finalize_mutation_source(&input_s_expr, &metadata)?
+                {
+                    input_s_expr = new_s_expr;
+                    mutation.truncate_table = is_truncate;
+                    mutation.direct_filter = direct_filter;
+                    if let Some(index) = pred_idx {
+                        mutation.required_columns.insert(index);
+                        mutation.predicate_column_index = Some(index);
+                    }
                 }
             }
             input_s_expr

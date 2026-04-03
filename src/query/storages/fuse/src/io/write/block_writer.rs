@@ -210,6 +210,7 @@ impl BlockBuilder {
             self.ctx.clone(),
             &data_block,
             bloom_index_location,
+            self.write_settings.bloom_index_type,
             self.bloom_columns_map.clone(),
             &self.ngram_args,
         )?;

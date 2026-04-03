@@ -315,6 +315,7 @@ impl StreamBlockBuilder {
 
         let bloom_index_builder = BloomIndexBuilder::create(
             properties.ctx.get_function_context()?,
+            properties.write_settings.bloom_index_type,
             properties.bloom_columns_map.clone(),
             &properties.ngram_args,
         )?;
