@@ -17,6 +17,7 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::fmt::FormattingOptions;
 use std::io::Write;
+use std::sync::Arc;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
@@ -24,14 +25,20 @@ use databend_common_base::runtime::catch_unwind;
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::ErrorCode;
+use databend_common_expression::Column;
 use databend_common_expression::EvalContext;
+use databend_common_expression::Function;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionDomain;
+use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionProperty;
 use databend_common_expression::FunctionRegistry;
+use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
+use databend_common_expression::types::AnyType;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -40,6 +47,7 @@ use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::IntervalType;
 use databend_common_expression::types::NullableType;
+use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
@@ -71,6 +79,7 @@ use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_4_arg;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
+use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
@@ -138,6 +147,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // convert_timezone( target_timezone, 'timestamp')
     register_convert_timezone(registry);
+
+    // date_from_parts(year, month, day)
+    // timestamp_from_parts(year, month, day, hour, minute, second [, nanosecond])
+    // timestamp_tz_from_parts(year, month, day, hour, minute, second [, nanosecond] [, time_zone])
+    register_date_from_parts(registry);
+    register_timestamp_from_parts(registry);
+    register_timestamp_tz_from_parts(registry);
 }
 
 /// Check if timestamp is within range, and return the timestamp in micros.
@@ -2732,4 +2748,262 @@ fn prepare_format_string(format: &str, date_format_style: &str) -> String {
         format.to_string()
     };
     replace_time_format(&processed_format).to_string()
+}
+
+fn register_date_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("date_from_parts", &["datefromparts"]);
+
+    registry
+        .register_passthrough_nullable_3_arg::<Int64Type, Int64Type, Int64Type, DateType, _, _>(
+            "date_from_parts",
+            |_, _, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_3_arg::<Int64Type, Int64Type, Int64Type, DateType>(
+                |year, month, day, output, ctx| match normalize_date_parts(year, month, day) {
+                    Ok(d) => {
+                        let days = d
+                            .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
+                            .unwrap()
+                            .get_days();
+                        output.push(clamp_date(days as i64));
+                    }
+                    Err(e) => {
+                        ctx.set_error(output.len(), format!("cannot create date from parts: {e}"));
+                        output.push(0);
+                    }
+                },
+            ),
+        );
+}
+
+fn register_timestamp_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("timestamp_from_parts", &["timestampfromparts"]);
+
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let int64_type = DataType::Number(NumberDataType::Int64);
+
+        let (sig_args, func): (
+            Vec<DataType>,
+            fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>,
+        ) = match args_type.len() {
+            // 6 args: year, month, day, hour, minute, second
+            6 => (vec![int64_type; 6], |args, ctx| {
+                timestamp_from_parts_fn(args, ctx, false)
+            }),
+
+            // 7 args: includes nanosecond
+            7 => (vec![int64_type; 7], |args, ctx| {
+                timestamp_from_parts_fn(args, ctx, true)
+            }),
+
+            _ => return None,
+        };
+
+        let signature = FunctionSignature {
+            name: "timestamp_from_parts".to_string(),
+            args_type: sig_args,
+            return_type: DataType::Timestamp,
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            func,
+            None,
+            has_null,
+        )))
+    }));
+
+    registry.register_function_factory("timestamp_from_parts", factory);
+}
+
+fn register_timestamp_tz_from_parts(registry: &mut FunctionRegistry) {
+    registry.register_aliases("timestamp_tz_from_parts", &["timestamptzfromparts"]);
+
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let int64_type = DataType::Number(NumberDataType::Int64);
+
+        let (sig_args, func): (
+            Vec<DataType>,
+            fn(&[Value<AnyType>], &mut EvalContext) -> Value<AnyType>,
+        ) = match args_type.len() {
+            // 6 args: no nanoseconds, no timezone
+            6 => (vec![int64_type; 6], |args, ctx| {
+                timestamp_tz_from_parts_fn(args, ctx, false, false)
+            }),
+
+            // 7 args: timezone provided
+            7 if args_type[6].remove_nullable() == DataType::String => {
+                let mut v = vec![int64_type; 6];
+                v.push(DataType::String);
+
+                // year, month, day, hour, minute, second, timezone
+                (v, |args, ctx| {
+                    timestamp_tz_from_parts_fn(args, ctx, false, true)
+                })
+            }
+
+            // 7 args: nanoseconds
+            7 => (vec![int64_type; 7], |args, ctx| {
+                timestamp_tz_from_parts_fn(args, ctx, true, false)
+            }),
+
+            // 8 args: nanoseconds + timezone
+            8 => {
+                let mut v = vec![int64_type; 7];
+                v.push(DataType::String);
+
+                // year, month, day, hour, minute, second, nanosecond, timezone
+                (v, |args, ctx| {
+                    timestamp_tz_from_parts_fn(args, ctx, true, true)
+                })
+            }
+
+            _ => return None,
+        };
+
+        let signature = FunctionSignature {
+            name: "timestamp_tz_from_parts".to_string(),
+            args_type: sig_args,
+            return_type: DataType::TimestampTz,
+        };
+
+        Some(Arc::new(Function::with_passthrough_nullable(
+            signature,
+            FunctionDomain::MayThrow,
+            func,
+            None,
+            has_null,
+        )))
+    }));
+
+    registry.register_function_factory("timestamp_tz_from_parts", factory);
+}
+
+fn build_timestamp_parts(
+    args: &[Value<AnyType>],
+    ctx: &mut EvalContext,
+    has_nano: bool,
+    has_tz: bool,
+) -> (Vec<i64>, Vec<i32>, Option<usize>) {
+    let len = args.iter().find_map(|arg| match arg {
+        Value::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let year_arg = args[0].try_downcast::<Int64Type>().unwrap();
+    let month_arg = args[1].try_downcast::<Int64Type>().unwrap();
+    let day_arg = args[2].try_downcast::<Int64Type>().unwrap();
+    let hour_arg = args[3].try_downcast::<Int64Type>().unwrap();
+    let minute_arg = args[4].try_downcast::<Int64Type>().unwrap();
+    let second_arg = args[5].try_downcast::<Int64Type>().unwrap();
+
+    let nanosecond_arg = if has_nano {
+        Some(args[6].try_downcast::<Int64Type>().unwrap())
+    } else {
+        None
+    };
+
+    let tz_arg = if has_tz {
+        let idx = if has_nano { 7 } else { 6 };
+        Some(args[idx].try_downcast::<StringType>().unwrap())
+    } else {
+        None
+    };
+
+    let size = len.unwrap_or(1);
+
+    let mut ts_values = Vec::with_capacity(size);
+    let mut offset_values = Vec::with_capacity(size);
+
+    for idx in 0..size {
+        let year = unsafe { year_arg.index_unchecked(idx) };
+        let month = unsafe { month_arg.index_unchecked(idx) };
+        let day = unsafe { day_arg.index_unchecked(idx) };
+        let hour = unsafe { hour_arg.index_unchecked(idx) };
+        let minute = unsafe { minute_arg.index_unchecked(idx) };
+        let second = unsafe { second_arg.index_unchecked(idx) };
+
+        let nanosecond = nanosecond_arg
+            .as_ref()
+            .map(|a| unsafe { a.index_unchecked(idx) })
+            .unwrap_or(0);
+
+        let tz = if let Some(ref tz_arg) = tz_arg {
+            let tz_str = unsafe { tz_arg.index_unchecked(idx) };
+            match TimeZone::get(tz_str) {
+                Ok(tz) => tz,
+                Err(e) => {
+                    ctx.set_error(ts_values.len(), format!("cannot parse timezone: {e}"));
+                    ts_values.push(0);
+                    offset_values.push(0);
+                    continue;
+                }
+            }
+        } else {
+            ctx.func_ctx.tz.clone()
+        };
+
+        match normalize_timestamp_micros(year, month, day, hour, minute, second, nanosecond, &tz) {
+            Ok(utc_micros) => match Timestamp::from_microsecond(utc_micros) {
+                Ok(ts) => {
+                    let offset = tz.to_offset(ts);
+                    ts_values.push(utc_micros);
+                    offset_values.push(offset.seconds());
+                }
+                Err(e) => {
+                    ctx.set_error(ts_values.len(), format!("{e}"));
+                    ts_values.push(0);
+                    offset_values.push(0);
+                }
+            },
+            Err(e) => {
+                ctx.set_error(ts_values.len(), format!("{e}"));
+                ts_values.push(0);
+                offset_values.push(0);
+            }
+        }
+    }
+
+    (ts_values, offset_values, len)
+}
+
+fn timestamp_from_parts_fn(
+    args: &[Value<AnyType>],
+    ctx: &mut EvalContext,
+    has_nano: bool,
+) -> Value<AnyType> {
+    let (ts_values, _, len) = build_timestamp_parts(args, ctx, has_nano, false);
+
+    match len {
+        Some(_) => Value::Column(Column::Timestamp(ts_values.into())),
+        None => Value::Scalar(Scalar::Timestamp(ts_values[0])),
+    }
+}
+
+fn timestamp_tz_from_parts_fn(
+    args: &[Value<AnyType>],
+    ctx: &mut EvalContext,
+    has_nano: bool,
+    has_tz: bool,
+) -> Value<AnyType> {
+    let (ts_values, offset_values, len) = build_timestamp_parts(args, ctx, has_nano, has_tz);
+
+    match len {
+        Some(_) => {
+            let col = Column::TimestampTz(
+                ts_values
+                    .iter()
+                    .zip(offset_values.iter())
+                    .map(|(&ts, &off)| timestamp_tz::new(ts, off))
+                    .collect(),
+            );
+            Value::Column(col)
+        }
+        None => Value::Scalar(Scalar::TimestampTz(timestamp_tz::new(
+            ts_values[0],
+            offset_values[0],
+        ))),
+    }
 }

@@ -15,6 +15,7 @@
 use std::sync::LazyLock;
 
 use databend_common_column::types::timestamp_tz;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_timezone::DateTimeComponents;
 use databend_common_timezone::fast_components_from_timestamp;
@@ -2065,4 +2066,110 @@ pub fn pg_format_to_strftime(pg_format_string: &str) -> String {
     }
 
     result
+}
+
+/// Normalize month/day values that may be outside normal ranges.
+/// Supports values like month=0 (meaning Dec of previous year),
+/// month=13 (meaning Jan of next year), and day=100 (100th day from month start).
+pub fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<Date, String> {
+    // 1. Safe month normalization
+    let total_months = year
+        .checked_mul(12)
+        .and_then(|y| y.checked_add(month - 1))
+        .ok_or_else(|| format!("Date parts out of bounds: year={year}, month={month}"))?;
+
+    let norm_year_i64 = total_months.div_euclid(12);
+    let norm_month = (total_months.rem_euclid(12) + 1) as i8; // 1..=12
+
+    let norm_year =
+        i16::try_from(norm_year_i64).map_err(|_| format!("Year out of bounds: {norm_year_i64}"))?;
+
+    // Create base date
+    let base = Date::new(norm_year, norm_month, 1)
+        .map_err(|_| format!("Invalid date: year={year}, month={month}, day={day}"))?;
+
+    // 2. Safe day normalization (Fixing the second bot flag)
+    let hours_to_add = (day - 1)
+        .checked_mul(24)
+        .ok_or_else(|| format!("Day value out of bounds: {day}"))?;
+
+    let result = base
+        .checked_add(SignedDuration::from_hours(hours_to_add))
+        .map_err(|_| format!("Date out of range: year={year}, month={month}, day={day}"))?;
+
+    Ok(result)
+}
+
+/// Normalize timestamp components that may be outside normal ranges.
+/// Similar to normalize_date_parts but also handles hour/minute/second/nanosecond overflow.
+pub fn normalize_timestamp_micros(
+    year: i64,
+    month: i64,
+    day: i64,
+    hour: i64,
+    minute: i64,
+    second: i64,
+    nanosecond: i64,
+    tz: &TimeZone,
+) -> Result<i64> {
+    // Handle nanosecond overflow
+    let extra_secs_from_nanos = nanosecond.div_euclid(1_000_000_000);
+    let norm_nanos = nanosecond.rem_euclid(1_000_000_000) as i32;
+    let norm_micros = (norm_nanos / 1_000) as u32;
+
+    // Combine time components into seconds
+    let total_seconds = hour
+        .checked_mul(3600)
+        .and_then(|h| h.checked_add(minute * 60))
+        .and_then(|m| m.checked_add(second))
+        .and_then(|s| s.checked_add(extra_secs_from_nanos))
+        .ok_or_else(|| ErrorCode::BadArguments("Timestamp components overflow i64"))?;
+
+    // Split into day overflow and time-of-day
+    let extra_days = total_seconds.div_euclid(86400);
+    let time_of_day = total_seconds.rem_euclid(86400);
+
+    let final_hour = (time_of_day / 3600) as u8;
+    let final_minute = ((time_of_day % 3600) / 60) as u8;
+    let final_second = (time_of_day % 60) as u8;
+
+    // Adjust day safely
+    let final_day = day
+        .checked_add(extra_days)
+        .ok_or_else(|| ErrorCode::BadArguments("Day overflow when constructing timestamp"))?;
+
+    let base_date = normalize_date_parts(year, month, final_day)
+        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")))?;
+
+    let jiff_year = base_date.year();
+    let jiff_month = base_date.month();
+    let jiff_day = base_date.day();
+
+    // Fast path
+    if let Some(micros) = fast_utc_from_local(
+        tz,
+        jiff_year as i32,
+        jiff_month as u8,
+        jiff_day as u8,
+        final_hour,
+        final_minute,
+        final_second,
+        norm_micros,
+    ) {
+        return Ok(micros);
+    }
+
+    // Slow path via jiff
+    let dt = date(jiff_year, jiff_month, jiff_day).at(
+        final_hour as i8,
+        final_minute as i8,
+        final_second as i8,
+        norm_nanos,
+    );
+
+    let zoned = tz
+        .to_zoned(dt)
+        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")))?;
+
+    Ok(zoned.timestamp().as_microsecond())
 }
