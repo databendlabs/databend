@@ -223,27 +223,25 @@ impl NewTransformFinalAggregate {
     }
 
     fn should_spill_now(&mut self) -> bool {
-        loop {
+        let result = loop {
             match self
                 .settings
                 .check_spill_with_backoff(&mut self.spill_backoff_state)
             {
-                SpillDecision::NoSpill => return false,
-                SpillDecision::SpillNow => {
-                    if self.spill_backoff_state.attempts > 0 {
-                        log::info!(
-                            "Spill backoff finished: total_sleep={}ms, attempts={}",
-                            self.spill_backoff_state.consumed_sleep_ms,
-                            self.spill_backoff_state.attempts,
-                        );
-                    }
-                    return true;
-                }
-                SpillDecision::Sleep(sleep_ms) => {
-                    std::thread::sleep(Duration::from_millis(sleep_ms));
-                }
+                SpillDecision::NoSpill => break false,
+                SpillDecision::SpillNow => break true,
+                SpillDecision::Sleep(ms) => std::thread::sleep(Duration::from_millis(ms)),
             }
+        };
+        if self.spill_backoff_state.attempts > 0 {
+            log::info!(
+                "Spill backoff finished with result={result}: total_sleep={}ms, attempts={}",
+                self.spill_backoff_state.consumed_sleep_ms,
+                self.spill_backoff_state.attempts,
+            );
         }
+        self.spill_backoff_state.reset();
+        result
     }
 
     fn spill_out(&mut self) -> Result<()> {

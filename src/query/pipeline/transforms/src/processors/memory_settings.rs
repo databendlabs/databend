@@ -49,7 +49,7 @@ pub struct SpillBackoffState {
 }
 
 impl SpillBackoffState {
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.consumed_sleep_ms = 0;
         self.attempts = 0;
     }
@@ -234,33 +234,26 @@ impl MemorySettings {
     }
 
     pub fn check_spill_with_backoff(&self, backoff_state: &mut SpillBackoffState) -> SpillDecision {
-        let decision = (|| {
-            if !self.check_spill() {
-                return SpillDecision::NoSpill;
-            }
-
-            let Some(spill_backoff) = self.spill_backoff else {
-                return SpillDecision::SpillNow;
-            };
-
-            let Some(query_usage) = self.current_query_usage() else {
-                return SpillDecision::SpillNow;
-            };
-
-            if !spill_backoff.should_backoff(query_usage) {
-                return SpillDecision::SpillNow;
-            }
-
-            match backoff_state.next_sleep_ms(spill_backoff.max_sleep_ms) {
-                Some(sleep_ms) => SpillDecision::Sleep(sleep_ms),
-                None => SpillDecision::SpillNow,
-            }
-        })();
-
-        if !matches!(decision, SpillDecision::Sleep(_)) {
-            backoff_state.reset();
+        if !self.check_spill() {
+            return SpillDecision::NoSpill;
         }
-        decision
+
+        let Some(spill_backoff) = self.spill_backoff else {
+            return SpillDecision::SpillNow;
+        };
+
+        let Some(query_usage) = self.current_query_usage() else {
+            return SpillDecision::SpillNow;
+        };
+
+        if !spill_backoff.should_backoff(query_usage) {
+            return SpillDecision::SpillNow;
+        }
+
+        match backoff_state.next_sleep_ms(spill_backoff.max_sleep_ms) {
+            Some(sleep_ms) => SpillDecision::Sleep(sleep_ms),
+            None => SpillDecision::SpillNow,
+        }
     }
 
     fn check_global(&self) -> Option<isize> {
@@ -566,6 +559,8 @@ mod tests {
             relaxed_settings.check_spill_with_backoff(&mut backoff_state),
             SpillDecision::NoSpill
         );
+        // Caller is responsible for resetting after NoSpill (as should_spill_now does)
+        backoff_state.reset();
         assert_eq!(
             pressured_settings.check_spill_with_backoff(&mut backoff_state),
             SpillDecision::Sleep(200)
