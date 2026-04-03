@@ -45,9 +45,9 @@ use databend_common_sql::plans::UDFType;
 use databend_common_storage::init_stage_operator;
 
 use self::venv::TempDir;
+use super::runtime_pool::Pool;
+use super::runtime_pool::RuntimeBuilder;
 use crate::ScriptUdfFunctionDesc;
-use crate::runtime_pool::Pool;
-use crate::runtime_pool::RuntimeBuilder;
 
 pub enum ScriptRuntime {
     JavaScript(JsRuntimePool),

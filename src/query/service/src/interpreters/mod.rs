@@ -165,17 +165,33 @@ mod interpreter_table_vacuum;
 mod interpreter_tag_create;
 mod interpreter_tag_drop;
 #[cfg(feature = "task-support")]
-mod interpreter_task_alter;
-#[cfg(feature = "task-support")]
-mod interpreter_task_create;
-#[cfg(feature = "task-support")]
-mod interpreter_task_describe;
-#[cfg(feature = "task-support")]
-mod interpreter_task_drop;
-#[cfg(feature = "task-support")]
-mod interpreter_task_execute;
-#[cfg(feature = "task-support")]
-mod interpreter_tasks_show;
+mod task {
+    mod interpreter_task_alter {
+        include!("interpreter_task_alter.rs");
+    }
+    mod interpreter_task_create {
+        include!("interpreter_task_create.rs");
+    }
+    mod interpreter_task_describe {
+        include!("interpreter_task_describe.rs");
+    }
+    mod interpreter_task_drop {
+        include!("interpreter_task_drop.rs");
+    }
+    mod interpreter_task_execute {
+        include!("interpreter_task_execute.rs");
+    }
+    mod interpreter_tasks_show {
+        include!("interpreter_tasks_show.rs");
+    }
+
+    pub(crate) use interpreter_task_alter::AlterTaskInterpreter;
+    pub(crate) use interpreter_task_create::CreateTaskInterpreter;
+    pub(crate) use interpreter_task_describe::DescribeTaskInterpreter;
+    pub(crate) use interpreter_task_drop::DropTaskInterpreter;
+    pub(crate) use interpreter_task_execute::ExecuteTaskInterpreter;
+    pub(crate) use interpreter_tasks_show::ShowTasksInterpreter;
+}
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
 mod interpreter_txn_commit;
