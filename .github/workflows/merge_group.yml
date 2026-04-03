@@ -51,7 +51,7 @@ jobs:
   check:
     needs: changes
     if: needs.changes.outputs.any_src_changed == 'true'
-    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
+    runs-on: [self-hosted, X64, Linux, 8c, aws]
     env:
       RUNNER_PROVIDER: aws
     steps:
