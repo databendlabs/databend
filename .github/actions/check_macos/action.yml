@@ -1,0 +1,56 @@
+name: "Check macOS"
+description: "Run lightweight checks natively on macOS"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup macOS check environment
+      shell: bash
+      run: |
+        brew unlink python || true
+        bash ./scripts/setup/dev_setup.sh -yb
+        rustup component add rustfmt clippy
+        brew install taplo typos-cli
+        python3 -m pip install --user --quiet yamllint
+
+    - name: Setup build env
+      shell: bash
+      run: |
+        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
+        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
+
+    - name: Check cargo version
+      shell: bash
+      run: rustup show
+
+    - name: Check disk space
+      shell: bash
+      run: df -h
+
+    - name: Check system info
+      shell: bash
+      run: |
+        uname -a
+        sysctl -n machdep.cpu.brand_string || true
+        vm_stat
+
+    - name: YAML Lint
+      shell: bash
+      run: python3 -m yamllint -f auto .
+
+    - name: Check typos
+      shell: bash
+      run: typos
+
+    - name: Format
+      shell: bash
+      run: cargo fmt --all -- --check
+
+    - name: Check toml format
+      shell: bash
+      run: |
+        taplo check
+        taplo fmt --check
+
+    - name: Clippy
+      shell: bash
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
