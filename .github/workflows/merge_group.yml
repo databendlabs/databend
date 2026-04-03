@@ -56,6 +56,9 @@ jobs:
       RUNNER_PROVIDER: aws
     steps:
       - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
       - name: Check
         uses: ./.github/actions/check
         with:
