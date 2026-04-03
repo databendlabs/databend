@@ -55,8 +55,159 @@ use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ExprContext;
+use crate::planner::binder::aggregate::AggregatePrepassAliasCatalog;
+use crate::planner::binder::aggregate::AggregatePrepassFacts;
+use crate::planner::binder::aggregate::AggregatePrepassFunctionCatalog;
+use crate::planner::binder::sort::OrderByRewriteFlags;
+use crate::plans::ScalarExpr;
+
+#[derive(Clone)]
+struct SelectClauseFact {
+    expr_context: ExprContext,
+    ast: Expr,
+    contains_aggregate: bool,
+    contains_window: bool,
+    referenced_aliases: Vec<String>,
+    references_aggregate_aliases: bool,
+    references_window_aliases: bool,
+}
+
+impl SelectClauseFact {
+    fn needs_aggregate_prepass(&self) -> bool {
+        self.contains_aggregate || self.references_aggregate_aliases
+    }
+
+    fn order_by_rewrite_flags(&self) -> OrderByRewriteFlags {
+        OrderByRewriteFlags::new(
+            !self.referenced_aliases.is_empty(),
+            self.contains_aggregate || self.references_aggregate_aliases,
+            self.contains_window || self.references_window_aliases,
+        )
+    }
+}
+
+#[derive(Clone, Default)]
+struct SelectClauseFacts {
+    having: Option<SelectClauseFact>,
+    qualify: Option<SelectClauseFact>,
+    order_by: Vec<SelectClauseFact>,
+}
+
+impl SelectClauseFacts {
+    fn iter_aggregate_prepass(&self) -> impl Iterator<Item = &SelectClauseFact> {
+        self.having.iter().chain(self.order_by.iter())
+    }
+
+    fn order_by_rewrite_flags(&self) -> Vec<OrderByRewriteFlags> {
+        self.order_by
+            .iter()
+            .map(SelectClauseFact::order_by_rewrite_flags)
+            .collect()
+    }
+}
+
+struct SelectGlobalView {
+    semantic_aliases: Vec<(String, ScalarExpr)>,
+    clause_facts: SelectClauseFacts,
+    aggregate_prepass_facts: AggregatePrepassFacts,
+}
 
 impl Binder {
+    fn build_select_clause_facts(
+        &self,
+        functions: &AggregatePrepassFunctionCatalog,
+        aliases: &AggregatePrepassAliasCatalog,
+        having: Option<&Expr>,
+        qualify: Option<&Expr>,
+        order_by: &[OrderByExpr],
+    ) -> SelectClauseFacts {
+        let having = having.map(|expr| {
+            let referenced_aliases = self.aggregate_prepass_expr_referenced_aliases(aliases, expr);
+            SelectClauseFact {
+                expr_context: ExprContext::HavingClause,
+                ast: expr.clone(),
+                contains_aggregate: Self::aggregate_prepass_contains_aggregate(
+                    &self.name_resolution_ctx,
+                    functions,
+                    expr,
+                ),
+                contains_window: Self::aggregate_prepass_contains_window(expr),
+                references_aggregate_aliases: aliases
+                    .references_aggregate_aliases(&referenced_aliases),
+                references_window_aliases: aliases.references_window_aliases(&referenced_aliases),
+                referenced_aliases,
+            }
+        });
+        let qualify = qualify.map(|expr| {
+            let referenced_aliases = self.aggregate_prepass_expr_referenced_aliases(aliases, expr);
+            SelectClauseFact {
+                expr_context: ExprContext::QualifyClause,
+                ast: expr.clone(),
+                contains_aggregate: Self::aggregate_prepass_contains_aggregate(
+                    &self.name_resolution_ctx,
+                    functions,
+                    expr,
+                ),
+                contains_window: Self::aggregate_prepass_contains_window(expr),
+                references_aggregate_aliases: aliases
+                    .references_aggregate_aliases(&referenced_aliases),
+                references_window_aliases: aliases.references_window_aliases(&referenced_aliases),
+                referenced_aliases,
+            }
+        });
+        let order_by = order_by
+            .iter()
+            .map(|order| {
+                let referenced_aliases =
+                    self.aggregate_prepass_expr_referenced_aliases(aliases, &order.expr);
+                SelectClauseFact {
+                    expr_context: ExprContext::OrderByClause,
+                    ast: order.expr.clone(),
+                    contains_aggregate: Self::aggregate_prepass_contains_aggregate(
+                        &self.name_resolution_ctx,
+                        functions,
+                        &order.expr,
+                    ),
+                    contains_window: Self::aggregate_prepass_contains_window(&order.expr),
+                    references_aggregate_aliases: aliases
+                        .references_aggregate_aliases(&referenced_aliases),
+                    references_window_aliases: aliases
+                        .references_window_aliases(&referenced_aliases),
+                    referenced_aliases,
+                }
+            })
+            .collect();
+
+        SelectClauseFacts {
+            having,
+            qualify,
+            order_by,
+        }
+    }
+
+    fn derive_aggregate_prepass_facts(
+        &self,
+        functions: &AggregatePrepassFunctionCatalog,
+        aliases: &AggregatePrepassAliasCatalog,
+        clause_facts: &SelectClauseFacts,
+    ) -> AggregatePrepassFacts {
+        let mut aggregate_prepass_facts = AggregatePrepassFacts::default();
+
+        for clause_fact in clause_facts
+            .iter_aggregate_prepass()
+            .filter(|clause_fact| clause_fact.needs_aggregate_prepass())
+        {
+            aggregate_prepass_facts.extend(self.collect_aggregate_prepass_facts(
+                functions,
+                aliases,
+                clause_fact.expr_context,
+                &clause_fact.ast,
+            ));
+        }
+
+        aggregate_prepass_facts
+    }
+
     #[async_backtrace::framed]
     pub(crate) fn bind_select(
         &mut self,
@@ -143,27 +294,38 @@ impl Binder {
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
-        let aggregate_prepass_aliases = self.collect_aggregate_prepass_aliases(&select_list);
+        let aggregate_prepass_functions = self.build_aggregate_prepass_function_catalog(
+            &from_context,
+            &select_list,
+            stmt.having.as_ref(),
+            stmt.qualify.as_ref(),
+            order_by,
+        )?;
+        let aggregate_prepass_aliases =
+            self.collect_aggregate_prepass_aliases(&aggregate_prepass_functions, &select_list);
+        let clause_facts = self.build_select_clause_facts(
+            &aggregate_prepass_functions,
+            &aggregate_prepass_aliases,
+            stmt.having.as_ref(),
+            stmt.qualify.as_ref(),
+            order_by,
+        );
+        let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
+            &aggregate_prepass_functions,
+            &aggregate_prepass_aliases,
+            &clause_facts,
+        );
+        let global_view = SelectGlobalView {
+            semantic_aliases,
+            clause_facts,
+            aggregate_prepass_facts,
+        };
 
-        if let Some(having) = &stmt.having {
-            self.pre_register_aggregate_fragments(
-                &mut from_context,
-                &semantic_aliases,
-                &aggregate_prepass_aliases,
-                ExprContext::HavingClause,
-                having,
-            )?;
-        }
-
-        for order in order_by {
-            self.pre_register_aggregate_fragments(
-                &mut from_context,
-                &semantic_aliases,
-                &aggregate_prepass_aliases,
-                ExprContext::OrderByClause,
-                &order.expr,
-            )?;
-        }
+        self.register_aggregate_prepass_facts(
+            &mut from_context,
+            &global_view.semantic_aliases,
+            &global_view.aggregate_prepass_facts,
+        )?;
 
         // `analyze_window` should behind `analyze_aggregate_select`,
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
@@ -197,8 +359,12 @@ impl Binder {
         // Bind WHERE after select-list analysis so aliases are available, but
         // resolve them against the original pre-rewrite select-item semantics.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) =
-                self.bind_where(&mut from_context, &semantic_aliases, expr, s_expr)?;
+            let (new_expr, scalar) = self.bind_where(
+                &mut from_context,
+                &global_view.semantic_aliases,
+                expr,
+                s_expr,
+            )?;
             s_expr = new_expr;
             Some(scalar)
         } else {
@@ -214,8 +380,13 @@ impl Binder {
             None
         };
 
-        let qualify = if let Some(qualify) = &stmt.qualify {
-            Some(self.analyze_window_qualify(&mut from_context, &semantic_aliases, qualify)?)
+        let qualify = if let Some(qualify) = global_view.clause_facts.qualify.as_ref() {
+            Some(self.analyze_window_qualify(
+                &mut from_context,
+                &global_view.semantic_aliases,
+                &qualify.ast,
+                qualify.contains_window || qualify.references_window_aliases,
+            )?)
         } else {
             None
         };
@@ -223,7 +394,12 @@ impl Binder {
         let order_items = self.analyze_order_items(
             &mut from_context,
             &mut select_info,
-            &aliases,
+            // Keep ORDER BY alias resolution on the same read-only semantic alias
+            // snapshot used by the clause prepass. This avoids binding against
+            // already-rewritten select-item scalars when a later clause only
+            // needs the original alias semantics.
+            &global_view.semantic_aliases,
+            &global_view.clause_facts.order_by_rewrite_flags(),
             order_by,
             stmt.distinct,
         )?;
@@ -306,10 +482,8 @@ impl Binder {
 /// It is useful when implementing some SQL syntax sugar,
 ///
 /// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
-#[allow(dead_code)]
 struct SelectRewriter {
     new_stmt: Option<SelectStmt>,
-    is_unquoted_ident_case_sensitive: bool,
     subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
@@ -400,10 +574,9 @@ impl SelectRewriter {
 }
 
 impl SelectRewriter {
-    fn new(is_unquoted_ident_case_sensitive: bool) -> Self {
+    fn new(_is_unquoted_ident_case_sensitive: bool) -> Self {
         SelectRewriter {
             new_stmt: None,
-            is_unquoted_ident_case_sensitive,
             subquery_executor: None,
         }
     }

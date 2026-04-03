@@ -65,7 +65,7 @@ use crate::plans::ScalarExpr;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
-#[derive(Debug, Clone, Copy, Default, EnumAsInner)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumAsInner)]
 pub enum ExprContext {
     SelectClause,
     WhereClause,

@@ -42,6 +42,7 @@ impl Binder {
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         qualify: &Expr,
+        needs_window_rewrite: bool,
     ) -> Result<ScalarExpr> {
         bind_context.expr_context = ExprContext::QualifyClause;
         let mut scalar_binder = ScalarBinder::new(
@@ -52,8 +53,10 @@ impl Binder {
             aliases,
         );
         let (mut scalar, _) = scalar_binder.bind(qualify)?;
-        let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
-        rewriter.visit(&mut scalar)?;
+        if needs_window_rewrite {
+            let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
+            rewriter.visit(&mut scalar)?;
+        }
         Ok(scalar)
     }
 

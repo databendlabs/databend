@@ -1,0 +1,444 @@
+=== window_aggregate_does_not_become_group_aggregate ===
+description: An aggregate used as a window function should stay in the window phase rather than becoming a group aggregate.
+sql: SELECT sum(number) OVER () FROM t
+status: ok
+EvalScalar
+├── scalars: [sum(number) OVER () (#1) AS (#1)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: []
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== window_partition_rejects_new_aggregate ===
+description: A window PARTITION BY clause must not introduce a new aggregate expression.
+sql: SELECT row_number() OVER (PARTITION BY sum(number)) FROM t
+status: error
+code: 1065
+message: Window specification and arguments cannot contain aggregate functions
+
+=== window_order_rejects_new_aggregate ===
+description: A window ORDER BY clause must not introduce a new aggregate expression.
+sql: SELECT row_number() OVER (ORDER BY sum(number)) FROM t
+status: error
+code: 1065
+message: Window specification and arguments cannot contain aggregate functions
+
+=== order_by_window_alias_does_not_seed_window_aggregate ===
+description: ORDER BY on a window alias must not pre-register aggregates that only appear inside that alias's window specification.
+sql: SELECT row_number() OVER (ORDER BY sum(number)) AS rn FROM t ORDER BY rn
+status: error
+code: 1065
+message: Window specification and arguments cannot contain aggregate functions
+
+=== order_by_expression_reuses_window_alias_semantics ===
+description: ORDER BY expressions should keep window aliases on the original semantic view instead of depending on rewritten select-item state.
+sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t ORDER BY rn + 1
+status: ok
+Sort
+├── sort keys: [rn + 1 (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.number (#0) AS (#0), row_number() OVER (ORDER BY number) (#1) AS (#1), plus(row_number() OVER (ORDER BY number) (#1), 1) AS (#2)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [t.number (#0) AS (#0)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [t.number (#0) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== window_order_reuses_having_aggregate ===
+description: A window ORDER BY clause should be able to reuse an aggregate introduced later by HAVING.
+sql: SELECT row_number() OVER (ORDER BY sum(number)) FROM t HAVING sum(number) > 0
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY sum(number)) (#2) AS (#2)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [sum(number) (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [sum(number) (#1) AS (#1)]
+            └── Filter
+                ├── filters: [gt(sum(number) (#1), 0)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_having_aggregate_alias ===
+description: A window ORDER BY clause should be able to reuse an aggregate reached through a HAVING alias reference.
+sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#1) AS (#1), row_number() OVER (ORDER BY s) (#2) AS (#2)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [sum(number) (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [sum(number) (#1) AS (#1)]
+            └── Filter
+                ├── filters: [gt(sum(number) (#1), 0)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_having_udaf ===
+description: A window ORDER BY clause should be able to reuse a UDAF introduced later by HAVING.
+sql: SELECT row_number() OVER (ORDER BY weighted_avg(a, b)) FROM t HAVING weighted_avg(a, b) > 0
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY weighted_avg(a, b)) (#5) AS (#5)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [weighted_avg(a, b) (#4) AS (#4)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [weighted_avg(a, b) (#4) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [weighted_avg(a, b) (#4) AS (#4)]
+            └── Filter
+                ├── filters: [gt(weighted_avg(a, b) (#4), 0)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [weighted_avg(a, b) AS (#4)]
+                    └── EvalScalar
+                        ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2), CAST(t.b (#1) AS Int32 NULL) AS (#3)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_having_udaf_alias ===
+description: A window ORDER BY clause should be able to reuse a UDAF reached through a HAVING alias reference.
+sql: SELECT weighted_avg(a, b) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0
+status: ok
+EvalScalar
+├── scalars: [weighted_avg(a, b) (#4) AS (#4), row_number() OVER (ORDER BY s) (#5) AS (#5)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [weighted_avg(a, b) (#4) AS (#4)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [weighted_avg(a, b) (#4) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [weighted_avg(a, b) (#4) AS (#4)]
+            └── Filter
+                ├── filters: [gt(weighted_avg(a, b) (#4), 0)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [weighted_avg(a, b) AS (#4)]
+                    └── EvalScalar
+                        ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2), CAST(t.b (#1) AS Int32 NULL) AS (#3)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_order_by_aggregate ===
+description: A window ORDER BY clause should be able to reuse an aggregate introduced later by ORDER BY.
+sql: SELECT row_number() OVER (ORDER BY sum(number)) FROM t ORDER BY sum(number)
+status: ok
+Sort
+├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1), row_number() OVER (ORDER BY sum(number)) (#2) AS (#2)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [sum(number) (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [sum(number) (#1) AS (#1)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_order_by_udaf ===
+description: A window ORDER BY clause should be able to reuse a UDAF introduced later by ORDER BY.
+sql: SELECT row_number() OVER (ORDER BY weighted_avg(a, b)) FROM t ORDER BY weighted_avg(a, b)
+status: ok
+Sort
+├── sort keys: [weighted_avg(a, b) (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [weighted_avg(a, b) (#4) AS (#4), row_number() OVER (ORDER BY weighted_avg(a, b)) (#5) AS (#5)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [weighted_avg(a, b) (#4) AS (#4)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [weighted_avg(a, b) (#4) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [weighted_avg(a, b) (#4) AS (#4)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [weighted_avg(a, b) AS (#4)]
+                    └── EvalScalar
+                        ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2), CAST(t.b (#1) AS Int32 NULL) AS (#3)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_order_by_aggregate_alias ===
+description: A window ORDER BY clause should be able to reuse an aggregate reached through an ORDER BY alias reference.
+sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t ORDER BY s
+status: ok
+Sort
+├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1), row_number() OVER (ORDER BY s) (#2) AS (#2)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [sum(number) (#1) AS (#1)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [sum(number) (#1) AS (#1)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_reuses_order_by_udaf_alias ===
+description: A window ORDER BY clause should be able to reuse a UDAF reached through an ORDER BY alias reference.
+sql: SELECT weighted_avg(a, b) AS s, row_number() OVER (ORDER BY s) FROM t ORDER BY s
+status: ok
+Sort
+├── sort keys: [weighted_avg(a, b) (#4) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [weighted_avg(a, b) (#4) AS (#4), row_number() OVER (ORDER BY s) (#5) AS (#5)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [weighted_avg(a, b) (#4) AS (#4)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [weighted_avg(a, b) (#4) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [weighted_avg(a, b) (#4) AS (#4)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [weighted_avg(a, b) AS (#4)]
+                    └── EvalScalar
+                        ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2), CAST(t.b (#1) AS Int32 NULL) AS (#3)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_order_rejects_window_alias_expansion ===
+description: A window ORDER BY clause must still reject aliases that expand to a prior window expression.
+sql: SELECT row_number() OVER () AS rn, row_number() OVER (ORDER BY rn) FROM t
+status: error
+code: 1065
+message: Window function cannot contain another window function
+
+=== duplicate_window_expression_reuses_window_binding ===
+description: Repeated identical window expressions should reuse the registered window binding.
+sql: SELECT row_number() OVER (ORDER BY number), row_number() OVER (ORDER BY number) FROM t
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY number) (#1) AS (#1)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [t.number (#0) AS (#0)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.number (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== laglead_window_from_sqllogictest_binds ===
+description: A sqllogictest LEAD window pattern should still bind through the lag/lead rewrite path.
+sql: SELECT lead(number, 1, 0) OVER (PARTITION BY number % 3 ORDER BY number + 1) FROM t
+status: ok
+EvalScalar
+├── scalars: [lead(number, 1, 0) OVER (PARTITION BY number % 3 ORDER BY number + 1) (#4) AS (#4)]
+└── Window
+    ├── aggregate function: lead
+    ├── partition items: [modulo(t.number (#0), 3) AS (#2)]
+    ├── order by items: [plus(t.number (#0), 1) AS (#3)]
+    ├── frame: [Rows: Following(Some(Number(1_u64))) ~ Following(Some(Number(1_u64)))]
+    └── Sort
+        ├── sort keys: [lead_part_0 (#2) ASC NULLS LAST, lead_order_0 (#3) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: LagLead(LagLeadFunction { is_lag: false, arg: BoundColumnRef(BoundColumnRef { span: Some(12..18), column: ColumnBinding { database_name: Some("default"), table_name: Some("t"), column_position: Some(1), table_index: Some(0), column_name: "number", column_name_lower: None, index: 0, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } }), offset: 1, default: Some(BoundColumnRef(BoundColumnRef { span: Some(23..24), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "lead_default_value", column_name_lower: None, index: 1, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })), return_type: Nullable(Number(UInt64)) })
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0), CAST(0 AS UInt64 NULL) AS (#1), modulo(t.number (#0), 3) AS (#2), plus(t.number (#0), 1) AS (#3)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== nth_value_window_binds ===
+description: An NTH_VALUE window expression should still bind through the dedicated nth_value rewrite path.
+sql: SELECT nth_value(number, 2) OVER (ORDER BY number) FROM t
+status: ok
+EvalScalar
+├── scalars: [nth_value(number, 2) OVER (ORDER BY number) (#1) AS (#1)]
+└── Window
+    ├── aggregate function: nth_value
+    ├── partition items: []
+    ├── order by items: [t.number (#0) AS (#0)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [t.number (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0), t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== window_partition_rewrites_group_item_expression ===
+description: A window partition expression over grouped aliases should rewrite non-column group items back to their group-item columns.
+sql: SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY b % 2 ORDER BY a) (#5) AS (#5), a (#1) AS (#6), b (#2) AS (#7)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(b (#2), 2) AS (#3)]
+    ├── order by items: [a (#1) AS (#4)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, row_number_order_0 (#4) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [modulo(b (#2), 2) AS (#3), a (#1) AS (#4)]
+            └── Aggregate(Initial)
+                ├── group items: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
+                ├── aggregate functions: []
+                └── EvalScalar
+                    ├── scalars: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== within_group_window_aggregate_binds ===
+description: A WITHIN GROUP window aggregate should bind its sort descriptors without turning into a grouped aggregate.
+sql: SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary
+status: ok
+EvalScalar
+├── scalars: [listagg(CAST(salary AS STRING), '|') WITHIN GROUP ( ORDER BY empno DESC ) OVER (PARTITION BY depname ORDER BY empno) (#4) AS (#4)]
+└── Window
+    ├── aggregate function: listagg
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: [empsalary.empno (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.empno (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(7..122), func_name: "listagg", distinct: false, params: [String("|")], args: [BoundColumnRef(BoundColumnRef { span: Some(20..26), column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "listagg_arg_0", column_name_lower: None, index: 3, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(String), sort_descs: [AggregateFunctionScalarSortDesc { expr: BoundColumnRef(BoundColumnRef { span: Some(68..73), column: ColumnBinding { database_name: Some("default"), table_name: Some("empsalary"), column_position: Some(2), table_index: Some(0), column_name: "empno", column_name_lower: None, index: 1, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } }), is_reuse_index: false, nulls_first: false, asc: false }], display_name: "listagg(CAST(salary AS STRING), '|') WITHIN GROUP ( ORDER BY empno DESC ) OVER (PARTITION BY depname ORDER BY empno)" })
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.empno (#1) AS (#1), empsalary.empno (#1) AS (#1), CAST(empsalary.salary (#2) AS String NULL) AS (#3)]
+            └── Scan
+                ├── table: default.empsalary (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+

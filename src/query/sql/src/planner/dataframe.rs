@@ -41,6 +41,7 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
+use crate::planner::binder::OrderByRewriteFlags;
 use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
@@ -361,6 +362,7 @@ impl Dataframe {
             &mut self.bind_context,
             &mut select_info,
             &aliases,
+            &vec![OrderByRewriteFlags::no_rewrite(); order.len()],
             &order,
             distinct,
         )?;

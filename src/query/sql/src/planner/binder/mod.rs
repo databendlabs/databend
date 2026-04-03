@@ -93,6 +93,7 @@ pub use location::parse_uri_location;
 pub use project::SelectInfo;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
+pub(crate) use sort::OrderByRewriteFlags;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;
 pub use window::WindowFunctionInfo;
 pub use window::WindowOrderByInfo;
