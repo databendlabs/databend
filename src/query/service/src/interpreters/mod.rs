@@ -164,18 +164,6 @@ mod interpreter_table_unset_options;
 mod interpreter_table_vacuum;
 mod interpreter_tag_create;
 mod interpreter_tag_drop;
-#[cfg(feature = "task-support")]
-mod interpreter_task_alter;
-#[cfg(feature = "task-support")]
-mod interpreter_task_create;
-#[cfg(feature = "task-support")]
-mod interpreter_task_describe;
-#[cfg(feature = "task-support")]
-mod interpreter_task_drop;
-#[cfg(feature = "task-support")]
-mod interpreter_task_execute;
-#[cfg(feature = "task-support")]
-mod interpreter_tasks_show;
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
 mod interpreter_txn_commit;
@@ -203,6 +191,8 @@ mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
 mod interpreter_virtual_column_vacuum;
+#[cfg(feature = "task-support")]
+pub(crate) mod task;
 mod util;
 
 pub use access::ManagementModeAccess;

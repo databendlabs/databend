@@ -15,15 +15,9 @@
 #![feature(box_patterns)]
 
 #[cfg(feature = "script-udf")]
-mod runtime_pool;
-#[cfg(feature = "script-udf")]
-mod transform_udf_script;
+mod script_udf;
 #[cfg(not(feature = "script-udf"))]
-mod transform_udf_script_stub;
-#[cfg(feature = "script-udf")]
-mod udaf_script;
-#[cfg(not(feature = "script-udf"))]
-mod udaf_script_stub;
+mod script_udf_stub;
 
 use std::collections::BTreeMap;
 
@@ -45,10 +39,10 @@ pub struct ScriptUdfFunctionDesc {
 }
 
 #[cfg(feature = "script-udf")]
-pub use transform_udf_script::TransformUdfScript;
-#[cfg(not(feature = "script-udf"))]
-pub use transform_udf_script_stub::TransformUdfScript;
+pub use script_udf::TransformUdfScript;
 #[cfg(feature = "script-udf")]
-pub use udaf_script::create_udaf_script_function;
+pub use script_udf::create_udaf_script_function;
 #[cfg(not(feature = "script-udf"))]
-pub use udaf_script_stub::create_udaf_script_function;
+pub use script_udf_stub::TransformUdfScript;
+#[cfg(not(feature = "script-udf"))]
+pub use script_udf_stub::create_udaf_script_function;

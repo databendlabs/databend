@@ -49,8 +49,8 @@ use databend_common_functions::aggregates::StateAddr;
 use databend_common_sql::plans::UDFLanguage;
 use databend_common_sql::plans::UDFScriptCode;
 
-use crate::runtime_pool::Pool;
-use crate::runtime_pool::RuntimeBuilder;
+use super::runtime_pool::Pool;
+use super::runtime_pool::RuntimeBuilder;
 
 pub struct AggregateUdfScript {
     display_name: String,
