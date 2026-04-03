@@ -48,6 +48,7 @@ use super::others::UdfEchoTable;
 use crate::storages::fuse::table_functions::ClusteringInformationFunc;
 use crate::storages::fuse::table_functions::FuseSegmentFunc;
 use crate::storages::fuse::table_functions::FuseSnapshotFunc;
+use crate::storages::fuse::table_functions::FuseTagFunc;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::cloud::TaskDependentsEnableTable;
@@ -138,6 +139,14 @@ impl TableFunctionFactory {
             (
                 next_id(),
                 Arc::new(TableFunctionTemplate::<FuseSnapshotFunc>::create),
+            ),
+        );
+
+        creators.insert(
+            "fuse_tag".to_string(),
+            (
+                next_id(),
+                Arc::new(TableFunctionTemplate::<FuseTagFunc>::create),
             ),
         );
 
