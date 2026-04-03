@@ -309,8 +309,15 @@ impl Binder {
             false,
             None,
         );
-        let (s_expr, mut bind_context) =
-            self.bind_base_table(bind_context, "system", table_index, None, sample, true)?;
+        let (s_expr, mut bind_context) = self.bind_base_table(
+            bind_context,
+            "system",
+            table_index,
+            None,
+            sample,
+            true,
+            false,
+        )?;
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
@@ -371,8 +378,15 @@ impl Binder {
                 None,
             );
 
-            let (s_expr, mut bind_context) =
-                self.bind_base_table(bind_context, "system", table_index, None, &None, true)?;
+            let (s_expr, mut bind_context) = self.bind_base_table(
+                bind_context,
+                "system",
+                table_index,
+                None,
+                &None,
+                true,
+                false,
+            )?;
             if let Some(alias) = alias {
                 bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
             }

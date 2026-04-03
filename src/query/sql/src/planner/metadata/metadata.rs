@@ -36,6 +36,7 @@ use databend_common_expression::types::DataType;
 use jsonb::keypath::OwnedKeyPaths;
 use parking_lot::RwLock;
 
+use crate::optimizer::AggIndexViewInfo;
 use crate::optimizer::ir::SExpr;
 
 /// Planner use [`usize`] as it's index type.
@@ -75,7 +76,7 @@ pub struct Metadata {
     non_lazy_columns: ColumnSet,
     /// Mappings from table index to _row_id column index.
     table_row_id_index: HashMap<IndexType, Symbol>,
-    agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
+    agg_indices: HashMap<IndexType, Vec<AggIndexPlan>>,
     max_column_position: usize, // for CSV
 
     /// Scan id of each scan operator.
@@ -86,6 +87,15 @@ pub struct Metadata {
     next_logical_recursive_cte_id: u32,
 }
 
+#[derive(Clone, Debug)]
+pub struct AggIndexPlan {
+    pub index_id: u64,
+    pub sql: String,
+    pub metadata: MetadataRef,
+    pub s_expr: SExpr,
+    pub prepared: Arc<AggIndexViewInfo>,
+}
+
 impl Metadata {
     fn next_column_index(&self) -> Symbol {
         Symbol::new(self.columns.len())
@@ -93,6 +103,12 @@ impl Metadata {
 
     pub fn table(&self, index: IndexType) -> &TableEntry {
         self.tables.get(index).expect("metadata must contain table")
+    }
+
+    pub fn set_table_source_of_index(&mut self, index: IndexType, source_of_index: bool) {
+        if let Some(table) = self.tables.get_mut(index) {
+            table.source_of_index = source_of_index;
+        }
     }
 
     pub fn tables(&self) -> &[TableEntry] {
@@ -333,8 +349,8 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indices(&mut self, table: String, agg_indices: Vec<(u64, String, SExpr)>) {
-        match self.agg_indices.entry(table) {
+    pub fn add_agg_indices(&mut self, table_index: IndexType, agg_indices: Vec<AggIndexPlan>) {
+        match self.agg_indices.entry(table_index) {
             Entry::Occupied(occupied) => occupied.into_mut().extend(agg_indices),
             Entry::Vacant(vacant) => {
                 vacant.insert(agg_indices);
@@ -342,16 +358,16 @@ impl Metadata {
         }
     }
 
-    pub fn agg_indices(&self) -> &HashMap<String, Vec<(u64, String, SExpr)>> {
+    pub fn agg_indices(&self) -> &HashMap<IndexType, Vec<AggIndexPlan>> {
         &self.agg_indices
     }
 
-    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>) {
+    pub fn replace_agg_indices(&mut self, agg_indices: HashMap<IndexType, Vec<AggIndexPlan>>) {
         self.agg_indices = agg_indices
     }
 
-    pub fn get_agg_indices(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
-        self.agg_indices.get(table).map(|v| v.as_slice())
+    pub fn get_agg_indices(&self, table_index: IndexType) -> Option<&[AggIndexPlan]> {
+        self.agg_indices.get(&table_index).map(|v| v.as_slice())
     }
 
     pub fn has_agg_indices(&self) -> bool {

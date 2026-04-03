@@ -14,7 +14,9 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateIndexStmt;
@@ -38,6 +40,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
@@ -46,15 +49,27 @@ use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
+use crate::ColumnEntry;
+use crate::Metadata;
 use crate::MetadataRef;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
+use crate::Symbol;
+use crate::TableEntry;
+use crate::Visibility;
 use crate::binder::Binder;
+use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::build_agg_index_plan_for_table;
+use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::SExprVisitor;
+use crate::optimizer::ir::VisitAction;
 use crate::optimizer::optimize;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
@@ -63,6 +78,10 @@ use crate::plans::DropTableIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
+use crate::plans::RelOperator;
+use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
+use crate::plans::Scan;
 
 const MAXIMUM_BLOOM_SIZE: u64 = 10 * 1024 * 1024;
 const MINIMUM_BLOOM_SIZE: u64 = 512;
@@ -151,7 +170,6 @@ impl Binder {
         metadata: &MetadataRef,
     ) -> Result<()> {
         let catalog = self.ctx.get_current_catalog();
-        let database = self.ctx.get_current_database();
         let tables = metadata.read().tables().to_vec();
 
         for table_entry in tables {
@@ -171,31 +189,87 @@ impl Binder {
                     .resolve_table_indexes(&self.ctx.get_tenant(), catalog.as_str(), table.get_id())
                     .await?;
 
+                let child_metadata = Arc::new(RwLock::new(metadata.read().clone()));
+                child_metadata
+                    .write()
+                    .set_table_source_of_index(table_entry.index(), true);
                 let mut s_exprs = Vec::with_capacity(indexes.len());
                 for (index_id, _, index_meta) in indexes {
-                    let tokens = tokenize_sql(&index_meta.query)?;
-                    let (stmt, _) = parse_sql(&tokens, self.dialect)?;
-                    let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                    new_bind_context.planning_agg_index = true;
-                    if let Statement::Query(query) = &stmt {
-                        let (s_expr, _) = self.bind_query(&mut new_bind_context, query)?;
-                        s_exprs.push((index_id, index_meta.query.clone(), s_expr));
+                    if let Some(agg_index_plan) = self.bind_agg_index_query_locally(
+                        &index_meta,
+                        &table_entry,
+                        index_id,
+                        &child_metadata,
+                    )? {
+                        s_exprs.push(agg_index_plan);
                     }
                 }
                 agg_indexes.extend(s_exprs);
             }
 
             if !agg_indexes.is_empty() {
-                // Should use bound table id.
-                let table_name = table.name();
-                let full_table_name = format!("{catalog}.{database}.{table_name}");
                 metadata
                     .write()
-                    .add_agg_indices(full_table_name, agg_indexes);
+                    .add_agg_indices(table_entry.index(), agg_indexes);
             }
         }
 
         Ok(())
+    }
+
+    fn bind_agg_index_query_locally(
+        &self,
+        index_meta: &IndexMeta,
+        table_entry: &TableEntry,
+        index_id: u64,
+        child_metadata: &MetadataRef,
+    ) -> Result<Option<crate::AggIndexPlan>> {
+        let tokens = tokenize_sql(&index_meta.query)?;
+        let (stmt, _) = parse_sql(&tokens, self.dialect)?;
+        let Statement::Query(query) = &stmt else {
+            return Ok(None);
+        };
+
+        let index_metadata = Arc::new(RwLock::new(child_metadata.read().clone()));
+        let initial_table_count = index_metadata.read().tables().len();
+
+        let mut index_binder = Binder::new(
+            self.ctx.clone(),
+            self.catalogs.clone(),
+            self.name_resolution_ctx.clone(),
+            index_metadata,
+        )
+        .with_subquery_executor(self.subquery_executor.clone());
+        let mut index_bind_context = BindContext::new();
+        index_bind_context.planning_agg_index = true;
+        let (s_expr, _) = index_binder.bind_query(&mut index_bind_context, query)?;
+        if index_binder.metadata.read().tables().len() != initial_table_count {
+            return Err(ErrorCode::Internal(format!(
+                "aggregating index query introduced unexpected tables while binding `{}`",
+                index_meta.query
+            )));
+        }
+        let s_expr = normalize_agg_index_s_expr(
+            &index_binder.metadata,
+            table_entry.index(),
+            table_entry.database(),
+            table_entry.name(),
+            &s_expr,
+        )?;
+
+        let mut agg_index_plan = build_agg_index_plan_for_table(
+            self.ctx.clone(),
+            self.subquery_executor.clone(),
+            index_binder.metadata.clone(),
+            table_entry.index(),
+            index_id,
+            index_meta.query.clone(),
+            s_expr,
+        )?;
+        // Keep per-index binding isolated, but expose one canonical child metadata per table.
+        agg_index_plan.metadata = child_metadata.clone();
+
+        Ok(Some(agg_index_plan))
     }
 
     #[async_backtrace::framed]
@@ -371,18 +445,29 @@ impl Binder {
 
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
-            let select_plan = self.bind_statement(bind_context, &stmt).await?;
-            let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone())
+            let refresh_metadata = Arc::new(RwLock::new(Metadata::default()));
+            let mut refresh_binder = Binder::new(
+                self.ctx.clone(),
+                self.catalogs.clone(),
+                self.name_resolution_ctx.clone(),
+                refresh_metadata,
+            )
+            .with_subquery_executor(self.subquery_executor.clone());
+            let select_plan = refresh_binder.bind_statement(bind_context, &stmt).await?;
+            let opt_ctx = OptimizerContext::new(self.ctx.clone(), refresh_binder.metadata.clone())
                 .set_planning_agg_index(true)
                 .clone();
-            Ok(optimize(opt_ctx, select_plan).await?)
+            Ok((
+                optimize(opt_ctx, select_plan).await?,
+                refresh_binder.metadata.clone(),
+            ))
         } else {
             Err(ErrorCode::UnsupportedIndex("statement is not query"))
         };
-        let plan = plan?;
+        let (plan, refresh_metadata) = plan?;
         bind_context.planning_agg_index = false;
 
-        let tables = self.metadata.read().tables().to_vec();
+        let tables = refresh_metadata.read().tables().to_vec();
 
         if tables.len() != 1 {
             return Err(ErrorCode::UnsupportedIndex(
@@ -960,4 +1045,229 @@ impl Binder {
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
+}
+
+fn normalize_agg_index_s_expr(
+    metadata: &MetadataRef,
+    canonical_table_index: usize,
+    canonical_database_name: &str,
+    canonical_table_name: &str,
+    s_expr: &SExpr,
+) -> Result<SExpr> {
+    let actual_table_index = find_scan_table_index(s_expr)?;
+    let replacements = {
+        let metadata = metadata.read();
+        build_agg_index_column_replacements(
+            &metadata.columns_by_table_index(canonical_table_index),
+            &metadata.columns_by_table_index(actual_table_index),
+            canonical_table_index,
+            canonical_database_name,
+            canonical_table_name,
+        )?
+    };
+
+    let mut visitor = AggIndexSExprNormalizer {
+        actual_table_index,
+        canonical_table_index,
+        replacements: &replacements,
+    };
+    Ok(s_expr
+        .accept(&mut visitor)?
+        .unwrap_or_else(|| s_expr.clone()))
+}
+
+fn find_scan_table_index(s_expr: &SExpr) -> Result<usize> {
+    match s_expr.plan() {
+        RelOperator::Scan(scan) => Ok(scan.table_index),
+        _ => find_scan_table_index(s_expr.child(0)?),
+    }
+}
+
+fn build_agg_index_column_replacements(
+    canonical_columns: &[ColumnEntry],
+    actual_columns: &[ColumnEntry],
+    canonical_table_index: usize,
+    canonical_database_name: &str,
+    canonical_table_name: &str,
+) -> Result<HashMap<Symbol, ColumnBinding>> {
+    let canonical_base_columns = canonical_columns
+        .iter()
+        .filter_map(|column| match column {
+            ColumnEntry::BaseTableColumn(base_column) => {
+                Some((base_column.column_name.clone(), base_column))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+
+    let mut replacements = HashMap::new();
+    for actual_column in actual_columns {
+        let ColumnEntry::BaseTableColumn(actual_base_column) = actual_column else {
+            continue;
+        };
+        let Some(canonical_base_column) =
+            canonical_base_columns.get(&actual_base_column.column_name)
+        else {
+            return Err(ErrorCode::Internal(format!(
+                "missing canonical column mapping for aggregating index column {}",
+                actual_base_column.column_name
+            )));
+        };
+
+        let column_binding = ColumnBindingBuilder::new(
+            canonical_base_column.column_name.clone(),
+            canonical_base_column.column_index,
+            Box::new(DataType::from(&canonical_base_column.data_type)),
+            Visibility::Visible,
+        )
+        .database_name(Some(canonical_database_name.to_string()))
+        .table_name(Some(canonical_table_name.to_string()))
+        .table_index(Some(canonical_table_index))
+        .column_position(canonical_base_column.column_position)
+        .virtual_expr(canonical_base_column.virtual_expr.clone())
+        .build();
+
+        replacements.insert(actual_base_column.column_index, column_binding);
+    }
+
+    Ok(replacements)
+}
+
+struct AggIndexSExprNormalizer<'a> {
+    actual_table_index: usize,
+    canonical_table_index: usize,
+    replacements: &'a HashMap<Symbol, ColumnBinding>,
+}
+
+impl SExprVisitor for AggIndexSExprNormalizer<'_> {
+    fn visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+        if let RelOperator::Scan(scan) = expr.plan() {
+            if scan.table_index != self.actual_table_index {
+                return Err(ErrorCode::Internal(format!(
+                    "unexpected aggregating index scan table index {}, expected {}",
+                    scan.table_index, self.actual_table_index
+                )));
+            }
+            return Ok(VisitAction::SkipChildren);
+        }
+        Ok(VisitAction::Continue)
+    }
+
+    fn post_visit(&mut self, expr: &SExpr) -> Result<VisitAction> {
+        let plan = match expr.plan().clone() {
+            RelOperator::EvalScalar(mut eval) => {
+                normalize_scalar_items(&mut eval.items, self.replacements)?;
+                RelOperator::EvalScalar(eval)
+            }
+            RelOperator::Aggregate(mut agg) => {
+                normalize_scalar_items(&mut agg.group_items, self.replacements)?;
+                normalize_scalar_items(&mut agg.aggregate_functions, self.replacements)?;
+                if let Some((items, _)) = &mut agg.rank_limit {
+                    for item in items {
+                        replace_sort_item(item, self.replacements);
+                    }
+                }
+                RelOperator::Aggregate(agg)
+            }
+            RelOperator::Filter(mut filter) => {
+                normalize_scalars(&mut filter.predicates, self.replacements)?;
+                RelOperator::Filter(filter)
+            }
+            RelOperator::Sort(mut sort) => {
+                for (old, new_column) in self.replacements {
+                    sort.replace_column(*old, new_column.index);
+                }
+                RelOperator::Sort(sort)
+            }
+            RelOperator::Scan(mut scan) => {
+                normalize_scan(&mut scan, self.canonical_table_index, self.replacements)?;
+                RelOperator::Scan(scan)
+            }
+            _ => return Ok(VisitAction::Continue),
+        };
+
+        Ok(VisitAction::Replace(expr.replace_plan(plan)))
+    }
+}
+
+fn normalize_scalar_items(
+    items: &mut [ScalarItem],
+    replacements: &HashMap<Symbol, ColumnBinding>,
+) -> Result<()> {
+    for item in items {
+        normalize_scalar(&mut item.scalar, replacements)?;
+        if let Some(new_column) = replacements.get(&item.index) {
+            item.index = new_column.index;
+        }
+    }
+    Ok(())
+}
+
+fn normalize_scalars(
+    scalars: &mut [ScalarExpr],
+    replacements: &HashMap<Symbol, ColumnBinding>,
+) -> Result<()> {
+    for scalar in scalars {
+        normalize_scalar(scalar, replacements)?;
+    }
+    Ok(())
+}
+
+fn normalize_scalar(
+    scalar: &mut ScalarExpr,
+    replacements: &HashMap<Symbol, ColumnBinding>,
+) -> Result<()> {
+    for (old, new_column) in replacements {
+        scalar.replace_column_binding(*old, new_column)?;
+    }
+    Ok(())
+}
+
+fn normalize_scan(
+    scan: &mut Scan,
+    canonical_table_index: usize,
+    replacements: &HashMap<Symbol, ColumnBinding>,
+) -> Result<()> {
+    scan.table_index = canonical_table_index;
+    scan.columns = replace_column_set(&scan.columns, replacements);
+    scan.statistics = Default::default();
+
+    if let Some(predicates) = &mut scan.push_down_predicates {
+        normalize_scalars(predicates, replacements)?;
+    }
+    if let Some(order_by) = &mut scan.order_by {
+        for item in order_by {
+            replace_sort_item(item, replacements);
+        }
+    }
+    if let Some(prewhere) = &mut scan.prewhere {
+        prewhere.output_columns = replace_column_set(&prewhere.output_columns, replacements);
+        prewhere.prewhere_columns = replace_column_set(&prewhere.prewhere_columns, replacements);
+        normalize_scalars(&mut prewhere.predicates, replacements)?;
+    }
+    Ok(())
+}
+
+fn replace_sort_item(
+    item: &mut crate::plans::SortItem,
+    replacements: &HashMap<Symbol, ColumnBinding>,
+) {
+    if let Some(new_column) = replacements.get(&item.index) {
+        item.index = new_column.index;
+    }
+}
+
+fn replace_column_set(
+    columns: &crate::ColumnSet,
+    replacements: &HashMap<Symbol, ColumnBinding>,
+) -> crate::ColumnSet {
+    columns
+        .iter()
+        .map(|column| {
+            replacements
+                .get(column)
+                .map(|new_column| new_column.index)
+                .unwrap_or(*column)
+        })
+        .collect()
 }

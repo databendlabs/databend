@@ -24,6 +24,7 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::BindContext;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::OptimizerContext;
+use databend_common_sql::optimizer::build_agg_index_plan_for_table;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::optimizers::recursive::RecursiveRuleOptimizer;
 use databend_common_sql::optimizer::optimizers::rule::DEFAULT_REWRITE_RULES;
@@ -227,6 +228,13 @@ fn get_test_suites() -> Vec<TestSuite> {
             index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec![],
         },
+        TestSuite {
+            query: "select avg(a) from t",
+            index: "select count(), count(a), sum(a), sum(b) from t",
+            is_matched: true,
+            index_selection: vec!["index_col_2 (#2)", "index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
         // query: eval-agg-eval-filter-scan, index: eval-agg-eval-scan
         TestSuite {
             query: "select sum(a) + 1 from t where b > 1 group by b",
@@ -378,18 +386,32 @@ async fn test_query_rewrite_impl(format: &str) -> Result<()> {
     let test_suites = get_test_suites();
     for suite in test_suites.into_iter() {
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
-        let (mut query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
+        let (mut query, _, metadata_ref) = plan_sql(ctx.clone(), suite.query, true).await?;
+        let table_index = {
+            let metadata = metadata_ref.read();
+            metadata
+                .tables()
+                .iter()
+                .find(|table| table.name() == "t")
+                .map(|table| table.index())
+                .expect("query metadata should contain table t")
+        };
+        let agg_index_plan = build_agg_index_plan_for_table(
+            ctx.clone(),
+            None,
+            metadata_ref.clone(),
+            table_index,
+            0,
+            suite.index.to_string(),
+            index,
+        )?;
         {
-            let mut metadata = metadata.write();
-            metadata.add_agg_indices("default.default.t".to_string(), vec![(
-                0,
-                suite.index.to_string(),
-                index,
-            )]);
+            let mut metadata = metadata_ref.write();
+            metadata.add_agg_indices(table_index, vec![agg_index_plan]);
         }
         query.clear_applied_rules();
 
-        let opt_ctx = OptimizerContext::new(ctx.clone(), metadata.clone());
+        let opt_ctx = OptimizerContext::new(ctx.clone(), metadata_ref.clone());
         let result = RecursiveRuleOptimizer::new(opt_ctx.clone(), &[RuleID::TryApplyAggIndex])
             .optimize_sync(&query)?;
         let agg_index = find_push_down_index_info(&result)?;
