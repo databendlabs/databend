@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_catalog::table::NavigationDescriptor;
@@ -20,10 +21,11 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
 use databend_common_sql::binder::validate_constraints_by_schema;
-use databend_common_sql::binder::validate_table_indexes_compatible_with_schema;
+use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_meta_client::types::MatchSeq;
 
 use crate::FuseTable;
@@ -130,16 +132,25 @@ impl FuseTable {
         target_meta: &TableMeta,
     ) -> Result<()> {
         let target_schema = target_meta.schema.as_ref();
-        let column_ids = target_schema.to_column_ids();
+        let target_column_ids: HashSet<ColumnId> =
+            target_schema.to_column_ids().into_iter().collect();
+        let dropped_column_ids: HashSet<ColumnId> = self
+            .table_info
+            .meta
+            .schema
+            .to_column_ids()
+            .into_iter()
+            .filter(|id| !target_column_ids.contains(id))
+            .collect();
         let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let tenant = ctx.get_tenant();
 
-        validate_table_indexes_compatible_with_schema(
+        validate_table_indexes_not_referencing_columns(
             ctx.clone(),
             catalog.as_ref(),
             &tenant,
             self.get_id(),
-            target_schema,
+            &dropped_column_ids,
         )
         .await?;
 
@@ -156,7 +167,7 @@ impl FuseTable {
                 !index
                     .column_ids
                     .iter()
-                    .all(|column_id| column_ids.contains(column_id))
+                    .all(|column_id| target_column_ids.contains(column_id))
             })
             .map(|index| index.name.clone())
             .collect::<Vec<_>>();
@@ -172,11 +183,11 @@ impl FuseTable {
             .column_mask_policy_columns_ids
             .iter()
             .filter_map(|(column_id, policy_map)| {
-                let target_missing = !column_ids.contains(column_id);
+                let target_missing = !target_column_ids.contains(column_id);
                 let referenced_missing = policy_map
                     .columns_ids
                     .iter()
-                    .any(|id| !column_ids.contains(id));
+                    .any(|id| !target_column_ids.contains(id));
 
                 (target_missing || referenced_missing).then_some(*column_id)
             })
@@ -194,7 +205,7 @@ impl FuseTable {
             let missing_column_ids = policy_map
                 .columns_ids
                 .iter()
-                .filter(|id| !column_ids.contains(id))
+                .filter(|id| !target_column_ids.contains(id))
                 .copied()
                 .collect::<Vec<_>>();
             if !missing_column_ids.is_empty() {

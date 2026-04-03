@@ -42,7 +42,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableDataType;
-use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
@@ -1060,42 +1059,9 @@ async fn bind_index_source_columns(
     Ok(columns)
 }
 
-/// Validate that every index defined on the table only references columns that still exist in the
-/// supplied schema. Use this when the operation changes the visible table schema, such as
-/// flashback/revert or dropping a column.
-pub async fn validate_table_indexes_compatible_with_schema(
-    ctx: Arc<dyn TableContext>,
-    catalog: &dyn Catalog,
-    tenant: &Tenant,
-    table_id: u64,
-    schema: &TableSchema,
-) -> Result<()> {
-    let target_columns = schema.to_column_ids().into_iter().collect::<HashSet<_>>();
-
-    let indexes = catalog
-        .list_indexes_by_table_id(ListIndexesByIdReq::new(tenant.clone(), table_id))
-        .await?;
-
-    for (_, index_name, index_meta) in &indexes {
-        for (column_id, column_name) in
-            bind_index_source_columns(ctx.clone(), &index_meta.query, table_id).await?
-        {
-            if !target_columns.contains(&column_id) {
-                return Err(ErrorCode::IllegalReference(format!(
-                    "{} index '{}' references column '{}' \
-                        that does not exist in the target schema. \
-                        Please DROP the index before proceeding.",
-                    index_meta.index_type, index_name, column_name
-                )));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Validate that table indexes do not reference any column from the supplied set. Use this for
-/// operations such as MODIFY COLUMN where we conservatively reject changes to columns that are
-/// still referenced by aggregating indexes.
+/// Validate that table indexes do not reference any column from the supplied set.
+/// Use this for any operation that invalidates columns: flashback/revert, DROP COLUMN,
+/// MODIFY COLUMN, etc. Callers pass the set of column IDs being removed or modified.
 pub async fn validate_table_indexes_not_referencing_columns(
     ctx: Arc<dyn TableContext>,
     catalog: &dyn Catalog,
@@ -1103,6 +1069,10 @@ pub async fn validate_table_indexes_not_referencing_columns(
     table_id: u64,
     columns: &HashSet<ColumnId>,
 ) -> Result<()> {
+    if columns.is_empty() {
+        return Ok(());
+    }
+
     let indexes = catalog
         .list_indexes_by_table_id(ListIndexesByIdReq::new(tenant.clone(), table_id))
         .await?;
@@ -1113,8 +1083,8 @@ pub async fn validate_table_indexes_not_referencing_columns(
         {
             if columns.contains(&column_id) {
                 return Err(ErrorCode::IllegalReference(format!(
-                    "{} index '{}' references column '{}' which is not allowed for this operation. \
-                             Please DROP the index before proceeding.",
+                    "{} index '{}' references column '{}'. \
+                     Please DROP the index before proceeding.",
                     index_meta.index_type, index_name, column_name
                 )));
             }

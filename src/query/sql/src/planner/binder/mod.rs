@@ -84,7 +84,6 @@ pub use copy_into_table::resolve_stage_locations;
 pub use databend_common_expression::DummyColumnType;
 pub use ddl::database::DEFAULT_STORAGE_CONNECTION;
 pub use ddl::database::DEFAULT_STORAGE_PATH;
-pub use ddl::index::validate_table_indexes_compatible_with_schema;
 pub use ddl::index::validate_table_indexes_not_referencing_columns;
 pub use ddl::table::verify_external_location_privileges;
 pub use default_expr::DefaultExprBinder;
