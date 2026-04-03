@@ -35,8 +35,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::UDFDefinition;
-use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_users::UserApiProvider;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
@@ -1110,7 +1110,7 @@ impl ContainsSubqueryVisitor {
     }
 }
 
-#[derive(Default, Visitor)]
+#[derive(Visitor)]
 #[visitor(Expr(enter))]
 struct ContainsAggregateVisitor {
     name_resolution_ctx: crate::NameResolutionContext,
@@ -1170,10 +1170,16 @@ impl<'a> AggregatePrepassFunctionNameCollector<'a> {
             return;
         }
 
-        if let Expr::FunctionCall { func, .. } = expr {
-            self.names
-                .insert(normalize_identifier(&func.name, self.name_resolution_ctx).name);
+        let Expr::FunctionCall { func, .. } = expr else {
+            return;
+        };
+
+        if func.window.is_some() {
+            return;
         }
+
+        self.names
+            .insert(normalize_identifier(&func.name, self.name_resolution_ctx).name);
     }
 
     fn enter_query(&mut self, _query: &Query) {
@@ -1447,36 +1453,14 @@ impl Binder {
         Ok(())
     }
 
-    fn lookup_aggregate_prepass_udf(
+    // The AST prepass must decide whether a function call can behave like an
+    // aggregate before scalar binding rewrites it. Built-in functions are
+    // answered locally, while unknown names probe the UDF cache lazily and
+    // memoize whether they are UDAFs.
+    pub(super) fn build_aggregate_prepass_function_catalog(
         &self,
         bind_context: &BindContext,
-        udf_name: &str,
-    ) -> Result<Option<UserDefinedFunction>> {
-        if let Some(udf) = bind_context.udf_cache.read().get(udf_name).cloned() {
-            return Ok(udf);
-        }
-
-        let tenant = self.ctx.get_tenant();
-        let provider = UserApiProvider::instance();
-        let udf = block_on(provider.get_udf(&tenant, udf_name))?;
-        bind_context
-            .udf_cache
-            .write()
-            .insert(udf_name.to_string(), udf.clone());
-        Ok(udf)
-    }
-
-    // The AST prepass must decide which fragments should be registered as
-    // aggregate candidates before scalar binding rewrites them. Built-in
-    // aggregates can be recognized syntactically, but UDAFs need a catalog
-    // lookup first. We prime a small read-only function catalog from the
-    // SELECT aliases and later clauses that participate in prepass so the
-    // scanner can treat UDAFs and built-in aggregates uniformly, without
-    // binding the full expressions yet.
-    pub(super) fn build_aggregate_prepass_function_catalog<'a>(
-        &self,
-        bind_context: &BindContext,
-        select_list: &'a SelectList<'a>,
+        select_list: &SelectList<'_>,
         having: Option<&Expr>,
         qualify: Option<&Expr>,
         order_by: &[databend_common_ast::ast::OrderByExpr],
@@ -1498,22 +1482,36 @@ impl Binder {
             order.expr.drive(&mut visitor);
         }
 
-        let mut functions = AggregatePrepassFunctionCatalog::default();
+        let mut udaf_names = HashSet::new();
+        let tenant = self.ctx.get_tenant();
+        let provider = UserApiProvider::instance();
         for name in visitor.names {
             if AggregateFunctionFactory::instance().contains(name.as_str())
                 || name.eq_ignore_ascii_case("grouping")
+                || is_builtin_function(&name)
             {
                 continue;
             }
 
-            if let Some(udf) = self.lookup_aggregate_prepass_udf(bind_context, &name)?
+            let udf = if let Some(udf) = bind_context.udf_cache.read().get(&name).cloned() {
+                udf
+            } else {
+                let udf = block_on(provider.get_udf(&tenant, &name))?;
+                bind_context
+                    .udf_cache
+                    .write()
+                    .insert(name.clone(), udf.clone());
+                udf
+            };
+
+            if let Some(udf) = udf
                 && matches!(udf.definition, UDFDefinition::UDAFScript(_))
             {
-                functions.udaf_names.insert(name);
+                udaf_names.insert(name);
             }
         }
 
-        Ok(functions)
+        Ok(AggregatePrepassFunctionCatalog { udaf_names })
     }
 
     pub(super) fn aggregate_prepass_contains_subquery(expr: &Expr) -> bool {
