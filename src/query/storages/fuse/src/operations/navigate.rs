@@ -33,7 +33,6 @@ use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
-use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
@@ -575,12 +574,7 @@ impl FuseTable {
         check_table_ref_access(ctx.as_ref())?;
         // Tags are only stored on the base table. Reject tag navigation on branches
         // to avoid confusing "Unknown TAG" errors.
-        if self
-            .table_info
-            .meta
-            .options
-            .contains_key(OPT_KEY_BASE_TABLE_ID)
-        {
+        if self.is_table_branch() {
             return Err(ErrorCode::Unimplemented(
                 "tag navigation is not supported on table branches",
             ));

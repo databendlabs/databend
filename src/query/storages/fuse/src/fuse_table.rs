@@ -93,6 +93,7 @@ use databend_storages_common_table_meta::meta::parse_storage_prefix;
 use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
@@ -841,6 +842,13 @@ impl FuseTable {
         new_table.table_info.meta.schema = schema;
         Arc::new(new_table)
     }
+
+    pub fn is_table_branch(&self) -> bool {
+        self.table_info
+            .meta
+            .options
+            .contains_key(OPT_KEY_BASE_TABLE_ID)
+    }
 }
 
 #[async_trait::async_trait]
@@ -990,6 +998,10 @@ impl Table for FuseTable {
         num_snapshot_limit: Option<usize>,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
+        if self.is_table_branch() {
+            return Ok(None);
+        }
+
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table

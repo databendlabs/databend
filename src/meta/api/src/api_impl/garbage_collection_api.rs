@@ -170,6 +170,9 @@ where
                 let Some(seq_dropped) = seq else {
                     return Ok(num_removed_copied_files);
                 };
+                if seq_dropped.data.drop_on >= req.retention_boundary {
+                    return Ok(num_removed_copied_files);
+                }
                 seq_dropped
             };
             txn.condition
