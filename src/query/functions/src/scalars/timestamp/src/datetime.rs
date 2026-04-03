@@ -32,7 +32,6 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::error_to_null;
 use databend_common_expression::serialize::EPOCH_DAYS_FROM_CE;
-use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::Bitmap;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
@@ -58,7 +57,6 @@ use databend_common_expression::types::number::UInt16Type;
 use databend_common_expression::types::number::UInt32Type;
 use databend_common_expression::types::number::UInt64Type;
 use databend_common_expression::types::string::StringDomain;
-use databend_common_expression::types::timestamp::MICROS_PER_MILLI;
 use databend_common_expression::types::timestamp::MICROS_PER_SEC;
 use databend_common_expression::types::timestamp::TIMESTAMP_MAX;
 use databend_common_expression::types::timestamp::TIMESTAMP_MIN;
@@ -66,7 +64,13 @@ use databend_common_expression::types::timestamp::clamp_timestamp;
 use databend_common_expression::types::timestamp::string_to_timestamp;
 use databend_common_expression::types::timestamp::timestamp_to_string;
 use databend_common_expression::types::timestamp_tz::TimestampTzType;
-use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
+use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
+use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
+use databend_common_expression::utils::auto_detect_datetime::calc_int64_to_timestamp_domain;
+use databend_common_expression::utils::auto_detect_datetime::fast_timestamp_from_tm;
+use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
+use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
+use databend_common_expression::utils::auto_detect_datetime::parse_timestamp_tz_with_auto;
 use databend_common_expression::utils::date_helper::*;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_4_arg;
@@ -74,7 +78,6 @@ use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::vectorize_with_builder_4_arg;
 use databend_common_timezone::fast_components_from_timestamp;
-use databend_common_timezone::fast_utc_from_local;
 use dtparse::parse;
 use jiff::Timestamp;
 use jiff::Unit;
@@ -141,31 +144,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     register_convert_timezone(registry);
 }
 
-/// Check if timestamp is within range, and return the timestamp in micros.
-#[inline]
-pub fn int64_to_timestamp(mut n: i64) -> i64 {
-    if -31536000000 < n && n < 31536000000 {
-        n * MICROS_PER_SEC
-    } else if -31536000000000 < n && n < 31536000000000 {
-        n * MICROS_PER_MILLI
-    } else {
-        clamp_timestamp(&mut n);
-        n
-    }
-}
-
-/// calc int64 domain to timestamp domain
-#[inline]
-pub fn calc_int64_to_timestamp_domain(n: i64) -> i64 {
-    if -31536000000 < n && n < 31536000000 {
-        n * MICROS_PER_SEC
-    } else if -31536000000000 < n && n < 31536000000000 {
-        n * MICROS_PER_MILLI
-    } else {
-        n.clamp(TIMESTAMP_MIN, TIMESTAMP_MAX)
-    }
-}
-
 /// calc int32 domain to timestamp domain
 #[inline]
 pub fn calc_int32_to_timestamp_domain(n: i32) -> i64 {
@@ -189,183 +167,6 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
         min: calc_int64_to_timestamp_domain(domain.min.as_()),
         max: calc_int64_to_timestamp_domain(domain.max.as_()),
     })
-}
-
-// ---------------------------------------------------------------------------
-// AUTO datetime format detection
-// ---------------------------------------------------------------------------
-
-const AUTO_DATE_FORMATS: &[&str] = &["%d-%b-%Y", "%m/%d/%Y"];
-
-const AUTO_TS_FORMATS: &[&str] = &[
-    // DD-MON-YYYY
-    "%d-%b-%Y %H:%M:%S%.f",
-    "%d-%b-%Y %H:%M:%S",
-    "%d-%b-%Y",
-    // MM/DD/YYYY
-    "%m/%d/%Y %H:%M:%S%.f",
-    "%m/%d/%Y %H:%M:%S",
-    "%m/%d/%Y",
-    // RFC 2822 (24h)
-    "%a, %d %b %Y %H:%M:%S%.f %z",
-    "%a, %d %b %Y %H:%M:%S %z",
-    "%a, %d %b %Y %H:%M:%S%.f",
-    "%a, %d %b %Y %H:%M:%S",
-    // RFC 2822 (12h)
-    "%a, %d %b %Y %I:%M:%S%.f %p %z",
-    "%a, %d %b %Y %I:%M:%S %p %z",
-    "%a, %d %b %Y %I:%M:%S%.f %p",
-    "%a, %d %b %Y %I:%M:%S %p",
-    // Unix date
-    "%a %b %d %H:%M:%S %z %Y",
-];
-
-/// Try to parse a string as an epoch number and convert to microseconds.
-/// Reuses the same rules as `int64_to_timestamp` / `to_timestamp(number)`.
-pub fn parse_epoch_str(val: &str) -> Option<i64> {
-    let n: i64 = val.parse().ok()?;
-    Some(int64_to_timestamp(n))
-}
-
-/// Core format-matching loop: tries each format, returns `(micros, offset_seconds)`.
-fn try_parse_formats(val: &str, tz: &TimeZone, formats: &[&str]) -> Option<(i64, i32)> {
-    for fmt in formats {
-        let (tm, consumed) = match BrokenDownTime::parse_prefix(fmt, val) {
-            Ok(pair) => pair,
-            Err(_) => continue,
-        };
-        if consumed != val.len() {
-            continue;
-        }
-        match tm.offset() {
-            Some(_) => {
-                let zoned = match tm.to_zoned() {
-                    Ok(z) => z,
-                    Err(_) => continue,
-                };
-                return Some((zoned.timestamp().as_microsecond(), zoned.offset().seconds()));
-            }
-            None => {
-                // Use fast_utc_from_local (which picks the "later" instant in
-                // DST folds) so that AUTO formats resolve identically to the
-                // ISO path that goes through string_to_timestamp.
-                let micros = match fast_timestamp_from_tm(&tm, tz) {
-                    Some(m) => m,
-                    None => continue,
-                };
-                let ts = match Timestamp::from_microsecond(micros) {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let zoned = ts.to_zoned(tz.clone());
-                return Some((micros, zoned.offset().seconds()));
-            }
-        }
-    }
-    None
-}
-
-pub fn auto_detect_timestamp(val: &str, tz: &TimeZone) -> Option<i64> {
-    let (mut micros, _) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
-    clamp_timestamp(&mut micros);
-    Some(micros)
-}
-
-pub fn auto_detect_date(val: &str) -> Option<i32> {
-    for fmt in AUTO_DATE_FORMATS {
-        let (tm, consumed) = match BrokenDownTime::parse_prefix(fmt, val) {
-            Ok(pair) => pair,
-            Err(_) => continue,
-        };
-        if consumed != val.len() {
-            continue;
-        }
-        let dt = match tm.to_datetime() {
-            Ok(dt) => dt,
-            Err(_) => continue,
-        };
-        return Some(clamp_date(uniform_date(dt.date()) as i64));
-    }
-    None
-}
-
-pub fn auto_detect_timestamp_tz(val: &str, tz: &TimeZone) -> Option<timestamp_tz> {
-    let (mut micros, offset) = try_parse_formats(val, tz, AUTO_TS_FORMATS)?;
-    clamp_timestamp(&mut micros);
-    Some(timestamp_tz::new(micros, offset))
-}
-
-/// Parse a date string with optional auto-detect fallback.
-/// Chain: ISO -> numeric-day -> auto (no dtparse).
-#[allow(clippy::result_large_err)]
-pub fn parse_date_with_auto(val: &str, tz: &TimeZone, enable_auto: bool) -> Result<i32, ErrorCode> {
-    match string_to_date(val, tz) {
-        Ok(d) => Ok(uniform_date(d)),
-        Err(e) => {
-            if enable_auto {
-                if let Ok(days) = val.parse::<i64>() {
-                    return Ok(clamp_date(days));
-                }
-                if let Some(days) = auto_detect_date(val) {
-                    return Ok(days);
-                }
-            }
-            Err(e)
-        }
-    }
-}
-
-/// Parse a timestamp string with optional auto-detect fallback.
-/// Chain: ISO -> epoch -> auto (no dtparse).
-#[allow(clippy::result_large_err)]
-pub fn parse_timestamp_with_auto(
-    val: &str,
-    tz: &TimeZone,
-    enable_auto: bool,
-) -> Result<i64, ErrorCode> {
-    match string_to_timestamp(val, tz) {
-        Ok(ts) => Ok(ts.timestamp().as_microsecond()),
-        Err(e) => {
-            if enable_auto {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
-                    return Ok(micros);
-                }
-                if let Some(micros) = auto_detect_timestamp(val, tz) {
-                    return Ok(micros);
-                }
-            }
-            Err(e)
-        }
-    }
-}
-
-/// Parse a timestamp_tz string with optional auto-detect fallback.
-/// Chain: ISO -> epoch -> auto (no dtparse).
-#[allow(clippy::result_large_err)]
-pub fn parse_timestamp_tz_with_auto(
-    val: &str,
-    tz: &TimeZone,
-    enable_auto: bool,
-) -> Result<timestamp_tz, ErrorCode> {
-    match string_to_timestamp_tz(val.as_bytes(), || tz) {
-        Ok(ts_tz) => Ok(ts_tz),
-        Err(e) => {
-            if enable_auto {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
-                    if let Ok(ts) = Timestamp::from_microsecond(micros) {
-                        let offset = tz.to_offset(ts).seconds();
-                        return Ok(timestamp_tz::new(micros, offset));
-                    }
-                }
-                if let Some(ts_tz) = auto_detect_timestamp_tz(val, tz) {
-                    return Ok(ts_tz);
-                }
-            }
-            Err(e)
-        }
-    }
 }
 
 fn timestamp_domain_to_timestamp_tz_domain(
@@ -468,6 +269,97 @@ fn register_convert_timezone(registry: &mut FunctionRegistry) {
     );
 }
 
+/// Parse a string to timestamp with full fallback chain:
+/// ISO -> epoch+auto -> dtparse.
+#[allow(clippy::result_large_err)]
+fn parse_string_to_timestamp(val: &str, func_ctx: &FunctionContext) -> Result<i64, ErrorCode> {
+    // Layer 1: ISO parse
+    let iso_err = match string_to_timestamp(val, &func_ctx.tz) {
+        Ok(ts) => return Ok(ts.timestamp().as_microsecond()),
+        Err(e) => e,
+    };
+    // Layer 2+3: Epoch detection + AUTO structured format detection
+    if func_ctx.enable_auto_detect_datetime_format {
+        if let Some(mut micros) = parse_epoch_str(val) {
+            clamp_timestamp(&mut micros);
+            return Ok(micros);
+        }
+        if let Some(micros) = auto_detect_timestamp(val, &func_ctx.tz) {
+            return Ok(micros);
+        }
+    }
+    // Layer 4: function-only dtparse fallback (not reused by VARIANT/COPY)
+    if !func_ctx.enable_strict_datetime_parser {
+        let dtparse_result = catch_unwind(|| {
+            parse(val)
+                .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                .and_then(|(naive_dt, offset)| {
+                    let naive_dt = match offset {
+                        Some(off) => format!("{}{}", naive_dt, off),
+                        None => naive_dt.to_string(),
+                    };
+                    string_to_timestamp(naive_dt, &func_ctx.tz)
+                })
+        })
+        .unwrap_or_else(|_| {
+            Err(ErrorCode::BadArguments(format!(
+                "TIMESTAMP '{}' is not recognized.",
+                val
+            )))
+        });
+        match dtparse_result {
+            Ok(ts) => return Ok(ts.timestamp().as_microsecond()),
+            Err(e) => return Err(e),
+        }
+    }
+    Err(iso_err)
+}
+
+/// Parse a string to date with full fallback chain:
+/// ISO -> numeric-day+auto -> dtparse.
+#[allow(clippy::result_large_err)]
+fn parse_string_to_date(val: &str, func_ctx: &FunctionContext) -> Result<i32, ErrorCode> {
+    // Layer 1: ISO parse
+    let iso_err = match string_to_date(val, &func_ctx.tz) {
+        Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+            Ok(s) => return Ok(s.get_days()),
+            Err(e) => ErrorCode::BadArguments(format!("{}", e)),
+        },
+        Err(e) => e,
+    };
+    // Layer 2+3: Numeric day + AUTO structured format detection
+    if func_ctx.enable_auto_detect_datetime_format {
+        if let Ok(days) = val.parse::<i64>() {
+            return Ok(clamp_date(days));
+        }
+        if let Some(days) = auto_detect_date(val) {
+            return Ok(days);
+        }
+    }
+    // Layer 4: function-only dtparse fallback (not reused by VARIANT/COPY)
+    if !func_ctx.enable_strict_datetime_parser {
+        let dtparse_result = catch_unwind(|| {
+            parse(val)
+                .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
+                .and_then(|(naive_dt, _)| string_to_date(naive_dt.to_string(), &func_ctx.tz))
+        })
+        .unwrap_or_else(|_| {
+            Err(ErrorCode::BadArguments(format!(
+                "Date '{}' is not recognized.",
+                val
+            )))
+        });
+        match dtparse_result {
+            Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
+                Ok(s) => return Ok(s.get_days()),
+                Err(e) => return Err(ErrorCode::BadArguments(format!("{}", e))),
+            },
+            Err(e) => return Err(e),
+        }
+    }
+    Err(iso_err)
+}
+
 fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_date", &["str_to_date", "date"]);
     registry.register_aliases("to_year", &["str_to_year", "year"]);
@@ -531,59 +423,16 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<StringType, TimestampType>(|val, output, ctx| {
-            // Layer 1: ISO parse
-            let iso_err = match string_to_timestamp(val, &ctx.func_ctx.tz) {
-                Ok(ts) => {
-                    output.push(ts.timestamp().as_microsecond());
-                    return;
-                }
-                Err(e) => e,
-            };
-            // Layer 2+3: Epoch detection + AUTO structured format detection
-            if ctx.func_ctx.enable_auto_detect_datetime_format {
-                if let Some(mut micros) = parse_epoch_str(val) {
-                    clamp_timestamp(&mut micros);
-                    output.push(micros);
-                    return;
-                }
-                if let Some(micros) = auto_detect_timestamp(val, &ctx.func_ctx.tz) {
-                    output.push(micros);
-                    return;
+            match parse_string_to_timestamp(val, ctx.func_ctx) {
+                Ok(micros) => output.push(micros),
+                Err(e) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("cannot parse to type `TIMESTAMP`. {}", e),
+                    );
+                    output.push(0);
                 }
             }
-            // Layer 4: function-only dtparse fallback (not reused by VARIANT/COPY)
-            let mut last_err = iso_err;
-            if !ctx.func_ctx.enable_strict_datetime_parser {
-                let dtparse_result = catch_unwind(|| {
-                    parse(val)
-                        .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                        .and_then(|(naive_dt, offset)| {
-                            let naive_dt = match offset {
-                                Some(off) => format!("{}{}", naive_dt, off),
-                                None => naive_dt.to_string(),
-                            };
-                            string_to_timestamp(naive_dt, &ctx.func_ctx.tz)
-                        })
-                })
-                .unwrap_or_else(|_| {
-                    Err(ErrorCode::BadArguments(format!(
-                        "TIMESTAMP '{}' is not recognized.",
-                        val
-                    )))
-                });
-                match dtparse_result {
-                    Ok(ts) => {
-                        output.push(ts.timestamp().as_microsecond());
-                        return;
-                    }
-                    Err(e) => last_err = e,
-                }
-            }
-            ctx.set_error(
-                output.len(),
-                format!("cannot parse to type `TIMESTAMP`. {}", last_err),
-            );
-            output.push(0);
         })(val, ctx)
     }
 
@@ -840,18 +689,6 @@ fn needs_civil_date_synthesis(
     } else {
         false
     }
-}
-
-fn fast_timestamp_from_tm(tm: &BrokenDownTime, tz: &TimeZone) -> Option<i64> {
-    let year = i32::from(tm.year()?);
-    let month: u8 = tm.month()?.try_into().ok()?;
-    let day: u8 = tm.day()?.try_into().ok()?;
-    let hour: u8 = tm.hour().unwrap_or(0).try_into().ok()?;
-    let minute: u8 = tm.minute().unwrap_or(0).try_into().ok()?;
-    let second: u8 = tm.second().unwrap_or(0).try_into().ok()?;
-    let nanos = tm.subsec_nanosecond().unwrap_or(0);
-    let micro = (nanos / 1_000).max(0) as u32;
-    fast_utc_from_local(tz, year, month, day, hour, minute, second, micro)
 }
 
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
@@ -1123,67 +960,13 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 
     fn eval_string_to_date(val: Value<StringType>, ctx: &mut EvalContext) -> Value<DateType> {
         vectorize_with_builder_1_arg::<StringType, DateType>(|val, output, ctx| {
-            // Layer 1: ISO parse
-            let iso_err = match string_to_date(val, &ctx.func_ctx.tz) {
-                Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
-                    Ok(s) => {
-                        output.push(s.get_days());
-                        return;
-                    }
-                    Err(e) => ErrorCode::BadArguments(format!("{}", e)),
-                },
-                Err(e) => e,
-            };
-            // Layer 2+3: Numeric day + AUTO structured format detection
-            if ctx.func_ctx.enable_auto_detect_datetime_format {
-                if let Ok(days) = val.parse::<i64>() {
-                    output.push(clamp_date(days));
-                    return;
-                }
-                if let Some(days) = auto_detect_date(val) {
-                    output.push(days);
-                    return;
+            match parse_string_to_date(val, ctx.func_ctx) {
+                Ok(days) => output.push(days),
+                Err(e) => {
+                    ctx.set_error(output.len(), format!("cannot parse to type `DATE`. {}", e));
+                    output.push(0);
                 }
             }
-            // Layer 4: function-only dtparse fallback (not reused by VARIANT/COPY)
-            let mut last_err = iso_err;
-            if !ctx.func_ctx.enable_strict_datetime_parser {
-                let dtparse_result = catch_unwind(|| {
-                    parse(val)
-                        .map_err(|err| ErrorCode::BadArguments(format!("{err}")))
-                        .and_then(|(naive_dt, _)| {
-                            string_to_date(naive_dt.to_string(), &ctx.func_ctx.tz)
-                        })
-                })
-                .unwrap_or_else(|_| {
-                    Err(ErrorCode::BadArguments(format!(
-                        "Date '{}' is not recognized.",
-                        val
-                    )))
-                });
-                match dtparse_result {
-                    Ok(d) => match d.since((Unit::Day, date(1970, 1, 1))) {
-                        Ok(s) => {
-                            output.push(s.get_days());
-                            return;
-                        }
-                        Err(e) => {
-                            ctx.set_error(
-                                output.len(),
-                                format!("cannot parse to type `DATE`. {}", e),
-                            );
-                            output.push(0);
-                            return;
-                        }
-                    },
-                    Err(e) => last_err = e,
-                }
-            }
-            ctx.set_error(
-                output.len(),
-                format!("cannot parse to type `DATE`. {}", last_err),
-            );
-            output.push(0);
         })(val, ctx)
     }
 }
