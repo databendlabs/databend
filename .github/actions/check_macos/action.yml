@@ -7,6 +7,15 @@ runs:
       uses: mozilla-actions/sccache-action@v0.0.3
       continue-on-error: true
 
+    - name: Setup macOS check environment
+      shell: bash
+      run: |
+        brew unlink python || true
+        bash ./scripts/setup/dev_setup.sh -yb
+        rustup component add rustfmt clippy
+        brew install taplo typos-cli
+        python3 -m pip install --user --quiet yamllint
+
     - name: Probe sccache
       shell: bash
       run: |
@@ -30,15 +39,6 @@ runs:
 
         echo "ENABLE_SCCACHE=true" >> $GITHUB_ENV
         echo "sccache wrapper probe passed; enabling cache-backed rustc wrapper"
-
-    - name: Setup macOS check environment
-      shell: bash
-      run: |
-        brew unlink python || true
-        bash ./scripts/setup/dev_setup.sh -yb
-        rustup component add rustfmt clippy
-        brew install taplo typos-cli
-        python3 -m pip install --user --quiet yamllint
 
     - name: Setup build env
       shell: bash
