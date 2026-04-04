@@ -948,7 +948,7 @@ impl Binder {
         }
 
         self.ctx
-            .get_settings()
+            .get_shared_settings()
             .set_batch_settings(&hint_settings, true)
     }
 
@@ -1058,10 +1058,9 @@ impl Binder {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::AsyncFunctionCall(_)
-            )
+            ) || scalar.is_aggregate()
         };
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;
@@ -1073,11 +1072,10 @@ impl Binder {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AggregateFunction(_)
                     | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::AsyncFunctionCall(_)
-            )
+            ) || scalar.is_aggregate()
         };
         let mut finder = Finder::new(&f);
         finder.visit(scalar)?;

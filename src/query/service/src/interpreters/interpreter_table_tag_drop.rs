@@ -15,10 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::DropTableTagPlan;
-use databend_common_storages_fuse::TableContext;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
 
 use crate::interpreters::Interpreter;
@@ -48,9 +45,6 @@ impl Interpreter for DropTableTagInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        LicenseManagerSwitch::instance()
-            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::TableRef)?;
-
         let handler = get_table_ref_handler();
         handler
             .do_drop_table_tag(self.ctx.clone(), &self.plan)

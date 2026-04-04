@@ -1,0 +1,90 @@
+# name: test/sql/join/asof/test_asof_join_eq_hash_fast_path.test
+# description: Validate ASOF joins with equality keys still return correct rows
+# group: [asof]
+
+statement ok
+drop table if exists asof_eq_prices
+
+statement ok
+drop table if exists asof_eq_trades
+
+statement ok
+create table asof_eq_prices(
+    wh timestamp,
+    symbol int,
+    price int
+)
+
+statement ok
+insert into asof_eq_prices values
+    ('2020-01-01 00:00:00', 1, 10),
+    ('2020-01-01 00:00:05', 1, 11),
+    ('2020-01-01 00:00:02', 2, 20),
+    ('2020-01-01 00:00:06', 2, 21)
+
+statement ok
+create table asof_eq_trades(
+    id int,
+    wh timestamp,
+    symbol int
+)
+
+statement ok
+insert into asof_eq_trades values
+    (1, '2020-01-01 00:00:01', 1),
+    (2, '2020-01-01 00:00:03', 2),
+    (3, '2020-01-01 00:00:05', 2),
+    (4, '2020-01-01 00:00:06', 1),
+    (5, '2020-01-01 00:00:07', 3),
+    (6, '2019-12-31 23:59:59', 1)
+
+# Inner ASOF should keep only matching rows, choose the nearest predecessor,
+# and never cross the equality partition.
+query II
+select t.id, p.price
+from asof_eq_trades t
+asof join asof_eq_prices p
+    on t.symbol = p.symbol and t.wh >= p.wh
+order by t.id
+----
+1 10
+2 20
+3 20
+4 11
+
+# Left ASOF should preserve unmatched rows as NULL while keeping the same
+# nearest-predecessor semantics for matched rows.
+query II
+select t.id, p.price
+from asof_eq_trades t
+asof left join asof_eq_prices p
+    on t.symbol = p.symbol and t.wh >= p.wh
+order by t.id
+----
+1 10
+2 20
+3 20
+4 11
+5 NULL
+6 NULL
+
+# Right ASOF should preserve unmatched build-side rows from the original
+# `prices` table after the ASOF rewrite swaps the physical children.
+query II
+select p.price, t.id
+from asof_eq_trades t
+asof right join asof_eq_prices p
+    on t.symbol = p.symbol and t.wh >= p.wh
+order by p.price, t.id
+----
+10 1
+11 4
+20 2
+20 3
+21 NULL
+
+statement ok
+drop table asof_eq_trades
+
+statement ok
+drop table asof_eq_prices

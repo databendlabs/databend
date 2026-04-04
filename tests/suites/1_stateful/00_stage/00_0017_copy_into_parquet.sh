@@ -28,12 +28,11 @@ run_copy_count "copy /*+ set_var(max_threads=1) */ into @s1/ from (select * from
 # one file
 run_copy_count "copy /*+ set_var(max_threads=1) */ into @s1/ from (select * from numbers(${HEAVY_ROW_COUNT})) max_file_size=${SMALL_FILE_SIZE} detailed_output=true;"
 
-# one files, limit threads by memory
+# four files, limit threads by memory
 run_copy_count "copy /*+ set_var(max_threads=4) set_var(max_memory_usage=${MEMORY_LIMIT}) */ into @s1/ from (select * from numbers(${HEAVY_ROW_COUNT})) max_file_size=${SMALL_FILE_SIZE} detailed_output=true;"
 
 # two files, limit threads by memory
-# copy /*+ set_var(max_threads=4) set_var(max_memory_usage=256000000) */ not working in cluster mode
-run_copy_count "set max_threads=4; set max_memory_usage=${MEMORY_LIMIT_HEAVY}; copy /*+ set_var(max_threads=4) set_var(max_memory_usage=${MEMORY_LIMIT_HEAVY}) */ into @s1/ from (select * from numbers(${HEAVY_ROW_COUNT})) max_file_size=${SMALL_FILE_SIZE} detailed_output=true;"
+run_copy_count "copy /*+ set_var(max_threads=4) set_var(max_memory_usage=${MEMORY_LIMIT_HEAVY}) */ into @s1/ from (select * from numbers(${HEAVY_ROW_COUNT})) max_file_size=${SMALL_FILE_SIZE} detailed_output=true;"
 
 stmt "remove @s1;"
 

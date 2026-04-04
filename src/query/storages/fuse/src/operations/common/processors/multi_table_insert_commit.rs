@@ -87,6 +87,8 @@ impl CommitMultiTableInsert {
 impl AsyncSink for CommitMultiTableInsert {
     const NAME: &'static str = "CommitMultiTableInsert";
 
+    const CALL_ON_FINISH_ON_ERROR: bool = false;
+
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
         let mut update_table_metas = Vec::with_capacity(self.commit_metas.len());
@@ -277,6 +279,7 @@ async fn build_update_table_meta_req(
     let snapshot = snapshot_generator.generate_new_snapshot(
         table_info,
         fuse_table.cluster_key_meta(),
+        fuse_table.cluster_type(),
         previous,
         txn_mgr,
         table_meta_timestamps,

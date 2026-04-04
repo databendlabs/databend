@@ -604,7 +604,7 @@ pub struct CreateTableBranchPlan {
     pub database: String,
     pub table: String,
 
-    pub ref_name: String,
+    pub name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
 }
@@ -616,7 +616,7 @@ pub struct CreateTableTagPlan {
     pub database: String,
     pub table: String,
 
-    pub ref_name: String,
+    pub name: String,
     pub navigation: Option<NavigationPoint>,
     pub retain: Option<Duration>,
 }
@@ -627,7 +627,7 @@ pub struct DropTableBranchPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub branch_name: String,
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -636,5 +636,5 @@ pub struct DropTableTagPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub tag_name: String,
+    pub name: String,
 }

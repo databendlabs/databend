@@ -1,0 +1,74 @@
+=== positional ? params ===
+[
+  [
+    "42",
+    "hello",
+    "1"
+  ]
+]
+null
+=== named :name params ===
+[
+  [
+    "30",
+    "Alice"
+  ]
+]
+null
+=== null and bool params ===
+[
+  [
+    null,
+    "0"
+  ]
+]
+null
+=== insert with params ===
+null
+null
+[
+  [
+    "1",
+    "row1",
+    "1"
+  ],
+  [
+    "2",
+    "row2",
+    "0"
+  ]
+]
+null
+=== where clause with params ===
+[
+  [
+    "1",
+    "row1",
+    "1"
+  ]
+]
+null
+=== sql injection prevention ===
+[
+  [
+    "Robert'); DROP TABLE t_params_test;--"
+  ]
+]
+null
+[
+  [
+    "2"
+  ]
+]
+null
+=== backward compatibility (no params) ===
+[
+  [
+    "1"
+  ]
+]
+null
+=== error: not enough params ===
+1006
+=== error: missing named param ===
+1006

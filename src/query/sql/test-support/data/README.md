@@ -1,11 +1,16 @@
-# Optimizer Test Data
+# Optimizer Replay Data
 
-This directory contains test data for query optimizer tests. It is now the canonical shared data set for both test runners:
+This directory contains the shared replay data set for optimizer tests. It is the canonical source for the replay-style runners below:
 
 - `src/query/sql/tests/it/planner.rs` runs the lightweight SQL-side replay.
 - `src/query/service/tests/it/sql/planner/optimizer/optimizer_test.rs` runs the service-side replay, including physical plans.
 
-The tests are structured as follows:
+This directory does **not** store every SQL-side golden file. Module-local golden files for lightweight semantic or optimizer tests live next to their tests under `src/query/sql/tests/it/<layer>/`, for example:
+
+- `src/query/sql/tests/it/semantic/binder.txt`
+- `src/query/sql/tests/it/optimizer/eager_aggregation.txt`
+
+The shared replay data is structured as follows:
 
 ## Directory Structure
 
@@ -114,16 +119,16 @@ cargo test --package databend-common-sql --test it -- planner::test_lite_replay_
 TEST_SUBDIR=tpcds cargo test --package databend-query --test it -- sql::planner::optimizer::optimizer_test::test_optimizer --exact --nocapture
 ```
 
-## Generated Result Files
+## Generated Replay Result Files
 
-Each test case generates up to three result files in the corresponding subdirectory under `results/`:
+Each replay test case generates up to three result files in the corresponding subdirectory under `results/`:
 - `{test_name}_raw.txt` - The raw plan before optimization
 - `{test_name}_optimized.txt` - The optimized logical plan
 - `{test_name}_physical.txt` - The physical execution plan when the runner supports physical planning
 
-## Adding New Tests
+## Adding New Replay Tests
 
-To add a new test case:
+To add a new replay test case:
 
 1. Create a new YAML file in the appropriate subdirectory under `cases/` (e.g., `basic/`, `tpcds/`, or `obfuscated/`).
 2. If the test uses new tables, add the table definitions to the corresponding subdirectory under `tables/`.
@@ -131,10 +136,10 @@ To add a new test case:
 4. The test runner will automatically discover and run all test cases recursively in all subdirectories.
 5. Test results will be saved in a matching subdirectory structure under the main `results/` directory.
 
-## Updating Existing Tests
+## Updating Existing Replay Tests
 
-If the expected output of a test changes (e.g., due to optimizer improvements):
+If the expected output of a replay test changes:
 
 1. Run the test with `UPDATE_GOLDENFILES` environment variable to generate new result files.
-2. The new result files will be automatically saved in the correct subdirectory structure under the main `results/` directory.
+2. The new result files will be automatically saved in the matching subdirectory under `results/`.
 3. Review the changes to ensure they are as expected.

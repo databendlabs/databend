@@ -54,6 +54,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql_test_support::parse_raw_expr;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::FilterEvalResult;
 use databend_storages_common_index::Index;
 use databend_storages_common_index::NgramArgs;
@@ -571,8 +572,13 @@ fn eval_index_expr(
         like_scalar_map.entry(scalar).or_insert(digests);
     }
 
-    let mut builder =
-        BloomIndexBuilder::create(func_ctx.clone(), bloom_columns.clone(), ngram_args).unwrap();
+    let mut builder = BloomIndexBuilder::create(
+        func_ctx.clone(),
+        BloomIndexType::default(),
+        bloom_columns.clone(),
+        ngram_args,
+    )
+    .unwrap();
     builder.add_block(block).unwrap();
     let index = builder.finalize().unwrap().unwrap();
 

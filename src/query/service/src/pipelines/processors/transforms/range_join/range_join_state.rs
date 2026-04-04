@@ -22,6 +22,7 @@ use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
+use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::RemoteExpr;
@@ -66,6 +67,7 @@ pub struct RangeJoinState {
     // IEJoin state
     pub(crate) ie_join_state: Option<IEJoinState>,
     pub(crate) join_type: JoinType,
+    pub(crate) output_schema: DataSchemaRef,
     // A bool indicating for tuple in the LHS if they found a match (used in full outer join)
     pub(crate) left_match: RwLock<MutableBitmap>,
     // A bool indicating for tuple in the RHS if they found a match (used in full outer join)
@@ -99,6 +101,7 @@ impl RangeJoinState {
             completed_pair: AtomicU64::new(0),
             ie_join_state,
             join_type: range_join.join_type,
+            output_schema: range_join.output_schema.clone(),
             left_match: RwLock::new(MutableBitmap::new()),
             right_match: RwLock::new(MutableBitmap::new()),
             partition_count: AtomicU64::new(0),
@@ -331,6 +334,78 @@ impl RangeJoinState {
                 right_match.extend_constant(right_block.num_rows(), false);
             }
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::sync::atomic::AtomicU64;
+
+    use databend_common_column::bitmap::MutableBitmap;
+    use databend_common_expression::DataBlock;
+    use databend_common_expression::DataField;
+    use databend_common_expression::DataSchemaRefExt;
+    use databend_common_expression::FromData;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::number::Int32Type;
+    use databend_common_expression::types::number::NumberDataType;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_common_sql::plans::JoinType;
+
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_fill_outer_with_empty_inner_table_blocks() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        let left_block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1i32, 2])]);
+
+        let mut left_match = MutableBitmap::new();
+        left_match.extend_constant(left_block.num_rows(), false);
+
+        let state = RangeJoinState {
+            ctx,
+            left_table: RwLock::new(vec![left_block]),
+            right_table: RwLock::new(vec![]),
+            right_sorted_blocks: Default::default(),
+            left_sorted_blocks: Default::default(),
+            conditions: vec![],
+            other_conditions: vec![],
+            partition_finished: Mutex::new(true),
+            finished_notify: Arc::new(WatchNotify::new()),
+            left_sinker_count: RwLock::new(0),
+            right_sinker_count: RwLock::new(0),
+            tasks: RwLock::new(vec![(0, 0)]),
+            row_offset: RwLock::new(vec![(0, 0)]),
+            finished_tasks: AtomicU64::new(0),
+            completed_pair: AtomicU64::new(0),
+            ie_join_state: None,
+            join_type: JoinType::Left,
+            output_schema: DataSchemaRefExt::create(vec![
+                DataField::new("left_x", DataType::Number(NumberDataType::Int32)),
+                DataField::new("right_x", DataType::Number(NumberDataType::Int32)),
+            ]),
+            left_match: RwLock::new(left_match),
+            right_match: RwLock::new(MutableBitmap::new()),
+            partition_count: AtomicU64::new(0),
+        };
+
+        let block = state.fill_outer(0, true)?;
+        assert_eq!(block.num_rows(), 2);
+        assert_eq!(block.num_columns(), 2);
+        assert_eq!(
+            block.get_by_offset(0).index(0).expect("row 0 should exist"),
+            ScalarRef::Number(NumberScalar::Int32(1))
+        );
+        assert_eq!(
+            block.get_by_offset(1).index(0).expect("row 0 should exist"),
+            ScalarRef::Null
+        );
         Ok(())
     }
 }
