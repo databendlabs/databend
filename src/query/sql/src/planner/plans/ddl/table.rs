@@ -333,7 +333,6 @@ pub struct AddTableColumnPlan {
     pub table: String,
     pub branch: Option<String>,
     pub if_not_exists: bool,
-    pub column_existed: bool,
     pub field: TableField,
     pub comment: String,
     pub option: AddColumnOption,
