@@ -118,12 +118,6 @@ impl Interpreter for AddTableColumnInterpreter {
             {
                 return Ok(PipelineBuildResult::create());
             }
-            if self.plan.column_existed {
-                return Err(ErrorCode::AlterTableError(format!(
-                    "Column '{}' no longer exists; please retry ALTER TABLE ... ADD COLUMN IF NOT EXISTS",
-                    self.plan.field.name()
-                )));
-            }
         }
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
