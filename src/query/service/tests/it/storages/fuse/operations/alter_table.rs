@@ -184,7 +184,6 @@ async fn test_fuse_table_optimize_alter_table() -> anyhow::Result<()> {
         table: fixture.default_table_name(),
         branch: None,
         if_not_exists: false,
-        column_existed: false,
         field,
         comment: "".to_string(),
         option: AddColumnOption::End,
