@@ -1163,23 +1163,8 @@ impl Binder {
                     .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
-                let column_name =
-                    normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-                let column_existed = schema.index_of(&column_name).is_ok();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
-                    if *if_not_exists && column_existed {
-                        let not_null = self.is_column_not_null();
-                        let data_type = resolve_type_name(&column.data_type, not_null)?;
-                        (
-                            TableField::new(&column_name, data_type),
-                            column.comment.clone().unwrap_or_default(),
-                            true,
-                            false,
-                            false,
-                        )
-                    } else {
-                        self.analyze_add_column(column, schema.clone()).await?
-                    };
+                    self.analyze_add_column(column, schema.clone()).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -1194,7 +1179,6 @@ impl Binder {
                     table,
                     branch,
                     if_not_exists: *if_not_exists,
-                    column_existed,
                     field,
                     comment,
                     option,
