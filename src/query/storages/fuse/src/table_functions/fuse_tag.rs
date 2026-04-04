@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -76,6 +77,11 @@ impl SimpleTableFunc for FuseTagFunc {
             .await?
             .get_table(&tenant, &self.args.database_name, &self.args.table_name)
             .await?;
+        if tbl.engine() != "FUSE" {
+            return Err(ErrorCode::TableEngineNotSupported(
+                "Invalid table engine, only FUSE table supports fuse_tag",
+            ));
+        }
         let table_id = tbl.get_id();
 
         let tags = ctx
