@@ -28,6 +28,7 @@ use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_meta_app::schema::ListTableTagsReq;
 
+use crate::operations::check_table_ref_access;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::parse_db_tb_args;
@@ -70,6 +71,8 @@ impl SimpleTableFunc for FuseTagFunc {
         ctx: &Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
+        check_table_ref_access(ctx.as_ref())?;
+
         let catalog = ctx.get_current_catalog();
         let tenant = ctx.get_tenant();
         let tbl = ctx
