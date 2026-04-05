@@ -127,7 +127,7 @@ fn transcode_output(data: Vec<u8>, format: &FileFormatParams) -> Result<Vec<u8>>
                 label
             ))
         })?;
-    let src = std::str::from_utf8(&data).map_err(|err| {
+    let src = simdutf8::basic::from_utf8(&data).map_err(|err| {
         ErrorCode::BadBytes(format!(
             "failed to encode unload data with encoding '{}': invalid internal utf-8: {}",
             label, err

@@ -54,6 +54,7 @@ parking_lot = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+simdutf8 = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 url = { workspace = true }
