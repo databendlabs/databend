@@ -47,7 +47,7 @@ fn test_decode_v171_csv_file_format_params() -> anyhow::Result<()> {
         binary_format: BinaryFormat::Hex,
         geometry_format: GeometryDataType::EWKB,
         encoding: "gbk".to_string(),
-        encoding_error: "replace".to_string(),
+        encoding_error_mode: "replace".to_string(),
     };
 
     common::test_load_old(
@@ -81,7 +81,7 @@ fn test_decode_v171_text_file_format_params() -> anyhow::Result<()> {
         nan_display: "nan_utf8".to_string(),
         null_display: "NULL".to_string(),
         encoding: "gbk".to_string(),
-        encoding_error: "replace".to_string(),
+        encoding_error_mode: "replace".to_string(),
     };
 
     common::test_load_old(

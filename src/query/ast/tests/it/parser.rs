@@ -719,7 +719,7 @@ SELECT * from s;"#,
         "#,
         r#"
             CREATE FILE FORMAT my_csv_encoding
-                type = CSV encoding = 'utf8' encoding_error = 'replace';
+                type = CSV encoding = 'utf8' encoding_error_mode = 'replace';
         "#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,

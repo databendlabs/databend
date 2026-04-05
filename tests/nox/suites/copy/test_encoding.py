@@ -62,7 +62,7 @@ def test_stage_read_utf8_encoding_error_modes(copy_env, tmp_path, format_name, d
     conn.exec(
         f"create or replace stage {strict_stage} "
         f"url='{_stage_fs_url(strict_dir)}' "
-        f"file_format=(type={format_name} encoding='utf8' encoding_error='strict')"
+        f"file_format=(type={format_name} encoding='utf8' encoding_error_mode='strict')"
     )
     conn.exec(f"create or replace table {strict_table} (name string, id int)")
 
@@ -74,7 +74,7 @@ def test_stage_read_utf8_encoding_error_modes(copy_env, tmp_path, format_name, d
     conn.exec(
         f"create or replace stage {replace_stage} "
         f"url='{_stage_fs_url(strict_dir)}' "
-        f"file_format=(type={format_name} encoding='utf8' encoding_error='replace')"
+        f"file_format=(type={format_name} encoding='utf8' encoding_error_mode='replace')"
     )
     conn.exec(f"create or replace table {replace_table} (name string, id int)")
 

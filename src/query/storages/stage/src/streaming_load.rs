@@ -117,14 +117,16 @@ fn row_based(
     }
 
     let maybe_encoding = match file_format_params {
-        FileFormatParams::Csv(fmt) => Some((fmt.encoding.clone(), fmt.encoding_error.clone())),
-        FileFormatParams::Text(fmt) => Some((fmt.encoding.clone(), fmt.encoding_error.clone())),
+        FileFormatParams::Csv(fmt) => Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone())),
+        FileFormatParams::Text(fmt) => {
+            Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone()))
+        }
         _ => None,
     };
-    if let Some((encoding, encoding_error)) = maybe_encoding {
-        if DecodingTransformer::needs_processing(&encoding, &encoding_error)? {
+    if let Some((encoding, encoding_error_mode)) = maybe_encoding {
+        if DecodingTransformer::needs_processing(&encoding, &encoding_error_mode)? {
             pipeline.try_add_accumulating_transformer(|| {
-                DecodingTransformer::try_create(encoding.clone(), encoding_error.clone())
+                DecodingTransformer::try_create(encoding.clone(), encoding_error_mode.clone())
             })?;
         }
     }

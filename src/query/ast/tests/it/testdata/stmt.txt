@@ -22679,9 +22679,9 @@ CreateFileFormat {
 
 ---------- Input ----------
 CREATE FILE FORMAT my_csv_encoding
-    type = CSV encoding = 'utf8' encoding_error = 'replace';
+    type = CSV encoding = 'utf8' encoding_error_mode = 'replace';
 ---------- Output ---------
-CREATE FILE FORMAT my_csv_encoding encoding = 'utf8', encoding_error = 'replace', type = CSV
+CREATE FILE FORMAT my_csv_encoding encoding = 'utf8', encoding_error_mode = 'replace', type = CSV
 ---------- AST ------------
 CreateFileFormat {
     create_option: Create,
@@ -22691,7 +22691,7 @@ CreateFileFormat {
             "encoding": String(
                 "utf8",
             ),
-            "encoding_error": String(
+            "encoding_error_mode": String(
                 "replace",
             ),
             "type": Keyword(

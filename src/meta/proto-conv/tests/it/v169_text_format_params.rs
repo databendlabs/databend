@@ -39,7 +39,7 @@ fn test_decode_v169_text_file_format_params() -> anyhow::Result<()> {
         nan_display: "nan_utf8".to_string(),
         null_display: "NULL".to_string(),
         encoding: "UTF-8".to_string(),
-        encoding_error: "strict".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
 
     common::test_load_old(

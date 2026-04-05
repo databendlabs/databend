@@ -128,14 +128,18 @@ impl RowBasedReadPipelineBuilder<'_> {
         }
 
         let maybe_encoding = match &self.stage_table_info.stage_info.file_format_params {
-            FileFormatParams::Csv(fmt) => Some((fmt.encoding.clone(), fmt.encoding_error.clone())),
-            FileFormatParams::Text(fmt) => Some((fmt.encoding.clone(), fmt.encoding_error.clone())),
+            FileFormatParams::Csv(fmt) => {
+                Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone()))
+            }
+            FileFormatParams::Text(fmt) => {
+                Some((fmt.encoding.clone(), fmt.encoding_error_mode.clone()))
+            }
             _ => None,
         };
-        if let Some((encoding, encoding_error)) = maybe_encoding {
-            if DecodingTransformer::needs_processing(&encoding, &encoding_error)? {
+        if let Some((encoding, encoding_error_mode)) = maybe_encoding {
+            if DecodingTransformer::needs_processing(&encoding, &encoding_error_mode)? {
                 pipeline.try_add_accumulating_transformer(|| {
-                    DecodingTransformer::try_create(encoding.clone(), encoding_error.clone())
+                    DecodingTransformer::try_create(encoding.clone(), encoding_error_mode.clone())
                 })?;
             }
         }

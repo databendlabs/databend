@@ -45,7 +45,7 @@ fn test_decode_v89_geometry_output_format() -> anyhow::Result<()> {
         binary_format: BinaryFormat::Base64,
         geometry_format: GeometryDataType::EWKT,
         encoding: "UTF-8".to_string(),
-        encoding_error: "strict".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(

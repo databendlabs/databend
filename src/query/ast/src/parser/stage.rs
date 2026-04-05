@@ -140,7 +140,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
                 | NAN_DISPLAY
                 | NULL_DISPLAY
                 | ENCODING
-                | ENCODING_ERROR
+                | ENCODING_ERROR_MODE
                 | ESCAPE
                 | NULL_FIELD_AS
                 | MISSING_FIELD_AS

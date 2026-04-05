@@ -55,7 +55,7 @@ fn test_decode_v75_csv_file_format_params() -> anyhow::Result<()> {
         binary_format: BinaryFormat::Base64,
         geometry_format: GeometryDataType::EWKT,
         encoding: "UTF-8".to_string(),
-        encoding_error: "strict".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
     common::test_load_old(
         func_name!(),

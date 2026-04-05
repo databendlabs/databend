@@ -32,7 +32,7 @@ query "select * from streaming_load_09;"
 stmt "truncate table streaming_load_09"
 
 echo "--csv-utf8-replace"
-(set -x; curl -sS -H "x-databend-query-id:load-encoding-csv-replace" -H "X-Databend-SQL:insert into streaming_load_09 from @_databend_load file_format = (type=csv encoding='utf8' encoding_error='replace')" -F "upload=@$DATA/bad_utf8.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load") | jq -r '.id, .stats.rows'
+(set -x; curl -sS -H "x-databend-query-id:load-encoding-csv-replace" -H "X-Databend-SQL:insert into streaming_load_09 from @_databend_load file_format = (type=csv encoding='utf8' encoding_error_mode='replace')" -F "upload=@$DATA/bad_utf8.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load") | jq -r '.id, .stats.rows'
 echo "<<<<"
 query "select * from streaming_load_09;"
 

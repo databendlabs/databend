@@ -12,7 +12,7 @@ test_stage_external External s3 s3://test-stage-bucket/demo/ https://s3.eu-centr
 query TTTTTBBTTT?TT
 SHOW STAGES like 'test_stage'
 ----
-test_stage Internal NULL NULL NULL 0 0 NULL {"allow_quoted_nulls":false,"binary_format":"Hex","compression":"None","empty_field_as":"Null","encoding":"UTF-8","encoding_error":"strict","error_on_column_count_mismatch":true,"escape":"","field_delimiter":"|","geometry_format":"EWKT","headers":0,"nan_display":"NaN","null_display":"\\N","output_header":false,"quote":"\"","quoted_empty_field_as":"String","record_delimiter":"\n","type":"Csv"} 'root'@'%' <slt:ignore> (empty) account_admin
+test_stage Internal NULL NULL NULL 0 0 NULL {"allow_quoted_nulls":false,"binary_format":"Hex","compression":"None","empty_field_as":"Null","encoding":"UTF-8","encoding_error_mode":"strict","error_on_column_count_mismatch":true,"escape":"","field_delimiter":"|","geometry_format":"EWKT","headers":0,"nan_display":"NaN","null_display":"\\N","output_header":false,"quote":"\"","quoted_empty_field_as":"String","record_delimiter":"\n","type":"Csv"} 'root'@'%' <slt:ignore> (empty) account_admin
 
 query TT
 SELECT name, file_format_options:type

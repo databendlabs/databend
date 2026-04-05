@@ -19,7 +19,7 @@ load-encoding-text-gbk
 <<<<
 >>>> truncate table streaming_load_09
 --csv-utf8-replace
-+ curl -sS -H x-databend-query-id:load-encoding-csv-replace -H 'X-Databend-SQL:insert into streaming_load_09 from @_databend_load file_format = (type=csv encoding='\''utf8'\'' encoding_error='\''replace'\'')' -F upload=@/tmp/streaming_load_09/bad_utf8.csv -u root: -XPUT http://localhost:8000/v1/streaming_load
++ curl -sS -H x-databend-query-id:load-encoding-csv-replace -H 'X-Databend-SQL:insert into streaming_load_09 from @_databend_load file_format = (type=csv encoding='\''utf8'\'' encoding_error_mode='\''replace'\'')' -F upload=@/tmp/streaming_load_09/bad_utf8.csv -u root: -XPUT http://localhost:8000/v1/streaming_load
 load-encoding-csv-replace
 1
 <<<<

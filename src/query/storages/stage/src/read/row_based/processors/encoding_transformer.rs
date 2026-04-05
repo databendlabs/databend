@@ -34,9 +34,9 @@ pub struct DecodingTransformer {
 }
 
 impl DecodingTransformer {
-    pub fn try_create(label: String, encoding_error: String) -> Result<Self> {
+    pub fn try_create(label: String, encoding_error_mode: String) -> Result<Self> {
         let encoding = resolve_encoding(&label)?;
-        let error_mode = EncodingErrorMode::parse(&encoding_error)?;
+        let error_mode = EncodingErrorMode::parse(&encoding_error_mode)?;
         Ok(Self {
             label,
             error_mode,
@@ -46,9 +46,9 @@ impl DecodingTransformer {
         })
     }
 
-    pub fn needs_processing(label: &str, encoding_error: &str) -> Result<bool> {
+    pub fn needs_processing(label: &str, encoding_error_mode: &str) -> Result<bool> {
         Ok(resolve_encoding(label)? != UTF_8
-            || EncodingErrorMode::parse(encoding_error)? != EncodingErrorMode::Strict)
+            || EncodingErrorMode::parse(encoding_error_mode)? != EncodingErrorMode::Strict)
     }
 
     fn new_file(&mut self, path: String) {
@@ -58,7 +58,7 @@ impl DecodingTransformer {
 
     fn file_decode_error(&self, path: &str) -> ErrorCode {
         ErrorCode::BadBytes(format!(
-            "failed to decode file {path} with encoding '{}' and encoding_error='{}'",
+            "failed to decode file {path} with encoding '{}' and encoding_error_mode='{}'",
             self.label, self.error_mode
         ))
     }
@@ -76,7 +76,7 @@ impl EncodingErrorMode {
             "strict" => Ok(Self::Strict),
             "replace" => Ok(Self::Replace),
             _ => Err(ErrorCode::BadArguments(format!(
-                "unsupported encoding_error '{}'",
+                "unsupported encoding_error_mode '{}'",
                 value
             ))),
         }
@@ -238,7 +238,7 @@ mod tests {
             })))
             .unwrap_err();
 
-        assert!(err.message().contains("encoding_error='strict'"));
+        assert!(err.message().contains("encoding_error_mode='strict'"));
     }
 
     #[test]
