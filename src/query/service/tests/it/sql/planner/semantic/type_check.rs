@@ -17,6 +17,8 @@ use databend_common_expression::ColumnIndex;
 use databend_common_expression::Expr;
 use databend_common_sql::Planner;
 use databend_common_sql::parse_exprs;
+use databend_common_sql::plans::Plan;
+use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -161,6 +163,41 @@ async fn test_grouping_qualify_rewrites_before_semantic_checks() -> anyhow::Resu
             .await
             .unwrap_or_else(|err| panic!("expected valid grouping QUALIFY for `{sql}`: {err}"));
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_grouping_sets_to_union_keeps_grouping_id_for_qualify_windows() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings()
+        .set_setting("grouping_sets_to_union".to_string(), "1".to_string())?;
+
+    fixture
+        .execute_command("CREATE TABLE students(course STRING, type STRING)")
+        .await?;
+
+    let sql = "SELECT course, GROUPING(course) AS g, count() OVER () AS w \
+               FROM students \
+               GROUP BY GROUPING SETS ((course), ()) \
+               QUALIFY GROUPING(course) = 0";
+
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(sql).await?;
+
+    let Plan::Query {
+        s_expr,
+        metadata,
+        bind_context,
+        ..
+    } = plan
+    else {
+        panic!("expected query plan");
+    };
+
+    let mut builder = PhysicalPlanBuilder::new(metadata, ctx, false);
+    builder.build(&s_expr, bind_context.column_set()).await?;
 
     Ok(())
 }
