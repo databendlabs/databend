@@ -13,12 +13,12 @@ SELECT 'a' LIKE concat('a') ESCAPE ''
 query B
 SELECT '%' LIKE '\\\\%' ESCAPE ''
 ----
-1
+0
 
 query B
 SELECT like_any('%', '\\\\%', '')
 ----
-1
+0
 
 query T
 EXPLAIN SELECT * FROM numbers(1) WHERE to_string(number) LIKE '\\\\%' ESCAPE ''
