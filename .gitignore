@@ -8,8 +8,14 @@
 .bash_history
 .mysql_history
 
+
 # Rust
 target/
+.cargo-home/
+.cargo-target/
+.toolchain-bin/
+.worktrees/
+
 
 # OS related
 ### MacOS ###

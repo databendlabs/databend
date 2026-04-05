@@ -2230,16 +2230,33 @@ impl<'a> TypeChecker<'a> {
             }
         }
 
-        // Check aggregate function
+        // Only force aggregate arguments to skip alias resolution in contexts
+        // that would otherwise prefer aliases over input columns, such as
+        // HAVING or ORDER BY. In the SELECT list we still want the existing
+        // column-first fallback so `sum(c1)` can bind a same-select alias when
+        // there is no real `c1` column.
         self.in_aggregate_function = true;
-        let mut arguments = vec![];
-        let mut arg_types = vec![];
-        for arg in args.iter() {
-            let box (argument, arg_type) = self.resolve(arg)?;
-            arguments.push(argument);
-            arg_types.push(arg_type);
+        let original_context = self.bind_context.expr_context.clone();
+        let disallow_alias_resolution = original_context.prefer_resolve_alias();
+        if disallow_alias_resolution {
+            self.bind_context
+                .set_expr_context(ExprContext::InAggregateFunction);
+        }
+        let arguments_result = (|| {
+            let mut arguments = vec![];
+            let mut arg_types = vec![];
+            for arg in args.iter() {
+                let box (argument, arg_type) = self.resolve(arg)?;
+                arguments.push(argument);
+                arg_types.push(arg_type);
+            }
+            Ok::<_, ErrorCode>((arguments, arg_types))
+        })();
+        if disallow_alias_resolution {
+            self.bind_context.set_expr_context(original_context.clone());
         }
         self.in_aggregate_function = false;
+        let (mut arguments, mut arg_types) = arguments_result?;
 
         let sort_descs = order_by
             .iter()
@@ -2249,7 +2266,15 @@ impl<'a> TypeChecker<'a> {
                      asc,
                      nulls_first,
                  }| {
-                    let box (scalar_expr, _) = self.resolve(expr)?;
+                    if disallow_alias_resolution {
+                        self.bind_context
+                            .set_expr_context(ExprContext::InAggregateFunction);
+                    }
+                    let result = self.resolve(expr);
+                    if disallow_alias_resolution {
+                        self.bind_context.set_expr_context(original_context.clone());
+                    }
+                    let box (scalar_expr, _) = result?;
 
                     Ok(AggregateFunctionScalarSortDesc {
                         expr: scalar_expr,
@@ -5447,6 +5472,7 @@ impl<'a> TypeChecker<'a> {
             )),
             Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
             Literal::String(string) => Scalar::String(string.clone()),
+            Literal::Binary(bytes) => Scalar::Binary(bytes.clone()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
         };
@@ -5481,7 +5507,7 @@ impl<'a> TypeChecker<'a> {
             )),
             Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
             Literal::Null => Scalar::Null,
-            Literal::String(_) | Literal::Boolean(_) => {
+            Literal::String(_) | Literal::Binary(_) | Literal::Boolean(_) => {
                 return Err(ErrorCode::InvalidArgument(format!(
                     "Invalid minus operator for {}",
                     literal
@@ -5701,9 +5727,18 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         }
 
-        let tenant = self.ctx.get_tenant();
-        let provider = UserApiProvider::instance();
-        let udf = databend_common_base::runtime::block_on(provider.get_udf(&tenant, udf_name))?;
+        let udf = if let Some(udf) = self.bind_context.udf_cache.read().get(udf_name).cloned() {
+            udf
+        } else {
+            let tenant = self.ctx.get_tenant();
+            let provider = UserApiProvider::instance();
+            let udf = databend_common_base::runtime::block_on(provider.get_udf(&tenant, udf_name))?;
+            self.bind_context
+                .udf_cache
+                .write()
+                .insert(udf_name.to_string(), udf.clone());
+            udf
+        };
 
         let Some(udf) = udf else {
             return Ok(None);

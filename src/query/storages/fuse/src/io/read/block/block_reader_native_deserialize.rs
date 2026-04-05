@@ -90,7 +90,7 @@ impl BlockReader {
             column_chunks: &column_chunks,
         };
 
-        for column_node in &self.project_column_nodes {
+        for column_node in self.project_column_nodes.iter() {
             let deserialized_column = self
                 .deserialize_native_field(&field_deserialization_ctx, column_node)
                 .map_err(|e| {

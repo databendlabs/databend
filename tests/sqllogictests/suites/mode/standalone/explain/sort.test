@@ -95,7 +95,7 @@ explain pipeline select a, b from t1 order by a;
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "AsyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "Resize" ]
     5 [ label = "SortPartialTransform" ]
@@ -151,7 +151,7 @@ explain pipeline select a, b from t1 order by a;
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "AsyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "Resize" ]
     5 [ label = "SortPartialTransform" ]
@@ -206,7 +206,7 @@ explain pipeline select a + 1, b from t1 order by a + 1;
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "AsyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "CompoundBlockOperator(Map)" ]
     5 [ label = "Resize" ]
@@ -263,7 +263,7 @@ explain pipeline select a + 1, b from t1 order by a + 1;
 digraph {
     0 [ label = "BlockPartitionSource" ]
     1 [ label = "TransformRuntimeFilterWait" ]
-    2 [ label = "AsyncReadParquetDataTransform" ]
+    2 [ label = "AsyncReadDataTransform" ]
     3 [ label = "DeserializeDataTransform" ]
     4 [ label = "CompoundBlockOperator(Map)" ]
     5 [ label = "Resize" ]

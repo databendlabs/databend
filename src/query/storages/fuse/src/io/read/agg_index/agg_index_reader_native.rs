@@ -14,75 +14,11 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
-use databend_common_native::read as nread;
-use databend_storages_common_table_meta::meta::ColumnMeta;
-use log::debug;
 
 use super::AggIndexReader;
-use crate::FuseBlockPartInfo;
 use crate::io::NativeSourceData;
 
 impl AggIndexReader {
-    pub async fn read_native_data(&self, loc: &str) -> Option<NativeSourceData> {
-        match self.reader.operator.stat(loc).await {
-            Ok(meta) => {
-                let reader = self.reader.operator.reader(loc).await.ok()?;
-                let (metadata, _) =
-                    nread::reader::read_meta_async(reader, meta.content_length() as usize)
-                        .await
-                        .inspect_err(|e| {
-                            debug!("Read aggregating index `{loc}`'s metadata failed: {e}")
-                        })
-                        .ok()?;
-                if metadata.is_empty() {
-                    debug!("Aggregating index `{loc}` is empty");
-                    return None;
-                }
-                let num_rows = metadata[0].pages.iter().map(|p| p.num_values).sum();
-                debug_assert!(
-                    metadata
-                        .iter()
-                        .all(|c| c.pages.iter().map(|p| p.num_values).sum::<u64>() == num_rows)
-                );
-                let columns_meta = metadata
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, c)| (i as u32, ColumnMeta::Native(c)))
-                    .collect();
-                let part = FuseBlockPartInfo::create(
-                    loc.to_string(),
-                    None,
-                    0,
-                    None,
-                    0,
-                    num_rows,
-                    columns_meta,
-                    None,
-                    None,
-                    self.compression.into(),
-                    None,
-                    None,
-                    None,
-                );
-                let res = self
-                    .reader
-                    .async_read_native_columns_data(&part, &self.ctx, &None)
-                    .await
-                    .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
-                    .ok()?;
-                Some(res)
-            }
-            Err(e) => {
-                if e.kind() == opendal::ErrorKind::NotFound {
-                    debug!("Aggregating index `{loc}` not found.")
-                } else {
-                    debug!("Read aggregating index `{loc}` failed: {e}");
-                }
-                None
-            }
-        }
-    }
-
     pub fn deserialize_native_data(&self, data: &mut NativeSourceData) -> Result<DataBlock> {
         let mut all_columns_arrays = vec![];
 

@@ -22,8 +22,7 @@ use databend_common_sql_test_support::TestSuite;
 use databend_common_sql_test_support::TestSuiteMints;
 use databend_common_sql_test_support::run_test_case_core;
 
-mod fixture;
-pub(crate) use self::fixture::LiteTableContext;
+use crate::framework::LiteTableContext;
 
 struct LiteRunner(Arc<LiteTableContext>);
 
@@ -164,7 +163,7 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
-            ctx.register_table_sql(statement).await?;
+            ctx.register_setup_sql(statement).await?;
         }
     }
     Ok(())
