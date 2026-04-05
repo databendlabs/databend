@@ -402,7 +402,8 @@ impl RuleHierarchicalGroupingSetsToUnion {
         )?;
 
         // Step 4: Assemble the complete plan
-        let union_result = self.create_union_all(&union_branches, eval_scalar, grouping_id_index)?;
+        let union_result =
+            self.create_union_all(&union_branches, eval_scalar, grouping_id_index)?;
 
         // Step 5: Chain all CTEs in correct dependency order
         // Sequence semantics: left executes first, right executes after
