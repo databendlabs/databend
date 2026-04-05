@@ -446,7 +446,7 @@ async fn test_fuse_table_add_column_if_not_exists_skips_binder_validation_for_du
 
     fixture
         .execute_command(&format!(
-            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS b INT AS (missing_col + 1) STORED",
+            "ALTER TABLE {}.{} ADD COLUMN IF NOT EXISTS b INT AS (TO_INT32(a + 1)) STORED",
             db_name, table_name
         ))
         .await?;
