@@ -20,6 +20,6 @@ mod separator;
 
 pub use block_builder::BlockBuilder;
 pub use decompressor::Decompressor;
-pub use encoding_transformer::EncodingTransformer;
+pub use encoding_transformer::DecodingTransformer;
 pub use reader::BytesReader;
 pub use separator::Separator;

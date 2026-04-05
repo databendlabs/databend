@@ -25,7 +25,7 @@ use encoding_rs::UTF_8;
 
 use crate::read::row_based::batch::BytesBatch;
 
-pub struct EncodingTransformer {
+pub struct DecodingTransformer {
     label: String,
     error_mode: EncodingErrorMode,
     encoding: &'static Encoding,
@@ -33,7 +33,7 @@ pub struct EncodingTransformer {
     path: Option<String>,
 }
 
-impl EncodingTransformer {
+impl DecodingTransformer {
     pub fn try_create(label: String, encoding_error: String) -> Result<Self> {
         let encoding = resolve_encoding(&label)?;
         let error_mode = EncodingErrorMode::parse(&encoding_error)?;
@@ -97,7 +97,7 @@ fn resolve_encoding(label: &str) -> Result<&'static Encoding> {
         .ok_or_else(|| ErrorCode::BadArguments(format!("unsupported file encoding '{}'", label)))
 }
 
-impl AccumulatingTransform for EncodingTransformer {
+impl AccumulatingTransform for DecodingTransformer {
     const NAME: &'static str = "EncodingTransformer";
 
     fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
@@ -183,9 +183,9 @@ mod tests {
 
     #[test]
     fn test_encoding_transformer_needs_processing() {
-        assert!(!EncodingTransformer::needs_processing("utf-8", "strict").unwrap());
-        assert!(EncodingTransformer::needs_processing("gbk", "strict").unwrap());
-        assert!(EncodingTransformer::needs_processing("utf-8", "replace").unwrap());
+        assert!(!DecodingTransformer::needs_processing("utf-8", "strict").unwrap());
+        assert!(DecodingTransformer::needs_processing("gbk", "strict").unwrap());
+        assert!(DecodingTransformer::needs_processing("utf-8", "replace").unwrap());
     }
 
     #[test]
@@ -194,7 +194,7 @@ mod tests {
         assert!(!had_errors);
 
         let mut transformer =
-            EncodingTransformer::try_create("gbk".to_string(), "strict".to_string()).unwrap();
+            DecodingTransformer::try_create("gbk".to_string(), "strict".to_string()).unwrap();
         let first = transformer
             .transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
                 data: encoded[..1].to_vec(),
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn test_encoding_transformer_strict_invalid_utf8() {
         let mut transformer =
-            EncodingTransformer::try_create("utf-8".to_string(), "strict".to_string()).unwrap();
+            DecodingTransformer::try_create("utf-8".to_string(), "strict".to_string()).unwrap();
         let err = transformer
             .transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
                 data: b"ab\xffcd\n".to_vec(),
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn test_encoding_transformer_replace_invalid_utf8() {
         let mut transformer =
-            EncodingTransformer::try_create("utf-8".to_string(), "replace".to_string()).unwrap();
+            DecodingTransformer::try_create("utf-8".to_string(), "replace".to_string()).unwrap();
         let blocks = transformer
             .transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
                 data: b"ab\xffcd\n".to_vec(),

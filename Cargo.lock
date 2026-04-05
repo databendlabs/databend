@@ -4825,6 +4825,7 @@ dependencies = [
  "parquet 56.2.0",
  "serde",
  "serde_json",
+ "simdutf8",
  "tokio",
  "typetag",
  "url",

@@ -45,8 +45,8 @@ use crate::compression::get_compression_with_path;
 use crate::read::load_context::LoadContext;
 use crate::read::row_based::format::create_row_based_file_format;
 use crate::read::row_based::processors::BlockBuilder;
+use crate::read::row_based::processors::DecodingTransformer;
 use crate::read::row_based::processors::Decompressor;
-use crate::read::row_based::processors::EncodingTransformer;
 use crate::read::row_based::processors::Separator;
 use crate::transform_generating::DataBlockIterator;
 use crate::transform_generating::DataBlockIteratorBuilder;
@@ -122,9 +122,9 @@ fn row_based(
         _ => None,
     };
     if let Some((encoding, encoding_error)) = maybe_encoding {
-        if EncodingTransformer::needs_processing(&encoding, &encoding_error)? {
+        if DecodingTransformer::needs_processing(&encoding, &encoding_error)? {
             pipeline.try_add_accumulating_transformer(|| {
-                EncodingTransformer::try_create(encoding.clone(), encoding_error.clone())
+                DecodingTransformer::try_create(encoding.clone(), encoding_error.clone())
             })?;
         }
     }
