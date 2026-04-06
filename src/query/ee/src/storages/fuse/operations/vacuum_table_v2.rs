@@ -86,10 +86,6 @@ enum BranchPhaseResult {
         snapshot_files_to_gc: Vec<String>,
     },
     /// No cleanup needed. Carries the gc root snapshot if one was found (for segment protection).
-    ///
-    /// Vacuum2 uses the selected gc root, not the earliest historical snapshot, as this branch's
-    /// protection boundary. Older snapshots may still exist physically, but once LVT advances to
-    /// the gc root they are treated as no longer reachable for branch-history protection.
     NoCleanup(Option<Arc<TableSnapshot>>),
 }
 
@@ -169,8 +165,8 @@ pub async fn do_vacuum2(
         }
 
         if expire_at.is_some_and(|expire_at| expire_at <= now) {
-            // After soft-drop, the branch still needs to go through gc_root selection
-            // and respect the retention period before its data can be cleaned up.
+            // After soft-drop, the branch still needs gc_root selection
+            // and retention period before data cleanup.
             if let Err(err) = catalog
                 .drop_table_branch(DropTableBranchReq {
                     tenant: ctx.get_tenant(),
@@ -215,8 +211,6 @@ pub async fn do_vacuum2(
             };
             let snapshot_files_to_gc = gc_selection.snapshots_to_gc;
             if snapshot_files_to_gc.is_empty() {
-                // Keep using the selected gc root as the protection boundary. See
-                // `BranchPhaseResult::NoCleanup` for the LVT-based reachability contract.
                 return Ok((
                     branch_table,
                     BranchPhaseResult::NoCleanup(Some(gc_selection.gc_root)),
@@ -346,9 +340,8 @@ pub async fn do_vacuum2(
         .chain(self_segments_to_scan)
         .collect::<Vec<_>>();
     let op = fuse_table.get_operator();
-    // `read_compact_segment()` only needs a schema for legacy V0/V1 migration. In this branch
-    // cleanup flow, old segments can only come from the base-table lineage, so the base schema
-    // is the correct compatibility schema to pass here.
+    // `read_compact_segment()` needs a schema only for legacy V0/V1 migration;
+    // the base schema is correct here.
     let schema = fuse_table.schema();
     let mut protected_blocks_by_table: ProtectedBlocksByTable = HashMap::new();
     let mut segment_stream = futures::stream::iter(all_segments.into_iter().map(|segment_loc| {
@@ -570,11 +563,7 @@ async fn vacuum_base_table(
     let mut snapshot_files_to_gc = gc_root.snapshots_to_gc;
     snapshot_files_to_gc.retain(|path| !protected_snapshot_locs.contains(path));
     if snapshot_files_to_gc.is_empty() {
-        // All snapshot candidates before the gc root are protected by active tags.
-        // Intentionally stop here instead of continuing to sweep table-local garbage files:
-        // vacuum2 is allowed to under-clean but must not risk reclaiming anything that might
-        // still be reachable through retained tag history. This matches the conservative design
-        // goal for protected snapshots in the branch/tag cleanup path.
+        // All candidates are protected by tags — stop to avoid reclaiming reachable data.
         return Ok((None, vec![]));
     }
 
@@ -601,18 +590,13 @@ async fn vacuum_base_table(
 
 /// Collect segments from a non-cleanup branch that reference at-risk tables.
 ///
-/// If `gc_root_snapshot` is provided (branch has a gc root but nothing to clean), it is used
-/// directly. Otherwise, `find_earliest_snapshot_via_history` is called to locate the snapshot.
+/// Uses `gc_root_snapshot` if provided, otherwise calls `find_earliest_snapshot_via_history`.
+/// Only the gc_root (or earliest) snapshot is examined — new segments after branch creation
+/// are always written under the branch's own prefix.
 ///
-/// Only the gc_root (or earliest) snapshot needs to be examined. After branch creation, all new
-/// segments and blocks are written under the branch's own storage prefix. External segment
-/// references are inherited from the source snapshot at creation time; later writes do not add
-/// new cross-table segment references.
-///
-/// Returns two parts:
-/// - `ProtectedSegmentsByTable`: segments stored under *other* at-risk tables that must be protected.
-/// - `Vec<Location>`: self-segments (stored under this branch) that may reference blocks in
-///   at-risk tables after compaction — scanned for block-level protection in Step 5.
+/// Returns:
+/// - `ProtectedSegmentsByTable`: external segments under at-risk tables to protect.
+/// - `Vec<Location>`: self-segments that may reference blocks in at-risk tables (for Step 5).
 #[async_backtrace::framed]
 async fn collect_external_segments(
     branch_table: &FuseTable,
@@ -630,9 +614,8 @@ async fn collect_external_segments(
         return Ok((HashMap::new(), vec![]));
     }
 
-    // Fast pre-check: skip traversal when neither the base table nor any recorded branch
-    // ancestry is in the at-risk set. OPT_KEY_REFERENCED_BRANCH_IDS is only recorded for
-    // transitive branch ancestry; if absent, the branch is defined to reference only its base.
+    // Fast pre-check: skip traversal when neither the base table nor any referenced branch
+    // is in the at-risk set.
     if base_table_id > 0 {
         let mut has_at_risk_ref = tables_at_risk.contains(&base_table_id);
         if !has_at_risk_ref {
@@ -686,10 +669,8 @@ async fn collect_external_segments(
 
 /// Clean segments and blocks under a single table's storage prefix.
 ///
-/// `cutoff` is `Some((snapshot_ts, meta_ts))` when a gc root exists — files newer than the
-/// cutoff are not listed. `None` means list all files (used for gc-pending branches).
-/// `snapshots_to_gc` is typically empty here because snapshot files are already cleaned
-/// in Steps 1/2; it is non-empty only for gc-pending branches that need a full sweep.
+/// `cutoff`: `Some((snapshot_ts, meta_ts))` when a gc root exists; `None` lists all files.
+/// `snapshots_to_gc`: non-empty only for gc-pending branches needing a full sweep.
 #[async_backtrace::framed]
 async fn cleanup_table_data(
     fuse_table: &FuseTable,
@@ -768,13 +749,9 @@ async fn final_gc_branch(
         FuseTable::parse_storage_prefix_from_table_info(table_info)?
     );
 
-    // Delete storage first: remove_all is idempotent, so a later metadata-deletion failure can
-    // be retried safely by the next vacuum run.
-    //
-    // This is also safe for staged orphan branches: vacuum only reaches this path after the
-    // orphan is older than both the normal dropped-branch retention boundary and
-    // STAGED_BRANCH_MIN_LIFETIME, while commit_table_branch_meta() rejects publishing once the
-    // same retention floor is crossed.
+    // Delete storage first: remove_all is idempotent, so a metadata-deletion failure
+    // can be retried by the next vacuum run. Safe for staged orphan branches because
+    // vacuum only reaches here after both retention boundary and STAGED_BRANCH_MIN_LIFETIME.
     if let Err(err) = fuse_table.get_operator().remove_all(&branch_dir).await {
         warn!(
             "cleanup non-retainable branch data failed, ignored, table: {}, branch: {}, err: {}",
@@ -794,8 +771,7 @@ async fn final_gc_branch(
         })
         .await
     {
-        // Only beyond-retention branches reach final GC, and undrop is retention-gated in
-        // meta API, so logging here is sufficient while the next vacuum run can retry cleanup.
+        // Undrop is retention-gated, so logging + retry on next vacuum is sufficient.
         warn!(
             "gc non-retainable branch kvs failed, ignored, table: {}, branch: {}, err: {}",
             table_info.desc, branch_name, err
@@ -813,8 +789,7 @@ async fn cleanup_table_files(
     blocks_to_gc: Vec<String>,
 ) -> Result<Vec<String>> {
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
-    // Companion files are derived from blocks/segments, so deleting them first keeps the data-file
-    // deletion order aligned with the rest of vacuum2.
+    // Delete companion files (stats, indexes) before data files.
     let mut stats_to_gc = segments_to_gc
         .iter()
         .map(|path| {
@@ -835,9 +810,8 @@ async fn cleanup_table_files(
     let inverted_indexes = &fuse_table.get_table_info().meta.indexes;
     let indexes_per_block = table_agg_index_ids.len() + inverted_indexes.len() + 2;
 
-    // TODO: index_paths pre-allocates blocks_to_gc * indexes_per_block strings, which can be
-    // very large for tables with millions of blocks and many indexes. Consider batched deletion
-    // if OOM becomes an issue.
+    // TODO: index_paths can be very large for tables with millions of blocks.
+    // Consider batched deletion if OOM becomes an issue.
     let mut index_paths = Vec::with_capacity(blocks_to_gc.len() * indexes_per_block);
     for loc in &blocks_to_gc {
         for index_id in &table_agg_index_ids {
@@ -1041,11 +1015,10 @@ pub async fn prepare_snapshot_gc_selection(
 
 /// Select the gc root snapshot from the candidate list.
 ///
-/// The gc root is the dividing line: all snapshots before it are safe to delete.
-/// Three strategies are used depending on the retention policy:
-/// - `is_vacuum_all`: the current (latest) snapshot is the gc root.
-/// - `respect_flash_back`: walk the snapshot chain to find the first snapshot <= LVT.
-/// - Otherwise: use the `prev_snapshot_id` of the last candidate as the gc root.
+/// Three strategies depending on retention policy:
+/// - `is_vacuum_all`: current (latest) snapshot is the gc root.
+/// - `respect_flash_back`: walk the chain to find the first snapshot <= LVT.
+/// - Otherwise: use `prev_snapshot_id` of the last candidate.
 async fn select_gc_root(
     fuse_table: &FuseTable,
     ctx: &Arc<dyn TableContext>,
