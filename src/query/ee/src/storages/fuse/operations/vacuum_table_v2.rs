@@ -372,20 +372,22 @@ pub async fn do_vacuum2(
     }
 
     // Step 6: final-gc beyond-retention branches that no longer own protected data.
+    // Use get() instead of remove() so gc-pending branches retain their protection sets for Step 7.
     let mut gc_pending_branches = Vec::new();
     let mut final_gc_branches = Vec::new();
     for branch_table in beyond_retention_branches {
-        let protected_segments = protected_segments_by_table
-            .remove(&branch_table.get_id())
-            .unwrap_or_default();
-        let protected_blocks = protected_blocks_by_table
-            .remove(&branch_table.get_id())
-            .unwrap_or_default();
+        let bid = branch_table.get_id();
+        let has_protected = protected_segments_by_table
+            .get(&bid)
+            .is_some_and(|s| !s.is_empty())
+            || protected_blocks_by_table
+                .get(&bid)
+                .is_some_and(|b| !b.is_empty());
 
-        if protected_segments.is_empty() && protected_blocks.is_empty() {
-            final_gc_branches.push(branch_table);
-        } else {
+        if has_protected {
             gc_pending_branches.push(branch_table);
+        } else {
+            final_gc_branches.push(branch_table);
         }
     }
     let final_gc_results =
@@ -482,6 +484,13 @@ pub async fn do_vacuum2(
     for result in cleanup_results {
         files_to_gc.extend(result?);
     }
+
+    // Best-effort cleanup for the legacy base-table `_refs/` directory left by pre-branch/tag
+    // implementations. New refs no longer use this layout.
+    let legacy_ref_dir = fuse_table
+        .meta_location_generator()
+        .ref_snapshot_location_prefix();
+    let _ = fuse_table.get_operator().remove_all(legacy_ref_dir).await;
 
     Ok(files_to_gc)
 }
@@ -607,7 +616,9 @@ async fn vacuum_base_table(
 /// Only the gc_root (or earliest) snapshot needs to be examined. After branch creation, all new
 /// segments and blocks are written under the branch's own storage prefix. External segment
 /// references are inherited from the source snapshot at creation time; later writes do not add
-/// new cross-table segment references.
+/// new cross-table segment references. Branch-local compaction may create newer self-owned
+/// segments, but it does not expand the set of external blocks reachable from this branch beyond
+/// the protection boundary captured by the selected snapshot here.
 ///
 /// Returns two parts:
 /// - `ProtectedSegmentsByTable`: segments stored under *other* at-risk tables that must be protected.

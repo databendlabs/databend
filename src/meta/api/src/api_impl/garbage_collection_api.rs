@@ -824,6 +824,10 @@ async fn remove_data_for_dropped_table_impl(
     table_id: &TableId,
     txn: &mut TxnRequest,
 ) -> Result<Result<(), String>, KVAppError> {
+    // Index cleanup only needs table_id, so do it first to avoid orphan index metadata
+    // when table meta is already gone (partial GC).
+    remove_index_for_dropped_table(kv_api, tenant, table_id, txn).await?;
+
     let seq_meta = kv_api.get_pb(table_id).await?;
 
     let Some(seq_meta) = seq_meta else {
@@ -937,8 +941,6 @@ async fn remove_data_for_dropped_table_impl(
             )));
     }
 
-    // Remove indexes attached to the branch.
-    remove_index_for_dropped_table(kv_api, tenant, table_id, txn).await?;
     Ok(Ok(()))
 }
 

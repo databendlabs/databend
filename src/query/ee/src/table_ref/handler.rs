@@ -512,6 +512,13 @@ impl RealTableRefHandler {
             )));
         }
 
+        if table.is_read_only() {
+            return Err(ErrorCode::IllegalReference(format!(
+                "The table '{}.{}' is read-only, can't create table refs",
+                database, table_name
+            )));
+        }
+
         Ok(table)
     }
 }

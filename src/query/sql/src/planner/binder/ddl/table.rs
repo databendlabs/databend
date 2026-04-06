@@ -1499,6 +1499,12 @@ impl Binder {
                 })))
             }
             AlterTableAction::CreateTableTag { spec } => {
+                if branch.is_some() {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported CREATE TAG on branch reference `{catalog}.{database}.{table}/{}`",
+                        branch.as_ref().unwrap()
+                    )));
+                }
                 let navigation = if let Some(point) = &spec.travel_point {
                     Some(self.resolve_data_travel_point(bind_context, point)?)
                 } else {
@@ -1516,6 +1522,12 @@ impl Binder {
                 })))
             }
             AlterTableAction::DropTableTag { tag_name } => {
+                if branch.is_some() {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported DROP TAG on branch reference `{catalog}.{database}.{table}/{}`",
+                        branch.as_ref().unwrap()
+                    )));
+                }
                 let name = self.normalize_identifier(tag_name).name;
                 Ok(Plan::DropTableTag(Box::new(DropTableTagPlan {
                     tenant,

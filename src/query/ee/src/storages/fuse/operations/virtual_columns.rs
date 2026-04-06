@@ -19,6 +19,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Instant;
 
+use chrono::Duration;
+use chrono::Utc;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::TableExt;
@@ -417,8 +419,8 @@ async fn collect_retainable_history_branch_tables(
     let catalog = ctx
         .get_catalog(fuse_table.get_table_info().catalog())
         .await?;
-    let retention_boundary = chrono::Utc::now()
-        - chrono::Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+    let retention_boundary =
+        Utc::now() - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
     catalog
         .list_history_table_branches(ListHistoryTableBranchesReq {
             table_id: fuse_table.get_id(),
