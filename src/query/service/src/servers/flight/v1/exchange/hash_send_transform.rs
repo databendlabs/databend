@@ -44,6 +44,7 @@ pub struct HashSendTransform {
     tasks: SyncTaskSet,
     channels: Vec<Arc<dyn OutboundChannel>>,
     handle: Option<SyncTaskHandle<'static, Result<Vec<()>>>>,
+    partition_row_counts: Vec<usize>,
 }
 
 impl HashSendTransform {
@@ -73,6 +74,7 @@ impl HashSendTransform {
             ),
             handle: None,
             id: NodeIndex::default(),
+            partition_row_counts: vec![0; scatter_size],
         }));
 
         PipeItem::create(processor, vec![input], vec![output])
@@ -121,6 +123,7 @@ impl Processor for HashSendTransform {
                     if block.is_empty() {
                         continue;
                     }
+                    self.partition_row_counts[partition_id] += block.num_rows();
 
                     if partition_id == self.local_pos {
                         if self.output.is_finished() {
@@ -158,6 +161,19 @@ impl Processor for HashSendTransform {
 
         if self.input.is_finished() {
             self.output.finish();
+
+            // Log partition row distribution
+            let total: usize = self.partition_row_counts.iter().sum();
+            if total > 0 {
+                let avg = total / self.partition_row_counts.len().max(1);
+                let max_rows = self.partition_row_counts.iter().max().copied().unwrap_or(0);
+                let min_rows = self.partition_row_counts.iter().min().copied().unwrap_or(0);
+                let skew = if avg > 0 { max_rows as f64 / avg as f64 } else { 0.0 };
+                log::info!(
+                    "HashSendTransform partition distribution: total={}, partitions={}, min={}, max={}, avg={}, skew={:.2}x, counts={:?}",
+                    total, self.partition_row_counts.len(), min_rows, max_rows, avg, skew, self.partition_row_counts
+                );
+            }
 
             let mut futures = Vec::new();
 
