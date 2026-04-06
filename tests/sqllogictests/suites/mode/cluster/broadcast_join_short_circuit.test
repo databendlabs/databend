@@ -1,0 +1,51 @@
+statement ok
+drop table if exists t_build
+
+statement ok
+drop table if exists t_probe
+
+statement ok
+create table t_build(a int not null, b string not null)
+
+statement ok
+create table t_probe(a int not null, c string not null)
+
+statement ok
+insert into t_build select number, concat('build_', to_string(number)) from numbers(1000)
+
+statement ok
+insert into t_probe select number, concat('probe_', to_string(number)) from numbers(1000)
+
+statement ok
+set enforce_shuffle_join = 1
+
+statement ok
+set enable_parallel_union_all = 0
+
+query I
+select count(*) from (
+    select a, b from (
+        select t_probe.a, t_build.b from t_probe inner join t_build on t_probe.a = t_build.a
+        union all
+        select t_probe.a, t_build.b from t_probe inner join t_build on t_probe.a = t_build.a
+        union all
+        select t_probe.a, t_build.b from t_probe inner join t_build on t_probe.a = t_build.a
+        union all
+        select t_probe.a, t_build.b from t_probe inner join t_build on t_probe.a = t_build.a
+    ) t
+    limit 5
+)
+----
+5
+
+statement ok
+unset enforce_shuffle_join
+
+statement ok
+unset enable_parallel_union_all
+
+statement ok
+drop table if exists t_build
+
+statement ok
+drop table if exists t_probe
