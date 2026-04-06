@@ -1,0 +1,483 @@
+# Auto datetime format detection tests
+# Uses inline settings() to avoid global SET/UNSET pollution
+
+statement ok
+set timezone = 'UTC';
+
+# ============================================================
+# Positive: AUTO date formats (strict=0, auto_detect=1)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('17-DEC-1980');
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('12/17/1980');
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('01-JAN-2000');
+----
+2000-01-01
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('3/05/2023');
+----
+2023-03-05
+
+# ============================================================
+# Positive: AUTO timestamp formats (DD-MON-YYYY family)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('17-DEC-1980 10:30:00');
+----
+1980-12-17 10:30:00.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('01-JAN-2000 23:59:59.123456');
+----
+2000-01-01 23:59:59.123456
+
+# ============================================================
+# Positive: AUTO timestamp formats (MM/DD/YYYY family)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('12/17/1980 10:30:00');
+----
+1980-12-17 10:30:00.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('2/18/2008 02:36:48');
+----
+2008-02-18 02:36:48.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('2/18/2008 02:36:48.123');
+----
+2008-02-18 02:36:48.123000
+
+# ============================================================
+# Positive: RFC 2822 (24h, with timezone)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 14:01:07.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 16:01:07.123456789 +0200');
+----
+2000-12-21 14:01:07.123456
+
+# ============================================================
+# Positive: RFC 2822 (24h, no timezone)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 16:01:07');
+----
+2000-12-21 16:01:07.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 16:01:07.999');
+----
+2000-12-21 16:01:07.999000
+
+# ============================================================
+# Positive: RFC 2822 (12h AM/PM, with timezone)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 04:01:07 PM +0200');
+----
+2000-12-21 14:01:07.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 04:01:07.123 PM +0200');
+----
+2000-12-21 14:01:07.123000
+
+# ============================================================
+# Positive: RFC 2822 (12h AM/PM, no timezone)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 04:01:07 PM');
+----
+2000-12-21 16:01:07.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 11:30:00 AM');
+----
+2000-12-21 11:30:00.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 04:01:07.123456789 PM');
+----
+2000-12-21 16:01:07.123456
+
+# ============================================================
+# Positive: Unix date format
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Mon Jul 08 18:09:51 +0000 2013');
+----
+2013-07-08 18:09:51.000000
+
+# ============================================================
+# Positive: Epoch detection (Snowflake semantics)
+# ============================================================
+
+# seconds
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('1487654321');
+----
+2017-02-21 05:18:41.000000
+
+# milliseconds
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('1487654321321');
+----
+2017-02-21 05:18:41.321000
+
+# compact numeric timestamp strings remain epoch-based
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('20240305');
+----
+1970-08-23 06:18:25.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('20240305123456');
+----
+2611-05-23 18:58:43.456000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('20240305');
+----
+0001-01-01
+
+# date numeric-string detection follows to_date(number)
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('57600');
+----
+2127-09-15
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('1487654321');
+----
+0001-01-01
+
+# negative numeric strings also follow to_date(number)
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('-86400');
+----
+1733-06-12
+
+# ============================================================
+# Positive: to_timestamp_tz with AUTO
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp_tz('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 16:01:07.000000 +0200
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp_tz('17-DEC-1980 10:30:00');
+----
+1980-12-17 10:30:00.000000 +0000
+
+# ============================================================
+# Negative: invalid input returns NULL
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('not-a-date');
+----
+NULL
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('not-a-timestamp');
+----
+NULL
+
+# ============================================================
+# Guard: strict=1 + auto_detect=1 → AUTO still activates
+# (auto_detect is independent of strict parser)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=1) select try_to_date('17-DEC-1980');
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=1) select try_to_timestamp('12/17/1980 10:30:00');
+----
+1980-12-17 10:30:00.000000
+
+# ============================================================
+# Guard: auto_detect=0 → AUTO does NOT activate
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=0) select try_to_date('17-DEC-1980');
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=0) select try_to_timestamp('12/17/1980 10:30:00');
+----
+NULL
+
+# ============================================================
+# Guard: strict=0 + auto_detect=0 → behavior unchanged
+# ============================================================
+
+# ISO formats still work via Layer 1/2
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=0) select try_to_timestamp('2013-04-28 20:57:01');
+----
+2013-04-28 20:57:01.000000
+
+# dtparse fallback still works for non-ISO
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=0) select try_to_timestamp('Dec 17, 1980');
+----
+1980-12-17 00:00:00.000000
+
+# compact numeric date handled by dtparse when auto_detect=0
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=0) select try_to_timestamp('20240305');
+----
+2024-03-05 00:00:00.000000
+
+# ============================================================
+# Guard: dtparse fallback works for timestamp and date
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Dec 17, 1980');
+----
+1980-12-17 00:00:00.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('Dec 17, 1980');
+----
+1980-12-17
+
+# ============================================================
+# Determinism: date_format_style does not affect AUTO
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, date_format_style='Oracle') select try_to_date('17-DEC-1980');
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, date_format_style='MySQL') select try_to_date('17-DEC-1980');
+----
+1980-12-17
+
+# ============================================================
+# Epoch boundary cases
+# ============================================================
+
+# boundary: sec vs ms
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('31535999999');
+----
+2969-05-02 23:59:59.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('31536000001');
+----
+1971-01-01 00:00:00.001000
+
+# negative epoch (seconds)
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('-86400');
+----
+1969-12-31 00:00:00.000000
+
+# ============================================================
+# VARIANT cast with AUTO detect
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select parse_json('"17-DEC-1980"')::TIMESTAMP;
+----
+1980-12-17 00:00:00.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select parse_json('"12/17/1980"')::DATE;
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select parse_json('"57600"')::DATE;
+----
+2127-09-15
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select parse_json('"Thu, 21 Dec 2000 16:01:07 +0200"')::TIMESTAMP;
+----
+2000-12-21 14:01:07.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select parse_json('"Thu, 21 Dec 2000 16:01:07 +0200"')::TIMESTAMP_TZ;
+----
+2000-12-21 16:01:07.000000 +0200
+
+# When auto_detect=1, both function path and VARIANT path converge on AUTO
+# (Layer 3 matches before dtparse), so results are identical regardless of strict.
+query B
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200') = parse_json('"Thu, 21 Dec 2000 16:01:07 +0200"')::TIMESTAMP;
+----
+1
+
+query B
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200') = parse_json('"Thu, 21 Dec 2000 16:01:07 +0200"')::TIMESTAMP;
+----
+1
+
+# Guard: VARIANT cast without auto_detect still fails for non-ISO
+query T
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=0) select try_cast(parse_json('"17-DEC-1980"') as TIMESTAMP);
+----
+NULL
+
+# ============================================================
+# Boundary: leap year
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('29-FEB-2024');
+----
+2024-02-29
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('02/29/2024');
+----
+2024-02-29
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('29-FEB-2024 12:00:00');
+----
+2024-02-29 12:00:00.000000
+
+# ============================================================
+# Boundary: month > 12 rejected
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_date('13/01/2024');
+----
+2024-01-13
+
+# ============================================================
+# Boundary: AM/PM (12:00 AM = midnight, 12:00 PM = noon)
+# ============================================================
+
+query B
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 12:00:00 AM') = try_to_timestamp('Thu, 21 Dec 2000 00:00:00');
+----
+1
+
+query B
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('Thu, 21 Dec 2000 12:00:00 PM') = try_to_timestamp('Thu, 21 Dec 2000 12:00:00');
+----
+1
+
+# ============================================================
+# Non-UTC timezone: Asia/Shanghai (+08:00)
+# ============================================================
+
+# Naive timestamp interpreted in session timezone
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_timestamp('17-DEC-1980 10:30:00');
+----
+1980-12-17 10:30:00.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_timestamp('12/17/1980 10:30:00');
+----
+1980-12-17 10:30:00.000000
+
+# RFC 2822 with explicit offset: result converted to UTC regardless of session tz
+# +0200 → UTC is 14:01:07, displayed in Asia/Shanghai (+8) as 22:01:07
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 22:01:07.000000
+
+# timestamp_tz: naive input gets session tz offset (+0800)
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_timestamp_tz('17-DEC-1980 10:30:00');
+----
+1980-12-17 10:30:00.000000 +0800
+
+# timestamp_tz: explicit offset preserved
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_timestamp_tz('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 16:01:07.000000 +0200
+
+# Date is timezone-independent
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_date('17-DEC-1980');
+----
+1980-12-17
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_date('12/17/1980');
+----
+1980-12-17
+
+# ============================================================
+# Non-UTC timezone: America/Los_Angeles (-08:00/-07:00)
+# ============================================================
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='America/Los_Angeles') select try_to_timestamp('17-DEC-1980 10:30:00');
+----
+1980-12-17 10:30:00.000000
+
+# RFC 2822 +0200 → UTC 14:01:07, displayed in LA (-08:00 in Dec) as 06:01:07
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='America/Los_Angeles') select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 06:01:07.000000
+
+# timestamp_tz: naive input gets session tz offset (-0800 in Dec)
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='America/Los_Angeles') select try_to_timestamp_tz('17-DEC-1980 10:30:00');
+----
+1980-12-17 10:30:00.000000 -0800
+
+# Same RFC 2822 input with explicit offset produces same UTC instant
+# regardless of session timezone (Asia/Shanghai vs UTC)
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='Asia/Shanghai') select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 22:01:07.000000
+
+query T
+settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1, timezone='UTC') select try_to_timestamp('Thu, 21 Dec 2000 16:01:07 +0200');
+----
+2000-12-21 14:01:07.000000
+
+# ============================================================
+# Cleanup
+# ============================================================
+
+statement ok
+unset timezone;

@@ -1,0 +1,50 @@
+statement ok
+DROP DATABASE IF EXISTS db_05_0063
+
+statement ok
+CREATE DATABASE db_05_0063
+
+statement ok
+USE db_05_0063
+
+statement ok
+CREATE OR REPLACE TABLE t_drop(a INT, b INT, c INT)
+
+statement ok
+ALTER TABLE t_drop ADD CONSTRAINT c_positive CHECK (c > 0)
+
+statement error Constraint 'c_positive' is incompatible with the target schema
+ALTER TABLE t_drop DROP COLUMN c
+
+query B
+SELECT count(*) = 1 FROM system.columns WHERE database = 'db_05_0063' AND "table" = 't_drop' AND name = 'c'
+----
+1
+
+statement ok
+INSERT INTO t_drop VALUES (1, 1, 1)
+
+query I
+SELECT count(*) FROM t_drop
+----
+1
+
+statement ok
+CREATE OR REPLACE TABLE t_modify(a INT, b STRING)
+
+statement ok
+ALTER TABLE t_modify ADD CONSTRAINT b_nonempty CHECK (length(b) > 0)
+
+statement error Constraint 'b_nonempty' is incompatible with the target schema
+ALTER TABLE t_modify MODIFY COLUMN b INT
+
+statement ok
+INSERT INTO t_modify VALUES (1, 'x')
+
+query I
+SELECT count(*) FROM t_modify
+----
+1
+
+statement ok
+DROP DATABASE db_05_0063

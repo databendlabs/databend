@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_io::GeometryDataType;
 use databend_common_io::prelude::BinaryDisplayFormat;
+use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::principal::UserSettingValue;
 use databend_common_meta_app::storage::S3StorageClass;
 
@@ -859,6 +860,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_strict_datetime_parser")? != 0)
     }
 
+    pub fn get_enable_auto_detect_datetime_format(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_auto_detect_datetime_format")? != 0)
+    }
+
     pub fn get_enable_dst_hour_fix(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_dst_hour_fix")? != 0)
     }
@@ -907,6 +912,11 @@ impl Settings {
     pub fn get_binary_input_format(&self) -> Result<BinaryDisplayFormat> {
         let v = self.try_get_string("binary_input_format")?;
         BinaryDisplayFormat::parse(&v)
+    }
+
+    pub fn get_http_json_result_mode(&self) -> Result<HttpHandlerDataFormat> {
+        let v = self.try_get_string("http_json_result_mode")?;
+        HttpHandlerDataFormat::parse(&v)
     }
 
     pub fn get_script_max_steps(&self) -> Result<u64> {

@@ -88,6 +88,32 @@ setting binary_output_format to 'UTF-8-LOSSY'."
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HttpHandlerDataFormat {
+    #[default]
+    Display,
+    Driver,
+}
+
+impl HttpHandlerDataFormat {
+    pub fn parse(s: &str) -> Result<Self, ErrorCode> {
+        match s.to_ascii_lowercase().as_str() {
+            "display" => Ok(HttpHandlerDataFormat::Display),
+            "driver" => Ok(HttpHandlerDataFormat::Driver),
+            other => Err(ErrorCode::InvalidArgument(format!(
+                "Invalid http json result mode '{other}', valid values: DISPLAY | DRIVER"
+            ))),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            HttpHandlerDataFormat::Display => "display",
+            HttpHandlerDataFormat::Driver => "driver",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputFormatSettings {
     pub jiff_timezone: TimeZone,
@@ -96,6 +122,7 @@ pub struct InputFormatSettings {
 
     pub is_rounding_mode: bool,
     pub disable_variant_check: bool,
+    pub enable_auto_detect_datetime_format: bool,
 }
 
 // only used for tests
@@ -107,6 +134,7 @@ impl Default for InputFormatSettings {
             binary_format: BinaryDisplayFormat::Hex,
             is_rounding_mode: true,
             disable_variant_check: false,
+            enable_auto_detect_datetime_format: false,
         }
     }
 }
@@ -116,6 +144,7 @@ pub struct OutputFormatSettings {
     pub jiff_timezone: TimeZone,
     pub geometry_format: GeometryDataType,
     pub binary_format: BinaryDisplayFormat,
+    pub http_json_result_mode: HttpHandlerDataFormat,
 
     // used only in http handler response
     pub format_null_as_str: bool,
@@ -127,6 +156,7 @@ impl Default for OutputFormatSettings {
             jiff_timezone: TimeZone::UTC,
             geometry_format: GeometryDataType::default(),
             binary_format: BinaryDisplayFormat::Hex,
+            http_json_result_mode: HttpHandlerDataFormat::Display,
             format_null_as_str: false,
         }
     }

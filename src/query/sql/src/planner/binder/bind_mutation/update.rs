@@ -43,7 +43,6 @@ use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
-use crate::plans::VisitorMut;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -233,16 +232,17 @@ impl Binder {
                 }
                 .into();
 
-                let mut rewriter =
-                    AggregateRewriter::new(&mut mutation.bind_context, self.metadata.clone());
-                rewriter.visit(&mut any_func).unwrap();
+                AggregateRewriter::rewrite_expr(
+                    &mut mutation.bind_context.aggregate_info,
+                    self.metadata.clone(),
+                    &mut any_func,
+                )
+                .unwrap();
 
-                let new = mutation
-                    .bind_context
-                    .aggregate_info
-                    .get_aggregate_function(&display_name)
-                    .unwrap()
-                    .index;
+                let new = match &any_func {
+                    ScalarExpr::BoundColumnRef(column_ref) => column_ref.column.index,
+                    _ => unreachable!("aggregate rewriter must replace aggregate with column"),
+                };
 
                 let (cast, new) = if !binding.data_type.is_nullable() {
                     let ColumnBinding {
@@ -285,14 +285,16 @@ impl Binder {
             .collect();
         let eval_scalar = EvalScalar { items };
 
-        mutation.bind_context.aggregate_info.group_items = fields_bindings
-            .into_iter()
-            .chain(std::iter::once(row_id))
-            .map(|column| ScalarItem {
-                index: column.index,
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
-            })
-            .collect();
+        mutation.bind_context.aggregate_info.replace_group_items(
+            fields_bindings
+                .into_iter()
+                .chain(std::iter::once(row_id))
+                .map(|column| ScalarItem {
+                    index: column.index,
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column }),
+                })
+                .collect(),
+        );
 
         for eval in &mut mutation.matched_evaluators {
             if let Some(expr) = &mut eval.condition {

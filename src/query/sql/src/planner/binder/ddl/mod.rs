@@ -20,7 +20,7 @@ mod data_mask;
 pub mod database;
 mod dictionary;
 mod dynamic_table;
-mod index;
+pub(crate) mod index;
 mod network_policy;
 mod notification;
 mod password_policy;

@@ -44,6 +44,8 @@ use databend_common_sql::BloomIndexColumns;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::Planner;
 use databend_common_sql::analyze_cluster_keys;
+use databend_common_sql::binder::validate_constraints_by_schema;
+use databend_common_sql::binder::validate_table_indexes_not_referencing_columns;
 use databend_common_sql::plans::ModifyColumnAction;
 use databend_common_sql::plans::ModifyTableColumnPlan;
 use databend_common_sql::plans::Plan;
@@ -200,6 +202,7 @@ impl ModifyTableColumnInterpreter {
         let table_info = table.get_table_info();
         let mut new_schema = schema.as_ref().clone();
         let mut modified_cols = HashSet::with_capacity(field_and_comments.len());
+        let mut modified_column_ids = HashSet::new();
         // first check default expr before lock table
         for (field, _comment) in field_and_comments {
             if let Some((i, old_field)) = schema.column_with_name(&field.name) {
@@ -224,6 +227,10 @@ impl ModifyTableColumnInterpreter {
 
                 if old_field.data_type != field.data_type {
                     modified_cols.insert(field.name.clone());
+                    // Aggregating indexes still bind to the existing table column ids, so
+                    // MODIFY COLUMN must check the ids from the current schema instead of the
+                    // freshly analyzed field definition.
+                    modified_column_ids.extend(old_field.column_ids());
                     // Check if this column is referenced by computed columns.
                     let data_schema = DataSchema::from(&new_schema);
                     check_referenced_computed_columns(
@@ -264,6 +271,20 @@ impl ModifyTableColumnInterpreter {
 
         let catalog_name = table_info.catalog();
         let catalog = self.ctx.get_catalog(catalog_name).await?;
+
+        validate_table_indexes_not_referencing_columns(
+            self.ctx.clone(),
+            catalog.as_ref(),
+            &self.ctx.get_tenant(),
+            table.get_id(),
+            &modified_column_ids,
+        )
+        .await?;
+        validate_constraints_by_schema(
+            self.ctx.clone(),
+            &table_info.meta.constraints,
+            new_schema.as_ref(),
+        )?;
 
         let base_snapshot = fuse_table.read_table_snapshot().await?;
         let prev_snapshot_id = base_snapshot.snapshot_id().map(|(id, _)| id);

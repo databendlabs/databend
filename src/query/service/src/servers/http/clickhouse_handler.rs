@@ -255,7 +255,7 @@ pub async fn clickhouse_handler_get(
         let default_format = get_default_format(&params, headers).map_err(BadRequest)?;
         let sql = params.query();
         // Use interpreter_plan_sql, we can write the query log if an error occurs.
-        let (plan, extras, _guard) = interpreter_plan_sql(context.clone(), &sql, true)
+        let (plan, extras, _guard) = interpreter_plan_sql(context.clone(), &sql, true, None)
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;
@@ -339,7 +339,7 @@ pub async fn clickhouse_handler_post(
         };
         info!("receive clickhouse http post, (query + body) = {}", &msg);
 
-        let (mut plan, extras, _guard) = interpreter_plan_sql(ctx.clone(), &sql, true)
+        let (mut plan, extras, _guard) = interpreter_plan_sql(ctx.clone(), &sql, true, None)
             .await
             .map_err(|err| err.display_with_sql(&sql))
             .map_err(BadRequest)?;

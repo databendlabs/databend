@@ -14,10 +14,12 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::hash::DefaultHasher;
 use std::hash::Hasher;
 use std::ops::ControlFlow;
 use std::ops::Deref;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -81,6 +83,7 @@ use serde::Serialize;
 use super::eliminate_cast::is_injective_cast;
 use crate::Index;
 use crate::eliminate_cast::cast_const;
+use crate::filters::BinaryFuse32Builder;
 use crate::filters::BlockBloomFilterIndexVersion;
 use crate::filters::BlockFilter;
 use crate::filters::BloomBuilder;
@@ -94,6 +97,36 @@ use crate::filters::Xor8Filter;
 use crate::statistics_to_domain;
 
 const NGRAM_HASH_SEED: u64 = 1575457558;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BloomIndexType {
+    #[default]
+    Xor8,
+    BinaryFuse32,
+}
+
+impl Display for BloomIndexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            BloomIndexType::Xor8 => "xor8",
+            BloomIndexType::BinaryFuse32 => "binary_fuse32",
+        })
+    }
+}
+
+impl FromStr for BloomIndexType {
+    type Err = ErrorCode;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s.to_lowercase().as_str() {
+            "xor8" => Ok(Self::Xor8),
+            "binary_fuse32" => Ok(Self::BinaryFuse32),
+            _ => Err(ErrorCode::TableOptionInvalid(format!(
+                "invalid bloom_index_type '{s}', must be one of: xor8, binary_fuse32"
+            ))),
+        }
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct BloomIndexMeta {
@@ -679,6 +712,7 @@ impl NgramArgs {
 impl BloomIndexBuilder {
     pub fn create(
         func_ctx: FunctionContext,
+        bloom_index_type: BloomIndexType,
         bloom_columns_map: BTreeMap<FieldIndex, TableField>,
         ngram_args: &[NgramArgs],
     ) -> Result<Self> {
@@ -690,7 +724,12 @@ impl BloomIndexBuilder {
                 field: field.clone(),
                 gram_size: 0,
                 bloom_size: 0,
-                builder: FilterImplBuilder::Xor(Xor8Builder::create()),
+                builder: match bloom_index_type {
+                    BloomIndexType::Xor8 => FilterImplBuilder::Xor(Xor8Builder::create()),
+                    BloomIndexType::BinaryFuse32 => {
+                        FilterImplBuilder::BinaryFuse32(BinaryFuse32Builder::create())
+                    }
+                },
             });
         }
         for arg in ngram_args.iter() {
@@ -727,7 +766,7 @@ impl BloomIndexBuilder {
 
         for (index, index_column) in self.bloom_columns.iter_mut().enumerate() {
             let field_type = &block.data_type(index_column.index);
-            if !Xor8Filter::supported_type(field_type) {
+            if !BloomIndex::supported_type(index_column.field.data_type()) {
                 bloom_keys_to_remove.push(index);
                 continue;
             }
