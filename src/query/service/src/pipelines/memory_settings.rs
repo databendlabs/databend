@@ -15,6 +15,7 @@
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::MemorySettings;
+use databend_common_pipeline_transforms::SpillBackoffSettings;
 use databend_common_settings::OutofMemoryBehavior;
 
 use crate::sessions::QueryContext;
@@ -154,6 +155,16 @@ impl MemorySettingsExt for MemorySettings {
             );
         }
 
+        let max_sleep_ms = settings.get_spill_global_backoff_max_sleep_ms()?;
+        let min_query_memory_usage = settings.get_min_query_memory_usage()?;
+
+        if max_sleep_ms > 0 && min_query_memory_usage > 0 {
+            builder = builder.with_spill_backoff(Some(SpillBackoffSettings {
+                max_sleep_ms,
+                min_query_memory_usage,
+            }));
+        }
+
         Ok(builder.build())
     }
 }
@@ -163,6 +174,7 @@ mod tests {
     use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
     use databend_common_pipeline_transforms::MemorySettings;
+    use databend_common_pipeline_transforms::SpillBackoffSettings;
 
     use crate::pipelines::memory_settings::MemorySettingsExt;
     use crate::test_kits::TestFixture;
@@ -382,6 +394,61 @@ mod tests {
         let memory_settings = MemorySettings::from_window_settings(&ctx)?;
 
         assert_eq!(memory_settings.spill_unit_size, 3 * 1024 * 1024);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_aggregate_spill_backoff_enabled_from_settings() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
+        settings.set_setting("spill_global_backoff_max_sleep_ms".into(), "100".into())?;
+        settings.set_setting("min_query_memory_usage".into(), "250".into())?;
+
+        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
+
+        assert_eq!(
+            memory_settings.spill_backoff,
+            Some(SpillBackoffSettings {
+                max_sleep_ms: 100,
+                min_query_memory_usage: 250,
+            })
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_aggregate_spill_backoff_disabled_when_sleep_is_zero() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
+        settings.set_setting("spill_global_backoff_max_sleep_ms".into(), "0".into())?;
+        settings.set_setting("min_query_memory_usage".into(), "250".into())?;
+
+        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
+
+        assert_eq!(memory_settings.spill_backoff, None);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_aggregate_spill_backoff_disabled_when_min_query_memory_usage_is_zero()
+    -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+        let settings = ctx.get_settings();
+
+        settings.set_setting("max_memory_usage".into(), "1000".into())?;
+        settings.set_setting("spill_global_backoff_max_sleep_ms".into(), "100".into())?;
+        settings.set_setting("min_query_memory_usage".into(), "0".into())?;
+
+        let memory_settings = MemorySettings::from_aggregate_settings(&ctx)?;
+
+        assert_eq!(memory_settings.spill_backoff, None);
         Ok(())
     }
 }
