@@ -78,6 +78,18 @@ impl RuntimeFiltersDesc {
         }))
     }
 
+    /// Close the broadcast source channel and notify runtime filter watchers.
+    /// Called when all threads of a hash join are short-circuited (e.g., downstream
+    /// LIMIT satisfied via sequential UNION ALL) and no thread will call `globalization`.
+    pub fn close_broadcast(&self) {
+        if let Some(broadcast_id) = self.broadcast_id {
+            self.ctx.broadcast_source_sender(broadcast_id).close();
+        }
+        for ready in &self.runtime_filters_ready {
+            let _ = ready.runtime_filter_watcher.send(None);
+        }
+    }
+
     pub async fn globalization(&self, mut packet: JoinRuntimeFilterPacket) -> Result<()> {
         if let Some(broadcast_id) = self.broadcast_id {
             packet = get_global_runtime_filter_packet(broadcast_id, packet, &self.ctx).await?;
