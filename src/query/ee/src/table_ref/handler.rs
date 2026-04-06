@@ -117,12 +117,13 @@ impl TableRefHandler for RealTableRefHandler {
             .options
             .insert(OPT_KEY_BASE_TABLE_ID.to_string(), base_table_id.to_string());
 
-        // Record which table IDs this new branch transitively references.
-        // Not set when snapshot is empty (no segments to protect).
-        // - Created from base table with data: "base_id"
-        // - Created from branch A (refs "base_id"): "A_id,base_id"
-        // - Created from branch B (refs "A_id,base_id"): "B_id,A_id,base_id"
-        if source_snapshot_location.is_some() {
+        // Record which branch IDs this new branch transitively references.
+        // Base table is always implicitly referenced via OPT_KEY_BASE_TABLE_ID.
+        // Not set when creating from base table or when snapshot is empty.
+        // - Created from base table: not set (base table implicit via BASE_TABLE_ID)
+        // - Created from branch A: "A_id"
+        // - Created from branch B (refs "A_id"): "B_id,A_id"
+        if source_snapshot_location.is_some() && source_table_id != base_table_id {
             let mut ref_ids = source_table_id.to_string();
             if let Some(inherited) = table_info.meta.options.get(OPT_KEY_REFERENCED_BRANCH_IDS) {
                 if !inherited.is_empty() {

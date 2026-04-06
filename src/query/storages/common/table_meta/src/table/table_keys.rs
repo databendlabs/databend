@@ -70,12 +70,13 @@ pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
 ///
 /// The option key for storing the base table id in a branch's TableMeta.
 pub const OPT_KEY_BASE_TABLE_ID: &str = "base_table_id";
-/// The option key for storing the table ids referenced by a branch's snapshot segments.
-/// Comma-separated list of u64 table ids (source + inherited). Set once at branch creation, never updated.
-/// Not set when snapshot is empty (no segments to protect).
-/// - Created from base table with data: "base_id"
-/// - Created from branch A (refs "base_id"): "A_id,base_id"
-/// - Created from branch B (refs "A_id,base_id"): "B_id,A_id,base_id"
+/// Comma-separated list of branch table IDs that this branch transitively references.
+/// Base table is always implicitly referenced via OPT_KEY_BASE_TABLE_ID and is NOT included here.
+/// Set once at branch creation, never updated. Not set when creating from base table or when
+/// snapshot is empty.
+/// - Created from base table: not set
+/// - Created from branch A: "A_id"
+/// - Created from branch B (refs "A_id"): "B_id,A_id"
 pub const OPT_KEY_REFERENCED_BRANCH_IDS: &str = "referenced_branch_ids";
 
 /// Table option keys that reserved for internal usage only

@@ -104,6 +104,7 @@ pub async fn do_vacuum2(
     respect_flash_back: bool,
 ) -> Result<Vec<String>> {
     let table_info = table.get_table_info();
+    let table_id = table.get_id();
     if ctx.txn_mgr().lock().is_active() {
         info!(
             "Transaction is active, skipping vacuum, target table {}",
@@ -128,7 +129,7 @@ pub async fn do_vacuum2(
     let mut files_to_gc: Vec<String> = base_snapshot_files;
     let mut storage_prefixes: StoragePrefixes = HashMap::from([(
         format!("{}/", fuse_table.meta_location_generator().prefix()),
-        fuse_table.get_id(),
+        table_id,
     )]);
 
     let catalog = ctx
@@ -136,7 +137,7 @@ pub async fn do_vacuum2(
         .await?;
     let history_branches = catalog
         .list_history_table_branches(ListHistoryTableBranchesReq {
-            table_id: fuse_table.get_id(),
+            table_id,
             retention_boundary: None,
         })
         .await?;
@@ -176,7 +177,7 @@ pub async fn do_vacuum2(
             if let Err(err) = catalog
                 .drop_table_branch(DropTableBranchReq {
                     tenant: ctx.get_tenant(),
-                    table_id: fuse_table.get_id(),
+                    table_id,
                     branch_name,
                     branch_id: branch_table.get_id(),
                 })
@@ -321,6 +322,7 @@ pub async fn do_vacuum2(
                         branch_table.as_ref(),
                         storage_prefixes,
                         tables_at_risk,
+                        table_id,
                         gc_root_snapshot,
                     )
                     .await
@@ -396,7 +398,6 @@ pub async fn do_vacuum2(
             gc_pending_branches.push(branch_table);
         }
     }
-    let base_table_id = fuse_table.get_id();
     let final_gc_results =
         futures::stream::iter(final_gc_branches.into_iter().map(|branch_table| {
             let ctx = ctx.clone();
@@ -405,7 +406,7 @@ pub async fn do_vacuum2(
                 final_gc_branch(
                     &ctx,
                     branch_table.as_ref(),
-                    base_table_id,
+                    table_id,
                     &branch_name,
                     retention_boundary,
                 )
@@ -628,6 +629,7 @@ async fn collect_external_segments(
     branch_table: &FuseTable,
     storage_prefixes: &StoragePrefixes,
     tables_at_risk: &HashSet<u64>,
+    base_table_id: u64,
     gc_root_snapshot: Option<Arc<TableSnapshot>>,
 ) -> Result<(ProtectedSegmentsByTable, Vec<Location>)> {
     if tables_at_risk.is_empty() {
@@ -639,20 +641,26 @@ async fn collect_external_segments(
         return Ok((HashMap::new(), vec![]));
     }
 
-    // Fast pre-check: if the branch records which other branches it references, and none of
-    // them are at risk, we can skip the expensive snapshot chain traversal entirely.
-    // Branches created before this option was introduced fall through to the full traversal.
-    if let Some(ref_ids_str) = branch_table
-        .get_table_info()
-        .meta
-        .options
-        .get(OPT_KEY_REFERENCED_BRANCH_IDS)
-    {
-        let has_at_risk_ref = ref_ids_str
-            .split(',')
-            .filter(|s| !s.is_empty())
-            .filter_map(|s| s.parse::<u64>().ok())
-            .any(|id| tables_at_risk.contains(&id));
+    // Fast pre-check: if the branch's base table and referenced branches are all outside the
+    // at-risk set, we can skip the expensive snapshot chain traversal entirely.
+    // Base table is always implicitly referenced via OPT_KEY_BASE_TABLE_ID.
+    // Branches created before these options were introduced fall through to the full traversal.
+    if base_table_id > 0 {
+        let mut has_at_risk_ref = tables_at_risk.contains(&base_table_id);
+        if !has_at_risk_ref {
+            if let Some(ref_ids_str) = branch_table
+                .get_table_info()
+                .meta
+                .options
+                .get(OPT_KEY_REFERENCED_BRANCH_IDS)
+            {
+                has_at_risk_ref = ref_ids_str
+                    .split(',')
+                    .filter(|s| !s.is_empty())
+                    .filter_map(|s| s.parse::<u64>().ok())
+                    .any(|id| tables_at_risk.contains(&id));
+            }
+        }
         if !has_at_risk_ref {
             return Ok((HashMap::new(), vec![]));
         }
