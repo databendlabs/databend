@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -49,6 +50,7 @@ fn build_partition_bucket_experimental(
     shuffle_mode: AggregateShuffleMode,
 ) -> Result<()> {
     let mut final_parallelism = ctx.get_settings().get_max_threads()? as usize;
+    let base_consumed_bits = shuffle_mode.determine_radix_bits();
     match shuffle_mode {
         AggregateShuffleMode::Row => {
             let schema = params.spill_schema();
@@ -107,6 +109,7 @@ fn build_partition_bucket_experimental(
 
     let mut builder = TransformPipeBuilder::create();
     let (tx, rx) = async_channel::unbounded();
+    let next_task_id = Arc::new(AtomicU64::new(1));
     for id in 0..final_parallelism {
         let input_port = InputPort::create();
         let output_port = OutputPort::create();
@@ -115,9 +118,11 @@ fn build_partition_bucket_experimental(
             output_port.clone(),
             params.clone(),
             id,
+            base_consumed_bits,
             ctx.clone(),
             tx.clone(),
             rx.clone(),
+            next_task_id.clone(),
         )?;
         builder.add_transform(input_port, output_port, ProcessorPtr::create(processor));
     }
