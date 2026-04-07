@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_sql::plans::RemoveStagePlan;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_storages_common_io::Files;
 use futures_util::StreamExt;
 use log::debug;
@@ -89,7 +89,7 @@ impl Interpreter for RemoveUserStageInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "remove_user_stage_execute");
 
         let plan = self.plan.clone();
-        let op = StageTable::get_op(&self.plan.stage)?;
+        let op = init_stage_operator(&self.plan.stage)?;
         let pattern = if plan.pattern.is_empty() {
             None
         } else {

@@ -36,10 +36,15 @@ struct PartitionMask {
 
 impl PartitionMask {
     fn new(partition_count: u64) -> Self {
+        Self::with_start_bit(partition_count, 0)
+    }
+
+    fn with_start_bit(partition_count: u64, start_bit: u64) -> Self {
         let radix_bits = partition_count.trailing_zeros() as u64;
         debug_assert_eq!(1 << radix_bits, partition_count);
+        debug_assert!(start_bit + radix_bits <= 48);
 
-        let shift = 48 - radix_bits;
+        let shift = 48 - start_bit - radix_bits;
         let mask = ((1 << radix_bits) - 1) << shift;
 
         Self { mask, shift }
@@ -59,6 +64,7 @@ pub struct PartitionedPayload {
 
     pub arenas: Vec<Arc<Bump>>,
 
+    partition_start_bit: u64,
     partition_mask: PartitionMask,
 }
 
@@ -70,6 +76,16 @@ impl PartitionedPayload {
         group_types: Vec<DataType>,
         aggrs: Vec<AggregateFunctionRef>,
         partition_count: u64,
+        arenas: Vec<Arc<Bump>>,
+    ) -> Self {
+        Self::new_with_start_bit(group_types, aggrs, partition_count, 0, arenas)
+    }
+
+    pub fn new_with_start_bit(
+        group_types: Vec<DataType>,
+        aggrs: Vec<AggregateFunctionRef>,
+        partition_count: u64,
+        partition_start_bit: u64,
         arenas: Vec<Arc<Bump>>,
     ) -> Self {
         let states_layout = if !aggrs.is_empty() {
@@ -101,7 +117,8 @@ impl PartitionedPayload {
             row_layout,
 
             arenas,
-            partition_mask: PartitionMask::new(partition_count),
+            partition_start_bit,
+            partition_mask: PartitionMask::with_start_bit(partition_count, partition_start_bit),
         }
     }
 
@@ -169,11 +186,17 @@ impl PartitionedPayload {
             group_types,
             aggrs,
             arenas,
+            partition_start_bit,
             ..
         } = self;
 
-        let mut new_partition_payload =
-            PartitionedPayload::new(group_types, aggrs, new_partition_count as u64, arenas);
+        let mut new_partition_payload = PartitionedPayload::new_with_start_bit(
+            group_types,
+            aggrs,
+            new_partition_count as u64,
+            partition_start_bit,
+            arenas,
+        );
 
         state.clear();
         for payload in payloads.into_iter() {
@@ -184,7 +207,9 @@ impl PartitionedPayload {
     }
 
     pub fn combine(&mut self, other: PartitionedPayload, state: &mut PayloadFlushState) {
-        if other.partition_count() == self.partition_count() {
+        if other.partition_count() == self.partition_count()
+            && other.partition_start_bit == self.partition_start_bit
+        {
             for (l, r) in self.payloads.iter_mut().zip(other.payloads.into_iter()) {
                 l.combine(r);
             }
@@ -291,5 +316,21 @@ impl PartitionedPayload {
 
     pub fn memory_size(&self) -> usize {
         self.payloads.iter().map(|x| x.memory_size()).sum()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PartitionMask;
+
+    #[test]
+    fn test_partition_mask_with_start_bit() {
+        let top_bit_mask = PartitionMask::new(2);
+        assert_eq!(top_bit_mask.index(1_u64 << 47), 1);
+        assert_eq!(top_bit_mask.index(1_u64 << 44), 0);
+
+        let shifted_mask = PartitionMask::with_start_bit(2, 3);
+        assert_eq!(shifted_mask.index(1_u64 << 47), 0);
+        assert_eq!(shifted_mask.index(1_u64 << 44), 1);
     }
 }

@@ -45,7 +45,43 @@ impl AggregationStatistics {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.processed_rows = 0;
+        self.processed_bytes = 0;
+        self.first_block_start = None;
+        self.start = Instant::now();
+    }
+
     pub fn log_finish_statistics(&mut self, hashtable: &AggregateHashTable) {
+        self.log_finish(
+            hashtable.payload.len(),
+            hashtable.hash_index_resize_count(),
+            None,
+        );
+    }
+
+    pub fn log_task_finish_statistics(
+        &mut self,
+        task_id: u64,
+        processor_id: usize,
+        spill_depth: usize,
+        output_rows: usize,
+        hash_index_resizes: usize,
+        spilled: bool,
+    ) {
+        self.log_finish(
+            output_rows,
+            hash_index_resizes,
+            Some((task_id, processor_id, spill_depth, spilled)),
+        );
+    }
+
+    fn log_finish(
+        &mut self,
+        output_rows: usize,
+        hash_index_resizes: usize,
+        task: Option<(u64, usize, usize, bool)>,
+    ) {
         let elapsed = self.start.elapsed().as_secs_f64();
         let real_elapsed = self
             .first_block_start
@@ -53,22 +89,41 @@ impl AggregationStatistics {
             .map(|t| t.elapsed().as_secs_f64())
             .unwrap_or(elapsed);
 
-        log::info!(
-            "[TRANSFORM-AGGREGATOR][{}] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
-            self.stage,
-            self.processed_rows,
-            hashtable.payload.len(),
-            elapsed,
-            real_elapsed,
-            convert_number_size(self.processed_rows as f64 / elapsed),
-            convert_byte_size(self.processed_bytes as f64 / elapsed),
-            convert_byte_size(self.processed_bytes as f64),
-            hashtable.hash_index_resize_count(),
-        );
+        match task {
+            Some((task_id, processor_id, spill_depth, spilled)) => {
+                log::info!(
+                    "{}[{}] Task completed: task_id={}, spill_depth={}, spilled={}, {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
+                    self.stage,
+                    processor_id,
+                    task_id,
+                    spill_depth,
+                    spilled,
+                    self.processed_rows,
+                    output_rows,
+                    elapsed,
+                    real_elapsed,
+                    convert_number_size(self.processed_rows as f64 / elapsed),
+                    convert_byte_size(self.processed_bytes as f64 / elapsed),
+                    convert_byte_size(self.processed_bytes as f64),
+                    hash_index_resizes,
+                );
+            }
+            None => {
+                log::info!(
+                    "[{}] Aggregation completed: {} → {} rows in {:.2}s (real: {:.2}s), throughput: {} rows/sec, {}/sec, total: {}, hash index resizes: {}",
+                    self.stage,
+                    self.processed_rows,
+                    output_rows,
+                    elapsed,
+                    real_elapsed,
+                    convert_number_size(self.processed_rows as f64 / elapsed),
+                    convert_byte_size(self.processed_bytes as f64 / elapsed),
+                    convert_byte_size(self.processed_bytes as f64),
+                    hash_index_resizes,
+                );
+            }
+        }
 
-        self.processed_rows = 0;
-        self.processed_bytes = 0;
-        self.first_block_start = None;
-        self.start = Instant::now();
+        self.reset();
     }
 }

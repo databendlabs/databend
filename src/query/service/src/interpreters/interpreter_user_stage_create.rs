@@ -22,7 +22,7 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_sql::plans::CreateStagePlan;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
@@ -98,7 +98,7 @@ impl Interpreter for CreateUserStageInterpreter {
         // when create or replace stage success, if old stage is not External stage, remove stage files
         if let Some(stage) = old_stage {
             if stage.stage_type != StageType::External {
-                let op = StageTable::get_op(&stage)?;
+                let op = init_stage_operator(&stage)?;
                 DropUserStageInterpreter::remove_all(self.ctx.clone(), op).await?;
                 info!(
                     "create or replace stage {:?} with all objects removed in stage",

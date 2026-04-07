@@ -66,6 +66,48 @@ create or replace table t (a string, b string, c int);
 statement ok
 insert into t values ('a','A',1),('a','A',2),('a','B',1),('a','B',3),('b','A',1),('b','A',4),('b','B',1),('b','B',5);
 
+statement error
+SELECT GROUPING()
+
+statement error
+SELECT GROUPING() FROM t
+
+statement error
+SELECT GROUPING(NULL) FROM t
+
+statement error
+SELECT GROUPING(a) FROM t GROUP BY ()
+
+statement error
+SELECT count() FROM t WHERE GROUPING() = 0 GROUP BY a
+
+statement error
+SELECT count() OVER () FROM t GROUP BY a QUALIFY GROUPING() = 0
+
+statement error
+SELECT count() FROM t t1 JOIN t t2 ON GROUPING() = 0 GROUP BY t1.a
+
+statement error
+SELECT 1 FROM t GROUP BY GROUPING SETS ((GROUPING()))
+
+query TII rowsort
+SELECT a, GROUPING(a) AS g, count() OVER () AS w
+FROM t
+GROUP BY GROUPING SETS ((a), ())
+QUALIFY GROUPING(a) = 0
+----
+a 0 3
+b 0 3
+
+query TII rowsort
+SELECT a, GROUPING(a) AS g, count() OVER () AS w
+FROM t
+GROUP BY GROUPING SETS ((a), ())
+QUALIFY g = 0
+----
+a 0 3
+b 0 3
+
 query TTI
 select a, b, sum(c) as sc from t group by grouping sets ((a,b),(),(b),(a)) order by sc;
 ----

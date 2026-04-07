@@ -1,0 +1,88 @@
+name: "Check macOS"
+description: "Run lightweight checks natively on macOS"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.3
+      continue-on-error: true
+
+    - name: Setup macOS check environment
+      shell: bash
+      run: |
+        brew unlink python || true
+        bash ./scripts/setup/dev_setup.sh -yb
+        rustup component add rustfmt clippy
+        brew install taplo typos-cli
+        python3 -m pip install --user --quiet yamllint
+
+    - name: Probe sccache
+      shell: bash
+      run: |
+        if ! command -v sccache >/dev/null 2>&1; then
+          echo "ENABLE_SCCACHE=false" >> $GITHUB_ENV
+          echo "sccache binary is unavailable; falling back to direct rustc"
+          exit 0
+        fi
+
+        export SCCACHE_GHA_ENABLED=true
+        sccache --stop-server >/dev/null 2>&1 || true
+        clippy_driver="$(rustup which clippy-driver)"
+        rustc_path="$(rustup which rustc)"
+
+        if ! sccache "${clippy_driver}" "${rustc_path}" -vV >/dev/null 2>&1; then
+          echo "ENABLE_SCCACHE=false" >> $GITHUB_ENV
+          echo "sccache wrapper probe failed; falling back to direct rustc"
+          sccache --stop-server >/dev/null 2>&1 || true
+          exit 0
+        fi
+
+        echo "ENABLE_SCCACHE=true" >> $GITHUB_ENV
+        echo "sccache wrapper probe passed; enabling cache-backed rustc wrapper"
+
+    - name: Setup build env
+      shell: bash
+      run: |
+        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
+        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
+        if [[ "${ENABLE_SCCACHE:-false}" == "true" ]]; then
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+        fi
+
+    - name: Check cargo version
+      shell: bash
+      run: rustup show
+
+    - name: Check disk space
+      shell: bash
+      run: df -h
+
+    - name: Check system info
+      shell: bash
+      run: |
+        uname -a
+        sysctl -n machdep.cpu.brand_string || true
+        vm_stat
+
+    - name: YAML Lint
+      shell: bash
+      run: python3 -m yamllint -f auto .
+
+    - name: Check typos
+      shell: bash
+      run: typos
+
+    - name: Format
+      shell: bash
+      run: cargo fmt --all -- --check
+
+    - name: Check toml format
+      shell: bash
+      run: |
+        taplo check
+        taplo fmt --check
+
+    - name: Clippy
+      shell: bash
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings

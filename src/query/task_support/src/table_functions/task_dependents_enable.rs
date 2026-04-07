@@ -20,6 +20,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
@@ -29,7 +30,7 @@ use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::EnableTaskDependentsRequest;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
-pub use databend_common_exception::Result;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRefExt;
@@ -41,7 +42,6 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_storages_factory::Table;
 
 pub struct TaskDependentsEnableTable {
     task_name: String,
@@ -65,8 +65,6 @@ impl TaskDependentsEnableTable {
             meta: TableMeta {
                 schema: TableSchemaRefExt::create_dummy(),
                 engine: String::from(table_func_name),
-                // Assuming that created_on is unnecessary for function table,
-                // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: DateTime::from_timestamp(0, 0).unwrap(),
                 updated_on: DateTime::from_timestamp(0, 0).unwrap(),
                 ..Default::default()
@@ -74,7 +72,7 @@ impl TaskDependentsEnableTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(TaskDependentsEnableTable {
+        Ok(Arc::new(Self {
             table_info,
             task_name: task_name.to_string(),
         }))
@@ -98,7 +96,6 @@ impl Table for TaskDependentsEnableTable {
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        // dummy statistics
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
@@ -121,7 +118,6 @@ impl Table for TaskDependentsEnableTable {
             },
             1,
         )?;
-
         Ok(())
     }
 }
@@ -132,17 +128,14 @@ struct TaskDependentsEnableSource {
 }
 
 impl TaskDependentsEnableSource {
-    pub fn create(
+    fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         task_name: String,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(
-            ctx.get_scan_progress(),
-            output,
-            TaskDependentsEnableSource { ctx, task_name },
-        )
+        AsyncSourcer::create(ctx.get_scan_progress(), output, Self { ctx, task_name })
     }
+
     fn build_request(&self) -> EnableTaskDependentsRequest {
         EnableTaskDependentsRequest {
             task_name: self.task_name.clone(),
@@ -157,8 +150,7 @@ impl AsyncSource for TaskDependentsEnableSource {
 
     #[async_backtrace::framed]
     async fn generate(&mut self) -> Result<Option<DataBlock>> {
-        let config = GlobalConfig::instance();
-        if config
+        if GlobalConfig::instance()
             .query
             .common
             .cloud_control_grpc_server_address
@@ -168,6 +160,7 @@ impl AsyncSource for TaskDependentsEnableSource {
                 "cannot create task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
+
         let cloud_api = CloudControlApiProvider::instance();
         let tenant = self.ctx.get_tenant();
         let user = self
@@ -177,7 +170,6 @@ impl AsyncSource for TaskDependentsEnableSource {
             .display()
             .to_string();
         let query_id = self.ctx.get_id();
-
         let cfg = build_client_config(
             tenant.tenant_name().to_string(),
             user,

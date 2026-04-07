@@ -102,6 +102,13 @@ SELECT SLEEP(2)
 statement error 2748
 SELECT * FROM t1 at (tag => "temp_tag")
 
+query TB
+select name, expire_at is not null from fuse_tag('test_tag','t1') order by name
+----
+temp_tag 1
+v1_0 0
+v1_0_copy 0
+
 statement ok
 optimize table t1 compact
 
@@ -109,8 +116,11 @@ statement ok
 select * from fuse_vacuum2('test_tag', 't1') ignore_result;
 
 ## temp_tag was purged.
-statement error 2745
-SELECT * FROM t1 at (tag => "temp_tag")
+query TB
+select name, expire_at is not null from fuse_tag('test_tag','t1') order by name
+----
+v1_0 0
+v1_0_copy 0
 
 query IT
 SELECT * FROM t1 at (tag => "v1_0") ORDER BY a
