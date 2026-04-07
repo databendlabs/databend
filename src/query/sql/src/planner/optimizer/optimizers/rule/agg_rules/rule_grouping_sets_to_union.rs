@@ -30,6 +30,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::CastExpr;
@@ -38,6 +39,7 @@ use crate::plans::EvalScalar;
 use crate::plans::MaterializedCTE;
 use crate::plans::MaterializedCTERef;
 use crate::plans::RelOp;
+use crate::plans::ScalarItem;
 use crate::plans::Sequence;
 use crate::plans::UnionAll;
 use crate::plans::VisitorMut;
@@ -92,7 +94,7 @@ impl Rule for RuleGroupingSetsToUnion {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
+        let mut eval_scalar: EvalScalar = s_expr.plan().clone().try_into()?;
         let agg: Aggregate = s_expr.child(0)?.plan().clone().try_into()?;
         if agg.mode != AggregateMode::Initial {
             return Ok(());
@@ -113,6 +115,20 @@ impl Rule for RuleGroupingSetsToUnion {
 
         if let Some(grouping_sets) = &agg.grouping_sets {
             if !grouping_sets.sets.is_empty() {
+                if !eval_scalar
+                    .items
+                    .iter()
+                    .any(|item| item.index == grouping_sets.grouping_id_index)
+                {
+                    eval_scalar.items.push(ScalarItem {
+                        index: grouping_sets.grouping_id_index,
+                        scalar: ScalarExpr::ConstantExpr(ConstantExpr {
+                            value: Scalar::Number(NumberScalar::UInt32(0)),
+                            span: None,
+                        }),
+                    });
+                }
+
                 let mut children = Vec::with_capacity(grouping_sets.sets.len());
 
                 let mut hasher = DefaultHasher::new();
@@ -143,6 +159,7 @@ impl Rule for RuleGroupingSetsToUnion {
                 let group_bys = agg
                     .group_items
                     .iter()
+                    .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
                     .map(|i| {
                         agg_input_columns
                             .iter()
@@ -174,6 +191,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     let null_group_ids: Vec<Symbol> = agg
                         .group_items
                         .iter()
+                        .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
                         .map(|i| i.index)
                         .filter(|index| !set.contains(index))
                         .clone()

@@ -22,6 +22,7 @@ use crate::BindContext;
 use crate::Binder;
 use crate::binder::ExprContext;
 use crate::binder::ScalarBinder;
+use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
 use crate::binder::window::WindowRewriter;
 use crate::binder::window::find_replaced_window_function;
@@ -52,6 +53,11 @@ impl Binder {
             aliases,
         );
         let (mut scalar, _) = scalar_binder.bind(qualify)?;
+        AggregateRewriter::rewrite_existing_expr(
+            &bind_context.aggregate_info,
+            &mut scalar,
+            "Qualify clause must not contain aggregate functions",
+        )?;
         let mut rewriter = WindowRewriter::new(bind_context, self.metadata.clone());
         rewriter.visit(&mut scalar)?;
         Ok(scalar)
