@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_table_meta::table::TableCompression;
 
 use crate::DEFAULT_ROW_PER_PAGE;
@@ -24,6 +25,7 @@ pub const MAX_BLOCK_UNCOMPRESSED_SIZE: usize = 1024 * 1024 * 400;
 pub struct WriteSettings {
     pub storage_format: FuseStorageFormat,
     pub table_compression: TableCompression,
+    pub bloom_index_type: BloomIndexType,
     // rows per page, current only work in native format
     pub max_page_size: usize,
 
@@ -36,6 +38,7 @@ impl Default for WriteSettings {
         Self {
             storage_format: FuseStorageFormat::Parquet,
             table_compression: TableCompression::default(),
+            bloom_index_type: BloomIndexType::default(),
             max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
             enable_parquet_dictionary: false,

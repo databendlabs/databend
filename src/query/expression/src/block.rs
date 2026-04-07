@@ -991,7 +991,7 @@ impl DataBlock {
                 BlockEntry::Const(s, data_type, _) => {
                     s.as_ref().estimated_scalar_repeat_size(num_rows, data_type)
                 }
-                _ => entry.memory_size(),
+                _ => entry.memory_size_with_options(true),
             })
             .sum()
     }

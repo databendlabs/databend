@@ -1,0 +1,49 @@
+#### prepare ee flashback metadata regression environment
+>>>> SET GLOBAL enable_experimental_row_access_policy = 1
+>>>> CREATE DATABASE IF NOT EXISTS ee_flashback_metadata
+>>>> DROP TABLE IF EXISTS ee_flashback_metadata.t_idx
+>>>> DROP TABLE IF EXISTS ee_flashback_metadata.t_mask
+>>>> DROP TABLE IF EXISTS ee_flashback_metadata.t_row
+>>>> DROP DATABASE IF EXISTS ee_flashback_metadata
+>>>> CREATE DATABASE ee_flashback_metadata
+#### time travel should handle row access policy metadata but flashback should reject it
+>>>> CREATE OR REPLACE TABLE ee_flashback_metadata.t_row(a INT, b STRING)
+>>>> INSERT INTO ee_flashback_metadata.t_row VALUES (1, 'alice'), (2, 'bob')
+2
+>>>> ALTER TABLE ee_flashback_metadata.t_row ADD COLUMN c INT
+>>>> INSERT INTO ee_flashback_metadata.t_row VALUES (3, 'charlie', 100), (4, 'dave', 200)
+2
+#### create and attach row access policy
+#### time travel row policy table at saved snapshot
+true
+#### flashback row policy table to saved snapshot should fail
+>>>> ALTER TABLE ee_flashback_metadata.t_row FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')
+<<<< expected failure happened
+#### flashback should reject incompatible masking policy metadata
+>>>> CREATE OR REPLACE TABLE ee_flashback_metadata.t_mask(a INT, b STRING)
+>>>> INSERT INTO ee_flashback_metadata.t_mask VALUES (1, 'hello')
+1
+>>>> ALTER TABLE ee_flashback_metadata.t_mask ADD COLUMN c STRING
+#### create and attach masking policy
+#### time travel masking table at saved snapshot
+true
+#### flashback masking table to saved snapshot should fail
+>>>> ALTER TABLE ee_flashback_metadata.t_mask FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')
+<<<< expected failure happened
+>>>> CREATE TABLE ee_flashback_metadata.t_idx(a INT, c INT) STORAGE_FORMAT = 'parquet'
+>>>> INSERT INTO ee_flashback_metadata.t_idx VALUES (1, 1), (2, 2)
+2
+>>>> ALTER TABLE ee_flashback_metadata.t_idx ADD COLUMN b INT
+>>>> INSERT INTO ee_flashback_metadata.t_idx VALUES (1, 1, 4), (1, 2, 1), (1, 2, 4), (2, 2, 5)
+4
+#### create and refresh aggregating index
+#### flashback should reject aggregating indexes bound to dropped columns
+#### flashback indexed table to saved snapshot should fail
+>>>> ALTER TABLE ee_flashback_metadata.t_idx FLASHBACK TO (SNAPSHOT => '<saved_snapshot>')
+<<<< expected failure happened
+#### cleanup ee flashback metadata regression environment
+>>>> DROP TABLE IF EXISTS ee_flashback_metadata.t_idx
+>>>> DROP TABLE IF EXISTS ee_flashback_metadata.t_mask
+>>>> DROP TABLE IF EXISTS ee_flashback_metadata.t_row
+>>>> DROP DATABASE IF EXISTS ee_flashback_metadata
+>>>> SET GLOBAL enable_experimental_row_access_policy = 0

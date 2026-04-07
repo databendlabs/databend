@@ -16,6 +16,8 @@ use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::LazyLock;
+
+use databend_common_frozen_api::FrozenAPI;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_TEMP_PREFIX: &str = "temp_prefix";
@@ -28,6 +30,7 @@ pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_ENGINE: &str = "engine";
 pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
+pub const OPT_KEY_BLOOM_INDEX_TYPE: &str = "bloom_index_type";
 pub const OPT_KEY_APPROX_DISTINCT_COLUMNS: &str = "approx_distinct_columns";
 pub const OPT_KEY_CHANGE_TRACKING: &str = "change_tracking";
 pub const OPT_KEY_CHANGE_TRACKING_BEGIN_VER: &str = "begin_version";
@@ -94,10 +97,10 @@ pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone, Eq, PartialEq, Copy, FrozenAPI)]
 pub enum ClusterType {
-    Linear,
-    Hilbert,
+    Linear = 0,
+    Hilbert = 1,
 }
 
 impl Display for ClusterType {

@@ -13,7 +13,6 @@
 - Prefer the `test-support` toolchain when you need to understand or debug SQL-layer behavior. It is the fastest way to replay planner/optimizer cases, inspect shared fixtures, and reason about SQL-side regressions before moving to heavier service-side debugging.
 - Prefer golden-file comparisons of the full output over asserting on a few extracted features from that output. Full-output snapshots make SQL-layer behavior changes easier to inspect, review, and debug.
 - [`tests/it/`](./tests/it/) contains integration tests for the SQL crate, including the lightweight planner replay coverage.
-- [`tests/ut/`](./tests/ut/) contains unit tests for SQL-side components.
 - [`test-support/`](./test-support/) contains shared SQL test-support utilities and fixtures used by planner/optimizer tests.
 - Read [`test-support/data/README.md`](./test-support/data/README.md) when you need to answer any of these questions:
   - where a shared optimizer replay case, statistics fixture, table definition, or generated golden file should live;

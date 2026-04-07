@@ -76,6 +76,7 @@ use crate::pipelines::executor::QueriesPipelineExecutor;
 use crate::pipelines::executor::QueryExecutorTasksQueue;
 use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::pipelines::executor::WorkersCondvar;
+use crate::pipelines::executor::executor_worker_context::out_of_limit_error;
 use crate::pipelines::executor::processor_async_task::ExecutorTasksQueue;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 
@@ -449,9 +450,7 @@ impl ExecutingGraph {
                         let process_rows = ThreadTracker::process_rows();
                         match guard.flush() {
                             Ok(_) => Ok((event, process_rows)),
-                            Err(out_of_limit) => {
-                                Err(ErrorCode::PanicError(format!("{:?}", out_of_limit)))
-                            }
+                            Err(out_of_limit) => Err(out_of_limit_error(out_of_limit)),
                         }
                     }?;
 

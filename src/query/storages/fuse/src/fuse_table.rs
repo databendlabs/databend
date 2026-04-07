@@ -79,6 +79,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storage::StorageMetricsLayer;
 use databend_common_storage::init_operator;
 use databend_storages_common_cache::LoadParams;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -93,6 +94,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::ClusterType;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
 use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
+use databend_storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
@@ -148,6 +150,7 @@ pub struct FuseTable {
     pub(crate) segment_format: FuseSegmentFormat,
     pub(crate) table_compression: TableCompression,
     pub(crate) bloom_index_cols: BloomIndexColumns,
+    pub(crate) bloom_index_type: BloomIndexType,
     pub(crate) approx_distinct_cols: ApproxDistinctColumns,
 
     pub(crate) operator: Operator,
@@ -258,6 +261,11 @@ impl FuseTable {
             .get(OPT_KEY_BLOOM_INDEX_COLUMNS)
             .and_then(|s| s.parse::<BloomIndexColumns>().ok())
             .unwrap_or(BloomIndexColumns::All);
+        let bloom_index_type = table_info
+            .options()
+            .get(OPT_KEY_BLOOM_INDEX_TYPE)
+            .and_then(|s| s.parse::<BloomIndexType>().ok())
+            .unwrap_or_default();
 
         let approx_distinct_cols = table_info
             .options()
@@ -276,6 +284,7 @@ impl FuseTable {
             table_info,
             meta_location_generator,
             bloom_index_cols,
+            bloom_index_type,
             approx_distinct_cols,
             operator,
             data_metrics,
@@ -332,6 +341,7 @@ impl FuseTable {
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
+            bloom_index_type: self.bloom_index_type,
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
@@ -514,6 +524,10 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    pub fn bloom_index_type(&self) -> BloomIndexType {
+        self.bloom_index_type
     }
 
     pub fn approx_distinct_cols(&self) -> ApproxDistinctColumns {

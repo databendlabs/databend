@@ -39,6 +39,7 @@ pub use bloom_index::BloomIndex;
 pub use bloom_index::BloomIndexBuilder;
 pub use bloom_index::BloomIndexMeta;
 pub use bloom_index::BloomIndexResult;
+pub use bloom_index::BloomIndexType;
 pub use bloom_index::FilterEvalResult;
 pub use bloom_index::NgramArgs;
 pub use eliminate_cast::eliminate_cast;

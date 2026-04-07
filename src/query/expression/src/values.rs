@@ -907,13 +907,13 @@ impl ScalarRef<'_> {
             ScalarRef::Decimal(_) => n * self.memory_size(),
             ScalarRef::Boolean(_) => n.div_ceil(8),
             ScalarRef::Binary(s) => s.len() * n + (n + 1) * 8,
-            ScalarRef::String(s) => n * 16 + if s.len() > 12 && n > 0 { s.len() } else { 0 },
+            ScalarRef::String(s) => n * 16 + s.len() * n,
             ScalarRef::Timestamp(_) => n * 8,
             ScalarRef::TimestampTz(_) => n * 16,
             ScalarRef::Date(_) => n * 4,
             ScalarRef::Interval(_) => n * 16,
-            ScalarRef::Array(col) => col.memory_size(false) * n + (n + 1) * 8,
-            ScalarRef::Map(col) => col.memory_size(false) * n + (n + 1) * 8,
+            ScalarRef::Array(col) => col.memory_size(true) * n + (n + 1) * 8,
+            ScalarRef::Map(col) => col.memory_size(true) * n + (n + 1) * 8,
             ScalarRef::Bitmap(b) => b.len() * n + (n + 1) * 8,
             ScalarRef::Tuple(fields) => {
                 let DataType::Tuple(fields_ty) = data_type else {

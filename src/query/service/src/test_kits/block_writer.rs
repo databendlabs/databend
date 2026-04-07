@@ -29,6 +29,7 @@ use databend_common_storages_fuse::io::serialize_block;
 use databend_storages_common_blocks::blocks_to_parquet;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::BloomIndexBuilder;
+use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -147,8 +148,12 @@ impl<'a> BlockWriter<'a> {
         let bloom_index_cols = BloomIndexColumns::All;
         let bloom_columns_map =
             bloom_index_cols.bloom_index_fields(schema.clone(), BloomIndex::supported_type)?;
-        let mut builder =
-            BloomIndexBuilder::create(FunctionContext::default(), bloom_columns_map, &[])?;
+        let mut builder = BloomIndexBuilder::create(
+            FunctionContext::default(),
+            BloomIndexType::default(),
+            bloom_columns_map,
+            &[],
+        )?;
         builder.add_block(block)?;
         let maybe_bloom_index = builder.finalize()?;
         if let Some(bloom_index) = maybe_bloom_index {

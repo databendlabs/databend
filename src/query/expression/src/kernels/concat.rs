@@ -49,6 +49,8 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::opaque::OpaqueType;
+use crate::types::string::StringColumn;
+use crate::types::string::StringColumnBuilder;
 use crate::types::timestamp_tz::TimestampTzType;
 use crate::types::vector::VectorColumnBuilder;
 use crate::with_decimal_mapped_type;
@@ -242,11 +244,14 @@ impl Column {
                     Column::Vector(builder.build())
                 }
             }),
+            Column::String(_) => Column::String(Self::concat_string_types(
+                columns.map(|col| col.into_string().unwrap()),
+                capacity,
+            )),
             Column::Variant(_)
             | Column::Geometry(_)
             | Column::Geography(_)
             | Column::Binary(_)
-            | Column::String(_)
             | Column::Bitmap(_) => {
                 Self::concat_use_arrow(columns, first_column.data_type(), capacity)
             }
@@ -266,6 +271,17 @@ impl Column {
             builder.extend(col.iter());
         }
         builder.into()
+    }
+
+    pub fn concat_string_types(
+        cols: impl Iterator<Item = StringColumn>,
+        num_rows: usize,
+    ) -> StringColumn {
+        let mut builder = StringColumnBuilder::with_capacity(num_rows);
+        for col in cols {
+            builder.append_column_for_concat(&col);
+        }
+        builder.build()
     }
 
     fn concat_opaque_column<I, const N: usize>(columns: I, capacity: usize) -> Column
@@ -305,5 +321,55 @@ impl Column {
             T::append_column(&mut builder, &col);
         }
         T::upcast_column_with_type(T::build_column(builder), data_type)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Column;
+    use crate::types::string::StringColumn;
+
+    #[test]
+    fn test_concat_string_columns_fast_path() {
+        let left = Column::String(StringColumn::from_iter([
+            "existing short",
+            "existing long string that definitely exceeds inline storage!",
+        ]));
+        let right = Column::String(StringColumn::from_iter([
+            "append short",
+            "append another extremely long string to force buffer usage!!!",
+        ]));
+
+        let result = Column::concat_columns(vec![left, right].into_iter()).unwrap();
+        let result = result.into_string().unwrap();
+        let values = result.iter().collect::<Vec<_>>();
+
+        assert_eq!(values, vec![
+            "existing short",
+            "existing long string that definitely exceeds inline storage!",
+            "append short",
+            "append another extremely long string to force buffer usage!!!",
+        ]);
+    }
+
+    #[test]
+    fn test_concat_string_columns_compacts_sparse_buffers() {
+        let long = "x".repeat(20_000);
+        let source = StringColumn::from_iter((0..8).map(|idx| format!("{idx}-{long}")));
+        let source_total_buffer_len = source.total_buffer_len();
+        let sparse_left = Column::String(source.clone().sliced(0, 1));
+        let sparse_right = Column::String(source.clone().sliced(7, 1));
+
+        let result = Column::concat_columns(vec![sparse_left, sparse_right].into_iter()).unwrap();
+        let result = result.into_string().unwrap();
+
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![
+            format!("0-{long}"),
+            format!("7-{long}"),
+        ]);
+        assert!(
+            result.total_buffer_len() < source_total_buffer_len,
+            "concat should compact sparse string buffers instead of retaining them"
+        );
     }
 }

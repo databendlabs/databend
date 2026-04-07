@@ -1171,7 +1171,14 @@ impl DefaultSettings {
                 }),
                 ("enable_strict_datetime_parser", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Strict datetime parser. Only support ISO 8601 as Default format.The best practice is to turn this parameter on.(enable by default)",
+                    desc: "When enabled (1), datetime functions only accept ISO 8601 and formats covered by enable_auto_detect_datetime_format (if that setting is also on). When disabled (0), falls back to best-effort parsing (dtparse). Only affects function-level parsing (to_date/to_timestamp), not COPY or VARIANT cast. Default: 1.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_auto_detect_datetime_format", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable auto-detection for non-ISO datetime formats (MM/DD/YYYY, DD-MON-YYYY, RFC 2822, Unix date, epoch numbers). Works across functions, COPY, and VARIANT cast. Independent of enable_strict_datetime_parser. Default: 0 (off).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1323,6 +1330,16 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("http_json_result_mode", DefaultSettingValue {
+                    value: UserSettingValue::String("display".to_owned()),
+                    desc: "Controls how HTTP query JSON data is encoded (display or driver).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::String(vec![
+                        "display".into(),
+                        "driver".into(),
+                    ])),
                 }),
                 ("binary_output_format", DefaultSettingValue {
                     value: UserSettingValue::String("hex".to_owned()),

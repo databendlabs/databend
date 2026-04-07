@@ -18,6 +18,10 @@ use std::str::FromStr;
 use databend_common_expression::FromData;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::types::*;
+use databend_common_expression::utils::auto_detect_datetime::auto_detect_date;
+use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp;
+use databend_common_expression::utils::auto_detect_datetime::auto_detect_timestamp_tz;
+use databend_common_expression::utils::auto_detect_datetime::parse_epoch_str;
 use goldenfile::Mint;
 use jiff::Timestamp;
 use jiff::tz::TimeZone;
@@ -769,4 +773,134 @@ fn test_current_time(file: &mut impl Write) {
     run_ast_with_context(file, "current_time()", ctx.clone());
     run_ast_with_context(file, "current_time(3)", ctx.clone());
     run_ast_with_context(file, "current_time(10)", ctx);
+}
+
+// ===================================================================
+// Unit tests for AUTO datetime format detection
+// ===================================================================
+
+#[test]
+fn test_auto_detect_date() {
+    // DD-MON-YYYY
+    assert_eq!(auto_detect_date("17-DEC-1980"), Some(4003));
+    assert_eq!(auto_detect_date("01-JAN-2000"), Some(10957));
+
+    // DD-MON-YYYY lowercase
+    assert_eq!(auto_detect_date("17-dec-1980"), Some(4003));
+    assert_eq!(auto_detect_date("01-jan-2000"), Some(10957));
+    assert_eq!(auto_detect_date("29-feb-2024"), Some(19782));
+
+    // MM/DD/YYYY
+    assert_eq!(auto_detect_date("12/17/1980"), Some(4003));
+    assert_eq!(auto_detect_date("3/05/2023"), Some(19421));
+
+    // Leap year
+    assert_eq!(auto_detect_date("29-FEB-2024"), Some(19782));
+    assert_eq!(auto_detect_date("02/29/2024"), Some(19782));
+
+    // Month > 12 rejected
+    assert_eq!(auto_detect_date("13/01/2024"), None);
+
+    // Numeric strings are no longer handled by auto_detect_date (caller's job)
+    assert_eq!(auto_detect_date("57600"), None);
+    assert_eq!(auto_detect_date("1487654321"), None);
+    assert_eq!(auto_detect_date("-86400"), None);
+
+    // Invalid
+    assert_eq!(auto_detect_date("not-a-date"), None);
+    assert_eq!(auto_detect_date(""), None);
+}
+
+#[test]
+fn test_auto_detect_timestamp() {
+    let tz = TimeZone::UTC;
+
+    // DD-MON-YYYY
+    assert!(auto_detect_timestamp("17-DEC-1980 10:30:00", &tz).is_some());
+    assert!(auto_detect_timestamp("01-JAN-2000 23:59:59.123456", &tz).is_some());
+
+    // DD-MON-YYYY lowercase
+    assert_eq!(
+        auto_detect_timestamp("17-dec-1980 10:30:00", &tz),
+        auto_detect_timestamp("17-DEC-1980 10:30:00", &tz)
+    );
+
+    // MM/DD/YYYY
+    assert!(auto_detect_timestamp("12/17/1980 10:30:00", &tz).is_some());
+    assert!(auto_detect_timestamp("2/18/2008 02:36:48", &tz).is_some());
+    assert!(auto_detect_timestamp("2/18/2008 02:36:48.123", &tz).is_some());
+
+    // RFC 2822 (24h, with tz) — should convert +0200 to UTC
+    let ts = auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
+    let ts_no_tz = auto_detect_timestamp("Thu, 21 Dec 2000 14:01:07", &tz).unwrap();
+    assert_eq!(ts, ts_no_tz); // 16:01:07+0200 == 14:01:07 UTC
+
+    // RFC 2822 (24h, no tz)
+    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07", &tz).is_some());
+    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 16:01:07.999", &tz).is_some());
+
+    // RFC 2822 (12h AM/PM, with tz)
+    let ts_12h = auto_detect_timestamp("Thu, 21 Dec 2000 04:01:07 PM +0200", &tz).unwrap();
+    assert_eq!(ts_12h, ts); // same as 24h version
+
+    // RFC 2822 (12h AM/PM, no tz)
+    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 04:01:07 PM", &tz).is_some());
+    assert!(auto_detect_timestamp("Thu, 21 Dec 2000 11:30:00 AM", &tz).is_some());
+
+    // AM/PM boundary: 12:00 AM = midnight, 12:00 PM = noon
+    let midnight = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00 AM", &tz).unwrap();
+    let noon = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00 PM", &tz).unwrap();
+    let zero_h = auto_detect_timestamp("Thu, 21 Dec 2000 00:00:00", &tz).unwrap();
+    let twelve_h = auto_detect_timestamp("Thu, 21 Dec 2000 12:00:00", &tz).unwrap();
+    assert_eq!(midnight, zero_h);
+    assert_eq!(noon, twelve_h);
+
+    // Leap year
+    assert!(auto_detect_timestamp("29-FEB-2024 12:00:00", &tz).is_some());
+    assert!(auto_detect_timestamp("02/29/2024 12:00:00", &tz).is_some());
+
+    // Unix date
+    assert!(auto_detect_timestamp("Mon Jul 08 18:09:51 +0000 2013", &tz).is_some());
+
+    // Epoch is no longer handled by auto_detect_timestamp (caller's job)
+    assert_eq!(auto_detect_timestamp("1487654321", &tz), None);
+    assert_eq!(auto_detect_timestamp("1487654321321", &tz), None);
+    assert_eq!(auto_detect_timestamp("20240305", &tz), None);
+    assert_eq!(auto_detect_timestamp("-86400", &tz), None);
+
+    // Invalid
+    assert_eq!(auto_detect_timestamp("not-a-timestamp", &tz), None);
+    assert_eq!(auto_detect_timestamp("", &tz), None);
+}
+
+#[test]
+fn test_auto_detect_timestamp_tz_unit() {
+    let tz = TimeZone::UTC;
+
+    // RFC 2822 with offset — offset should be preserved
+    let ts_tz = auto_detect_timestamp_tz("Thu, 21 Dec 2000 16:01:07 +0200", &tz).unwrap();
+    assert_eq!(ts_tz.seconds_offset(), 7200); // +0200 = 7200s
+
+    // No offset — should use session tz (UTC → 0)
+    let ts_tz = auto_detect_timestamp_tz("17-DEC-1980 10:30:00", &tz).unwrap();
+    assert_eq!(ts_tz.seconds_offset(), 0);
+}
+
+#[test]
+fn test_parse_epoch_str_unit() {
+    // seconds
+    assert_eq!(parse_epoch_str("1487654321"), Some(1_487_654_321_000_000));
+    // milliseconds (> 31536000000)
+    assert_eq!(
+        parse_epoch_str("1487654321321"),
+        Some(1_487_654_321_321_000)
+    );
+    // boundary: sec vs ms
+    assert_eq!(parse_epoch_str("31535999999"), Some(31_535_999_999_000_000));
+    assert_eq!(parse_epoch_str("31536000001"), Some(31_536_000_001_000));
+    // negative
+    assert_eq!(parse_epoch_str("-86400"), Some(-86_400_000_000));
+    // not a number
+    assert_eq!(parse_epoch_str("abc"), None);
+    assert_eq!(parse_epoch_str(""), None);
 }
