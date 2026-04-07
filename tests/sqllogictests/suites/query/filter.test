@@ -186,6 +186,17 @@ select * from t where b not like 'databend%cloud%data%warehouse';
 3 query databend
 4 query databend, query
 
+# Repeated '%' should preserve VARIANT LIKE semantics.
+query BB
+select parse_json('{"name":"abab"}') like '%abab', parse_json('{"name":"abab"}') like '%%%%abab';
+----
+0 0
+
+query BB
+select parse_json('{"name":"abab"}') like 'abab%', parse_json('{"name":"abab"}') like 'abab%%%%';
+----
+0 0
+
 statement ok
 create or replace table t(a int) change_tracking = true;
 

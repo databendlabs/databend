@@ -113,7 +113,9 @@ impl Processor for TransformHashJoin {
                 std::mem::swap(&mut finished, &mut self.join);
                 drop(finished);
 
-                self.stage_sync_barrier.reduce_quorum(1);
+                if self.stage_sync_barrier.reduce_quorum(1) {
+                    self.rf_desc.close_broadcast();
+                }
             }
 
             return Ok(Event::Finished);

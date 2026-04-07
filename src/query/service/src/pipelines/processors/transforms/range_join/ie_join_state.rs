@@ -439,25 +439,10 @@ impl RangeJoinState {
         let left_match = self.left_match.read();
         let right_match = self.right_match.read();
 
-        let (outer_idx, inner_idx, outer_offset, outer_table, outer_match, inner_table) = if is_left
-        {
-            (
-                left_idx,
-                right_idx,
-                left_offset,
-                &left_table,
-                &*left_match,
-                &right_table,
-            )
+        let (outer_idx, outer_offset, outer_table, outer_match) = if is_left {
+            (left_idx, left_offset, &left_table, &*left_match)
         } else {
-            (
-                right_idx,
-                left_idx,
-                right_offset,
-                &right_table,
-                &*right_match,
-                &left_table,
-            )
+            (right_idx, right_offset, &right_table, &*right_match)
         };
 
         let mut indices = Vec::with_capacity(block_size);
@@ -477,13 +462,19 @@ impl RangeJoinState {
         }
 
         let outer_result_block = outer_table[outer_idx].take(indices.as_slice())?;
+        let output_fields = self.output_schema.fields();
+        let inner_fields = if is_left {
+            &output_fields[outer_result_block.num_columns()..]
+        } else {
+            &output_fields[..output_fields.len() - outer_result_block.num_columns()]
+        };
 
-        let null_columns = inner_table[inner_idx]
-            .columns()
+        let null_columns = inner_fields
             .iter()
-            .map(|c| {
+            .map(|field| {
+                let data_type = field.data_type().clone();
                 BlockEntry::new(Value::Scalar(Scalar::Null), || {
-                    (c.data_type().wrap_nullable(), indices.len())
+                    (data_type.wrap_nullable(), indices.len())
                 })
             })
             .collect::<Vec<_>>();

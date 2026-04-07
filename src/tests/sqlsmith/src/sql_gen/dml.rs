@@ -43,7 +43,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::TableField;
 use databend_common_expression::types::DataType;
 use databend_common_formats::OutputCommonSettings;
-use databend_common_formats::field_encoder::FieldEncoderValues;
+use databend_common_formats::field_encoder::FieldEncoderBytes;
 use databend_common_io::constants::FALSE_BYTES_LOWER;
 use databend_common_io::constants::INF_BYTES_LOWER;
 use databend_common_io::constants::NAN_BYTES_LOWER;
@@ -472,6 +472,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 };
                 (
                     AlterTableAction::AddColumn {
+                        if_not_exists: false,
                         column: column.clone(),
                         option: option.clone(),
                     },
@@ -584,7 +585,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             0..=9 => {
                 let columns = self.gen_columns(data_types, row_count);
                 let mut buf = Vec::new();
-                let encoder = FieldEncoderValues {
+                let encoder = FieldEncoderBytes {
                     common_settings: OutputCommonSettings {
                         true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                         false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
