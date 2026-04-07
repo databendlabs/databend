@@ -299,6 +299,9 @@ impl Binder {
                             column.table_name = Some(self.normalize_identifier(table).name);
                         }
                     }
+                    // Restore binding_views to the outer scope's value so the
+                    // current view does not leak into sibling/parent contexts.
+                    new_bind_context.binding_views = bind_context.binding_views.clone();
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {

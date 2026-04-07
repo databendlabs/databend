@@ -253,6 +253,54 @@ drop table if exists t;
 statement ok
 drop view if exists v;
 
+# Test: sibling/scalar subquery referencing the same view should NOT be
+# treated as a circular dependency.
+statement ok
+drop view if exists sv_v;
+
+statement ok
+drop table if exists sv_t;
+
+statement ok
+create table sv_t(a int);
+
+statement ok
+insert into sv_t values (1),(2),(3);
+
+statement ok
+create view sv_v as select a from sv_t;
+
+# Scalar subquery reads the same view — this is legal, not a loop.
+query I
+select (select count(*) from sv_v) from sv_v order by a;
+----
+3
+3
+3
+
+# Sibling reference: view in both sides of a join
+query II
+select t1.a, t2.a from sv_v t1, sv_v t2 where t1.a = t2.a order by t1.a;
+----
+1 1
+2 2
+3 3
+
+# View + scalar subquery over a different table — the other table must
+# NOT be marked as source_of_view (ensures privilege path is correct).
+query II
+select sv_v.a, (select count(*) from numbers(5)) from sv_v order by a;
+----
+1 5
+2 5
+3 5
+
+statement ok
+drop view if exists sv_v;
+
+statement ok
+drop table if exists sv_t;
+
 statement ok
 create table t(id int);
 
