@@ -152,19 +152,19 @@ statement ok
 create or replace view rv_foo2 as (select * from rv_foo);
 
 # Circular: rv_foo -> rv_foo2 -> rv_foo (via scalar subquery)
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select (select * from rv_foo2));
 
 # Direct self-reference
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select * from rv_foo);
 
 # Circular via EXISTS
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select 1 where exists (select * from rv_foo2));
 
 # Circular via IN subquery
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select * from rv_test where i in (select * from rv_foo2));
 
 # Multi-hop: v1 -> v2 -> v3 -> v1
@@ -186,7 +186,7 @@ create view rv_v2 as select * from rv_v1;
 statement ok
 create view rv_v3 as select * from rv_v2;
 
-statement error 1001
+statement error 1029
 create or replace view rv_v1 as select * from rv_v3;
 
 # Verify non-circular views still work
@@ -199,11 +199,11 @@ select * from rv_v3;
 # Reuse rv_v1 -> rv_v2 -> rv_v3 chain
 
 # Direct self-reference via ALTER VIEW
-statement error 1001
+statement error 1029
 alter view rv_v1 as select * from rv_v1;
 
 # Circular: rv_v1 -> rv_v3 -> rv_v2 -> rv_v1
-statement error 1001
+statement error 1029
 alter view rv_v1 as select * from rv_v3;
 
 # Verify views still work after failed ALTER attempts
@@ -286,8 +286,8 @@ select t1.a, t2.a from sv_v t1, sv_v t2 where t1.a = t2.a order by t1.a;
 2 2
 3 3
 
-# View + scalar subquery over a different table — the other table must
-# NOT be marked as source_of_view (ensures privilege path is correct).
+# View + unrelated scalar subquery should not inherit the current
+# view-binding context from the outer SELECT.
 query II
 select sv_v.a, (select count(*) from numbers(5)) from sv_v order by a;
 ----

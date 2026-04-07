@@ -32,6 +32,7 @@ use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::ViewIdent;
 use crate::binder::util::TableIdentifier;
 use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
@@ -262,6 +263,12 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
+                let view_ident = ViewIdent {
+                    catalog: catalog.clone(),
+                    database: database.clone(),
+                    name: table_name.clone(),
+                };
+                bind_context.check_view_loop(&view_ident)?;
                 let query = table_meta
                     .options()
                     .get(QUERY)
@@ -270,11 +277,7 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                new_bind_context.enter_view((
-                    catalog.clone(),
-                    database.clone(),
-                    table_name.clone(),
-                ))?;
+                new_bind_context.binding_views.insert(view_ident);
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
                         catalog,

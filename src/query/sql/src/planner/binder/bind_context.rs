@@ -132,7 +132,12 @@ pub struct VirtualColumnName {
     pub key_name: String,
 }
 
-pub type ViewIdent = (String, String, String);
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ViewIdent {
+    pub catalog: String,
+    pub database: String,
+    pub name: String,
+}
 
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
@@ -327,14 +332,14 @@ impl BindContext {
         bind_context
     }
 
-    pub fn enter_view(&mut self, ident: ViewIdent) -> Result<()> {
-        if self.binding_views.insert(ident.clone()) {
-            Ok(())
-        } else {
-            Err(ErrorCode::Internal(format!(
+    pub fn check_view_loop(&self, ident: &ViewIdent) -> Result<()> {
+        if self.binding_views.contains(ident) {
+            Err(ErrorCode::ViewDependencyError(format!(
                 "View dependency loop detected (view: {}.{})",
-                ident.1, ident.2
+                ident.database, ident.name
             )))
+        } else {
+            Ok(())
         }
     }
 
@@ -940,50 +945,6 @@ impl BindContext {
 impl Default for BindContext {
     fn default() -> Self {
         BindContext::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::BindContext;
-
-    #[test]
-    fn test_enter_view_records_view_ident() {
-        let mut bind_context = BindContext::new();
-        bind_context
-            .enter_view(("default".to_string(), "db".to_string(), "v1".to_string()))
-            .unwrap();
-
-        assert!(bind_context.binding_views.contains(&(
-            "default".to_string(),
-            "db".to_string(),
-            "v1".to_string()
-        )));
-    }
-
-    #[test]
-    fn test_enter_view_detects_loop() {
-        let mut bind_context = BindContext::new();
-        let ident = ("default".to_string(), "db".to_string(), "v1".to_string());
-        bind_context.enter_view(ident.clone()).unwrap();
-
-        let err = bind_context.enter_view(ident).unwrap_err();
-        assert!(err.message().contains("View dependency loop detected"));
-    }
-
-    #[test]
-    fn test_with_parent_inherits_binding_views() {
-        let mut parent = BindContext::new();
-        parent
-            .enter_view(("default".to_string(), "db".to_string(), "v1".to_string()))
-            .unwrap();
-
-        let child = BindContext::with_parent(parent).unwrap();
-        assert!(child.binding_views.contains(&(
-            "default".to_string(),
-            "db".to_string(),
-            "v1".to_string()
-        )));
     }
 }
 
