@@ -36,6 +36,7 @@ use async_channel::Sender;
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
 use databend_base::uniq_id::GlobalUniq;
+#[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::JoinHandle;
@@ -57,6 +58,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::merge_into_join::MergeIntoJoin;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
+#[cfg(feature = "storage-stage")]
 use databend_common_catalog::plan::ParquetReadOptions;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
@@ -83,7 +85,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+#[cfg(feature = "storage-stage")]
 use databend_common_expression::TableDataType;
+#[cfg(feature = "storage-stage")]
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::InputFormatSettings;
@@ -121,6 +125,7 @@ use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
+#[cfg(feature = "storage-stage")]
 use databend_common_storage::init_stage_operator;
 use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
@@ -129,11 +134,12 @@ use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
-use databend_common_storages_stage::StageTable;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+#[cfg(feature = "storage-stage")]
+use databend_query_storage_stage_support::StageTable;
 use databend_storages_common_blocks::memory::IN_MEMORY_R_CTE_DATA;
 use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_session::SessionState;
@@ -369,12 +375,24 @@ impl QueryContext {
     // Build external table by stage info, this is used in:
     // COPY INTO t1 FROM 's3://'
     // 's3://' here is a s3 external stage, and build it to the external table.
+    #[cfg(feature = "storage-stage")]
     fn build_external_by_table_info(
         &self,
         table_info: &StageTableInfo,
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
         StageTable::try_create(table_info.clone())
+    }
+
+    #[cfg(not(feature = "storage-stage"))]
+    fn build_external_by_table_info(
+        &self,
+        _table_info: &StageTableInfo,
+        _table_args: Option<TableArgs>,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(
+            "Stage table support is disabled, rebuild with cargo feature 'storage-stage'",
+        ))
     }
 
     #[async_backtrace::framed]
@@ -2109,6 +2127,7 @@ impl TableContext for QueryContext {
         }
     }
 
+    #[cfg(feature = "storage-stage")]
     async fn create_stage_table(
         &self,
         stage_info: StageInfo,
@@ -2273,6 +2292,20 @@ impl TableContext for QueryContext {
                 )));
             }
         }
+    }
+
+    #[cfg(not(feature = "storage-stage"))]
+    async fn create_stage_table(
+        &self,
+        _stage_info: StageInfo,
+        _files_info: StageFilesInfo,
+        _files_to_copy: Option<Vec<StageFileInfo>>,
+        _max_column_position: usize,
+        _on_error_mode: Option<OnErrorMode>,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(
+            "Stage table support is disabled, rebuild with cargo feature 'storage-stage'",
+        ))
     }
 
     async fn acquire_table_lock(

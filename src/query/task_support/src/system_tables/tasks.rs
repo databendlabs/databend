@@ -36,29 +36,29 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
+use databend_common_storages_system::AsyncOneBlockSystemTable;
+use databend_common_storages_system::AsyncSystemTable;
 use itertools::Itertools;
 
-use crate::table::AsyncOneBlockSystemTable;
-use crate::table::AsyncSystemTable;
-
 pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
-    let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
-    let mut name: Vec<String> = Vec::with_capacity(tasks.len());
-    let mut id: Vec<u64> = Vec::with_capacity(tasks.len());
-    let mut owner: Vec<String> = Vec::with_capacity(tasks.len());
-    let mut comment: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-    let mut warehouse: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-    let mut schedule: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-    let mut status: Vec<String> = Vec::with_capacity(tasks.len());
-    let mut definition: Vec<String> = Vec::with_capacity(tasks.len());
-    let mut condition_text: Vec<String> = Vec::with_capacity(tasks.len());
-    let mut after: Vec<String> = Vec::with_capacity(tasks.len());
-    let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
-    let mut error_integration: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-    let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
-    let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
-    let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
-    let mut session_params: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
+    let mut created_on = Vec::with_capacity(tasks.len());
+    let mut name = Vec::with_capacity(tasks.len());
+    let mut id = Vec::with_capacity(tasks.len());
+    let mut owner = Vec::with_capacity(tasks.len());
+    let mut comment = Vec::with_capacity(tasks.len());
+    let mut warehouse = Vec::with_capacity(tasks.len());
+    let mut schedule = Vec::with_capacity(tasks.len());
+    let mut status = Vec::with_capacity(tasks.len());
+    let mut definition = Vec::with_capacity(tasks.len());
+    let mut condition_text = Vec::with_capacity(tasks.len());
+    let mut after = Vec::with_capacity(tasks.len());
+    let mut suspend_after_num_failures = Vec::with_capacity(tasks.len());
+    let mut error_integration = Vec::with_capacity(tasks.len());
+    let mut last_committed_on = Vec::with_capacity(tasks.len());
+    let mut next_schedule_time = Vec::with_capacity(tasks.len());
+    let mut last_suspended_on = Vec::with_capacity(tasks.len());
+    let mut session_params = Vec::with_capacity(tasks.len());
+
     for task in tasks {
         created_on.push(task.created_at.timestamp_micros());
         name.push(task.task_name);
@@ -70,15 +70,13 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         status.push(task.status.to_string());
         definition.push(task.query_text);
         condition_text.push(task.condition_text);
-        // join by comma
         after.push(task.after.into_iter().collect::<Vec<_>>().join(","));
         suspend_after_num_failures.push(task.suspend_task_after_num_failures.map(|v| v as u64));
         error_integration.push(task.error_integration);
         next_schedule_time.push(task.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(task.updated_at.timestamp_micros());
         last_suspended_on.push(task.last_suspended_at.map(|t| t.timestamp_micros()));
-        let serialized_params = serde_json::to_vec(&task.session_params).unwrap();
-        session_params.push(Some(serialized_params));
+        session_params.push(Some(serde_json::to_vec(&task.session_params).unwrap()));
     }
 
     Ok(DataBlock::new_from_columns(vec![
@@ -120,8 +118,7 @@ impl AsyncSystemTable for TasksTable {
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let config = GlobalConfig::instance();
-        if config
+        if GlobalConfig::instance()
             .query
             .common
             .cloud_control_grpc_server_address
@@ -138,8 +135,8 @@ impl AsyncSystemTable for TasksTable {
         let available_roles = ctx.get_all_available_roles().await?;
         let req = ShowTasksRequest {
             tenant_id: tenant.tenant_name().to_string(),
-            name_like: "".to_string(),
-            result_limit: 10000, // TODO: use plan.limit pushdown
+            name_like: String::new(),
+            result_limit: 10000,
             owners: available_roles
                 .into_iter()
                 .map(|x| x.identity().to_string())
@@ -148,7 +145,6 @@ impl AsyncSystemTable for TasksTable {
         };
 
         let cloud_api = CloudControlApiProvider::instance();
-        let task_client = cloud_api.get_task_client();
         let cfg = build_client_config(
             tenant.tenant_name().to_string(),
             user,
@@ -156,11 +152,9 @@ impl AsyncSystemTable for TasksTable {
             cloud_api.get_timeout(),
         );
         let req = make_request(req, cfg);
+        let resp = cloud_api.get_task_client().show_tasks(req).await?;
 
-        let resp = task_client.show_tasks(req).await?;
-        let tasks = resp.tasks;
-
-        parse_tasks_to_datablock(tasks.into_iter().map(Task::try_from).try_collect()?)
+        parse_tasks_to_datablock(resp.tasks.into_iter().map(Task::try_from).try_collect()?)
     }
 }
 
@@ -175,7 +169,6 @@ impl TasksTable {
             meta: TableMeta {
                 schema,
                 engine: "SystemTasks".to_string(),
-
                 ..Default::default()
             },
             ..Default::default()

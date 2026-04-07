@@ -21,7 +21,7 @@ use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::TaggableObject;
 use databend_common_sql::plans::DropStagePlan;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use log::debug;
@@ -85,7 +85,7 @@ impl Interpreter for DropUserStageInterpreter {
         // 1. Remove stage files for internal stages
         if let Ok(stage) = &stage {
             if !matches!(&stage.stage_type, StageType::External) {
-                let op = StageTable::get_op(stage)?;
+                let op = init_stage_operator(stage)?;
                 Self::remove_all(self.ctx.clone(), op).await?;
                 info!(
                     "drop stage {:?} with all objects removed in stage",
