@@ -948,7 +948,7 @@ impl Binder {
         }
 
         self.ctx
-            .get_settings()
+            .get_shared_settings()
             .set_batch_settings(&hint_settings, true)
     }
 

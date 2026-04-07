@@ -4798,9 +4798,10 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let add_column = map(
         rule! {
-            ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
+            ADD ~ COLUMN? ~ ( IF ~ NOT ~ EXISTS )? ~ #column_def ~ ( #add_column_option )?
         },
-        |(_, _, column, option)| AlterTableAction::AddColumn {
+        |(_, _, if_not_exists, column, option)| AlterTableAction::AddColumn {
+            if_not_exists: if_not_exists.is_some(),
             column,
             option: option.unwrap_or(AddColumnOption::End),
         },

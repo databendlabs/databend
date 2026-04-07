@@ -3752,7 +3752,6 @@ dependencies = [
  "databend-common-io",
  "databend-common-meta-app",
  "databend-common-settings",
- "databend-functions-scalar-datetime",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
  "geozero",

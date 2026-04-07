@@ -24,14 +24,12 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::serialize::read_decimal_with_size;
-use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::VectorScalarRef;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -44,7 +42,6 @@ use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
 use databend_common_io::constants::NULL_BYTES_LOWER;
 use databend_common_io::constants::NULL_BYTES_UPPER;
-use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_io::cursor_ext::ReadBytesExt;
 use databend_common_io::cursor_ext::ReadCheckPointExt;
@@ -260,11 +257,7 @@ impl NestedValues {
     ) -> Result<()> {
         let mut buf = Vec::new();
         self.read_string_inner(reader, &mut buf)?;
-        let mut buffer_readr = Cursor::new(&buf);
-        let date = buffer_readr.read_date_text(&self.common_settings.settings.jiff_timezone)?;
-        let days = uniform_date(date);
-        column.push(clamp_date(days as i64));
-        Ok(())
+        super::common::read_date(column, &buf, &self.common_settings)
     }
 
     fn read_interval<R: AsRef<[u8]>>(
