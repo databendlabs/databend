@@ -75,7 +75,6 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::HistoryTableBranchMeta;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -488,7 +487,7 @@ impl Catalog for SessionCatalog {
     async fn list_history_table_branches(
         &self,
         req: ListHistoryTableBranchesReq,
-    ) -> Result<Vec<HistoryTableBranchMeta>> {
+    ) -> Result<Vec<TableBranchMeta>> {
         self.inner.list_history_table_branches(req).await
     }
 

@@ -26,8 +26,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
-use databend_common_meta_app::schema::HistoryTableBranchMeta;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_meta_app::schema::TableBranchMeta;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::S3StorageClass;
@@ -119,7 +119,7 @@ impl FuseTable {
 
     pub fn branch_table_from_meta(
         &self,
-        branch: HistoryTableBranchMeta,
+        branch: TableBranchMeta,
         s3_storage_class: &S3StorageClass,
     ) -> Result<Box<Self>> {
         let table_info = TableInfo {

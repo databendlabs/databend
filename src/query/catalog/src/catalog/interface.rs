@@ -72,7 +72,6 @@ use databend_common_meta_app::schema::GetSequenceReply;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
-use databend_common_meta_app::schema::HistoryTableBranchMeta;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
@@ -408,7 +407,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn list_history_table_branches(
         &self,
         _req: ListHistoryTableBranchesReq,
-    ) -> Result<Vec<HistoryTableBranchMeta>> {
+    ) -> Result<Vec<TableBranchMeta>> {
         Err(ErrorCode::Unimplemented(format!(
             "'list_history_table_branches' not implemented for catalog {}",
             self.name()

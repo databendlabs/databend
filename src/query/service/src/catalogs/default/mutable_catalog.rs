@@ -97,7 +97,6 @@ use databend_common_meta_app::schema::GetTableBranchReq;
 use databend_common_meta_app::schema::GetTableCopiedFileReply;
 use databend_common_meta_app::schema::GetTableCopiedFileReq;
 use databend_common_meta_app::schema::GetTableTagReq;
-use databend_common_meta_app::schema::HistoryTableBranchMeta;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDatabaseReq;
@@ -746,7 +745,7 @@ impl Catalog for MutableCatalog {
     async fn list_history_table_branches(
         &self,
         req: ListHistoryTableBranchesReq,
-    ) -> Result<Vec<HistoryTableBranchMeta>> {
+    ) -> Result<Vec<TableBranchMeta>> {
         self.ctx
             .meta
             .list_history_table_branches(req)

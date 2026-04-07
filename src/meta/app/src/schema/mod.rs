@@ -127,7 +127,6 @@ pub use table::GetTableCopiedFileReply;
 pub use table::GetTableCopiedFileReq;
 pub use table::GetTableReq;
 pub use table::GetTableTagReq;
-pub use table::HistoryTableBranchMeta;
 pub use table::ListDroppedTableReq;
 pub use table::ListDroppedTableResp;
 pub use table::ListHistoryTableBranchesReq;

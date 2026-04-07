@@ -412,24 +412,6 @@ fn virtual_block_prefix(fuse_table: &FuseTable) -> String {
 }
 
 #[async_backtrace::framed]
-async fn collect_retainable_history_branch_tables(
-    fuse_table: &FuseTable,
-    ctx: &Arc<dyn TableContext>,
-) -> Result<Vec<databend_common_meta_app::schema::HistoryTableBranchMeta>> {
-    let catalog = ctx
-        .get_catalog(fuse_table.get_table_info().catalog())
-        .await?;
-    let retention_boundary =
-        Utc::now() - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
-    catalog
-        .list_history_table_branches(ListHistoryTableBranchesReq {
-            table_id: fuse_table.get_id(),
-            retention_boundary: Some(retention_boundary),
-        })
-        .await
-}
-
-#[async_backtrace::framed]
 async fn collect_referenced_virtual_locations_from_segments(
     fuse_table: &FuseTable,
     segment_locations: &HashSet<Location>,
@@ -486,7 +468,17 @@ async fn vacuum_virtual_column_orphans(
     // in this set, we skip it instead of falling back to the current branch/base owner:
     // leaking an orphan virtual file is acceptable here, but deleting files under the wrong owner
     // is not.
-    let retain_branches = collect_retainable_history_branch_tables(fuse_table, &ctx).await?;
+    let catalog = ctx
+        .get_catalog(fuse_table.get_table_info().catalog())
+        .await?;
+    let retention_boundary =
+        Utc::now() - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+    let retain_branches = catalog
+        .list_history_table_branches(ListHistoryTableBranchesReq {
+            table_id: fuse_table.get_id(),
+            retention_boundary: Some(retention_boundary),
+        })
+        .await?;
     ctx.set_status_info(&format!(
         "vacuum virtual columns: collected retainable history branches, table:{}, branches:{}",
         fuse_table.get_table_info().desc,

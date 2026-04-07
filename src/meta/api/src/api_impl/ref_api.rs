@@ -51,7 +51,6 @@ use databend_common_meta_app::schema::DroppedBranchIdent;
 use databend_common_meta_app::schema::DroppedBranchMeta;
 use databend_common_meta_app::schema::GetTableBranchReq;
 use databend_common_meta_app::schema::GetTableTagReq;
-use databend_common_meta_app::schema::HistoryTableBranchMeta;
 use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
@@ -1042,7 +1041,7 @@ where
     async fn list_history_table_branches(
         &self,
         req: ListHistoryTableBranchesReq,
-    ) -> Result<Vec<HistoryTableBranchMeta>, KVAppError> {
+    ) -> Result<Vec<TableBranchMeta>, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let table_id = req.table_id;
@@ -1123,7 +1122,7 @@ where
                     continue;
                 };
 
-            branches.push(HistoryTableBranchMeta {
+            branches.push(TableBranchMeta {
                 branch_name,
                 branch_id,
                 branch_meta,

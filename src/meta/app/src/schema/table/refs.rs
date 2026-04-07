@@ -244,14 +244,6 @@ pub struct TableBranchMeta {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct HistoryTableBranchMeta {
-    pub branch_name: String,
-    pub branch_id: TableId,
-    pub branch_meta: SeqV<TableMeta>,
-    pub expire_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableTagReq {
     pub table_id: u64,
     pub seq: MatchSeq,
