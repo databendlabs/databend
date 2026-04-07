@@ -15,7 +15,9 @@
 use std::any::Any;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
+use databend_common_base::base::WatchNotify;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -26,7 +28,60 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_sql::IndexType;
-use tokio::time::timeout;
+
+const RUNTIME_FILTER_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+const RUNTIME_FILTER_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+async fn wait_runtime_filters(
+    scan_id: IndexType,
+    input: &Arc<InputPort>,
+    output: &Arc<OutputPort>,
+    abort_notify: Arc<WatchNotify>,
+    runtime_filter_ready: &[Arc<RuntimeFilterReady>],
+) -> Result<()> {
+    for runtime_filter_ready in runtime_filter_ready {
+        let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
+        if (*rx.borrow()).is_some() {
+            continue;
+        }
+
+        let deadline = Instant::now() + RUNTIME_FILTER_WAIT_TIMEOUT;
+        loop {
+            if output.is_finished() {
+                input.finish();
+                return Ok(());
+            }
+
+            let now = Instant::now();
+            if now >= deadline {
+                log::warn!(
+                    "Runtime filter wait timeout after {:?} for scan_id: {}",
+                    RUNTIME_FILTER_WAIT_TIMEOUT,
+                    scan_id
+                );
+                break;
+            }
+
+            let wait_duration = (deadline - now).min(RUNTIME_FILTER_WAIT_POLL_INTERVAL);
+            tokio::select! {
+                changed = rx.changed() => {
+                    match changed {
+                        Ok(()) => break,
+                        Err(_) => return Err(ErrorCode::TokioError("watcher's sender is dropped")),
+                    }
+                }
+                _ = abort_notify.notified() => {
+                    return Err(ErrorCode::AbortedQuery(
+                        "query aborted while waiting for runtime filter",
+                    ));
+                }
+                _ = tokio::time::sleep(wait_duration) => {}
+            }
+        }
+    }
+
+    Ok(())
+}
 
 pub struct TransformRuntimeFilterWait {
     ctx: Arc<dyn TableContext>,
@@ -111,30 +166,104 @@ impl Processor for TransformRuntimeFilterWait {
             self.runtime_filter_ready.len()
         );
 
-        let timeout_duration = Duration::from_secs(30);
-        for runtime_filter_ready in &self.runtime_filter_ready {
-            let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
-            if (*rx.borrow()).is_some() {
-                continue;
-            }
-
-            match timeout(timeout_duration, rx.changed()).await {
-                Ok(Ok(())) => {}
-                Ok(Err(_)) => {
-                    return Err(ErrorCode::TokioError("watcher's sender is dropped"));
-                }
-                Err(_) => {
-                    log::warn!(
-                        "Runtime filter wait timeout after {:?} for scan_id: {}",
-                        timeout_duration,
-                        self.scan_id
-                    );
-                }
-            }
-        }
+        wait_runtime_filters(
+            self.scan_id,
+            &self.input,
+            &self.output,
+            self.ctx.get_abort_notify(),
+            &self.runtime_filter_ready,
+        )
+        .await?;
 
         self.runtime_filter_ready.clear();
         self.wait_finished = true;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use databend_common_base::base::WatchNotify;
+    use databend_common_base::runtime::spawn;
+    use databend_common_pipeline::core::InputPort;
+    use databend_common_pipeline::core::OutputPort;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_wait_runtime_filters_returns_when_output_finished() {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let ready = Arc::new(RuntimeFilterReady::default());
+        let abort_notify = Arc::new(WatchNotify::new());
+
+        let output_cloned = output.clone();
+        spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            output_cloned.finish();
+        });
+
+        tokio::time::timeout(
+            Duration::from_millis(300),
+            wait_runtime_filters(0, &input, &output, abort_notify, &[ready]),
+        )
+        .await
+        .expect("runtime filter wait should stop after branch finish")
+        .expect("branch finish should not return an error");
+
+        assert!(input.is_finished());
+    }
+
+    #[tokio::test]
+    async fn test_wait_runtime_filters_returns_when_query_aborted() {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let ready = Arc::new(RuntimeFilterReady::default());
+        let abort_notify = Arc::new(WatchNotify::new());
+
+        let abort_notify_cloned = abort_notify.clone();
+        spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            abort_notify_cloned.notify_waiters();
+        });
+
+        let err = tokio::time::timeout(
+            Duration::from_millis(300),
+            wait_runtime_filters(0, &input, &output, abort_notify, &[ready]),
+        )
+        .await
+        .expect("runtime filter wait should stop after query abort")
+        .expect_err("query abort should propagate as an error");
+
+        assert_eq!(err.name(), "AbortedQuery");
+    }
+
+    #[tokio::test]
+    async fn test_wait_runtime_filters_returns_when_filter_notified() {
+        let input = InputPort::create();
+        let output = OutputPort::create();
+        let ready = Arc::new(RuntimeFilterReady::default());
+        let abort_notify = Arc::new(WatchNotify::new());
+
+        let ready_cloned = ready.clone();
+        spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            ready_cloned
+                .runtime_filter_watcher
+                .send(Some(()))
+                .expect("watcher should stay open");
+        });
+
+        tokio::time::timeout(
+            Duration::from_millis(300),
+            wait_runtime_filters(0, &input, &output, abort_notify, &[ready]),
+        )
+        .await
+        .expect("runtime filter wait should stop after filter notification")
+        .expect("filter notification should not return an error");
+
+        assert!(!input.is_finished());
     }
 }

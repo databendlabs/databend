@@ -3750,7 +3750,6 @@ dependencies = [
  "lexical-core",
  "match-template",
  "micromarshal",
- "num",
  "num-traits",
  "pretty_assertions",
  "serde",
