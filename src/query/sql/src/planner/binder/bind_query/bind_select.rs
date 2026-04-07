@@ -55,9 +55,9 @@ use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ExprContext;
-use crate::planner::binder::aggregate::AggregatePrepassAliasCatalog;
-use crate::planner::binder::aggregate::AggregatePrepassFacts;
-use crate::planner::binder::aggregate::AggregatePrepassFunctionCatalog;
+use crate::planner::binder::aggregate_prepass::AggregatePrepassAliasCatalog;
+use crate::planner::binder::aggregate_prepass::AggregatePrepassFacts;
+use crate::planner::binder::aggregate_prepass::AggregatePrepassFunctionCatalog;
 use crate::planner::binder::sort::OrderByRewriteFlags;
 use crate::plans::ScalarExpr;
 
@@ -73,10 +73,6 @@ struct SelectClauseFact {
 }
 
 impl SelectClauseFact {
-    fn needs_aggregate_prepass(&self) -> bool {
-        self.contains_aggregate || self.references_aggregate_aliases
-    }
-
     fn order_by_rewrite_flags(&self) -> OrderByRewriteFlags {
         OrderByRewriteFlags::new(
             !self.referenced_aliases.is_empty(),
@@ -94,10 +90,6 @@ struct SelectClauseFacts {
 }
 
 impl SelectClauseFacts {
-    fn iter_aggregate_prepass(&self) -> impl Iterator<Item = &SelectClauseFact> {
-        self.having.iter().chain(self.order_by.iter())
-    }
-
     fn order_by_rewrite_flags(&self) -> Vec<OrderByRewriteFlags> {
         self.order_by
             .iter()
@@ -122,16 +114,14 @@ impl Binder {
         order_by: &[OrderByExpr],
     ) -> SelectClauseFacts {
         let having = having.map(|expr| {
-            let referenced_aliases = self.aggregate_prepass_expr_referenced_aliases(aliases, expr);
+            let features =
+                Self::aggregate_prepass_expr_features(&self.name_resolution_ctx, functions, expr);
+            let referenced_aliases = aliases.referenced_aliases(&self.name_resolution_ctx, expr);
             SelectClauseFact {
                 expr_context: ExprContext::HavingClause,
                 ast: expr.clone(),
-                contains_aggregate: Self::aggregate_prepass_contains_aggregate(
-                    &self.name_resolution_ctx,
-                    functions,
-                    expr,
-                ),
-                contains_window: Self::aggregate_prepass_contains_window(expr),
+                contains_aggregate: features.contains_aggregate,
+                contains_window: features.contains_window,
                 references_aggregate_aliases: aliases
                     .references_aggregate_aliases(&referenced_aliases),
                 references_window_aliases: aliases.references_window_aliases(&referenced_aliases),
@@ -139,16 +129,14 @@ impl Binder {
             }
         });
         let qualify = qualify.map(|expr| {
-            let referenced_aliases = self.aggregate_prepass_expr_referenced_aliases(aliases, expr);
+            let features =
+                Self::aggregate_prepass_expr_features(&self.name_resolution_ctx, functions, expr);
+            let referenced_aliases = aliases.referenced_aliases(&self.name_resolution_ctx, expr);
             SelectClauseFact {
                 expr_context: ExprContext::QualifyClause,
                 ast: expr.clone(),
-                contains_aggregate: Self::aggregate_prepass_contains_aggregate(
-                    &self.name_resolution_ctx,
-                    functions,
-                    expr,
-                ),
-                contains_window: Self::aggregate_prepass_contains_window(expr),
+                contains_aggregate: features.contains_aggregate,
+                contains_window: features.contains_window,
                 references_aggregate_aliases: aliases
                     .references_aggregate_aliases(&referenced_aliases),
                 references_window_aliases: aliases.references_window_aliases(&referenced_aliases),
@@ -158,17 +146,18 @@ impl Binder {
         let order_by = order_by
             .iter()
             .map(|order| {
+                let features = Self::aggregate_prepass_expr_features(
+                    &self.name_resolution_ctx,
+                    functions,
+                    &order.expr,
+                );
                 let referenced_aliases =
-                    self.aggregate_prepass_expr_referenced_aliases(aliases, &order.expr);
+                    aliases.referenced_aliases(&self.name_resolution_ctx, &order.expr);
                 SelectClauseFact {
                     expr_context: ExprContext::OrderByClause,
                     ast: order.expr.clone(),
-                    contains_aggregate: Self::aggregate_prepass_contains_aggregate(
-                        &self.name_resolution_ctx,
-                        functions,
-                        &order.expr,
-                    ),
-                    contains_window: Self::aggregate_prepass_contains_window(&order.expr),
+                    contains_aggregate: features.contains_aggregate,
+                    contains_window: features.contains_window,
                     references_aggregate_aliases: aliases
                         .references_aggregate_aliases(&referenced_aliases),
                     references_window_aliases: aliases
@@ -183,29 +172,6 @@ impl Binder {
             qualify,
             order_by,
         }
-    }
-
-    fn derive_aggregate_prepass_facts(
-        &self,
-        functions: &AggregatePrepassFunctionCatalog,
-        aliases: &AggregatePrepassAliasCatalog,
-        clause_facts: &SelectClauseFacts,
-    ) -> AggregatePrepassFacts {
-        let mut aggregate_prepass_facts = AggregatePrepassFacts::default();
-
-        for clause_fact in clause_facts
-            .iter_aggregate_prepass()
-            .filter(|clause_fact| clause_fact.needs_aggregate_prepass())
-        {
-            aggregate_prepass_facts.extend(self.collect_aggregate_prepass_facts(
-                functions,
-                aliases,
-                clause_fact.expr_context,
-                &clause_fact.ast,
-            ));
-        }
-
-        aggregate_prepass_facts
     }
 
     #[async_backtrace::framed]
@@ -310,10 +276,21 @@ impl Binder {
             stmt.qualify.as_ref(),
             order_by,
         );
+
+        let ast_iter = std::iter::chain(&clause_facts.having, &clause_facts.qualify)
+            .chain(clause_facts.order_by.iter())
+            .filter_map(|fact| {
+                if fact.contains_aggregate || fact.references_aggregate_aliases {
+                    Some((&fact.ast, fact.expr_context))
+                } else {
+                    None
+                }
+            });
+
         let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
             &aggregate_prepass_functions,
             &aggregate_prepass_aliases,
-            &clause_facts,
+            ast_iter,
         );
         let global_view = SelectGlobalView {
             semantic_aliases,

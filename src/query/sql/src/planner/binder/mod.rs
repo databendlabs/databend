@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate;
+mod aggregate_prepass;
 mod async_function_desc;
 mod bind_context;
 mod bind_mutation;
