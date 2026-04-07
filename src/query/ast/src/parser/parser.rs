@@ -64,7 +64,7 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
 
     #[cfg(debug_assertions)]
     if let Err(message) = assert_reparse(tokens[0].source, stmt.clone()) {
-        log::warn!("{message}");
+        eprintln!("[WARN] {message}");
     }
 
     Ok((stmt.stmt, stmt.format))

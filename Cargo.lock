@@ -3385,7 +3385,6 @@ dependencies = [
  "hex",
  "indent",
  "itertools 0.13.0",
- "log",
  "logos",
  "memchr",
  "nom 8.0.0",
