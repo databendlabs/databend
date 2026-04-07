@@ -5974,7 +5974,6 @@ dependencies = [
  "futures-util",
  "geo",
  "geo-index",
- "geozero",
  "goldenfile",
  "headers",
  "hex",
