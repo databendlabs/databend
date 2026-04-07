@@ -3,7 +3,7 @@ import os
 import nox
 
 
-PYTHON_DRIVER = ["0.33.1", "0.33.4"]
+PYTHON_DRIVER = ["0.33.7"]
 
 
 @nox.session
