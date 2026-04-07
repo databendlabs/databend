@@ -89,7 +89,7 @@ impl RuntimeFiltersDesc {
             self.ctx.broadcast_source_sender(broadcast_id).close();
         }
         for ready in &self.runtime_filters_ready {
-            let _ = ready.runtime_filter_watcher.send(None);
+            let _ = ready.runtime_filter_watcher.send(Some(()));
         }
     }
 
