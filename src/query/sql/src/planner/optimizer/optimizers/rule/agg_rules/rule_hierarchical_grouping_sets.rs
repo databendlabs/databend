@@ -34,6 +34,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
@@ -778,12 +779,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         let null_group_ids: Vec<Symbol> = agg
             .group_items
             .iter()
-            .filter(|item| {
-                !matches!(
-                    &item.scalar,
-                    ScalarExpr::BoundColumnRef(col) if col.column.column_name == "_grouping_id"
-                )
-            })
+            .filter(|item| !is_grouping_id_item(item))
             .map(|i| i.index)
             .filter(|index| !group_columns.contains(index))
             .collect();
@@ -857,12 +853,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
     fn calculate_grouping_id(&self, group_columns: &[Symbol], all_groups: &[ScalarItem]) -> u32 {
         let all_groups: Vec<&ScalarItem> = all_groups
             .iter()
-            .filter(|item| {
-                !matches!(
-                    &item.scalar,
-                    ScalarExpr::BoundColumnRef(col) if col.column.column_name == "_grouping_id"
-                )
-            })
+            .filter(|item| !is_grouping_id_item(item))
             .collect();
         let mask = (1 << all_groups.len()) - 1;
         let mut id = 0;

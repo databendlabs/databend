@@ -26,10 +26,12 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::Visitor;
 use crate::plans::walk_expr;
 
 pub const GROUPING_FUNC_NAME: &str = "grouping";
+pub const GROUPING_ID_COLUMN_NAME: &str = "_grouping_id";
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>
@@ -85,11 +87,10 @@ pub fn is_grouping_function(scalar: &ScalarExpr) -> bool {
     )
 }
 
-pub fn is_raw_grouping_function(scalar: &ScalarExpr) -> bool {
+pub fn is_grouping_id_item(item: &ScalarItem) -> bool {
     matches!(
-        scalar,
-        ScalarExpr::FunctionCall(func)
-            if func.func_name.eq_ignore_ascii_case(GROUPING_FUNC_NAME) && func.params.is_empty()
+        &item.scalar,
+        ScalarExpr::BoundColumnRef(col) if col.column.column_name == GROUPING_ID_COLUMN_NAME
     )
 }
 

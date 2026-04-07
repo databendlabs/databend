@@ -33,6 +33,8 @@ use itertools::Itertools;
 
 use super::ExprContext;
 use super::Finder;
+use super::GROUPING_ID_COLUMN_NAME;
+use super::is_grouping_id_item;
 use super::prune_by_children;
 use super::reject_grouping_functions;
 use crate::BindContext;
@@ -1035,10 +1037,8 @@ impl Binder {
         }
 
         for item in agg_info.group_items.iter() {
-            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
-                if col.column.column_name.eq("_grouping_id") {
-                    continue;
-                }
+            if is_grouping_id_item(item) {
+                continue;
             }
             scalar_items.push(item.clone());
         }
@@ -1124,7 +1124,7 @@ impl Binder {
 
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_derived_column_binding(
-            "_grouping_id".to_string(),
+            GROUPING_ID_COLUMN_NAME.to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
 

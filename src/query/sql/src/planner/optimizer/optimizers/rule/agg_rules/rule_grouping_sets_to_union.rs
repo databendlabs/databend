@@ -30,6 +30,7 @@ use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
+use crate::planner::binder::is_grouping_id_item;
 use crate::plans::Aggregate;
 use crate::plans::AggregateMode;
 use crate::plans::CastExpr;
@@ -84,13 +85,6 @@ impl RuleGroupingSetsToUnion {
             ctx,
         }
     }
-}
-
-fn is_grouping_id_item(item: &ScalarItem) -> bool {
-    matches!(
-        &item.scalar,
-        ScalarExpr::BoundColumnRef(col) if col.column.column_name == "_grouping_id"
-    )
 }
 
 // Must go before `RuleSplitAggregate`
@@ -215,20 +209,6 @@ impl Rule for RuleGroupingSetsToUnion {
 
                     for scalar in eval_scalar.items.iter_mut() {
                         visitor.visit(&mut scalar.scalar)?;
-                    }
-
-                    if !eval_scalar
-                        .items
-                        .iter()
-                        .any(|item| item.index == grouping_sets.grouping_id_index)
-                    {
-                        eval_scalar.items.push(ScalarItem {
-                            index: grouping_sets.grouping_id_index,
-                            scalar: ScalarExpr::ConstantExpr(ConstantExpr {
-                                value: Scalar::Number(NumberScalar::UInt32(grouping_id)),
-                                span: None,
-                            }),
-                        });
                     }
 
                     let agg_plan = SExpr::create_unary(agg, cte_consumer.clone());
