@@ -20,6 +20,10 @@ pendings = "pendings"
 ## External
 WRONLY = "WRONLY"
 
+# Base64 literals used in tests
+QWJj = "QWJj"
+MTIz = "MTIz"
+
 # Wrong cases
 Tke = "Tke"
 ba = "ba"

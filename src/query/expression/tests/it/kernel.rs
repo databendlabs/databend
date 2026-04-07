@@ -598,7 +598,7 @@ fn assert_estimated_scalar_repeat_size(scalar: ScalarRef, num_rows: usize, ty: D
     let col = builder.build();
     assert_eq!(
         scalar.estimated_scalar_repeat_size(num_rows, &ty),
-        col.memory_size(false)
+        col.memory_size(true)
     );
 }
 
@@ -643,17 +643,31 @@ fn test_estimated_scalar_repeat_size() {
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
-    // string
+    // string short
     {
         let scalar = ScalarRef::String("abc");
         let ty = DataType::String;
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
-    // string
+    // string short, single row
+    {
+        let scalar = ScalarRef::String("abc");
+        let ty = DataType::String;
+        assert_estimated_scalar_repeat_size(scalar, 1, ty);
+    }
+
+    // long string
     {
         let scalar = ScalarRef::String("abcdefghijklmn123");
         let ty = DataType::String;
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // nullable(string)
+    {
+        let scalar = ScalarRef::String("abc");
+        let ty = DataType::Nullable(Box::new(DataType::String));
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 
@@ -695,6 +709,19 @@ fn test_estimated_scalar_repeat_size() {
             DataType::Number(NumberDataType::UInt8),
             DataType::String,
         ])));
+        assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
+    }
+
+    // tuple
+    {
+        let scalar = ScalarRef::Tuple(vec![
+            ScalarRef::Number(NumberScalar::UInt8(1)),
+            ScalarRef::String("abc"),
+        ]);
+        let ty = DataType::Tuple(vec![
+            DataType::Number(NumberDataType::UInt8),
+            DataType::String,
+        ]);
         assert_estimated_scalar_repeat_size(scalar, num_rows, ty);
     }
 }

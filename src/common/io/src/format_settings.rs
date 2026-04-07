@@ -122,6 +122,7 @@ pub struct InputFormatSettings {
 
     pub is_rounding_mode: bool,
     pub disable_variant_check: bool,
+    pub enable_auto_detect_datetime_format: bool,
 }
 
 // only used for tests
@@ -133,6 +134,7 @@ impl Default for InputFormatSettings {
             binary_format: BinaryDisplayFormat::Hex,
             is_rounding_mode: true,
             disable_variant_check: false,
+            enable_auto_detect_datetime_format: false,
         }
     }
 }

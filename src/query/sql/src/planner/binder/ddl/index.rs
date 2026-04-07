@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::sync::LazyLock;
 
 use databend_common_ast::ast::CreateIndexStmt;
@@ -31,8 +32,12 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableIndexType as AstTableIndexType;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -41,7 +46,9 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::schema::GetIndexReq;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::IndexNameIdent;
+use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::TableIndexType;
+use databend_common_meta_app::tenant::Tenant;
 use databend_storages_common_table_meta::meta::Location;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
@@ -50,11 +57,14 @@ use itertools::Itertools;
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
+use crate::ColumnEntry;
 use crate::MetadataRef;
+use crate::NameResolutionContext;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::binder::Binder;
 use crate::optimizer::OptimizerContext;
+use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
 use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTableIndexPlan;
@@ -63,6 +73,7 @@ use crate::plans::DropTableIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshTableIndexPlan;
+use crate::plans::RelOperator;
 
 const MAXIMUM_BLOOM_SIZE: u64 = 10 * 1024 * 1024;
 const MINIMUM_BLOOM_SIZE: u64 = 512;
@@ -960,4 +971,124 @@ impl Binder {
         };
         Ok(Plan::RefreshTableIndex(Box::new(plan)))
     }
+}
+
+fn collect_source_column_refs_from_bound_query(
+    s_expr: &SExpr,
+    metadata: &crate::Metadata,
+    table_id: u64,
+    columns: &mut BTreeMap<ColumnId, String>,
+) {
+    if let RelOperator::Scan(scan) = s_expr.plan() {
+        let table_entry = metadata.table(scan.table_index);
+        if table_entry.table().get_id() == table_id {
+            for index in scan.used_columns() {
+                match metadata.column(index) {
+                    ColumnEntry::BaseTableColumn(column)
+                        if column.table_index == scan.table_index =>
+                    {
+                        columns.insert(column.column_id, column.column_name.to_lowercase());
+                    }
+                    ColumnEntry::VirtualColumn(column)
+                        if column.table_index == scan.table_index =>
+                    {
+                        columns.insert(
+                            column.source_column_id,
+                            column.source_column_name.to_lowercase(),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    for child in s_expr.children() {
+        collect_source_column_refs_from_bound_query(child, metadata, table_id, columns);
+    }
+}
+
+async fn bind_index_source_columns(
+    ctx: Arc<dyn TableContext>,
+    query: &str,
+    table_id: u64,
+) -> Result<BTreeMap<ColumnId, String>> {
+    let settings = ctx.get_settings();
+    let tokens = tokenize_sql(query)?;
+    // Persisted index SQL should not be reparsed with the caller session dialect, otherwise
+    // compatibility checks become session-dependent for the same stored definition.
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+    // The binder inherits the session's current catalog/database for name resolution.
+    // This is safe because:
+    // 1. Catalog: only the default catalog is used in practice; even if mismatched, bind
+    //    failure conservatively blocks the operation rather than allowing unsafe changes.
+    // 2. Database: CREATE AGGREGATING INDEX requires the session to be in the target
+    //    database, and the persisted query is fully database-qualified (e.g.
+    //    `SELECT a FROM test.t`), so resolution does not depend on the session database.
+    let mut binder = Binder::new(
+        ctx.clone(),
+        CatalogManager::instance(),
+        NameResolutionContext::try_from(settings.as_ref())?,
+        Default::default(),
+    );
+    let mut bind_context = BindContext::new();
+    bind_context.planning_agg_index = true;
+
+    let plan = binder.bind_statement(&mut bind_context, &stmt).await?;
+    let Plan::Query { metadata, .. } = &plan else {
+        return Err(ErrorCode::SyntaxException(
+            "Index definition must be a query statement".to_string(),
+        ));
+    };
+    let metadata = metadata.clone();
+
+    // Run optimizer to apply column pruning so that scan.columns only contains
+    // columns actually referenced by the query, not all table columns.
+    let opt_ctx = OptimizerContext::new(ctx, metadata.clone())
+        .set_planning_agg_index(true)
+        .clone();
+    let optimized = optimize(opt_ctx, plan).await?;
+    let Plan::Query { s_expr, .. } = optimized else {
+        return Err(ErrorCode::Internal(
+            "Optimizer returned non-query plan".to_string(),
+        ));
+    };
+
+    let mut columns = BTreeMap::new();
+    collect_source_column_refs_from_bound_query(&s_expr, &metadata.read(), table_id, &mut columns);
+    Ok(columns)
+}
+
+/// Validate that table indexes do not reference any column from the supplied set.
+/// Use this for any operation that invalidates columns: flashback/revert, DROP COLUMN,
+/// MODIFY COLUMN, etc. Callers pass the set of column IDs being removed or modified.
+pub async fn validate_table_indexes_not_referencing_columns(
+    ctx: Arc<dyn TableContext>,
+    catalog: &dyn Catalog,
+    tenant: &Tenant,
+    table_id: u64,
+    columns: &HashSet<ColumnId>,
+) -> Result<()> {
+    if columns.is_empty() {
+        return Ok(());
+    }
+
+    let indexes = catalog
+        .list_indexes_by_table_id(ListIndexesByIdReq::new(tenant.clone(), table_id))
+        .await?;
+
+    for (_, index_name, index_meta) in &indexes {
+        for (column_id, column_name) in
+            bind_index_source_columns(ctx.clone(), &index_meta.query, table_id).await?
+        {
+            if columns.contains(&column_id) {
+                return Err(ErrorCode::IllegalReference(format!(
+                    "{} index '{}' references column '{}'. \
+                     Please DROP the index before proceeding.",
+                    index_meta.index_type, index_name, column_name
+                )));
+            }
+        }
+    }
+    Ok(())
 }
