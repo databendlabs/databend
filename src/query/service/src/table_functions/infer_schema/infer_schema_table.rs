@@ -48,11 +48,11 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_sql::binder::resolve_file_location;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::init_stage_operator;
-use databend_common_storages_stage::BytesReader;
-use databend_common_storages_stage::Decompressor;
-use databend_common_storages_stage::InferSchemaPartInfo;
-use databend_common_storages_stage::LoadContext;
 use databend_common_users::Object;
+use databend_query_storage_stage_support::BytesReader;
+use databend_query_storage_stage_support::Decompressor;
+use databend_query_storage_stage_support::InferSchemaPartInfo;
+use databend_query_storage_stage_support::LoadContext;
 use databend_storages_common_stage::SingleFilePartition;
 use opendal::Scheme;
 

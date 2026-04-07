@@ -31,7 +31,9 @@ mod interpreter_connection_create;
 mod interpreter_connection_desc;
 mod interpreter_connection_drop;
 mod interpreter_connection_show;
+#[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_location;
+#[cfg(feature = "storage-stage")]
 mod interpreter_copy_into_table;
 mod interpreter_create_warehouses;
 mod interpreter_create_workload_group;
@@ -162,12 +164,34 @@ mod interpreter_table_unset_options;
 mod interpreter_table_vacuum;
 mod interpreter_tag_create;
 mod interpreter_tag_drop;
-mod interpreter_task_alter;
-mod interpreter_task_create;
-mod interpreter_task_describe;
-mod interpreter_task_drop;
-mod interpreter_task_execute;
-mod interpreter_tasks_show;
+#[cfg(feature = "task-support")]
+mod task {
+    mod interpreter_task_alter {
+        include!("interpreter_task_alter.rs");
+    }
+    mod interpreter_task_create {
+        include!("interpreter_task_create.rs");
+    }
+    mod interpreter_task_describe {
+        include!("interpreter_task_describe.rs");
+    }
+    mod interpreter_task_drop {
+        include!("interpreter_task_drop.rs");
+    }
+    mod interpreter_task_execute {
+        include!("interpreter_task_execute.rs");
+    }
+    mod interpreter_tasks_show {
+        include!("interpreter_tasks_show.rs");
+    }
+
+    pub(crate) use interpreter_task_alter::AlterTaskInterpreter;
+    pub(crate) use interpreter_task_create::CreateTaskInterpreter;
+    pub(crate) use interpreter_task_describe::DescribeTaskInterpreter;
+    pub(crate) use interpreter_task_drop::DropTaskInterpreter;
+    pub(crate) use interpreter_task_execute::ExecuteTaskInterpreter;
+    pub(crate) use interpreter_tasks_show::ShowTasksInterpreter;
+}
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
 mod interpreter_txn_commit;
@@ -195,7 +219,6 @@ mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
 mod interpreter_virtual_column_vacuum;
-mod task;
 mod util;
 
 pub use access::ManagementModeAccess;

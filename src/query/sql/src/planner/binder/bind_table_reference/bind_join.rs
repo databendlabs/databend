@@ -32,6 +32,7 @@ use crate::MetadataRef;
 use crate::binder::Finder;
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
+use crate::binder::reject_grouping_functions;
 use crate::binder::wrap_nullable;
 use crate::normalize_identifier;
 use crate::optimizer::OptimizerContext;
@@ -759,6 +760,8 @@ impl<'a> JoinConditionResolver<'a> {
     }
 
     fn check_join_allowed_scalar_expr(&mut self, scalars: &Vec<ScalarExpr>) -> Result<()> {
+        reject_grouping_functions(scalars.iter(), "Join condition")?;
+
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,

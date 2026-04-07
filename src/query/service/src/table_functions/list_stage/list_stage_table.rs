@@ -47,7 +47,7 @@ use databend_common_sql::binder::resolve_stage_location;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFileInfoStream;
 use databend_common_storage::StageFilesInfo;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
 use futures_util::StreamExt;
 use futures_util::stream::Chunks;
@@ -204,7 +204,7 @@ impl ListStagesSource {
                 )));
             }
         }
-        let op = StageTable::get_op(&stage_info)?;
+        let op = init_stage_operator(&stage_info)?;
         let thread_num = self.ctx.get_settings().get_max_threads()? as usize;
 
         let files_info = StageFilesInfo {

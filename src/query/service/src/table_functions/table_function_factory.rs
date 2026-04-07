@@ -37,6 +37,12 @@ use databend_common_storages_fuse::table_functions::TableFunctionTemplate;
 use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_meta_client::types::MetaId;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::TaskDependentsEnableTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::TaskDependentsTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::TaskHistoryTable;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUC_ID_END;
 use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
@@ -51,11 +57,9 @@ use crate::storages::fuse::table_functions::FuseSnapshotFunc;
 use crate::storages::fuse::table_functions::FuseTagFunc;
 use crate::table_functions::TableFunction;
 use crate::table_functions::async_crash_me::AsyncCrashMeTable;
-use crate::table_functions::cloud::TaskDependentsEnableTable;
-use crate::table_functions::cloud::TaskDependentsTable;
-use crate::table_functions::cloud::TaskHistoryTable;
 use crate::table_functions::copy_history::CopyHistoryTable;
 use crate::table_functions::fuse_vacuum2::FuseVacuum2Table;
+#[cfg(feature = "storage-stage")]
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::inspect_parquet::InspectParquetTable;
 use crate::table_functions::list_stage::ListStageTable;
@@ -104,6 +108,9 @@ pub struct TableFunctionFactory {
 
 impl TableFunctionFactory {
     pub fn create(config: &InnerConfig) -> Self {
+        #[cfg(not(feature = "task-support"))]
+        let _ = config;
+
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
         let mut next_id = || -> MetaId {
             if id >= SYS_TBL_FUC_ID_END {
@@ -269,6 +276,7 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(AsyncCrashMeTable::create)),
         );
 
+        #[cfg(feature = "storage-stage")]
         creators.insert(
             "infer_schema".to_string(),
             (next_id(), Arc::new(InferSchemaTable::create)),
@@ -311,6 +319,7 @@ impl TableFunctionFactory {
             ),
         );
 
+        #[cfg(feature = "task-support")]
         if !config.task.on {
             creators.insert(
                 "task_dependents".to_string(),

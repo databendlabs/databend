@@ -16,10 +16,10 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_sql::plans::ExecuteTaskPlan;
+use databend_query_task_support::TaskInterpreter;
+use databend_query_task_support::TaskInterpreterManager;
 
 use crate::interpreters::Interpreter;
-use crate::interpreters::task::TaskInterpreter;
-use crate::interpreters::task::TaskInterpreterManager;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -48,7 +48,7 @@ impl Interpreter for ExecuteTaskInterpreter {
     #[fastrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        TaskInterpreterManager::build(&self.ctx)?
+        TaskInterpreterManager::build(self.ctx.as_ref())?
             .execute_task(&self.ctx, &self.plan)
             .await?;
 

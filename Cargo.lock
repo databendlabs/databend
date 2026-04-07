@@ -5875,7 +5875,6 @@ dependencies = [
  "arrow-json 56.2.0",
  "arrow-schema 56.2.0",
  "arrow-select 56.2.0",
- "arrow-udf-runtime",
  "async-backtrace",
  "async-channel",
  "async-compat",
@@ -5937,7 +5936,6 @@ dependencies = [
  "databend-common-storages-information-schema",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
- "databend-common-storages-stage",
  "databend-common-storages-stream",
  "databend-common-storages-system",
  "databend-common-telemetry",
@@ -5956,6 +5954,9 @@ dependencies = [
  "databend-meta-client 260205.4.0",
  "databend-meta-plugin-semaphore",
  "databend-meta-runtime",
+ "databend-query-script-udf-support",
+ "databend-query-storage-stage-support",
+ "databend-query-task-support",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -6039,6 +6040,72 @@ dependencies = [
  "walkdir",
  "wiremock",
  "zip",
+]
+
+[[package]]
+name = "databend-query-script-udf-support"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrow-array 56.2.0",
+ "arrow-ipc 56.2.0",
+ "arrow-schema 56.2.0",
+ "arrow-select 56.2.0",
+ "arrow-udf-runtime",
+ "async-backtrace",
+ "databend-common-base",
+ "databend-common-cache",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-meta-app",
+ "databend-common-pipeline-transforms",
+ "databend-common-sql",
+ "databend-common-storage",
+ "futures",
+ "log",
+ "parking_lot 0.12.3",
+ "tokio",
+ "toml 0.8.22",
+ "uuid",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
+name = "databend-query-storage-stage-support"
+version = "0.1.0"
+dependencies = [
+ "databend-common-storages-stage",
+]
+
+[[package]]
+name = "databend-query-task-support"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "databend-common-ast",
+ "databend-common-catalog",
+ "databend-common-cloud-control",
+ "databend-common-config",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-license",
+ "databend-common-management",
+ "databend-common-meta-app",
+ "databend-common-pipeline",
+ "databend-common-settings",
+ "databend-common-sql",
+ "databend-common-storages-basic",
+ "databend-common-storages-factory",
+ "databend-common-storages-system",
+ "databend-common-users",
+ "itertools 0.13.0",
+ "jiff",
+ "serde_json",
 ]
 
 [[package]]

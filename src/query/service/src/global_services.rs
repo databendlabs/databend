@@ -60,6 +60,7 @@ use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::SessionManager;
 use crate::spillers::SpillsBufferPool;
+#[cfg(feature = "task-support")]
 use crate::task::service::TaskService;
 
 pub struct GlobalServices;
@@ -201,6 +202,7 @@ impl GlobalServices {
         if config.log.history.on {
             GlobalHistoryLog::init(config, version).await?;
         }
+        #[cfg(feature = "task-support")]
         if config.task.on {
             if config
                 .query
@@ -213,6 +215,12 @@ impl GlobalServices {
                 ));
             }
             TaskService::init(config).await?;
+        }
+        #[cfg(not(feature = "task-support"))]
+        if config.task.on {
+            return Err(ErrorCode::Unimplemented(
+                "task support is disabled, rebuild with cargo feature 'task-support'",
+            ));
         }
 
         GLOBAL_QUERIES_MANAGER.set_gc_handle(memory_gc_handle);
