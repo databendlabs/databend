@@ -774,12 +774,13 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg: &Aggregate,
         grouping_id_index: Symbol,
     ) -> Result<()> {
-        let grouping_id = self.calculate_grouping_id(group_columns, &agg.group_items);
+        let grouping_id =
+            self.calculate_grouping_id(group_columns, &agg.group_items, grouping_id_index);
 
         let null_group_ids: Vec<Symbol> = agg
             .group_items
             .iter()
-            .filter(|item| !is_grouping_id_item(item))
+            .filter(|item| !is_grouping_id_item(item, grouping_id_index))
             .map(|i| i.index)
             .filter(|index| !group_columns.contains(index))
             .collect();
@@ -850,10 +851,15 @@ impl RuleHierarchicalGroupingSetsToUnion {
         Ok(result)
     }
 
-    fn calculate_grouping_id(&self, group_columns: &[Symbol], all_groups: &[ScalarItem]) -> u32 {
+    fn calculate_grouping_id(
+        &self,
+        group_columns: &[Symbol],
+        all_groups: &[ScalarItem],
+        grouping_id_index: Symbol,
+    ) -> u32 {
         let all_groups: Vec<&ScalarItem> = all_groups
             .iter()
-            .filter(|item| !is_grouping_id_item(item))
+            .filter(|item| !is_grouping_id_item(item, grouping_id_index))
             .collect();
         let mask = (1 << all_groups.len()) - 1;
         let mut id = 0;

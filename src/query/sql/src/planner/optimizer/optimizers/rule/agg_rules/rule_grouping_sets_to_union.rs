@@ -159,7 +159,7 @@ impl Rule for RuleGroupingSetsToUnion {
                 let group_bys = agg
                     .group_items
                     .iter()
-                    .filter(|item| !is_grouping_id_item(item))
+                    .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
                     .map(|i| {
                         agg_input_columns
                             .iter()
@@ -191,7 +191,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     let null_group_ids: Vec<Symbol> = agg
                         .group_items
                         .iter()
-                        .filter(|item| !is_grouping_id_item(item))
+                        .filter(|item| !is_grouping_id_item(item, grouping_sets.grouping_id_index))
                         .map(|i| i.index)
                         .filter(|index| !set.contains(index))
                         .clone()

@@ -1036,8 +1036,12 @@ impl Binder {
             scalar_items.push(sort_desc_expr.clone());
         }
 
+        let grouping_id_index = agg_info
+            .grouping_sets
+            .as_ref()
+            .map(|g| g.grouping_id_column.index);
         for item in agg_info.group_items.iter() {
-            if is_grouping_id_item(item) {
+            if grouping_id_index.is_some_and(|idx| is_grouping_id_item(item, idx)) {
                 continue;
             }
             scalar_items.push(item.clone());

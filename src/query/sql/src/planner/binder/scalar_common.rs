@@ -87,11 +87,11 @@ pub fn is_grouping_function(scalar: &ScalarExpr) -> bool {
     )
 }
 
-pub fn is_grouping_id_item(item: &ScalarItem) -> bool {
-    matches!(
-        &item.scalar,
-        ScalarExpr::BoundColumnRef(col) if col.column.column_name == GROUPING_ID_COLUMN_NAME
-    )
+pub fn is_grouping_id_item(
+    item: &ScalarItem,
+    grouping_id_index: databend_common_expression::Symbol,
+) -> bool {
+    item.index == grouping_id_index
 }
 
 pub fn grouping_clause_error(function: &FunctionCall, clause_name: &str) -> ErrorCode {
