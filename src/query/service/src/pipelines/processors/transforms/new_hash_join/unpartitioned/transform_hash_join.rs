@@ -340,7 +340,7 @@ struct BuildState {
 }
 
 impl BuildState {
-    pub fn event(&mut self, build: &InputPort, probe: &InputPort) -> Result<Event> {
+    pub fn event(&mut self, build: &InputPort, _probe: &InputPort) -> Result<Event> {
         if self.build_data.is_some() {
             return Ok(Event::Sync);
         }
@@ -357,12 +357,12 @@ impl BuildState {
             };
         }
 
-        if !self.initialized {
-            self.initialized = true;
-            if !probe.is_finished() && !probe.has_data() {
-                probe.set_need_data();
-            }
-        }
+        // if !self.initialized {
+        //     self.initialized = true;
+        //     if !probe.is_finished() && !probe.has_data() {
+        //         probe.set_need_data();
+        //     }
+        // }
 
         build.set_need_data();
         Ok(Event::NeedData)
