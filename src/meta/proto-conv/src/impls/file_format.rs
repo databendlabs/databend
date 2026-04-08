@@ -556,6 +556,10 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             binary_format,
             output_header: p.output_header,
             geometry_format,
+            encoding: p.encoding.unwrap_or_else(|| "UTF-8".to_string()),
+            encoding_error_mode: p
+                .encoding_error_mode
+                .unwrap_or_else(|| "strict".to_string()),
         })
     }
 
@@ -580,6 +584,8 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             binary_format: Some(self.binary_format.to_string()),
             output_header: self.output_header,
             geometry_format: Some(self.geometry_format.to_string()),
+            encoding: Some(self.encoding.clone()),
+            encoding_error_mode: Some(self.encoding_error_mode.clone()),
         })
     }
 }
@@ -616,6 +622,10 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             error_on_column_count_mismatch: !p.allow_column_count_mismatch,
             empty_field_as,
             output_header: p.output_header,
+            encoding: p.encoding.unwrap_or_else(|| "UTF-8".to_string()),
+            encoding_error_mode: p
+                .encoding_error_mode
+                .unwrap_or_else(|| "strict".to_string()),
         })
     }
 
@@ -636,6 +646,8 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             allow_column_count_mismatch: !self.error_on_column_count_mismatch,
             empty_field_as: Some(self.empty_field_as.to_string()),
             output_header: self.output_header,
+            encoding: Some(self.encoding.clone()),
+            encoding_error_mode: Some(self.encoding_error_mode.clone()),
         })
     }
 }

@@ -31,6 +31,7 @@ use databend_common_expression::types::date::date_to_string;
 use databend_common_expression::types::interval::interval_to_string;
 use databend_common_expression::types::opaque::OpaqueColumn;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::GeometryDataType;
 use databend_common_io::constants::FALSE_BYTES_NUM;
 use databend_common_io::constants::INF_BYTES_LONG;
@@ -47,6 +48,7 @@ use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_io::prelude::OutputFormatSettings;
+use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use jsonb::RawJsonb;
 
@@ -103,7 +105,9 @@ impl FieldEncoderToString {
                 self.variant_text(unsafe { c.index_unchecked(row_index) }),
             )),
             Column::Geometry(c) => self.encode_geometry(unsafe { c.index_unchecked(row_index) }),
-            Column::Geography(c) => self.encode_geometry(unsafe { c.index_unchecked(row_index).0 }),
+            Column::Geography(c) => {
+                self.encode_geography(unsafe { c.index_unchecked(row_index).0 })
+            }
             Column::Opaque(c) => Ok(Cow::Owned(self.encode_opaque(c, row_index))),
             Column::Array(box c) => {
                 let mut out = String::new();
@@ -178,7 +182,7 @@ impl FieldEncoderToString {
                 self.write_geometry_nested_to(unsafe { c.index_unchecked(row_index) }, out)?
             }
             Column::Geography(c) => {
-                self.write_geometry_nested_to(unsafe { c.index_unchecked(row_index).0 }, out)?
+                self.write_geography_nested_to(unsafe { c.index_unchecked(row_index).0 }, out)?
             }
 
             // JSON
@@ -367,6 +371,11 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         Ok(text)
     }
 
+    fn encode_geography(&self, value: &[u8]) -> Result<Cow<'static, str>> {
+        let (text, _) = self.geography_text(value)?;
+        Ok(text)
+    }
+
     fn write_geometry_nested_to(&self, value: &[u8], out: &mut String) -> Result<()> {
         let (text, is_string) = self.geometry_text(value)?;
         if is_string {
@@ -377,17 +386,51 @@ setting binary_output_format to 'UTF-8-LOSSY'."
         Ok(())
     }
 
+    fn write_geography_nested_to(&self, value: &[u8], out: &mut String) -> Result<()> {
+        let (text, is_string) = self.geography_text(value)?;
+        if is_string {
+            self.write_quoted_string(text.as_ref(), out);
+        } else {
+            out.push_str(text.as_ref());
+        }
+        Ok(())
+    }
+
     fn geometry_text(&self, value: &[u8]) -> Result<(Cow<'static, str>, bool)> {
         match ewkb_to_geo(&mut Ewkb(value)) {
-            Ok((geo, srid)) => match self.settings.geometry_format {
+            Ok((geo, srid)) => {
+                let srid = srid.unwrap_or(0);
+                match self.settings.geometry_format {
+                    GeometryDataType::WKB => {
+                        Ok((Cow::Owned(hex::encode_upper(geo_to_wkb(geo)?)), true))
+                    }
+                    GeometryDataType::WKT => Ok((Cow::Owned(geo_to_wkt(geo)?), true)),
+                    GeometryDataType::EWKB => Ok((
+                        Cow::Owned(hex::encode_upper(geo_to_ewkb(geo, Some(srid))?)),
+                        true,
+                    )),
+                    GeometryDataType::EWKT => Ok((Cow::Owned(geo_to_ewkt(geo, Some(srid))?), true)),
+                    GeometryDataType::GEOJSON => Ok((Cow::Owned(geo_to_json(geo)?), false)),
+                }
+            }
+            Err(_) => Ok(self.lossy_geometry(value)),
+        }
+    }
+
+    fn geography_text(&self, value: &[u8]) -> Result<(Cow<'static, str>, bool)> {
+        match Ewkb(value).to_geo() {
+            Ok(geo) => match self.settings.geometry_format {
                 GeometryDataType::WKB => {
                     Ok((Cow::Owned(hex::encode_upper(geo_to_wkb(geo)?)), true))
                 }
                 GeometryDataType::WKT => Ok((Cow::Owned(geo_to_wkt(geo)?), true)),
-                GeometryDataType::EWKB => {
-                    Ok((Cow::Owned(hex::encode_upper(geo_to_ewkb(geo, srid)?)), true))
+                GeometryDataType::EWKB => Ok((
+                    Cow::Owned(hex::encode_upper(geo_to_ewkb(geo, Some(GEOGRAPHY_SRID))?)),
+                    true,
+                )),
+                GeometryDataType::EWKT => {
+                    Ok((Cow::Owned(geo_to_ewkt(geo, Some(GEOGRAPHY_SRID))?), true))
                 }
-                GeometryDataType::EWKT => Ok((Cow::Owned(geo_to_ewkt(geo, srid)?), true)),
                 GeometryDataType::GEOJSON => Ok((Cow::Owned(geo_to_json(geo)?), false)),
             },
             Err(_) => Ok(self.lossy_geometry(value)),

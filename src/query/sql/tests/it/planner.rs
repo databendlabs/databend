@@ -142,6 +142,24 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    for sql in [
+        "SELECT 'a' LIKE 'a' ESCAPE ''",
+        "SELECT 'a' LIKE concat('a') ESCAPE ''",
+        "SELECT '%' LIKE '\\\\%' ESCAPE ''",
+        "SELECT like_any('%', '\\\\%', '')",
+        "SELECT 'a' LIKE ANY ('a', 'b') ESCAPE ''",
+        "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE ''",
+    ] {
+        ctx.bind_sql(sql).await?;
+    }
+
+    Ok(())
+}
+
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {

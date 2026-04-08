@@ -517,6 +517,13 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     );
                 }
 
+                // `grouping` is a placeholder before the aggregate rewriter rewrites it to
+                // `grouping<...>(_grouping_id)`. Folding it here can reach the dummy
+                // implementation and panic on invalid queries.
+                if function.signature.name == "grouping" {
+                    return (func_expr, func_domain);
+                }
+
                 if all_args_is_scalar {
                     let block = DataBlock::empty_with_rows(1);
                     let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);

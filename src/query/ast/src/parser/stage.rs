@@ -139,6 +139,8 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
                 | QUOTE
                 | NAN_DISPLAY
                 | NULL_DISPLAY
+                | ENCODING
+                | ENCODING_ERROR_MODE
                 | ESCAPE
                 | NULL_FIELD_AS
                 | MISSING_FIELD_AS

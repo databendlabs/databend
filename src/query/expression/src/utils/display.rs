@@ -23,11 +23,15 @@ use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_column::binary::BinaryColumn;
+use databend_common_exception::ErrorCode;
+use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::display_decimal_128;
 use databend_common_io::display_decimal_256;
 use databend_common_io::ewkb_to_geo;
 use databend_common_io::geo_to_ewkt;
+use databend_common_io::geo_to_wkt;
+use geozero::ToGeo;
 use geozero::wkb::Ewkb;
 use itertools::Itertools;
 use jiff::tz::TimeZone;
@@ -193,8 +197,10 @@ impl Debug for ScalarRef<'_> {
                 write!(f, "{geom:?}")
             }
             ScalarRef::Geography(v) => {
-                let geog = ewkb_to_geo(&mut Ewkb(v.0))
-                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                let geog = Ewkb(v.0)
+                    .to_geo()
+                    .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                    .and_then(|geo| geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)))
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{geog:?}")
             }
@@ -335,8 +341,10 @@ impl Display for ScalarRef<'_> {
                 write!(f, "{}", QuotedString(geom, '\''))
             }
             ScalarRef::Geography(v) => {
-                let geog = ewkb_to_geo(&mut Ewkb(v.0))
-                    .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+                let geog = Ewkb(v.0)
+                    .to_geo()
+                    .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                    .and_then(|geo| geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)))
                     .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
                 write!(f, "{}", QuotedString(geog, '\''))
             }
@@ -377,8 +385,10 @@ pub fn scalar_ref_to_string(value: &ScalarRef) -> String {
             format!("{}", geom)
         }
         ScalarRef::Geography(v) => {
-            let geog = ewkb_to_geo(&mut Ewkb(v.0))
-                .and_then(|(geo, srid)| geo_to_ewkt(geo, srid))
+            let geog = Ewkb(v.0)
+                .to_geo()
+                .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+                .and_then(|geo| geo_to_ewkt(geo, Some(GEOGRAPHY_SRID)))
                 .unwrap_or_else(|e| format!("GeozeroError: {:?}", e));
             format!("{}", geog)
         }

@@ -28,7 +28,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::executor::physical_plans::DataDistribution;
-use databend_common_storages_stage::StageSinkTable;
+use databend_query_storage_stage_support::StageSinkTable;
 use databend_storages_common_stage::CopyIntoLocationInfo;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 
