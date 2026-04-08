@@ -1,0 +1,62 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0102
+
+statement ok
+CREATE DATABASE db_09_0102
+
+statement ok
+USE db_09_0102
+
+statement ok
+create table t(a int not null)
+
+statement ok
+insert into t values (11), (12), (13), (14), (15)
+
+statement ok
+insert into t values (1)
+
+statement ok
+insert into t values (4), (5), (6)
+
+statement ok
+insert into t values (7), (8), (9), (10)
+
+statement ok
+insert into t values (2), (3)
+
+query I
+select count() from fuse_block('db_09_0102', 't')
+----
+5
+
+query I
+select count() from fuse_segment('db_09_0102', 't')
+----
+5
+
+statement ok
+set max_threads = 1
+
+query I
+select row_count from fuse_block('db_09_0102', 't') order by row_count asc limit 2
+----
+1
+2
+
+query I
+select row_count from fuse_segment('db_09_0102', 't') order by row_count asc limit 2
+----
+1
+2
+
+query II
+select count(distinct file_location), count() from fuse_segment('db_09_0102', 't')
+----
+5 5
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0102
