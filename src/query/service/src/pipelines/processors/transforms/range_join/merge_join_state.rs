@@ -32,6 +32,11 @@ use crate::pipelines::processors::transforms::range_join::filter_block;
 
 impl RangeJoinState {
     pub fn range_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
+        // Merge range join originally only served Inner/Cross joins, so it could return
+        // matched pairs directly without tracking unmatched rows. ASOF LEFT/RIGHT joins now
+        // reuse this path after the nullable interval-end rewrite, which means we must record
+        // rows that survive `other_conditions` filtering and then run the existing outer-fill
+        // tasks for the remaining probe/build rows.
         let partition_count = self.partition_count.load(Ordering::SeqCst) as usize;
         if task_id >= partition_count {
             if !self.left_match.read().is_empty() {
