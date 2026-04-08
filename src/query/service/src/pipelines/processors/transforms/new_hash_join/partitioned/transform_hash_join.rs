@@ -427,31 +427,31 @@ struct BuildState {
 }
 
 impl BuildState {
-    pub fn event(&mut self, build_input: &InputPort, probe: &InputPort) -> Result<Event> {
-        if !self.initialized {
-            self.initialized = true;
-            probe.set_need_data();
-            build_input.set_need_data();
-            return Ok(Event::NeedData);
-        }
-
+    pub fn event(&mut self, build: &InputPort, probe: &InputPort) -> Result<Event> {
         if self.build_data.is_some() {
             return Ok(Event::Sync);
         }
 
-        if build_input.has_data() {
-            self.build_data = Some(build_input.pull_data().unwrap()?);
+        if build.has_data() {
+            self.build_data = Some(build.pull_data().unwrap()?);
             return Ok(Event::Sync);
         }
 
-        if build_input.is_finished() {
+        if build.is_finished() {
             return match self.finished {
                 true => Ok(Event::Async),
                 false => Ok(Event::Sync),
             };
         }
 
-        build_input.set_need_data();
+        if !self.initialized {
+            self.initialized = true;
+            if !probe.is_finished() && !probe.has_data() {
+                probe.set_need_data();
+            }
+        }
+
+        build.set_need_data();
         Ok(Event::NeedData)
     }
 }
