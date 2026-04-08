@@ -57,6 +57,15 @@ use opendal::Buffer;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_prewhere() -> Result<()> {
+    run_prewhere_test_with_threshold(50).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_prewhere_without_row_selection_pushdown() -> Result<()> {
+    run_prewhere_test_with_threshold(10).await
+}
+
+async fn run_prewhere_test_with_threshold(selectivity_threshold: u64) -> Result<()> {
     let PrewhereTestSetup {
         _fixture,
         ctx,
@@ -69,11 +78,16 @@ async fn test_prewhere() -> Result<()> {
     } = prepare_prewhere_data().await?;
     let _ = _fixture;
 
+    ctx.get_settings().set_setting(
+        "prewhere_selectivity_threshold".to_string(),
+        selectivity_threshold.to_string(),
+    )?;
+
     // Create ReadState which combines prewhere and runtime filter logic
     let read_state = ReadState::create(ctx.clone(), scan_id, Some(&prewhere_info), &block_reader)?;
 
     // Use the new unified API that handles all states internally
-    let (data_block, _row_selection, bitmap_selection) =
+    let (data_block, row_selection, bitmap_selection) =
         read_state.deserialize_and_filter(column_chunks.clone(), &part)?;
 
     // Verify the final data_block (all columns in order: x, y, z, d, e)
@@ -126,6 +140,7 @@ async fn test_prewhere() -> Result<()> {
 
     // Verify the bitmap_selection is present and has the correct format
     {
+        assert!(row_selection.is_some());
         assert!(bitmap_selection.is_some());
         let bitmap = bitmap_selection.unwrap();
         // Row 2 (x=3, y=30, z=300, d=3000) should be the only one selected

@@ -60,6 +60,7 @@ pub struct ReadState {
     pub remain_column_ids: HashSet<ColumnId>,
     pub func_ctx: FunctionContext,
     pub output_schema: DataSchema,
+    pub prewhere_selectivity_threshold: u64,
 }
 
 impl ReadState {
@@ -69,6 +70,8 @@ impl ReadState {
         prewhere_info: Option<&PrewhereInfo>,
         block_reader: &BlockReader,
     ) -> Result<Self> {
+        let prewhere_selectivity_threshold =
+            ctx.get_settings().get_prewhere_selectivity_threshold()?;
         let original_schema = block_reader.original_schema.as_ref();
 
         let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
@@ -130,6 +133,7 @@ impl ReadState {
             remain_column_ids,
             func_ctx: ctx.get_function_context()?,
             output_schema: block_reader.data_schema(),
+            prewhere_selectivity_threshold,
         })
     }
 
@@ -204,12 +208,22 @@ impl ReadState {
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
         let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
+        let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
+            should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
+        });
 
-        let remain_block = self.remain_reader.deserialize_part(
+        let mut remain_block = self.remain_reader.deserialize_part(
             part,
             remain_columns_chunks,
-            row_selection.as_ref(),
+            push_down_row_selection
+                .then_some(row_selection.as_ref())
+                .flatten(),
         )?;
+        if !push_down_row_selection {
+            if let Some(bitmap) = bitmap_selection.as_ref() {
+                remain_block = remain_block.filter_with_bitmap(bitmap)?;
+            }
+        }
 
         let mut merged_fields = self.pre_reader.data_fields();
         merged_fields.extend(self.remain_reader.data_fields());
@@ -233,5 +247,37 @@ impl ReadState {
             }
         }
         Ok(filtered_columns_chunks)
+    }
+}
+
+fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) -> bool {
+    let total_rows = row_selection.bitmap.len();
+    if threshold == 0 || total_rows == 0 {
+        return false;
+    }
+
+    (row_selection.selected_rows as u128) * 100 < (total_rows as u128) * (threshold as u128)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::MutableBitmap;
+
+    use super::*;
+
+    #[test]
+    fn test_should_push_down_row_selection() {
+        let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
+        sparse_bitmap.set(2, true);
+        let sparse_bitmap: Bitmap = sparse_bitmap.into();
+        let sparse_selection = RowSelection::from(&sparse_bitmap);
+
+        assert!(should_push_down_row_selection(&sparse_selection, 50));
+        assert!(!should_push_down_row_selection(&sparse_selection, 20));
+        assert!(!should_push_down_row_selection(&sparse_selection, 0));
+
+        let dense_bitmap: Bitmap = MutableBitmap::from_len_set(5).into();
+        let dense_selection = RowSelection::from(&dense_bitmap);
+        assert!(!should_push_down_row_selection(&dense_selection, 100));
     }
 }
