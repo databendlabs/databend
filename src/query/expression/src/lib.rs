@@ -61,6 +61,7 @@ mod evaluator;
 mod expression;
 pub mod filter;
 mod function;
+pub mod geographic;
 pub mod hash_util;
 mod hilbert;
 mod kernels;

@@ -127,6 +127,9 @@ fn test_aggr_functions() {
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
     test_agg_mode(file, eval_aggr);
+    test_agg_st_union_agg(file, eval_aggr);
+    test_agg_st_intersection_agg(file, eval_aggr);
+    test_agg_st_envelope_agg(file, eval_aggr);
     test_agg_st_collect(file, eval_aggr);
 }
 
@@ -171,6 +174,9 @@ fn test_aggr_functions_group_by() {
     test_agg_json_array_agg(file, eval_aggr);
     test_agg_json_object_agg(file, eval_aggr);
     test_agg_mode(file, simulate_two_groups_group_by);
+    test_agg_st_union_agg(file, simulate_two_groups_group_by);
+    test_agg_st_intersection_agg(file, simulate_two_groups_group_by);
+    test_agg_st_envelope_agg(file, simulate_two_groups_group_by);
     test_agg_st_collect(file, eval_aggr);
 }
 
@@ -391,6 +397,35 @@ fn get_geometry_example() -> Vec<(&'static str, BlockEntry)> {
                     "",
                     "SRID=4326;LINESTRING(121.4 31.2, 113.2 23.1)",
                     "SRID=3857;POLYGON((12700000 2600000, 12800000 2600000, 12800000 2700000, 12700000 2700000, 12700000 2600000))",
+                ],
+                vec![true, false, true, true],
+            ),
+        ),
+    ]
+    .into_iter()
+    .map(|(name, column)| (name, column.into()))
+    .collect()
+}
+
+fn get_geometry_overlap_example() -> Vec<(&'static str, BlockEntry)> {
+    [
+        (
+            "polygon_overlap",
+            StringType::from_data(vec![
+                "POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))",
+                "POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))",
+                "POLYGON((1.5 1.5, 2.5 1.5, 2.5 2.5, 1.5 2.5, 1.5 1.5))",
+                "POLYGON((1.8 1.8, 2.2 1.8, 2.2 2.2, 1.8 2.2, 1.8 1.8))",
+            ]),
+        ),
+        (
+            "polygon_overlap_null",
+            StringType::from_data_with_validity(
+                vec![
+                    "POLYGON((0 0, 4 0, 4 4, 0 4, 0 0))",
+                    "",
+                    "POLYGON((1.5 1.5, 2.5 1.5, 2.5 2.5, 1.5 2.5, 1.5 1.5))",
+                    "POLYGON((1.8 1.8, 2.2 1.8, 2.2 2.2, 1.8 2.2, 1.8 1.8))",
                 ],
                 vec![true, false, true, true],
             ),
@@ -1657,6 +1692,71 @@ fn test_agg_mode(file: &mut impl Write, simulator: impl AggregationSimulator) {
         file,
         "mode(all_null)",
         get_example().as_slice(),
+        simulator,
+        vec![],
+    );
+}
+
+fn test_agg_st_union_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "st_union_agg(to_geometry(point))",
+        get_geometry_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "st_union_agg(to_geometry(polygon))",
+        get_geometry_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "st_union_agg(to_geometry(point_null))",
+        get_geometry_example().as_slice(),
+        simulator,
+        vec![],
+    );
+}
+
+fn test_agg_st_intersection_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "st_intersection_agg(to_geometry(polygon_overlap))",
+        get_geometry_overlap_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "st_intersection_agg(to_geometry(polygon_overlap_null))",
+        get_geometry_overlap_example().as_slice(),
+        simulator,
+        vec![],
+    );
+}
+
+fn test_agg_st_envelope_agg(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "st_envelope_agg(to_geometry(point))",
+        get_geometry_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "st_envelope_agg(to_geometry(line_string))",
+        get_geometry_example().as_slice(),
+        simulator,
+        vec![],
+    );
+    run_agg_ast(
+        file,
+        "st_envelope_agg(to_geometry(point_null))",
+        get_geometry_example().as_slice(),
         simulator,
         vec![],
     );
