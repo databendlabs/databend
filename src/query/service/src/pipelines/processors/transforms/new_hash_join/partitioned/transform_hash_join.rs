@@ -134,6 +134,7 @@ impl TransformPartitionedHashJoin {
                 runtime_filter_builder,
                 stage: Stage::Build(BuildState {
                     finished: false,
+                    initialized: false,
                     build_data: None,
                 }),
                 instant: Instant::now(),
@@ -238,7 +239,7 @@ impl Processor for TransformPartitionedHashJoin {
         }
 
         match &mut self.stage {
-            Stage::Build(state) => state.event(&self.build_port),
+            Stage::Build(state) => state.event(&self.build_port, &self.probe_port),
             Stage::BuildFinal(state) => state.event(),
             Stage::Probe(state) => state.event(&self.probe_port),
             Stage::ProbeFinal(state) => state.event(&self.joined_port),
@@ -421,28 +422,36 @@ enum Stage {
 #[derive(Debug)]
 struct BuildState {
     finished: bool,
+    initialized: bool,
     build_data: Option<DataBlock>,
 }
 
 impl BuildState {
-    pub fn event(&mut self, input: &InputPort) -> Result<Event> {
+    pub fn event(&mut self, build_input: &InputPort, probe: &InputPort) -> Result<Event> {
+        if !self.initialized {
+            self.initialized = true;
+            probe.set_need_data();
+            build_input.set_need_data();
+            return Ok(Event::NeedData);
+        }
+
         if self.build_data.is_some() {
             return Ok(Event::Sync);
         }
 
-        if input.has_data() {
-            self.build_data = Some(input.pull_data().unwrap()?);
+        if build_input.has_data() {
+            self.build_data = Some(build_input.pull_data().unwrap()?);
             return Ok(Event::Sync);
         }
 
-        if input.is_finished() {
+        if build_input.is_finished() {
             return match self.finished {
                 true => Ok(Event::Async),
                 false => Ok(Event::Sync),
             };
         }
 
-        input.set_need_data();
+        build_input.set_need_data();
         Ok(Event::NeedData)
     }
 }
