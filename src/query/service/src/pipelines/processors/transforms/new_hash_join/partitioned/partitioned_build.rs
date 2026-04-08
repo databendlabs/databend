@@ -364,10 +364,7 @@ impl PartitionedHashJoinState {
 
         self.build_block_idx += 1;
         match self.build_block_idx == self.chunks.len() {
-            true => {
-                self.hash_table.log_stats();
-                Ok(None)
-            }
+            true => Ok(None),
             false => Ok(Some(ProgressValues { rows: 0, bytes: 0 })),
         }
     }

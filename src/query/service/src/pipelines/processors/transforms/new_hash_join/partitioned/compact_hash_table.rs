@@ -109,43 +109,6 @@ impl<I: RowIndex> CompactJoinHashTable<I> {
         target.next_power_of_two()
     }
 
-    pub fn log_stats(&self) {
-        let num_buckets = self.first.len();
-        let mut non_empty = 0usize;
-        let mut max_chain = 0usize;
-        let mut total_chain = 0usize;
-
-        for i in 0..num_buckets {
-            if self.first[i] != I::ZERO {
-                non_empty += 1;
-                let mut chain_len = 0usize;
-                let mut idx = self.first[i].to_usize();
-                while idx != 0 {
-                    chain_len += 1;
-                    idx = self.next[idx].to_usize();
-                }
-                max_chain = max_chain.max(chain_len);
-                total_chain += chain_len;
-            }
-        }
-
-        let avg_chain = if non_empty > 0 {
-            total_chain as f64 / non_empty as f64
-        } else {
-            0.0
-        };
-        let occupancy = if num_buckets > 0 {
-            non_empty as f64 / num_buckets as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        log::info!(
-            "CompactJoinHashTable stats: buckets={}, non_empty={}, occupancy={:.1}%, total_rows={}, avg_chain={:.2}, max_chain={}",
-            num_buckets, non_empty, occupancy, total_chain, avg_chain, max_chain
-        );
-    }
-
     pub fn probe<const DIRECT: bool>(&self, vals: &mut [u64], bitmap: Option<Bitmap>) -> usize {
         let mut valids = None;
 

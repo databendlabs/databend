@@ -81,9 +81,7 @@ impl BloomFilterSelectivity {
 
         if self.eval_counter >= self.sampling_frequency {
             self.judge_selectivity();
-            self.input_rows = 0;
-            self.filtered_rows = 0;
-            self.eval_counter = 0;
+            self.reset();
         }
     }
 
@@ -92,6 +90,12 @@ impl BloomFilterSelectivity {
             let selectivity_pct = (self.filtered_rows * 100) / self.input_rows;
             self.always_true = selectivity_pct < self.selectivity_threshold;
         }
+    }
+
+    fn reset(&mut self) {
+        self.input_rows = 0;
+        self.filtered_rows = 0;
+        self.eval_counter = 0;
     }
 }
 

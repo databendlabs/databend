@@ -100,9 +100,6 @@ pub(crate) struct Node {
     updated_list: Arc<UpdateList>,
     inputs_port: Vec<Arc<InputPort>>,
     outputs_port: Vec<Arc<OutputPort>>,
-
-    // Event counters: [NeedData, NeedConsume, Sync, Async, Finished]
-    pub(crate) event_counts: [AtomicU64; 5],
 }
 
 impl Node {
@@ -151,7 +148,6 @@ impl Node {
             inputs_port: inputs_port.to_vec(),
             outputs_port: outputs_port.to_vec(),
             tracking_payload,
-            event_counts: Default::default(),
         })
     }
 
@@ -466,22 +462,14 @@ impl ExecutingGraph {
                     );
                     let processor_state = match event {
                         Event::Finished => {
-                            node.event_counts[4].fetch_add(1, Ordering::Relaxed);
                             if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
                                 locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
                             }
 
                             State::Finished
                         }
-                        Event::NeedData | Event::NeedConsume => {
-                            match event {
-                                Event::NeedData => node.event_counts[0].fetch_add(1, Ordering::Relaxed),
-                                _ => node.event_counts[1].fetch_add(1, Ordering::Relaxed),
-                            };
-                            State::Idle
-                        }
+                        Event::NeedData | Event::NeedConsume => State::Idle,
                         Event::Sync => {
-                            node.event_counts[2].fetch_add(1, Ordering::Relaxed);
                             schedule_queue.push_sync(ProcessorWrapper {
                                 processor: node.processor.clone(),
                                 graph: graph.clone(),
@@ -490,7 +478,6 @@ impl ExecutingGraph {
                             State::Processing
                         }
                         Event::Async => {
-                            node.event_counts[3].fetch_add(1, Ordering::Relaxed);
                             schedule_queue.push_async(ProcessorWrapper {
                                 processor: node.processor.clone(),
                                 graph: graph.clone(),
@@ -1100,37 +1087,6 @@ impl RunningGraph {
 
 impl Drop for RunningGraph {
     fn drop(&mut self) {
-        // Log per-processor event counts
-        {
-            use std::collections::BTreeMap;
-            let mut aggregated: BTreeMap<String, [u64; 5]> = BTreeMap::new();
-            for node in self.0.graph.node_weights() {
-                let name = unsafe { node.processor.name() };
-                let counts = [
-                    node.event_counts[0].load(Ordering::Relaxed),
-                    node.event_counts[1].load(Ordering::Relaxed),
-                    node.event_counts[2].load(Ordering::Relaxed),
-                    node.event_counts[3].load(Ordering::Relaxed),
-                    node.event_counts[4].load(Ordering::Relaxed),
-                ];
-                let total: u64 = counts.iter().sum();
-                if total == 0 {
-                    continue;
-                }
-                let entry = aggregated.entry(name).or_insert([0; 5]);
-                for i in 0..5 {
-                    entry[i] += counts[i];
-                }
-            }
-            for (name, c) in &aggregated {
-                let total: u64 = c.iter().sum();
-                log::info!(
-                    "Processor event stats: {} => total={}, NeedData={}, NeedConsume={}, Sync={}, Async={}, Finished={}",
-                    name, total, c[0], c[1], c[2], c[3], c[4]
-                );
-            }
-        }
-
         let execution_stats = self.get_query_execution_stats();
         if let Ok(queue) = QueryExecutionStatsQueue::instance() {
             let _ = queue.append_data((self.get_query_id().to_string(), execution_stats));
