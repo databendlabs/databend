@@ -98,7 +98,7 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
             let limit = plan
                 .push_downs
                 .as_ref()
-                .and_then(|v| v.limit)
+                .and_then(|v| if v.order_by.is_empty() { v.limit } else { None })
                 .unwrap_or(DEFAULT_SNAPSHOT_LIMIT);
 
             let table_snapshot_reader = MetaReaders::table_snapshot_reader(table.operator.clone());

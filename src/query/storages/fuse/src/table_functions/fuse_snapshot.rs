@@ -215,7 +215,10 @@ impl SimpleTableFunc for FuseSnapshotFunc {
                 TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
             let snapshots_io = SnapshotsIO::create(ctx.clone(), table.operator.clone());
 
-            let limit = plan.push_downs.as_ref().and_then(|v| v.limit);
+            let limit = plan
+                .push_downs
+                .as_ref()
+                .and_then(|v| if v.order_by.is_empty() { v.limit } else { None });
             let snapshot_lite = if limit.is_none() {
                 info!("getting snapshots, using parallel strategy");
                 // Use SnapshotsIO::read_snapshot_lites only if limit is None
