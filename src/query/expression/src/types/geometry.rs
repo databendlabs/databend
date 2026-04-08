@@ -222,12 +222,14 @@ pub(crate) fn compare_geometry(left: &[u8], right: &[u8]) -> Option<Ordering> {
     }
 }
 
+pub fn extract_geometry_geo_and_srid(value: &[u8]) -> Result<(Geometry<f64>, i32)> {
+    let (geo, srid) = ewkb_to_geo(&mut Ewkb(value))?;
+    Ok((geo, srid.unwrap_or(0)))
+}
+
 pub fn extract_geo_and_srid(value: ScalarRef) -> Result<Option<(Geometry<f64>, i32)>> {
     let (geo, srid) = match value {
-        ScalarRef::Geometry(buf) => {
-            let (geo, srid) = ewkb_to_geo(&mut Ewkb(buf))?;
-            (geo, srid.unwrap_or(0))
-        }
+        ScalarRef::Geometry(buf) => extract_geometry_geo_and_srid(buf)?,
         ScalarRef::Geography(buf) => {
             let geo = Ewkb(buf.0)
                 .to_geo()

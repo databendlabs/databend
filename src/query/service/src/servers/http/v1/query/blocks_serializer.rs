@@ -24,8 +24,22 @@ use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::binary::BinaryColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
+use databend_common_expression::types::geography::GeographyColumn;
+use databend_common_expression::types::geometry::extract_geometry_geo_and_srid;
+use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_formats::field_encoder::FieldEncoderToString;
+use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::GeometryDataType;
+use databend_common_io::geo_to_ewkb;
+use databend_common_io::geo_to_ewkt;
+use databend_common_io::geo_to_json;
+use databend_common_io::geo_to_wkb;
+use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::OutputFormatSettings;
+use geo::Geometry;
 use log::info;
 use serde::ser::SerializeSeq;
 
@@ -110,12 +124,125 @@ impl BlocksSerializer {
         let mut writer = StreamWriter::try_new_with_options(&mut buf, &schema, opts)?;
 
         for (block, _) in &self.columns {
-            let block = DataBlock::new_from_columns(block.clone());
+            let columns = if let Some(format) = &self.format {
+                format_geo_columns(block, format)?
+            } else {
+                block.clone()
+            };
+            let block = DataBlock::new_from_columns(columns);
             let batch = block.to_record_batch_with_dataschema(data_schema)?;
             writer.write(&batch)?;
         }
         writer.finish()?;
         Ok(buf)
+    }
+}
+
+fn format_geo_columns(columns: &[Column], format: &OutputFormatSettings) -> Result<Vec<Column>> {
+    columns
+        .iter()
+        .map(|column| format_geo_column(column, format.geometry_format))
+        .collect()
+}
+
+fn format_geo_column(column: &Column, geometry_format: GeometryDataType) -> Result<Column> {
+    match column {
+        Column::Geometry(column) => Ok(Column::Geometry(format_geometry_column(
+            column,
+            geometry_format,
+        )?)),
+        Column::Geography(column) => Ok(Column::Geography(format_geography_column(
+            column,
+            geometry_format,
+        )?)),
+        Column::Nullable(column) => Ok(NullableColumn::new_column(
+            format_geo_column(&column.column, geometry_format)?,
+            column.validity.clone(),
+        )),
+        Column::Array(column) => Ok(Column::Array(Box::new(ArrayColumn::new(
+            format_geo_column(&column.underlying_column(), geometry_format)?,
+            column.underlying_offsets(),
+        )))),
+        Column::Map(column) => Ok(Column::Map(Box::new(ArrayColumn::new(
+            format_geo_column(&column.underlying_column(), geometry_format)?,
+            column.underlying_offsets(),
+        )))),
+        Column::Tuple(fields) => Ok(Column::Tuple(
+            fields
+                .iter()
+                .map(|field| format_geo_column(field, geometry_format))
+                .collect::<Result<Vec<_>>>()?,
+        )),
+        _ => Ok(column.clone()),
+    }
+}
+
+fn format_geometry_column(
+    column: &BinaryColumn,
+    geometry_format: GeometryDataType,
+) -> Result<BinaryColumn> {
+    format_geo_binary_column(
+        column.len(),
+        column.total_bytes_len(),
+        column.iter(),
+        |value| match extract_geometry_geo_and_srid(value) {
+            Ok((geo, srid)) => format_decoded_geo(geo, Some(srid), geometry_format),
+            Err(_) => Ok(lossy_geo_value(value, geometry_format)),
+        },
+    )
+}
+
+fn format_geography_column(
+    column: &GeographyColumn,
+    geometry_format: GeometryDataType,
+) -> Result<GeographyColumn> {
+    Ok(GeographyColumn(format_geo_binary_column(
+        column.len(),
+        column.0.total_bytes_len(),
+        column.iter(),
+        |value| {
+            value
+                .to_geo()
+                .and_then(|geo| format_decoded_geo(geo, Some(GEOGRAPHY_SRID), geometry_format))
+                .or_else(|_| Ok(lossy_geo_value(value.0, geometry_format)))
+        },
+    )?))
+}
+
+fn format_geo_binary_column<T>(
+    len: usize,
+    data_len: usize,
+    values: impl IntoIterator<Item = T>,
+    mut format_value: impl FnMut(T) -> Result<Vec<u8>>,
+) -> Result<BinaryColumn> {
+    let mut builder = BinaryColumnBuilder::with_capacity(len, data_len);
+    for value in values {
+        builder.put_slice(&format_value(value)?);
+        builder.commit_row();
+    }
+    Ok(builder.build())
+}
+
+fn format_decoded_geo(
+    geo: Geometry<f64>,
+    srid: Option<i32>,
+    geometry_format: GeometryDataType,
+) -> Result<Vec<u8>> {
+    match geometry_format {
+        GeometryDataType::WKB => geo_to_wkb(geo),
+        GeometryDataType::WKT => Ok(geo_to_wkt(geo)?.into_bytes()),
+        GeometryDataType::EWKB => geo_to_ewkb(geo, srid),
+        GeometryDataType::EWKT => Ok(geo_to_ewkt(geo, srid)?.into_bytes()),
+        GeometryDataType::GEOJSON => Ok(geo_to_json(geo)?.into_bytes()),
+    }
+}
+
+fn lossy_geo_value(value: &[u8], geometry_format: GeometryDataType) -> Vec<u8> {
+    match geometry_format {
+        GeometryDataType::WKB | GeometryDataType::EWKB => value.to_vec(),
+        GeometryDataType::WKT | GeometryDataType::EWKT | GeometryDataType::GEOJSON => {
+            String::from_utf8_lossy(value).into_owned().into_bytes()
+        }
     }
 }
 
