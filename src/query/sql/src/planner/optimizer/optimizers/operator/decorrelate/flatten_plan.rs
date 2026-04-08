@@ -871,25 +871,12 @@ impl SubqueryDecorrelatorOptimizer {
             flatten_info,
             left_need_cross_join,
         )?;
-
-        union_all.left_outputs = union_all
-            .left_outputs
-            .drain(..)
-            .map(|(old, mut expr)| {
-                let Some(&new) = self.derived_columns.get(&old) else {
-                    return Ok((old, expr));
-                };
-                if let Some(expr) = &mut expr {
-                    expr.replace_column(old, new)?;
-                };
-                Ok((new, expr))
-            })
-            .chain(correlated_columns.iter().copied().map(|old| {
-                let new = self.get_derived(old)?;
-                Ok((new, None))
-            }))
-            .collect::<Result<_>>()?;
-        self.derived_columns.clear();
+        let left_derived = std::mem::take(&mut self.derived_columns);
+        Self::rewrite_union_branch_outputs(
+            &mut union_all.left_outputs,
+            correlated_columns,
+            &left_derived,
+        )?;
 
         let right_flatten_plan = self.flatten_plan(
             outer,
@@ -898,24 +885,12 @@ impl SubqueryDecorrelatorOptimizer {
             flatten_info,
             right_need_cross_join,
         )?;
-        union_all.right_outputs = union_all
-            .right_outputs
-            .drain(..)
-            .map(|(old, mut expr)| {
-                let Some(&new) = self.derived_columns.get(&old) else {
-                    return Ok((old, expr));
-                };
-                if let Some(expr) = &mut expr {
-                    expr.replace_column(old, new)?;
-                };
-                Ok((new, expr))
-            })
-            .chain(correlated_columns.iter().copied().map(|old| {
-                let new = self.get_derived(old)?;
-                Ok((new, None))
-            }))
-            .collect::<Result<_>>()?;
-        self.derived_columns.clear();
+        let right_derived = std::mem::take(&mut self.derived_columns);
+        Self::rewrite_union_branch_outputs(
+            &mut union_all.right_outputs,
+            correlated_columns,
+            &right_derived,
+        )?;
 
         let mut metadata = self.metadata.write();
         union_all
@@ -934,6 +909,33 @@ impl SubqueryDecorrelatorOptimizer {
             Arc::new(left_flatten_plan),
             Arc::new(right_flatten_plan),
         ))
+    }
+
+    fn rewrite_union_branch_outputs(
+        branch_outputs: &mut Vec<(Symbol, Option<ScalarExpr>)>,
+        correlated_columns: &ColumnSet,
+        derived: &HashMap<Symbol, Symbol>,
+    ) -> Result<()> {
+        *branch_outputs = branch_outputs
+            .drain(..)
+            .map(|(old, mut expr)| {
+                let Some(&new) = derived.get(&old) else {
+                    return Ok((old, expr));
+                };
+                if let Some(expr) = &mut expr {
+                    expr.replace_column(old, new)?;
+                };
+                Ok((new, expr))
+            })
+            .chain(correlated_columns.iter().copied().map(|old| {
+                let new = derived
+                    .get(&old)
+                    .copied()
+                    .ok_or_else(|| ErrorCode::Internal(format!("Missing derived column {old}")))?;
+                Ok((new, None))
+            }))
+            .collect::<Result<_>>()?;
+        Ok(())
     }
 
     fn flatten_sub_expression_scan(
