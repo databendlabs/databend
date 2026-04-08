@@ -32,6 +32,12 @@ create file format if not exists csv_none type=csv compression=none;
 statement ok
 create file format if not exists csv_zip type=csv compression=zip;
 
+statement ok
+create file format if not exists csv_gbk type=csv encoding='gbk';
+
+statement ok
+create file format if not exists text_gbk type=text encoding='gbk';
+
 
 # test csv
 query ???
@@ -148,6 +154,26 @@ query ??
 select $1, $2 from @unload/a_raw_path.csv (file_format => 'csv');
 ----
 5 6
+
+query ???
+copy into @unload/gbk.csv from (select '张三', 1) file_format=(type=csv encoding='gbk') single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
+----
+gbk.csv 9 1
+
+query ??
+select $1, $2 from @unload/gbk.csv (file_format => 'csv_gbk');
+----
+张三 1
+
+query ???
+copy into @unload/gbk.txt from (select '张三', 1) file_format=(type=text encoding='gbk') single=true include_query_id=false use_raw_path=true detailed_output=true overwrite=true;
+----
+gbk.txt 7 1
+
+query ??
+select $1, $2 from @unload/gbk.txt (file_format => 'text_gbk');
+----
+张三 1
 
 statement error 1006.*file already exists
 copy into @unload/a_raw_path.csv from (select 3,4) file_format=(type=csv) single=true include_query_id=false use_raw_path=true detailed_output=false overwrite=false;

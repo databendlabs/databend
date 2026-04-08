@@ -718,6 +718,10 @@ SELECT * from s;"#,
             CREATE OR REPLACE FILE FORMAT my_csv
                 type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
         "#,
+        r#"
+            CREATE FILE FORMAT my_csv_encoding
+                type = CSV encoding = 'utf8' encoding_error_mode = 'replace';
+        "#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
         r#"SELECT * FROM t GROUP BY all"#,

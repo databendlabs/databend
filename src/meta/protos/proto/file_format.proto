@@ -122,6 +122,8 @@ message CsvFileFormatParams {
   optional string geometry_format = 13;
   bool allow_quoted_nulls = 14;
   optional string quoted_empty_field_as = 15;
+  optional string encoding = 16;
+  optional string encoding_error_mode = 17;
 }
 
 message TextFileFormatParams {
@@ -141,6 +143,8 @@ message TextFileFormatParams {
   bool allow_column_count_mismatch = 9;
   optional string empty_field_as = 10;
   bool output_header = 11;
+  optional string encoding = 12;
+  optional string encoding_error_mode = 13;
 }
 
 message XmlFileFormatParams {

@@ -199,7 +199,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (167, "2026-02-28: Add: file_format.proto Lance file format"),
     (168, "2026-03-11: Remove: share_by in TableMeta/DatabaseMeta and refs in TableMeta, Remove SnapshotRef"),
     (169, "2026-03-23: Update: user.proto/TextFileFormatParams add null_display, allow_column_count_mismatch, empty_field_as and output_header"),
-    (170, "2026-03-25: Add: TableTag")
+    (170, "2026-03-25: Add: TableTag"),
+    (171, "2026-04-02: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add encoding and encoding_error_mode")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

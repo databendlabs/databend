@@ -253,6 +253,7 @@ dtparse = { git = "https://github.com/datafuse-extras/dtparse.git", rev = "7a9e4
 dyn-clone = "1.0.9"
 educe = { version = "1.0.0", features = ["default", "full"], package = "databend_educe" }
 either = "1.9"
+encoding_rs = "0.8.35"
 enquote = "1.1.0"
 enum-as-inner = "0.6"
 enum_dispatch = "0.3.13"
