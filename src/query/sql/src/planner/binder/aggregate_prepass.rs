@@ -40,7 +40,7 @@ use crate::normalize_identifier;
 use crate::plans::ScalarExpr;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub(super) struct AggregatePrepassExprFeatures {
+struct AggregatePrepassExprFeatures {
     pub contains_aggregate: bool,
     pub contains_window: bool,
     pub contains_subquery: bool,
@@ -80,31 +80,84 @@ pub(super) struct AggregatePrepassFact {
     pub source: AggregatePrepassSource,
     pub expr: Expr,
     pub contains_window: bool,
-    pub contains_subquery: bool,
-    pub referenced_aliases: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
 pub(super) struct AggregatePrepassFacts {
-    aliases: AggregatePrepassAliasCatalog,
-    facts: Vec<AggregatePrepassFact>,
+    items: Vec<AggregatePrepassFact>,
+    direct_len: usize,
+}
+
+impl AggregatePrepassFacts {
+    fn insert_prioritized_unique(&mut self, fact: AggregatePrepassFact) {
+        if fact.source.is_direct_clause() {
+            if self.items[..self.direct_len].contains(&fact) {
+                return;
+            }
+            self.items.push(fact);
+            let last = self.items.len() - 1;
+            self.items.swap(self.direct_len, last);
+            self.direct_len += 1;
+        } else {
+            if self.items[self.direct_len..].contains(&fact) {
+                return;
+            }
+            self.items.push(fact);
+        };
+    }
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct AggregatePrepassAliasInfo {
-    #[cfg_attr(not(test), expect(dead_code))]
-    pub name: String,
+pub(super) struct AggregatePrepassExprInfo {
     pub ast: Expr,
     pub contains_aggregate: bool,
     pub contains_window: bool,
-    #[cfg_attr(not(test), expect(dead_code))]
     pub contains_subquery: bool,
     pub referenced_aliases: Vec<String>,
 }
 
+impl AggregatePrepassExprInfo {
+    pub(super) fn analyze(
+        name_resolution_ctx: &NameResolutionContext,
+        functions: &AggregatePrepassFunctionCatalog,
+        aliases: &HashSet<&str>,
+        expr: &Expr,
+    ) -> Self {
+        let mut feature_visitor = AggregatePrepassExprFeatureVisitor {
+            name_resolution_ctx,
+            functions,
+            query_depth: 0,
+            features: Default::default(),
+        };
+        expr.drive(&mut feature_visitor);
+
+        let mut alias_visitor = ReferencedAliasVisitor {
+            name_resolution_ctx,
+            aliases,
+            query_depth: 0,
+            names: BTreeSet::new(),
+        };
+        expr.drive(&mut alias_visitor);
+
+        let AggregatePrepassExprFeatures {
+            contains_aggregate,
+            contains_window,
+            contains_subquery,
+        } = feature_visitor.features;
+
+        Self {
+            ast: expr.clone(),
+            contains_aggregate,
+            contains_window,
+            contains_subquery,
+            referenced_aliases: alias_visitor.names.into_iter().collect(),
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub(super) struct AggregatePrepassAliasCatalog {
-    items: Vec<AggregatePrepassAliasInfo>,
+    items: Vec<AggregatePrepassExprInfo>,
     by_name: BTreeMap<String, Vec<usize>>,
 }
 
@@ -119,33 +172,23 @@ impl AggregatePrepassAliasCatalog {
             by_name.entry(name.clone()).or_default().push(index);
         }
 
+        let alias_names = by_name.keys().map(String::as_str).collect();
         let items = aliases
             .into_iter()
-            .map(|(name, ast)| {
-                let AggregatePrepassExprFeatures {
-                    contains_aggregate,
-                    contains_window,
-                    contains_subquery,
-                } = Binder::aggregate_prepass_expr_features(name_resolution_ctx, functions, &ast);
-                AggregatePrepassAliasInfo {
-                    referenced_aliases: Self::collect_referenced_aliases(
-                        name_resolution_ctx,
-                        &by_name,
-                        &ast,
-                    ),
-                    contains_aggregate,
-                    contains_window,
-                    contains_subquery,
-                    name,
-                    ast,
-                }
+            .map(|(_, ast)| {
+                AggregatePrepassExprInfo::analyze(
+                    name_resolution_ctx,
+                    functions,
+                    &alias_names,
+                    &ast,
+                )
             })
             .collect();
 
         Self { items, by_name }
     }
 
-    fn get_unique(&self, name: &str) -> Option<&AggregatePrepassAliasInfo> {
+    fn get_unique(&self, name: &str) -> Option<&AggregatePrepassExprInfo> {
         if let [index] = self.by_name.get(name)?.as_slice() {
             Some(&self.items[*index])
         } else {
@@ -154,36 +197,23 @@ impl AggregatePrepassAliasCatalog {
     }
 
     #[cfg(test)]
-    fn items(&self) -> &[AggregatePrepassAliasInfo] {
+    fn items(&self) -> &[AggregatePrepassExprInfo] {
         &self.items
     }
 
-    pub(super) fn referenced_aliases(
-        &self,
-        name_resolution_ctx: &NameResolutionContext,
-        expr: &Expr,
-    ) -> Vec<String> {
-        Self::collect_referenced_aliases(name_resolution_ctx, &self.by_name, expr)
+    pub(super) fn alias_names(&self) -> HashSet<&str> {
+        self.by_name.keys().map(String::as_str).collect()
     }
 
-    pub(super) fn references_window_aliases(&self, names: &[String]) -> bool {
-        names.iter().any(|name| {
-            self.alias_reaches(name, &|alias| alias.contains_window, &mut BTreeSet::new())
-        })
-    }
-
-    pub(super) fn references_aggregate_aliases(&self, names: &[String]) -> bool {
-        names.iter().any(|name| {
-            self.alias_reaches(
-                name,
-                &|alias| alias.contains_aggregate,
-                &mut BTreeSet::new(),
-            )
-        })
+    pub(super) fn references_aliases_matching<F>(&self, names: &[String], predicate: &F) -> bool
+    where F: Fn(&AggregatePrepassExprInfo) -> bool {
+        names
+            .iter()
+            .any(|name| self.alias_reaches(name, predicate, &mut BTreeSet::new()))
     }
 
     fn alias_reaches<F>(&self, name: &str, predicate: &F, visiting: &mut BTreeSet<String>) -> bool
-    where F: Fn(&AggregatePrepassAliasInfo) -> bool {
+    where F: Fn(&AggregatePrepassExprInfo) -> bool {
         let Some(alias) = self.get_unique(name) else {
             return false;
         };
@@ -203,33 +233,23 @@ impl AggregatePrepassAliasCatalog {
         visiting.remove(name);
         reached
     }
-
-    fn collect_referenced_aliases(
-        name_resolution_ctx: &NameResolutionContext,
-        aliases: &BTreeMap<String, Vec<usize>>,
-        expr: &Expr,
-    ) -> Vec<String> {
-        let mut visitor = ReferencedAliasVisitor {
-            name_resolution_ctx,
-            aliases,
-            query_depth: 0,
-            names: BTreeSet::new(),
-        };
-        expr.drive(&mut visitor);
-        visitor.names.into_iter().collect()
-    }
 }
 
 #[derive(Visitor)]
-#[visitor(Expr(enter), Query(enter))]
+#[visitor(Expr(enter), Query)]
 struct AggregatePrepassExprFeatureVisitor<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
     functions: &'a AggregatePrepassFunctionCatalog,
+    query_depth: usize,
     features: AggregatePrepassExprFeatures,
 }
 
 impl AggregatePrepassExprFeatureVisitor<'_> {
     fn enter_expr(&mut self, expr: &Expr) {
+        if self.query_depth > 0 {
+            return;
+        }
+
         match expr {
             Expr::CountAll { window: None, .. } => self.features.contains_aggregate = true,
             Expr::FunctionCall { func, .. }
@@ -248,6 +268,11 @@ impl AggregatePrepassExprFeatureVisitor<'_> {
 
     fn enter_query(&mut self, _query: &Query) {
         self.features.contains_subquery = true;
+        self.query_depth += 1;
+    }
+
+    fn exit_query(&mut self, _query: &Query) {
+        self.query_depth -= 1;
     }
 }
 
@@ -298,7 +323,7 @@ impl<'a> AggregatePrepassFunctionNameCollector<'a> {
 #[visitor(ColumnRef(enter), Query)]
 struct ReferencedAliasVisitor<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
-    aliases: &'a BTreeMap<String, Vec<usize>>,
+    aliases: &'a HashSet<&'a str>,
     query_depth: usize,
     names: BTreeSet<String>,
 }
@@ -309,16 +334,11 @@ impl ReferencedAliasVisitor<'_> {
             return;
         }
 
-        if column.database.is_some() || column.table.is_some() {
-            return;
-        }
-
-        let ColumnID::Name(ident) = &column.column else {
+        let Some(alias) = resolve_unqualified_alias_name(self.name_resolution_ctx, column) else {
             return;
         };
 
-        let alias = normalize_identifier(ident, self.name_resolution_ctx).name;
-        if self.aliases.contains_key(&alias) {
+        if self.aliases.contains(alias.as_str()) {
             self.names.insert(alias);
         }
     }
@@ -343,7 +363,7 @@ struct AggregatePrepassScanner<'a> {
     window_depth: usize,
     expanding_aliases: HashSet<String>,
     expansion_stack: Vec<String>,
-    fragments: Vec<AggregatePrepassFact>,
+    facts: Vec<AggregatePrepassFact>,
 }
 
 impl AggregatePrepassScanner<'_> {
@@ -363,10 +383,10 @@ impl AggregatePrepassScanner<'_> {
             window_depth: 0,
             expanding_aliases: HashSet::new(),
             expansion_stack: Vec::new(),
-            fragments: Vec::new(),
+            facts: Vec::new(),
         };
         expr.drive(&mut scanner);
-        scanner.fragments
+        scanner.facts
     }
 
     fn enter_expr(&mut self, expr: &Expr) {
@@ -378,16 +398,18 @@ impl AggregatePrepassScanner<'_> {
             return;
         }
 
-        match expr {
-            Expr::CountAll { window: None, .. } => self.record_fragment(expr),
+        if let Some(fact) = match expr {
+            Expr::CountAll { window: None, .. } => self.build_fact(expr),
             Expr::FunctionCall { func, .. }
                 if self
                     .functions
                     .is_aggregate_target(self.name_resolution_ctx, func) =>
             {
-                self.record_fragment(expr)
+                self.build_fact(expr)
             }
-            _ => {}
+            _ => None,
+        } {
+            self.facts.push(fact);
         }
     }
 
@@ -424,28 +446,30 @@ impl AggregatePrepassScanner<'_> {
         self.query_depth -= 1;
     }
 
-    fn record_fragment(&mut self, expr: &Expr) {
-        let features =
-            Binder::aggregate_prepass_expr_features(self.name_resolution_ctx, self.functions, expr);
-        if features.contains_subquery {
-            return;
-        };
+    fn build_fact(&self, expr: &Expr) -> Option<AggregatePrepassFact> {
+        let analysis = AggregatePrepassExprInfo::analyze(
+            self.name_resolution_ctx,
+            self.functions,
+            &self.ast_aliases.alias_names(),
+            expr,
+        );
+        if analysis.contains_subquery {
+            return None;
+        }
 
-        self.fragments.push(AggregatePrepassFact {
+        Some(AggregatePrepassFact {
             expr_context: self.expr_context,
-            source: match self.expansion_stack.as_array() {
-                Some([alias]) => AggregatePrepassSource::AliasExpansion(alias.clone()),
-                None => AggregatePrepassSource::DirectClause,
-            },
-            expr: expr.clone(),
-            contains_window: features.contains_window,
-            contains_subquery: features.contains_subquery,
-            referenced_aliases: AggregatePrepassAliasCatalog::collect_referenced_aliases(
-                self.name_resolution_ctx,
-                &self.ast_aliases.by_name,
-                expr,
-            ),
-        });
+            source: self.current_source(),
+            expr: analysis.ast,
+            contains_window: analysis.contains_window,
+        })
+    }
+
+    fn current_source(&self) -> AggregatePrepassSource {
+        match self.expansion_stack.first() {
+            Some(alias) => AggregatePrepassSource::AliasExpansion(alias.clone()),
+            None => AggregatePrepassSource::DirectClause,
+        }
     }
 
     fn is_window_expr(expr: &Expr) -> bool {
@@ -463,18 +487,25 @@ impl AggregatePrepassScanner<'_> {
         column: &ColumnRef,
         ast_aliases: &'a AggregatePrepassAliasCatalog,
     ) -> Option<(String, &'a Expr)> {
-        if column.database.is_some() || column.table.is_some() {
-            return None;
-        }
-
-        let ColumnID::Name(ident) = &column.column else {
-            return None;
-        };
-
-        let alias = normalize_identifier(ident, name_resolution_ctx).name;
+        let alias = resolve_unqualified_alias_name(name_resolution_ctx, column)?;
         let ast = &ast_aliases.get_unique(&alias)?.ast;
         Some((alias, ast))
     }
+}
+
+fn resolve_unqualified_alias_name(
+    name_resolution_ctx: &NameResolutionContext,
+    column: &ColumnRef,
+) -> Option<String> {
+    if column.database.is_some() || column.table.is_some() {
+        return None;
+    }
+
+    let ColumnID::Name(ident) = &column.column else {
+        return None;
+    };
+
+    Some(normalize_identifier(ident, name_resolution_ctx).name)
 }
 
 impl Binder {
@@ -496,34 +527,13 @@ impl Binder {
         AggregatePrepassAliasCatalog::new(&self.name_resolution_ctx, functions, aliases)
     }
 
-    pub(super) fn register_aggregate_prepass_facts(
+    pub(super) fn bind_aggregate_prepass_facts(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         facts: &AggregatePrepassFacts,
     ) -> Result<()> {
-        let mut direct = facts
-            .facts
-            .iter()
-            .filter(|fact| fact.source.is_direct_clause())
-            .collect::<Vec<_>>();
-        direct.dedup();
-        for fact in direct {
-            self.bind_and_rewrite_aggregate_expr(
-                bind_context,
-                aliases,
-                fact.expr_context,
-                &fact.expr,
-            )?;
-        }
-
-        let mut alias = facts
-            .facts
-            .iter()
-            .filter(|fact| fact.source.is_alias_expansion())
-            .collect::<Vec<_>>();
-        alias.dedup();
-        for fact in alias {
+        for fact in &facts.items {
             self.bind_and_rewrite_aggregate_expr(
                 bind_context,
                 aliases,
@@ -543,6 +553,20 @@ impl Binder {
         qualify: Option<&Expr>,
         order_by: &[databend_common_ast::ast::OrderByExpr],
     ) -> Result<AggregatePrepassFunctionCatalog> {
+        let function_names =
+            self.collect_aggregate_prepass_function_names(select_list, having, qualify, order_by);
+        let udaf_names = self.resolve_aggregate_prepass_udaf_names(bind_context, function_names)?;
+
+        Ok(AggregatePrepassFunctionCatalog { udaf_names })
+    }
+
+    fn collect_aggregate_prepass_function_names(
+        &self,
+        select_list: &SelectList<'_>,
+        having: Option<&Expr>,
+        qualify: Option<&Expr>,
+        order_by: &[databend_common_ast::ast::OrderByExpr],
+    ) -> BTreeSet<String> {
         let mut visitor = AggregatePrepassFunctionNameCollector::new(&self.name_resolution_ctx);
 
         for item in select_list.items.iter() {
@@ -560,10 +584,19 @@ impl Binder {
             order.expr.drive(&mut visitor);
         }
 
+        visitor.names
+    }
+
+    fn resolve_aggregate_prepass_udaf_names(
+        &self,
+        bind_context: &BindContext,
+        function_names: BTreeSet<String>,
+    ) -> Result<HashSet<String>> {
         let mut udaf_names = HashSet::new();
         let tenant = self.ctx.get_tenant();
         let provider = UserApiProvider::instance();
-        for name in visitor.names {
+
+        for name in function_names {
             if name.eq_ignore_ascii_case("grouping") || is_builtin_function(&name) {
                 continue;
             }
@@ -586,21 +619,7 @@ impl Binder {
             }
         }
 
-        Ok(AggregatePrepassFunctionCatalog { udaf_names })
-    }
-
-    pub(super) fn aggregate_prepass_expr_features(
-        name_resolution_ctx: &NameResolutionContext,
-        functions: &AggregatePrepassFunctionCatalog,
-        expr: &Expr,
-    ) -> AggregatePrepassExprFeatures {
-        let mut detector = AggregatePrepassExprFeatureVisitor {
-            name_resolution_ctx,
-            functions,
-            features: Default::default(),
-        };
-        expr.drive(&mut detector);
-        detector.features
+        Ok(udaf_names)
     }
 
     pub(super) fn derive_aggregate_prepass_facts<'a>(
@@ -610,22 +629,19 @@ impl Binder {
         ast_iter: impl Iterator<Item = (&'a Expr, ExprContext)>,
     ) -> AggregatePrepassFacts {
         ast_iter
-            .map(|(ast_expr, expr_context)| AggregatePrepassFacts {
-                aliases: aliases.clone(),
-                facts: AggregatePrepassScanner::scan(
+            .map(|(ast_expr, expr_context)| {
+                AggregatePrepassScanner::scan(
                     expr_context,
                     &self.name_resolution_ctx,
                     functions,
                     aliases,
                     ast_expr,
-                ),
+                )
             })
-            .fold(AggregatePrepassFacts::default(), |mut acc, item| {
-                if acc.aliases.items.is_empty() {
-                    acc.aliases = item.aliases;
-                }
-                acc.facts.extend(item.facts);
-                acc
+            .flatten()
+            .fold(AggregatePrepassFacts::default(), |mut facts, fact| {
+                facts.insert_prioritized_unique(fact);
+                facts
             })
     }
 }
@@ -638,51 +654,6 @@ mod tests {
     use databend_common_ast::parser::tokenize_sql;
 
     use super::*;
-
-    impl AggregatePrepassFacts {
-        fn new(aliases: AggregatePrepassAliasCatalog) -> Self {
-            Self {
-                aliases,
-                facts: Vec::new(),
-            }
-        }
-
-        fn iter(&self) -> impl Iterator<Item = &AggregatePrepassFact> {
-            self.facts.iter()
-        }
-
-        fn push_fact(&mut self, fact: AggregatePrepassFact) {
-            self.facts.push(fact);
-        }
-
-        fn unique_facts(&self) -> Vec<&AggregatePrepassFact> {
-            let mut unique = Vec::new();
-            for fact in &self.facts {
-                if unique.contains(&fact) {
-                    continue;
-                }
-                unique.push(fact);
-            }
-            unique
-        }
-
-        fn ordered_unique_facts(&self) -> Vec<&AggregatePrepassFact> {
-            let unique = self.unique_facts();
-            let mut ordered = Vec::with_capacity(unique.len());
-            ordered.extend(
-                unique
-                    .iter()
-                    .copied()
-                    .filter(|fact| matches!(fact.source, AggregatePrepassSource::DirectClause)),
-            );
-            ordered.extend(
-                unique.iter().copied().filter(|fact| {
-                    matches!(fact.source, AggregatePrepassSource::AliasExpansion(_))
-                }),
-            );
-            ordered
-        }
-    }
 
     fn parse_ast_expr(text: &str) -> Expr {
         let tokens = tokenize_sql(text).unwrap();
@@ -708,20 +679,17 @@ mod tests {
         let items = aliases.items();
         assert_eq!(items.len(), 3);
 
-        assert_eq!(items[0].name, "s");
         assert!(items[0].contains_aggregate);
         assert!(!items[0].contains_window);
         assert!(!items[0].contains_subquery);
         assert!(items[0].referenced_aliases.is_empty());
 
-        assert_eq!(items[1].name, "rn");
         assert!(!items[1].contains_aggregate);
         assert!(items[1].contains_window);
         assert!(!items[1].contains_subquery);
         assert_eq!(items[1].referenced_aliases, vec!["s".to_string()]);
 
-        assert_eq!(items[2].name, "sub");
-        assert!(items[2].contains_aggregate);
+        assert!(!items[2].contains_aggregate);
         assert!(!items[2].contains_window);
         assert!(items[2].contains_subquery);
         assert!(items[2].referenced_aliases.is_empty());
@@ -751,8 +719,6 @@ mod tests {
         );
         assert!(matches!(facts[0].expr_context, ExprContext::HavingClause));
         assert!(!facts[0].contains_window);
-        assert!(!facts[0].contains_subquery);
-        assert!(facts[0].referenced_aliases.is_empty());
     }
 
     #[test]
@@ -784,7 +750,7 @@ mod tests {
             parse_ast_expr("sum(number)"),
         )]);
 
-        let mut facts = AggregatePrepassFacts::new(aliases.clone());
+        let mut facts = AggregatePrepassFacts::default();
         for fact in AggregatePrepassScanner::scan(
             ExprContext::HavingClause,
             &name_resolution_ctx,
@@ -792,7 +758,7 @@ mod tests {
             &aliases,
             &parse_ast_expr("sum(number) > 0"),
         ) {
-            facts.push_fact(fact);
+            facts.insert_prioritized_unique(fact);
         }
         for fact in AggregatePrepassScanner::scan(
             ExprContext::HavingClause,
@@ -801,45 +767,34 @@ mod tests {
             &aliases,
             &parse_ast_expr("sum(number) > 0"),
         ) {
-            facts.push_fact(fact);
+            facts.insert_prioritized_unique(fact);
         }
 
-        assert_eq!(facts.iter().count(), 2);
-        assert_eq!(facts.unique_facts().len(), 1);
+        assert_eq!(facts.items.len(), 1);
     }
 
     #[test]
-    fn aggregate_prepass_facts_prioritize_direct_candidates() {
-        let aliases = AggregatePrepassAliasCatalog::default();
-        let expr = parse_ast_expr("sum(number)");
-        let mut facts = AggregatePrepassFacts::new(aliases);
-        facts.push_fact(AggregatePrepassFact {
-            expr_context: ExprContext::HavingClause,
-            source: AggregatePrepassSource::AliasExpansion("s".to_string()),
-            expr: expr.clone(),
-            contains_window: false,
-            contains_subquery: false,
-            referenced_aliases: Vec::new(),
-        });
-        facts.push_fact(AggregatePrepassFact {
-            expr_context: ExprContext::HavingClause,
-            source: AggregatePrepassSource::DirectClause,
-            expr,
-            contains_window: false,
-            contains_subquery: false,
-            referenced_aliases: Vec::new(),
-        });
+    fn aggregate_prepass_nested_alias_expansion_keeps_alias_source() {
+        let name_resolution_ctx = NameResolutionContext::default();
+        let functions = AggregatePrepassFunctionCatalog::default();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![
+            ("s".to_string(), parse_ast_expr("sum(number)")),
+            ("a".to_string(), parse_ast_expr("s + 1")),
+        ]);
 
-        let ordered = facts.ordered_unique_facts();
-        assert_eq!(ordered.len(), 2);
-        assert!(matches!(
-            ordered[0].source,
-            AggregatePrepassSource::DirectClause
-        ));
-        assert!(matches!(
-            ordered[1].source,
-            AggregatePrepassSource::AliasExpansion(_)
-        ));
+        let facts = AggregatePrepassScanner::scan(
+            ExprContext::HavingClause,
+            &name_resolution_ctx,
+            &functions,
+            &aliases,
+            &parse_ast_expr("a > 0"),
+        );
+
+        assert_eq!(facts.len(), 1);
+        assert_eq!(
+            facts[0].source,
+            AggregatePrepassSource::AliasExpansion("a".to_string())
+        );
     }
 
     #[test]
@@ -856,9 +811,25 @@ mod tests {
             ("w".to_string(), parse_ast_expr("rn + 1")),
         ]);
 
-        assert!(aliases.references_aggregate_aliases(&["a".to_string()]));
-        assert!(aliases.references_window_aliases(&["w".to_string()]));
-        assert!(!aliases.references_aggregate_aliases(&["w".to_string()]));
-        assert!(!aliases.references_window_aliases(&["a".to_string()]));
+        assert!(
+            &aliases.references_aliases_matching(&["a".to_string()], &|alias| {
+                alias.contains_aggregate
+            })
+        );
+        assert!(
+            !aliases.references_aliases_matching(&["a".to_string()], &|alias| {
+                alias.contains_window
+            })
+        );
+        assert!(
+            aliases.references_aliases_matching(&["w".to_string()], &|alias| {
+                alias.contains_window
+            })
+        );
+        assert!(
+            !aliases.references_aliases_matching(&["w".to_string()], &|alias| {
+                alias.contains_aggregate
+            })
+        );
     }
 }
