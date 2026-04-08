@@ -629,7 +629,7 @@ impl Binder {
         ast_iter: impl Iterator<Item = (&'a Expr, ExprContext)>,
     ) -> AggregatePrepassFacts {
         ast_iter
-            .map(|(ast_expr, expr_context)| {
+            .flat_map(|(ast_expr, expr_context)| {
                 AggregatePrepassScanner::scan(
                     expr_context,
                     &self.name_resolution_ctx,
@@ -638,7 +638,6 @@ impl Binder {
                     ast_expr,
                 )
             })
-            .flatten()
             .fold(AggregatePrepassFacts::default(), |mut facts, fact| {
                 facts.insert_prioritized_unique(fact);
                 facts
