@@ -57,15 +57,23 @@ use opendal::Buffer;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_prewhere() -> Result<()> {
-    run_prewhere_test_with_threshold(50).await
+    run_prewhere_test_with_threshold(50, false).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_prewhere_without_row_selection_pushdown() -> Result<()> {
-    run_prewhere_test_with_threshold(10).await
+    run_prewhere_test_with_threshold(10, false).await
 }
 
-async fn run_prewhere_test_with_threshold(selectivity_threshold: u64) -> Result<()> {
+#[tokio::test(flavor = "multi_thread")]
+async fn test_prewhere_with_single_reader() -> Result<()> {
+    run_prewhere_test_with_threshold(0, true).await
+}
+
+async fn run_prewhere_test_with_threshold(
+    selectivity_threshold: u64,
+    expect_single_reader: bool,
+) -> Result<()> {
     let PrewhereTestSetup {
         _fixture,
         ctx,
@@ -84,7 +92,13 @@ async fn run_prewhere_test_with_threshold(selectivity_threshold: u64) -> Result<
     )?;
 
     // Create ReadState which combines prewhere and runtime filter logic
-    let read_state = ReadState::create(ctx.clone(), scan_id, Some(&prewhere_info), &block_reader)?;
+    let read_state = ReadState::create(
+        ctx.clone(),
+        scan_id,
+        Some(&prewhere_info),
+        block_reader.clone(),
+    )?;
+    assert_eq!(read_state.use_single_prewhere_reader, expect_single_reader);
 
     // Use the new unified API that handles all states internally
     let (data_block, row_selection, bitmap_selection) =

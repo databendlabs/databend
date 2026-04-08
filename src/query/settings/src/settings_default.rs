@@ -1073,7 +1073,7 @@ impl DefaultSettings {
                 }),
                 ("prewhere_selectivity_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(100),
-                    desc: "Maximum selectivity percentage for pushing row selection into remain-column reads during prewhere. When selected_rows / total_rows * 100 is greater than or equal to this threshold, remain columns are fully deserialized and filtered afterward. Set 100 to keep pushdown enabled unless all rows are selected, or 0 to disable pushdown.",
+                    desc: "Maximum selectivity percentage for pushing row selection into remain-column reads during prewhere. When selected_rows / total_rows * 100 is greater than or equal to this threshold, remain columns are fully deserialized and filtered afterward. Set 100 to keep pushdown enabled unless all rows are selected, or 0 to read all projected columns with a single reader and filter afterward.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
