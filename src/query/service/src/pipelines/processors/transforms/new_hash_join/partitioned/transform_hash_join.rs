@@ -426,6 +426,7 @@ enum Stage {
 #[derive(Debug)]
 struct BuildState {
     finished: bool,
+    #[allow(dead_code)]
     initialized: bool,
     build_data: Option<DataBlock>,
 }
