@@ -46,7 +46,27 @@ impl RangeJoinState {
             }
             return Ok(vec![DataBlock::empty()]);
         }
+        let result = self.range_join_partition(task_id);
+        self.completed_pair.fetch_add(1, Ordering::SeqCst);
+        result
+    }
 
+    // Used by range join
+    fn sort_descriptions(&self, _: bool) -> Vec<SortColumnDescription> {
+        let op = &self.conditions[0].operator;
+        let asc = match op.as_str() {
+            "gt" | "gte" => false,
+            "lt" | "lte" => true,
+            _ => unreachable!(),
+        };
+        vec![SortColumnDescription {
+            offset: 0,
+            asc,
+            nulls_first: true,
+        }]
+    }
+
+    fn range_join_partition(&self, task_id: usize) -> Result<Vec<DataBlock>> {
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let left_sorted_blocks = self.left_sorted_blocks.read();
@@ -194,23 +214,7 @@ impl RangeJoinState {
             }
         }
 
-        self.completed_pair.fetch_add(1, Ordering::SeqCst);
         Ok(result_blocks)
-    }
-
-    // Used by range join
-    fn sort_descriptions(&self, _: bool) -> Vec<SortColumnDescription> {
-        let op = &self.conditions[0].operator;
-        let asc = match op.as_str() {
-            "gt" | "gte" => false,
-            "lt" | "lte" => true,
-            _ => unreachable!(),
-        };
-        vec![SortColumnDescription {
-            offset: 0,
-            asc,
-            nulls_first: true,
-        }]
     }
 }
 
