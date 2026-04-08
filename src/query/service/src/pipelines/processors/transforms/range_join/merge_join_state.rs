@@ -12,18 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::Ordering;
+
 use databend_common_exception::Result;
+use databend_common_expression::BlockEntry;
+use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::RepeatIndex;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SortColumnDescription;
+use databend_common_expression::Value;
+use databend_common_expression::types::AccessType;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::UInt64Type;
 
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::filter_block;
 
 impl RangeJoinState {
     pub fn range_join(&self, task_id: usize) -> Result<Vec<DataBlock>> {
+        let partition_count = self.partition_count.load(Ordering::SeqCst) as usize;
+        if task_id >= partition_count {
+            if !self.left_match.read().is_empty() {
+                return Ok(vec![self.fill_outer(task_id, true)?]);
+            } else if !self.right_match.read().is_empty() {
+                return Ok(vec![self.fill_outer(task_id, false)?]);
+            }
+            return Ok(vec![DataBlock::empty()]);
+        }
+
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let left_sorted_blocks = self.left_sorted_blocks.read();
@@ -59,6 +77,10 @@ impl RangeJoinState {
         let mut result_blocks = Vec::with_capacity(left_len);
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
+        let track_left_outer = !self.left_match.read().is_empty();
+        let track_right_outer = !self.right_match.read().is_empty();
+        let mut matched_left = Vec::with_capacity(left_len);
+        let mut matched_right = Vec::with_capacity(right_len);
 
         while i < left_len {
             if j == right_len {
@@ -79,9 +101,12 @@ impl RangeJoinState {
             ) {
                 let mut left_result_block = DataBlock::empty();
                 let mut right_buffer = Vec::with_capacity(right_len - j);
+                let mut right_match_buffer = Vec::with_capacity(right_len - j);
+                let mut left_match_index = None;
                 if let ScalarRef::Number(NumberScalar::Int64(left)) =
                     unsafe { left_idx_col.index_unchecked(i) }
                 {
+                    left_match_index = Some((left - 1) as usize);
                     left_result_block = left_table[left_idx].take_compacted_indices(
                         &[RepeatIndex {
                             row: ((left - 1) as usize - left_offset) as u32,
@@ -95,6 +120,9 @@ impl RangeJoinState {
                         unsafe { right_idx_col.index_unchecked(k) }
                     {
                         right_buffer.push(((-right - 1) as usize - right_offset) as u32);
+                        if track_right_outer {
+                            right_match_buffer.push(((-right - 1) as usize) as u64);
+                        }
                     }
                 }
                 if !left_result_block.is_empty() {
@@ -102,8 +130,42 @@ impl RangeJoinState {
                         right_table[right_idx].take(right_buffer.as_slice())?;
                     // Merge left_result_block and right_result_block
                     left_result_block.merge_block(right_result_block);
+                    if track_right_outer {
+                        left_result_block.add_entry(BlockEntry::new(
+                            Value::Column(Column::Number(NumberColumn::UInt64(
+                                right_match_buffer.into(),
+                            ))),
+                            || {
+                                (
+                                    databend_common_expression::types::DataType::Number(
+                                        databend_common_expression::types::NumberDataType::UInt64,
+                                    ),
+                                    left_result_block.num_rows(),
+                                )
+                            },
+                        ));
+                    }
                     for filter in self.other_conditions.iter() {
                         left_result_block = filter_block(left_result_block, filter)?;
+                    }
+                    if track_left_outer && !left_result_block.is_empty() {
+                        if let Some(left_match_index) = left_match_index {
+                            matched_left.push(left_match_index);
+                        }
+                    }
+                    if track_right_outer && !left_result_block.is_empty() {
+                        let column = &left_result_block
+                            .columns()
+                            .last()
+                            .unwrap()
+                            .value()
+                            .try_downcast::<UInt64Type>()
+                            .unwrap();
+                        if let Value::Column(col) = column {
+                            matched_right
+                                .extend(UInt64Type::iter_column(col).map(|idx| idx as usize));
+                        }
+                        left_result_block.pop_columns(1);
                     }
                     result_blocks.push(left_result_block);
                 }
@@ -112,6 +174,22 @@ impl RangeJoinState {
                 j += 1;
             }
         }
+
+        if track_left_outer && !matched_left.is_empty() {
+            let mut left_match = self.left_match.write();
+            for idx in matched_left {
+                left_match.set(idx, true);
+            }
+        }
+
+        if track_right_outer && !matched_right.is_empty() {
+            let mut right_match = self.right_match.write();
+            for idx in matched_right {
+                right_match.set(idx, true);
+            }
+        }
+
+        self.completed_pair.fetch_add(1, Ordering::SeqCst);
         Ok(result_blocks)
     }
 
