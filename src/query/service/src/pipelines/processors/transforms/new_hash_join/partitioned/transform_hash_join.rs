@@ -214,10 +214,14 @@ impl Processor for TransformPartitionedHashJoin {
 
             if !matches!(self.stage, Stage::Finished) {
                 self.stage = Stage::Finished;
+
                 let mut finished = FinishedJoin::create();
                 std::mem::swap(&mut finished, &mut self.join);
-                self.stage_sync_barrier.reduce_quorum(1);
                 drop(finished);
+
+                if self.stage_sync_barrier.reduce_quorum(1) {
+                    self.rf_desc.close_broadcast();
+                }
             }
 
             return Ok(Event::Finished);
