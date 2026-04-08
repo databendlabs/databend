@@ -28,10 +28,11 @@ use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::GetTaskDependentsRequest;
-use databend_common_cloud_control::pb::Task;
-use databend_common_cloud_control::task_utils;
+use databend_common_cloud_control::pb::Task as PbTask;
+use databend_common_cloud_control::task_utils::Task as CloudTask;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
+use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::TableDataType;
@@ -60,7 +61,7 @@ pub struct TaskDependentsTable {
 }
 
 impl TaskDependentsTable {
-    pub fn schema() -> TableSchemaRef {
+    fn schema() -> TableSchemaRef {
         TableSchemaRefExt::create(vec![
             TableField::new("created_on", TableDataType::Timestamp),
             TableField::new("name", TableDataType::String),
@@ -83,7 +84,7 @@ impl TaskDependentsTable {
         table_func_name: &str,
         table_id: u64,
         table_args: TableArgs,
-    ) -> databend_common_exception::Result<Arc<dyn TableFunction>> {
+    ) -> Result<Arc<dyn TableFunction>> {
         let args_parsed = TaskDependentsParsed::parse(&table_args)?;
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
@@ -92,8 +93,6 @@ impl TaskDependentsTable {
             meta: TableMeta {
                 schema: Self::schema(),
                 engine: String::from(table_func_name),
-                // Assuming that created_on is unnecessary for function table,
-                // we could make created_on fixed to pass test_shuffle_action_try_into.
                 created_on: DateTime::from_timestamp(0, 0).unwrap(),
                 updated_on: DateTime::from_timestamp(0, 0).unwrap(),
                 ..Default::default()
@@ -101,7 +100,7 @@ impl TaskDependentsTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(TaskDependentsTable {
+        Ok(Arc::new(Self {
             table_info,
             args_parsed,
             table_args,
@@ -125,8 +124,7 @@ impl Table for TaskDependentsTable {
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
         _dry_run: bool,
-    ) -> databend_common_exception::Result<(PartStatistics, Partitions)> {
-        // dummy statistics
+    ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
     }
 
@@ -140,7 +138,7 @@ impl Table for TaskDependentsTable {
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
         _put_cache: bool,
-    ) -> databend_common_exception::Result<()> {
+    ) -> Result<()> {
         pipeline.add_source(
             |output| {
                 TaskDependentsSource::create(
@@ -152,7 +150,6 @@ impl Table for TaskDependentsTable {
             },
             1,
         )?;
-
         Ok(())
     }
 }
@@ -165,19 +162,20 @@ struct TaskDependentsSource {
 }
 
 impl TaskDependentsSource {
-    pub fn create(
+    fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         task_name: String,
         recursive: bool,
-    ) -> databend_common_exception::Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.get_scan_progress(), output, TaskDependentsSource {
+    ) -> Result<ProcessorPtr> {
+        AsyncSourcer::create(ctx.get_scan_progress(), output, Self {
             ctx,
             task_name,
             recursive,
             is_finished: false,
         })
     }
+
     fn build_request(&self) -> GetTaskDependentsRequest {
         GetTaskDependentsRequest {
             task_name: self.task_name.clone(),
@@ -185,32 +183,30 @@ impl TaskDependentsSource {
             recursive: self.recursive,
         }
     }
-    fn to_block(&self, tasks: &Vec<Task>) -> databend_common_exception::Result<DataBlock> {
-        let mut created_on: Vec<i64> = Vec::with_capacity(tasks.len());
-        let mut name: Vec<String> = Vec::with_capacity(tasks.len());
-        let mut owner: Vec<String> = Vec::with_capacity(tasks.len());
-        let mut comment: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-        let mut warehouse: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-        let mut schedule: Vec<Option<String>> = Vec::with_capacity(tasks.len());
-        let mut predecessors: Vec<Vec<String>> = Vec::with_capacity(tasks.len());
-
-        let mut state: Vec<String> = Vec::with_capacity(tasks.len());
-        let mut definition: Vec<String> = Vec::with_capacity(tasks.len());
-        let mut condition_text: Vec<String> = Vec::with_capacity(tasks.len());
+    fn to_block(&self, tasks: &[PbTask]) -> Result<DataBlock> {
+        let mut created_on = Vec::with_capacity(tasks.len());
+        let mut name = Vec::with_capacity(tasks.len());
+        let mut owner = Vec::with_capacity(tasks.len());
+        let mut comment = Vec::with_capacity(tasks.len());
+        let mut warehouse = Vec::with_capacity(tasks.len());
+        let mut schedule = Vec::with_capacity(tasks.len());
+        let mut predecessors = Vec::with_capacity(tasks.len());
+        let mut state = Vec::with_capacity(tasks.len());
+        let mut definition = Vec::with_capacity(tasks.len());
+        let mut condition_text = Vec::with_capacity(tasks.len());
 
         for task in tasks {
-            let task = task.clone();
-            let tsk: task_utils::Task = task.try_into()?;
-            created_on.push(tsk.created_at.timestamp_micros());
-            name.push(tsk.task_name.clone());
-            owner.push(tsk.owner.clone());
-            comment.push(tsk.comment.clone());
-            warehouse.push(tsk.warehouse_options.and_then(|s| s.warehouse.clone()));
-            schedule.push(tsk.schedule_options.clone());
-            predecessors.push(tsk.after.clone());
-            state.push(tsk.status.to_string());
-            definition.push(tsk.query_text.clone());
-            condition_text.push(tsk.condition_text.clone());
+            let task: CloudTask = task.clone().try_into()?;
+            created_on.push(task.created_at.timestamp_micros());
+            name.push(task.task_name.clone());
+            owner.push(task.owner.clone());
+            comment.push(task.comment.clone());
+            warehouse.push(task.warehouse_options.and_then(|opts| opts.warehouse));
+            schedule.push(task.schedule_options.clone());
+            predecessors.push(task.after.clone());
+            state.push(task.status.to_string());
+            definition.push(task.query_text.clone());
+            condition_text.push(task.condition_text.clone());
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -241,13 +237,13 @@ impl AsyncSource for TaskDependentsSource {
     const NAME: &'static str = "task_dependents";
 
     #[async_backtrace::framed]
-    async fn generate(&mut self) -> databend_common_exception::Result<Option<DataBlock>> {
+    async fn generate(&mut self) -> Result<Option<DataBlock>> {
         if self.is_finished {
             return Ok(None);
         }
         self.is_finished = true;
-        let config = GlobalConfig::instance();
-        if config
+
+        if GlobalConfig::instance()
             .query
             .common
             .cloud_control_grpc_server_address
@@ -257,6 +253,7 @@ impl AsyncSource for TaskDependentsSource {
                 "cannot create task without cloud control enabled, please set cloud_control_grpc_server_address in config",
             ));
         }
+
         let cloud_api = CloudControlApiProvider::instance();
         let tenant = self.ctx.get_tenant();
         let user = self
@@ -266,14 +263,12 @@ impl AsyncSource for TaskDependentsSource {
             .display()
             .to_string();
         let query_id = self.ctx.get_id();
-
         let cfg = build_client_config(
             tenant.tenant_name().to_string(),
             user,
             query_id,
             cloud_api.get_timeout(),
         );
-
         let dependents = cloud_api
             .get_task_client()
             .get_task_dependents(make_request(self.build_request(), cfg))
@@ -301,7 +296,7 @@ pub(crate) struct TaskDependentsParsed {
 }
 
 impl TaskDependentsParsed {
-    pub fn parse(table_args: &TableArgs) -> databend_common_exception::Result<Self> {
+    fn parse(table_args: &TableArgs) -> Result<Self> {
         let args = table_args.expect_all_named("task_dependents")?;
 
         let mut task_name = None;
@@ -319,15 +314,14 @@ impl TaskDependentsParsed {
             }
         }
 
-        if task_name.is_none() {
-            return Err(ErrorCode::BadArguments(format!(
-                "task_name must be specified for {}",
-                "task_dependents"
-            )));
-        }
+        let Some(task_name) = task_name else {
+            return Err(ErrorCode::BadArguments(
+                "task_name must be specified for task_dependents",
+            ));
+        };
 
         Ok(Self {
-            task_name: task_name.unwrap(),
+            task_name,
             recursive: recursive.unwrap_or_default(),
         })
     }

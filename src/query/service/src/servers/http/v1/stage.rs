@@ -15,7 +15,7 @@
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_storages_stage::StageTable;
+use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
 use futures_util::AsyncWriteExt;
 use futures_util::io;
@@ -111,7 +111,7 @@ pub async fn upload_to_stage(
             .map_err(InternalServerError)?
     };
 
-    let op = StageTable::get_op(&stage).map_err(InternalServerError)?;
+    let op = init_stage_operator(&stage).map_err(InternalServerError)?;
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {

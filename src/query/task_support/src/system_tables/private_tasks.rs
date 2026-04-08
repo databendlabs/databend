@@ -17,8 +17,11 @@ use std::sync::Arc;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_cloud_control::pb;
-use databend_common_cloud_control::task_utils;
+use databend_common_cloud_control::pb::ScheduleOptions as CloudScheduleOptions;
+use databend_common_cloud_control::pb::WarehouseOptions;
+use databend_common_cloud_control::task_utils::Status as CloudTaskStatus;
+use databend_common_cloud_control::task_utils::Task as CloudTask;
+use databend_common_cloud_control::task_utils::format_schedule_options;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::infer_table_schema;
@@ -28,13 +31,12 @@ use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_sql::plans::task_schema;
+use databend_common_storages_system::AsyncOneBlockSystemTable;
+use databend_common_storages_system::AsyncSystemTable;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 
-use crate::meta_service_error;
-use crate::parse_tasks_to_datablock;
-use crate::table::AsyncOneBlockSystemTable;
-use crate::table::AsyncSystemTable;
+use crate::system_tables::parse_tasks_to_datablock;
 
 pub struct PrivateTasksTable {
     table_info: TableInfo,
@@ -54,13 +56,13 @@ impl AsyncSystemTable for PrivateTasksTable {
         push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
-
         let tasks = UserApiProvider::instance()
             .task_api(&tenant)
             .list_task()
             .await
-            .map_err(meta_service_error)?;
+            .map_err(|e| databend_common_exception::ErrorCode::MetaServiceError(e.to_string()))?;
         let tasks_len = tasks.len();
+
         let trans_tasks = tasks
             .into_iter()
             .take(
@@ -69,7 +71,7 @@ impl AsyncSystemTable for PrivateTasksTable {
                     .and_then(|v| v.limit)
                     .unwrap_or(tasks_len),
             )
-            .map(Self::task_trans)
+            .map(private_task_to_cloud_task)
             .try_collect()?;
 
         parse_tasks_to_datablock(trans_tasks)
@@ -87,7 +89,6 @@ impl PrivateTasksTable {
             meta: TableMeta {
                 schema,
                 engine: "SystemTasks".to_string(),
-
                 ..Default::default()
             },
             ..Default::default()
@@ -95,46 +96,45 @@ impl PrivateTasksTable {
 
         AsyncOneBlockSystemTable::create(Self { table_info })
     }
+}
 
-    pub fn task_trans(task: Task) -> Result<task_utils::Task> {
-        Ok(task_utils::Task {
-            task_id: task.task_id,
-            task_name: task.task_name,
-            query_text: task.query_text,
-            condition_text: task.when_condition.unwrap_or_default(),
-            after: task.after,
-            comment: task.comment,
-            owner: task.owner,
-            schedule_options: task
-                .schedule_options
-                .map(|schedule_options| {
-                    let options = pb::ScheduleOptions {
-                        interval: schedule_options.interval,
-                        cron: schedule_options.cron,
-                        time_zone: schedule_options.time_zone,
-                        schedule_type: schedule_options.schedule_type as i32,
-                        milliseconds_interval: schedule_options.milliseconds_interval,
-                    };
-                    task_utils::format_schedule_options(&options)
+pub fn private_task_to_cloud_task(task: Task) -> Result<CloudTask> {
+    Ok(CloudTask {
+        task_id: task.task_id,
+        task_name: task.task_name,
+        query_text: task.query_text,
+        condition_text: task.when_condition.unwrap_or_default(),
+        after: task.after,
+        comment: task.comment,
+        owner: task.owner,
+        schedule_options: task
+            .schedule_options
+            .map(|schedule_options| {
+                format_schedule_options(&CloudScheduleOptions {
+                    interval: schedule_options.interval,
+                    milliseconds_interval: schedule_options.milliseconds_interval,
+                    cron: schedule_options.cron,
+                    time_zone: schedule_options.time_zone,
+                    schedule_type: schedule_options.schedule_type as i32,
                 })
-                .transpose()?,
-            warehouse_options: task.warehouse_options.map(|warehouse_options| {
-                pb::WarehouseOptions {
-                    warehouse: warehouse_options.warehouse,
-                    using_warehouse_size: warehouse_options.using_warehouse_size,
-                }
+            })
+            .transpose()?,
+        warehouse_options: task
+            .warehouse_options
+            .map(|warehouse_options| WarehouseOptions {
+                warehouse: warehouse_options.warehouse,
+                using_warehouse_size: warehouse_options.using_warehouse_size,
             }),
-            next_scheduled_at: task.next_scheduled_at,
-            suspend_task_after_num_failures: task.suspend_task_after_num_failures.map(|i| i as i32),
-            error_integration: task.error_integration,
-            status: match task.status {
-                Status::Suspended => task_utils::Status::Suspended,
-                Status::Started => task_utils::Status::Started,
-            },
-            created_at: task.created_at,
-            updated_at: task.updated_at,
-            last_suspended_at: task.last_suspended_at,
-            session_params: task.session_params,
-        })
-    }
+        next_scheduled_at: task.next_scheduled_at,
+        suspend_task_after_num_failures: task.suspend_task_after_num_failures.map(|i| i as i32),
+        error_integration: task.error_integration,
+        status: match task.status {
+            Status::Suspended => CloudTaskStatus::Suspended,
+            Status::Started => CloudTaskStatus::Started,
+        },
+        created_at: task.created_at,
+        updated_at: task.updated_at,
+        last_suspended_at: task.last_suspended_at,
+        session_params: task.session_params,
+    })
 }

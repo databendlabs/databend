@@ -3092,9 +3092,9 @@ dependencies = [
 
 [[package]]
 name = "crs-definitions"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52a5c99491ee16d7f1549494bcab90bdfb2f283ef48a25fc6c870e7e7c9f12bb"
+checksum = "5229c5b63bdc8e24d60e5c4b6115fbb4d11a8978661b4ecc57d6068ddb073983"
 
 [[package]]
 name = "crunchy"
@@ -3709,6 +3709,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "pretty_assertions",
+ "proj4rs",
  "proptest",
  "rand 0.8.5",
  "rand_distr",
@@ -3750,7 +3751,6 @@ dependencies = [
  "lexical-core",
  "match-template",
  "micromarshal",
- "num",
  "num-traits",
  "pretty_assertions",
  "serde",
@@ -4011,6 +4011,7 @@ dependencies = [
  "databend-meta-client 260205.4.0",
  "derive_more 1.0.0",
  "display-more 0.2.5",
+ "encoding_rs",
  "enumflags2",
  "hex",
  "itertools 0.13.0",
@@ -4803,6 +4804,7 @@ dependencies = [
  "databend-common-storages-parquet",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
+ "encoding_rs",
  "enum-as-inner",
  "futures",
  "jsonb",
@@ -4823,6 +4825,7 @@ dependencies = [
  "parquet 56.2.0",
  "serde",
  "serde_json",
+ "simdutf8",
  "tokio",
  "typetag",
  "url",
@@ -5875,7 +5878,6 @@ dependencies = [
  "arrow-json 56.2.0",
  "arrow-schema 56.2.0",
  "arrow-select 56.2.0",
- "arrow-udf-runtime",
  "async-backtrace",
  "async-channel",
  "async-compat",
@@ -5937,7 +5939,6 @@ dependencies = [
  "databend-common-storages-information-schema",
  "databend-common-storages-orc",
  "databend-common-storages-parquet",
- "databend-common-storages-stage",
  "databend-common-storages-stream",
  "databend-common-storages-system",
  "databend-common-telemetry",
@@ -5956,6 +5957,9 @@ dependencies = [
  "databend-meta-client 260205.4.0",
  "databend-meta-plugin-semaphore",
  "databend-meta-runtime",
+ "databend-query-script-udf-support",
+ "databend-query-storage-stage-support",
+ "databend-query-task-support",
  "databend-storages-common-blocks",
  "databend-storages-common-cache",
  "databend-storages-common-index",
@@ -6039,6 +6043,72 @@ dependencies = [
  "walkdir",
  "wiremock",
  "zip",
+]
+
+[[package]]
+name = "databend-query-script-udf-support"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arrow-array 56.2.0",
+ "arrow-ipc 56.2.0",
+ "arrow-schema 56.2.0",
+ "arrow-select 56.2.0",
+ "arrow-udf-runtime",
+ "async-backtrace",
+ "databend-common-base",
+ "databend-common-cache",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-meta-app",
+ "databend-common-pipeline-transforms",
+ "databend-common-sql",
+ "databend-common-storage",
+ "futures",
+ "log",
+ "parking_lot 0.12.3",
+ "tokio",
+ "toml 0.8.22",
+ "uuid",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
+name = "databend-query-storage-stage-support"
+version = "0.1.0"
+dependencies = [
+ "databend-common-storages-stage",
+]
+
+[[package]]
+name = "databend-query-task-support"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "databend-common-ast",
+ "databend-common-catalog",
+ "databend-common-cloud-control",
+ "databend-common-config",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-functions",
+ "databend-common-license",
+ "databend-common-management",
+ "databend-common-meta-app",
+ "databend-common-pipeline",
+ "databend-common-settings",
+ "databend-common-sql",
+ "databend-common-storages-basic",
+ "databend-common-storages-factory",
+ "databend-common-storages-system",
+ "databend-common-users",
+ "itertools 0.13.0",
+ "jiff",
+ "serde_json",
 ]
 
 [[package]]
@@ -7854,9 +7924,9 @@ dependencies = [
 
 [[package]]
 name = "geo-index"
-version = "0.3.2"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27fb4e4ffdde62f8aa7a4165b30f6fe8e8337d35b657ebf86c98d884ee7c750"
+checksum = "f310ad245e63f6b5fcf4a7c2663139708eae1374045396eef95ea3badd242d57"
 dependencies = [
  "bytemuck",
  "float_next_after",
@@ -7894,9 +7964,9 @@ dependencies = [
 
 [[package]]
 name = "geographiclib-rs"
-version = "0.2.4"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6e5ed84f8089c70234b0a8e0aedb6dc733671612ddc0d37c6066052f9781960"
+checksum = "c5a7f08910fd98737a6eda7568e7c5e645093e073328eeef49758cfe8b0489c7"
 dependencies = [
  "libm",
 ]
@@ -13411,15 +13481,14 @@ dependencies = [
 
 [[package]]
 name = "proj4rs"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a3c4a66ce46a8b4514d0dce1e7a39b3d2b3a6125f7968093020f96a8a5ad09b"
+checksum = "8a9a8e6a70c71f11595fa32f9128ebe56f1d986ad380db858799640a1039a0e2"
 dependencies = [
  "console_log",
  "crs-definitions",
  "geo-types",
  "js-sys",
- "lazy_static",
  "thiserror 2.0.18",
  "wasm-bindgen",
  "web-sys",

@@ -1066,7 +1066,11 @@ impl Display for TableReference {
                         write!(f, " RIGHT ANY JOIN")?;
                     }
                 }
-                write!(f, " {}", join.right)?;
+                if matches!(join.right.as_ref(), TableReference::Join { .. }) {
+                    write!(f, " ({})", join.right)?;
+                } else {
+                    write!(f, " {}", join.right)?;
+                }
                 match &join.condition {
                     JoinCondition::On(expr) => {
                         write!(f, " ON {expr}")?;

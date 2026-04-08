@@ -19,7 +19,10 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use geo::BoundingRect;
 use geo::Geometry;
+use geo::LineString;
 use geo::Point;
+use geo::Polygon;
+use geo::Rect;
 use geohash::encode;
 use geozero::CoordDimensions;
 use geozero::GeomProcessor;
@@ -31,6 +34,7 @@ use geozero::ToWkt;
 use geozero::geo_types::GeoWriter;
 use geozero::geojson::GeoJson;
 use geozero::wkb::Ewkb;
+use hex::encode_upper;
 use serde::Deserialize;
 use serde::Serialize;
 use wkt::TryFromWkt;
@@ -185,47 +189,16 @@ pub(crate) fn ewkt_str_to_geo(input: &str) -> Result<(Geometry, Option<i32>)> {
     }
 }
 
-pub trait GeometryFormatOutput {
-    fn format(self, data_type: GeometryDataType) -> Result<String>;
-}
-impl<B: AsRef<[u8]>> GeometryFormatOutput for Ewkb<B> {
-    fn format(self, format_type: GeometryDataType) -> Result<String> {
-        match format_type {
-            GeometryDataType::WKB => self
-                .to_wkb(CoordDimensions::xy())
-                .map(|bytes| {
-                    bytes
-                        .iter()
-                        .map(|b| format!("{:02X}", b))
-                        .collect::<Vec<_>>()
-                        .join("")
-                })
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::EWKB => Ok(self
-                .0
-                .as_ref()
-                .iter()
-                .map(|b| format!("{:02X}", b))
-                .collect::<Vec<_>>()
-                .join("")),
-            GeometryDataType::WKT => self
-                .to_wkt()
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::EWKT => self
-                .to_ewkt(self.srid())
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-            GeometryDataType::GEOJSON => self
-                .to_json()
-                .map_err(|e| ErrorCode::GeometryError(e.to_string())),
-        }
+pub fn geometry_format(ewkb: &[u8], format_type: GeometryDataType) -> Result<String> {
+    let (geo, srid) = ewkb_to_geo(&mut Ewkb(ewkb))?;
+    let srid = srid.unwrap_or(0);
+    match format_type {
+        GeometryDataType::WKB => geo_to_wkb(geo).map(encode_upper),
+        GeometryDataType::EWKB => geo_to_ewkb(geo, Some(srid)).map(encode_upper),
+        GeometryDataType::WKT => geo_to_wkt(geo),
+        GeometryDataType::EWKT => geo_to_ewkt(geo, Some(srid)),
+        GeometryDataType::GEOJSON => geo_to_json(geo),
     }
-}
-
-pub fn geometry_format<T: GeometryFormatOutput>(
-    geometry: T,
-    format_type: GeometryDataType,
-) -> Result<String> {
-    geometry.format(format_type)
 }
 
 /// Convert Geometry object to GEOJSON format.
@@ -256,6 +229,19 @@ pub fn geo_to_wkt(geo: Geometry) -> Result<String> {
 pub fn geo_to_ewkt(geo: Geometry, srid: Option<i32>) -> Result<String> {
     geo.to_ewkt(srid)
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+pub fn rect_to_polygon(rect: Rect<f64>) -> Polygon<f64> {
+    let min = rect.min();
+    let max = rect.max();
+    let exterior = LineString::from(vec![
+        (min.x, min.y),
+        (max.x, min.y),
+        (max.x, max.y),
+        (min.x, max.y),
+        (min.x, min.y),
+    ]);
+    Polygon::new(exterior, vec![])
 }
 
 /// Process EWKB input and return SRID.

@@ -1224,23 +1224,23 @@ evaluation (internal):
 ast            : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
 raw expr       : st_transform(st_geomfromwkt('POINT(4.500212 52.161170)'), 4326, 28992)
 checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>("POINT(4.500212 52.161170)"), CAST<UInt16>(4326_u16 AS Int32), CAST<UInt16>(28992_u16 AS Int32))
-optimized expr : "SRID=28992;POINT(94308.670475 464038.168827)"
+optimized expr : "SRID=28992;POINT(94286.471882 463928.603089)"
 output type    : Geometry
 output domain  : Undefined
-output         : 'SRID=28992;POINT(94308.670475 464038.168827)'
+output         : 'SRID=28992;POINT(94286.471882 463928.603089)'
 
 
 ast            : st_transform(st_geomfromwkt(a), b, c)
 raw expr       : st_transform(st_geomfromwkt(a::String), b::Int32, c::Int32)
 checked expr   : st_transform<Geometry, Int32, Int32>(st_geometryfromwkt<String>(a), b, c)
-optimized expr : "SRID=28992;POINT(94308.670475 464038.168827)"
+optimized expr : "SRID=28992;POINT(94286.471882 463928.603089)"
 evaluation:
 +--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
 |        | a                                                           | b             | c               | Output                                         |
 +--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
 | Type   | String                                                      | Int32         | Int32           | Geometry                                       |
 | Domain | {"POINT(4.500212 52.161170)"..="POINT(4.500212 52.161170)"} | {4326..=4326} | {28992..=28992} | Undefined                                      |
-| Row 0  | 'POINT(4.500212 52.161170)'                                 | 4326          | 28992           | 'SRID=28992;POINT(94308.670475 464038.168827)' |
+| Row 0  | 'POINT(4.500212 52.161170)'                                 | 4326          | 28992           | 'SRID=28992;POINT(94286.471882 463928.603089)' |
 +--------+-------------------------------------------------------------+---------------+-----------------+------------------------------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------+
@@ -1249,7 +1249,7 @@ evaluation (internal):
 | a      | Column(StringColumn[POINT(4.500212 52.161170)])                  |
 | b      | Column(Int32([4326]))                                            |
 | c      | Column(Int32([28992]))                                           |
-| Output | Geometry([0x0101000020407100005dfe43ba4a06f7402ffce0ac98521c41]) |
+| Output | Geometry([0x010100002040710000d923d48ce704f740ae299069e2501c41]) |
 +--------+------------------------------------------------------------------+
 
 
@@ -1368,6 +1368,222 @@ optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
 output         : true
+
+
+ast            : ST_CENTROID(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))
+raw expr       : ST_CENTROID(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))
+checked expr   : st_centroid<Geometry>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry))
+optimized expr : "POINT(1 1)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : ST_CENTROID(TO_GEOMETRY('LINESTRING(0 0, 2 0, 2 2)'))
+raw expr       : ST_CENTROID(TO_GEOMETRY('LINESTRING(0 0, 2 0, 2 2)'))
+checked expr   : st_centroid<Geometry>(CAST<String>("LINESTRING(0 0, 2 0, 2 2)" AS Geometry))
+optimized expr : "POINT(1.5 0.5)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(1.5 0.5)'
+
+
+ast            : ST_CENTROID(TO_GEOMETRY('POINT(5 5)'))
+raw expr       : ST_CENTROID(TO_GEOMETRY('POINT(5 5)'))
+checked expr   : st_centroid<Geometry>(CAST<String>("POINT(5 5)" AS Geometry))
+optimized expr : "POINT(5 5)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(5 5)'
+
+
+ast            : ST_CENTROID(TO_GEOMETRY('MULTIPOINT((0 0), (2 0), (0 2), (2 2))'))
+raw expr       : ST_CENTROID(TO_GEOMETRY('MULTIPOINT((0 0), (2 0), (0 2), (2 2))'))
+checked expr   : st_centroid<Geometry>(CAST<String>("MULTIPOINT((0 0), (2 0), (0 2), (2 2))" AS Geometry))
+optimized expr : "POINT(1 1)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : ST_ENVELOPE(TO_GEOMETRY('LINESTRING(0 0, 2 1, -1 3)'))
+raw expr       : ST_ENVELOPE(TO_GEOMETRY('LINESTRING(0 0, 2 1, -1 3)'))
+checked expr   : st_envelope<Geometry>(CAST<String>("LINESTRING(0 0, 2 1, -1 3)" AS Geometry))
+optimized expr : "POLYGON((-1 0,2 0,2 3,-1 3,-1 0))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((-1 0,2 0,2 3,-1 3,-1 0))'
+
+
+ast            : ST_ENVELOPE(TO_GEOMETRY('POINT(1 2)'))
+raw expr       : ST_ENVELOPE(TO_GEOMETRY('POINT(1 2)'))
+checked expr   : st_envelope<Geometry>(CAST<String>("POINT(1 2)" AS Geometry))
+optimized expr : "POLYGON((1 2,1 2,1 2,1 2,1 2))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((1 2,1 2,1 2,1 2,1 2))'
+
+
+ast            : ST_ENVELOPE(TO_GEOMETRY('POLYGON((0 0, 3 0, 2 2, 0 3, 0 0))'))
+raw expr       : ST_ENVELOPE(TO_GEOMETRY('POLYGON((0 0, 3 0, 2 2, 0 3, 0 0))'))
+checked expr   : st_envelope<Geometry>(CAST<String>("POLYGON((0 0, 3 0, 2 2, 0 3, 0 0))" AS Geometry))
+optimized expr : "POLYGON((0 0,3 0,3 3,0 3,0 0))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((0 0,3 0,3 3,0 3,0 0))'
+
+
+ast            : ST_ENVELOPE(TO_GEOMETRY('MULTIPOINT((0 0), (2 1), (-1 3))'))
+raw expr       : ST_ENVELOPE(TO_GEOMETRY('MULTIPOINT((0 0), (2 1), (-1 3))'))
+checked expr   : st_envelope<Geometry>(CAST<String>("MULTIPOINT((0 0), (2 1), (-1 3))" AS Geometry))
+optimized expr : "POLYGON((-1 0,2 0,2 3,-1 3,-1 0))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((-1 0,2 0,2 3,-1 3,-1 0))'
+
+
+ast            : ST_UNION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_UNION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_union<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry))
+optimized expr : "MULTIPOINT(0 0,1 1)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'MULTIPOINT(0 0,1 1)'
+
+
+ast            : ST_UNION(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))
+raw expr       : ST_UNION(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))
+checked expr   : st_union<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))" AS Geometry), CAST<String>("POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))" AS Geometry))
+optimized expr : "POLYGON((0 1,0 0,1 0,1 1,0 1))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((0 1,0 0,1 0,1 1,0 1))'
+
+
+ast            : ST_UNION(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(2 2, 3 3)'))
+raw expr       : ST_UNION(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(2 2, 3 3)'))
+checked expr   : st_union<Geometry, Geometry>(CAST<String>("LINESTRING(0 0, 2 2)" AS Geometry), CAST<String>("LINESTRING(2 2, 3 3)" AS Geometry))
+optimized expr : "LINESTRING(0 0,3 3)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'LINESTRING(0 0,3 3)'
+
+
+ast            : ST_UNION(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+raw expr       : ST_UNION(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+checked expr   : st_union<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))" AS Geometry))
+optimized expr : "POLYGON((0 2,0 0,2 0,2 1,3 1,3 3,1 3,1 2,0 2))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((0 2,0 0,2 0,2 1,3 1,3 3,1 3,1 2,0 2))'
+
+
+ast            : ST_INTERSECTION(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+raw expr       : ST_INTERSECTION(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+checked expr   : st_intersection<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))" AS Geometry))
+optimized expr : "POLYGON((1 2,1 1,2 1,2 2,1 2))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((1 2,1 1,2 1,2 2,1 2))'
+
+
+ast            : ST_INTERSECTION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(0 0)'))
+raw expr       : ST_INTERSECTION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(0 0)'))
+checked expr   : st_intersection<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(0 0)" AS Geometry))
+optimized expr : "POINT(0 0)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(0 0)'
+
+
+ast            : ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(0 2, 2 0)'))
+raw expr       : ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(0 2, 2 0)'))
+checked expr   : st_intersection<Geometry, Geometry>(CAST<String>("LINESTRING(0 0, 2 2)" AS Geometry), CAST<String>("LINESTRING(0 2, 2 0)" AS Geometry))
+optimized expr : "POINT(1 1)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(1 1)'
+
+
+ast            : ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 3 3)'), TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))
+raw expr       : ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 3 3)'), TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))
+checked expr   : st_intersection<Geometry, Geometry>(CAST<String>("LINESTRING(0 0, 3 3)" AS Geometry), CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry))
+optimized expr : "LINESTRING(0 0,2 2)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'LINESTRING(0 0,2 2)'
+
+
+ast            : ST_DIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))'))
+raw expr       : ST_DIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))'))
+checked expr   : st_difference<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))" AS Geometry), CAST<String>("POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))" AS Geometry))
+optimized expr : "POLYGON((0 3,0 0,3 0,3 3,0 3),(1 1,1 2,2 2,2 1,1 1))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((0 3,0 0,3 0,3 3,0 3),(1 1,1 2,2 2,2 1,1 1))'
+
+
+ast            : ST_DIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_DIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_difference<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry))
+optimized expr : "POINT(0 0)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POINT(0 0)'
+
+
+ast            : ST_DIFFERENCE(TO_GEOMETRY('LINESTRING(0 0, 3 3)'), TO_GEOMETRY('LINESTRING(1 1, 2 2)'))
+raw expr       : ST_DIFFERENCE(TO_GEOMETRY('LINESTRING(0 0, 3 3)'), TO_GEOMETRY('LINESTRING(1 1, 2 2)'))
+checked expr   : st_difference<Geometry, Geometry>(CAST<String>("LINESTRING(0 0, 3 3)" AS Geometry), CAST<String>("LINESTRING(1 1, 2 2)" AS Geometry))
+optimized expr : "MULTILINESTRING((0 0,1 1),(2 2,3 3))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'MULTILINESTRING((0 0,1 1),(2 2,3 3))'
+
+
+ast            : ST_DIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))'))
+raw expr       : ST_DIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))'))
+checked expr   : st_difference<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))" AS Geometry))
+optimized expr : "POLYGON((0 2,0 0,2 0,2 2,0 2))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'POLYGON((0 2,0 0,2 0,2 2,0 2))'
+
+
+ast            : ST_SYMDIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+raw expr       : ST_SYMDIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))
+checked expr   : st_symdifference<Geometry, Geometry>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry))
+optimized expr : "MULTIPOINT(0 0,1 1)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'MULTIPOINT(0 0,1 1)'
+
+
+ast            : ST_SYMDIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+raw expr       : ST_SYMDIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))
+checked expr   : st_symdifference<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))" AS Geometry))
+optimized expr : "MULTIPOLYGON(((0 2,0 0,2 0,2 1,1 1,1 2,0 2)),((1 3,1 2,2 2,2 1,3 1,3 3,1 3)))"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'MULTIPOLYGON(((0 2,0 0,2 0,2 1,1 1,1 2,0 2)),((1 3,1 2,2 2,2 1,3 1,3 3,1 3)))'
+
+
+ast            : ST_SYMDIFFERENCE(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(2 2, 4 4)'))
+raw expr       : ST_SYMDIFFERENCE(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(2 2, 4 4)'))
+checked expr   : st_symdifference<Geometry, Geometry>(CAST<String>("LINESTRING(0 0, 2 2)" AS Geometry), CAST<String>("LINESTRING(2 2, 4 4)" AS Geometry))
+optimized expr : "LINESTRING(0 0,4 4)"
+output type    : Geometry NULL
+output domain  : Undefined
+output         : 'LINESTRING(0 0,4 4)'
+
+
+ast            : ST_SYMDIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))
+raw expr       : ST_SYMDIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))
+checked expr   : st_symdifference<Geometry, Geometry>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry))
+optimized expr : NULL
+output type    : Geometry NULL
+output domain  : {NULL}
+output         : NULL
 
 
 ast            : ST_AREA(TO_GEOMETRY('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'))

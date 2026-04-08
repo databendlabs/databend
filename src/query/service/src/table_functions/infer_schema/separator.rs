@@ -36,8 +36,8 @@ use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::TextFileFormatParams;
 use databend_common_pipeline_transforms::AccumulatingTransform;
-use databend_common_storages_stage::BytesBatch;
-use databend_common_storages_stage::parse_tsv_records_for_infer_schema;
+use databend_query_storage_stage_support::BytesBatch;
+use databend_query_storage_stage_support::parse_tsv_records_for_infer_schema;
 use itertools::Itertools;
 use regex::RegexSet;
 

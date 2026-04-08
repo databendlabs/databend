@@ -33,7 +33,10 @@ use itertools::Itertools;
 
 use super::ExprContext;
 use super::Finder;
+use super::GROUPING_ID_COLUMN_NAME;
+use super::is_grouping_id_item;
 use super::prune_by_children;
+use super::reject_grouping_functions;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::Symbol;
@@ -660,6 +663,18 @@ impl AggregateInfo {
     }
 
     fn replace_grouping(&self, function: &FunctionCall) -> Result<FunctionCall> {
+        // `grouping<...>(_grouping_id)` is the internal rewritten form. Alias-expanded
+        // QUALIFY expressions can bind to it directly and must not be rewritten again.
+        if !function.params.is_empty() {
+            return Ok(function.clone());
+        }
+
+        if function.arguments.is_empty() {
+            return Err(ErrorCode::BadArguments(
+                "grouping requires at least one argument",
+            ));
+        }
+
         if self.grouping_sets.is_none() {
             return Err(ErrorCode::SemanticError(
                 "grouping can only be called in GROUP BY GROUPING SETS clauses",
@@ -1020,11 +1035,13 @@ impl Binder {
             scalar_items.push(sort_desc_expr.clone());
         }
 
+        let grouping_id_index = agg_info
+            .grouping_sets
+            .as_ref()
+            .map(|g| g.grouping_id_column.index);
         for item in agg_info.group_items.iter() {
-            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
-                if col.column.column_name.eq("_grouping_id") {
-                    continue;
-                }
+            if grouping_id_index.is_some_and(|idx| is_grouping_id_item(item, idx)) {
+                continue;
             }
             scalar_items.push(item.clone());
         }
@@ -1110,7 +1127,7 @@ impl Binder {
 
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_derived_column_binding(
-            "_grouping_id".to_string(),
+            GROUPING_ID_COLUMN_NAME.to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
 
@@ -1119,16 +1136,14 @@ impl Binder {
             column: grouping_id_column.clone(),
         };
 
-        if !self.ctx.get_settings().get_grouping_sets_to_union()? {
-            agg_info.group_items_map.insert(
-                bound_grouping_id_col.clone().into(),
-                agg_info.group_items.len(),
-            );
-            agg_info.group_items.push(ScalarItem {
-                index: grouping_id_column.index,
-                scalar: bound_grouping_id_col.into(),
-            });
-        }
+        agg_info.group_items_map.insert(
+            bound_grouping_id_col.clone().into(),
+            agg_info.group_items.len(),
+        );
+        agg_info.group_items.push(ScalarItem {
+            index: grouping_id_column.index,
+            scalar: bound_grouping_id_col.into(),
+        });
 
         let grouping_sets_info = GroupingSetsInfo {
             grouping_id_column,
@@ -1262,6 +1277,15 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
         };
+
+        reject_grouping_functions(
+            bind_context
+                .aggregate_info
+                .group_items
+                .iter()
+                .map(|item| &item.scalar),
+            "GROUP BY items",
+        )?;
 
         for item in bind_context.aggregate_info.group_items.iter() {
             let mut finder = Finder::new(&f);
