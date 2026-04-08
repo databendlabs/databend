@@ -81,7 +81,7 @@ impl TableMetaFunc for ClusteringStatistics {
         let limit = limit.unwrap_or(usize::MAX);
         let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
 
-        let mut segment_name = Vec::with_capacity(len);
+        let mut segment_name = StringColumnBuilder::with_capacity(len);
         let mut block_name = StringColumnBuilder::with_capacity(len);
         let mut max = Vec::with_capacity(len);
         let mut min = Vec::with_capacity(len);
@@ -108,12 +108,11 @@ impl TableMetaFunc for ClusteringStatistics {
                 .await?;
             for (i, segment) in segments.into_iter().enumerate() {
                 let segment = segment?;
-                segment_name.extend(std::iter::repeat_n(
-                    chunk[i].0.clone(),
-                    segment.blocks.len(),
-                ));
+                let segment_loc = &chunk[i].0;
 
                 for block in segment.blocks.iter() {
+                    segment_name.put_and_commit(segment_loc);
+
                     let block = block.as_ref();
                     block_name.put_and_commit(&block.location.0);
 
@@ -147,7 +146,7 @@ impl TableMetaFunc for ClusteringStatistics {
 
         Ok(DataBlock::new(
             vec![
-                StringType::from_data(segment_name).into(),
+                Column::String(segment_name.build()).into(),
                 Column::String(block_name.build()).into(),
                 StringType::from_opt_data(min).into(),
                 StringType::from_opt_data(max).into(),
