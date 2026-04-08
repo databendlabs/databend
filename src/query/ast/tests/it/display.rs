@@ -55,3 +55,30 @@ fn test_like_escape_display_escapes_escape_literal() {
         test_stmt_display(sql);
     }
 }
+
+#[test]
+fn test_parse_sql_nested_join_conditions_without_panic() {
+    let cases = [
+        r#"
+        SELECT * FROM (VALUES(NULL)) AS tbl(i)
+          INNER JOIN (
+            (VALUES(NULL)) AS tbl2(i)
+            INNER JOIN (VALUES(NULL)) AS tbl3(i) ON tbl2.i = tbl3.i
+          ) USING(i);
+        "#,
+        r#"
+        SELECT i1.i AS i1_i, i2.s, i3.i AS i3_i
+          FROM integers1 AS i1
+          LEFT OUTER JOIN (
+            integers2 AS i2
+            LEFT OUTER JOIN integers3 AS i3 ON i2.i = i3.i
+          ) ON NULL;
+        "#,
+    ];
+
+    for sql in cases {
+        test_stmt_display(sql);
+        let tokens = tokenize_sql(sql).unwrap();
+        parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    }
+}

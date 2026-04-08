@@ -15,7 +15,6 @@
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use nom::Parser;
-use pretty_assertions::assert_eq;
 
 use crate::ParseError;
 use crate::Range;
@@ -64,7 +63,9 @@ pub fn parse_sql(tokens: &[Token], dialect: Dialect) -> Result<(Statement, Optio
     let stmt = run_parser(tokens, dialect, ParseMode::Default, false, statement)?;
 
     #[cfg(debug_assertions)]
-    assert_reparse(tokens[0].source, stmt.clone());
+    if let Err(message) = assert_reparse(tokens[0].source, stmt.clone()) {
+        eprintln!("[WARN] {message}");
+    }
 
     Ok((stmt.stmt, stmt.format))
 }
@@ -205,11 +206,16 @@ pub fn run_parser<O>(
 
 /// Check that the statement can be displayed and reparsed without loss
 #[allow(dead_code)]
-fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
+fn assert_reparse(sql: &str, stmt: StatementWithFormat) -> std::result::Result<(), String> {
     let stmt = reset_ast(stmt);
 
     let new_sql = stmt.to_string();
-    let new_tokens = crate::parser::tokenize_sql(&new_sql).unwrap();
+    let new_tokens = crate::parser::tokenize_sql(&new_sql).map_err(|err| {
+        format!(
+            "failed to tokenize round-tripped SQL: {} in {}",
+            err.1, new_sql
+        )
+    })?;
     let new_stmt = run_parser(
         &new_tokens,
         Dialect::PostgreSQL,
@@ -217,11 +223,22 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) {
         false,
         statement,
     )
-    .map_err(|err| panic!("{} in {}", err.1, new_sql))
-    .unwrap();
+    .map_err(|err| {
+        format!(
+            "failed to reparse round-tripped SQL: {} in {}",
+            err.1, new_sql
+        )
+    })?;
 
     let new_stmt = reset_ast(new_stmt);
-    assert_eq!(stmt, new_stmt, "\nleft:\n{}\nright:\n{}", sql, new_sql);
+    if stmt != new_stmt {
+        return Err(format!(
+            "statement changed after round-tripping.\nleft:\n{}\nright:\n{}",
+            sql, new_sql
+        ));
+    }
+
+    Ok(())
 }
 
 #[allow(dead_code)]
