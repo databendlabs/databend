@@ -12,26 +12,49 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Cursor;
+use std::sync::Arc;
+
+use arrow_array::RecordBatch;
+use arrow_ipc::reader::StreamReader;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchema;
 use databend_common_expression::FromData;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_GEOGRAPHY;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_GEOMETRY;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::DateType;
+use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::TimestampTzType;
 use databend_common_expression::types::array::ArrayColumn;
+use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::date_to_string;
+use databend_common_expression::types::geography::GeographyColumn;
+use databend_common_expression::types::geography::GeographyRef;
+use databend_common_expression::types::geography::GeographyType;
+use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_common_expression::types::nullable::NullableColumn;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int32Type;
 use databend_common_expression::types::timestamp::timestamp_to_string;
+use databend_common_io::GEOGRAPHY_SRID;
+use databend_common_io::GeometryDataType;
+use databend_common_io::geo_to_ewkt;
+use databend_common_io::geo_to_wkb;
+use databend_common_io::geometry::geometry_from_str;
 use databend_common_io::prelude::BinaryDisplayFormat;
 use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_io::prelude::OutputFormatSettings;
+use databend_common_io::wkb::read_wkb_header;
 use databend_query::servers::http::v1::BlocksCollector;
 use pretty_assertions::assert_eq;
 
@@ -176,5 +199,237 @@ fn test_nested_string_data_block() -> anyhow::Result<()> {
             "{\"k\\\"1\":\"v\\\"2\"}"
         ]])
     );
+    Ok(())
+}
+
+fn geography_column(values: &[Vec<u8>]) -> Column {
+    let mut builder =
+        BinaryColumnBuilder::with_capacity(values.len(), values.iter().map(|v| v.len()).sum());
+    for value in values {
+        builder.put_slice(value);
+        builder.commit_row();
+    }
+    Column::Geography(GeographyColumn(builder.build()))
+}
+
+fn geometry_to_wkb(value: &[u8]) -> Result<Vec<u8>> {
+    let (geo, _) =
+        extract_geo_and_srid(databend_common_expression::ScalarRef::Geometry(value))?.unwrap();
+    geo_to_wkb(geo)
+}
+
+fn geography_to_wkb(value: &[u8]) -> Result<Vec<u8>> {
+    let (geo, _) = extract_geo_and_srid(databend_common_expression::ScalarRef::Geography(
+        GeographyRef(value),
+    ))?
+    .unwrap();
+    geo_to_wkb(geo)
+}
+
+fn geometry_to_ewkt(value: &[u8]) -> Result<Vec<u8>> {
+    let (geo, _) =
+        extract_geo_and_srid(databend_common_expression::ScalarRef::Geometry(value))?.unwrap();
+    let srid = read_wkb_header(value).ok().and_then(|info| info.srid);
+    Ok(geo_to_ewkt(geo, srid)?.into_bytes())
+}
+
+fn geography_to_ewkt(value: &[u8]) -> Result<Vec<u8>> {
+    let (geo, _) = extract_geo_and_srid(databend_common_expression::ScalarRef::Geography(
+        GeographyRef(value),
+    ))?
+    .unwrap();
+    Ok(geo_to_ewkt(geo, Some(GEOGRAPHY_SRID))?.into_bytes())
+}
+
+fn read_first_arrow_batch(
+    buf: Vec<u8>,
+) -> anyhow::Result<(Arc<arrow_schema::Schema>, RecordBatch)> {
+    let mut reader = StreamReader::try_new(Cursor::new(buf), None)?;
+    let schema = reader.schema();
+    let batch = reader
+        .next()
+        .transpose()?
+        .expect("expected one record batch in arrow stream");
+    assert!(reader.next().transpose()?.is_none());
+    Ok((schema, batch))
+}
+
+#[test]
+fn test_arrow_ipc_geo_text_payloads() -> anyhow::Result<()> {
+    let geom = geometry_from_str("SRID=4326;POINT(1 2)", None)?;
+    let geog = GeographyType::point(3.0, 4.0).0;
+
+    let schema = DataSchema::new(vec![
+        DataField::new("geom", DataType::Geometry),
+        DataField::new("geog", DataType::Geography),
+    ]);
+    let format = OutputFormatSettings {
+        geometry_format: GeometryDataType::EWKT,
+        ..Default::default()
+    };
+
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![
+            GeometryType::from_data(vec![geom.clone()]),
+            geography_column(std::slice::from_ref(&geog)),
+        ],
+        1,
+    );
+
+    let buf = collector
+        .into_serializer(format)
+        .to_arrow_ipc(&schema, vec![])?;
+    let (arrow_schema, batch) = read_first_arrow_batch(buf)?;
+
+    assert_eq!(
+        arrow_schema
+            .field(0)
+            .metadata()
+            .get(EXTENSION_KEY)
+            .map(String::as_str),
+        Some(ARROW_EXT_TYPE_GEOMETRY)
+    );
+    assert_eq!(
+        arrow_schema
+            .field(1)
+            .metadata()
+            .get(EXTENSION_KEY)
+            .map(String::as_str),
+        Some(ARROW_EXT_TYPE_GEOGRAPHY)
+    );
+
+    match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
+        Column::Geometry(column) => {
+            assert_eq!(column.index(0).unwrap(), geometry_to_ewkt(&geom)?)
+        }
+        other => panic!("expected geometry column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(1).clone(), schema.field(1).data_type())? {
+        Column::Geography(column) => {
+            assert_eq!(column.index(0).unwrap().0, geography_to_ewkt(&geog)?)
+        }
+        other => panic!("expected geography column, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_arrow_ipc_nested_geo_binary_payloads() -> anyhow::Result<()> {
+    let geom1 = geometry_from_str("SRID=4326;POINT(1 2)", None)?;
+    let geom2 = geometry_from_str("SRID=4326;POINT(3 4)", None)?;
+    let geom3 = geometry_from_str("SRID=4326;POINT(5 6)", None)?;
+    let geom4 = geometry_from_str("SRID=4326;POINT(7 8)", None)?;
+    let geog1 = GeographyType::point(9.0, 10.0).0;
+    let geog2 = GeographyType::point(11.0, 12.0).0;
+
+    let schema = DataSchema::new(vec![
+        DataField::new("array_geom", DataType::Array(Box::new(DataType::Geometry))),
+        DataField::new(
+            "tuple_geo",
+            DataType::Tuple(vec![DataType::Geometry, DataType::Geography]),
+        ),
+        DataField::new(
+            "map_geog",
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                DataType::String,
+                DataType::Geography,
+            ]))),
+        ),
+        DataField::new(
+            "nullable_geom",
+            DataType::Nullable(Box::new(DataType::Geometry)),
+        ),
+    ]);
+    let format = OutputFormatSettings {
+        geometry_format: GeometryDataType::WKB,
+        ..Default::default()
+    };
+
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![
+            Column::Array(Box::new(ArrayColumn::new(
+                GeometryType::from_data(vec![geom1.clone(), geom2.clone()]),
+                vec![0_u64, 2].into(),
+            ))),
+            Column::Tuple(vec![
+                GeometryType::from_data(vec![geom3.clone()]),
+                geography_column(std::slice::from_ref(&geog1)),
+            ]),
+            Column::Map(Box::new(ArrayColumn::new(
+                Column::Tuple(vec![
+                    StringType::from_data(vec!["k"]),
+                    geography_column(std::slice::from_ref(&geog2)),
+                ]),
+                vec![0_u64, 1].into(),
+            ))),
+            NullableColumn::new_column(
+                GeometryType::from_data(vec![geom4.clone()]),
+                Bitmap::new_constant(true, 1),
+            ),
+        ],
+        1,
+    );
+
+    let buf = collector
+        .into_serializer(format)
+        .to_arrow_ipc(&schema, vec![])?;
+    let (_, batch) = read_first_arrow_batch(buf)?;
+
+    match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
+        Column::Array(column) => match column.values() {
+            Column::Geometry(values) => {
+                assert_eq!(values.index(0).unwrap(), geometry_to_wkb(&geom1)?);
+                assert_eq!(values.index(1).unwrap(), geometry_to_wkb(&geom2)?);
+            }
+            other => panic!("expected geometry array values, got {other:?}"),
+        },
+        other => panic!("expected array column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(1).clone(), schema.field(1).data_type())? {
+        Column::Tuple(fields) => {
+            match &fields[0] {
+                Column::Geometry(column) => {
+                    assert_eq!(column.index(0).unwrap(), geometry_to_wkb(&geom3)?)
+                }
+                other => panic!("expected tuple geometry field, got {other:?}"),
+            }
+            match &fields[1] {
+                Column::Geography(column) => {
+                    assert_eq!(column.index(0).unwrap().0, geography_to_wkb(&geog1)?)
+                }
+                other => panic!("expected tuple geography field, got {other:?}"),
+            }
+        }
+        other => panic!("expected tuple column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(2).clone(), schema.field(2).data_type())? {
+        Column::Map(column) => match column.values() {
+            Column::Tuple(fields) => match &fields[1] {
+                Column::Geography(column) => {
+                    assert_eq!(column.index(0).unwrap().0, geography_to_wkb(&geog2)?)
+                }
+                other => panic!("expected map geography value field, got {other:?}"),
+            },
+            other => panic!("expected map tuple values, got {other:?}"),
+        },
+        other => panic!("expected map column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(3).clone(), schema.field(3).data_type())? {
+        Column::Nullable(column) => match &column.column {
+            Column::Geometry(column) => {
+                assert_eq!(column.index(0).unwrap(), geometry_to_wkb(&geom4)?)
+            }
+            other => panic!("expected nullable geometry inner column, got {other:?}"),
+        },
+        other => panic!("expected nullable column, got {other:?}"),
+    }
+
     Ok(())
 }
