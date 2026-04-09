@@ -45,6 +45,7 @@ use opendal::Operator;
 
 use super::writer_processor::FragmentWriterParams;
 use super::writer_processor::SharedFragmentState;
+use super::writer_processor::lance_compatible_arrow_schema;
 use crate::append::UnloadOutput;
 use crate::append::output::DataSummary;
 
@@ -58,7 +59,7 @@ async fn commit_fragments_to_target_dataset(
         return Ok(());
     }
 
-    let arrow_schema = Schema::from(schema.as_ref());
+    let arrow_schema = lance_compatible_arrow_schema(&Schema::from(schema.as_ref()));
     let lance_schema = LanceSchema::try_from(&arrow_schema)?;
 
     info!(

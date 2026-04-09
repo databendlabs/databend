@@ -19,7 +19,19 @@ use std::num::NonZeroU64;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use arrow_array::Array;
+use arrow_array::FixedSizeListArray;
+use arrow_array::LargeListArray;
+use arrow_array::ListArray;
+use arrow_array::MapArray;
 use arrow_array::RecordBatch;
+use arrow_array::RecordBatchOptions;
+use arrow_array::StringArray;
+use arrow_array::cast::AsArray;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Field;
+use arrow_schema::FieldRef;
+use arrow_schema::Fields;
 use arrow_schema::Schema as ArrowSchema;
 use async_trait::async_trait;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -53,6 +65,145 @@ use crate::append::output::DataSummary;
 
 const STAGING_MOVE_CONCURRENCY: usize = 8;
 const STAGING_MOVE_CHUNK_SIZE: u64 = 8 * 1024 * 1024;
+
+pub(crate) fn lance_compatible_arrow_schema(schema: &ArrowSchema) -> ArrowSchema {
+    fn visit_field(field: &FieldRef) -> FieldRef {
+        Arc::new(
+            Field::new(
+                field.name(),
+                visit_type(field.data_type()),
+                field.is_nullable(),
+            )
+            .with_metadata(field.metadata().clone()),
+        )
+    }
+
+    fn visit_type(ty: &ArrowDataType) -> ArrowDataType {
+        match ty {
+            ArrowDataType::Utf8View => ArrowDataType::Utf8,
+            ArrowDataType::List(field) => ArrowDataType::List(visit_field(field)),
+            ArrowDataType::ListView(field) => ArrowDataType::ListView(visit_field(field)),
+            ArrowDataType::FixedSizeList(field, len) => {
+                ArrowDataType::FixedSizeList(visit_field(field), *len)
+            }
+            ArrowDataType::LargeList(field) => ArrowDataType::LargeList(visit_field(field)),
+            ArrowDataType::LargeListView(field) => ArrowDataType::LargeListView(visit_field(field)),
+            ArrowDataType::Struct(fields) => {
+                let visited_fields = fields.iter().map(visit_field).collect::<Vec<_>>();
+                ArrowDataType::Struct(Fields::from(visited_fields))
+            }
+            ArrowDataType::Union(fields, mode) => {
+                let (ids, fields): (Vec<_>, Vec<_>) = fields
+                    .iter()
+                    .map(|(i, field)| (i, visit_field(field)))
+                    .unzip();
+                ArrowDataType::Union(arrow_schema::UnionFields::new(ids, fields), *mode)
+            }
+            ArrowDataType::Dictionary(key, value) => {
+                ArrowDataType::Dictionary(Box::new(visit_type(key)), Box::new(visit_type(value)))
+            }
+            ArrowDataType::Map(field, ordered) => ArrowDataType::Map(visit_field(field), *ordered),
+            ty => {
+                debug_assert!(!ty.is_nested());
+                ty.clone()
+            }
+        }
+    }
+
+    let fields = schema.fields().iter().map(visit_field).collect::<Vec<_>>();
+    ArrowSchema::new(fields).with_metadata(schema.metadata().clone())
+}
+
+fn lance_compatible_array(array: Arc<dyn Array>, data_type: &ArrowDataType) -> Arc<dyn Array> {
+    match data_type {
+        ArrowDataType::Utf8 => {
+            if matches!(array.data_type(), ArrowDataType::Utf8View) {
+                Arc::new(StringArray::from_iter(array.as_string_view().iter())) as _
+            } else {
+                array
+            }
+        }
+        ArrowDataType::Struct(fields) => {
+            let array = array.as_struct();
+            let inner_arrays = array
+                .columns()
+                .iter()
+                .zip(fields.iter())
+                .map(|(column, field)| lance_compatible_array(column.clone(), field.data_type()))
+                .collect::<Vec<_>>();
+            Arc::new(arrow_array::StructArray::new(
+                fields.clone(),
+                inner_arrays,
+                array.nulls().cloned(),
+            )) as _
+        }
+        ArrowDataType::List(field) => {
+            let array = array.as_list::<i32>();
+            let values = lance_compatible_array(array.values().clone(), field.data_type());
+            Arc::new(ListArray::new(
+                field.clone(),
+                array.offsets().clone(),
+                values,
+                array.nulls().cloned(),
+            )) as _
+        }
+        ArrowDataType::LargeList(field) => {
+            let array = array.as_list::<i64>();
+            let values = lance_compatible_array(array.values().clone(), field.data_type());
+            Arc::new(LargeListArray::new(
+                field.clone(),
+                array.offsets().clone(),
+                values,
+                array.nulls().cloned(),
+            )) as _
+        }
+        ArrowDataType::FixedSizeList(field, size) => {
+            let array = array.as_fixed_size_list();
+            let values = lance_compatible_array(array.values().clone(), field.data_type());
+            Arc::new(FixedSizeListArray::new(
+                field.clone(),
+                *size,
+                values,
+                array.nulls().cloned(),
+            )) as _
+        }
+        ArrowDataType::Map(field, ordered) => {
+            let array = array.as_map();
+            let entries =
+                lance_compatible_array(Arc::new(array.entries().clone()) as _, field.data_type());
+            Arc::new(MapArray::new(
+                field.clone(),
+                array.offsets().clone(),
+                entries.as_struct().clone(),
+                array.nulls().cloned(),
+                *ordered,
+            )) as _
+        }
+        _ => array,
+    }
+}
+
+pub(crate) fn lance_compatible_record_batch(
+    batch: RecordBatch,
+    arrow_schema: Arc<ArrowSchema>,
+) -> Result<RecordBatch> {
+    if arrow_schema.fields().is_empty() {
+        return Ok(RecordBatch::try_new_with_options(
+            arrow_schema,
+            vec![],
+            &RecordBatchOptions::default().with_row_count(Some(batch.num_rows())),
+        )?);
+    }
+
+    let arrays = batch
+        .columns()
+        .iter()
+        .zip(arrow_schema.fields())
+        .map(|(array, field)| lance_compatible_array(array.clone(), field.data_type()))
+        .collect::<Vec<_>>();
+
+    Ok(RecordBatch::try_new(arrow_schema, arrays)?)
+}
 
 struct PreparedMoveTask {
     fragments: Vec<Fragment>,
@@ -110,6 +261,7 @@ pub struct LanceDatasetWriter {
 
 pub(crate) struct FragmentWriterParams {
     schema: TableSchemaRef,
+    arrow_schema: Arc<ArrowSchema>,
 
     target_accessor: Operator,
     target_dataset_path: String,
@@ -131,8 +283,10 @@ impl FragmentWriterParams {
         staging_accessor: Operator,
         staging_dataset_path: String,
     ) -> Result<Self> {
-        let arrow_schema = ArrowSchema::from(schema.as_ref());
-        let lance_schema = LanceSchema::try_from(&arrow_schema).map_err(|err| {
+        let arrow_schema = Arc::new(lance_compatible_arrow_schema(&ArrowSchema::from(
+            schema.as_ref(),
+        )));
+        let lance_schema = LanceSchema::try_from(arrow_schema.as_ref()).map_err(|err| {
             ErrorCode::StorageOther(format!("lance schema conversion failed: {err}"))
         })?;
         let staging_store_params =
@@ -153,6 +307,7 @@ impl FragmentWriterParams {
 
         Ok(Self {
             schema,
+            arrow_schema,
             target_accessor,
             target_dataset_path,
             staging_accessor,
@@ -496,6 +651,7 @@ impl Processor for LanceDatasetWriter {
             summary.row_counts += block.num_rows();
             summary.input_bytes = summary.input_bytes.saturating_add(block.memory_size());
             let batch = block.to_record_batch(self.params.schema.as_ref())?;
+            let batch = lance_compatible_record_batch(batch, self.params.arrow_schema.clone())?;
             batches.push(batch)
         }
         if summary.row_counts == 0 {
@@ -527,5 +683,66 @@ impl Processor for LanceDatasetWriter {
         Err(ErrorCode::Internal(
             "unexpected async state in LanceDatasetWriter".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use arrow_array::StringViewArray;
+    use arrow_schema::Field;
+
+    use super::*;
+
+    #[test]
+    fn test_lance_compatible_arrow_schema_converts_nested_utf8_view() {
+        let inner = Arc::new(Field::new("inner", ArrowDataType::Utf8View, true));
+        let schema = ArrowSchema::new(vec![Field::new(
+            "nested",
+            ArrowDataType::Struct(Fields::from(vec![inner])),
+            true,
+        )]);
+
+        let normalized = lance_compatible_arrow_schema(&schema);
+        let ArrowDataType::Struct(fields) = normalized.field(0).data_type() else {
+            panic!("expected struct field")
+        };
+
+        assert_eq!(fields[0].data_type(), &ArrowDataType::Utf8);
+    }
+
+    #[test]
+    fn test_lance_compatible_record_batch_converts_utf8_view_arrays() -> Result<()> {
+        let source_field = Arc::new(Field::new("inner", ArrowDataType::Utf8View, true));
+        let source_schema = Arc::new(ArrowSchema::new(vec![Field::new(
+            "nested",
+            ArrowDataType::Struct(Fields::from(vec![source_field.clone()])),
+            true,
+        )]));
+        let target_field = Arc::new(Field::new("inner", ArrowDataType::Utf8, true));
+        let target_schema = Arc::new(ArrowSchema::new(vec![Field::new(
+            "nested",
+            ArrowDataType::Struct(Fields::from(vec![target_field.clone()])),
+            true,
+        )]));
+
+        let batch = RecordBatch::try_new(source_schema, vec![Arc::new(
+            arrow_array::StructArray::new(
+                Fields::from(vec![source_field]),
+                vec![Arc::new(StringViewArray::from(vec![Some("abc"), None]))],
+                None,
+            ),
+        )])?;
+
+        let normalized = lance_compatible_record_batch(batch, target_schema)?;
+        let nested = normalized.column(0).as_struct();
+
+        assert_eq!(nested.column(0).data_type(), &ArrowDataType::Utf8);
+        let strings = nested.column(0).as_string::<i32>();
+        assert_eq!(strings.value(0), "abc");
+        assert!(strings.is_null(1));
+
+        Ok(())
     }
 }
