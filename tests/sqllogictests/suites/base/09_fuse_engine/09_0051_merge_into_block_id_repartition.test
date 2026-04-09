@@ -1,0 +1,207 @@
+statement ok
+DROP TABLE IF EXISTS t_repartition_target;
+
+statement ok
+DROP TABLE IF EXISTS t_repartition_source;
+
+statement ok
+CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00');
+
+statement ok
+CREATE TABLE t_repartition_source (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_repartition_source VALUES (1, 'a_new', 'y1', '2024-01-02 00:00:00'), (2, 'b_new', 'y2', '2024-01-02 00:00:00'), (3, 'c_old', 'y3', '2023-12-01 00:00:00'), (6, 'f_new', 'y6', '2024-01-02 00:00:00'), (7, 'g_new', 'y7', '2024-01-02 00:00:00');
+
+statement ok
+SET enable_merge_into_row_fetch = 1;
+
+statement ok
+SET enable_merge_into_block_id_repartition = 1;
+
+query II
+MERGE INTO t_repartition_target AS tar
+USING t_repartition_source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *
+WHEN NOT MATCHED THEN INSERT *;
+----
+2 2
+
+query ITTT
+SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+----
+1 a_new y1 2024-01-02 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c x3 2024-01-01 00:00:00.000000
+4 d x4 2024-01-01 00:00:00.000000
+5 e x5 2024-01-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+statement ok
+DROP TABLE t_repartition_target;
+
+statement ok
+CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00');
+
+statement ok
+SET enable_merge_into_block_id_repartition = 0;
+
+query II
+MERGE INTO t_repartition_target AS tar
+USING t_repartition_source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *
+WHEN NOT MATCHED THEN INSERT *;
+----
+2 2
+
+query ITTT
+SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+----
+1 a_new y1 2024-01-02 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c x3 2024-01-01 00:00:00.000000
+4 d x4 2024-01-01 00:00:00.000000
+5 e x5 2024-01-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+statement ok
+DROP TABLE t_repartition_target;
+
+statement ok
+CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+
+statement ok
+SET enable_merge_into_block_id_repartition = 1;
+
+query I
+MERGE INTO t_repartition_target AS tar
+USING t_repartition_source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *;
+----
+2
+
+query ITTT
+SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+----
+1 a_new y1 2024-01-02 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c x3 2024-01-01 00:00:00.000000
+
+statement ok
+DROP TABLE t_repartition_target;
+
+statement ok
+CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+
+statement ok
+SET enable_merge_into_block_id_repartition = 1;
+
+query I
+MERGE INTO t_repartition_target AS tar
+USING t_repartition_source AS sou
+ON tar.id = sou.id
+WHEN NOT MATCHED THEN INSERT *;
+----
+4
+
+query ITTT
+SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+----
+1 a x1 2024-01-01 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c_old y3 2023-12-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+statement ok
+DROP TABLE t_repartition_target;
+
+statement ok
+CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+
+statement ok
+INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+
+statement ok
+SET enable_merge_into_block_id_repartition = 1;
+
+query II
+MERGE INTO t_repartition_target AS tar
+USING t_repartition_source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN DELETE
+WHEN NOT MATCHED THEN INSERT *;
+----
+2 2
+
+query ITTT
+SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+----
+3 c x3 2024-01-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+statement ok
+DROP TABLE IF EXISTS t_repartition_target;
+
+statement ok
+DROP TABLE IF EXISTS t_repartition_source;
+
+statement ok
+SET enable_merge_into_block_id_repartition = 1;
+
+statement ok
+SET enable_merge_into_row_fetch = 1;

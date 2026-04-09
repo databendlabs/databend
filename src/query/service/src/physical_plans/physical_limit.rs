@@ -296,6 +296,7 @@ impl PhysicalPlanBuilder {
                 cols_to_fetch,
                 fetched_fields,
                 need_wrap_nullable: false,
+                is_mutation: false,
                 stat_info: Some(stat_info.clone()),
             });
         }

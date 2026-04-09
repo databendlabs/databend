@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipe;
 use databend_common_sql::IndexType;
+use databend_common_storages_fuse::operations::BlockIdPartitionExchange;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 
 use crate::physical_plans::format::MutationSplitFormatter;
@@ -71,9 +73,21 @@ impl IPhysicalPlan for MutationSplit {
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        builder
-            .main_pipeline
-            .try_resize(builder.settings.get_max_threads()? as usize)?;
+        let max_threads = builder.settings.get_max_threads()? as usize;
+
+        // Add block_id repartition before split so each downstream RowFetch
+        // processor sees rows from a disjoint set of blocks, eliminating
+        // duplicate block reads.
+        if max_threads > 1
+            && builder
+                .settings
+                .get_enable_merge_into_block_id_repartition()?
+        {
+            let exchange = Arc::new(BlockIdPartitionExchange::create(self.split_index));
+            builder.main_pipeline.exchange(max_threads, exchange)?;
+        } else {
+            builder.main_pipeline.try_resize(max_threads)?;
+        }
 
         // The MutationStrategy is FullOperation, use row_id_idx to split
         let mut items = Vec::with_capacity(builder.main_pipeline.output_len());

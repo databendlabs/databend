@@ -809,6 +809,7 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
+        is_mutation: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),
     })

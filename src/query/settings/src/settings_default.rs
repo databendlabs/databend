@@ -525,6 +525,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_merge_into_block_id_repartition", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable local block_id repartition before row fetch in merge into to reduce duplicate block reads.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_cte_recursive_depth", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
                     desc: "Max recursive depth for recursive cte",
