@@ -214,6 +214,7 @@ impl SpawnApi for DatabendRuntime {
 
             if let Some(timeout) = timeout {
                 endpoint = endpoint.timeout(timeout);
+                endpoint = endpoint.connect_timeout(timeout);
             }
 
             endpoint

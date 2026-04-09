@@ -110,6 +110,7 @@ mod tests {
     use parquet::basic::Repetition;
     use parquet::basic::Type as PhysicalType;
     use parquet::errors::ParquetError;
+    use parquet::schema::printer::print_schema;
     use parquet::schema::types::SchemaDescPtr;
     use parquet::schema::types::SchemaDescriptor;
     use parquet::schema::types::Type;
@@ -188,6 +189,12 @@ mod tests {
         };
         let s = serde_json::to_string(&info).unwrap();
         let info = serde_json::from_str::<ParquetTableInfo>(&s).unwrap();
-        assert_eq!(info.schema_descr, schema_descr)
+
+        let mut original = Vec::new();
+        print_schema(&mut original, schema_descr.root_schema());
+        let mut roundtrip = Vec::new();
+        print_schema(&mut roundtrip, info.schema_descr.root_schema());
+
+        assert_eq!(original, roundtrip)
     }
 }

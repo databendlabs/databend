@@ -69,9 +69,24 @@ impl<'a> RowGroupImplBuilder<'a> {
 
     pub fn build(self) -> RowGroupImpl {
         let schema_descriptor = Arc::new(self.schema_descriptor.clone());
+        let column_metadata = (0..schema_descriptor.num_columns())
+            .map(|dfs_id| {
+                self.column_chunk_metadatas
+                    .get(&dfs_id)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        ColumnChunkMetaData::builder(self.schema_descriptor.column(dfs_id))
+                            .set_compression(self.compression)
+                            .set_data_page_offset(0)
+                            .set_total_compressed_size(0)
+                            .build()
+                            .unwrap()
+                    })
+            })
+            .collect();
         let row_group = RowGroupMetaData::builder(schema_descriptor.clone())
             .set_num_rows(self.num_rows as i64)
-            .set_column_metadata(self.column_chunk_metadatas.values().cloned().collect())
+            .set_column_metadata(column_metadata)
             .build()
             .unwrap();
         RowGroupImpl {
@@ -138,3 +153,60 @@ impl Iterator for PageIteratorImpl {
 }
 
 impl PageIterator for PageIteratorImpl {}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use opendal::Buffer;
+    use parquet::basic::Compression;
+    use parquet::basic::Repetition;
+    use parquet::basic::Type as PhysicalType;
+    use parquet::schema::types::SchemaDescriptor;
+    use parquet::schema::types::Type;
+
+    use super::RowGroupImplBuilder;
+
+    fn test_schema() -> SchemaDescriptor {
+        let fields = vec![
+            Arc::new(
+                Type::primitive_type_builder("c0", PhysicalType::INT32)
+                    .with_repetition(Repetition::OPTIONAL)
+                    .build()
+                    .unwrap(),
+            ),
+            Arc::new(
+                Type::primitive_type_builder("c1", PhysicalType::INT32)
+                    .with_repetition(Repetition::OPTIONAL)
+                    .build()
+                    .unwrap(),
+            ),
+            Arc::new(
+                Type::primitive_type_builder("c2", PhysicalType::INT32)
+                    .with_repetition(Repetition::OPTIONAL)
+                    .build()
+                    .unwrap(),
+            ),
+        ];
+        let schema = Type::group_type_builder("schema")
+            .with_fields(fields)
+            .build()
+            .unwrap();
+        SchemaDescriptor::new(Arc::new(schema))
+    }
+
+    #[test]
+    fn test_build_sparse_projection_row_group_metadata() {
+        let schema = test_schema();
+        let mut builder = RowGroupImplBuilder::new(1, &schema, Compression::UNCOMPRESSED);
+        builder.add_column_chunk(2, Buffer::from(vec![1_u8, 2, 3, 4]));
+
+        let row_group = builder.build();
+        let metadata = row_group.row_groups().next().unwrap();
+
+        assert_eq!(metadata.columns().len(), schema.num_columns());
+        assert_eq!(metadata.column(2).compressed_size(), 4);
+        assert_eq!(metadata.column(0).compressed_size(), 0);
+        assert_eq!(metadata.column(1).compressed_size(), 0);
+    }
+}
