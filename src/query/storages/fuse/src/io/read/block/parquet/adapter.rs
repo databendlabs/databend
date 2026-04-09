@@ -159,6 +159,7 @@ mod tests {
     use std::sync::Arc;
 
     use opendal::Buffer;
+    use parquet::arrow::arrow_reader::RowGroups;
     use parquet::basic::Compression;
     use parquet::basic::Repetition;
     use parquet::basic::Type as PhysicalType;
