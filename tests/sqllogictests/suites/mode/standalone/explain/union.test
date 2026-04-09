@@ -65,7 +65,7 @@ UnionAll
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
 │   ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan
@@ -76,7 +76,7 @@ UnionAll
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
     ├── push downs: [filters: [is_true(t2.a (#2) > 1)], limit: NONE]
     └── estimated rows: 1.00
 
@@ -104,7 +104,7 @@ Limit
     │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
     │       ├── push downs: [filters: [], limit: 3]
     │       └── estimated rows: 2.00
     └── Limit
@@ -120,7 +120,7 @@ Limit
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
             ├── push downs: [filters: [], limit: 3]
             └── estimated rows: 2.00
 
@@ -148,7 +148,7 @@ Limit
     │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
     │       ├── push downs: [filters: [], limit: 4]
     │       └── estimated rows: 2.00
     └── Limit
@@ -164,7 +164,7 @@ Limit
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
             ├── push downs: [filters: [], limit: 4]
             └── estimated rows: 2.00
 
@@ -192,7 +192,7 @@ Limit
     │       ├── read size: < 1 KiB
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
     │       ├── push downs: [filters: [], limit: 1]
     │       └── estimated rows: 2.00
     └── Limit
@@ -208,7 +208,7 @@ Limit
             ├── read size: < 1 KiB
             ├── partitions total: 1
             ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
             ├── push downs: [filters: [], limit: 1]
             └── estimated rows: 2.00
 
@@ -227,7 +227,7 @@ UnionAll
 │   ├── read size: < 1 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
 │   ├── push downs: [filters: [is_true(t1.a (#0) > 1)], limit: NONE]
 │   └── estimated rows: 1.00
 └── TableScan
@@ -238,7 +238,7 @@ UnionAll
     ├── read size: < 1 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
     ├── push downs: [filters: [is_true(t2.b (#3) > 2)], limit: NONE]
     └── estimated rows: 1.00
 
@@ -277,10 +277,10 @@ UnionAll
     ├── scan id: 1
     ├── output columns: [b (#1)]
     ├── read rows: 10000
-    ├── read size: 10.59 KiB
+    ├── read size: 10.60 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
     ├── push downs: [filters: [], limit: NONE]
     └── estimated rows: 10000.00
 
@@ -296,10 +296,10 @@ UnionAll
 │   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 10000
-│   ├── read size: 10.59 KiB
+│   ├── read size: 10.60 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
-│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
 │   ├── push downs: [filters: [], limit: NONE]
 │   └── estimated rows: 10000.00
 └── EmptyResultScan
