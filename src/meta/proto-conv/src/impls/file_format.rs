@@ -560,6 +560,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             encoding_error_mode: p
                 .encoding_error_mode
                 .unwrap_or_else(|| "strict".to_string()),
+            trim_space: p.trim_space,
         })
     }
 
@@ -586,6 +587,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             geometry_format: Some(self.geometry_format.to_string()),
             encoding: Some(self.encoding.clone()),
             encoding_error_mode: Some(self.encoding_error_mode.clone()),
+            trim_space: self.trim_space,
         })
     }
 }
@@ -626,6 +628,7 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             encoding_error_mode: p
                 .encoding_error_mode
                 .unwrap_or_else(|| "strict".to_string()),
+            trim_space: p.trim_space,
         })
     }
 
@@ -648,6 +651,7 @@ impl FromToProto for mt::principal::TextFileFormatParams {
             output_header: self.output_header,
             encoding: Some(self.encoding.clone()),
             encoding_error_mode: Some(self.encoding_error_mode.clone()),
+            trim_space: self.trim_space,
         })
     }
 }

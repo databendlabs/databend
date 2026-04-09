@@ -30,6 +30,7 @@ use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::text::format::TextInputFormat;
 use crate::read::row_based::utils::get_decode_error_by_pos;
+use crate::read::row_based::utils::trim_ascii_space;
 
 pub struct TextDecoder {
     pub load_context: Arc<LoadContext>,
@@ -38,6 +39,7 @@ pub struct TextDecoder {
     pub field_delimiter: Option<u8>,
     pub error_on_column_count_mismatch: bool,
     pub empty_field_as: EmptyFieldAs,
+    pub trim_space: bool,
 
     pub record_delimiter: u8,
     pub trim_cr: bool,
@@ -59,6 +61,7 @@ impl TextDecoder {
             field_delimiter,
             error_on_column_count_mismatch: fmt.params.error_on_column_count_mismatch,
             empty_field_as: fmt.params.empty_field_as,
+            trim_space: fmt.params.trim_space,
             record_delimiter,
             trim_cr,
         }
@@ -77,9 +80,13 @@ impl TextDecoder {
     fn read_column(
         &self,
         builder: &mut ColumnBuilder,
-        col_data: &[u8],
+        mut col_data: &[u8],
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
+        if self.trim_space {
+            col_data = trim_ascii_space(col_data);
+        }
+
         if col_data.is_empty() {
             let field = &self.load_context.schema.fields()[column_index];
             match &self.empty_field_as {
