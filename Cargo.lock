@@ -1053,7 +1053,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=a0a2bb369cdd96dea3da3d61e190db4c79119da4#a0a2bb369cdd96dea3da3d61e190db4c79119da4"
+source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=955f84470ff596640364fe6561d183979a4ab11f#955f84470ff596640364fe6561d183979a4ab11f"
 dependencies = [
  "anyhow",
  "arrow-array 58.1.0",
@@ -6140,8 +6140,6 @@ dependencies = [
  "arrow-ipc 58.1.0",
  "arrow-json 58.1.0",
  "arrow-schema 58.1.0",
- "arrow-select 58.1.0",
- "arrow-udf-runtime",
  "async-backtrace",
  "async-channel",
  "async-compat",
@@ -6294,7 +6292,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-util",
- "toml 0.8.22",
  "tonic 0.14.5",
  "tower 0.5.2",
  "typetag",
@@ -6310,10 +6307,10 @@ name = "databend-query-script-udf-support"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "arrow-array 56.2.0",
- "arrow-ipc 56.2.0",
- "arrow-schema 56.2.0",
- "arrow-select 56.2.0",
+ "arrow-array 58.1.0",
+ "arrow-ipc 58.1.0",
+ "arrow-schema 58.1.0",
+ "arrow-select 58.1.0",
  "arrow-udf-runtime",
  "databend-common-base",
  "databend-common-cache",
