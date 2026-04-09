@@ -181,9 +181,7 @@ async fn vacuum_by_duration(
                     } else {
                         let removed = vacuum_dir_with_probe(
                             &operator,
-                            &temporary_dir,
                             de.path(),
-                            &meta_path,
                             timestamp,
                             expire_time,
                             limit,
@@ -268,9 +266,7 @@ async fn resolve_dir_last_modified(
 /// If it is expired, reuse the same lister to finish deletion and avoid an extra probe list.
 async fn vacuum_dir_with_probe(
     operator: &Operator,
-    temporary_dir: &str,
     dir_path: &str,
-    meta_path: &str,
     timestamp: i64,
     expire_time: i64,
     limit: usize,
@@ -283,8 +279,9 @@ async fn vacuum_dir_with_probe(
         Err(e) => return Err(e.into()),
     };
     let mut paths = Vec::new();
-    let mut first_file_last_modified = None;
 
+    // Probe a file to check last_modified
+    let mut first_entry_last_modified = None;
     loop {
         let entry = match lister.try_next().await {
             Ok(Some(entry)) => entry,
@@ -298,11 +295,7 @@ async fn vacuum_dir_with_probe(
         }
 
         paths.push(entry.path().to_string());
-        if !entry.metadata().is_file() {
-            continue;
-        }
-
-        first_file_last_modified = if let Some(last_modified) = entry.metadata().last_modified() {
+        first_entry_last_modified = if let Some(last_modified) = entry.metadata().last_modified() {
             Some(last_modified.timestamp_millis())
         } else {
             stat_last_modified(operator, entry.path()).await
@@ -310,21 +303,15 @@ async fn vacuum_dir_with_probe(
         break;
     }
 
-    let Some(first_file_last_modified) = first_file_last_modified else {
+    let Some(first_entry_last_modified) = first_entry_last_modified else {
         return Ok(0);
     };
 
-    if timestamp - first_file_last_modified < expire_time {
+    if timestamp - first_entry_last_modified < expire_time {
         return Ok(0);
     }
 
-    let removed =
-        vacuum_by_meta_with_operator(operator, temporary_dir, meta_path, limit, removed_total)
-            .await?;
-    if removed > 0 {
-        return Ok(removed);
-    }
-
+    // delete by lister
     loop {
         let entry = match lister.try_next().await {
             Ok(Some(entry)) => entry,

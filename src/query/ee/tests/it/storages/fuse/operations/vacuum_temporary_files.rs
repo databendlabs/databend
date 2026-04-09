@@ -240,9 +240,7 @@ mod unit {
 
         vacuum_dir_with_probe(
             operator,
-            temporary_dir,
             dir_path,
-            &meta_path,
             timestamp,
             expire_time,
             limit,
@@ -387,9 +385,7 @@ mod unit {
 
         let removed = vacuum_dir_with_probe(
             &operator,
-            "spill/",
             "spill/dir/",
-            "spill/dir.list",
             now,
             Duration::from_secs(60).as_millis() as i64,
             100,
@@ -421,9 +417,7 @@ mod unit {
 
         let removed = vacuum_dir_with_probe(
             &operator,
-            "spill/",
             "spill/dir/",
-            "spill/dir.list",
             Utc::now().timestamp_millis(),
             Duration::from_secs(60).as_millis() as i64,
             100,
@@ -439,7 +433,7 @@ mod unit {
             "spill/dir/".to_string(),
         ]);
         assert_eq!(accessor.list_call_count(), 1);
-        assert_eq!(accessor.read_call_count(), 1);
+        assert_eq!(accessor.read_call_count(), 0);
         Ok(())
     }
 }
