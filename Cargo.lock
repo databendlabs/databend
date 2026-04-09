@@ -1053,7 +1053,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=ddde517521a6bc27a7db1e3a59c69f7279b2289f#ddde517521a6bc27a7db1e3a59c69f7279b2289f"
+source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=4865bcc06b0da73391c279b3a5a962ef92a3162e#4865bcc06b0da73391c279b3a5a962ef92a3162e"
 dependencies = [
  "anyhow",
  "arrow-array 58.1.0",
