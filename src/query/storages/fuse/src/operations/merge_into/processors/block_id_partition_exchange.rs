@@ -42,9 +42,9 @@ impl BlockIdPartitionExchange {
     }
 
     #[inline(always)]
-    fn partition_index(row_id: u64, n: usize) -> u8 {
+    fn partition_index(row_id: u64, n: usize) -> u16 {
         let (prefix, _) = split_row_id(row_id);
-        (prefix % n as u64) as u8
+        (prefix % n as u64) as u16
     }
 }
 
@@ -55,7 +55,7 @@ impl Exchange for BlockIdPartitionExchange {
     fn partition(&self, data_block: DataBlock, n: usize) -> Result<Vec<DataBlock>> {
         let num_rows = data_block.num_rows();
         let entry = &data_block.columns()[self.row_id_col_offset];
-        let mut indices = Vec::with_capacity(num_rows);
+        let mut indices: Vec<u16> = Vec::with_capacity(num_rows);
 
         match entry.data_type() {
             DataType::Number(NumberDataType::UInt64) => {
@@ -85,7 +85,7 @@ impl Exchange for BlockIdPartitionExchange {
                         indices.push(Self::partition_index(*row_id, n));
                     } else {
                         let counter = self.null_counter.fetch_add(1, Ordering::Relaxed);
-                        indices.push((counter % n as u64) as u8);
+                        indices.push((counter % n as u64) as u16);
                     }
                 }
             }
