@@ -453,21 +453,28 @@ impl PhysicalPlanBuilder {
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
+        let has_lazy_columns = self
+            .metadata
+            .read()
+            .get_table_lazy_columns(target_table_index)
+            .is_some_and(|cols| !cols.is_empty());
+
         if matches!(strategy, MutationStrategy::MixedMatched) {
             plan = PhysicalPlan::new(MutationSplit {
                 input: plan,
                 split_index: row_id_offset,
+                has_row_fetch: has_lazy_columns,
                 meta: PhysicalPlanMeta::new("MutationSplit"),
             });
         }
 
         // Construct row fetch plan for lazy columns.
-        if let Some(lazy_columns) = self
-            .metadata
-            .read()
-            .get_table_lazy_columns(target_table_index)
-            && !lazy_columns.is_empty()
-        {
+        if has_lazy_columns {
+            let lazy_columns = self
+                .metadata
+                .read()
+                .get_table_lazy_columns(target_table_index)
+                .unwrap();
             plan = build_mutation_row_fetch(
                 plan,
                 metadata.clone(),

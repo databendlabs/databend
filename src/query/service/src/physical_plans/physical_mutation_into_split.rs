@@ -33,6 +33,9 @@ pub struct MutationSplit {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub split_index: IndexType,
+    /// Whether RowFetch follows this MutationSplit (lazy columns exist).
+    /// Block_id repartition is only beneficial when RowFetch is present.
+    pub has_row_fetch: bool,
 }
 
 #[typetag::serde]
@@ -67,6 +70,7 @@ impl IPhysicalPlan for MutationSplit {
             meta: self.meta.clone(),
             input,
             split_index: self.split_index,
+            has_row_fetch: self.has_row_fetch,
         })
     }
 
@@ -77,8 +81,9 @@ impl IPhysicalPlan for MutationSplit {
 
         // Add block_id repartition before split so each downstream RowFetch
         // processor sees rows from a disjoint set of blocks, eliminating
-        // duplicate block reads.
-        if max_threads > 1
+        // duplicate block reads. Only useful when RowFetch follows.
+        if self.has_row_fetch
+            && max_threads > 1
             && builder
                 .settings
                 .get_enable_merge_into_block_id_repartition()?
