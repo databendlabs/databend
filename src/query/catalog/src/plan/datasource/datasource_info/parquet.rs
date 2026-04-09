@@ -26,18 +26,11 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use parquet::file::metadata::ParquetMetaData;
-use parquet::format::SchemaElement;
-use parquet::schema::types;
+use parquet::schema::parser::parse_message_type;
+use parquet::schema::printer::print_schema;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
-use parquet::thrift::TSerializable;
 use serde::Deserialize;
-use thrift::protocol::TCompactInputProtocol;
-use thrift::protocol::TCompactOutputProtocol;
-use thrift::protocol::TInputProtocol;
-use thrift::protocol::TListIdentifier;
-use thrift::protocol::TOutputProtocol;
-use thrift::protocol::TType;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
 
@@ -93,37 +86,18 @@ impl ParquetTableInfo {
 fn deser_schema_desc<'de, D>(deserializer: D) -> Result<SchemaDescPtr, D::Error>
 where D: serde::Deserializer<'de> {
     let bytes: Vec<u8> = Deserialize::deserialize(deserializer)?;
-    let cursor = Cursor::new(bytes);
-    let mut i_prot = TCompactInputProtocol::new(cursor);
-    let list_ident = i_prot.read_list_begin().unwrap();
-    let mut schema_elements: Vec<SchemaElement> = Vec::with_capacity(list_ident.size as usize);
-    for _ in 0..list_ident.size {
-        let list_elem = SchemaElement::read_from_in_protocol(&mut i_prot).unwrap();
-        schema_elements.push(list_elem);
-    }
-    i_prot.read_list_end().unwrap();
-    let schema = types::from_thrift(&schema_elements).unwrap();
-    Ok(Arc::new(SchemaDescriptor::new(schema)))
+    let schema_string =
+        String::from_utf8(bytes).map_err(|e| serde::de::Error::custom(e.to_string()))?;
+    let schema =
+        parse_message_type(&schema_string).map_err(|e| serde::de::Error::custom(e.to_string()))?;
+    Ok(Arc::new(SchemaDescriptor::new(Arc::new(schema))))
 }
 
 fn ser_schema_desc<S>(schema: &SchemaDescPtr, serializer: S) -> Result<S::Ok, S::Error>
 where S: serde::Serializer {
-    let mut transport = Vec::<u8>::new();
-    let mut o_prot = TCompactOutputProtocol::new(&mut transport);
-    let schema_elements = types::to_thrift(schema.root_schema()).map_err(|e| {
-        serde::ser::Error::custom(format!("Failed to convert schema to thrift: {:?}", e))
-    })?;
-    o_prot
-        .write_list_begin(&TListIdentifier::new(
-            TType::Struct,
-            schema_elements.len() as i32,
-        ))
-        .unwrap();
-    for e in schema_elements {
-        e.write_to_out_protocol(&mut o_prot).unwrap();
-    }
-    o_prot.write_list_end().unwrap();
-    serializer.serialize_bytes(&transport)
+    let mut out = Cursor::new(Vec::<u8>::new());
+    print_schema(&mut out, schema.root_schema());
+    serializer.serialize_bytes(out.get_ref())
 }
 
 #[cfg(test)]

@@ -591,7 +591,8 @@ impl IcebergTable {
                         .map(|(i, field)| (i, visit_field(field)))
                         .unzip();
                     arrow_schema::DataType::Union(
-                        arrow_schema::UnionFields::new(ids, fields),
+                        arrow_schema::UnionFields::try_new(ids, fields)
+                            .expect("existing union fields should remain valid"),
                         *mode,
                     )
                 }

@@ -15,7 +15,7 @@
 use databend_common_expression::Scalar;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::file::metadata::RowGroupMetaData;
-use parquet::format::PageLocation;
+use parquet::file::page_index::offset_index::PageLocation;
 
 use crate::row_group_serde::deserialize_row_group_meta;
 use crate::row_group_serde::serialize_row_group_meta;

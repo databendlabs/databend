@@ -55,7 +55,7 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::table::TableCompression;
 use parquet::arrow::ArrowWriter;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 
 use crate::FuseStorageFormat;
 use crate::FuseTable;
@@ -126,7 +126,7 @@ impl ArrowParquetWriter {
         Ok(())
     }
 
-    fn finish(&mut self) -> Result<FileMetaData> {
+    fn finish(&mut self) -> Result<ParquetMetaData> {
         let Initialized(writer) = self else {
             unreachable!("ArrowParquetWriter::finish called before initialization");
         };

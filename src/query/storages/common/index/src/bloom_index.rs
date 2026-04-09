@@ -76,11 +76,12 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::Versioned;
 use jsonb::RawJsonb;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::eliminate_cast::is_injective_cast;
+use super::index_common::index_columns_from_parquet_meta;
 use crate::Index;
 use crate::eliminate_cast::cast_const;
 use crate::filters::BinaryFuse32Builder;
@@ -158,44 +159,13 @@ impl TryFrom<Bytes> for BloomIndexMeta {
     }
 }
 
-impl TryFrom<FileMetaData> for BloomIndexMeta {
+impl TryFrom<ParquetMetaData> for BloomIndexMeta {
     type Error = ErrorCode;
 
-    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
-        let rg = meta.row_groups.remove(0);
-        let mut col_metas = Vec::with_capacity(rg.columns.len());
-        for x in &rg.columns {
-            match &x.meta_data {
-                Some(chunk_meta) => {
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
-                    let res = SingleColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                    };
-                    let column_name = chunk_meta.path_in_schema[0].to_owned();
-                    col_metas.push((column_name, res));
-                }
-                None => {
-                    panic!(
-                        "expecting chunk meta data while converting ThriftFileMetaData to BloomIndexMeta"
-                    )
-                }
-            }
-        }
-        col_metas.shrink_to_fit();
-        Ok(Self { columns: col_metas })
+    fn try_from(meta: ParquetMetaData) -> std::result::Result<Self, Self::Error> {
+        Ok(Self {
+            columns: index_columns_from_parquet_meta(&meta),
+        })
     }
 }
 
