@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -58,13 +59,11 @@ use crate::planner::binder::ExprContext;
 use crate::planner::binder::aggregate_prepass::AggregatePrepassAliasCatalog;
 use crate::planner::binder::aggregate_prepass::AggregatePrepassExprInfo;
 use crate::planner::binder::aggregate_prepass::AggregatePrepassFacts;
-use crate::planner::binder::aggregate_prepass::AggregatePrepassFunctionCatalog;
 use crate::planner::binder::sort::OrderByRewriteFlags;
 use crate::plans::ScalarExpr;
 
 #[derive(Clone)]
 struct SelectClauseFact {
-    expr_context: ExprContext,
     ast: Expr,
     contains_aggregate: bool,
     contains_window: bool,
@@ -78,6 +77,7 @@ struct SelectClauseFacts {
     having: Option<SelectClauseFact>,
     qualify: Option<SelectClauseFact>,
     order_by: Vec<SelectClauseFact>,
+    aggregate_prepass_inputs: Vec<(Expr, ExprContext)>,
 }
 
 struct SelectGlobalView {
@@ -90,53 +90,79 @@ struct SelectGlobalView {
 impl Binder {
     fn build_select_clause_facts(
         &self,
-        functions: &AggregatePrepassFunctionCatalog,
+        udaf_names: &HashSet<String>,
         aliases: &AggregatePrepassAliasCatalog,
         having: Option<&Expr>,
         qualify: Option<&Expr>,
         order_by: &[OrderByExpr],
     ) -> SelectClauseFacts {
-        let build_fact = |expr_context, expr: &Expr| {
-            let alias_names = aliases.alias_names();
-            let analysis = AggregatePrepassExprInfo::analyze(
-                &self.name_resolution_ctx,
-                functions,
-                &alias_names,
-                expr,
-            );
+        let alias_names = aliases.alias_names();
+        std::iter::chain(
+            having
+                .into_iter()
+                .map(|expr| (expr, ExprContext::HavingClause)),
+            qualify
+                .into_iter()
+                .map(|expr| (expr, ExprContext::QualifyClause)),
+        )
+        .chain(
+            order_by
+                .iter()
+                .map(|order| (&order.expr, ExprContext::OrderByClause)),
+        )
+        .fold(
+            SelectClauseFacts::default(),
+            |mut facts, (expr, expr_context)| {
+                let AggregatePrepassExprInfo {
+                    ast,
+                    contains_aggregate,
+                    contains_window,
+                    referenced_aliases,
+                    ..
+                } = AggregatePrepassExprInfo::analyze(
+                    &self.name_resolution_ctx,
+                    udaf_names,
+                    &alias_names,
+                    expr,
+                );
 
-            let references_aggregate_aliases = aliases
-                .references_aliases_matching(&analysis.referenced_aliases, &|alias| {
-                    alias.contains_aggregate
-                });
-            let references_window_aliases = aliases
-                .references_aliases_matching(&analysis.referenced_aliases, &|alias| {
-                    alias.contains_window
-                });
+                let references_aggregate_aliases = aliases
+                    .references_aliases_matching(&referenced_aliases, &|alias| {
+                        alias.contains_aggregate
+                    });
+                let references_window_aliases = aliases
+                    .references_aliases_matching(&referenced_aliases, &|alias| {
+                        alias.contains_window
+                    });
 
-            SelectClauseFact {
-                expr_context,
-                ast: analysis.ast,
-                contains_aggregate: analysis.contains_aggregate,
-                contains_window: analysis.contains_window,
-                references_aggregate_aliases,
-                references_window_aliases,
-                referenced_aliases: analysis.referenced_aliases,
-            }
-        };
+                let fact = SelectClauseFact {
+                    ast,
+                    contains_aggregate,
+                    contains_window,
+                    references_aggregate_aliases,
+                    references_window_aliases,
+                    referenced_aliases,
+                };
 
-        let having = having.map(|expr| build_fact(ExprContext::HavingClause, expr));
-        let qualify = qualify.map(|expr| build_fact(ExprContext::QualifyClause, expr));
-        let order_by = order_by
-            .iter()
-            .map(|order| build_fact(ExprContext::OrderByClause, &order.expr))
-            .collect();
+                if expr_context == ExprContext::QualifyClause {
+                    facts.qualify = Some(fact);
+                    return facts;
+                }
 
-        SelectClauseFacts {
-            having,
-            qualify,
-            order_by,
-        }
+                if contains_aggregate || references_aggregate_aliases {
+                    facts
+                        .aggregate_prepass_inputs
+                        .push((fact.ast.clone(), expr_context));
+                }
+
+                match expr_context {
+                    ExprContext::HavingClause => facts.having = Some(fact),
+                    ExprContext::OrderByClause => facts.order_by.push(fact),
+                    _ => unreachable!("aggregate prepass only inspects HAVING/QUALIFY/ORDER BY"),
+                }
+                facts
+            },
+        )
     }
 
     #[async_backtrace::framed]
@@ -225,39 +251,29 @@ impl Binder {
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
-        let aggregate_prepass_functions = self.build_aggregate_prepass_function_catalog(
+        let udaf_names = self.find_and_load_udaf(
             &from_context,
             &select_list,
             stmt.having.as_ref(),
             stmt.qualify.as_ref(),
             order_by,
         )?;
-        let aggregate_prepass_aliases =
-            self.collect_aggregate_prepass_aliases(&aggregate_prepass_functions, &select_list);
+        let aliases = self.collect_aggregate_prepass_aliases(&udaf_names, &select_list);
         let clause_facts = self.build_select_clause_facts(
-            &aggregate_prepass_functions,
-            &aggregate_prepass_aliases,
+            &udaf_names,
+            &aliases,
             stmt.having.as_ref(),
             stmt.qualify.as_ref(),
             order_by,
         );
 
-        let ast_iter = clause_facts
-            .having
-            .iter()
-            .chain(clause_facts.order_by.iter())
-            .filter_map(|fact| {
-                if fact.contains_aggregate || fact.references_aggregate_aliases {
-                    Some((&fact.ast, fact.expr_context))
-                } else {
-                    None
-                }
-            });
-
         let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
-            &aggregate_prepass_functions,
-            &aggregate_prepass_aliases,
-            ast_iter,
+            &udaf_names,
+            &aliases,
+            clause_facts
+                .aggregate_prepass_inputs
+                .iter()
+                .map(|(expr, expr_context)| (expr, *expr_context)),
         );
         let global_view = SelectGlobalView {
             semantic_aliases,

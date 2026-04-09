@@ -20,6 +20,7 @@ use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
+use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_base::runtime::block_on;
@@ -39,39 +40,25 @@ use crate::binder::select::SelectList;
 use crate::normalize_identifier;
 use crate::plans::ScalarExpr;
 
-#[derive(Debug, Clone, Copy, Default)]
-struct AggregatePrepassExprFeatures {
-    pub contains_aggregate: bool,
-    pub contains_window: bool,
-    pub contains_subquery: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, enum_as_inner::EnumAsInner)]
 pub(super) enum AggregatePrepassSource {
     DirectClause,
     AliasExpansion(String),
 }
 
-#[derive(Debug, Clone, Default)]
-pub(super) struct AggregatePrepassFunctionCatalog {
-    udaf_names: HashSet<String>,
-}
-
-impl AggregatePrepassFunctionCatalog {
-    fn is_aggregate_target(
-        &self,
-        name_resolution_ctx: &NameResolutionContext,
-        func: &ASTFunctionCall,
-    ) -> bool {
-        if func.window.is_some() {
-            return false;
-        }
-
-        let func_name = normalize_identifier(&func.name, name_resolution_ctx).name;
-        AggregateFunctionFactory::instance().contains(func_name.as_str())
-            || func_name.eq_ignore_ascii_case("grouping")
-            || self.udaf_names.contains(func_name.as_str())
+fn is_aggregate_target(
+    name_resolution_ctx: &NameResolutionContext,
+    udaf_names: &HashSet<String>,
+    func: &ASTFunctionCall,
+) -> bool {
+    if func.window.is_some() {
+        return false;
     }
+
+    let func_name = normalize_identifier(&func.name, name_resolution_ctx).name;
+    AggregateFunctionFactory::instance().contains(func_name.as_str())
+        || func_name.eq_ignore_ascii_case("grouping")
+        || udaf_names.contains(func_name.as_str())
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -80,6 +67,159 @@ pub(super) struct AggregatePrepassFact {
     pub source: AggregatePrepassSource,
     pub expr: Expr,
     pub contains_window: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct ExprFlags {
+    contains_aggregate: bool,
+    contains_window: bool,
+    contains_subquery: bool,
+}
+
+trait AstProbe {
+    fn enter_expr(&mut self, _expr: &Expr, _query_depth: usize) {}
+
+    fn enter_column_ref(&mut self, _column: &ColumnRef, _query_depth: usize) {}
+
+    fn enter_query(&mut self, _query: &Query, _query_depth: usize) {}
+}
+
+impl<L: AstProbe, R: AstProbe> AstProbe for (L, R) {
+    fn enter_expr(&mut self, expr: &Expr, query_depth: usize) {
+        self.0.enter_expr(expr, query_depth);
+        self.1.enter_expr(expr, query_depth);
+    }
+
+    fn enter_column_ref(&mut self, column: &ColumnRef, query_depth: usize) {
+        self.0.enter_column_ref(column, query_depth);
+        self.1.enter_column_ref(column, query_depth);
+    }
+
+    fn enter_query(&mut self, query: &Query, query_depth: usize) {
+        self.0.enter_query(query, query_depth);
+        self.1.enter_query(query, query_depth);
+    }
+}
+
+#[derive(Visitor)]
+#[visitor(Expr(enter), ColumnRef(enter), Query)]
+struct ProbeWalker<'a> {
+    probe: &'a mut dyn AstProbe,
+    query_depth: usize,
+}
+
+impl ProbeWalker<'_> {
+    fn enter_expr(&mut self, expr: &Expr) {
+        self.probe.enter_expr(expr, self.query_depth);
+    }
+
+    fn enter_column_ref(&mut self, column: &ColumnRef) {
+        self.probe.enter_column_ref(column, self.query_depth);
+    }
+
+    fn enter_query(&mut self, query: &Query) {
+        self.probe.enter_query(query, self.query_depth);
+        self.query_depth += 1;
+    }
+
+    fn exit_query(&mut self, _query: &Query) {
+        self.query_depth -= 1;
+    }
+}
+
+fn walk_expr_with_probe(expr: &Expr, probe: &mut dyn AstProbe) {
+    let mut walker = ProbeWalker {
+        probe,
+        query_depth: 0,
+    };
+    expr.drive(&mut walker);
+}
+
+struct ExprFlagsProbe<'a> {
+    name_resolution_ctx: &'a NameResolutionContext,
+    udaf_names: &'a HashSet<String>,
+    result: ExprFlags,
+}
+
+impl AstProbe for ExprFlagsProbe<'_> {
+    fn enter_expr(&mut self, expr: &Expr, query_depth: usize) {
+        if query_depth > 0 {
+            return;
+        }
+
+        match expr {
+            Expr::CountAll { window: None, .. } => self.result.contains_aggregate = true,
+            Expr::FunctionCall { func, .. }
+                if is_aggregate_target(self.name_resolution_ctx, self.udaf_names, func) =>
+            {
+                self.result.contains_aggregate = true
+            }
+            _ if is_window_expr(expr) => {
+                self.result.contains_window = true;
+            }
+            _ => {}
+        }
+    }
+
+    fn enter_query(&mut self, _query: &Query, _query_depth: usize) {
+        self.result.contains_subquery = true;
+    }
+}
+
+struct ReferencedAliasProbe<'a> {
+    name_resolution_ctx: &'a NameResolutionContext,
+    aliases: &'a HashSet<&'a str>,
+    referenced_aliases: BTreeSet<String>,
+}
+
+impl AstProbe for ReferencedAliasProbe<'_> {
+    fn enter_column_ref(&mut self, column: &ColumnRef, query_depth: usize) {
+        if query_depth > 0 {
+            return;
+        }
+
+        let Some(alias) = resolve_unqualified_alias_name(self.name_resolution_ctx, column) else {
+            return;
+        };
+
+        if self.aliases.contains(alias.as_str()) {
+            self.referenced_aliases.insert(alias);
+        }
+    }
+}
+
+struct FunctionNameProbe<'a> {
+    name_resolution_ctx: &'a NameResolutionContext,
+    names: BTreeSet<String>,
+}
+
+impl AstProbe for FunctionNameProbe<'_> {
+    fn enter_expr(&mut self, expr: &Expr, query_depth: usize) {
+        if query_depth > 0 {
+            return;
+        }
+
+        let Expr::FunctionCall { func, .. } = expr else {
+            return;
+        };
+
+        if func.window.is_some() {
+            return;
+        }
+
+        self.names
+            .insert(normalize_identifier(&func.name, self.name_resolution_ctx).name);
+    }
+}
+
+fn is_window_expr(expr: &Expr) -> bool {
+    match expr {
+        Expr::CountAll {
+            window: Some(_), ..
+        } => true,
+        Expr::FunctionCall { func, .. } => func.window.is_some(),
+        _ => false,
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -112,6 +252,7 @@ pub(super) struct AggregatePrepassExprInfo {
     pub ast: Expr,
     pub contains_aggregate: bool,
     pub contains_window: bool,
+    #[allow(dead_code)]
     pub contains_subquery: bool,
     pub referenced_aliases: Vec<String>,
 }
@@ -119,38 +260,30 @@ pub(super) struct AggregatePrepassExprInfo {
 impl AggregatePrepassExprInfo {
     pub(super) fn analyze(
         name_resolution_ctx: &NameResolutionContext,
-        functions: &AggregatePrepassFunctionCatalog,
+        udaf_names: &HashSet<String>,
         aliases: &HashSet<&str>,
         expr: &Expr,
     ) -> Self {
-        let mut feature_visitor = AggregatePrepassExprFeatureVisitor {
-            name_resolution_ctx,
-            functions,
-            query_depth: 0,
-            features: Default::default(),
-        };
-        expr.drive(&mut feature_visitor);
-
-        let mut alias_visitor = ReferencedAliasVisitor {
-            name_resolution_ctx,
-            aliases,
-            query_depth: 0,
-            names: BTreeSet::new(),
-        };
-        expr.drive(&mut alias_visitor);
-
-        let AggregatePrepassExprFeatures {
-            contains_aggregate,
-            contains_window,
-            contains_subquery,
-        } = feature_visitor.features;
+        let mut probe = (
+            ExprFlagsProbe {
+                name_resolution_ctx,
+                udaf_names,
+                result: ExprFlags::default(),
+            },
+            ReferencedAliasProbe {
+                name_resolution_ctx,
+                aliases,
+                referenced_aliases: BTreeSet::new(),
+            },
+        );
+        walk_expr_with_probe(expr, &mut probe);
 
         Self {
             ast: expr.clone(),
-            contains_aggregate,
-            contains_window,
-            contains_subquery,
-            referenced_aliases: alias_visitor.names.into_iter().collect(),
+            contains_aggregate: probe.0.result.contains_aggregate,
+            contains_window: probe.0.result.contains_window,
+            contains_subquery: probe.0.result.contains_subquery,
+            referenced_aliases: probe.1.referenced_aliases.into_iter().collect(),
         }
     }
 }
@@ -164,7 +297,7 @@ pub(super) struct AggregatePrepassAliasCatalog {
 impl AggregatePrepassAliasCatalog {
     pub(super) fn new(
         name_resolution_ctx: &NameResolutionContext,
-        functions: &AggregatePrepassFunctionCatalog,
+        udaf_names: &HashSet<String>,
         aliases: Vec<(String, Expr)>,
     ) -> Self {
         let mut by_name: BTreeMap<_, Vec<_>> = BTreeMap::new();
@@ -178,7 +311,7 @@ impl AggregatePrepassAliasCatalog {
             .map(|(_, ast)| {
                 AggregatePrepassExprInfo::analyze(
                     name_resolution_ctx,
-                    functions,
+                    udaf_names,
                     &alias_names,
                     &ast,
                 )
@@ -236,128 +369,11 @@ impl AggregatePrepassAliasCatalog {
 }
 
 #[derive(Visitor)]
-#[visitor(Expr(enter), Query)]
-struct AggregatePrepassExprFeatureVisitor<'a> {
-    name_resolution_ctx: &'a NameResolutionContext,
-    functions: &'a AggregatePrepassFunctionCatalog,
-    query_depth: usize,
-    features: AggregatePrepassExprFeatures,
-}
-
-impl AggregatePrepassExprFeatureVisitor<'_> {
-    fn enter_expr(&mut self, expr: &Expr) {
-        if self.query_depth > 0 {
-            return;
-        }
-
-        match expr {
-            Expr::CountAll { window: None, .. } => self.features.contains_aggregate = true,
-            Expr::FunctionCall { func, .. }
-                if self
-                    .functions
-                    .is_aggregate_target(self.name_resolution_ctx, func) =>
-            {
-                self.features.contains_aggregate = true
-            }
-            _ if AggregatePrepassScanner::is_window_expr(expr) => {
-                self.features.contains_window = true;
-            }
-            _ => {}
-        }
-    }
-
-    fn enter_query(&mut self, _query: &Query) {
-        self.features.contains_subquery = true;
-        self.query_depth += 1;
-    }
-
-    fn exit_query(&mut self, _query: &Query) {
-        self.query_depth -= 1;
-    }
-}
-
-#[derive(Visitor)]
-#[visitor(Expr(enter), Query)]
-struct AggregatePrepassFunctionNameCollector<'a> {
-    name_resolution_ctx: &'a NameResolutionContext,
-    query_depth: usize,
-    names: BTreeSet<String>,
-}
-
-impl<'a> AggregatePrepassFunctionNameCollector<'a> {
-    fn new(name_resolution_ctx: &'a NameResolutionContext) -> Self {
-        Self {
-            name_resolution_ctx,
-            query_depth: 0,
-            names: BTreeSet::new(),
-        }
-    }
-
-    fn enter_expr(&mut self, expr: &Expr) {
-        if self.query_depth > 0 {
-            return;
-        }
-
-        let Expr::FunctionCall { func, .. } = expr else {
-            return;
-        };
-
-        if func.window.is_some() {
-            return;
-        }
-
-        self.names
-            .insert(normalize_identifier(&func.name, self.name_resolution_ctx).name);
-    }
-
-    fn enter_query(&mut self, _query: &Query) {
-        self.query_depth += 1;
-    }
-
-    fn exit_query(&mut self, _query: &Query) {
-        self.query_depth -= 1;
-    }
-}
-
-#[derive(Visitor)]
-#[visitor(ColumnRef(enter), Query)]
-struct ReferencedAliasVisitor<'a> {
-    name_resolution_ctx: &'a NameResolutionContext,
-    aliases: &'a HashSet<&'a str>,
-    query_depth: usize,
-    names: BTreeSet<String>,
-}
-
-impl ReferencedAliasVisitor<'_> {
-    fn enter_column_ref(&mut self, column: &ColumnRef) {
-        if self.query_depth > 0 {
-            return;
-        }
-
-        let Some(alias) = resolve_unqualified_alias_name(self.name_resolution_ctx, column) else {
-            return;
-        };
-
-        if self.aliases.contains(alias.as_str()) {
-            self.names.insert(alias);
-        }
-    }
-
-    fn enter_query(&mut self, _query: &Query) {
-        self.query_depth += 1;
-    }
-
-    fn exit_query(&mut self, _query: &Query) {
-        self.query_depth -= 1;
-    }
-}
-
-#[derive(Visitor)]
 #[visitor(Expr, ColumnRef(enter), Query)]
-struct AggregatePrepassScanner<'a> {
+struct Scanner<'a> {
     expr_context: ExprContext,
     name_resolution_ctx: &'a NameResolutionContext,
-    functions: &'a AggregatePrepassFunctionCatalog,
+    udaf_names: &'a HashSet<String>,
     ast_aliases: &'a AggregatePrepassAliasCatalog,
     query_depth: usize,
     window_depth: usize,
@@ -366,18 +382,18 @@ struct AggregatePrepassScanner<'a> {
     facts: Vec<AggregatePrepassFact>,
 }
 
-impl AggregatePrepassScanner<'_> {
+impl Scanner<'_> {
     fn scan(
         expr_context: ExprContext,
         name_resolution_ctx: &NameResolutionContext,
-        functions: &AggregatePrepassFunctionCatalog,
+        udaf_names: &HashSet<String>,
         ast_aliases: &AggregatePrepassAliasCatalog,
         expr: &Expr,
     ) -> Vec<AggregatePrepassFact> {
-        let mut scanner = AggregatePrepassScanner {
+        let mut scanner = Scanner {
             expr_context,
             name_resolution_ctx,
-            functions,
+            udaf_names,
             ast_aliases,
             query_depth: 0,
             window_depth: 0,
@@ -390,7 +406,7 @@ impl AggregatePrepassScanner<'_> {
     }
 
     fn enter_expr(&mut self, expr: &Expr) {
-        if Self::is_window_expr(expr) {
+        if is_window_expr(expr) {
             self.window_depth += 1;
         }
 
@@ -401,9 +417,7 @@ impl AggregatePrepassScanner<'_> {
         if let Some(fact) = match expr {
             Expr::CountAll { window: None, .. } => self.build_fact(expr),
             Expr::FunctionCall { func, .. }
-                if self
-                    .functions
-                    .is_aggregate_target(self.name_resolution_ctx, func) =>
+                if is_aggregate_target(self.name_resolution_ctx, self.udaf_names, func) =>
             {
                 self.build_fact(expr)
             }
@@ -414,7 +428,7 @@ impl AggregatePrepassScanner<'_> {
     }
 
     fn exit_expr(&mut self, expr: &Expr) {
-        if Self::is_window_expr(expr) {
+        if is_window_expr(expr) {
             self.window_depth -= 1;
         }
     }
@@ -447,21 +461,21 @@ impl AggregatePrepassScanner<'_> {
     }
 
     fn build_fact(&self, expr: &Expr) -> Option<AggregatePrepassFact> {
-        let analysis = AggregatePrepassExprInfo::analyze(
-            self.name_resolution_ctx,
-            self.functions,
-            &self.ast_aliases.alias_names(),
-            expr,
-        );
-        if analysis.contains_subquery {
+        let mut probe = ExprFlagsProbe {
+            name_resolution_ctx: self.name_resolution_ctx,
+            udaf_names: self.udaf_names,
+            result: ExprFlags::default(),
+        };
+        walk_expr_with_probe(expr, &mut probe);
+        if probe.result.contains_subquery {
             return None;
         }
 
         Some(AggregatePrepassFact {
             expr_context: self.expr_context,
             source: self.current_source(),
-            expr: analysis.ast,
-            contains_window: analysis.contains_window,
+            expr: expr.clone(),
+            contains_window: probe.result.contains_window,
         })
     }
 
@@ -469,16 +483,6 @@ impl AggregatePrepassScanner<'_> {
         match self.expansion_stack.first() {
             Some(alias) => AggregatePrepassSource::AliasExpansion(alias.clone()),
             None => AggregatePrepassSource::DirectClause,
-        }
-    }
-
-    fn is_window_expr(expr: &Expr) -> bool {
-        match expr {
-            Expr::CountAll {
-                window: Some(_), ..
-            } => true,
-            Expr::FunctionCall { func, .. } => func.window.is_some(),
-            _ => false,
         }
     }
 
@@ -511,7 +515,7 @@ fn resolve_unqualified_alias_name(
 impl Binder {
     pub(super) fn collect_aggregate_prepass_aliases<'a>(
         &self,
-        functions: &AggregatePrepassFunctionCatalog,
+        udaf_names: &HashSet<String>,
         select_list: &'a SelectList<'a>,
     ) -> AggregatePrepassAliasCatalog {
         let aliases = select_list
@@ -524,7 +528,7 @@ impl Binder {
                 _ => None,
             })
             .collect();
-        AggregatePrepassAliasCatalog::new(&self.name_resolution_ctx, functions, aliases)
+        AggregatePrepassAliasCatalog::new(&self.name_resolution_ctx, udaf_names, aliases)
     }
 
     pub(super) fn bind_aggregate_prepass_facts(
@@ -545,49 +549,40 @@ impl Binder {
         Ok(())
     }
 
-    pub(super) fn build_aggregate_prepass_function_catalog(
+    pub(super) fn find_and_load_udaf(
         &self,
         bind_context: &BindContext,
         select_list: &SelectList<'_>,
         having: Option<&Expr>,
         qualify: Option<&Expr>,
-        order_by: &[databend_common_ast::ast::OrderByExpr],
-    ) -> Result<AggregatePrepassFunctionCatalog> {
-        let function_names =
-            self.collect_aggregate_prepass_function_names(select_list, having, qualify, order_by);
-        let udaf_names = self.resolve_aggregate_prepass_udaf_names(bind_context, function_names)?;
+        order_by: &[OrderByExpr],
+    ) -> Result<HashSet<String>> {
+        let mut probe = FunctionNameProbe {
+            name_resolution_ctx: &self.name_resolution_ctx,
+            names: BTreeSet::new(),
+        };
 
-        Ok(AggregatePrepassFunctionCatalog { udaf_names })
+        for expr in select_list
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let SelectTarget::AliasedExpr { box expr, .. } = item.select_target {
+                    Some(expr)
+                } else {
+                    None
+                }
+            })
+            .chain(having)
+            .chain(qualify)
+            .chain(order_by.iter().map(|order| &order.expr))
+        {
+            walk_expr_with_probe(expr, &mut probe);
+        }
+
+        self.resolve_udaf_names(bind_context, probe.names)
     }
 
-    fn collect_aggregate_prepass_function_names(
-        &self,
-        select_list: &SelectList<'_>,
-        having: Option<&Expr>,
-        qualify: Option<&Expr>,
-        order_by: &[databend_common_ast::ast::OrderByExpr],
-    ) -> BTreeSet<String> {
-        let mut visitor = AggregatePrepassFunctionNameCollector::new(&self.name_resolution_ctx);
-
-        for item in select_list.items.iter() {
-            if let SelectTarget::AliasedExpr { expr, .. } = item.select_target {
-                expr.drive(&mut visitor);
-            }
-        }
-        if let Some(expr) = having {
-            expr.drive(&mut visitor);
-        }
-        if let Some(expr) = qualify {
-            expr.drive(&mut visitor);
-        }
-        for order in order_by {
-            order.expr.drive(&mut visitor);
-        }
-
-        visitor.names
-    }
-
-    fn resolve_aggregate_prepass_udaf_names(
+    fn resolve_udaf_names(
         &self,
         bind_context: &BindContext,
         function_names: BTreeSet<String>,
@@ -624,16 +619,16 @@ impl Binder {
 
     pub(super) fn derive_aggregate_prepass_facts<'a>(
         &self,
-        functions: &AggregatePrepassFunctionCatalog,
+        udaf_names: &HashSet<String>,
         aliases: &AggregatePrepassAliasCatalog,
         ast_iter: impl Iterator<Item = (&'a Expr, ExprContext)>,
     ) -> AggregatePrepassFacts {
         ast_iter
             .flat_map(|(ast_expr, expr_context)| {
-                AggregatePrepassScanner::scan(
+                Scanner::scan(
                     expr_context,
                     &self.name_resolution_ctx,
-                    functions,
+                    udaf_names,
                     aliases,
                     ast_expr,
                 )
@@ -662,8 +657,8 @@ mod tests {
     #[test]
     fn aggregate_prepass_alias_catalog_tracks_features_and_refs() {
         let name_resolution_ctx = NameResolutionContext::default();
-        let functions = AggregatePrepassFunctionCatalog::default();
-        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![
             ("s".to_string(), parse_ast_expr("sum(number)")),
             (
                 "rn".to_string(),
@@ -697,16 +692,16 @@ mod tests {
     #[test]
     fn aggregate_prepass_facts_track_alias_expansion_source() {
         let name_resolution_ctx = NameResolutionContext::default();
-        let functions = AggregatePrepassFunctionCatalog::default();
-        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![(
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![(
             "s".to_string(),
             parse_ast_expr("sum(number)"),
         )]);
 
-        let facts = AggregatePrepassScanner::scan(
+        let facts = Scanner::scan(
             ExprContext::HavingClause,
             &name_resolution_ctx,
-            &functions,
+            &udaf_names,
             &aliases,
             &parse_ast_expr("s > 0"),
         );
@@ -723,16 +718,16 @@ mod tests {
     #[test]
     fn aggregate_prepass_duplicate_aliases_do_not_expand() {
         let name_resolution_ctx = NameResolutionContext::default();
-        let functions = AggregatePrepassFunctionCatalog::default();
-        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![
             ("s".to_string(), parse_ast_expr("sum(number)")),
             ("s".to_string(), parse_ast_expr("max(number)")),
         ]);
 
-        let facts = AggregatePrepassScanner::scan(
+        let facts = Scanner::scan(
             ExprContext::OrderByClause,
             &name_resolution_ctx,
-            &functions,
+            &udaf_names,
             &aliases,
             &parse_ast_expr("s > 0"),
         );
@@ -743,26 +738,26 @@ mod tests {
     #[test]
     fn aggregate_prepass_facts_deduplicate_identical_candidates() {
         let name_resolution_ctx = NameResolutionContext::default();
-        let functions = AggregatePrepassFunctionCatalog::default();
-        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![(
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![(
             "s".to_string(),
             parse_ast_expr("sum(number)"),
         )]);
 
         let mut facts = AggregatePrepassFacts::default();
-        for fact in AggregatePrepassScanner::scan(
+        for fact in Scanner::scan(
             ExprContext::HavingClause,
             &name_resolution_ctx,
-            &functions,
+            &udaf_names,
             &aliases,
             &parse_ast_expr("sum(number) > 0"),
         ) {
             facts.insert_prioritized_unique(fact);
         }
-        for fact in AggregatePrepassScanner::scan(
+        for fact in Scanner::scan(
             ExprContext::HavingClause,
             &name_resolution_ctx,
-            &functions,
+            &udaf_names,
             &aliases,
             &parse_ast_expr("sum(number) > 0"),
         ) {
@@ -775,16 +770,16 @@ mod tests {
     #[test]
     fn aggregate_prepass_nested_alias_expansion_keeps_alias_source() {
         let name_resolution_ctx = NameResolutionContext::default();
-        let functions = AggregatePrepassFunctionCatalog::default();
-        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![
             ("s".to_string(), parse_ast_expr("sum(number)")),
             ("a".to_string(), parse_ast_expr("s + 1")),
         ]);
 
-        let facts = AggregatePrepassScanner::scan(
+        let facts = Scanner::scan(
             ExprContext::HavingClause,
             &name_resolution_ctx,
-            &functions,
+            &udaf_names,
             &aliases,
             &parse_ast_expr("a > 0"),
         );
@@ -797,10 +792,31 @@ mod tests {
     }
 
     #[test]
+    fn aggregate_prepass_fact_flags_ignore_deeper_alias_expansion_features() {
+        let name_resolution_ctx = NameResolutionContext::default();
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![(
+            "w".to_string(),
+            parse_ast_expr("row_number() OVER (ORDER BY number)"),
+        )]);
+
+        let facts = Scanner::scan(
+            ExprContext::HavingClause,
+            &name_resolution_ctx,
+            &udaf_names,
+            &aliases,
+            &parse_ast_expr("sum(w) > 0"),
+        );
+
+        assert_eq!(facts.len(), 1);
+        assert!(!facts[0].contains_window);
+    }
+
+    #[test]
     fn aggregate_prepass_alias_catalog_tracks_transitive_aggregate_and_window_aliases() {
         let name_resolution_ctx = NameResolutionContext::default();
-        let functions = AggregatePrepassFunctionCatalog::default();
-        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &functions, vec![
+        let udaf_names = HashSet::new();
+        let aliases = AggregatePrepassAliasCatalog::new(&name_resolution_ctx, &udaf_names, vec![
             ("s".to_string(), parse_ast_expr("sum(number)")),
             ("a".to_string(), parse_ast_expr("s + 1")),
             (
