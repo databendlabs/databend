@@ -27,6 +27,7 @@ use futures_util::TryStreamExt;
 use log::info;
 use opendal::Buffer;
 use opendal::ErrorKind;
+use opendal::Operator;
 
 // Default retention duration for temporary files: 3 days.
 const DEFAULT_RETAIN_DURATION: Duration = Duration::from_secs(60 * 60 * 24 * 3);
@@ -60,6 +61,24 @@ pub async fn do_vacuum_temporary_files(
     }
 }
 
+/// Vacuum temporary spill files by retention duration.
+///
+/// Background:
+/// - On object stores like S3, a directory entry may not expose a reliable `last_modified`.
+/// - Treating such directories as expired is unsafe because an active query's spill directory can
+///   be deleted while the query is still running.
+///
+/// Decision order for directories:
+/// - Prefer the directory's own `last_modified` when available.
+/// - Otherwise, use the paired spill meta file that ends with `.list`, because it is a better
+///   signal for spill activity on remote storage.
+/// - If the meta file is also unavailable, probe only the first file in the directory and use its
+///   `last_modified` as a conservative fallback.
+///
+/// Cost control:
+/// - `list` on remote storage is expensive, so the extra probe is only used in the final fallback.
+/// - If probing decides the directory is expired, the same lister is reused to finish deletion so
+///   we don't pay for an additional probe list.
 async fn vacuum_by_duration(
     abort_checker: AbortChecker,
     temporary_dir: &str,
@@ -82,8 +101,6 @@ async fn vacuum_by_duration(
     let mut temp_files = Vec::new();
     let mut gc_metas = HashSet::new();
 
-    // We may delete next entries during iteration
-    // So we can't use
     loop {
         let de = ds.try_next().await;
         match de {
@@ -93,30 +110,29 @@ async fn vacuum_by_duration(
                     continue;
                 }
                 let name = de.name();
-                let meta = if de.metadata().last_modified().is_none() {
-                    operator.stat(de.path()).await
-                } else {
-                    Ok(de.metadata().clone())
-                };
+                if de.metadata().is_file() {
+                    let Some(last_modified) =
+                        resolve_file_last_modified(&operator, de.path(), de.metadata()).await
+                    else {
+                        continue;
+                    };
 
-                if meta.is_err() {
-                    continue;
-                }
-                let meta = meta.unwrap();
-
-                if let Some(modified) = meta.last_modified() {
-                    if timestamp - modified.timestamp_millis() < expire_time {
+                    if timestamp - last_modified < expire_time {
                         continue;
                     }
-                }
-                if meta.is_file() {
+
                     if name.ends_with(SPILL_META_SUFFIX) {
                         if gc_metas.contains(name) {
                             continue;
                         }
-                        let removed =
-                            vacuum_by_meta(&temporary_dir, de.path(), limit, &mut removed_total)
-                                .await?;
+                        let removed = vacuum_by_meta_with_operator(
+                            &operator,
+                            &temporary_dir,
+                            de.path(),
+                            limit,
+                            &mut removed_total,
+                        )
+                        .await?;
                         limit = limit.saturating_sub(removed);
                         gc_metas.insert(name.to_owned());
                     } else {
@@ -126,27 +142,58 @@ async fn vacuum_by_duration(
                         }
                     }
                 } else {
-                    let removed = vacuum_by_meta(
-                        &temporary_dir,
-                        &format!("{}{}", de.path().trim_end_matches('/'), SPILL_META_SUFFIX),
-                        limit,
-                        &mut removed_total,
-                    )
-                    .await?;
-                    // by meta
-                    if removed > 0 {
-                        let meta_name = format!("{}{}", name, SPILL_META_SUFFIX);
-                        if gc_metas.contains(&meta_name) {
+                    let meta_path =
+                        format!("{}{}", de.path().trim_end_matches('/'), SPILL_META_SUFFIX);
+                    if let Some(last_modified) =
+                        resolve_dir_last_modified(&operator, de.path(), de.metadata(), &meta_path)
+                            .await
+                    {
+                        if timestamp - last_modified < expire_time {
                             continue;
                         }
 
-                        limit = limit.saturating_sub(removed);
-                        gc_metas.insert(meta_name);
+                        let removed = vacuum_by_meta_with_operator(
+                            &operator,
+                            &temporary_dir,
+                            &meta_path,
+                            limit,
+                            &mut removed_total,
+                        )
+                        .await?;
+                        if removed > 0 {
+                            let meta_name = format!("{}{}", name, SPILL_META_SUFFIX);
+                            if gc_metas.contains(&meta_name) {
+                                continue;
+                            }
+
+                            limit = limit.saturating_sub(removed);
+                            gc_metas.insert(meta_name);
+                        } else {
+                            let removed = vacuum_by_list_dir_with_operator(
+                                &operator,
+                                de.path(),
+                                limit,
+                                &mut removed_total,
+                            )
+                            .await?;
+                            limit = limit.saturating_sub(removed);
+                        }
                     } else {
-                        // by list
-                        let removed =
-                            vacuum_by_list_dir(de.path(), limit, &mut removed_total).await?;
+                        let removed = vacuum_dir_with_probe(
+                            &operator,
+                            &temporary_dir,
+                            de.path(),
+                            &meta_path,
+                            timestamp,
+                            expire_time,
+                            limit,
+                            &mut removed_total,
+                        )
+                        .await?;
                         limit = limit.saturating_sub(removed);
+                        if removed > 0 {
+                            gc_metas.insert(format!("{}{}", name, SPILL_META_SUFFIX));
+                        }
                     }
                 }
                 if limit == 0 {
@@ -171,6 +218,142 @@ async fn vacuum_by_duration(
         start_time.elapsed().as_secs()
     );
     Ok(removed_total)
+}
+
+/// Read `last_modified` for a single object path via `stat`.
+async fn stat_last_modified(operator: &Operator, path: &str) -> Option<i64> {
+    operator
+        .stat(path)
+        .await
+        .ok()
+        .and_then(|meta| meta.last_modified().map(|v| v.timestamp_millis()))
+}
+
+/// Resolve a file's `last_modified`, preferring list metadata and falling back to `stat`.
+async fn resolve_file_last_modified(
+    operator: &Operator,
+    path: &str,
+    metadata: &opendal::Metadata,
+) -> Option<i64> {
+    if let Some(last_modified) = metadata.last_modified() {
+        return Some(last_modified.timestamp_millis());
+    }
+
+    if let Some(last_modified) = stat_last_modified(operator, path).await {
+        return Some(last_modified);
+    }
+
+    None
+}
+
+/// Resolve a directory's `last_modified` from the dir itself first, then from its `.list` file.
+async fn resolve_dir_last_modified(
+    operator: &Operator,
+    dir_path: &str,
+    metadata: &opendal::Metadata,
+    meta_path: &str,
+) -> Option<i64> {
+    if let Some(last_modified) = metadata.last_modified() {
+        return Some(last_modified.timestamp_millis());
+    }
+
+    if let Some(last_modified) = stat_last_modified(operator, dir_path).await {
+        return Some(last_modified);
+    }
+
+    stat_last_modified(operator, meta_path).await
+}
+
+/// Probe only the first file in a directory to decide whether the whole directory can be vacuumed.
+/// If it is expired, reuse the same lister to finish deletion and avoid an extra probe list.
+async fn vacuum_dir_with_probe(
+    operator: &Operator,
+    temporary_dir: &str,
+    dir_path: &str,
+    meta_path: &str,
+    timestamp: i64,
+    expire_time: i64,
+    limit: usize,
+    removed_total: &mut usize,
+) -> Result<usize> {
+    let start_time = Instant::now();
+    let mut lister = match operator.lister_with(dir_path).recursive(true).await {
+        Ok(lister) => lister,
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),
+        Err(e) => return Err(e.into()),
+    };
+    let mut paths = Vec::new();
+    let mut first_file_last_modified = None;
+
+    loop {
+        let entry = match lister.try_next().await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => break,
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        };
+
+        if entry.path() == dir_path {
+            continue;
+        }
+
+        paths.push(entry.path().to_string());
+        if !entry.metadata().is_file() {
+            continue;
+        }
+
+        first_file_last_modified = if let Some(last_modified) = entry.metadata().last_modified() {
+            Some(last_modified.timestamp_millis())
+        } else {
+            stat_last_modified(operator, entry.path()).await
+        };
+        break;
+    }
+
+    let Some(first_file_last_modified) = first_file_last_modified else {
+        return Ok(0);
+    };
+
+    if timestamp - first_file_last_modified < expire_time {
+        return Ok(0);
+    }
+
+    let removed =
+        vacuum_by_meta_with_operator(operator, temporary_dir, meta_path, limit, removed_total)
+            .await?;
+    if removed > 0 {
+        return Ok(removed);
+    }
+
+    loop {
+        let entry = match lister.try_next().await {
+            Ok(Some(entry)) => entry,
+            Ok(None) => break,
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            Err(e) => return Err(e.into()),
+        };
+
+        if entry.path() == dir_path {
+            continue;
+        }
+        paths.push(entry.path().to_string());
+    }
+
+    paths.push(dir_path.to_owned());
+
+    let cur_removed = paths.len().min(limit);
+    let _ = operator.delete_iter(paths.into_iter().take(limit)).await;
+
+    *removed_total += cur_removed;
+    info!(
+        "Vacuum temporary files progress(by probed dir): Total removed: {}, Current batch: {} (from '{}'), Time: {} sec",
+        *removed_total,
+        cur_removed,
+        dir_path,
+        start_time.elapsed().as_secs(),
+    );
+
+    Ok(cur_removed)
 }
 
 // Vacuum temporary files by query hook
@@ -200,7 +383,9 @@ async fn vacuum_query_hook(
         .filter_map(|x| x.is_ok().then(|| x.unwrap()));
 
     for (meta_file_path, buffer) in metas {
-        let removed = vacuum_by_meta_buffer(
+        let operator = DataOperator::instance().spill_operator();
+        let removed = vacuum_by_meta_buffer_with_operator(
+            &operator,
             &meta_file_path,
             temporary_dir,
             buffer,
@@ -214,14 +399,15 @@ async fn vacuum_query_hook(
     Ok(removed_total)
 }
 
-async fn vacuum_by_meta_buffer(
+/// Delete temporary files recorded in a spill meta buffer with the provided operator.
+async fn vacuum_by_meta_buffer_with_operator(
+    operator: &Operator,
     meta_file_path: &str,
     temporary_dir: &str,
     meta: Buffer,
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().spill_operator();
     let start_time = Instant::now();
     let meta = meta.to_bytes();
     let files: Vec<String> = meta.lines().map(|x| Ok(x?)).collect::<Result<Vec<_>>>()?;
@@ -259,13 +445,14 @@ async fn vacuum_by_meta_buffer(
     Ok(cur_removed)
 }
 
-async fn vacuum_by_meta(
+/// Delete temporary files through a spill meta file with the provided operator.
+async fn vacuum_by_meta_with_operator(
+    operator: &Operator,
     temporary_dir: &str,
     meta_file_path: &str,
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
-    let operator = DataOperator::instance().spill_operator();
     let meta: Buffer;
     let r = operator.read(meta_file_path).await;
     match r {
@@ -273,16 +460,25 @@ async fn vacuum_by_meta(
         Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),
         Err(e) => return Err(e.into()),
     }
-    vacuum_by_meta_buffer(meta_file_path, temporary_dir, meta, limit, removed_total).await
+    vacuum_by_meta_buffer_with_operator(
+        operator,
+        meta_file_path,
+        temporary_dir,
+        meta,
+        limit,
+        removed_total,
+    )
+    .await
 }
 
-async fn vacuum_by_list_dir(
+/// Delete all files under a temporary directory with the provided operator.
+async fn vacuum_by_list_dir_with_operator(
+    operator: &Operator,
     dir_path: &str,
     limit: usize,
     removed_total: &mut usize,
 ) -> Result<usize> {
     let start_time = Instant::now();
-    let operator = DataOperator::instance().spill_operator();
     let mut r = operator.lister_with(dir_path).recursive(true).await?;
     let mut batches = vec![];
 
