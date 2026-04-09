@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
@@ -99,6 +101,7 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableBranchMeta;
@@ -448,6 +451,22 @@ impl Catalog for SessionCatalog {
 
     async fn commit_table_branch_meta(&self, req: CommitTableBranchMetaReq) -> Result<()> {
         self.inner.commit_table_branch_meta(req).await
+    }
+
+    async fn mark_staged_branches_for_cleanup(
+        &self,
+        table_id: u64,
+        cleanup_at: Option<DateTime<Utc>>,
+    ) -> Result<Vec<StagedBranchIdent>> {
+        self.inner
+            .mark_staged_branches_for_cleanup(table_id, cleanup_at)
+            .await
+    }
+
+    async fn drop_staged_table_branch(&self, table_id: u64, branch_id: u64) -> Result<()> {
+        self.inner
+            .drop_staged_table_branch(table_id, branch_id)
+            .await
     }
 
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {

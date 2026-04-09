@@ -40,6 +40,8 @@ use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::VACUUM2_OBJECT_KEY_PREFIX;
 use databend_storages_common_table_meta::meta::uuid_from_date_time;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::table_storage_prefix;
 use futures_util::TryStreamExt;
 use log::info;
 use log::warn;
@@ -95,6 +97,40 @@ pub struct SnapshotGcSelection {
 }
 
 impl FuseTable {
+    pub async fn cleanup_staged_branches(
+        &self,
+        _ctx: &dyn TableContext,
+        catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
+        table_id: u64,
+        cleanup_at: Option<DateTime<Utc>>,
+    ) -> Result<Vec<String>> {
+        let Some(db_id) = self.get_table_info().options().get(OPT_KEY_DATABASE_ID) else {
+            return Err(ErrorCode::Internal(format!(
+                "Database id not set in table options"
+            )));
+        };
+        let db_id = db_id.parse::<u64>()?;
+
+        let staged = catalog
+            .mark_staged_branches_for_cleanup(table_id, cleanup_at)
+            .await?;
+
+        let dal = self.get_operator_ref();
+        let mut cleaned = Vec::new();
+        for staged_branch in staged {
+            let branch_dir = format!("{}/", table_storage_prefix(db_id, staged_branch.branch_id));
+            dal.remove_all(&branch_dir).await?;
+
+            catalog
+                .drop_staged_table_branch(table_id, staged_branch.branch_id)
+                .await?;
+
+            cleaned.push(branch_dir);
+        }
+
+        Ok(cleaned)
+    }
+
     pub async fn vacuum_table(
         &self,
         ctx: Arc<dyn TableContext>,

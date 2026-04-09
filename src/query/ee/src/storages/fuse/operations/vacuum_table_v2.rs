@@ -28,14 +28,12 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::GcDroppedTableBranchReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
-use databend_common_meta_app::schema::STAGED_BRANCH_MIN_LIFETIME;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::RetentionPolicy;
@@ -114,8 +112,17 @@ pub async fn do_vacuum2(
     let retention_boundary =
         now - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
-    // Step 1: select and clean the base table if it has a gc root.
     let fuse_table = FuseTable::try_from_table(table)?;
+    let catalog = ctx
+        .get_catalog(fuse_table.get_table_info().catalog())
+        .await?;
+
+    // Step 0: clean expired staged branches before processing visible branch history.
+    let mut files_to_gc = fuse_table
+        .cleanup_staged_branches(ctx.as_ref(), &catalog, table_id, Some(now))
+        .await?;
+
+    // Step 1: select and clean the base table if it has a gc root.
     let latest_snapshot = fuse_table.read_table_snapshot().await?;
     let (base_gc_state, base_snapshot_files) = if let Some(latest_snapshot) = latest_snapshot {
         vacuum_base_table(fuse_table, &ctx, latest_snapshot, respect_flash_back).await?
@@ -123,15 +130,11 @@ pub async fn do_vacuum2(
         (None, vec![])
     };
 
-    let mut files_to_gc: Vec<String> = base_snapshot_files;
+    files_to_gc.extend(base_snapshot_files);
     let mut storage_prefixes: StoragePrefixes = HashMap::from([(
         format!("{}/", fuse_table.meta_location_generator().prefix()),
         table_id,
     )]);
-
-    let catalog = ctx
-        .get_catalog(fuse_table.get_table_info().catalog())
-        .await?;
     let history_branches = catalog
         .list_history_table_branches(ListHistoryTableBranchesReq {
             table_id,
@@ -141,7 +144,7 @@ pub async fn do_vacuum2(
     let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
 
     // Step 2: classify branch history and select gc roots.
-    // Phase A (serial): construct branch tables, handle expiry, classify beyond-retention.
+    // Phase A (serial): construct branch tables and classify beyond-retention.
     // Phase B (parallel): select gc roots for retainable candidates.
     let mut beyond_retention_branches: Vec<Box<FuseTable>> = Vec::new();
     let mut gc_root_candidates: Vec<Box<FuseTable>> = Vec::new();
@@ -153,39 +156,17 @@ pub async fn do_vacuum2(
         let branch_id = branch.branch_id.table_id;
         let expire_at = branch.expire_at;
         let drop_on = branch.branch_meta.data.drop_on;
-        let branch_name = branch.branch_name.clone();
         let branch_table = fuse_table.branch_table_from_meta(branch, &s3_storage_class)?;
 
         let storage_prefix = format!("{}/", branch_table.meta_location_generator().prefix());
         storage_prefixes.insert(storage_prefix, branch_id);
 
-        if drop_on.is_some_and(|drop_on| {
-            drop_on < retention_boundary
-                && (!branch_name.starts_with("orphan@")
-                    || drop_on + STAGED_BRANCH_MIN_LIFETIME < now)
-        }) {
+        // For expired branches, `expire_at` acts as the automatic delete effective time.
+        let effective_drop_time =
+            drop_on.or_else(|| expire_at.filter(|expire_at| *expire_at <= now));
+        if effective_drop_time.is_some_and(|drop_time| drop_time < retention_boundary) {
             beyond_retention_branches.push(branch_table);
             continue;
-        }
-
-        if expire_at.is_some_and(|expire_at| expire_at <= now) {
-            // After soft-drop, the branch still needs to go through gc_root selection
-            // and respect the retention period before its data can be cleaned up.
-            if let Err(err) = catalog
-                .drop_table_branch(DropTableBranchReq {
-                    tenant: ctx.get_tenant(),
-                    table_id,
-                    branch_name,
-                    branch_id: branch_table.get_id(),
-                })
-                .await
-            {
-                warn!(
-                    "drop expired branch failed, ignored, branch: {}, err: {}",
-                    branch_table.get_table_info().desc,
-                    err
-                );
-            }
         }
 
         gc_root_candidates.push(branch_table);
@@ -781,11 +762,6 @@ async fn final_gc_branch(
 
     // Delete storage first: remove_all is idempotent, so a later metadata-deletion failure can
     // be retried safely by the next vacuum run.
-    //
-    // This is also safe for staged orphan branches: vacuum only reaches this path after the
-    // orphan is older than both the normal dropped-branch retention boundary and
-    // STAGED_BRANCH_MIN_LIFETIME, while commit_table_branch_meta() rejects publishing once the
-    // same retention floor is crossed.
     if let Err(err) = fuse_table.get_operator().remove_all(&branch_dir).await {
         warn!(
             "cleanup non-retainable branch data failed, ignored, table: {}, branch: {}, err: {}",

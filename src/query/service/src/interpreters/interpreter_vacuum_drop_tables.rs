@@ -58,6 +58,10 @@ impl VacuumDropTablesInterpreter {
         Ok(VacuumDropTablesInterpreter { ctx, plan })
     }
 
+    // Collect the storage targets for VACUUM DROP TABLE.
+    // Non-dry-run first cleans staged branches under each dropped base table before collecting
+    // visible history branches. Dry-run skips staged cleanup entirely, so staged branch targets
+    // are not included in preview output.
     async fn collect_vacuum_drop_targets(
         &self,
         catalog: &Arc<dyn Catalog>,
@@ -79,6 +83,12 @@ impl VacuumDropTablesInterpreter {
             };
 
             let table_id = base_fuse_table.get_id();
+            if self.plan.option.dry_run.is_none() {
+                base_fuse_table
+                    .cleanup_staged_branches(self.ctx.as_ref(), catalog, table_id, None)
+                    .await?;
+            }
+
             let history_branches = catalog
                 .list_history_table_branches(ListHistoryTableBranchesReq {
                     table_id,

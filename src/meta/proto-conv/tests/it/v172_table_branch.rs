@@ -33,7 +33,7 @@ use crate::common;
 fn test_decode_v172_table_branch() -> anyhow::Result<()> {
     let table_branch_v172: Vec<u8> = vec![
         10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
-        84, 67, 16, 1, 160, 6, 171, 1, 168, 6, 24,
+        84, 67, 16, 1, 160, 6, 172, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableBranch {
@@ -43,4 +43,20 @@ fn test_decode_v172_table_branch() -> anyhow::Result<()> {
 
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), table_branch_v172.as_slice(), 172, want())
+}
+
+#[test]
+fn test_decode_v172_staged_branch() -> anyhow::Result<()> {
+    let staged_branch_v172: Vec<u8> = vec![
+        10, 23, 50, 48, 50, 54, 45, 48, 52, 45, 49, 48, 32, 48, 57, 58, 51, 48, 58, 48, 48, 32, 85,
+        84, 67, 16, 1, 160, 6, 172, 1, 168, 6, 24,
+    ];
+
+    let want = || mt::StagedBranch {
+        create_on: DateTime::<Utc>::from_timestamp(1775813400, 0).unwrap(),
+        cleanup_marked: true,
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), staged_branch_v172.as_slice(), 172, want())
 }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -19,8 +20,6 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_meta_app::app_error::AppError;
-use databend_common_meta_app::app_error::CreateAsDropTableWithoutDropTime;
-use databend_common_meta_app::app_error::CreateTableWithDropTime;
 use databend_common_meta_app::app_error::ReferenceAlreadyExists;
 use databend_common_meta_app::app_error::ReferenceExpired;
 use databend_common_meta_app::app_error::TableSnapshotExpired;
@@ -55,6 +54,9 @@ use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::STAGED_BRANCH_TIMEOUT;
+use databend_common_meta_app::schema::StagedBranch;
+use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::TableBranch;
 use databend_common_meta_app::schema::TableBranchMeta;
 use databend_common_meta_app::schema::TableId;
@@ -73,18 +75,13 @@ use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTime
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
-use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnCondition;
-use databend_meta_client::types::TxnGetResponse;
 use databend_meta_client::types::TxnRequest;
-use databend_meta_client::types::protobuf as pb;
-use databend_meta_client::types::txn_op_response::Response;
 use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
@@ -93,18 +90,15 @@ use log::warn;
 
 use crate::api_impl::schema_api::restore_policy_references_on_undrop;
 use crate::database_util::get_db_or_err;
-use crate::deserialize_id_get_response;
-use crate::deserialize_struct_get_response;
 use crate::fetch_id;
-use crate::garbage_collection_api::ORPHAN_POSTFIX;
 use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
+use crate::txn_core_util::txn_delete_exact;
 use crate::txn_del;
-use crate::txn_get;
 use crate::txn_put_pb;
 use crate::util::IdempotentKVTxnResponse;
 use crate::util::IdempotentKVTxnSender;
@@ -316,16 +310,13 @@ where
         Ok(tags)
     }
 
-    /// Create a new branch generation for a base table.
+    /// Reserve a staged branch id under the base table.
     ///
-    /// The branch itself is stored as:
-    /// - a visible name entry: `__fd_table_branch/<base_table_id>/<branch_name> -> TableBranch`
-    /// - an underlying branch table meta keyed by the generated branch table id
-    /// - a history entry recording all generations for the branch name
+    /// Phase 1 writes only `__fd_staged_branch/<base_table_id>/<branch_id> -> StagedBranch`.
+    /// The caller then writes the branch snapshot object, and phase 2 publishes the visible
+    /// `__fd_table_branch/<base_table_id>/<branch_name>` entry together with the branch table meta.
     ///
-    /// For snapshot-based branch creation, we first create the branch as dropped and keep its
-    /// history under an orphan name. `commit_table_branch_meta()` will later publish it under the
-    /// real branch name after the snapshot object is written successfully.
+    /// This keeps the branch name hidden until the snapshot object is durable.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn create_table_branch(
@@ -334,110 +325,59 @@ where
     ) -> Result<CreateTableBranchReply, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        if !req.as_dropped && req.table_meta.drop_on.is_some() {
-            return Err(KVAppError::AppError(AppError::CreateTableWithDropTime(
-                CreateTableWithDropTime::new(&req.branch_name),
-            )));
-        }
-        if req.as_dropped && req.table_meta.drop_on.is_none() {
-            return Err(KVAppError::AppError(
-                AppError::CreateAsDropTableWithoutDropTime(CreateAsDropTableWithoutDropTime::new(
-                    &req.branch_name,
-                )),
-            ));
-        }
-
         let branch_name = &req.branch_name;
-        let table_id = req.table_id;
-        let source_table_id = req.source_table_id;
-        let key_table = DBIdTableName {
-            db_id: req.db_id,
-            table_name: req.name_ident.table_name.clone(),
-        };
         let key_source_table_id = TableId {
-            table_id: source_table_id,
+            table_id: req.source_table_id,
         };
-        let key_branch = TableIdBranchName::new(table_id, branch_name);
-
-        let branch_meta = req.table_meta;
+        let key_branch = TableIdBranchName::new(req.table_id, branch_name);
         let mut maybe_branch_id = None;
-        let mut orphan_branch_name = None;
-
-        let keys = vec![
-            key_table.to_string_key(),
-            key_source_table_id.to_string_key(),
-            key_branch.to_string_key(),
-        ];
+        let mut auto_increment_start_vals = None;
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let values = self.mget_kv(&keys).await?;
-            let mut data = keys
-                .iter()
-                .zip(values.into_iter())
-                .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
-                .collect::<Vec<_>>();
-
-            let seq_table = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_id_get_response::<DBIdTableName>(d)?;
-                assert_eq!(key_table, k);
-
-                let Some(v) = v else {
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&key_table.table_name, "create_table_branch"),
-                    )));
-                };
-                if *v.data != table_id {
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&key_table.table_name, "create_table_branch"),
-                    )));
-                }
-                v.seq
-            };
-
-            let seq_source_table_meta = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableId>(d)?;
-                assert_eq!(key_source_table_id, k);
-                v
-            };
-            let Some(seq_source_table_meta) = seq_source_table_meta else {
+            let Some(seq_source_table_meta) = self.get_pb(&key_source_table_id).await? else {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(source_table_id, "create_table_branch: source table"),
+                    UnknownTableId::new(req.source_table_id, "create_table_branch: source table"),
                 )));
             };
             if req.seq.match_seq(&seq_source_table_meta).is_err() {
                 return Err(KVAppError::AppError(AppError::from(
                     TableVersionMismatched::new(
-                        source_table_id,
+                        req.source_table_id,
                         req.seq,
                         seq_source_table_meta.seq,
                         "create_table_branch",
                     ),
                 )));
             }
-            if seq_source_table_meta.data.drop_on.is_some() {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(
-                        source_table_id,
-                        "create_table_branch: source table is dropped",
-                    ),
-                )));
-            }
 
-            let seq_branch = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableIdBranchName>(d)?;
-                assert_eq!(key_branch, k);
-                v
-            };
+            let seq_branch = self.get_pb(&key_branch).await?;
             if seq_branch.is_some() {
                 return Err(KVAppError::AppError(AppError::from(
                     ReferenceAlreadyExists::new(format!("Branch '{}' already exists", branch_name)),
                 )));
+            }
+
+            if auto_increment_start_vals.is_none() {
+                let mut values = BTreeMap::new();
+                for table_field in seq_source_table_meta.data.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
+                    };
+
+                    let source_ai_key =
+                        AutoIncrementKey::new(req.source_table_id, table_field.column_id());
+                    let source_ai_ident =
+                        AutoIncrementStorageIdent::new_generic(&req.tenant, source_ai_key);
+                    let start_value = match self.get_pb(&source_ai_ident).await? {
+                        Some(seq_v) => seq_v.data.into_inner().0,
+                        None => auto_increment_expr.start,
+                    };
+                    values.insert(table_field.column_id(), start_value);
+                }
+                auto_increment_start_vals = Some(values);
             }
 
             // Reuse the generated branch id across retries so a failed txn does not keep
@@ -450,118 +390,30 @@ where
                     id
                 }
             };
-            let key_branch_table_id = TableId {
-                table_id: branch_id,
-            };
-
-            // Hidden branch creation uses an orphan dropped-branch key first, so the visible
-            // branch name is not published until the snapshot file and committed table meta
-            // are both ready.
-            if req.as_dropped && orphan_branch_name.is_none() {
-                orphan_branch_name = Some(format!("{}@{}", ORPHAN_POSTFIX, branch_id));
-            }
+            let key_staged_branch = StagedBranchIdent::new(req.table_id, branch_id);
 
             let mut conditions = vec![
-                txn_cond_seq(&key_table, Eq, seq_table),
                 txn_cond_seq(&key_source_table_id, Eq, seq_source_table_meta.seq),
                 txn_cond_seq(&key_branch, Eq, 0),
+                txn_cond_seq(&key_staged_branch, Eq, 0),
             ];
             if let Some(lvt_check) = req.lvt_check.as_ref() {
-                conditions.push(build_lvt_condition(self, source_table_id, lvt_check).await?);
+                conditions.push(build_lvt_condition(self, req.source_table_id, lvt_check).await?);
             }
 
-            // For staged (hidden) branches, All associated KV entries
-            // (table meta, orphan dropped-branch marker, auto-increment counters, policies)
-            // are written durably so that vacuum GC can always discover and clean them up
-            // if the subsequent commit_table_branch_meta() never completes.
+            let staged_branch = StagedBranch {
+                create_on: Utc::now(),
+                cleanup_marked: false,
+            };
+            let txn = TxnRequest::new(conditions, vec![txn_put_pb(
+                &key_staged_branch,
+                &staged_branch,
+            )?]);
 
-            let mut if_then = vec![txn_put_pb(&key_branch_table_id, &branch_meta)?];
-
-            if req.as_dropped {
-                // Orphan staged branches intentionally reuse the normal dropped-branch retention
-                // flow. They are never published through the visible branch name, so delayed
-                // cleanup is an acceptable tradeoff: vacuum will eventually reclaim the orphan
-                // without needing a special immediate-GC path.
-                let orphan_dropped_key = DroppedBranchIdent::new(
-                    table_id,
-                    orphan_branch_name.as_ref().unwrap(),
-                    branch_id,
-                );
-                let dropped_meta = DroppedBranchMeta {
-                    drop_on: Utc::now(),
-                    expire_at: req.expire_at,
-                };
-                if_then.push(txn_put_pb(&orphan_dropped_key, &dropped_meta)?);
-            } else {
-                let table_branch = TableBranch {
-                    expire_at: req.expire_at,
-                    branch_id,
-                };
-                if_then.push(txn_put_pb(&key_branch, &table_branch)?);
-            }
-            let mut txn = TxnRequest::new(conditions, if_then);
-
-            let policy_ids: HashSet<u64> = branch_meta
-                .column_mask_policy_columns_ids
-                .values()
-                .map(|policy_map| policy_map.policy_id)
-                .collect();
-            for policy_id in policy_ids {
-                let ident = MaskPolicyTableIdIdent::new_generic(
-                    req.name_ident.tenant.clone(),
-                    MaskPolicyIdTableId {
-                        policy_id,
-                        table_id: branch_id,
-                    },
-                );
-                txn.if_then.push(txn_put_pb(&ident, &MaskPolicyTableId)?);
-            }
-
-            if let Some(policy_map) = &branch_meta.row_access_policy_columns_ids {
-                let ident = RowAccessPolicyTableIdIdent::new_generic(
-                    req.name_ident.tenant.clone(),
-                    RowAccessPolicyIdTableId {
-                        policy_id: policy_map.policy_id,
-                        table_id: branch_id,
-                    },
-                );
-                txn.if_then
-                    .push(txn_put_pb(&ident, &RowAccessPolicyTableId {})?);
-            }
-
-            for table_field in branch_meta.schema.fields() {
-                let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
-                    continue;
-                };
-
-                // Inherit the source table's current auto-increment counter so the branch
-                // does not generate values that collide with data already in the snapshot.
-                // Falls back to the column seed when the source has never been incremented.
-                let source_ai_key = AutoIncrementKey::new(source_table_id, table_field.column_id());
-                let source_ai_ident =
-                    AutoIncrementStorageIdent::new_generic(&req.name_ident.tenant, source_ai_key);
-                let start_value = match self.get_pb(&source_ai_ident).await? {
-                    Some(seq_v) => seq_v.data.into_inner().0,
-                    None => auto_increment_expr.start,
-                };
-
-                let auto_increment_key = AutoIncrementKey::new(branch_id, table_field.column_id());
-                let storage_ident = AutoIncrementStorageIdent::new_generic(
-                    &req.name_ident.tenant,
-                    auto_increment_key,
-                );
-                let storage_value = Id::new_typed(AutoIncrementStorageValue(start_value));
-
-                txn.if_then
-                    .push(txn_put_pb(&storage_ident, &storage_value)?);
-            }
-
-            txn.if_then.push(txn_get(&key_branch_table_id));
-
-            let (succ, responses) = send_txn(self, txn).await?;
+            let (succ, _responses) = send_txn(self, txn).await?;
 
             debug!(
-                table_id = table_id,
+                table_id = req.table_id,
                 branch_name :% =(branch_name),
                 branch_id = branch_id,
                 succ = succ;
@@ -569,36 +421,17 @@ where
             );
 
             if succ {
-                // The branch table meta is fetched in-txn so the caller receives the exact seq
-                // written by this successful branch creation.
-                let Some(branch_id_seq) = responses.last().and_then(|r| match &r.response {
-                    Some(Response::Get(resp)) => resp.value.as_ref().map(|v| v.seq),
-                    _ => None,
-                }) else {
-                    return Err(KVAppError::AppError(AppError::UnknownTableId(
-                        UnknownTableId::new(
-                            branch_id,
-                            "create_table_branch: missing table_id_seq in txn response",
-                        ),
-                    )));
-                };
-
                 return Ok(CreateTableBranchReply {
                     branch_id,
-                    branch_id_seq,
-                    branch_meta: branch_meta.clone(),
-                    orphan_branch_name: orphan_branch_name.clone(),
+                    auto_increment_start_vals: auto_increment_start_vals
+                        .clone()
+                        .unwrap_or_default(),
                 });
             }
         }
     }
 
-    /// Publish a previously hidden branch generation under its real branch name.
-    ///
-    /// This finalizes snapshot-based branch creation by:
-    /// - deleting the orphan dropped-branch entry
-    /// - clearing `drop_on` from the branch table meta (rewritten without TTL)
-    /// - writing the visible `TableBranch` entry
+    /// Publish a previously staged branch generation under its real branch name.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn commit_table_branch_meta(
@@ -607,59 +440,35 @@ where
     ) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let key_table = DBIdTableName {
-            db_id: req.db_id,
-            table_name: req.table_name.clone(),
+        let key_table_id = TableId {
+            table_id: req.table_id,
         };
         let key_branch = TableIdBranchName::new(req.table_id, &req.branch_name);
-        let key_orphan_dropped =
-            DroppedBranchIdent::new(req.table_id, &req.orphan_branch_name, req.branch_id);
+        let key_staged_branch = StagedBranchIdent::new(req.table_id, req.branch_id);
         let key_branch_table_id = TableId {
             table_id: req.branch_id,
         };
-        let keys = vec![
-            key_table.to_string_key(),
-            key_branch.to_string_key(),
-            key_orphan_dropped.to_string_key(),
-            key_branch_table_id.to_string_key(),
-        ];
 
         let txn_sender = IdempotentKVTxnSender::new();
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            let values = self.mget_kv(&keys).await?;
-            let mut data = keys
-                .iter()
-                .zip(values.into_iter())
-                .map(|(k, v)| TxnGetResponse::new(k, v.map(pb::SeqV::from)))
-                .collect::<Vec<_>>();
-
-            let seq_table = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_id_get_response::<DBIdTableName>(d)?;
-                assert_eq!(key_table, k);
-
-                let Some(v) = v else {
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&key_table.table_name, "commit_table_branch_meta"),
-                    )));
-                };
-                if *v.data != req.table_id {
-                    return Err(KVAppError::AppError(AppError::UnknownTable(
-                        UnknownTable::new(&key_table.table_name, "commit_table_branch_meta"),
-                    )));
-                }
-                v.seq
+            let Some(seq_table_meta) = self.get_pb(&key_table_id).await? else {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(req.table_id, "commit_table_branch_meta: base table"),
+                )));
             };
+            if seq_table_meta.data.drop_on.is_some() {
+                return Err(KVAppError::AppError(AppError::UnknownTableId(
+                    UnknownTableId::new(
+                        req.table_id,
+                        "commit_table_branch_meta: base table is dropped",
+                    ),
+                )));
+            }
 
-            let seq_branch = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableIdBranchName>(d)?;
-                assert_eq!(key_branch, k);
-                v
-            };
+            let seq_branch = self.get_pb(&key_branch).await?;
             if seq_branch.is_some() {
                 return Err(KVAppError::AppError(AppError::from(
                     ReferenceAlreadyExists::new(format!(
@@ -669,75 +478,88 @@ where
                 )));
             }
 
-            let seq_orphan_dropped = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<DroppedBranchIdent>(d)?;
-                assert_eq!(key_orphan_dropped, k);
-                v
-            };
-            let Some(seq_orphan_dropped) = seq_orphan_dropped else {
+            let seq_staged_branch = self.get_pb(&key_staged_branch).await?;
+            let Some(seq_staged_branch) = seq_staged_branch else {
                 return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
                     format!("Unknown branch '{}'", req.branch_name),
                 ))));
             };
-            if seq_orphan_dropped.data.drop_on < req.retention_boundary {
+            if seq_staged_branch.data.cleanup_marked {
                 return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
                     format!(
-                        "Staged branch '{}' expired before {} and can no longer be published",
-                        req.branch_name, req.retention_boundary
+                        "Staged branch '{}' is already marked for cleanup",
+                        req.branch_name
                     ),
                 ))));
             }
-
-            let seq_branch_meta = {
-                let d = data.remove(0);
-                let (k, v) = deserialize_struct_get_response::<TableId>(d)?;
-                assert_eq!(key_branch_table_id, k);
-                v
-            };
-            let Some(seq_branch_meta) = seq_branch_meta else {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(req.branch_id, "commit_table_branch_meta"),
-                )));
-            };
-            if req.seq.match_seq(&seq_branch_meta).is_err() {
-                return Err(KVAppError::AppError(AppError::from(
-                    TableVersionMismatched::new(
-                        req.branch_id,
-                        req.seq,
-                        seq_branch_meta.seq,
-                        "commit_table_branch_meta",
+            if seq_staged_branch.data.create_on + STAGED_BRANCH_TIMEOUT <= Utc::now() {
+                return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
+                    format!(
+                        "Staged branch '{}' timed out and can no longer be published",
+                        req.branch_name
                     ),
-                )));
-            }
-            if seq_branch_meta.data.drop_on.is_none() {
-                return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                    format!("Branch '{}' has already been committed", req.branch_name),
                 ))));
             }
-
-            // Publishing clears drop_on and rewrites the branch table meta without TTL.
-            let mut committed_branch_meta = req.new_table_meta.clone();
-            committed_branch_meta.drop_on = None;
 
             let table_branch = TableBranch {
                 expire_at: req.expire_at,
                 branch_id: req.branch_id,
             };
 
-            let txn_req = TxnRequest::new(
+            let mut txn_req = TxnRequest::new(
                 vec![
-                    txn_cond_seq(&key_table, Eq, seq_table),
+                    txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
                     txn_cond_seq(&key_branch, Eq, 0),
-                    txn_cond_seq(&key_orphan_dropped, Eq, seq_orphan_dropped.seq),
-                    txn_cond_seq(&key_branch_table_id, Eq, seq_branch_meta.seq),
+                    txn_cond_seq(&key_staged_branch, Eq, seq_staged_branch.seq),
+                    txn_cond_seq(&key_branch_table_id, Eq, 0),
                 ],
                 vec![
-                    txn_put_pb(&key_branch_table_id, &committed_branch_meta)?,
+                    txn_put_pb(&key_branch_table_id, &req.new_table_meta)?,
                     txn_put_pb(&key_branch, &table_branch)?,
-                    txn_del(&key_orphan_dropped),
+                    txn_del(&key_staged_branch),
                 ],
             );
+
+            let policy_ids: HashSet<u64> = req
+                .new_table_meta
+                .column_mask_policy_columns_ids
+                .values()
+                .map(|policy_map| policy_map.policy_id)
+                .collect();
+            for policy_id in policy_ids {
+                let ident =
+                    MaskPolicyTableIdIdent::new_generic(req.tenant.clone(), MaskPolicyIdTableId {
+                        policy_id,
+                        table_id: req.branch_id,
+                    });
+                txn_req
+                    .if_then
+                    .push(txn_put_pb(&ident, &MaskPolicyTableId)?);
+            }
+
+            if let Some(policy_map) = &req.new_table_meta.row_access_policy_columns_ids {
+                let ident = RowAccessPolicyTableIdIdent::new_generic(
+                    req.tenant.clone(),
+                    RowAccessPolicyIdTableId {
+                        policy_id: policy_map.policy_id,
+                        table_id: req.branch_id,
+                    },
+                );
+                txn_req
+                    .if_then
+                    .push(txn_put_pb(&ident, &RowAccessPolicyTableId {})?);
+            }
+
+            for (column_id, start_value) in &req.auto_increment_start_vals {
+                let auto_increment_key = AutoIncrementKey::new(req.branch_id, *column_id);
+                let storage_ident =
+                    AutoIncrementStorageIdent::new_generic(&req.tenant, auto_increment_key);
+                let storage_value = Id::new_typed(AutoIncrementStorageValue(*start_value));
+
+                txn_req
+                    .if_then
+                    .push(txn_put_pb(&storage_ident, &storage_value)?);
+            }
 
             let txn_response = txn_sender.send_txn(self, txn_req).await?;
             let succ = match txn_response {
@@ -760,6 +582,84 @@ where
                 "commit_table_branch_meta"
             );
 
+            if succ {
+                return Ok(());
+            }
+        }
+    }
+
+    /// Mark staged branches under a base table so a later cleanup step can remove them.
+    ///
+    /// `cleanup_at` is the evaluation timestamp for staged cleanup eligibility.
+    /// `Some(ts)` marks only staged branches whose `create_on + STAGED_BRANCH_TIMEOUT <= ts`;
+    /// `None` marks every staged branch under the base table, which is used by dropped-table
+    /// cleanup as a final fallback.
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn mark_staged_branches_for_cleanup(
+        &self,
+        table_id: u64,
+        cleanup_at: Option<DateTime<Utc>>,
+    ) -> Result<Vec<StagedBranchIdent>, KVAppError> {
+        debug!(table_id = table_id, cleanup_at :? =(cleanup_at); "RefApi: {}", func_name!());
+
+        let staged_prefix = StagedBranchIdent::new(table_id, 0);
+        let staged_dir = DirName::new(staged_prefix);
+        let staged_entries = self
+            .list_pb_vec(ListOptions::unlimited(&staged_dir))
+            .await?;
+
+        let mut marked = Vec::new();
+        for (key, seq_staged) in staged_entries {
+            if seq_staged.data.cleanup_marked {
+                marked.push(key);
+                continue;
+            }
+
+            if cleanup_at.is_some_and(|cleanup_at| {
+                seq_staged.data.create_on + STAGED_BRANCH_TIMEOUT > cleanup_at
+            }) {
+                continue;
+            }
+
+            let mut staged = seq_staged.data;
+            staged.cleanup_marked = true;
+            let txn = TxnRequest::new(vec![txn_cond_seq(&key, Eq, seq_staged.seq)], vec![
+                txn_put_pb(&key, &staged)?,
+            ]);
+            let (succ, _) = send_txn(self, txn).await?;
+            if succ {
+                marked.push(key);
+            }
+        }
+
+        Ok(marked)
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
+    async fn drop_staged_table_branch(
+        &self,
+        table_id: u64,
+        branch_id: u64,
+    ) -> Result<(), KVAppError> {
+        debug!(table_id = table_id, branch_id = branch_id; "RefApi: {}", func_name!());
+
+        let key_staged_branch = StagedBranchIdent::new(table_id, branch_id);
+
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
+
+            let seq_staged_branch = self.get_pb(&key_staged_branch).await?;
+            let Some(seq_staged_branch) = seq_staged_branch else {
+                return Ok(());
+            };
+
+            let mut txn = TxnRequest::default();
+            txn_delete_exact(&mut txn, &key_staged_branch, seq_staged_branch.seq);
+
+            let (succ, _) = send_txn(self, txn).await?;
             if succ {
                 return Ok(());
             }

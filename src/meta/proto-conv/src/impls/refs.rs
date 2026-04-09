@@ -108,3 +108,30 @@ impl FromToProto for mt::DroppedBranchMeta {
         })
     }
 }
+
+impl FromToProto for mt::StagedBranch {
+    type PB = pb::StagedBranch;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            create_on: DateTime::<Utc>::from_pb(p.create_on)?,
+            cleanup_marked: p.cleanup_marked,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            create_on: self.create_on.to_pb()?,
+            cleanup_marked: self.cleanup_marked,
+        })
+    }
+}

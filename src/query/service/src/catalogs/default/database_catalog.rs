@@ -17,6 +17,8 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
@@ -103,6 +105,7 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
+use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableBranchMeta;
@@ -443,6 +446,24 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn commit_table_branch_meta(&self, req: CommitTableBranchMetaReq) -> Result<()> {
         self.mutable_catalog.commit_table_branch_meta(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn mark_staged_branches_for_cleanup(
+        &self,
+        table_id: u64,
+        cleanup_at: Option<DateTime<Utc>>,
+    ) -> Result<Vec<StagedBranchIdent>> {
+        self.mutable_catalog
+            .mark_staged_branches_for_cleanup(table_id, cleanup_at)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_staged_table_branch(&self, table_id: u64, branch_id: u64) -> Result<()> {
+        self.mutable_catalog
+            .drop_staged_table_branch(table_id, branch_id)
+            .await
     }
 
     #[async_backtrace::framed]

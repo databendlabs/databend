@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
+use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdBranchName;
@@ -125,7 +126,9 @@ where
     /// Garbage collect one non-retainable branch generation.
     ///
     /// This removes branch table metadata and related kvs, and removes the
-    /// branch id from branch history.
+    /// branch id from branch history. The branch may come from either the
+    /// dropped-branch key-space or an active branch entry whose `expire_at`
+    /// has already passed and is also beyond the retention boundary.
     #[fastrace::trace]
     async fn gc_drop_table_branch(
         &self,
@@ -134,55 +137,53 @@ where
         let branch_table_id = TableId {
             table_id: req.branch_id,
         };
+        let key_active_branch = TableIdBranchName::new(req.table_id, &req.branch_name);
         let key_dropped_branch =
             DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
 
-        let seq_dropped = self.get_pb(&key_dropped_branch).await?;
-        let Some(seq_dropped) = seq_dropped else {
-            return Ok(0);
-        };
-        if seq_dropped.data.drop_on >= req.retention_boundary {
-            return Ok(0);
-        }
-
-        // Copied-file markers are independent from the dropped-branch key lifecycle.
-        // Remove them once up front so retries only need to protect branch metadata cleanup.
-        //
-        // This API is only called from vacuum_table_v2::final_gc_branch(), which only final-gcs
-        // branches after they are already past the retention boundary. Branch undrop is blocked
-        // once that boundary is crossed, and copied-file dedup markers are best-effort metadata
-        // with their own TTL, so removing them eagerly outside the retry loop is acceptable here.
+        // Copied-file markers: remove once up front (idempotent, best-effort).
         let num_removed_copied_files =
             remove_copied_files_for_dropped_table(self, &branch_table_id).await?;
 
         let mut trials = txn_backoff(None, func_name!());
-        let mut maybe_seq_dropped = Some(seq_dropped);
         loop {
             trials.next().unwrap()?.await;
 
+            let seq_dropped = self.get_pb(&key_dropped_branch).await?;
+            let seq_active = if seq_dropped.is_some() {
+                None
+            } else {
+                self.get_pb(&key_active_branch).await?
+            };
+
+            let effective_drop_time = match (&seq_dropped, &seq_active) {
+                (Some(d), _) => Some(d.data.drop_on),
+                (_, Some(a)) => a.data.expire_at.filter(|e| *e < req.retention_boundary),
+                _ => None,
+            };
+            let Some(effective_drop_time) = effective_drop_time else {
+                return Ok(num_removed_copied_files);
+            };
+            if effective_drop_time >= req.retention_boundary {
+                return Ok(num_removed_copied_files);
+            }
+
             let mut txn = TxnRequest::default();
 
-            // 1) Remove the dropped-branch entry.
-            let seq_dropped = if let Some(seq_dropped) = maybe_seq_dropped.take() {
-                seq_dropped
-            } else {
-                let seq = self.get_pb(&key_dropped_branch).await?;
-                let Some(seq_dropped) = seq else {
-                    return Ok(num_removed_copied_files);
-                };
-                if seq_dropped.data.drop_on >= req.retention_boundary {
-                    return Ok(num_removed_copied_files);
-                }
-                seq_dropped
-            };
-            txn.condition
-                .push(txn_cond_eq_seq(&key_dropped_branch, seq_dropped.seq));
-            txn.if_then.push(txn_del(&key_dropped_branch));
+            if let Some(seq_active) = seq_active.as_ref() {
+                txn.condition
+                    .push(txn_cond_eq_seq(&key_active_branch, seq_active.seq));
+                txn.if_then.push(txn_del(&key_active_branch));
+            }
+            if let Some(seq_dropped) = seq_dropped.as_ref() {
+                txn.condition
+                    .push(txn_cond_eq_seq(&key_dropped_branch, seq_dropped.seq));
+                txn.if_then.push(txn_del(&key_dropped_branch));
+            }
 
-            // 2) Remove the branch table metadata and branch-owned auxiliary kvs.
-            //    If the table meta is already gone (e.g. a previous partial GC removed it
-            //    but crashed before deleting the dropped-branch marker), we still proceed
-            //    to step 2 to clean up the stale dropped-branch key.
+            // Remove branch table metadata and branch-owned auxiliary kvs.
+            // If table meta is already gone (partial GC), we still proceed to
+            // clean up whichever branch-history key still exists.
             let _ = remove_data_for_dropped_table_impl(
                 self,
                 &req.tenant,
@@ -1024,6 +1025,17 @@ async fn remove_data_for_dropped_table(
         let _ =
             remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, txn).await?;
         txn.condition.push(txn_cond_eq_seq(key, seq_dropped.seq));
+        txn.if_then.push(txn_del(key));
+    }
+
+    // Remove staged branch entries under the dropped base table as a final cleanup fallback.
+    let staged_branch_prefix = StagedBranchIdent::new(table_id.table_id, 0);
+    let staged_branch_dir = DirName::new(staged_branch_prefix);
+    let staged_branches = kv_api
+        .list_pb_vec(ListOptions::unlimited(&staged_branch_dir))
+        .await?;
+    for (key, seq_staged) in &staged_branches {
+        txn.condition.push(txn_cond_eq_seq(key, seq_staged.seq));
         txn.if_then.push(txn_del(key));
     }
 

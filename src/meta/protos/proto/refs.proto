@@ -42,3 +42,12 @@ message DroppedBranchMeta {
   // Option<DateTime<Utc>>
   optional string expire_at = 2;
 }
+
+message StagedBranch {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // DateTime<Utc>
+  string create_on = 1;
+  bool cleanup_marked = 2;
+}
