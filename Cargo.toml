@@ -618,7 +618,7 @@ overflow-checks = true
 rpath = true
 
 [patch.crates-io]
-arrow-udf-runtime = { git = "https://github.com/SkyFan2002/arrow-udf.git", rev = "955f84470ff596640364fe6561d183979a4ab11f" }
+arrow-udf-runtime = { git = "https://github.com/SkyFan2002/arrow-udf.git", rev = "ddde517521a6bc27a7db1e3a59c69f7279b2289f" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
 async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.git", rev = "a353334" }
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
