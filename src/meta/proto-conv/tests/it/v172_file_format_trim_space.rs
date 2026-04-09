@@ -23,12 +23,13 @@ use fastrace::func_name;
 use crate::common;
 
 #[test]
-fn test_decode_v171_csv_file_format_params() -> anyhow::Result<()> {
-    let csv_file_format_params_v171 = vec![
+fn test_decode_v172_csv_file_format_params() -> anyhow::Result<()> {
+    let csv_file_format_params_v172 = vec![
         8, 11, 16, 2, 26, 1, 124, 34, 1, 10, 42, 8, 110, 97, 110, 95, 117, 116, 102, 56, 50, 1, 92,
         58, 1, 34, 66, 2, 92, 78, 82, 4, 78, 85, 76, 76, 90, 3, 104, 101, 120, 96, 1, 106, 4, 69,
         87, 75, 66, 112, 1, 122, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 130, 1, 3,
-        103, 98, 107, 138, 1, 7, 114, 101, 112, 108, 97, 99, 101, 160, 6, 171, 1, 168, 6, 24,
+        103, 98, 107, 138, 1, 7, 114, 101, 112, 108, 97, 99, 101, 144, 1, 1, 160, 6, 172, 1, 168,
+        6, 24,
     ];
     let want = || CsvFileFormatParams {
         compression: StageFileCompression::Zip,
@@ -41,6 +42,7 @@ fn test_decode_v171_csv_file_format_params() -> anyhow::Result<()> {
         escape: "\\".to_string(),
         quote: "\"".to_string(),
         error_on_column_count_mismatch: true,
+        trim_space: true,
         allow_quoted_nulls: true,
         empty_field_as: EmptyFieldAs::Null,
         quoted_empty_field_as: EmptyFieldAs::FieldDefault,
@@ -48,13 +50,12 @@ fn test_decode_v171_csv_file_format_params() -> anyhow::Result<()> {
         geometry_format: GeometryDataType::EWKB,
         encoding: "gbk".to_string(),
         encoding_error_mode: "replace".to_string(),
-        trim_space: false,
     };
 
     common::test_load_old(
         func_name!(),
-        csv_file_format_params_v171.as_slice(),
-        171,
+        csv_file_format_params_v172.as_slice(),
+        172,
         want(),
     )?;
     common::test_pb_from_to(func_name!(), want())?;
@@ -62,12 +63,12 @@ fn test_decode_v171_csv_file_format_params() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_decode_v171_text_file_format_params() -> anyhow::Result<()> {
-    let text_file_format_params_v171 = vec![
+fn test_decode_v172_text_file_format_params() -> anyhow::Result<()> {
+    let text_file_format_params_v172 = vec![
         8, 11, 16, 2, 26, 1, 124, 34, 1, 10, 42, 8, 110, 97, 110, 95, 117, 116, 102, 56, 50, 1, 92,
         58, 1, 34, 66, 4, 78, 85, 76, 76, 72, 1, 82, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65,
-        85, 76, 84, 88, 1, 98, 3, 103, 98, 107, 106, 7, 114, 101, 112, 108, 97, 99, 101, 160, 6,
-        171, 1, 168, 6, 24,
+        85, 76, 84, 88, 1, 98, 3, 103, 98, 107, 106, 7, 114, 101, 112, 108, 97, 99, 101, 112, 1,
+        160, 6, 172, 1, 168, 6, 24,
     ];
     let want = || TextFileFormatParams {
         compression: StageFileCompression::Zip,
@@ -77,19 +78,19 @@ fn test_decode_v171_text_file_format_params() -> anyhow::Result<()> {
         escape: "\\".to_string(),
         quote: "\"".to_string(),
         error_on_column_count_mismatch: false,
+        trim_space: true,
         empty_field_as: EmptyFieldAs::FieldDefault,
         output_header: true,
         nan_display: "nan_utf8".to_string(),
         null_display: "NULL".to_string(),
         encoding: "gbk".to_string(),
         encoding_error_mode: "replace".to_string(),
-        trim_space: false,
     };
 
     common::test_load_old(
         func_name!(),
-        text_file_format_params_v171.as_slice(),
-        171,
+        text_file_format_params_v172.as_slice(),
+        172,
         want(),
     )?;
     common::test_pb_from_to(func_name!(), want())?;

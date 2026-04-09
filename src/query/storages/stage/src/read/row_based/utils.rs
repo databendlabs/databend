@@ -23,6 +23,31 @@ pub fn truncate_column_data(s: String) -> String {
     }
 }
 
+pub fn trim_ascii_space(mut data: &[u8]) -> &[u8] {
+    while let Some((first, rest)) = data.split_first() {
+        if is_trim_space_byte(*first) {
+            data = rest;
+        } else {
+            break;
+        }
+    }
+
+    while let Some((last, rest)) = data.split_last() {
+        if is_trim_space_byte(*last) {
+            data = rest;
+        } else {
+            break;
+        }
+    }
+
+    data
+}
+
+#[inline]
+fn is_trim_space_byte(byte: u8) -> bool {
+    matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+}
+
 pub fn get_decode_error_by_pos(
     column_index: usize,
     schema: &TableSchemaRef,
@@ -37,5 +62,17 @@ pub fn get_decode_error_by_pos(
         column_name: field.name().to_string(),
         column_type: field.data_type().to_string(),
         column_data: truncate_column_data(column_data),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::trim_ascii_space;
+
+    #[test]
+    fn test_trim_ascii_space() {
+        assert_eq!(trim_ascii_space(b" \t\r\n\x0b\x0cabc\t "), b"abc");
+        assert_eq!(trim_ascii_space(b"abc"), b"abc");
+        assert_eq!(trim_ascii_space(b" \t\r\n\x0b\x0c "), b"");
     }
 }

@@ -56,6 +56,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }
 cron = { workspace = true }
+csv-core = { workspace = true }
 ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-base = { workspace = true }
