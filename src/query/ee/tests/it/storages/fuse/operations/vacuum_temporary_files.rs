@@ -45,7 +45,7 @@ mod unit {
 
     #[derive(Clone, Debug)]
     enum StatResult {
-        Meta(Metadata),
+        Meta(Box<Metadata>),
         NotFound,
     }
 
@@ -146,7 +146,7 @@ mod unit {
                 .cloned()
                 .unwrap_or(StatResult::NotFound)
             {
-                StatResult::Meta(meta) => Ok(RpStat::new(meta)),
+                StatResult::Meta(meta) => Ok(RpStat::new(*meta)),
                 StatResult::NotFound => Err(opendal::Error::new(
                     opendal::ErrorKind::NotFound,
                     "mock stat not found",
@@ -257,10 +257,13 @@ mod unit {
         let accessor = MockVacuumAccessor::new(
             HashMap::new(),
             HashMap::from([
-                ("spill/dir/".to_string(), StatResult::Meta(dir_meta(None))),
+                (
+                    "spill/dir/".to_string(),
+                    StatResult::Meta(Box::new(dir_meta(None))),
+                ),
                 (
                     "spill/dir.list".to_string(),
-                    StatResult::Meta(file_meta(Some(meta_ts))),
+                    StatResult::Meta(Box::new(file_meta(Some(meta_ts)))),
                 ),
             ]),
             HashMap::new(),
@@ -284,10 +287,13 @@ mod unit {
                 file_meta(Some(now - 10_000)),
             )])]),
             HashMap::from([
-                ("spill/dir/".to_string(), StatResult::Meta(dir_meta(None))),
+                (
+                    "spill/dir/".to_string(),
+                    StatResult::Meta(Box::new(dir_meta(None))),
+                ),
                 (
                     "spill/dir.list".to_string(),
-                    StatResult::Meta(file_meta(Some(now))),
+                    StatResult::Meta(Box::new(file_meta(Some(now)))),
                 ),
             ]),
             HashMap::new(),
@@ -325,10 +331,13 @@ mod unit {
                 ("spill/dir/file2".to_string(), file_meta(Some(old_ts))),
             ])]),
             HashMap::from([
-                ("spill/dir/".to_string(), StatResult::Meta(dir_meta(None))),
+                (
+                    "spill/dir/".to_string(),
+                    StatResult::Meta(Box::new(dir_meta(None))),
+                ),
                 (
                     "spill/dir.list".to_string(),
-                    StatResult::Meta(file_meta(Some(old_ts))),
+                    StatResult::Meta(Box::new(file_meta(Some(old_ts)))),
                 ),
             ]),
             HashMap::from([(
