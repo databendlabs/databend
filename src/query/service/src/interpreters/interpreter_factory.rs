@@ -59,7 +59,9 @@ use crate::interpreters::interpreter_connection_create::CreateConnectionInterpre
 use crate::interpreters::interpreter_connection_desc::DescConnectionInterpreter;
 use crate::interpreters::interpreter_connection_drop::DropConnectionInterpreter;
 use crate::interpreters::interpreter_connection_show::ShowConnectionsInterpreter;
+#[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
+#[cfg(feature = "storage-stage")]
 use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_create_warehouses::CreateWarehouseInterpreter;
 use crate::interpreters::interpreter_create_workload_group::CreateWorkloadGroupInterpreter;
@@ -106,12 +108,6 @@ use crate::interpreters::interpreter_table_row_access_add::AddTableRowAccessPoli
 use crate::interpreters::interpreter_table_tag_create::CreateTableTagInterpreter;
 use crate::interpreters::interpreter_table_tag_drop::DropTableTagInterpreter;
 use crate::interpreters::interpreter_table_unset_options::UnsetOptionsInterpreter;
-use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
-use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
-use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
-use crate::interpreters::interpreter_task_drop::DropTaskInterpreter;
-use crate::interpreters::interpreter_task_execute::ExecuteTaskInterpreter;
-use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::interpreter_txn_abort::AbortInterpreter;
 use crate::interpreters::interpreter_txn_begin::BeginInterpreter;
 use crate::interpreters::interpreter_txn_commit::CommitInterpreter;
@@ -123,11 +119,26 @@ use crate::interpreters::interpreter_worker_alter::AlterWorkerInterpreter;
 use crate::interpreters::interpreter_worker_create::CreateWorkerInterpreter;
 use crate::interpreters::interpreter_worker_drop::DropWorkerInterpreter;
 use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
+#[cfg(feature = "task-support")]
+use crate::interpreters::task;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.
 pub struct InterpreterFactory;
+
+#[cfg(not(feature = "task-support"))]
+fn task_support_disabled(op: &str) -> ErrorCode {
+    ErrorCode::Unimplemented(format!(
+        "{op} requires cargo feature 'task-support', rebuild with it enabled"
+    ))
+}
+#[cfg(not(feature = "storage-stage"))]
+fn stage_disabled(op: &str) -> ErrorCode {
+    ErrorCode::Unimplemented(format!(
+        "{op} requires cargo feature 'storage-stage', rebuild with it enabled"
+    ))
+}
 
 /// InterpreterFactory provides `get` method which transforms `Plan` into the corresponding interpreter.
 /// Such as: Plan::Query -> InterpreterSelectV2
@@ -304,13 +315,19 @@ impl InterpreterFactory {
                 ctx,
                 sql.clone(),
             )?)),
+            #[cfg(feature = "storage-stage")]
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
                 *copy_plan.clone(),
             )?)),
+            #[cfg(not(feature = "storage-stage"))]
+            Plan::CopyIntoTable(_) => Err(stage_disabled("COPY INTO TABLE")),
+            #[cfg(feature = "storage-stage")]
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
                 CopyIntoLocationInterpreter::try_create(ctx, *copy_plan.clone())?,
             )),
+            #[cfg(not(feature = "storage-stage"))]
+            Plan::CopyIntoLocation(_) => Err(stage_disabled("COPY INTO LOCATION")),
             // catalogs
             Plan::ShowCreateCatalog(plan) => Ok(Arc::new(
                 ShowCreateCatalogInterpreter::try_create(ctx, *plan.clone())?,
@@ -752,21 +769,48 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
 
-            Plan::CreateTask(p) => Ok(Arc::new(CreateTaskInterpreter::try_create(
+            #[cfg(feature = "task-support")]
+            Plan::CreateTask(p) => Ok(Arc::new(task::CreateTaskInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            Plan::AlterTask(p) => Ok(Arc::new(AlterTaskInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::DropTask(p) => Ok(Arc::new(DropTaskInterpreter::try_create(ctx, *p.clone())?)),
-            Plan::DescribeTask(p) => Ok(Arc::new(DescribeTaskInterpreter::try_create(
+            #[cfg(not(feature = "task-support"))]
+            Plan::CreateTask(_) => Err(task_support_disabled("CREATE TASK")),
+            #[cfg(feature = "task-support")]
+            Plan::AlterTask(p) => Ok(Arc::new(task::AlterTaskInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            Plan::ExecuteTask(p) => Ok(Arc::new(ExecuteTaskInterpreter::try_create(
+            #[cfg(not(feature = "task-support"))]
+            Plan::AlterTask(_) => Err(task_support_disabled("ALTER TASK")),
+            #[cfg(feature = "task-support")]
+            Plan::DropTask(p) => Ok(Arc::new(task::DropTaskInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),
-            Plan::ShowTasks(p) => Ok(Arc::new(ShowTasksInterpreter::try_create(ctx, *p.clone())?)),
+            #[cfg(not(feature = "task-support"))]
+            Plan::DropTask(_) => Err(task_support_disabled("DROP TASK")),
+            #[cfg(feature = "task-support")]
+            Plan::DescribeTask(p) => Ok(Arc::new(task::DescribeTaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            #[cfg(not(feature = "task-support"))]
+            Plan::DescribeTask(_) => Err(task_support_disabled("DESCRIBE TASK")),
+            #[cfg(feature = "task-support")]
+            Plan::ExecuteTask(p) => Ok(Arc::new(task::ExecuteTaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            #[cfg(not(feature = "task-support"))]
+            Plan::ExecuteTask(_) => Err(task_support_disabled("EXECUTE TASK")),
+            #[cfg(feature = "task-support")]
+            Plan::ShowTasks(p) => Ok(Arc::new(task::ShowTasksInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            #[cfg(not(feature = "task-support"))]
+            Plan::ShowTasks(_) => Err(task_support_disabled("SHOW TASKS")),
 
             Plan::CreateConnection(p) => Ok(Arc::new(CreateConnectionInterpreter::try_create(
                 ctx,

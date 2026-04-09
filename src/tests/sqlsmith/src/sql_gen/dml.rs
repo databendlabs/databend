@@ -472,6 +472,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 };
                 (
                     AlterTableAction::AddColumn {
+                        if_not_exists: false,
                         column: column.clone(),
                         option: option.clone(),
                     },

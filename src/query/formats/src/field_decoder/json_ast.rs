@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::io::Cursor;
 
 use databend_common_column::types::months_days_micros;
 use databend_common_column::types::timestamp_tz;
@@ -21,7 +20,6 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::serialize::read_decimal_from_json;
-use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::NumberColumnBuilder;
@@ -36,22 +34,20 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_expression::types::number::Number;
 use databend_common_expression::types::string::StringColumnBuilder;
-use databend_common_expression::types::timestamp::clamp_timestamp;
-use databend_common_expression::types::timestamp_tz::string_to_timestamp_tz;
+use databend_common_expression::utils::auto_detect_datetime::int64_to_timestamp;
+use databend_common_expression::utils::auto_detect_datetime::parse_date_with_auto;
+use databend_common_expression::utils::auto_detect_datetime::parse_timestamp_tz_with_auto;
+use databend_common_expression::utils::auto_detect_datetime::parse_timestamp_with_auto;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::HybridBitmap;
 use databend_common_io::Interval;
-use databend_common_io::cursor_ext::BufferReadDateTimeExt;
-use databend_common_io::cursor_ext::DateTimeResType;
 use databend_common_io::geography::geography_from_ewkt;
 use databend_common_io::geometry_from_ewkt;
 use databend_common_io::parse_bitmap;
 use databend_common_io::prelude::InputFormatSettings;
-use databend_functions_scalar_datetime::datetime::int64_to_timestamp;
 use jiff::tz::TimeZone;
 use lexical_core::FromLexical;
-use num::cast::AsPrimitive;
 use num_traits::NumCast;
 use serde_json::Value;
 
@@ -62,6 +58,7 @@ pub struct FieldJsonAstDecoder {
     pub ident_case_sensitive: bool,
     pub is_select: bool,
     is_rounding_mode: bool,
+    enable_auto_detect_datetime_format: bool,
 }
 
 impl FieldDecoder for FieldJsonAstDecoder {
@@ -77,6 +74,7 @@ impl FieldJsonAstDecoder {
             ident_case_sensitive: false,
             is_select,
             is_rounding_mode: settings.is_rounding_mode,
+            enable_auto_detect_datetime_format: settings.enable_auto_detect_datetime_format,
         }
     }
 
@@ -287,10 +285,12 @@ impl FieldJsonAstDecoder {
     fn read_date(&self, column: &mut Vec<i32>, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
-                let mut reader = Cursor::new(v.as_bytes());
-                let date = reader.read_date_text(&self.jiff_timezone)?;
-                let days = uniform_date(date);
-                column.push(clamp_date(days as i64));
+                let days = parse_date_with_auto(
+                    v,
+                    &self.jiff_timezone,
+                    self.enable_auto_detect_datetime_format,
+                )?;
+                column.push(days);
                 Ok(())
             }
             Value::Number(number) => match number.as_i64() {
@@ -307,18 +307,12 @@ impl FieldJsonAstDecoder {
     fn read_timestamp(&self, column: &mut Vec<i64>, value: &Value) -> Result<()> {
         match value {
             Value::String(v) => {
-                let v = v.clone();
-                let mut reader = Cursor::new(v.as_bytes());
-                let ts = reader.read_timestamp_text(&self.jiff_timezone)?;
-
-                match ts {
-                    DateTimeResType::Datetime(ts) => {
-                        let mut micros = ts.timestamp().as_microsecond();
-                        clamp_timestamp(&mut micros);
-                        column.push(micros.as_());
-                    }
-                    _ => unreachable!(),
-                }
+                let micros = parse_timestamp_with_auto(
+                    v,
+                    &self.jiff_timezone,
+                    self.enable_auto_detect_datetime_format,
+                )?;
+                column.push(micros);
                 Ok(())
             }
             Value::Number(number) => match number.as_i64() {
@@ -338,7 +332,11 @@ impl FieldJsonAstDecoder {
     fn read_timestamp_tz(&self, column: &mut Vec<timestamp_tz>, value: &Value) -> Result<()> {
         match value {
             Value::String(s) => {
-                let ts_tz = string_to_timestamp_tz(s.as_bytes(), || &self.jiff_timezone)?;
+                let ts_tz = parse_timestamp_tz_with_auto(
+                    s,
+                    &self.jiff_timezone,
+                    self.enable_auto_detect_datetime_format,
+                )?;
                 column.push(ts_tz);
                 Ok(())
             }

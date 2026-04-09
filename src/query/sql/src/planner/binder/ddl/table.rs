@@ -1161,6 +1161,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::AddColumn {
+                if_not_exists,
                 column,
                 option: ast_option,
             } => {
@@ -1170,7 +1171,7 @@ impl Binder {
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
-                    self.analyze_add_column(column, schema).await?;
+                    self.analyze_add_column(column, schema.clone()).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -1184,6 +1185,7 @@ impl Binder {
                     database,
                     table,
                     branch,
+                    if_not_exists: *if_not_exists,
                     field,
                     comment,
                     option,

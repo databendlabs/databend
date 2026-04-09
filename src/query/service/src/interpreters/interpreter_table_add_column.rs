@@ -103,8 +103,22 @@ impl Interpreter for AddTableColumnInterpreter {
                 &self.plan.database, &self.plan.table
             )));
         }
-
         let field = self.plan.field.clone();
+        let index = match &self.plan.option {
+            AddColumnOption::First => 0,
+            AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
+            AddColumnOption::End => table_info.meta.schema.num_fields(),
+        };
+        if self.plan.if_not_exists {
+            if table_info
+                .meta
+                .schema
+                .index_of(self.plan.field.name())
+                .is_ok()
+            {
+                return Ok(PipelineBuildResult::create());
+            }
+        }
         if field.computed_expr().is_some() {
             LicenseManagerSwitch::instance()
                 .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
@@ -127,11 +141,6 @@ impl Interpreter for AddTableColumnInterpreter {
             let _ = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(&field)?;
         }
         is_valid_column(field.name())?;
-        let index = match &self.plan.option {
-            AddColumnOption::First => 0,
-            AddColumnOption::After(name) => table_info.meta.schema.index_of(name)? + 1,
-            AddColumnOption::End => table_info.meta.schema.num_fields(),
-        };
         table_info
             .meta
             .add_column(&field, &self.plan.comment, index)?;

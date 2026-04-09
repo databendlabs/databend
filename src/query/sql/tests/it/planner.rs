@@ -107,6 +107,18 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         optimizer_skip_list: &[],
         default_node_num: 1,
     },
+    LiteReplayCaseSpec {
+        name: "19574_correlated_exists_union",
+        warehouse_distribution: false,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
+    LiteReplayCaseSpec {
+        name: "19574_correlated_exists_union_all",
+        warehouse_distribution: false,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
 ];
 
 impl TestCaseRunner for LiteRunner {
@@ -139,6 +151,24 @@ async fn test_lite_replay_service_optimizer_cases() -> Result<()> {
         let ctx = LiteTableContext::create().await?;
         run_test_case(&ctx, &case, spec, &mut mints).await?;
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    for sql in [
+        "SELECT 'a' LIKE 'a' ESCAPE ''",
+        "SELECT 'a' LIKE concat('a') ESCAPE ''",
+        "SELECT '%' LIKE '\\\\%' ESCAPE ''",
+        "SELECT like_any('%', '\\\\%', '')",
+        "SELECT 'a' LIKE ANY ('a', 'b') ESCAPE ''",
+        "SELECT 'a' LIKE ANY (SELECT 'a') ESCAPE ''",
+    ] {
+        ctx.bind_sql(sql).await?;
+    }
+
     Ok(())
 }
 

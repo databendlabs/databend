@@ -45,6 +45,8 @@ fn test_decode_v164_csv_file_format_params() -> anyhow::Result<()> {
         quoted_empty_field_as: EmptyFieldAs::FieldDefault,
         binary_format: BinaryFormat::Hex,
         geometry_format: GeometryDataType::EWKB,
+        encoding: "UTF-8".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
 
     common::test_load_old(

@@ -185,6 +185,7 @@ impl RowsFetcher for ParquetRowsFetcher {
             if blocks_bytes >= 50 * 1024 * 1024 || tasks_indices.peek().is_none() {
                 let tasks_handle = std::mem::take(&mut tasks_handle);
                 let tasks_block = future::try_join_all(tasks_handle).await.unwrap();
+                blocks_bytes = 0;
                 for task_block in tasks_block {
                     let (final_index, block) = task_block?;
                     final_blocks.insert(final_index, block);

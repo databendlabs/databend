@@ -3879,10 +3879,14 @@ Functions overloads:
 1 st_aswkt(Geometry NULL) :: String NULL
 2 st_aswkt(Geography) :: String
 3 st_aswkt(Geography NULL) :: String NULL
+0 st_centroid(Geometry) :: Geometry NULL
+1 st_centroid(Geometry NULL) :: Geometry NULL
 0 st_contains(Geometry, Geometry) :: Boolean
 1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_convexhull(Geometry) :: Geometry
 1 st_convexhull(Geometry NULL) :: Geometry NULL
+0 st_difference(Geometry, Geometry) :: Geometry NULL
+1 st_difference(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_dimension(Geometry) :: Int32 NULL
 1 st_dimension(Geometry NULL) :: Int32 NULL
 2 st_dimension(Geography) :: Int32 NULL
@@ -3897,6 +3901,8 @@ Functions overloads:
 1 st_endpoint(Geometry NULL) :: Geometry NULL
 2 st_endpoint(Geography) :: Geography NULL
 3 st_endpoint(Geography NULL) :: Geography NULL
+0 st_envelope(Geometry) :: Geometry NULL
+1 st_envelope(Geometry NULL) :: Geometry NULL
 0 st_equals(Geometry, Geometry) :: Boolean
 1 st_equals(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_geogfromgeohash(String) :: Geography
@@ -3941,6 +3947,8 @@ Functions overloads:
 5 st_hilbert(Geography NULL) :: UInt64 NULL
 6 st_hilbert(Geography, Array(Float64)) :: UInt64 NULL
 7 st_hilbert(Geography NULL, Array(Float64) NULL) :: UInt64 NULL
+0 st_intersection(Geometry, Geometry) :: Geometry NULL
+1 st_intersection(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_intersects(Geometry, Geometry) :: Boolean
 1 st_intersects(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_length(Geometry) :: Float64
@@ -3977,10 +3985,14 @@ Functions overloads:
 1 st_startpoint(Geometry NULL) :: Geometry NULL
 2 st_startpoint(Geography) :: Geography NULL
 3 st_startpoint(Geography NULL) :: Geography NULL
+0 st_symdifference(Geometry, Geometry) :: Geometry NULL
+1 st_symdifference(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_transform(Geometry, Int32) :: Geometry
 1 st_transform(Geometry NULL, Int32 NULL) :: Geometry NULL
 2 st_transform(Geometry, Int32, Int32) :: Geometry
 3 st_transform(Geometry NULL, Int32 NULL, Int32 NULL) :: Geometry NULL
+0 st_union(Geometry, Geometry) :: Geometry NULL
+1 st_union(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_within(Geometry, Geometry) :: Boolean
 1 st_within(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_x(Geometry) :: Float64

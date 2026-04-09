@@ -144,7 +144,12 @@ where
                 args.table_name.as_str(),
             )
             .await?;
-        let limit = plan.push_downs.as_ref().and_then(|x| x.limit);
+        // Don't pass limit when order_by is present - table functions can't do TopN,
+        // so limit must be applied by the upper Sort operator after ordering.
+        let limit = plan
+            .push_downs
+            .as_ref()
+            .and_then(|x| if x.order_by.is_empty() { x.limit } else { None });
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
         if let Some(snapshot) = location_snapshot(tbl, args).await? {
             return T::apply(ctx, tbl, snapshot, limit).await;

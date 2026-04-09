@@ -330,6 +330,7 @@ SELECT * from s;"#,
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;"#,
         r#"ALTER TABLE t ADD c int null;"#,
         r#"ALTER TABLE t ADD COLUMN c int null;"#,
+        r#"ALTER TABLE t ADD COLUMN IF NOT EXISTS c int null;"#,
         r#"ALTER TABLE t ADD COLUMN a float default 1.1 COMMENT 'hello' FIRST;"#,
         r#"ALTER TABLE t ADD COLUMN b string default 'b' AFTER a;"#,
         r#"ALTER TABLE t RENAME COLUMN a TO b;"#,
@@ -716,6 +717,10 @@ SELECT * from s;"#,
         r#"
             CREATE OR REPLACE FILE FORMAT my_csv
                 type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
+        "#,
+        r#"
+            CREATE FILE FORMAT my_csv_encoding
+                type = CSV encoding = 'utf8' encoding_error_mode = 'replace';
         "#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
