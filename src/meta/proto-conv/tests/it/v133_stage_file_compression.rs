@@ -40,6 +40,7 @@ fn test_decode_v133_remove_sequence_meta_step() -> anyhow::Result<()> {
         escape: "|".to_string(),
         quote: "\'".to_string(),
         error_on_column_count_mismatch: false,
+        trim_space: false,
         allow_quoted_nulls: false,
         empty_field_as: EmptyFieldAs::String,
         quoted_empty_field_as: EmptyFieldAs::String,

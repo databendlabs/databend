@@ -25,6 +25,7 @@ use crate::read::row_based::batch::NdjsonRowBatch;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
 use crate::read::row_based::formats::text::separator::TextRowSeparator;
+use crate::read::row_based::utils::trim_ascii_space;
 
 pub struct TextFieldReader<'a> {
     row: &'a [u8],
@@ -83,6 +84,7 @@ struct InferSchemaIter {
     record_delimiter: u8,
     field_delimiter: u8,
     trim_cr: bool,
+    trim_space: bool,
 }
 
 impl Drop for InferSchemaIter {
@@ -99,6 +101,11 @@ impl Iterator for InferSchemaIter {
         loop {
             if let Some(fields) = &mut self.current_fields {
                 if let Some((i, field)) = fields.next() {
+                    let field = if self.trim_space {
+                        trim_ascii_space(field)
+                    } else {
+                        field
+                    };
                     return Some(
                         decode_tsv_field(field, &mut self.field_buf)
                             .map(|_| (i, String::from_utf8_lossy(&self.field_buf).to_string())),
@@ -184,6 +191,7 @@ pub fn parse_tsv_records_for_infer_schema(
         record_delimiter: record_delimiter_byte,
         field_delimiter,
         trim_cr,
+        trim_space: params.trim_space,
     };
     Ok(iter)
 }
@@ -225,6 +233,23 @@ mod tests {
             (1, "3\n4".to_string()),
             (0, "5".to_string()),
             (1, "6".to_string()),
+        ]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tsv_records_for_infer_schema_trim_space() -> Result<()> {
+        let params = TextFileFormatParams {
+            trim_space: true,
+            ..TextFileFormatParams::default()
+        };
+        let records =
+            parse_tsv_records_for_infer_schema(b"  42  \t  hello  \t  \\N  \n", &params, true)?
+                .collect::<Result<Vec<_>>>()?;
+        assert_eq!(records, vec![
+            (0, "42".to_string()),
+            (1, "hello".to_string()),
+            (2, "\\N".to_string()),
         ]);
         Ok(())
     }
