@@ -3599,7 +3599,7 @@ mod config_converters {
             .transpose()?;
 
         Ok(inner::SpillConfig {
-            local_writeable_root: None,
+            local_writable_root: None,
             path: spill.spill_local_disk_path,
             reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
             global_bytes_limit: spill.spill_local_disk_max_bytes,
