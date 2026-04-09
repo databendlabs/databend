@@ -55,7 +55,7 @@ SELECT COUNT() > 0 as c FROM system.temp_files
 1
 
 statement ok
-VACUUM TEMPORARY FILES RETAIN 1 DAY;
+VACUUM TEMPORARY FILES RETAIN 1 DAYS;
 
 query ?
 SELECT COUNT() > 0 as c FROM system.temp_files
