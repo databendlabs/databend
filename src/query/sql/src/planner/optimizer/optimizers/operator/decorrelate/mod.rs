@@ -18,6 +18,14 @@ mod flatten_plan;
 mod flatten_scalar;
 mod subquery_decorrelator;
 
+use std::collections::HashMap;
+
+use databend_common_expression::Symbol;
 pub use subquery_decorrelator::FlattenInfo;
 pub use subquery_decorrelator::SubqueryDecorrelatorOptimizer;
 pub use subquery_decorrelator::UnnestResult;
+
+use crate::optimizer::ir::SExpr;
+
+type DerivedColumnMap = HashMap<Symbol, Symbol>;
+type FlattenPlanResult = (SExpr, DerivedColumnMap);

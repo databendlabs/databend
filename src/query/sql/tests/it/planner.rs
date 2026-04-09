@@ -172,6 +172,32 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_nested_correlated_filter_aliases_reach_limit_rewrite() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.set_cluster_node_num(1);
+
+    let sql = r#"
+        SELECT *
+        FROM (VALUES (1, 1)) AS t1(a, b)
+        WHERE EXISTS (
+            SELECT 1
+            FROM (
+                SELECT t2.a
+                FROM (VALUES (1, 1)) AS t2(a, b)
+                WHERE t2.b = t1.b
+                LIMIT 1
+            ) AS s
+            WHERE s.a = t1.a
+        )
+    "#;
+
+    let plan = ctx.bind_sql(sql).await?;
+    ctx.optimize_plan(plan).await?;
+
+    Ok(())
+}
+
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {
