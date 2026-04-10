@@ -1123,13 +1123,8 @@ impl SubqueryDecorrelatorOptimizer {
                 derived_index
             })
             .collect();
-        Scan {
-            table_index: scan.table_index,
-            columns,
-            scan_id: metadata.next_scan_id(),
-            ..Default::default()
-        }
-        .into()
+        let scan_id = metadata.next_scan_id();
+        scan.derive_decorrelated_scan(columns, scan_id).into()
     }
 
     fn clone_outer_recursive_cte_scan(&mut self, scan: &RecursiveCteScan) -> Result<RelOperator> {
