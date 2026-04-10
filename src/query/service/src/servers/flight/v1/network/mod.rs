@@ -18,8 +18,9 @@ pub mod local_channel;
 pub mod outbound_buffer;
 pub mod outbound_channel;
 pub mod outbound_transport;
-pub mod sync_task;
 
+pub use databend_common_pipeline::core::SyncTaskHandle;
+pub use databend_common_pipeline::core::SyncTaskSet;
 pub use inbound_channel::InboundChannel;
 pub use inbound_channel::NetworkInboundChannelSet;
 pub use inbound_channel::NetworkInboundReceiver;
@@ -36,5 +37,3 @@ pub use outbound_transport::PingPongCallback;
 pub use outbound_transport::PingPongExchange;
 pub use outbound_transport::PingPongExchangeInner;
 pub use outbound_transport::PingPongResponse;
-pub use sync_task::SyncTaskHandle;
-pub use sync_task::SyncTaskSet;
