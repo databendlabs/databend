@@ -25,6 +25,10 @@ tower-service = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+http = { workspace = true }
+http-body-util = "0.1"
+hyper-util = { workspace = true }
+prost = { workspace = true }
 
 [features]
 mocks = []

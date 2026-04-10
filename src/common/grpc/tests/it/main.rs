@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod dns_resolver;
+mod rpc_client_timeout;
