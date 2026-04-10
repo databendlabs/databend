@@ -659,7 +659,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                             builder.push(false);
                             return;
                         }
-                        let is_within = Euclidean.distance_within(&l_geo, &r_geo, *distance);
+                        let is_within = Euclidean.distance_within(&l_geo, &r_geo, distance.0);
                         builder.push(is_within);
                     }
                     (Err(e), _) | (_, Err(e)) => {

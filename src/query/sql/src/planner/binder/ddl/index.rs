@@ -859,7 +859,7 @@ impl Binder {
                 Ok(field) => {
                     if !matches!(field.data_type.remove_nullable(), TableDataType::Geometry) {
                         return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Spatial index only support Geometry type, but the type of column {} is {}",
+                            "Spatial index only supports Geometry type, but the type of column {} is {}",
                             column, field.data_type
                         )));
                     }
