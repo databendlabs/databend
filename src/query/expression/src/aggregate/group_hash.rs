@@ -60,7 +60,7 @@ pub fn group_hash_entries(entries: ProjectedBlock, values: &mut [u64]) {
     }
 }
 
-fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
+pub fn combine_group_hash_column<const IS_FIRST: bool>(c: &Column, values: &mut [u64]) {
     HashVisitor::<IS_FIRST> { values }
         .visit_column(c.clone())
         .unwrap()

@@ -17,6 +17,7 @@ use std::any::Any;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 
 use super::Exchange;
@@ -46,6 +47,10 @@ impl IPhysicalPlan for BroadcastSource {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -86,6 +91,10 @@ impl IPhysicalPlan for BroadcastSink {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Serial
     }
 
     #[recursive::recursive]

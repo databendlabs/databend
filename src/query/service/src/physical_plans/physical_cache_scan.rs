@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_sql::ColumnSet;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::plans::CacheSource;
 
 use crate::physical_plans::format::CacheScanFormatter;
@@ -57,6 +58,10 @@ impl IPhysicalPlan for CacheScan {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {

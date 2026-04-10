@@ -26,6 +26,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -60,6 +61,10 @@ impl IPhysicalPlan for Filter {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     #[recursive::recursive]

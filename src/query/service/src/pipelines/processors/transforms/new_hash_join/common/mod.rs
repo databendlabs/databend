@@ -13,6 +13,9 @@
 // limitations under the License.
 
 mod cstyle_cell;
+pub mod join;
+pub mod probe_stream;
+pub mod runtime_filter;
 mod squash_blocks;
 
 pub use cstyle_cell::CStyleCell;

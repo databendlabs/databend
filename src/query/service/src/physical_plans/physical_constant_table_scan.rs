@@ -21,6 +21,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::format::ConstantTableScanFormatter;
@@ -54,6 +55,10 @@ impl IPhysicalPlan for ConstantTableScan {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {

@@ -26,6 +26,7 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline_transforms::create_dummy_item;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_common_storages_fuse::FuseTable;
@@ -68,6 +69,10 @@ impl IPhysicalPlan for ReplaceInto {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     #[recursive::recursive]

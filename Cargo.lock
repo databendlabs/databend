@@ -6022,6 +6022,7 @@ dependencies = [
  "sha2",
  "socket2 0.5.9",
  "sqlx",
+ "strength_reduce",
  "sysinfo",
  "tantivy",
  "temp-env",

@@ -33,6 +33,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheck;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::Matcher;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Filter;
@@ -76,6 +77,10 @@ impl IPhysicalPlan for EvalScalar {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     #[recursive::recursive]

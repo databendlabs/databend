@@ -16,7 +16,10 @@ use std::any::Any;
 
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::RemoteExpr;
 use databend_common_pipeline::core::PlanScope;
+use databend_common_sql::executor::physical_plans::DataDistribution;
+use databend_common_sql::executor::physical_plans::FragmentKind;
 
 use crate::physical_plans::format::ExchangeSourceFormatter;
 use crate::physical_plans::format::PhysicalFormat;
@@ -35,6 +38,8 @@ pub struct ExchangeSource {
     // Fragment ID of source fragment
     pub source_fragment_id: usize,
     pub query_id: String,
+    pub kind: FragmentKind,
+    pub keys: Vec<RemoteExpr>,
 }
 
 #[typetag::serde]
@@ -63,6 +68,16 @@ impl IPhysicalPlan for ExchangeSource {
         true
     }
 
+    fn output_data_distribution(&self) -> DataDistribution {
+        match &self.kind {
+            FragmentKind::Init => DataDistribution::Random,
+            FragmentKind::Normal => DataDistribution::NodeHash(self.keys.clone()),
+            FragmentKind::Expansive => DataDistribution::Broadcast,
+            FragmentKind::Merge => DataDistribution::Serial,
+            FragmentKind::GlobalShuffle => DataDistribution::GlobalHash(self.keys.clone()),
+        }
+    }
+
     fn display_in_profile(&self) -> bool {
         false
     }
@@ -74,6 +89,8 @@ impl IPhysicalPlan for ExchangeSource {
             schema: self.schema.clone(),
             source_fragment_id: self.source_fragment_id,
             query_id: self.query_id.clone(),
+            kind: self.kind.clone(),
+            keys: self.keys.clone(),
         })
     }
 

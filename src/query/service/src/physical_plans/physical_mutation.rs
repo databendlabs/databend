@@ -55,6 +55,7 @@ use databend_common_sql::Visibility;
 use databend_common_sql::binder::MutationStrategy;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::binder::wrap_cast;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::optimizer::ir::SExpr;
@@ -118,6 +119,10 @@ impl IPhysicalPlan for Mutation {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     #[recursive::recursive]

@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_settings::Settings;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -547,6 +548,18 @@ impl Join {
                 .iter()
                 .any(|expr| expr.has_subquery())
     }
+
+    fn enforce_shuffle_join(settings: &Settings, right_stat_info: &Arc<StatInfo>) -> Result<bool> {
+        let max_build_rows = settings.get_broadcast_join_max_build_rows()?;
+        if max_build_rows > 0
+            && settings.get_enable_partitioned_hash_join()?
+            && right_stat_info.cardinality >= max_build_rows as f64
+        {
+            return Ok(true);
+        }
+
+        settings.get_enforce_shuffle_join()
+    }
 }
 
 impl Operator for Join {
@@ -715,7 +728,8 @@ impl Operator for Join {
                 // Use a very large value to prevent broadcast join.
                 1000.0
             };
-            if !settings.get_enforce_shuffle_join()?
+
+            if !Self::enforce_shuffle_join(&settings, &right_stat_info)?
                 && (right_stat_info.cardinality * broadcast_join_threshold
                     < left_stat_info.cardinality
                     || settings.get_enforce_broadcast_join()?)
@@ -752,7 +766,7 @@ impl Operator for Join {
     fn compute_required_prop_children(
         &self,
         ctx: Arc<dyn TableContext>,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
         _required: &RequiredProperty,
     ) -> Result<Vec<Vec<RequiredProperty>>> {
         let mut children_required = vec![];
@@ -838,19 +852,21 @@ impl Operator for Join {
                 | JoinType::Asof
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
-        ) && !settings.get_enforce_shuffle_join()?
-        {
-            // (Any, Broadcast)
-            let left_distribution = Distribution::Any;
-            let right_distribution = Distribution::Broadcast;
-            children_required.push(vec![
-                RequiredProperty {
-                    distribution: left_distribution,
-                },
-                RequiredProperty {
-                    distribution: right_distribution,
-                },
-            ]);
+        ) {
+            let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+            if !Self::enforce_shuffle_join(&settings, &right_stat_info)? {
+                // (Any, Broadcast)
+                let left_distribution = Distribution::Any;
+                let right_distribution = Distribution::Broadcast;
+                children_required.push(vec![
+                    RequiredProperty {
+                        distribution: left_distribution,
+                    },
+                    RequiredProperty {
+                        distribution: right_distribution,
+                    },
+                ]);
+            }
         }
 
         if children_required.is_empty() {

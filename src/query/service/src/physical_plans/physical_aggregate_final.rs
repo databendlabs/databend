@@ -29,6 +29,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::Aggregate;
@@ -109,6 +110,13 @@ impl IPhysicalPlan for AggregateFinal {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(AggregateFinalFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        match self.group_by.is_empty() {
+            true => DataDistribution::Serial,
+            false => DataDistribution::Random,
+        }
     }
 
     fn get_desc(&self) -> Result<String> {

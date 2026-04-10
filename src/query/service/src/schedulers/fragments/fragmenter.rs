@@ -283,6 +283,8 @@ impl DeriveHandle for FragmentDeriveHandle {
 
             let plan_id = v.get_id();
             let source_fragment_id = self.ctx.get_fragment_id();
+            let exchange_kind = exchange.kind.clone();
+            let exchange_keys = exchange.keys.clone();
 
             let plan: PhysicalPlan = PhysicalPlan::new(ExchangeSink {
                 input,
@@ -327,6 +329,8 @@ impl DeriveHandle for FragmentDeriveHandle {
 
                 source_fragment_id,
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSource", plan_id),
+                kind: exchange_kind,
+                keys: exchange_keys,
             }));
         }
 

@@ -37,6 +37,7 @@ use databend_common_sql::TypeCheck;
 use databend_common_sql::binder::wrap_cast;
 use databend_common_sql::executor::physical_plans::AggregateFunctionDesc;
 use databend_common_sql::executor::physical_plans::AggregateFunctionSignature;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::WindowFuncFrame;
@@ -108,6 +109,14 @@ impl IPhysicalPlan for Window {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(WindowFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        if self.partition_by.is_empty() {
+            DataDistribution::Random
+        } else {
+            self.input.output_data_distribution()
+        }
     }
 
     #[recursive::recursive]

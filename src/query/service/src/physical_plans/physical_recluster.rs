@@ -40,6 +40,7 @@ use databend_common_pipeline_transforms::blocks::CompoundBlockOperator;
 use databend_common_pipeline_transforms::build_ordered_compact_pipeline;
 use databend_common_pipeline_transforms::columns::TransformAddStreamColumns;
 use databend_common_sql::StreamContext;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FuseTable;
@@ -78,6 +79,10 @@ impl IPhysicalPlan for Recluster {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {
@@ -279,6 +284,10 @@ impl IPhysicalPlan for HilbertPartition {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     #[recursive::recursive]

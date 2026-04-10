@@ -17,6 +17,7 @@ use std::any::Any;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipe;
 use databend_common_sql::IndexType;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 
 use crate::physical_plans::format::MutationSplitFormatter;
@@ -44,6 +45,10 @@ impl IPhysicalPlan for MutationSplit {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {

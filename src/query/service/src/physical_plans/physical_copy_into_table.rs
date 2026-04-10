@@ -23,6 +23,7 @@ use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_sql::ColumnBinding;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::plans::CopyIntoTableMode;
 use databend_common_sql::plans::ValidationMode;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -62,6 +63,10 @@ impl IPhysicalPlan for CopyIntoTable {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     #[recursive::recursive]

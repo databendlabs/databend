@@ -18,6 +18,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::RemoteExpr;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 
 use crate::physical_plans::format::ExchangeSinkFormatter;
@@ -82,6 +83,16 @@ impl IPhysicalPlan for ExchangeSink {
 
     fn is_distributed_plan(&self) -> bool {
         true
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        match &self.kind {
+            FragmentKind::Init => DataDistribution::Random,
+            FragmentKind::Normal => DataDistribution::NodeHash(self.keys.clone()),
+            FragmentKind::Expansive => DataDistribution::Broadcast,
+            FragmentKind::Merge => DataDistribution::Serial,
+            FragmentKind::GlobalShuffle => DataDistribution::GlobalHash(self.keys.clone()),
+        }
     }
 
     fn display_in_profile(&self) -> bool {

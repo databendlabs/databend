@@ -24,6 +24,7 @@ use databend_common_expression::SortColumnDescription;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::SortDesc;
 use databend_storages_common_cache::TempDirManager;
 
@@ -75,6 +76,10 @@ impl IPhysicalPlan for WindowPartition {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(WindowPartitionFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     #[recursive::recursive]

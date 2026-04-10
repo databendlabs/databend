@@ -23,6 +23,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline_transforms::TransformPipelineHelper;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::TruncateMode;
 use databend_common_storages_fuse::FuseTable;
@@ -69,6 +70,10 @@ impl IPhysicalPlan for CommitSink {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Serial
     }
 
     #[recursive::recursive]

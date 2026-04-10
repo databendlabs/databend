@@ -70,7 +70,8 @@ async fn test_prewhere() -> Result<()> {
     let _ = _fixture;
 
     // Create ReadState which combines prewhere and runtime filter logic
-    let read_state = ReadState::create(ctx.clone(), scan_id, Some(&prewhere_info), &block_reader)?;
+    let mut read_state =
+        ReadState::create(ctx.clone(), scan_id, Some(&prewhere_info), &block_reader)?;
 
     // Use the new unified API that handles all states internally
     let (data_block, _row_selection, bitmap_selection) =

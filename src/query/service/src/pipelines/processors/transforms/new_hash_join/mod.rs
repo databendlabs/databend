@@ -13,24 +13,19 @@
 // limitations under the License.
 
 mod common;
-mod grace;
-mod hash_join_factory;
-mod hashtable;
-mod hybrid;
-mod join;
-pub mod memory;
-mod performance;
-mod runtime_filter;
-mod transform_hash_join;
+pub mod partitioned;
+pub mod unpartitioned;
 
-pub use grace::GraceHashJoin;
-pub use grace::GraceMemoryJoin;
-pub use hash_join_factory::HashJoinFactory;
-pub use hybrid::HybridHashJoin;
-pub use hybrid::HybridHashJoinState;
-pub use join::Join;
-pub use join::JoinStream;
-pub use memory::BasicHashJoinState;
-pub use memory::InnerHashJoin;
-pub use runtime_filter::RuntimeFiltersDesc;
-pub use transform_hash_join::TransformHashJoin;
+pub use common::join::Join;
+pub use common::join::JoinStream;
+pub use common::runtime_filter::RuntimeFiltersDesc;
+pub use partitioned::SharedRuntimeFilterPackets;
+pub use partitioned::TransformPartitionedHashJoin;
+pub use unpartitioned::HashJoinFactory;
+pub use unpartitioned::TransformHashJoin;
+pub use unpartitioned::grace::GraceHashJoin;
+pub use unpartitioned::grace::GraceMemoryJoin;
+pub use unpartitioned::hybrid::HybridHashJoin;
+pub use unpartitioned::hybrid::HybridHashJoinState;
+pub use unpartitioned::memory::BasicHashJoinState;
+pub use unpartitioned::memory::InnerHashJoin;

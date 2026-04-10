@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::DataSchemaRefExt;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 
 use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
@@ -60,6 +61,10 @@ impl IPhysicalPlan for MaterializeCTERef {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.cte_schema.clone())
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn derive(&self, children: Vec<PhysicalPlan>) -> PhysicalPlan {

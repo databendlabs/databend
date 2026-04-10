@@ -31,6 +31,7 @@ use databend_common_pipeline_transforms::TransformPipelineHelper;
 use databend_common_pipeline_transforms::blocks::TransformCastSchema;
 use databend_common_pipeline_transforms::build_compact_block_pipeline;
 use databend_common_sql::ColumnBinding;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::executor::physical_plans::OnConflictField;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::operations::ReplaceIntoProcessor;
@@ -68,6 +69,10 @@ impl IPhysicalPlan for ReplaceDeduplicate {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Serial
     }
 
     #[recursive::recursive]

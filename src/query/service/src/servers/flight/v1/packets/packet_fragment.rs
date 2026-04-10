@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use serde::Deserializer;
 use serde::Serializer;
 use serde::de::Error;
@@ -67,6 +68,10 @@ impl IPhysicalPlan for SerializedPhysicalPlanRef {
     }
 
     fn derive(&self, _: Vec<PhysicalPlan>) -> PhysicalPlan {
+        unimplemented!()
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
         unimplemented!()
     }
 }

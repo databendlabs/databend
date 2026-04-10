@@ -26,6 +26,7 @@ use databend_common_sql::ColumnEntry;
 use databend_common_sql::ColumnSet;
 use databend_common_sql::IndexType;
 use databend_common_sql::Symbol;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::optimizer::ir::SExpr;
 
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -73,6 +74,10 @@ impl IPhysicalPlan for Limit {
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {
         Ok(LimitFormatter::create(self))
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Serial
     }
 
     #[recursive::recursive]

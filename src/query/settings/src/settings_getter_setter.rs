@@ -365,6 +365,14 @@ impl Settings {
         self.try_get_u64("bloom_runtime_filter_threshold")
     }
 
+    pub fn get_bloom_runtime_filter_selectivity_threshold(&self) -> Result<u64> {
+        self.try_get_u64("bloom_runtime_filter_selectivity_threshold")
+    }
+
+    pub fn get_bloom_runtime_filter_sampling_frequency(&self) -> Result<u64> {
+        self.try_get_u64("bloom_runtime_filter_sampling_frequency")
+    }
+
     pub fn get_min_max_runtime_filter_threshold(&self) -> Result<u64> {
         self.try_get_u64("min_max_runtime_filter_threshold")
     }
@@ -464,6 +472,10 @@ impl Settings {
 
     pub fn get_enforce_shuffle_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enforce_shuffle_join")? != 0)
+    }
+
+    pub fn get_broadcast_join_max_build_rows(&self) -> Result<u64> {
+        self.try_get_u64("broadcast_join_max_build_rows")
     }
 
     pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {
@@ -1176,6 +1188,10 @@ impl Settings {
 
     pub fn get_enable_experimental_new_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_new_join")? == 1)
+    }
+
+    pub fn get_enable_partitioned_hash_join(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_partitioned_hash_join")? != 0)
     }
 
     pub fn get_s3_storage_class(&self) -> Result<S3StorageClass> {

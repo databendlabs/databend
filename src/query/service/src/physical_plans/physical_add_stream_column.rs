@@ -36,6 +36,7 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
@@ -67,6 +68,10 @@ impl IPhysicalPlan for AddStreamColumn {
 
     fn get_meta_mut(&mut self) -> &mut PhysicalPlanMeta {
         &mut self.meta
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        self.input.output_data_distribution()
     }
 
     fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {

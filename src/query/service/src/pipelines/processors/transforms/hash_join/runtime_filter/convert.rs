@@ -21,7 +21,6 @@ use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterSpatial;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
 use databend_common_catalog::sbbf::Sbbf;
-use databend_common_catalog::sbbf::SbbfAtomic;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -55,7 +54,7 @@ pub async fn build_runtime_filter_infos(
     packet: JoinRuntimeFilterPacket,
     runtime_filter_descs: HashMap<usize, &RuntimeFilterDesc>,
     selectivity_threshold: u64,
-    max_threads: usize,
+    _max_threads: usize,
 ) -> Result<HashMap<usize, RuntimeFilterInfo>> {
     let total_build_rows = packet.build_rows;
     let Some(packets) = packet.packets else {
@@ -104,7 +103,7 @@ pub async fn build_runtime_filter_infos(
             };
             let bloom = if bloom_enabled {
                 if let Some(ref bloom) = packet.bloom {
-                    Some(build_bloom_filter(bloom.clone(), probe_key, max_threads, desc.id).await?)
+                    Some(build_bloom_filter(bloom.clone(), probe_key)?)
                 } else {
                     None
                 }
@@ -278,37 +277,14 @@ fn build_min_max_filter(
     Ok(min_max_filter)
 }
 
-async fn build_bloom_filter(
-    bloom: Vec<u64>,
+fn build_bloom_filter(
+    bloom_words: Vec<u32>,
     probe_key: &Expr<String>,
-    max_threads: usize,
-    filter_id: usize,
 ) -> Result<RuntimeFilterBloom> {
     let probe_column = resolve_probe_column_ref(probe_key);
     let column_name = probe_column.id.to_string();
-    let total_items = bloom.len();
-
-    if total_items < 3_000_000 {
-        let mut filter = Sbbf::new_with_ndv_fpp(total_items as u64, 0.01)
-            .map_err(|e| ErrorCode::Internal(e.to_string()))?;
-        filter.insert_hash_batch(&bloom);
-        return Ok(RuntimeFilterBloom {
-            column_name,
-            filter: Arc::new(filter),
-        });
-    }
-
-    let start = std::time::Instant::now();
-    let builder = SbbfAtomic::new_with_ndv_fpp(total_items as u64, 0.01)
-        .map_err(|e| ErrorCode::Internal(e.to_string()))?
-        .insert_hash_batch_parallel(bloom, max_threads);
-    let filter = builder.finish();
-    log::info!(
-        "filter_id: {}, build_time: {:?}",
-        filter_id,
-        start.elapsed()
-    );
-
+    let filter = Sbbf::from_u32s(bloom_words)
+        .ok_or_else(|| ErrorCode::Internal("Invalid bloom filter data in runtime filter"))?;
     Ok(RuntimeFilterBloom {
         column_name,
         filter: Arc::new(filter),
@@ -331,6 +307,7 @@ fn resolve_probe_column_ref(probe_key: &Expr<String>) -> &ColumnRef<String> {
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_catalog::sbbf::Sbbf;
     use databend_common_expression::ColumnBuilder;
     use databend_common_expression::ColumnRef;
     use databend_common_expression::Constant;
@@ -392,7 +369,11 @@ mod tests {
                 min: Scalar::Number(1i32.into()),
                 max: Scalar::Number(10i32.into()),
             }),
-            bloom: Some(vec![11, 22]),
+            bloom: Some({
+                let mut f = Sbbf::new_with_ndv_fpp(100, 0.01).unwrap();
+                f.insert_hash_batch(&[11, 22]);
+                f.into_u32s()
+            }),
             spatial: None,
         });
 

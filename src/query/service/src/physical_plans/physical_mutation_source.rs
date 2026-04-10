@@ -43,6 +43,7 @@ use databend_common_sql::ScalarExpr;
 use databend_common_sql::StreamContext;
 use databend_common_sql::binder::MutationType;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
+use databend_common_sql::executor::physical_plans::DataDistribution;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::SegmentLocation;
@@ -94,6 +95,10 @@ impl IPhysicalPlan for MutationSource {
     #[recursive::recursive]
     fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.output_schema.clone())
+    }
+
+    fn output_data_distribution(&self) -> DataDistribution {
+        DataDistribution::Random
     }
 
     fn formatter(&self) -> Result<Box<dyn PhysicalFormat + '_>> {

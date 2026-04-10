@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::sbbf::Sbbf;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
@@ -47,8 +49,9 @@ struct SingleFilterBuilder {
     inlist_builder: Option<ColumnBuilder>,
     inlist_threshold: usize,
 
-    bloom_hashes: Option<Vec<u64>>,
+    bloom_filter: Option<Sbbf>,
     bloom_threshold: usize,
+    bloom_disabled: bool,
 
     is_spatial: bool,
     spatial_rects: Vec<(f64, f64, f64, f64)>,
@@ -90,12 +93,21 @@ impl SingleFilterBuilder {
             } else {
                 0
             },
-            bloom_hashes: None,
+            bloom_filter: if desc.enable_bloom_runtime_filter && bloom_threshold > 0 {
+                let ndv = match desc.build_table_rows {
+                    Some(rows) => rows.min(bloom_threshold as u64),
+                    None => bloom_threshold as u64,
+                };
+                Some(Sbbf::new_with_ndv_fpp(ndv, 0.01).map_err(ErrorCode::Internal)?)
+            } else {
+                None
+            },
             bloom_threshold: if desc.enable_bloom_runtime_filter {
                 bloom_threshold
             } else {
                 0
             },
+            bloom_disabled: !desc.enable_bloom_runtime_filter || bloom_threshold == 0,
             is_spatial: desc.is_spatial,
             spatial_rects: Vec::new(),
             spatial_srid: None,
@@ -142,22 +154,21 @@ impl SingleFilterBuilder {
     }
 
     fn add_bloom(&mut self, column: &Column, new_total: usize) -> Result<()> {
-        if new_total > self.bloom_threshold {
-            self.bloom_hashes = None;
+        if self.bloom_disabled || new_total > self.bloom_threshold {
+            self.bloom_filter = None;
+            self.bloom_disabled = true;
             return Ok(());
         }
-        let mut hashes = match self.bloom_hashes.take() {
-            Some(h) => h,
-            None => Vec::with_capacity(column.len()),
-        };
-        hashes.reserve(column.len());
-        let entry = BlockEntry::from(column.clone());
-        let hash_method = self
-            .hash_method
-            .as_ref()
-            .expect("hash_method must exist for non-spatial filters");
-        hash_by_method_for_bloom(hash_method, (&[entry]).into(), column.len(), &mut hashes)?;
-        self.bloom_hashes = Some(hashes);
+        if let Some(ref mut filter) = self.bloom_filter {
+            let mut hashes = Vec::with_capacity(column.len());
+            let entry = BlockEntry::from(column.clone());
+            let hash_method = self
+                .hash_method
+                .as_ref()
+                .expect("hash_method must exist for non-spatial filters");
+            hash_by_method_for_bloom(hash_method, (&[entry]).into(), column.len(), &mut hashes)?;
+            filter.insert_hash_batch(&hashes);
+        }
         Ok(())
     }
 
@@ -219,7 +230,7 @@ impl SingleFilterBuilder {
                 None
             };
 
-            let bloom = self.bloom_hashes.take();
+            let bloom = self.bloom_filter.take().map(|f| f.into_u32s());
 
             Ok(RuntimeFilterPacket {
                 id: self.id,
