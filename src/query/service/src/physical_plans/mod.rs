@@ -112,6 +112,7 @@ pub use physical_window::*;
 pub use physical_window_partition::*;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
+pub use runtime_filter::SpatialRuntimeFilterMode;
 
 pub mod explain;
 mod format;

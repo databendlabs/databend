@@ -125,9 +125,9 @@ impl Interpreter for DropTableColumnInterpreter {
         if !table_info.meta.indexes.is_empty() {
             for (index_name, index) in &table_info.meta.indexes {
                 if index.column_ids.contains(&field.column_id) {
-                    return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                        "column `{}` is referenced by inverted index, drop {} index `{}` first",
-                        index.index_type, field.name, index_name,
+                    return Err(ErrorCode::ColumnReferencedByIndex(format!(
+                        "column `{}` is referenced by {} index, drop index `{}` first",
+                        field.name, index.index_type, index_name,
                     )));
                 }
             }

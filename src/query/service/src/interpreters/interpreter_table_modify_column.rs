@@ -349,9 +349,9 @@ impl ModifyTableColumnInterpreter {
                                 && old_field.data_type.remove_nullable()
                                     != field.data_type.remove_nullable()
                             {
-                                return Err(ErrorCode::ColumnReferencedByInvertedIndex(format!(
-                                    "column `{}` is referenced by inverted index, drop inverted index `{}` first",
-                                    field.name, index_name,
+                                return Err(ErrorCode::ColumnReferencedByIndex(format!(
+                                    "column `{}` is referenced by {} index, drop index `{}` first",
+                                    field.name, index.index_type, index_name,
                                 )));
                             }
                         }

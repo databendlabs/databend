@@ -205,6 +205,78 @@ output domain  : {1.414213562..=1.414213562}
 output         : 1.414213562
 
 
+ast            : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.5)
+raw expr       : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.5)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry), CAST<Decimal(2, 1)>(1.5_d64(2,1) AS Float64))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.414)
+raw expr       : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.414)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("POINT(1 1)" AS Geometry), CAST<Decimal(4, 3)>(1.414_d64(4,3) AS Float64))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 2.0)
+raw expr       : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 2.0)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("LINESTRING(2 0, 2 2)" AS Geometry), CAST<Decimal(2, 1)>(2.0_d64(2,1) AS Float64))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 1.9)
+raw expr       : st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 1.9)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("POINT(0 0)" AS Geometry), CAST<String>("LINESTRING(2 0, 2 2)" AS Geometry), CAST<Decimal(2, 1)>(1.9_d64(2,1) AS Float64))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 3.0)
+raw expr       : st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 3.0)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("LINESTRING(0 0, 2 0)" AS Geometry), CAST<String>("LINESTRING(0 3, 2 3)" AS Geometry), CAST<Decimal(2, 1)>(3.0_d64(2,1) AS Float64))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 2.9)
+raw expr       : st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 2.9)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("LINESTRING(0 0, 2 0)" AS Geometry), CAST<String>("LINESTRING(0 3, 2 3)" AS Geometry), CAST<Decimal(2, 1)>(2.9_d64(2,1) AS Float64))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 2.0)
+raw expr       : st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 2.0)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))" AS Geometry), CAST<Decimal(2, 1)>(2.0_d64(2,1) AS Float64))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 1.9)
+raw expr       : st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 1.9)
+checked expr   : st_dwithin<Geometry, Geometry, Float64>(CAST<String>("POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))" AS Geometry), CAST<String>("POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))" AS Geometry), CAST<Decimal(2, 1)>(1.9_d64(2,1) AS Float64))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
 ast            : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 raw expr       : st_geohash(to_geometry('POINT(-122.306100 37.554162)', 4326))
 checked expr   : st_geohash<Geometry>(to_geometry<String, Int32>("POINT(-122.306100 37.554162)", CAST<UInt16>(4326_u16 AS Int32)))

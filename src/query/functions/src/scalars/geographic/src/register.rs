@@ -412,7 +412,7 @@ pub(crate) fn geo_try_convert_with_arg_fn<I: ArgType, O: ArgType>(
     );
 }
 
-fn check_incompatible_srid(
+pub(crate) fn check_incompatible_srid(
     l_srid: Option<i32>,
     r_srid: Option<i32>,
     len: usize,

@@ -24,6 +24,36 @@ SELECT st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
 ----
 1.414213562
 
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.5);
+----
+1
+
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.414);
+----
+0
+
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 2.0);
+----
+1
+
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 1.9);
+----
+0
+
+query B
+SELECT st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 2.0);
+----
+1
+
+query B
+SELECT st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 1.9);
+----
+0
+
 query R
 SELECT st_length(to_geometry('POINT(1 1)'));
 ----
