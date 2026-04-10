@@ -25,7 +25,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_pipeline::core::OutputPort;
-use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::SourcePipeBuilder;
 use log::info;
@@ -41,9 +40,10 @@ use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
-use crate::operations::read::TransformRuntimeFilterWait;
-use crate::operations::read::block_partition_receiver_source::BlockPartitionReceiverSource;
-use crate::operations::read::block_partition_source::BlockPartitionSource;
+use crate::operations::read::partition_stream::PartitionStream;
+use crate::operations::read::partition_stream::PartitionStreamSource;
+use crate::operations::read::partition_stream::ReceiverPartitionStream;
+use crate::operations::read::partition_stream::StealPartitionStream;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_source_pipeline(
@@ -72,29 +72,44 @@ pub fn build_fuse_source_pipeline(
         max_io_requests = max_io_requests.min(16);
     }
 
-    let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-    let mut partitions = StealablePartitions::new(partitions, ctx.clone());
-
-    if matches!(storage_format, FuseStorageFormat::Native) && topk.is_some() {
-        partitions.disable_steal();
-    }
-
-    match receiver {
-        Some(rx) => {
-            let pipe = build_receiver_source(max_io_requests, ctx.clone(), rx.clone())?;
-            pipeline.add_pipe(pipe);
-        }
+    let waker = pipeline.get_waker();
+    let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
+    let stream: Arc<dyn PartitionStream> = match receiver {
+        Some(rx) => Arc::new(ReceiverPartitionStream::new(rx)),
         None => {
-            let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
-            let pipe =
-                build_block_source(max_io_requests, partitions.clone(), batch_size, ctx.clone())?;
-            pipeline.add_pipe(pipe);
+            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+
+            if matches!(storage_format, FuseStorageFormat::Native) && topk.is_some() {
+                partitions.disable_steal();
+            }
+
+            Arc::new(StealPartitionStream::new(partitions.clone(), batch_size))
         }
+    };
+
+    let mut source_builder = SourcePipeBuilder::create();
+    for i in 0..max_io_requests {
+        let output = OutputPort::create();
+        source_builder.add_source(
+            output.clone(),
+            PartitionStreamSource::create(
+                i,
+                waker.clone(),
+                output,
+                stream.clone(),
+                ctx.clone(),
+                plan.scan_id,
+            )?,
+        );
     }
+    pipeline.add_pipe(source_builder.finalize());
+
     let block_format = match storage_format {
         FuseStorageFormat::Native => FuseNativeBlockFormat::create(),
         FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(),
     };
+
     let read_block_context = ReadBlockContext::create(
         ctx.clone(),
         storage_format,
@@ -103,15 +118,6 @@ pub fn build_fuse_source_pipeline(
         index_reader.clone(),
         virtual_reader.clone(),
     )?;
-
-    pipeline.add_transform(|input, output| {
-        Ok(TransformRuntimeFilterWait::create(
-            ctx.clone(),
-            plan.scan_id,
-            input,
-            output,
-        ))
-    })?;
 
     pipeline.add_transform(|input, output| {
         ReadDataTransform::create(
@@ -241,37 +247,4 @@ pub fn adjust_threads_and_request(
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
     }
     (max_threads, max_io_requests)
-}
-
-pub fn build_receiver_source(
-    max_threads: usize,
-    ctx: Arc<dyn TableContext>,
-    rx: Receiver<Result<PartInfoPtr>>,
-) -> Result<Pipe> {
-    let mut source_builder = SourcePipeBuilder::create();
-    for _i in 0..max_threads {
-        let output = OutputPort::create();
-        source_builder.add_source(
-            output.clone(),
-            BlockPartitionReceiverSource::create(ctx.clone(), rx.clone(), output)?,
-        );
-    }
-    Ok(source_builder.finalize())
-}
-
-pub fn build_block_source(
-    max_threads: usize,
-    partitions: StealablePartitions,
-    max_batch: usize,
-    ctx: Arc<dyn TableContext>,
-) -> Result<Pipe> {
-    let mut source_builder = SourcePipeBuilder::create();
-    for i in 0..max_threads {
-        let output = OutputPort::create();
-        source_builder.add_source(
-            output.clone(),
-            BlockPartitionSource::create(i, partitions.clone(), max_batch, ctx.clone(), output)?,
-        )
-    }
-    Ok(source_builder.finalize())
 }
