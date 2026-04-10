@@ -17,6 +17,7 @@ use std::ops::Range;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_io::GEOGRAPHY_SRID;
 use databend_common_io::ewkb_to_geo;
 use geo::Geometry;
 use geozero::ToGeo;
