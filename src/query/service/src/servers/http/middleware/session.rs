@@ -704,7 +704,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = ["authorization", "cookie"];
+    let sensitive_headers = ["authorization", "cookie", "x-clickhouse-key"];
     headers
         .iter()
         .map(|(k, v)| {
@@ -746,7 +746,10 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
 
 #[cfg(test)]
 mod tests {
+    use poem::http::HeaderMap;
+
     use crate::servers::http::middleware::session::get_client_ip;
+    use crate::servers::http::middleware::session::sanitize_request_headers;
 
     #[test]
     fn test_parse_ip() {
@@ -755,5 +758,27 @@ mod tests {
             .finish();
         let ip = get_client_ip(&req);
         assert_eq!(ip, Some("1.2.3.4".to_string()));
+    }
+
+    #[test]
+    fn test_sanitize_request_headers_masks_sensitive_values() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer secret".parse().unwrap());
+        headers.insert("cookie", "session=secret".parse().unwrap());
+        headers.insert("x-clickhouse-key", "secret-key".parse().unwrap());
+        headers.insert("x-clickhouse-user", "databend".parse().unwrap());
+
+        let sanitized = sanitize_request_headers(&headers);
+
+        assert_eq!(sanitized.get("authorization"), Some(&"******".to_string()));
+        assert_eq!(sanitized.get("cookie"), Some(&"******".to_string()));
+        assert_eq!(
+            sanitized.get("x-clickhouse-key"),
+            Some(&"******".to_string())
+        );
+        assert_eq!(
+            sanitized.get("x-clickhouse-user"),
+            Some(&"databend".to_string())
+        );
     }
 }
