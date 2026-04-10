@@ -130,8 +130,11 @@ impl IPhysicalPlan for RowFetch {
         )?;
 
         if !MutationSplit::check_physical_plan(&self.input) {
-            // SELECT+LIMIT path or MatchedOnly path without MutationSplit.
-            // For MatchedOnly with lazy columns, add block_id repartition before RowFetch.
+            // For MatchedOnly MERGE INTO, add block_id repartition before RowFetch
+            // to reduce duplicate block reads.
+            // Not applicable to SELECT+LIMIT: the exchange would destroy the sort
+            // order produced by Sort+Limit (MergePartitionProcessor uses Random
+            // strategy with non-deterministic output order).
             if self.is_mutation {
                 let max_threads = builder.settings.get_max_threads()? as usize;
                 if max_threads > 1
