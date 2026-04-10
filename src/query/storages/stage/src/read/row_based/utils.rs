@@ -28,11 +28,6 @@ pub fn trim_ascii_space(data: &[u8]) -> &[u8] {
     data.trim_ascii()
 }
 
-#[inline]
-fn is_trim_space_byte(byte: u8) -> bool {
-    matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
-}
-
 pub fn get_decode_error_by_pos(
     column_index: usize,
     schema: &TableSchemaRef,
@@ -56,8 +51,9 @@ mod tests {
 
     #[test]
     fn test_trim_ascii_space() {
-        assert_eq!(trim_ascii_space(b" \t\r\n\x0b\x0cabc\t "), b"abc");
+        assert_eq!(trim_ascii_space(b" \t\r\nabc\t "), b"abc");
         assert_eq!(trim_ascii_space(b"abc"), b"abc");
-        assert_eq!(trim_ascii_space(b" \t\r\n\x0b\x0c "), b"");
+        assert_eq!(trim_ascii_space(b" \t\r\n "), b"");
+        assert_eq!(trim_ascii_space(b"\x0b\x0cabc\x0b\x0c"), b"\x0b\x0cabc\x0b");
     }
 }

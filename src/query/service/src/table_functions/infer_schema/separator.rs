@@ -543,29 +543,8 @@ fn human_readable_size(bytes: usize) -> String {
     }
 }
 
-fn trim_ascii_space(mut data: &[u8]) -> &[u8] {
-    while let Some((first, rest)) = data.split_first() {
-        if is_trim_space_byte(*first) {
-            data = rest;
-        } else {
-            break;
-        }
-    }
-
-    while let Some((last, rest)) = data.split_last() {
-        if is_trim_space_byte(*last) {
-            data = rest;
-        } else {
-            break;
-        }
-    }
-
-    data
-}
-
-#[inline]
-fn is_trim_space_byte(byte: u8) -> bool {
-    matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
+fn trim_ascii_space(data: &[u8]) -> &[u8] {
+    data.trim_ascii()
 }
 
 #[cfg(test)]
