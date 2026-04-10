@@ -711,7 +711,7 @@ EOF
 Development tools (since -d was provided):
   * mysql client
   * python3 (boto3, ruff, yamllint, ...)
-  * python database drivers (mysql-connector-python, pymysql, sqlalchemy, clickhouse_driver)
+  * python database drivers (mysql-connector-python, pymysql, sqlalchemy)
 EOF
 	fi
 
@@ -908,7 +908,7 @@ if [[ "$INSTALL_DEV_TOOLS" == "true" ]]; then
 	fi
 	python3 -m pip install --quiet boto3 "moto[all]" shfmt-py toml yamllint ruff
 	# drivers
-	python3 -m pip install --quiet pymysql sqlalchemy clickhouse_driver
+	python3 -m pip install --quiet pymysql sqlalchemy
 	# sqllogic dependencies
 	python3 -m pip install --quiet mysql-connector-python==8.0.30
 fi

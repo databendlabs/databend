@@ -139,13 +139,6 @@ impl DefaultSettings {
             let all_timezones: Vec<String> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.to_string()).collect();
 
             let default_settings = HashMap::from([
-                ("enable_clickhouse_handler", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables clickhouse handler.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum rows size of a single data block that can be read.",
