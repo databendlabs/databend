@@ -14,7 +14,6 @@ Nd = "Nd"
 typ = "typ"
 aranges = "aranges"
 pendings = "pendings"
-writeable = "writeable"
 
 [default.extend-identifiers]
 
