@@ -31,6 +31,7 @@ use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::csv::CsvInputFormat;
 use crate::read::row_based::formats::csv::separator::unquote;
 use crate::read::row_based::utils::get_decode_error_by_pos;
+use crate::read::row_based::utils::trim_ascii_space;
 
 pub struct CsvDecoder {
     pub load_context: Arc<LoadContext>,
@@ -52,10 +53,14 @@ impl CsvDecoder {
     fn read_column(
         &self,
         builder: &mut ColumnBuilder,
-        col_data: &[u8],
+        mut col_data: &[u8],
         column_index: usize,
         is_quoted: bool,
     ) -> std::result::Result<(), FileParseError> {
+        if self.fmt.params.trim_space {
+            col_data = trim_ascii_space(col_data);
+        }
+
         if col_data.is_empty() {
             let behavior = if is_quoted {
                 self.fmt.params.quoted_empty_field_as.clone()
