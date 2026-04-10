@@ -83,7 +83,7 @@ build_exceptions! {
     CatalogNotFound(2320),
 }
 
-// Syntax and Semantic Errors [1005-1010, 1027-1028, 1065]
+// Syntax and Semantic Errors [1005-1010, 1027-1029, 1065]
 build_exceptions! {
     /// Syntax error in query
     SyntaxException(1005),
@@ -99,6 +99,8 @@ build_exceptions! {
     UnknownAggregateFunction(1027),
     /// Number of arguments doesn't match
     NumberArgumentsNotMatch(1028),
+    /// Invalid view dependency
+    ViewDependencyError(1029),
     /// Semantic error
     SemanticError(1065),
 }
