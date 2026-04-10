@@ -193,10 +193,6 @@ impl Settings {
         Ok(())
     }
 
-    pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
-    }
-
     pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
     }
