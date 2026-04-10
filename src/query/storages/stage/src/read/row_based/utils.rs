@@ -28,11 +28,6 @@ pub fn trim_ascii_space(data: &[u8]) -> &[u8] {
     data.trim_ascii()
 }
 
-#[inline]
-fn is_trim_space_byte(byte: u8) -> bool {
-    matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
-}
-
 pub fn get_decode_error_by_pos(
     column_index: usize,
     schema: &TableSchemaRef,

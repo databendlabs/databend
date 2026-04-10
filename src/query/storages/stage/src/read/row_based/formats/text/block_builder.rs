@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Cursor;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -20,7 +19,6 @@ use databend_common_expression::ColumnBuilder;
 use databend_common_expression::TableDataType;
 use databend_common_expression::types::nullable::NullableColumnBuilder;
 use databend_common_formats::SeparatedTextDecoder;
-use databend_common_io::cursor_ext::BufferReadStringExt;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_storage::FileParseError;
 
@@ -29,8 +27,8 @@ use crate::read::load_context::LoadContext;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::RowDecoder;
 use crate::read::row_based::formats::text::format::TextInputFormat;
+use crate::read::row_based::formats::text::parser::decode_tsv_field_with_trim;
 use crate::read::row_based::utils::get_decode_error_by_pos;
-use crate::read::row_based::utils::trim_ascii_space;
 
 pub struct TextDecoder {
     pub load_context: Arc<LoadContext>,
@@ -80,66 +78,18 @@ impl TextDecoder {
     fn read_column(
         &self,
         builder: &mut ColumnBuilder,
-        mut col_data: &[u8],
+        col_data: &[u8],
         column_index: usize,
     ) -> std::result::Result<(), FileParseError> {
-        if self.trim_space {
-            col_data = trim_ascii_space(col_data);
+        if col_data.is_empty() {
+            return self.read_empty_column(builder, column_index);
         }
 
-        if col_data.is_empty() {
-            let field = &self.load_context.schema.fields()[column_index];
-            match &self.empty_field_as {
-                EmptyFieldAs::FieldDefault => {
-                    self.load_context.push_default_value(builder, column_index)
-                }
-                EmptyFieldAs::Null => {
-                    if !matches!(field.data_type, TableDataType::Nullable(_)) {
-                        return Err(FileParseError::ColumnEmptyError {
-                            column_index,
-                            column_name: field.name().to_owned(),
-                            column_type: field.data_type.to_string(),
-                            empty_field_as: self.empty_field_as.to_string(),
-                            remedy: format!(
-                                "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
-                                field.name()
-                            ),
-                        });
-                    }
-                    builder.push_default();
-                    Ok(())
-                }
-                EmptyFieldAs::String => match builder {
-                    ColumnBuilder::String(b) => {
-                        b.put_and_commit("");
-                        Ok(())
-                    }
-                    ColumnBuilder::Nullable(box NullableColumnBuilder {
-                        builder: ColumnBuilder::String(b),
-                        validity,
-                    }) => {
-                        b.put_and_commit("");
-                        validity.push(true);
-                        Ok(())
-                    }
-                    ColumnBuilder::Nullable(_) => {
-                        builder.push_default();
-                        Ok(())
-                    }
-                    _ => Err(FileParseError::ColumnEmptyError {
-                        column_index,
-                        column_name: field.name().to_owned(),
-                        column_type: field.data_type.to_string(),
-                        empty_field_as: self.empty_field_as.to_string(),
-                        remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
-                    }),
-                },
-            }
-        } else {
-            // todo(youngsofun): optimize this later after refactor.
-            let mut cursor = Cursor::new(col_data);
-            let mut data = vec![];
-            cursor.read_escaped_string_text(&mut data).map_err(|e| {
+        // `trim_space` must apply after escape decoding so escaped trailing
+        // whitespace such as `\ ` is preserved until it becomes a real space.
+        let mut data = vec![];
+        let decoded =
+            decode_tsv_field_with_trim(col_data, &mut data, self.trim_space).map_err(|e| {
                 get_decode_error_by_pos(
                     column_index,
                     &self.load_context.schema,
@@ -147,15 +97,73 @@ impl TextDecoder {
                     col_data,
                 )
             })?;
-            if let Err(e) = self.field_decoder.read_field(builder, &data, true) {
-                return Err(get_decode_error_by_pos(
-                    column_index,
-                    &self.load_context.schema,
-                    &e.message(),
-                    col_data,
-                ));
+
+        if decoded.is_empty() {
+            return self.read_empty_column(builder, column_index);
+        }
+
+        if let Err(e) = self.field_decoder.read_field(builder, decoded, true) {
+            return Err(get_decode_error_by_pos(
+                column_index,
+                &self.load_context.schema,
+                &e.message(),
+                col_data,
+            ));
+        }
+        Ok(())
+    }
+
+    fn read_empty_column(
+        &self,
+        builder: &mut ColumnBuilder,
+        column_index: usize,
+    ) -> std::result::Result<(), FileParseError> {
+        let field = &self.load_context.schema.fields()[column_index];
+        match &self.empty_field_as {
+            EmptyFieldAs::FieldDefault => {
+                self.load_context.push_default_value(builder, column_index)
             }
-            Ok(())
+            EmptyFieldAs::Null => {
+                if !matches!(field.data_type, TableDataType::Nullable(_)) {
+                    return Err(FileParseError::ColumnEmptyError {
+                        column_index,
+                        column_name: field.name().to_owned(),
+                        column_type: field.data_type.to_string(),
+                        empty_field_as: self.empty_field_as.to_string(),
+                        remedy: format!(
+                            "one of the following options: 1. Modify the `{}` column to allow NULL values. 2. Set EMPTY_FIELD_AS to FIELD_DEFAULT.",
+                            field.name()
+                        ),
+                    });
+                }
+                builder.push_default();
+                Ok(())
+            }
+            EmptyFieldAs::String => match builder {
+                ColumnBuilder::String(b) => {
+                    b.put_and_commit("");
+                    Ok(())
+                }
+                ColumnBuilder::Nullable(box NullableColumnBuilder {
+                    builder: ColumnBuilder::String(b),
+                    validity,
+                }) => {
+                    b.put_and_commit("");
+                    validity.push(true);
+                    Ok(())
+                }
+                ColumnBuilder::Nullable(_) => {
+                    builder.push_default();
+                    Ok(())
+                }
+                _ => Err(FileParseError::ColumnEmptyError {
+                    column_index,
+                    column_name: field.name().to_owned(),
+                    column_type: field.data_type.to_string(),
+                    empty_field_as: self.empty_field_as.to_string(),
+                    remedy: "Set EMPTY_FIELD_AS to FIELD_DEFAULT or NULL.".to_string(),
+                }),
+            },
         }
     }
 

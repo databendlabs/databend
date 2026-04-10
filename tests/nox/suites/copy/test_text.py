@@ -4,6 +4,15 @@ from .copy_utils import unload_and_read_stage_text
 from .copy_utils import run_all
 
 
+def _quote_sql_string(value):
+    value = str(value)
+    return value.replace("'", "''")
+
+
+def _stage_fs_url(path):
+    return f"fs://{_quote_sql_string(path)}/"
+
+
 @pytest.mark.parametrize("type_name", ["tsv", "text"])
 def test_text_alias(copy_env, type_name):
     name = copy_env.uniq_name
@@ -236,3 +245,24 @@ def test_text_trim_space(copy_env):
     )
     assert res.values()[1] == 1
     assert conn.query_row("select * from t_trim_text").values() == (42, "hello", None)
+
+
+def test_text_trim_space_after_escape_decode(copy_env, tmp_path):
+    conn = copy_env.conn
+    stage_name = copy_env.uniq_name
+    table_name = f"{stage_name}_t"
+    stage_dir = tmp_path / stage_name
+    stage_dir.mkdir()
+    path = stage_dir / "trim_escaped_space.txt"
+    path.write_bytes(b"abc\\ \n")
+
+    conn.exec(
+        f"create or replace stage {stage_name} "
+        f"url='{_stage_fs_url(stage_dir)}' "
+        "file_format=(type=text trim_space=true)"
+    )
+    conn.exec(f"create or replace table {table_name} (a string)")
+
+    res = conn.query_row(f"copy into {table_name} from @{stage_name}")
+    assert res.values()[1] == 1
+    assert conn.query_row(f"select * from {table_name}").values() == ("abc\\",)
