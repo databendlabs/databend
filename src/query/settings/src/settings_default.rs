@@ -525,9 +525,9 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
-                ("enable_merge_into_block_id_repartition", DefaultSettingValue {
+                ("enable_mutation_block_id_repartition", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enable local block_id repartition before row fetch in merge into to reduce duplicate block reads.",
+                    desc: "Enable local block_id repartition before row fetch in join-based mutations (MERGE INTO, UPDATE...FROM) to reduce duplicate block reads.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),

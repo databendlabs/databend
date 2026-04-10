@@ -51,9 +51,11 @@ pub struct RowFetch {
     pub row_id_col_offset: usize,
     pub fetched_fields: Vec<DataField>,
     pub need_wrap_nullable: bool,
-    /// True when this RowFetch is part of a MERGE INTO pipeline (not SELECT+LIMIT).
-    #[serde(default)]
-    pub is_mutation: bool,
+    /// When true, a block_id repartition is inserted before RowFetch to reduce
+    /// duplicate block reads. Applicable to join-based mutation paths (MERGE INTO,
+    /// UPDATE...FROM). Not applicable to SELECT+LIMIT where the exchange would
+    /// destroy sort order.
+    pub enable_block_id_repartition: bool,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -113,7 +115,7 @@ impl IPhysicalPlan for RowFetch {
             row_id_col_offset: self.row_id_col_offset,
             fetched_fields: self.fetched_fields.clone(),
             need_wrap_nullable: self.need_wrap_nullable,
-            is_mutation: self.is_mutation,
+            enable_block_id_repartition: self.enable_block_id_repartition,
             stat_info: self.stat_info.clone(),
         })
     }
@@ -132,15 +134,15 @@ impl IPhysicalPlan for RowFetch {
         if !MutationSplit::check_physical_plan(&self.input) {
             // For MatchedOnly MERGE INTO, add block_id repartition before RowFetch
             // to reduce duplicate block reads.
-            // Not applicable to SELECT+LIMIT: the exchange would destroy the sort
-            // order produced by Sort+Limit (MergePartitionProcessor uses Random
-            // strategy with non-deterministic output order).
-            if self.is_mutation {
+            // Not applicable to SELECT+LIMIT: pipeline.exchange() merges partitions
+            // with non-deterministic output order, which would destroy the sort
+            // order produced by Sort+Limit.
+            if self.enable_block_id_repartition {
                 let max_threads = builder.settings.get_max_threads()? as usize;
                 if max_threads > 1
                     && builder
                         .settings
-                        .get_enable_merge_into_block_id_repartition()?
+                        .get_enable_mutation_block_id_repartition()?
                 {
                     let exchange =
                         Arc::new(BlockIdPartitionExchange::create(self.row_id_col_offset));

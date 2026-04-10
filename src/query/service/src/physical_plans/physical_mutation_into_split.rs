@@ -33,8 +33,8 @@ pub struct MutationSplit {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub split_index: IndexType,
-    /// Whether RowFetch follows this MutationSplit (lazy columns exist).
-    /// Block_id repartition is only beneficial when RowFetch is present.
+    /// When true, a block_id repartition is inserted before the split to reduce
+    /// duplicate block reads in the downstream RowFetch stage.
     pub has_row_fetch: bool,
 }
 
@@ -79,14 +79,13 @@ impl IPhysicalPlan for MutationSplit {
 
         let max_threads = builder.settings.get_max_threads()? as usize;
 
-        // Add block_id repartition before split so each downstream RowFetch
-        // processor sees rows from a disjoint set of blocks, eliminating
-        // duplicate block reads. Only useful when RowFetch follows.
+        // Repartition by block_id so each downstream RowFetch processor handles
+        // a disjoint set of blocks, reducing duplicate block reads.
         if self.has_row_fetch
             && max_threads > 1
             && builder
                 .settings
-                .get_enable_merge_into_block_id_repartition()?
+                .get_enable_mutation_block_id_repartition()?
         {
             let exchange = Arc::new(BlockIdPartitionExchange::create(self.split_index));
             builder.main_pipeline.exchange(max_threads, exchange)?;
