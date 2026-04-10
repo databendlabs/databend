@@ -82,6 +82,9 @@ Y
 statement ok
 create or replace file format head_csv_format type = 'CSV' field_delimiter = ',' skip_header = 1;
 
+statement ok
+create or replace file format trim_csv_format type = 'CSV' field_delimiter = ',' trim_space = true;
+
 query TTBTI
 select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', file_format => 'CSV');
 ----
@@ -93,6 +96,12 @@ select * from infer_schema(location => '@data/csv/numbers_with_headers.csv', fil
 ----
 id BIGINT 1 csv/numbers_with_headers.csv 0
 value BIGINT 1 csv/numbers_with_headers.csv 1
+
+query TTBTI
+select * from infer_schema(location => '@data/csv/whitespace_number.csv', file_format => 'trim_csv_format');
+----
+column_1 BIGINT 1 csv/whitespace_number.csv 0
+column_2 BIGINT 1 csv/whitespace_number.csv 1
 
 statement error
 select * from infer_schema(location => '@data/csv/ragged.csv', file_format => 'head_csv_format');

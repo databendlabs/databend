@@ -14,7 +14,11 @@
 
 use databend_common_expression::RemoteExpr;
 
-// pub type ProbeKeyWithEquivalents = Option<Vec<(RemoteExpr<String>, usize, usize)>>;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum SpatialRuntimeFilterMode {
+    Intersects,
+    DistanceWithin(f64),
+}
 
 /// Collection of runtime filters for a join operation
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Default)]
@@ -54,6 +58,6 @@ pub struct PhysicalRuntimeFilter {
     /// Enable min-max filter for this runtime filter
     pub enable_min_max_runtime_filter: bool,
 
-    /// Is a spatial function runtime filter
-    pub is_spatial: bool,
+    /// Is a spatial function runtime filter if spatial mode is some.
+    pub spatial_mode: Option<SpatialRuntimeFilterMode>,
 }

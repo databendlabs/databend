@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::btree_map;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -131,6 +132,13 @@ pub struct VirtualColumnName {
     pub key_name: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ViewIdent {
+    pub catalog: String,
+    pub database: String,
+    pub name: String,
+}
+
 /// `BindContext` stores all the free variables in a query and tracks the context of binding procedure.
 #[derive(Clone, Debug)]
 pub struct BindContext {
@@ -158,10 +166,8 @@ pub struct BindContext {
     /// functions, otherwise a grouping error will be raised.
     pub in_grouping: bool,
 
-    /// If current binding table is a view, record its catalog, database and name.
-    ///
-    /// It's used to check if the view has a loop dependency.
-    pub view_info: Option<(String, String, String)>,
+    /// Views that are on the current binding path.
+    pub binding_views: HashSet<ViewIdent>,
 
     /// True if there is async function in current context, need rewrite.
     pub have_async_func: bool,
@@ -255,7 +261,7 @@ impl BindContext {
             srf_info: SetReturningInfo::default(),
             cte_context: CteContext::default(),
             in_grouping: false,
-            view_info: None,
+            binding_views: HashSet::new(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
@@ -302,7 +308,7 @@ impl BindContext {
             srf_info: Default::default(),
             cte_context: parent.cte_context.clone(),
             in_grouping: false,
-            view_info: None,
+            binding_views: parent.binding_views.clone(),
             have_async_func: false,
             have_udf_script: false,
             have_udf_server: false,
@@ -322,7 +328,19 @@ impl BindContext {
         bind_context.parent = self.parent.clone();
         bind_context.cte_context = self.cte_context.clone();
         bind_context.udf_cache = self.udf_cache.clone();
+        bind_context.binding_views = self.binding_views.clone();
         bind_context
+    }
+
+    pub fn check_view_loop(&self, ident: &ViewIdent) -> Result<()> {
+        if self.binding_views.contains(ident) {
+            Err(ErrorCode::ViewDependencyError(format!(
+                "View dependency loop detected (view: {}.{})",
+                ident.database, ident.name
+            )))
+        } else {
+            Ok(())
+        }
     }
 
     /// Returns all column bindings in current scope.

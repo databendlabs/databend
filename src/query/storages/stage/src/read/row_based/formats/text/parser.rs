@@ -25,6 +25,7 @@ use crate::read::row_based::batch::NdjsonRowBatch;
 use crate::read::row_based::batch::RowBatchWithPosition;
 use crate::read::row_based::format::SeparatorState;
 use crate::read::row_based::formats::text::separator::TextRowSeparator;
+use crate::read::row_based::utils::trim_ascii_space;
 
 pub struct TextFieldReader<'a> {
     row: &'a [u8],
@@ -66,12 +67,26 @@ impl<'a> Iterator for TextFieldReader<'a> {
     }
 }
 
-pub fn decode_tsv_field(col_data: &[u8], output: &mut Vec<u8>) -> Result<()> {
+pub(super) fn decode_tsv_field<'a>(col_data: &[u8], output: &'a mut Vec<u8>) -> Result<&'a [u8]> {
     let mut cursor = Cursor::new(col_data);
     output.clear();
     cursor
         .read_escaped_string_text(output)
-        .map_err(|e| ErrorCode::BadBytes(e.to_string()))
+        .map_err(|e| ErrorCode::BadBytes(e.to_string()))?;
+    Ok(output.as_slice())
+}
+
+pub(super) fn decode_tsv_field_with_trim<'a>(
+    col_data: &[u8],
+    output: &'a mut Vec<u8>,
+    trim_space: bool,
+) -> Result<&'a [u8]> {
+    let field = decode_tsv_field(col_data, output)?;
+    Ok(if trim_space {
+        trim_ascii_space(field)
+    } else {
+        field
+    })
 }
 
 struct InferSchemaIter {
@@ -83,6 +98,7 @@ struct InferSchemaIter {
     record_delimiter: u8,
     field_delimiter: u8,
     trim_cr: bool,
+    trim_space: bool,
 }
 
 impl Drop for InferSchemaIter {
@@ -100,8 +116,8 @@ impl Iterator for InferSchemaIter {
             if let Some(fields) = &mut self.current_fields {
                 if let Some((i, field)) = fields.next() {
                     return Some(
-                        decode_tsv_field(field, &mut self.field_buf)
-                            .map(|_| (i, String::from_utf8_lossy(&self.field_buf).to_string())),
+                        decode_tsv_field_with_trim(field, &mut self.field_buf, self.trim_space)
+                            .map(|field| (i, String::from_utf8_lossy(field).to_string())),
                     );
                 } else {
                     self.current_fields = None;
@@ -184,6 +200,7 @@ pub fn parse_tsv_records_for_infer_schema(
         record_delimiter: record_delimiter_byte,
         field_delimiter,
         trim_cr,
+        trim_space: params.trim_space,
     };
     Ok(iter)
 }
@@ -225,6 +242,54 @@ mod tests {
             (1, "3\n4".to_string()),
             (0, "5".to_string()),
             (1, "6".to_string()),
+        ]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tsv_records_for_infer_schema_trim_space() -> Result<()> {
+        let params = TextFileFormatParams {
+            trim_space: true,
+            ..TextFileFormatParams::default()
+        };
+        let records =
+            parse_tsv_records_for_infer_schema(b"  42  \t  hello  \t  \\N  \n", &params, true)?
+                .collect::<Result<Vec<_>>>()?;
+        assert_eq!(records, vec![
+            (0, "42".to_string()),
+            (1, "hello".to_string()),
+            (2, "\\N".to_string()),
+        ]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_decode_tsv_field_with_trim_preserves_escaped_trailing_space() -> Result<()> {
+        let mut field_buf = Vec::new();
+
+        assert_eq!(
+            decode_tsv_field_with_trim(b"  abc\\ ", &mut field_buf, true)?,
+            b"abc\\"
+        );
+        assert_eq!(
+            decode_tsv_field_with_trim(b"  abc\\t", &mut field_buf, true)?,
+            b"abc"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_tsv_records_for_infer_schema_trim_after_decode() -> Result<()> {
+        let params = TextFileFormatParams {
+            trim_space: true,
+            ..TextFileFormatParams::default()
+        };
+        let records = parse_tsv_records_for_infer_schema(b"  abc\\ \t  def\\t\n", &params, true)?
+            .collect::<Result<Vec<_>>>()?;
+        assert_eq!(records, vec![
+            (0, "abc\\".to_string()),
+            (1, "def".to_string()),
         ]);
         Ok(())
     }

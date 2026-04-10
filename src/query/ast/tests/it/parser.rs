@@ -1235,6 +1235,23 @@ fn test_statement_error() {
 }
 
 #[test]
+fn test_file_format_trim_space_option() {
+    let sql = r#"
+        COPY INTO mytable
+            FROM 's3://mybucket/data.csv'
+            FILE_FORMAT = (
+                type = CSV
+                trim_space = true
+            )
+    "#;
+
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let displayed = stmt.to_string().to_uppercase();
+    assert!(displayed.contains("TRIM_SPACE = true".to_uppercase().as_str()));
+}
+
+#[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();

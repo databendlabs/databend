@@ -34,6 +34,7 @@ fn test_decode_v169_text_file_format_params() -> anyhow::Result<()> {
         escape: "\\".to_string(),
         quote: "\"".to_string(),
         error_on_column_count_mismatch: false,
+        trim_space: false,
         empty_field_as: EmptyFieldAs::FieldDefault,
         output_header: true,
         nan_display: "nan_utf8".to_string(),

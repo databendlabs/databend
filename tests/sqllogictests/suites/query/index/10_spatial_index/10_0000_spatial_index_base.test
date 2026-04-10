@@ -8,12 +8,12 @@ statement ok
 USE test_spatial_index
 
 statement ok
-CREATE TABLE IF NOT EXISTS t(id Int, geom Geometry, geog Geography, SPATIAL INDEX idx (geom, geog)) Engine = Fuse
+CREATE TABLE IF NOT EXISTS t(id Int, geom Geometry, geog Geography, SPATIAL INDEX idx (geom)) Engine = Fuse
 
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx (geom, geog) ) ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx (geom) ) ENGINE=FUSE
 
 statement ok
 DROP SPATIAL INDEX idx ON t;
@@ -22,12 +22,12 @@ statement error
 CREATE SPATIAL INDEX idx2 ON t(id);
 
 statement ok
-CREATE SPATIAL INDEX idx2 ON t(geom, geog);
+CREATE SPATIAL INDEX idx2 ON t(geom);
 
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx2 (geom, geog) ) ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx2 (geom) ) ENGINE=FUSE
 
 statement error
 DROP INVERTED INDEX idx2 ON t;
@@ -87,6 +87,12 @@ SELECT store_id, store_name, category FROM spatial_stores WHERE category IN ('re
 8 Hilton hotel
 13 Burger King restaurant
 
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE st_dwithin(location, to_geometry('POINT(100 100)'), 1.5) ORDER BY store_id;
+----
+5 Peets Coffee coffee
+6 Lipton tea
+
 statement ok
 CREATE TABLE districts (district_id INT, district_name String, geom Geometry);
 
@@ -105,6 +111,11 @@ Central Costa
 
 query TI
 SELECT d.district_name, count(s.store_id) AS store_count FROM districts d JOIN spatial_stores s ON st_within(s.location, d.geom) GROUP BY d.district_name;
+----
+Central 2
+
+query TI
+SELECT d.district_name, count(s.store_id) AS store_count FROM districts d JOIN spatial_stores s ON st_dwithin(s.location, d.geom, 2.0) GROUP BY d.district_name ORDER BY d.district_name;
 ----
 Central 2
 

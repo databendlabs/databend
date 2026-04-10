@@ -83,7 +83,7 @@ build_exceptions! {
     CatalogNotFound(2320),
 }
 
-// Syntax and Semantic Errors [1005-1010, 1027-1028, 1065]
+// Syntax and Semantic Errors [1005-1010, 1027-1029, 1065]
 build_exceptions! {
     /// Syntax error in query
     SyntaxException(1005),
@@ -99,6 +99,8 @@ build_exceptions! {
     UnknownAggregateFunction(1027),
     /// Number of arguments doesn't match
     NumberArgumentsNotMatch(1028),
+    /// Invalid view dependency
+    ViewDependencyError(1029),
     /// Semantic error
     SemanticError(1065),
 }
@@ -359,8 +361,8 @@ build_exceptions! {
 
 // Index Errors [1503, 1601-1603, 2720-2726]
 build_exceptions! {
-    /// Column referenced by inverted index
-    ColumnReferencedByInvertedIndex(1111),
+    /// Column referenced by index
+    ColumnReferencedByIndex(1111),
     /// Invalid row ID index
     InvalidRowIdIndex(1503),
     /// Unsupported index
