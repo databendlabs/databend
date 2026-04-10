@@ -155,6 +155,32 @@ impl Scan {
         }
     }
 
+    /// Create a derived scan for decorrelation with new columns and scan_id.
+    /// Only query-semantic read-path metadata (sample, indexes) is preserved.
+    /// Everything else is explicitly defaulted — the derived scan sits on the
+    /// build side of a decorrelated SEMI/ANTI join, not the mutation target.
+    pub fn derive_decorrelated_scan(&self, columns: ColumnSet, scan_id: usize) -> Self {
+        Scan {
+            table_index: self.table_index,
+            columns,
+            scan_id,
+            // Read-path metadata: preserve from the original scan.
+            sample: self.sample.clone(),
+            inverted_index: self.inverted_index.clone(),
+            vector_index: self.vector_index.clone(),
+            // Everything else: explicit default.
+            change_type: None,
+            update_stream_columns: false,
+            is_lazy_table: false,
+            push_down_predicates: None,
+            limit: None,
+            order_by: None,
+            prewhere: None,
+            agg_index: None,
+            statistics: Arc::new(Statistics::default()),
+        }
+    }
+
     pub fn set_update_stream_columns(&mut self, update_stream_columns: bool) {
         self.update_stream_columns = update_stream_columns;
     }
@@ -387,5 +413,57 @@ mod tests {
         );
 
         assert_eq!(reduced.value(), u64::MAX as f64);
+    }
+
+    #[test]
+    fn test_derive_scan_preserves_bind_time_metadata() {
+        let original = Scan {
+            table_index: 42,
+            columns: [Symbol::new(1), Symbol::new(2), Symbol::new(3)]
+                .into_iter()
+                .collect(),
+            scan_id: 10,
+            sample: Some(SampleConfig {
+                row_level: None,
+                block_level: Some(50.0),
+            }),
+            change_type: Some(ChangeType::Append),
+            update_stream_columns: true,
+            is_lazy_table: true,
+            // Optimizer-phase fields set to non-default to verify they get reset.
+            limit: Some(100),
+            order_by: Some(vec![]),
+            ..Default::default()
+        };
+
+        let new_columns = [Symbol::new(10), Symbol::new(20), Symbol::new(30)]
+            .into_iter()
+            .collect();
+        let derived = original.derive_decorrelated_scan(new_columns, 99);
+
+        // New columns and scan_id must be replaced.
+        assert_eq!(
+            derived.columns,
+            [Symbol::new(10), Symbol::new(20), Symbol::new(30)]
+                .into_iter()
+                .collect()
+        );
+        assert_eq!(derived.scan_id, 99);
+        assert_eq!(derived.table_index, 42);
+
+        // Query-semantic read-path metadata must be preserved.
+        assert_eq!(derived.sample, original.sample);
+
+        // Everything else must be reset to default.
+        assert_eq!(derived.change_type, None);
+        assert!(!derived.update_stream_columns);
+        assert!(!derived.is_lazy_table);
+
+        // Optimizer-phase fields must be reset.
+        assert!(derived.push_down_predicates.is_none());
+        assert!(derived.limit.is_none());
+        assert!(derived.order_by.is_none());
+        assert!(derived.prewhere.is_none());
+        assert!(derived.agg_index.is_none());
     }
 }
