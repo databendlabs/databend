@@ -25,11 +25,12 @@ use databend_common_pipeline::basic::Exchange;
 /// Partitions data blocks by block_id extracted from the `_row_id` column.
 ///
 /// This ensures that rows belonging to the same physical block are routed
-/// to the same downstream processor, eliminating duplicate block reads
+/// to the same downstream processor, reducing duplicate block reads
 /// in the RowFetch stage of MERGE INTO.
 pub struct BlockIdPartitionExchange {
     row_id_col_offset: usize,
-    /// Round-robin counter for NULL row_ids (unmatched rows in MixedMatched).
+    /// Incrementing counter used by `partition()` to spread NULL row_ids
+    /// (unmatched rows in MixedMatched) evenly across partitions.
     null_counter: AtomicU64,
 }
 

@@ -1,42 +1,59 @@
-statement ok
-DROP TABLE IF EXISTS t_repartition_target;
+## Test block_id repartition optimization for MERGE INTO RowFetch.
+## When enabled, rows are partitioned by block_id before RowFetch so each
+## processor handles a disjoint set of blocks, reducing duplicate block reads.
 
 statement ok
-DROP TABLE IF EXISTS t_repartition_source;
+CREATE OR REPLACE DATABASE test_block_id_repartition
 
 statement ok
-CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+USE test_block_id_repartition
+
+## ==========================================================================
+## Setup: target table with multiple blocks (one INSERT per block),
+## and a source table with overlapping + new rows.
+## ==========================================================================
 
 statement ok
-INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+## Each INSERT creates a separate block in storage.
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00')
 
 statement ok
-CREATE TABLE t_repartition_source (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+CREATE OR REPLACE TABLE source (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
 
 statement ok
-INSERT INTO t_repartition_source VALUES (1, 'a_new', 'y1', '2024-01-02 00:00:00'), (2, 'b_new', 'y2', '2024-01-02 00:00:00'), (3, 'c_old', 'y3', '2023-12-01 00:00:00'), (6, 'f_new', 'y6', '2024-01-02 00:00:00'), (7, 'g_new', 'y7', '2024-01-02 00:00:00');
+INSERT INTO source VALUES (1, 'a_new', 'y1', '2024-01-02 00:00:00'), (2, 'b_new', 'y2', '2024-01-02 00:00:00'), (3, 'c_old', 'y3', '2023-12-01 00:00:00'), (6, 'f_new', 'y6', '2024-01-02 00:00:00'), (7, 'g_new', 'y7', '2024-01-02 00:00:00')
+
+## ==========================================================================
+## Test 1: MixedMatched (WHEN MATCHED + WHEN NOT MATCHED), repartition ON.
+## Source ids 1,2 match and have newer ts => updated.
+## Source id 3 matches but has older ts => NOT updated (condition: tar.ts < sou.ts).
+## Source ids 6,7 don't match => inserted.
+## ==========================================================================
 
 statement ok
-SET enable_merge_into_row_fetch = 1;
+SET enable_merge_into_row_fetch = 1
 
 statement ok
-SET enable_merge_into_block_id_repartition = 1;
+SET enable_merge_into_block_id_repartition = 1
 
 query II
-MERGE INTO t_repartition_target AS tar
-USING t_repartition_source AS sou
+MERGE INTO target AS tar
+USING source AS sou
 ON tar.id = sou.id
 WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *
 WHEN NOT MATCHED THEN INSERT *;
@@ -44,7 +61,7 @@ WHEN NOT MATCHED THEN INSERT *;
 2 2
 
 query ITTT
-SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+SELECT id, val, extra, ts FROM target ORDER BY id;
 ----
 1 a_new y1 2024-01-02 00:00:00.000000
 2 b_new y2 2024-01-02 00:00:00.000000
@@ -54,33 +71,34 @@ SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
 6 f_new y6 2024-01-02 00:00:00.000000
 7 g_new y7 2024-01-02 00:00:00.000000
 
-statement ok
-DROP TABLE t_repartition_target;
+## ==========================================================================
+## Test 2: Same scenario with repartition OFF. Results must be identical.
+## ==========================================================================
 
 statement ok
-CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
 
 statement ok
-INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00')
 
 statement ok
-SET enable_merge_into_block_id_repartition = 0;
+SET enable_merge_into_block_id_repartition = 0
 
 query II
-MERGE INTO t_repartition_target AS tar
-USING t_repartition_source AS sou
+MERGE INTO target AS tar
+USING source AS sou
 ON tar.id = sou.id
 WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *
 WHEN NOT MATCHED THEN INSERT *;
@@ -88,7 +106,7 @@ WHEN NOT MATCHED THEN INSERT *;
 2 2
 
 query ITTT
-SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+SELECT id, val, extra, ts FROM target ORDER BY id;
 ----
 1 a_new y1 2024-01-02 00:00:00.000000
 2 b_new y2 2024-01-02 00:00:00.000000
@@ -98,61 +116,65 @@ SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
 6 f_new y6 2024-01-02 00:00:00.000000
 7 g_new y7 2024-01-02 00:00:00.000000
 
-statement ok
-DROP TABLE t_repartition_target;
+## ==========================================================================
+## Test 3: MatchedOnly (no NOT MATCHED clause), repartition ON.
+## Only ids 1,2 are updated (ts condition). Id 3 not updated.
+## ==========================================================================
 
 statement ok
-CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
 
 statement ok
-INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
 
 statement ok
-SET enable_merge_into_block_id_repartition = 1;
+SET enable_merge_into_block_id_repartition = 1
 
 query I
-MERGE INTO t_repartition_target AS tar
-USING t_repartition_source AS sou
+MERGE INTO target AS tar
+USING source AS sou
 ON tar.id = sou.id
 WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *;
 ----
 2
 
 query ITTT
-SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+SELECT id, val, extra, ts FROM target ORDER BY id;
 ----
 1 a_new y1 2024-01-02 00:00:00.000000
 2 b_new y2 2024-01-02 00:00:00.000000
 3 c x3 2024-01-01 00:00:00.000000
 
-statement ok
-DROP TABLE t_repartition_target;
+## ==========================================================================
+## Test 4: NotMatchedOnly (no MATCHED clause), repartition is a no-op
+## since there is no RowFetch in this path.
+## ==========================================================================
 
 statement ok
-CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
 
 statement ok
-INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
 
 statement ok
-SET enable_merge_into_block_id_repartition = 1;
+SET enable_merge_into_block_id_repartition = 1
 
 query I
-MERGE INTO t_repartition_target AS tar
-USING t_repartition_source AS sou
+MERGE INTO target AS tar
+USING source AS sou
 ON tar.id = sou.id
 WHEN NOT MATCHED THEN INSERT *;
 ----
 4
 
 query ITTT
-SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+SELECT id, val, extra, ts FROM target ORDER BY id;
 ----
 1 a x1 2024-01-01 00:00:00.000000
 2 b_new y2 2024-01-02 00:00:00.000000
@@ -160,27 +182,29 @@ SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
 6 f_new y6 2024-01-02 00:00:00.000000
 7 g_new y7 2024-01-02 00:00:00.000000
 
-statement ok
-DROP TABLE t_repartition_target;
+## ==========================================================================
+## Test 5: MixedMatched with DELETE instead of UPDATE, repartition ON.
+## Ids 1,2 matched with newer ts => deleted. Ids 6,7 not matched => inserted.
+## ==========================================================================
 
 statement ok
-CREATE TABLE t_repartition_target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP);
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
 
 statement ok
-INSERT INTO t_repartition_target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
 
 statement ok
-INSERT INTO t_repartition_target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00');
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
 
 statement ok
-SET enable_merge_into_block_id_repartition = 1;
+SET enable_merge_into_block_id_repartition = 1
 
 query II
-MERGE INTO t_repartition_target AS tar
-USING t_repartition_source AS sou
+MERGE INTO target AS tar
+USING source AS sou
 ON tar.id = sou.id
 WHEN MATCHED AND tar.ts < sou.ts THEN DELETE
 WHEN NOT MATCHED THEN INSERT *;
@@ -188,20 +212,15 @@ WHEN NOT MATCHED THEN INSERT *;
 2 2
 
 query ITTT
-SELECT id, val, extra, ts FROM t_repartition_target ORDER BY id;
+SELECT id, val, extra, ts FROM target ORDER BY id;
 ----
 3 c x3 2024-01-01 00:00:00.000000
 6 f_new y6 2024-01-02 00:00:00.000000
 7 g_new y7 2024-01-02 00:00:00.000000
 
-statement ok
-DROP TABLE IF EXISTS t_repartition_target;
+## ==========================================================================
+## Cleanup
+## ==========================================================================
 
 statement ok
-DROP TABLE IF EXISTS t_repartition_source;
-
-statement ok
-SET enable_merge_into_block_id_repartition = 1;
-
-statement ok
-SET enable_merge_into_row_fetch = 1;
+DROP DATABASE test_block_id_repartition
