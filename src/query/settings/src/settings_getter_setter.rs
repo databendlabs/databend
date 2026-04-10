@@ -788,6 +788,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
     }
 
+    pub fn get_prewhere_selectivity_threshold(&self) -> Result<u64> {
+        self.try_get_u64("prewhere_selectivity_threshold")
+    }
+
     pub fn get_numeric_cast_option(&self) -> Result<String> {
         self.try_get_string("numeric_cast_option")
     }

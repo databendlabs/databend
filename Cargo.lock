@@ -5893,6 +5893,7 @@ dependencies = [
  "chrono-tz 0.8.6",
  "concurrent-queue",
  "cron",
+ "csv-core",
  "ctor",
  "dashmap 6.1.0",
  "databend-base",

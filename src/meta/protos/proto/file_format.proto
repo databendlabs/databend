@@ -124,6 +124,7 @@ message CsvFileFormatParams {
   optional string quoted_empty_field_as = 15;
   optional string encoding = 16;
   optional string encoding_error_mode = 17;
+  bool trim_space = 18;
 }
 
 message TextFileFormatParams {
@@ -145,6 +146,7 @@ message TextFileFormatParams {
   bool output_header = 11;
   optional string encoding = 12;
   optional string encoding_error_mode = 13;
+  bool trim_space = 14;
 }
 
 message XmlFileFormatParams {

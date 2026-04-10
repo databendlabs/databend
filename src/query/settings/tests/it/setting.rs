@@ -94,6 +94,31 @@ async fn test_set_settings() {
                 10
             );
         }
+
+        {
+            settings
+                .set_setting(
+                    "prewhere_selectivity_threshold".to_string(),
+                    "80".to_string(),
+                )
+                .unwrap();
+            assert_eq!(settings.get_prewhere_selectivity_threshold().unwrap(), 80);
+
+            settings
+                .set_setting(
+                    "prewhere_selectivity_threshold".to_string(),
+                    "0".to_string(),
+                )
+                .unwrap();
+            assert_eq!(settings.get_prewhere_selectivity_threshold().unwrap(), 0);
+
+            let result = settings.set_setting(
+                "prewhere_selectivity_threshold".to_string(),
+                "101".to_string(),
+            );
+            let expect = "WrongValueForVariable. Code: 2803, Text = Value 101 is not within the range [0, 100].";
+            assert_eq!(expect, format!("{}", result.unwrap_err()));
+        }
     }
 
     // String out of range.
