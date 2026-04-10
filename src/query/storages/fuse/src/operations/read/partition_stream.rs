@@ -156,18 +156,14 @@ impl Processor for PartitionStreamSource {
             return Ok(Event::Finished);
         }
 
-        // Runtime filter wait phase
-        if let Some(waiter) = &mut self.runtime_filter_waiter {
+        if let Some(mut waiter) = self.runtime_filter_waiter.take() {
             if waiter.ready.is_none() {
                 let ready = waiter.ctx.get_runtime_filter_ready(waiter.scan_id);
-                if ready.is_empty() {
-                    self.runtime_filter_waiter = None;
-                } else {
+                if !ready.is_empty() {
                     waiter.ready = Some(ready);
+                    self.runtime_filter_waiter = Some(waiter);
                     return Ok(Event::Async);
                 }
-            } else {
-                return Ok(Event::Async);
             }
         }
 
@@ -217,6 +213,7 @@ impl Processor for PartitionStreamSource {
                     waiter.scan_id,
                     ready.len()
                 );
+
                 wait_runtime_filters(
                     waiter.scan_id,
                     &self.output,
