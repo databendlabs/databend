@@ -51,7 +51,12 @@ runs:
       if: inputs.version
       shell: bash
       run: |
-        python - <<'PY'
+        PYTHON_BIN="$(command -v python3 || command -v python)"
+        if [[ -z "$PYTHON_BIN" ]]; then
+          echo "python3/python is required for release wheel build normalization" >&2
+          exit 1
+        fi
+        "$PYTHON_BIN" - <<'PY'
         from pathlib import Path
 
         path = Path(".cargo/config.toml")
