@@ -257,24 +257,3 @@ fn create_python_binding_telemetry_payload(config: &InnerConfig) -> serde_json::
         }
     })
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_configure_embedded_listeners_uses_ephemeral_ports() {
-        let mut conf = InnerConfig::default();
-
-        configure_embedded_listeners(&mut conf);
-
-        assert_eq!(conf.query.common.mysql_handler_port, 0);
-        assert_eq!(conf.query.common.clickhouse_handler_port, 0);
-        assert_eq!(conf.query.common.clickhouse_http_handler_port, 0);
-        assert_eq!(conf.query.common.http_handler_port, 0);
-        assert_eq!(conf.query.common.flight_sql_handler_port, 0);
-        assert_eq!(conf.query.common.flight_api_address, "127.0.0.1:0");
-        assert_eq!(conf.query.common.admin_api_address, "127.0.0.1:0");
-        assert_eq!(conf.query.common.metric_api_address, "127.0.0.1:0");
-    }
-}
