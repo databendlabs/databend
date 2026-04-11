@@ -51,25 +51,17 @@ runs:
       if: inputs.version
       shell: bash
       run: |
-        PYTHON_BIN="$(command -v python3 || command -v python)"
-        if [[ -z "$PYTHON_BIN" ]]; then
-          echo "python3/python is required for release wheel build normalization" >&2
-          exit 1
+        marker="[target.'cfg(target_os = \"linux\")']"
+        if ! grep -Fq "$marker" .cargo/config.toml; then
+          echo "No Linux-specific cargo target override found"
+        else
+          awk -v marker="$marker" '
+            index($0, marker) == 1 { exit }
+            { print }
+          ' .cargo/config.toml > .cargo/config.toml.tmp
+          mv .cargo/config.toml.tmp .cargo/config.toml
+          echo "Removed Linux-specific linker overrides for release wheel builds"
         fi
-        "$PYTHON_BIN" - <<'PY'
-        from pathlib import Path
-
-        path = Path(".cargo/config.toml")
-        content = path.read_text()
-        marker = "\n[target.'cfg(target_os = \"linux\")']\n"
-
-        if marker not in content:
-            print("No Linux-specific cargo target override found")
-        else:
-            content = content.split(marker, 1)[0].rstrip() + "\n"
-            path.write_text(content)
-            print("Removed Linux-specific linker overrides for release wheel builds")
-        PY
 
     - name: Cross setup for macOS
       if: endsWith(inputs.target, '-darwin')
