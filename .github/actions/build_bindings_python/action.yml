@@ -47,6 +47,25 @@ runs:
           echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
         fi
 
+    - name: Normalize cargo config for release wheel builds
+      if: inputs.version
+      shell: bash
+      run: |
+        python - <<'PY'
+        from pathlib import Path
+
+        path = Path(".cargo/config.toml")
+        content = path.read_text()
+        marker = "\n[target.'cfg(target_os = \"linux\")']\n"
+
+        if marker not in content:
+            print("No Linux-specific cargo target override found")
+        else:
+            content = content.split(marker, 1)[0].rstrip() + "\n"
+            path.write_text(content)
+            print("Removed Linux-specific linker overrides for release wheel builds")
+        PY
+
     - name: Cross setup for macOS
       if: endsWith(inputs.target, '-darwin')
       shell: bash
@@ -76,6 +95,9 @@ runs:
     - name: Build wheels
       if: inputs.version
       uses: PyO3/maturin-action@v1
+      env:
+        CARGO_PROFILE_RELEASE_LTO: "off"
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
       with:
         rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
         working-directory: src/bendpy
