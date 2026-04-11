@@ -22,6 +22,14 @@ def test_execute_and_relation_fetch_helpers():
     assert relation.df().values.tolist() == [[1], [2]]
 
 
+def test_relation_fetch_helpers_preserve_duplicate_column_names():
+    conn = databend.connect()
+    relation = conn.sql("select 1 as a, 2 as a")
+
+    assert relation.fetchall() == [(1, 2)]
+    assert relation.fetchone() == (1, 2)
+
+
 def test_register_pandas_dataframe_materializes_local_parquet(tmp_path):
     conn = databend.connect(data_path=str(tmp_path / "embedded"))
     frame = pd.DataFrame({"id": [1, 2], "name": ["a", "b"]})
@@ -41,4 +49,3 @@ def test_register_arrow_table_uses_register_parquet(tmp_path):
     register_parquet.assert_called_once()
     _, parquet_path = register_parquet.call_args.args
     assert Path(parquet_path).suffix == ".parquet"
-
