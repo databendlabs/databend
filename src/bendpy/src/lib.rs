@@ -149,10 +149,6 @@ fn create_embedded_config(
 fn configure_embedded_listeners(conf: &mut InnerConfig) {
     conf.query.common.mysql_handler_host = "127.0.0.1".to_string();
     conf.query.common.mysql_handler_port = 0;
-    conf.query.common.clickhouse_handler_host = "127.0.0.1".to_string();
-    conf.query.common.clickhouse_handler_port = 0;
-    conf.query.common.clickhouse_http_handler_host = "127.0.0.1".to_string();
-    conf.query.common.clickhouse_http_handler_port = 0;
     conf.query.common.http_handler_host = "127.0.0.1".to_string();
     conf.query.common.http_handler_port = 0;
     conf.query.common.flight_sql_handler_host = "127.0.0.1".to_string();
