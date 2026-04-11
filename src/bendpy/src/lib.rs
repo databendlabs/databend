@@ -93,6 +93,7 @@ fn create_embedded_config(
     conf.query.common.cluster_id = "".to_string();
     conf.query.common.warehouse_id = "".to_string();
     conf.query.node_id = "embedded_node".to_string();
+    configure_embedded_listeners(&mut conf);
 
     // Logging configuration
     let mut log_config = databend_common_tracing::Config::new_testing();
@@ -145,11 +146,28 @@ fn create_embedded_config(
     Ok(conf)
 }
 
+fn configure_embedded_listeners(conf: &mut InnerConfig) {
+    conf.query.common.mysql_handler_host = "127.0.0.1".to_string();
+    conf.query.common.mysql_handler_port = 0;
+    conf.query.common.http_handler_host = "127.0.0.1".to_string();
+    conf.query.common.http_handler_port = 0;
+    conf.query.common.flight_sql_handler_host = "127.0.0.1".to_string();
+    conf.query.common.flight_sql_handler_port = 0;
+    conf.query.common.flight_api_address = "127.0.0.1:0".to_string();
+    conf.query.common.admin_api_address = "127.0.0.1:0".to_string();
+    conf.query.common.metric_api_address = "127.0.0.1:0".to_string();
+}
+
 /// A Python module implemented in Rust.
 #[pymodule(gil_used = false)]
 pub fn databend(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // m.add_function(wrap_pyfunction!(init_service, m)?)?;
     m.add_function(wrap_pyfunction!(init_embedded, m)?)?;
+    m.add_class::<dataframe::PyBoxSize>()?;
+    m.add_class::<dataframe::PyDataFrame>()?;
+    m.add_class::<datablock::PyDataBlock>()?;
+    m.add_class::<datablock::PyDataBlocks>()?;
+    m.add_class::<schema::PySchema>()?;
     m.add_class::<context::PySessionContext>()?;
     Ok(())
 }
