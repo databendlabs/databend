@@ -151,3 +151,30 @@ source .venv/bin/activate
 uvx maturin develop -E test
 pytest tests/
 ```
+
+## Local Publish Without Docker
+
+```bash
+cd src/bendpy
+
+# Build only
+./scripts/local_publish.sh --python python3.12  --skip-upload
+
+# Build only and clean old artifacts first
+./scripts/local_publish.sh --python python3.12 --clean --skip-upload
+
+# Build multiple Linux targets on the current host
+./scripts/local_publish.sh --python python3.12 --clean --skip-upload \
+  --target x86_64-unknown-linux-gnu \
+  --target aarch64-unknown-linux-gnu
+
+# Build and upload to PyPI
+PYPI_TOKEN=your-token ./scripts/local_publish.sh --python python3.12
+
+# Optional: override the package version for this build
+PYPI_TOKEN=your-token ./scripts/local_publish.sh --python python3.12 --version 0.1.1
+```
+
+This script builds a wheel on the current host with `maturin` and uploads it with `twine`.
+It does not use Docker and does not produce a manylinux wheel. Cross-target builds also depend on
+the host having a working linker/toolchain for the requested target.
