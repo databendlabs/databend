@@ -884,7 +884,7 @@ impl DataExchangeManager {
         query_id: &str,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
-    ) -> Result<PipelineBuildResult> {
+    ) -> Result<Option<PipelineBuildResult>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -898,7 +898,7 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+                query_coordinator.try_subscribe_fragment(&query_ctx, fragment_id, injector)
             }
         }
     }
@@ -1084,6 +1084,16 @@ impl QueryCoordinator {
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
+        self.try_subscribe_fragment(ctx, fragment_id, injector)?
+            .ok_or_else(|| ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+    }
+
+    pub fn try_subscribe_fragment(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+        fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
+    ) -> Result<Option<PipelineBuildResult>> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
@@ -1098,7 +1108,7 @@ impl QueryCoordinator {
             if fragment_coordinator.data_exchange.is_none() {
                 // When the root fragment and the data has been send to the coordination node,
                 // we do not need to wait for the data of other nodes.
-                return Ok(fragment_coordinator.pipeline_build_res.unwrap());
+                return Ok(Some(fragment_coordinator.pipeline_build_res.unwrap()));
             }
 
             let exchange_params = fragment_coordinator
@@ -1124,9 +1134,9 @@ impl QueryCoordinator {
                 injector,
             )?;
 
-            return Ok(build_res);
+            return Ok(Some(build_res));
         }
-        Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+        Ok(None)
     }
 
     pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
