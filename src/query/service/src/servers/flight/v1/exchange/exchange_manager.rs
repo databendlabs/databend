@@ -249,6 +249,7 @@ impl DataExchangeManager {
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
+        let mut inbound_channel_sizes = HashMap::<String, usize>::new();
 
         for index in env.dataflow_diagram.node_indices() {
             if env.dataflow_diagram[index].id == config.query.node_id {
@@ -297,9 +298,25 @@ impl DataExchangeManager {
                                 })
                             }));
                         }
-                        Edge::ExchangeFragment { .. } => {
-                            // Skip: remote sender will call do_exchange on us,
-                            // handled by handle_do_exchange → NetworkInboundSender
+                        Edge::ExchangeFragment {
+                            exchange_id,
+                            channels,
+                        } => {
+                            // Pre-register inbound channel sets so source-only exchange
+                            // receivers can build their pipelines before the first
+                            // do_exchange connection arrives.
+                            match inbound_channel_sizes.entry(exchange_id) {
+                                Entry::Occupied(v) => {
+                                    if *v.get() != channels.len() {
+                                        return Err(ErrorCode::Internal(
+                                            "Mismatched inbound exchange parallelism",
+                                        ));
+                                    }
+                                }
+                                Entry::Vacant(v) => {
+                                    v.insert(channels.len());
+                                }
+                            }
                         }
                     }
                 }
@@ -419,6 +436,7 @@ impl DataExchangeManager {
                         query_coordinator.info = query_info;
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
+                        query_coordinator.register_inbound_channel_sets(&inbound_channel_sizes)?;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
@@ -428,6 +446,7 @@ impl DataExchangeManager {
                         query_coordinator.info = query_info;
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
+                        query_coordinator.register_inbound_channel_sets(&inbound_channel_sizes)?;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
@@ -669,6 +688,25 @@ impl DataExchangeManager {
                 ))),
                 Some(channel_set) => Ok(channel_set.clone()),
             },
+        }
+    }
+
+    pub fn get_or_create_exchange_channel_set(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(query_id.to_string()) {
+            Entry::Occupied(mut v) => v
+                .get_mut()
+                .get_or_create_inbound_channel_set(channel_id, num_threads),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .get_or_create_inbound_channel_set(channel_id, num_threads),
         }
     }
 
@@ -1031,6 +1069,41 @@ impl QueryCoordinator {
                     v.insert(pps);
                 }
             }
+        }
+    }
+
+    pub fn register_inbound_channel_sets(
+        &mut self,
+        channel_sizes: &HashMap<String, usize>,
+    ) -> Result<()> {
+        for (channel_id, num_threads) in channel_sizes {
+            self.get_or_create_inbound_channel_set(channel_id, *num_threads)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_or_create_inbound_channel_set(
+        &mut self,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        match self.inbound_channel_sets.entry(channel_id.to_string()) {
+            Entry::Occupied(v) => {
+                if v.get().channels.len() != num_threads {
+                    return Err(ErrorCode::Internal(format!(
+                        "Mismatched inbound channel set parallelism, channel_id: {}, expected: {}, actual: {}",
+                        channel_id,
+                        num_threads,
+                        v.get().channels.len()
+                    )));
+                }
+
+                Ok(v.get().clone())
+            }
+            Entry::Vacant(v) => Ok(v
+                .insert(Arc::new(NetworkInboundChannelSet::new(num_threads)))
+                .clone()),
         }
     }
 
