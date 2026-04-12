@@ -801,89 +801,6 @@ impl DeriveHandle for ReadSourceDeriveHandle {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::SourceActionState;
-    use super::should_schedule_intermediate_fragment_locally;
-    use super::should_schedule_source_action;
-
-    #[test]
-    fn test_skip_empty_source_actions_once_real_work_exists() {
-        assert!(should_schedule_source_action(
-            true,
-            false,
-            SourceActionState::NonEmpty,
-            false
-        ));
-        assert!(!should_schedule_source_action(
-            true,
-            false,
-            SourceActionState::Empty,
-            true
-        ));
-        assert!(!should_schedule_source_action(
-            true,
-            false,
-            SourceActionState::Empty,
-            false
-        ));
-    }
-
-    #[test]
-    fn test_keep_single_local_fallback_for_all_empty_sources() {
-        assert!(should_schedule_source_action(
-            false,
-            false,
-            SourceActionState::Empty,
-            true
-        ));
-        assert!(!should_schedule_source_action(
-            false,
-            false,
-            SourceActionState::Empty,
-            false
-        ));
-    }
-
-    #[test]
-    fn test_keep_singleton_sources_local_only() {
-        assert!(should_schedule_source_action(
-            false,
-            true,
-            SourceActionState::Singleton,
-            true
-        ));
-        assert!(!should_schedule_source_action(
-            false,
-            true,
-            SourceActionState::Singleton,
-            false
-        ));
-        assert!(!should_schedule_source_action(
-            false,
-            true,
-            SourceActionState::Empty,
-            true
-        ));
-    }
-
-    #[test]
-    fn test_localize_intermediate_fragment_when_all_inputs_are_local_only() {
-        assert!(should_schedule_intermediate_fragment_locally(
-            false, true, true
-        ));
-        assert!(should_schedule_intermediate_fragment_locally(
-            true, true, false
-        ));
-        assert!(!should_schedule_intermediate_fragment_locally(
-            false, true, false
-        ));
-        assert!(!should_schedule_intermediate_fragment_locally(
-            false, false, true
-        ));
-    }
-}
-
 struct ReclusterDeriveHandle {
     tasks: Vec<ReclusterTask>,
 }
@@ -1028,5 +945,88 @@ impl DeriveHandle for ReplaceDeriveHandle {
         }
 
         Err(children)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SourceActionState;
+    use super::should_schedule_intermediate_fragment_locally;
+    use super::should_schedule_source_action;
+
+    #[test]
+    fn test_skip_empty_source_actions_once_real_work_exists() {
+        assert!(should_schedule_source_action(
+            true,
+            false,
+            SourceActionState::NonEmpty,
+            false
+        ));
+        assert!(!should_schedule_source_action(
+            true,
+            false,
+            SourceActionState::Empty,
+            true
+        ));
+        assert!(!should_schedule_source_action(
+            true,
+            false,
+            SourceActionState::Empty,
+            false
+        ));
+    }
+
+    #[test]
+    fn test_keep_single_local_fallback_for_all_empty_sources() {
+        assert!(should_schedule_source_action(
+            false,
+            false,
+            SourceActionState::Empty,
+            true
+        ));
+        assert!(!should_schedule_source_action(
+            false,
+            false,
+            SourceActionState::Empty,
+            false
+        ));
+    }
+
+    #[test]
+    fn test_keep_singleton_sources_local_only() {
+        assert!(should_schedule_source_action(
+            false,
+            true,
+            SourceActionState::Singleton,
+            true
+        ));
+        assert!(!should_schedule_source_action(
+            false,
+            true,
+            SourceActionState::Singleton,
+            false
+        ));
+        assert!(!should_schedule_source_action(
+            false,
+            true,
+            SourceActionState::Empty,
+            true
+        ));
+    }
+
+    #[test]
+    fn test_localize_intermediate_fragment_when_all_inputs_are_local_only() {
+        assert!(should_schedule_intermediate_fragment_locally(
+            false, true, true
+        ));
+        assert!(should_schedule_intermediate_fragment_locally(
+            true, true, false
+        ));
+        assert!(!should_schedule_intermediate_fragment_locally(
+            false, true, false
+        ));
+        assert!(!should_schedule_intermediate_fragment_locally(
+            false, false, true
+        ));
     }
 }
