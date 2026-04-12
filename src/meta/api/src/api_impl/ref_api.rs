@@ -330,9 +330,8 @@ where
             table_id: req.source_table_id,
         };
         let key_branch = TableIdBranchName::new(req.table_id, branch_name);
-        let mut maybe_branch_id = None;
-        let mut auto_increment_start_vals = None;
 
+        let mut maybe_branch_id = None;
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -358,26 +357,6 @@ where
                 return Err(KVAppError::AppError(AppError::from(
                     ReferenceAlreadyExists::new(format!("Branch '{}' already exists", branch_name)),
                 )));
-            }
-
-            if auto_increment_start_vals.is_none() {
-                let mut values = BTreeMap::new();
-                for table_field in seq_source_table_meta.data.schema.fields() {
-                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
-                        continue;
-                    };
-
-                    let source_ai_key =
-                        AutoIncrementKey::new(req.source_table_id, table_field.column_id());
-                    let source_ai_ident =
-                        AutoIncrementStorageIdent::new_generic(&req.tenant, source_ai_key);
-                    let start_value = match self.get_pb(&source_ai_ident).await? {
-                        Some(seq_v) => seq_v.data.into_inner().0,
-                        None => auto_increment_expr.start,
-                    };
-                    values.insert(table_field.column_id(), start_value);
-                }
-                auto_increment_start_vals = Some(values);
             }
 
             // Reuse the generated branch id across retries so a failed txn does not keep
@@ -421,11 +400,25 @@ where
             );
 
             if succ {
+                let mut auto_increment_start_vals = BTreeMap::new();
+                for table_field in seq_source_table_meta.data.schema.fields() {
+                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                        continue;
+                    };
+
+                    let source_ai_key =
+                        AutoIncrementKey::new(req.source_table_id, table_field.column_id());
+                    let source_ai_ident =
+                        AutoIncrementStorageIdent::new_generic(&req.tenant, source_ai_key);
+                    let start_value = match self.get_pb(&source_ai_ident).await? {
+                        Some(seq_v) => seq_v.data.into_inner().0,
+                        None => auto_increment_expr.start,
+                    };
+                    auto_increment_start_vals.insert(table_field.column_id(), start_value);
+                }
                 return Ok(CreateTableBranchReply {
                     branch_id,
-                    auto_increment_start_vals: auto_increment_start_vals
-                        .clone()
-                        .unwrap_or_default(),
+                    auto_increment_start_vals,
                 });
             }
         }
@@ -999,10 +992,14 @@ where
                 continue;
             };
 
-            // Filter dropped branches by retention boundary
+            // Filter branches whose effective delete time is already beyond the retention window.
             if let Some(retention_boundary) = req.retention_boundary {
                 if let Some((_, drop_on)) = dropped_map.get(&branch_id.table_id) {
                     if *drop_on < retention_boundary {
+                        continue;
+                    }
+                } else if let Some((_, expire_at)) = active_map.get(&branch_id.table_id) {
+                    if expire_at.is_some_and(|expire_at| expire_at < retention_boundary) {
                         continue;
                     }
                 }

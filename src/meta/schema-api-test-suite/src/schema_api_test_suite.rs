@@ -8006,10 +8006,7 @@ impl SchemaApiTestSuite {
         let fresh_staged_key = StagedBranchIdent::new(base_table_id, fresh_reply.branch_id);
 
         let marked = mt
-            .mark_staged_branches_for_cleanup(
-                base_table_id,
-                Some(Utc::now() - STAGED_BRANCH_TIMEOUT),
-            )
+            .mark_staged_branches_for_cleanup(base_table_id, Some(Utc::now()))
             .await?;
         assert!(
             marked.contains(&timed_out_staged_key),
