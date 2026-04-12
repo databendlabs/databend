@@ -62,6 +62,22 @@ fn add_source_pipe(pipeline: &mut Pipeline, source_items: Vec<PipeItem>) {
     pipeline.add_pipe(Pipe::create(last_output_len, items.len(), items));
 }
 
+fn local_exchange_threads(
+    executor_id: &str,
+    destination_channels: &[(String, Vec<String>)],
+) -> Result<usize> {
+    destination_channels
+        .iter()
+        .find_map(|(destination, channels)| (destination == executor_id).then_some(channels.len()))
+        .filter(|threads| *threads > 0)
+        .ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "Executor {} is not a destination of exchange",
+                executor_id
+            ))
+        })
+}
+
 /// Add Exchange Source to the pipeline.
 pub fn via_exchange_source(
     ctx: Arc<QueryContext>,
@@ -117,8 +133,13 @@ pub fn via_hash_exchange_source(
     let query_id = &params.query_id;
     let exchange_id = &params.exchange_id;
     let exchange_manager = DataExchangeManager::instance();
+    let local_threads = local_exchange_threads(&params.executor_id, &params.destination_channels)?;
 
-    let channel_set = exchange_manager.get_exchange_channel_set(query_id, exchange_id)?;
+    let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+        query_id,
+        exchange_id,
+        local_threads,
+    )?;
     let waker = pipeline.get_waker();
 
     let num_receivers = channel_set.channels.len();
@@ -137,12 +158,17 @@ pub fn via_hash_exchange_source(
 }
 
 pub fn via_broadcast_exchange_source(
+    _ctx: &Arc<QueryContext>,
     params: &BroadcastExchangeParams,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
     let exchange_manager = DataExchangeManager::instance();
-    let channel_set =
-        exchange_manager.get_exchange_channel_set(&params.query_id, &params.exchange_id)?;
+    let local_threads = local_exchange_threads(&params.executor_id, &params.destination_channels)?;
+    let channel_set = exchange_manager.get_or_create_exchange_channel_set(
+        &params.query_id,
+        &params.exchange_id,
+        local_threads,
+    )?;
     let waker = pipeline.get_waker();
     let mut source_items = Vec::with_capacity(channel_set.channels.len());
 
@@ -159,27 +185,15 @@ pub fn via_broadcast_exchange_source(
 }
 
 pub fn via_shuffle_exchange_source(
-    ctx: &Arc<QueryContext>,
+    _ctx: &Arc<QueryContext>,
     params: &ShuffleExchangeParams,
     injector: Arc<dyn ExchangeInjector>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    let local_channels = params
-        .destination_channels
-        .iter()
-        .find_map(|(destination, channels)| {
-            (destination == &params.executor_id).then_some(channels.len())
-        })
-        .unwrap_or_default();
+    let _local_channels =
+        local_exchange_threads(&params.executor_id, &params.destination_channels)?;
 
-    if local_channels == 0 {
-        return Err(ErrorCode::Internal(format!(
-            "Executor {} is not a destination of fragment {} exchange",
-            params.executor_id, params.fragment_id
-        )));
-    }
-
-    let exchange_manager = ctx.get_exchange_manager();
+    let exchange_manager = DataExchangeManager::instance();
     let exchange_params = ExchangeParams::NodeShuffleExchange(params.clone());
     let flight_receivers = exchange_manager.get_flight_receiver(&exchange_params)?;
     let mut source_items = Vec::with_capacity(flight_receivers.len());
@@ -255,6 +269,7 @@ pub fn via_remote_exchange_source(
             pipeline,
         ),
         DataExchange::Broadcast(exchange) => via_broadcast_exchange_source(
+            &ctx,
             &create_broadcast_source_params(&ctx, query_id, schema, exchange),
             pipeline,
         ),
