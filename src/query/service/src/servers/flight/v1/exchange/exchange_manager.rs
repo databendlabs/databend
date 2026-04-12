@@ -340,11 +340,6 @@ impl DataExchangeManager {
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
-                        warn!(
-                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
-                            config.query.node_id, target_id, exchange_id, num_threads
-                        );
-
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
                                 let mut flight_client =
@@ -649,10 +644,6 @@ impl DataExchangeManager {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        warn!(
-            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
-            query_id, channel_id, num_threads
-        );
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 

@@ -24,6 +24,7 @@ use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::ProcessorPtr;
 
+use super::broadcast_send_sink::create_broadcast_sink_item;
 use super::exchange_params::BroadcastExchangeParams;
 use super::exchange_params::ExchangeParams;
 use super::exchange_params::GlobalExchangeParams;
@@ -101,9 +102,9 @@ impl ExchangeSink {
                 pipeline.add_pipe(Pipe::create(output, 0, items));
                 Ok(())
             }
-            ExchangeParams::BroadcastExchange(_) => Err(ErrorCode::Internal(
-                "BroadcastExchange should not appear on the sink side",
-            )),
+            ExchangeParams::BroadcastExchange(params) => {
+                Self::broadcast_exchange_sink(ctx, pipeline, params)
+            }
             ExchangeParams::NodeShuffleExchange(params) => {
                 exchange_shuffle(ctx, params, pipeline)?;
 
@@ -186,6 +187,23 @@ impl ExchangeSink {
         }
 
         pipeline.add_pipe(Pipe::create(local_threads, 0, items));
+        Ok(())
+    }
+
+    fn broadcast_exchange_sink(
+        ctx: &Arc<QueryContext>,
+        pipeline: &mut Pipeline,
+        params: &BroadcastExchangeParams,
+    ) -> Result<()> {
+        let compression = ctx.get_settings().get_query_flight_compression()?;
+        let channels = build_broadcast_outbound_channels(params, Vec::new(), compression)?;
+        let output_len = pipeline.output_len();
+
+        let items = (0..output_len)
+            .map(|_| create_broadcast_sink_item(channels.clone()))
+            .collect::<Vec<_>>();
+
+        pipeline.add_pipe(Pipe::create(output_len, 0, items));
         Ok(())
     }
 }
