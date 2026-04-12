@@ -1115,11 +1115,7 @@ impl QueryCoordinator {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        let channel_set = self
-            .inbound_channel_sets
-            .entry(channel_id.to_string())
-            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
-            .clone();
+        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
@@ -1454,6 +1450,78 @@ impl FragmentCoordinator {
 
             self.pipeline_build_res = Some(res);
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_exception::Result;
+
+    use super::QueryCoordinator;
+
+    #[test]
+    fn test_query_coordinator_register_inbound_channel_sets() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        let channel_sizes = HashMap::from([
+            ("exchange-a".to_string(), 2_usize),
+            ("exchange-b".to_string(), 4_usize),
+        ]);
+
+        coordinator.register_inbound_channel_sets(&channel_sizes)?;
+
+        assert_eq!(
+            coordinator
+                .get_or_create_inbound_channel_set("exchange-a", 2)?
+                .channels
+                .len(),
+            2
+        );
+        assert_eq!(
+            coordinator
+                .get_or_create_inbound_channel_set("exchange-b", 4)?
+                .channels
+                .len(),
+            4
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_coordinator_detects_mismatched_inbound_parallelism() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        coordinator.get_or_create_inbound_channel_set("exchange-a", 2)?;
+
+        let err = coordinator
+            .get_or_create_inbound_channel_set("exchange-a", 1)
+            .err()
+            .expect("mismatched inbound channel set should fail");
+        assert!(
+            err.message()
+                .contains("Mismatched inbound channel set parallelism")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_coordinator_detects_mismatched_inbound_sender_parallelism() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        coordinator
+            .register_inbound_channel_sets(&HashMap::from([("exchange-a".to_string(), 2)]))?;
+
+        let err = coordinator
+            .create_inbound_sender("exchange-a", 1)
+            .err()
+            .expect("mismatched inbound sender should fail");
+        assert!(
+            err.message()
+                .contains("Mismatched inbound channel set parallelism")
+        );
 
         Ok(())
     }
