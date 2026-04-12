@@ -29,7 +29,7 @@ const PATTERNS: &[&str] = &[
     "SHOW COLUMNS",
     "SHOW CATALOGS",
     "SHOW USER FUNCTIONS",
-    "SHOW TABLE FUNCTIONS",
+    "SHOW TABLE_FUNCTIONS",
     "SHOW INDEXES",
     "SHOW STATISTICS",
     "SHOW WORKLOAD GROUPS",
@@ -244,7 +244,7 @@ mod tests {
         // Typo corrections - may return multiple suggestions if scores are close
         assert_eq!(
             suggest_correction("show tabl"), // typos:disable-line
-            Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
+            Some("Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string())
         );
         assert_eq!(
             suggest_correction("vacum drop table"), // typos:disable-line
@@ -261,7 +261,7 @@ mod tests {
         // Should suggest both relevant options for ambiguous input
         assert_eq!(
             suggest_correction("show table"),
-            Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
+            Some("Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string())
         );
 
         // Multiple suggestions when scores are very close
@@ -341,7 +341,7 @@ mod tests {
         // Should prioritize table-related suggestions
         assert_eq!(
             result,
-            "Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string()
+            "Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string()
         );
     }
 
@@ -362,7 +362,7 @@ mod tests {
         // Should recognize valid starts with similar commands
         assert_eq!(
             suggest_correction("show table"),
-            Some("Did you mean `SHOW TABLE FUNCTIONS` or `SHOW TABLES`?".to_string())
+            Some("Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string())
         );
         assert_eq!(
             suggest_correction("vacuum temp"),
