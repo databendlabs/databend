@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
 use chrono::DateTime;
-use chrono::TimeDelta;
 use chrono::Utc;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::SeqV;
@@ -50,16 +48,6 @@ pub struct TableTag {
 pub struct DroppedBranchMeta {
     pub drop_on: DateTime<Utc>,
     pub expire_at: Option<DateTime<Utc>>,
-}
-
-/// A staged branch may remain unpublished for at most this long.
-pub const STAGED_BRANCH_TIMEOUT: TimeDelta = TimeDelta::hours(1);
-
-/// Value stored in `__fd_staged_branch/<base_table_id>/<branch_id>`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StagedBranch {
-    pub create_on: DateTime<Utc>,
-    pub cleanup_marked: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
@@ -112,28 +100,6 @@ impl Display for TableIdTagName {
     }
 }
 
-/// Key: `__fd_staged_branch/<base_table_id>/<branch_id>`
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct StagedBranchIdent {
-    pub table_id: u64,
-    pub branch_id: u64,
-}
-
-impl StagedBranchIdent {
-    pub fn new(table_id: u64, branch_id: u64) -> Self {
-        Self {
-            table_id,
-            branch_id,
-        }
-    }
-}
-
-impl Display for StagedBranchIdent {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}.{}", self.table_id, self.branch_id)
-    }
-}
-
 /// Key: `__fd_dropped_branch/<base_table_id>/<branch_name>/<branch_id>`
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct DroppedBranchIdent {
@@ -162,34 +128,20 @@ impl Display for DroppedBranchIdent {
     }
 }
 
-// -- Req types for RefApi --
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableBranchReq {
     pub tenant: Tenant,
-    pub table_id: u64,
-    pub source_table_id: u64,
+    /// Base table id that owns the branch namespace.
+    pub base_table_id: u64,
+    /// Fork from this branch. `None` means fork from the base table itself.
+    pub from_branch_id: Option<u64>,
     pub branch_name: String,
+    /// Optimistic seq check for the fork source.
     pub seq: MatchSeq,
-    /// Optional optimistic LVT check against the source object.
-    pub lvt_check: Option<TableLvtCheck>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateTableBranchReply {
-    pub branch_id: u64,
-    pub auto_increment_start_vals: BTreeMap<u32, u64>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CommitTableBranchMetaReq {
-    pub tenant: Tenant,
-    pub table_id: u64,
-    pub branch_name: String,
-    pub branch_id: u64,
-    pub auto_increment_start_vals: BTreeMap<u32, u64>,
     pub new_table_meta: TableMeta,
     pub expire_at: Option<DateTime<Utc>>,
+    /// Check fork source LVT at branch creation time.
+    pub lvt_check: Option<TableLvtCheck>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -223,8 +175,6 @@ pub struct GcDroppedTableBranchReq {
     pub table_id: u64,
     pub branch_name: String,
     pub branch_id: u64,
-    /// Only branches dropped before this timestamp are eligible for final GC.
-    pub retention_boundary: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -299,8 +249,6 @@ mod kvapi_key_impl {
     use crate::schema::TableId;
     use crate::schema::table::DroppedBranchIdent;
     use crate::schema::table::DroppedBranchMeta;
-    use crate::schema::table::StagedBranch;
-    use crate::schema::table::StagedBranchIdent;
     use crate::schema::table::TableBranch;
     use crate::schema::table::TableIdBranchName;
     use crate::schema::table::TableIdTagName;
@@ -333,21 +281,6 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for StagedBranchIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id).push_u64(self.branch_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            let branch_id = p.next_u64()?;
-            Ok(Self {
-                table_id,
-                branch_id,
-            })
-        }
-    }
-
     /// "__fd_table_branch/<tb_id>/<branch_name> -> TableBranch"
     impl kvapi::Key for TableIdBranchName {
         const PREFIX: &'static str = "__fd_table_branch";
@@ -370,17 +303,6 @@ mod kvapi_key_impl {
         }
     }
 
-    /// "__fd_staged_branch/<table_id>/<branch_id> -> StagedBranch"
-    impl kvapi::Key for StagedBranchIdent {
-        const PREFIX: &'static str = "__fd_staged_branch";
-
-        type ValueType = StagedBranch;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
-    }
-
     impl kvapi::Value for TableBranch {
         type KeyType = TableIdBranchName;
 
@@ -391,14 +313,6 @@ mod kvapi_key_impl {
 
     impl kvapi::Value for TableTag {
         type KeyType = TableIdTagName;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
-    }
-
-    impl kvapi::Value for StagedBranch {
-        type KeyType = StagedBranchIdent;
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []

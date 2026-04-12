@@ -13,9 +13,12 @@ SNAPSHOT_LOCATION=$(echo "select snapshot_location from fuse_snapshot('test_vacu
 PREFIX=$(echo "$SNAPSHOT_LOCATION" | cut -d'/' -f1)
 
 stmt "set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_live"
+stmt "set enable_experimental_table_ref=1; insert into test_vacuum_drop_table_with_branches.a/b_live values (10)"
 stmt "set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_mixed"
+stmt "set enable_experimental_table_ref=1; insert into test_vacuum_drop_table_with_branches.a/b_mixed values (20)"
 stmt "set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a drop branch b_mixed"
 stmt "set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_mixed"
+stmt "set enable_experimental_table_ref=1; insert into test_vacuum_drop_table_with_branches.a/b_mixed values (21)"
 stmt "set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a create branch b_drop"
 stmt "set enable_experimental_table_ref=1; alter table test_vacuum_drop_table_with_branches.a drop branch b_drop"
 
