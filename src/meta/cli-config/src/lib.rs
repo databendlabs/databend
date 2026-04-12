@@ -386,13 +386,12 @@ pub struct RaftConfig {
     #[clap(long, default_value = "8000")]
     pub snapshot_db_block_keys: u64,
 
-    /// The total block to cache.
-    #[clap(long, default_value = "1024")]
-    pub snapshot_db_block_cache_item: u64,
-
-    /// The total cache size for snapshot blocks.
+    /// The total cache size for snapshot blocks in bytes.
     ///
-    /// By default, it is 1GB.
+    /// Since rotbl 0.2.10 the block cache is weight-bounded by bytes only
+    /// (the underlying `moka::sync::Cache` with a byte-based weigher cannot
+    /// enforce an independent item-count bound), so this is the single knob
+    /// for snapshot cache sizing. Defaults to 1 GiB.
     #[clap(long, default_value = "1073741824")]
     pub snapshot_db_block_cache_size: u64,
 
@@ -487,7 +486,6 @@ impl From<RaftConfig> for InnerRaftConfig {
 
             snapshot_db_debug_check: x.snapshot_db_debug_check,
             snapshot_db_block_keys: x.snapshot_db_block_keys,
-            snapshot_db_block_cache_item: x.snapshot_db_block_cache_item,
             snapshot_db_block_cache_size: x.snapshot_db_block_cache_size,
 
             compact_immutables_ms: x.compact_immutables_ms,
@@ -525,7 +523,6 @@ impl From<InnerRaftConfig> for RaftConfig {
 
             snapshot_db_debug_check: inner.snapshot_db_debug_check,
             snapshot_db_block_keys: inner.snapshot_db_block_keys,
-            snapshot_db_block_cache_item: inner.snapshot_db_block_cache_item,
             snapshot_db_block_cache_size: inner.snapshot_db_block_cache_size,
 
             compact_immutables_ms: inner.compact_immutables_ms,
