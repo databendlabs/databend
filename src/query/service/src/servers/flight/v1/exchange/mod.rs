@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod broadcast_recv_transform;
+mod broadcast_send_sink;
 mod broadcast_send_transform;
 mod data_exchange;
 mod exchange_injector;
@@ -37,6 +38,7 @@ pub mod serde;
 pub use broadcast_recv_transform::ExchangeRecvTransform;
 pub type BroadcastRecvTransform = ExchangeRecvTransform;
 pub type HashRecvTransform = ExchangeRecvTransform;
+pub use broadcast_send_sink::BroadcastExchangeSink;
 pub use broadcast_send_transform::BroadcastSendTransform;
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
