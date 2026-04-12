@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::IndexNameIdent;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ObjectTagIdRef;
 use databend_common_meta_app::schema::ObjectTagIdRefIdent;
-use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
 use databend_common_meta_app::schema::TableId;
 use databend_common_meta_app::schema::TableIdBranchName;
@@ -123,12 +122,8 @@ where
         Ok(num_meta_key_removed)
     }
 
-    /// Garbage collect one non-retainable branch generation.
-    ///
-    /// This removes branch table metadata and related kvs, and removes the
-    /// branch id from branch history. The branch may come from either the
-    /// dropped-branch key-space or an active branch entry whose `expire_at`
-    /// has already passed and is also beyond the retention boundary.
+    /// Garbage collect one branch generation that the caller has already
+    /// selected for final GC.
     #[fastrace::trace]
     async fn gc_drop_table_branch(
         &self,
@@ -141,7 +136,6 @@ where
         let key_dropped_branch =
             DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
 
-        // Copied-file markers: remove once up front (idempotent, best-effort).
         let num_removed_copied_files =
             remove_copied_files_for_dropped_table(self, &branch_table_id).await?;
 
@@ -149,41 +143,25 @@ where
         loop {
             trials.next().unwrap()?.await;
 
-            let seq_dropped = self.get_pb(&key_dropped_branch).await?;
-            let seq_active = if seq_dropped.is_some() {
-                None
-            } else {
-                self.get_pb(&key_active_branch).await?
-            };
-
-            let effective_drop_time = match (&seq_dropped, &seq_active) {
-                (Some(d), _) => Some(d.data.drop_on),
-                (_, Some(a)) => a.data.expire_at.filter(|e| *e < req.retention_boundary),
-                _ => None,
-            };
-            let Some(effective_drop_time) = effective_drop_time else {
-                return Ok(num_removed_copied_files);
-            };
-            if effective_drop_time >= req.retention_boundary {
-                return Ok(num_removed_copied_files);
-            }
-
             let mut txn = TxnRequest::default();
 
-            if let Some(seq_active) = seq_active.as_ref() {
-                txn.condition
-                    .push(txn_cond_eq_seq(&key_active_branch, seq_active.seq));
-                txn.if_then.push(txn_del(&key_active_branch));
-            }
-            if let Some(seq_dropped) = seq_dropped.as_ref() {
+            if let Some(seq_dropped) = self.get_pb(&key_dropped_branch).await? {
                 txn.condition
                     .push(txn_cond_eq_seq(&key_dropped_branch, seq_dropped.seq));
                 txn.if_then.push(txn_del(&key_dropped_branch));
             }
+            if let Some(seq_active) = self.get_pb(&key_active_branch).await? {
+                if seq_active.data.branch_id == req.branch_id {
+                    txn.condition
+                        .push(txn_cond_eq_seq(&key_active_branch, seq_active.seq));
+                    txn.if_then.push(txn_del(&key_active_branch));
+                }
+            }
 
-            // Remove branch table metadata and branch-owned auxiliary kvs.
-            // If table meta is already gone (partial GC), we still proceed to
-            // clean up whichever branch-history key still exists.
+            if txn.if_then.is_empty() {
+                return Ok(num_removed_copied_files);
+            }
+
             let _ = remove_data_for_dropped_table_impl(
                 self,
                 &req.tenant,
@@ -194,12 +172,7 @@ where
             )
             .await?;
 
-            let mut num_meta_keys_removed = num_removed_copied_files;
-            for op in &txn.if_then {
-                if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
-                    num_meta_keys_removed += 1;
-                }
-            }
+            let num_meta_keys_removed = num_removed_copied_files + count_delete_ops(&txn);
 
             let (succ, _responses) = send_txn(self, txn).await?;
             if succ {
@@ -690,11 +663,7 @@ async fn gc_dropped_db_by_id(
     }
 
     // Count removed keys (approximate for DeleteByPrefix operations)
-    for op in &txn.if_then {
-        if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
-            num_meta_keys_removed += 1;
-        }
-    }
+    num_meta_keys_removed += count_delete_ops(&txn);
 
     let _resp = kv_api.transaction(txn).await?;
 
@@ -725,9 +694,9 @@ async fn gc_dropped_table_by_id(
 
         let mut txn = TxnRequest::default();
 
-        // 1) Remove the base table data (including active/dropped branch metas) in the main GC txn.
-        // Note: remove_data_for_dropped_table enumerates active branch names to discover branch
-        // table ids, so branch name keys must still exist at this point.
+        // 1) Remove the table data. Branch metadata is cleaned first in small per-branch txns
+        // inside `remove_data_for_dropped_table`, so the base-table txn does not grow linearly
+        // with branch count.
         if let Some(removed) = remove_data_for_dropped_table(
             kv_api,
             tenant,
@@ -755,12 +724,7 @@ async fn gc_dropped_table_by_id(
         )
         .await?;
 
-        let mut num_meta_keys_removed = copied_files_removed;
-        for op in &txn.if_then {
-            if let Some(Request::Delete(_) | Request::DeleteByPrefix(_)) = &op.request {
-                num_meta_keys_removed += 1;
-            }
-        }
+        let num_meta_keys_removed = copied_files_removed + count_delete_ops(&txn);
 
         let (succ, _responses) = send_txn(kv_api, txn).await?;
 
@@ -945,12 +909,60 @@ async fn remove_data_for_dropped_table_impl(
     Ok(Ok(()))
 }
 
+/// Clean up one branch entry (active or dropped) owned by a dropped base table.
+async fn gc_branch_for_dropped_table<K>(
+    kv_api: &(impl GarbageCollectionApi + IndexApi + ?Sized),
+    tenant: &Tenant,
+    branch_id: u64,
+    branch_key: &K,
+    initial_seq: u64,
+) -> Result<usize, KVAppError>
+where
+    K: kvapi::Key + Sync,
+    K::ValueType: databend_common_proto_conv::FromToProto,
+{
+    let branch_table_id = TableId {
+        table_id: branch_id,
+    };
+    // Copied-file markers are outside the txn; remove them once and keep the rest retryable.
+    let num_removed_copied_files =
+        remove_copied_files_for_dropped_table(kv_api, &branch_table_id).await?;
+    let mut branch_key_seq = Some(initial_seq);
+    let mut trials = txn_backoff(None, func_name!());
+    loop {
+        trials.next().unwrap()?.await;
+
+        if branch_key_seq.is_none() && kv_api.get_pb(&branch_table_id).await?.is_none() {
+            return Ok(num_removed_copied_files);
+        }
+
+        let mut txn = TxnRequest::default();
+        if let Some(seq) = branch_key_seq {
+            txn.condition.push(txn_cond_eq_seq(branch_key, seq));
+            txn.if_then.push(txn_del(branch_key));
+        }
+        let _ =
+            remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, &mut txn)
+                .await?;
+
+        let num_meta_keys_removed = num_removed_copied_files + count_delete_ops(&txn);
+
+        let (succ, _responses) = send_txn(kv_api, txn).await?;
+        if succ {
+            return Ok(num_meta_keys_removed);
+        }
+        branch_key_seq = kv_api.get_pb(branch_key).await?.map(|seq_v| seq_v.seq);
+    }
+}
+
 /// Update TxnRequest to remove a dropped table's own data.
 ///
-/// This function returns the updated TxnRequest,
-/// or Err of the reason in string if it can not proceed.
+/// This first removes all active and dropped branches under the base table in small per-branch
+/// txns, then appends the base table's own deletions to `txn`.
+///
+/// Returns the updated txn, or `Err(String)` if cleanup for the target table cannot proceed.
 async fn remove_data_for_dropped_table(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    kv_api: &(impl GarbageCollectionApi + IndexApi + ?Sized),
     tenant: &Tenant,
     catalog: &String,
     db_id: u64,
@@ -992,54 +1004,40 @@ async fn remove_data_for_dropped_table(
         txn.if_then.push(txn_del(&tag_key));
     }
 
-    let mut current_removed = 0;
-
-    // Remove branch-table metas and branch name keys for active branches.
     let active_branch_prefix = TableIdBranchName::new(table_id.table_id, "");
     let active_branch_dir = DirName::new(active_branch_prefix);
     let active_branches = kv_api
         .list_pb_vec(ListOptions::unlimited(&active_branch_dir))
         .await?;
-    for (key, seq_branch) in &active_branches {
-        let branch_table_id = TableId {
-            table_id: seq_branch.data.branch_id,
-        };
-        current_removed += remove_copied_files_for_dropped_table(kv_api, &branch_table_id).await?;
-        let _ =
-            remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, txn).await?;
-        txn.condition.push(txn_cond_eq_seq(key, seq_branch.seq));
-        txn.if_then.push(txn_del(key));
+    // Branches under a dropped table/database are finalized independently from the outer base
+    // object GC txn. They are peer GC targets, and `UNDROP TABLE` / `UNDROP DATABASE` only
+    // restores the base object itself, not branch history that has already been GC'd.
+    let mut removed = 0;
+    for (key, seq_branch) in active_branches {
+        removed += gc_branch_for_dropped_table(
+            kv_api,
+            tenant,
+            seq_branch.data.branch_id,
+            &key,
+            seq_branch.seq,
+        )
+        .await?;
     }
 
-    // Remove branch-table metas and dropped-branch entries for dropped branches.
+    // `level = 2` scans `__fd_dropped_branch/<table_id>/<branch_name>/` and returns every
+    // dropped branch generation under the base table.
     let dropped_branch_prefix = DroppedBranchIdent::new(table_id.table_id, "dummy", 0);
     let dropped_branch_dir = DirName::new_with_level(dropped_branch_prefix, 2);
     let dropped_branches = kv_api
         .list_pb_vec(ListOptions::unlimited(&dropped_branch_dir))
         .await?;
-    for (key, seq_dropped) in &dropped_branches {
-        let branch_table_id = TableId {
-            table_id: key.branch_id,
-        };
-        current_removed += remove_copied_files_for_dropped_table(kv_api, &branch_table_id).await?;
-        let _ =
-            remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, txn).await?;
-        txn.condition.push(txn_cond_eq_seq(key, seq_dropped.seq));
-        txn.if_then.push(txn_del(key));
+    for (key, seq_dropped) in dropped_branches {
+        removed +=
+            gc_branch_for_dropped_table(kv_api, tenant, key.branch_id, &key, seq_dropped.seq)
+                .await?;
     }
 
-    // Remove staged branch entries under the dropped base table as a final cleanup fallback.
-    let staged_branch_prefix = StagedBranchIdent::new(table_id.table_id, 0);
-    let staged_branch_dir = DirName::new(staged_branch_prefix);
-    let staged_branches = kv_api
-        .list_pb_vec(ListOptions::unlimited(&staged_branch_dir))
-        .await?;
-    for (key, seq_staged) in &staged_branches {
-        txn.condition.push(txn_cond_eq_seq(key, seq_staged.seq));
-        txn.if_then.push(txn_del(key));
-    }
-
-    Ok(Some(current_removed))
+    Ok(Some(removed))
 }
 
 async fn remove_index_for_dropped_table(
@@ -1066,4 +1064,16 @@ async fn remove_index_for_dropped_table(
     }
 
     Ok(())
+}
+
+fn count_delete_ops(txn: &TxnRequest) -> usize {
+    txn.if_then
+        .iter()
+        .filter(|op| {
+            matches!(
+                op.request.as_ref(),
+                Some(Request::Delete(_) | Request::DeleteByPrefix(_))
+            )
+        })
+        .count()
 }
