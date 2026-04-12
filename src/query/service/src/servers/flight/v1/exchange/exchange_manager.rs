@@ -812,26 +812,6 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
-                if !query_coordinator.flight_data_senders.is_empty() {
-                    unreachable!(
-                        "query_coordinator.fragment_senders is not empty: {:?}",
-                        query_coordinator
-                            .flight_data_senders
-                            .keys()
-                            .collect::<Vec<_>>()
-                    );
-                }
-
-                if !query_coordinator.flight_data_receivers.is_empty() {
-                    unreachable!(
-                        "query_coordinator.fragment_receivers is not empty: {:?}",
-                        query_coordinator
-                            .flight_data_receivers
-                            .keys()
-                            .collect::<Vec<_>>()
-                    );
-                }
-
                 let injector = DefaultExchangeInjector::create();
                 let mut build_res = query_coordinator.subscribe_fragment(
                     &ctx,
@@ -852,6 +832,8 @@ impl DataExchangeManager {
                         .sources_pipelines
                         .extend(sub_build_res.sources_pipelines);
                 }
+
+                query_coordinator.drop_unused_flight_data_channels("building root pipeline");
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
@@ -1062,6 +1044,24 @@ impl QueryCoordinator {
                     v.insert(pps);
                 }
             }
+        }
+    }
+
+    fn drop_unused_flight_data_channels(&mut self, stage: &str) {
+        let sender_keys = self.flight_data_senders.keys().cloned().collect::<Vec<_>>();
+        let receiver_keys = self
+            .flight_data_receivers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !sender_keys.is_empty() || !receiver_keys.is_empty() {
+            warn!(
+                "Dropping unused legacy flight channels before {}: senders={:?}, receivers={:?}",
+                stage, sender_keys, receiver_keys
+            );
+            self.flight_data_senders.clear();
+            self.flight_data_receivers.clear();
         }
     }
 
@@ -1304,7 +1304,7 @@ impl QueryCoordinator {
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
-        assert!(self.flight_data_senders.is_empty() && self.flight_data_receivers.is_empty());
+        self.drop_unused_flight_data_channels("starting partial query executor");
         let info_mut = self.info.as_mut().expect("Query info is None");
         info_mut.query_executor = Some(executor.clone());
 
@@ -1472,6 +1472,7 @@ mod tests {
     use crate::physical_plans::ExchangeSink as PhysicalExchangeSink;
     use crate::physical_plans::PhysicalPlan;
     use crate::physical_plans::PhysicalPlanMeta;
+    use crate::servers::flight::FlightReceiver;
 
     #[test]
     fn test_query_coordinator_register_inbound_channel_sets() -> Result<()> {
@@ -1532,6 +1533,24 @@ mod tests {
             err.message()
                 .contains("Mismatched inbound channel set parallelism")
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_coordinator_drops_unused_flight_data_channels() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        let _ = coordinator.register_flight_channel_sender("sender-a".to_string())?;
+        coordinator
+            .flight_data_receivers
+            .insert("receiver-a".to_string(), vec![FlightReceiver::create(
+                async_channel::bounded(1).1,
+            )]);
+
+        coordinator.drop_unused_flight_data_channels("unit-test");
+
+        assert!(coordinator.flight_data_senders.is_empty());
+        assert!(coordinator.flight_data_receivers.is_empty());
 
         Ok(())
     }
