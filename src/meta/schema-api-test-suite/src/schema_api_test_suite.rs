@@ -7585,7 +7585,6 @@ impl SchemaApiTestSuite {
                 source_table_id: table_info.ident.table_id,
                 seq: MatchSeq::Exact(table_info.ident.seq),
                 branch_name: branch_name.to_string(),
-                lvt_check: None,
             })
             .await?;
 
@@ -7593,14 +7592,15 @@ impl SchemaApiTestSuite {
             tenant: tenant.clone(),
             table_id: table_info.ident.table_id,
             branch_name: branch_name.to_string(),
-            branch_id: reply.branch_id,
-            auto_increment_start_vals: reply.auto_increment_start_vals,
+            branch_id: reply,
             new_table_meta: table_info.meta.clone(),
             expire_at,
+            lvt_check: None,
+            source_table_id: table_info.ident.table_id,
         })
         .await?;
 
-        Ok(reply.branch_id)
+        Ok(reply)
     }
 
     async fn upsert_branch_copied_files<MT>(
@@ -7946,11 +7946,10 @@ impl SchemaApiTestSuite {
                 source_table_id: base_table_id,
                 seq: MatchSeq::Exact(base_table_seq),
                 branch_name: timed_out_branch_name.to_string(),
-                lvt_check: None,
             })
             .await?;
 
-        let timed_out_staged_key = StagedBranchIdent::new(base_table_id, timed_out_reply.branch_id);
+        let timed_out_staged_key = StagedBranchIdent::new(base_table_id, timed_out_reply);
         let mut timed_out_staged = mt.get_pb(&timed_out_staged_key).await?.unwrap().data;
         timed_out_staged.create_on = Utc::now() - STAGED_BRANCH_TIMEOUT - Duration::minutes(1);
         mt.upsert_pb(&UpsertPB::update(
@@ -7964,10 +7963,11 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
                 branch_name: timed_out_branch_name.to_string(),
-                branch_id: timed_out_reply.branch_id,
-                auto_increment_start_vals: timed_out_reply.auto_increment_start_vals.clone(),
+                branch_id: timed_out_reply,
                 new_table_meta: base_table.meta.clone(),
                 expire_at: None,
+                lvt_check: None,
+                source_table_id: base_table_id,
             })
             .await
             .unwrap_err();
@@ -7986,7 +7986,7 @@ impl SchemaApiTestSuite {
         );
         assert!(
             mt.get_pb(&TableId {
-                table_id: timed_out_reply.branch_id
+                table_id: timed_out_reply
             })
             .await?
             .is_none()
@@ -8000,16 +8000,12 @@ impl SchemaApiTestSuite {
                 source_table_id: base_table_id,
                 seq: MatchSeq::Exact(base_table_seq),
                 branch_name: fresh_branch_name.to_string(),
-                lvt_check: None,
             })
             .await?;
-        let fresh_staged_key = StagedBranchIdent::new(base_table_id, fresh_reply.branch_id);
+        let fresh_staged_key = StagedBranchIdent::new(base_table_id, fresh_reply);
 
         let marked = mt
-            .mark_staged_branches_for_cleanup(
-                base_table_id,
-                Some(Utc::now() - STAGED_BRANCH_TIMEOUT),
-            )
+            .mark_staged_branches_for_cleanup(base_table_id, Some(Utc::now()))
             .await?;
         assert!(
             marked.contains(&timed_out_staged_key),
@@ -8030,10 +8026,11 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
                 branch_name: timed_out_branch_name.to_string(),
-                branch_id: timed_out_reply.branch_id,
-                auto_increment_start_vals: timed_out_reply.auto_increment_start_vals,
+                branch_id: timed_out_reply,
                 new_table_meta: base_table.meta.clone(),
                 expire_at: None,
+                lvt_check: None,
+                source_table_id: base_table_id,
             })
             .await
             .unwrap_err();
@@ -8043,7 +8040,7 @@ impl SchemaApiTestSuite {
             "cleanup-marked staged branch must not be committed"
         );
 
-        mt.drop_staged_table_branch(base_table_id, timed_out_reply.branch_id)
+        mt.drop_staged_table_branch(base_table_id, timed_out_reply)
             .await?;
         assert!(mt.get_pb(&timed_out_staged_key).await?.is_none());
         assert!(mt.get_pb(&fresh_staged_key).await?.is_some());

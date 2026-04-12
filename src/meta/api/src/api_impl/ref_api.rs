@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -39,7 +38,6 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::CommitTableBranchMetaReq;
-use databend_common_meta_app::schema::CreateTableBranchReply;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -319,10 +317,7 @@ where
     /// This keeps the branch name hidden until the snapshot object is durable.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn create_table_branch(
-        &self,
-        req: CreateTableBranchReq,
-    ) -> Result<CreateTableBranchReply, KVAppError> {
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<u64, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let branch_name = &req.branch_name;
@@ -330,9 +325,8 @@ where
             table_id: req.source_table_id,
         };
         let key_branch = TableIdBranchName::new(req.table_id, branch_name);
-        let mut maybe_branch_id = None;
-        let mut auto_increment_start_vals = None;
 
+        let mut maybe_branch_id = None;
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
@@ -360,26 +354,6 @@ where
                 )));
             }
 
-            if auto_increment_start_vals.is_none() {
-                let mut values = BTreeMap::new();
-                for table_field in seq_source_table_meta.data.schema.fields() {
-                    let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
-                        continue;
-                    };
-
-                    let source_ai_key =
-                        AutoIncrementKey::new(req.source_table_id, table_field.column_id());
-                    let source_ai_ident =
-                        AutoIncrementStorageIdent::new_generic(&req.tenant, source_ai_key);
-                    let start_value = match self.get_pb(&source_ai_ident).await? {
-                        Some(seq_v) => seq_v.data.into_inner().0,
-                        None => auto_increment_expr.start,
-                    };
-                    values.insert(table_field.column_id(), start_value);
-                }
-                auto_increment_start_vals = Some(values);
-            }
-
             // Reuse the generated branch id across retries so a failed txn does not keep
             // allocating new table ids.
             let branch_id = match maybe_branch_id {
@@ -390,25 +364,22 @@ where
                     id
                 }
             };
-            let key_staged_branch = StagedBranchIdent::new(req.table_id, branch_id);
 
-            let mut conditions = vec![
-                txn_cond_seq(&key_source_table_id, Eq, seq_source_table_meta.seq),
-                txn_cond_seq(&key_branch, Eq, 0),
-                txn_cond_seq(&key_staged_branch, Eq, 0),
-            ];
-            if let Some(lvt_check) = req.lvt_check.as_ref() {
-                conditions.push(build_lvt_condition(self, req.source_table_id, lvt_check).await?);
-            }
-
+            // Staged means a branch creation is in progress:
+            // the branch id is reserved, but the branch is not published yet.
+            // Here it is a phase-1 placeholder used for commit validation and timeout cleanup.
             let staged_branch = StagedBranch {
                 create_on: Utc::now(),
                 cleanup_marked: false,
             };
-            let txn = TxnRequest::new(conditions, vec![txn_put_pb(
-                &key_staged_branch,
-                &staged_branch,
-            )?]);
+            let key_staged_branch = StagedBranchIdent::new(req.table_id, branch_id);
+            let txn = TxnRequest::new(
+                vec![
+                    txn_cond_seq(&key_source_table_id, Eq, seq_source_table_meta.seq),
+                    txn_cond_seq(&key_branch, Eq, 0),
+                ],
+                vec![txn_put_pb(&key_staged_branch, &staged_branch)?],
+            );
 
             let (succ, _responses) = send_txn(self, txn).await?;
 
@@ -421,12 +392,7 @@ where
             );
 
             if succ {
-                return Ok(CreateTableBranchReply {
-                    branch_id,
-                    auto_increment_start_vals: auto_increment_start_vals
-                        .clone()
-                        .unwrap_or_default(),
-                });
+                return Ok(branch_id);
             }
         }
     }
@@ -506,19 +472,21 @@ where
                 branch_id: req.branch_id,
             };
 
-            let mut txn_req = TxnRequest::new(
-                vec![
-                    txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
-                    txn_cond_seq(&key_branch, Eq, 0),
-                    txn_cond_seq(&key_staged_branch, Eq, seq_staged_branch.seq),
-                    txn_cond_seq(&key_branch_table_id, Eq, 0),
-                ],
-                vec![
-                    txn_put_pb(&key_branch_table_id, &req.new_table_meta)?,
-                    txn_put_pb(&key_branch, &table_branch)?,
-                    txn_del(&key_staged_branch),
-                ],
-            );
+            let mut conditions = vec![
+                txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq),
+                txn_cond_seq(&key_branch, Eq, 0),
+                txn_cond_seq(&key_staged_branch, Eq, seq_staged_branch.seq),
+                txn_cond_seq(&key_branch_table_id, Eq, 0),
+            ];
+            if let Some(lvt_check) = req.lvt_check.as_ref() {
+                conditions.push(build_lvt_condition(self, req.source_table_id, lvt_check).await?);
+            }
+
+            let mut txn_req = TxnRequest::new(conditions, vec![
+                txn_put_pb(&key_branch_table_id, &req.new_table_meta)?,
+                txn_put_pb(&key_branch, &table_branch)?,
+                txn_del(&key_staged_branch),
+            ]);
 
             let policy_ids: HashSet<u64> = req
                 .new_table_meta
@@ -550,11 +518,25 @@ where
                     .push(txn_put_pb(&ident, &RowAccessPolicyTableId {})?);
             }
 
-            for (column_id, start_value) in &req.auto_increment_start_vals {
-                let auto_increment_key = AutoIncrementKey::new(req.branch_id, *column_id);
+            for table_field in req.new_table_meta.schema.fields() {
+                let Some(auto_increment_expr) = table_field.auto_increment_expr() else {
+                    continue;
+                };
+
+                let source_ai_key =
+                    AutoIncrementKey::new(req.source_table_id, table_field.column_id());
+                let source_ai_ident =
+                    AutoIncrementStorageIdent::new_generic(&req.tenant, source_ai_key);
+                let start_value = match self.get_pb(&source_ai_ident).await? {
+                    Some(seq_v) => seq_v.data.into_inner().0,
+                    None => auto_increment_expr.start,
+                };
+
+                let auto_increment_key =
+                    AutoIncrementKey::new(req.branch_id, table_field.column_id());
                 let storage_ident =
                     AutoIncrementStorageIdent::new_generic(&req.tenant, auto_increment_key);
-                let storage_value = Id::new_typed(AutoIncrementStorageValue(*start_value));
+                let storage_value = Id::new_typed(AutoIncrementStorageValue(start_value));
 
                 txn_req
                     .if_then
@@ -999,10 +981,14 @@ where
                 continue;
             };
 
-            // Filter dropped branches by retention boundary
+            // Filter branches whose effective delete time is already beyond the retention window.
             if let Some(retention_boundary) = req.retention_boundary {
                 if let Some((_, drop_on)) = dropped_map.get(&branch_id.table_id) {
                     if *drop_on < retention_boundary {
+                        continue;
+                    }
+                } else if let Some((_, expire_at)) = active_map.get(&branch_id.table_id) {
+                    if expire_at.is_some_and(|expire_at| expire_at < retention_boundary) {
                         continue;
                     }
                 }

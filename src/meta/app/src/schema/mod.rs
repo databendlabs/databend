@@ -102,7 +102,6 @@ pub use sequence::*;
 pub use table::CommitTableBranchMetaReq;
 pub use table::CommitTableMetaReply;
 pub use table::CommitTableMetaReq;
-pub use table::CreateTableBranchReply;
 pub use table::CreateTableBranchReq;
 pub use table::CreateTableIndexReq;
 pub use table::CreateTableReply;

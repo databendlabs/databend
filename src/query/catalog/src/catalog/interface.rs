@@ -38,7 +38,6 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableBranchReply;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -340,10 +339,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    async fn create_table_branch(
-        &self,
-        _req: CreateTableBranchReq,
-    ) -> Result<CreateTableBranchReply> {
+    async fn create_table_branch(&self, _req: CreateTableBranchReq) -> Result<u64> {
         Err(ErrorCode::Unimplemented(format!(
             "'create_table_branch' not implemented for catalog {}",
             self.name()

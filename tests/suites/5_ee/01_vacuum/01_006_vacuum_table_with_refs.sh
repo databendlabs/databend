@@ -29,14 +29,9 @@ stmt "set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs
 stmt_fail "set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_exp"
 stmt_fail "set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp"
 
-echo "first vacuum"
 stmt "set data_retention_time_in_days=0; select * from fuse_vacuum2('test_vacuum_orphan_refs','a');" > /dev/null
 
 echo "after vacuum"
 ls -l /tmp/test_vacuum_orphan_refs/"$PREFIX"/ | wc -l
 stmt "set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a/b_live order by c"
 stmt "set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a at(tag => t_live) order by c"
-
-echo "second vacuum"
-stmt "set data_retention_time_in_days=0; select * from fuse_vacuum2('test_vacuum_orphan_refs','a');" > /dev/null
-ls -l /tmp/test_vacuum_orphan_refs/"$PREFIX"/ | wc -l

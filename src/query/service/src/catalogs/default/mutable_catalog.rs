@@ -58,7 +58,6 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableBranchReply;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -645,10 +644,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_branch(
-        &self,
-        req: CreateTableBranchReq,
-    ) -> Result<CreateTableBranchReply> {
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<u64> {
         self.ctx
             .meta
             .create_table_branch(req)

@@ -42,7 +42,6 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableBranchReply;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -442,10 +441,7 @@ impl Catalog for SessionCatalog {
             .await
     }
 
-    async fn create_table_branch(
-        &self,
-        req: CreateTableBranchReq,
-    ) -> Result<CreateTableBranchReply> {
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<u64> {
         self.inner.create_table_branch(req).await
     }
 

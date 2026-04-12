@@ -141,9 +141,8 @@ where
         let key_dropped_branch =
             DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
 
-        // Copied-file markers: remove once up front (idempotent, best-effort).
-        let num_removed_copied_files =
-            remove_copied_files_for_dropped_table(self, &branch_table_id).await?;
+        let mut copied_files_removed = false;
+        let mut num_removed_copied_files = 0;
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
@@ -162,10 +161,18 @@ where
                 _ => None,
             };
             let Some(effective_drop_time) = effective_drop_time else {
-                return Ok(num_removed_copied_files);
+                return Ok(0);
             };
             if effective_drop_time >= req.retention_boundary {
-                return Ok(num_removed_copied_files);
+                return Ok(0);
+            }
+
+            // Remove copied-file markers once after retention check passes.
+            // Idempotent, so safe if the txn below fails and we never re-enter this branch.
+            if !copied_files_removed {
+                num_removed_copied_files =
+                    remove_copied_files_for_dropped_table(self, &branch_table_id).await?;
+                copied_files_removed = true;
             }
 
             let mut txn = TxnRequest::default();

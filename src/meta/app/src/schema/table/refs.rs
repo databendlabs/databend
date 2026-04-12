@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -56,6 +55,9 @@ pub struct DroppedBranchMeta {
 pub const STAGED_BRANCH_TIMEOUT: TimeDelta = TimeDelta::hours(1);
 
 /// Value stored in `__fd_staged_branch/<base_table_id>/<branch_id>`.
+///
+/// A staged branch is a lightweight placeholder created during branch creation.
+/// It reserves the branch_id and signals that a branch creation is in progress.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StagedBranch {
     pub create_on: DateTime<Utc>,
@@ -162,34 +164,32 @@ impl Display for DroppedBranchIdent {
     }
 }
 
-// -- Req types for RefApi --
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableBranchReq {
     pub tenant: Tenant,
+    /// Base table id that owns the branch namespace.
     pub table_id: u64,
+    /// Source table/branch id the new branch is created from.
     pub source_table_id: u64,
     pub branch_name: String,
+    /// Optimistic seq check for the source table/branch.
     pub seq: MatchSeq,
-    /// Optional optimistic LVT check against the source object.
-    pub lvt_check: Option<TableLvtCheck>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CreateTableBranchReply {
-    pub branch_id: u64,
-    pub auto_increment_start_vals: BTreeMap<u32, u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CommitTableBranchMetaReq {
     pub tenant: Tenant,
+    /// Base table id that owns the branch namespace.
     pub table_id: u64,
     pub branch_name: String,
+    /// Reserved branch table id from phase-1.
     pub branch_id: u64,
-    pub auto_increment_start_vals: BTreeMap<u32, u64>,
     pub new_table_meta: TableMeta,
     pub expire_at: Option<DateTime<Utc>>,
+    /// Check source table LVT at commit time.
+    pub lvt_check: Option<TableLvtCheck>,
+    /// The source table/branch id for LVT check.
+    pub source_table_id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
