@@ -18,8 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Instant;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_args::TableArgs;
@@ -44,7 +42,6 @@ use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::app_error::AppError;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -58,7 +55,6 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableBranchReply;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -81,7 +77,6 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
-use databend_common_meta_app::schema::GcDroppedTableBranchReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -124,7 +119,6 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
-use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableBranchMeta;
@@ -645,44 +639,10 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_branch(
-        &self,
-        req: CreateTableBranchReq,
-    ) -> Result<CreateTableBranchReply> {
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<u64> {
         self.ctx
             .meta
             .create_table_branch(req)
-            .await
-            .map_err(Into::into)
-    }
-
-    #[async_backtrace::framed]
-    async fn commit_table_branch_meta(&self, req: CommitTableBranchMetaReq) -> Result<()> {
-        self.ctx
-            .meta
-            .commit_table_branch_meta(req)
-            .await
-            .map_err(Into::into)
-    }
-
-    #[async_backtrace::framed]
-    async fn mark_staged_branches_for_cleanup(
-        &self,
-        table_id: u64,
-        cleanup_at: Option<DateTime<Utc>>,
-    ) -> Result<Vec<StagedBranchIdent>> {
-        self.ctx
-            .meta
-            .mark_staged_branches_for_cleanup(table_id, cleanup_at)
-            .await
-            .map_err(Into::into)
-    }
-
-    #[async_backtrace::framed]
-    async fn drop_staged_table_branch(&self, table_id: u64, branch_id: u64) -> Result<()> {
-        self.ctx
-            .meta
-            .drop_staged_table_branch(table_id, branch_id)
             .await
             .map_err(Into::into)
     }
@@ -774,14 +734,6 @@ impl Catalog for MutableCatalog {
         self.ctx
             .meta
             .list_history_table_branches(req)
-            .await
-            .map_err(Into::into)
-    }
-
-    async fn gc_drop_table_branch(&self, req: GcDroppedTableBranchReq) -> Result<usize> {
-        self.ctx
-            .meta
-            .gc_drop_table_branch(req)
             .await
             .map_err(Into::into)
     }

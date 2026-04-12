@@ -64,7 +64,6 @@ use databend_common_meta_app::row_access_policy::row_access_policy_table_id_iden
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::CatalogOption;
-use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateCatalogReq;
 use databend_common_meta_app::schema::CreateDatabaseReq;
@@ -120,13 +119,11 @@ use databend_common_meta_app::schema::MarkedDeletedIndexType;
 use databend_common_meta_app::schema::RenameDatabaseReq;
 use databend_common_meta_app::schema::RenameDictionaryReq;
 use databend_common_meta_app::schema::RenameTableReq;
-use databend_common_meta_app::schema::STAGED_BRANCH_TIMEOUT;
 use databend_common_meta_app::schema::SecurityPolicyColumnMap;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SetSecurityPolicyAction;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
-use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
 use databend_common_meta_app::schema::TableCopiedFileNameIdent;
@@ -147,6 +144,7 @@ use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::TagNameIdent;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableBranchByIdReq;
 use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReq;
@@ -359,7 +357,6 @@ impl SchemaApiTestSuite {
         self.gc_dropped_db_after_undrop(&b.build().await).await?;
         self.branch_gc_and_undrop_retention(&b.build().await)
             .await?;
-        self.staged_branch_lifecycle(&b.build().await).await?;
         self.catalog_create_get_list_drop(&b.build().await).await?;
         self.table_least_visible_time(&b.build().await).await?;
         self.vacuum_retention_timestamp(&b.build().await).await?;
@@ -7581,26 +7578,17 @@ impl SchemaApiTestSuite {
         let reply = mt
             .create_table_branch(CreateTableBranchReq {
                 tenant: tenant.clone(),
-                table_id: table_info.ident.table_id,
-                source_table_id: table_info.ident.table_id,
+                base_table_id: table_info.ident.table_id,
+                from_branch_id: None,
                 seq: MatchSeq::Exact(table_info.ident.seq),
                 branch_name: branch_name.to_string(),
+                new_table_meta: table_info.meta.clone(),
+                expire_at,
                 lvt_check: None,
             })
             .await?;
 
-        mt.commit_table_branch_meta(CommitTableBranchMetaReq {
-            tenant: tenant.clone(),
-            table_id: table_info.ident.table_id,
-            branch_name: branch_name.to_string(),
-            branch_id: reply.branch_id,
-            auto_increment_start_vals: reply.auto_increment_start_vals,
-            new_table_meta: table_info.meta.clone(),
-            expire_at,
-        })
-        .await?;
-
-        Ok(reply.branch_id)
+        Ok(reply)
     }
 
     async fn upsert_branch_copied_files<MT>(
@@ -7676,9 +7664,69 @@ impl SchemaApiTestSuite {
         // without waiting for wall-clock time to pass.
         let expired_boundary = Utc::now() + Duration::days(1);
 
+        self.test_branch_undrop_retention_boundaries(
+            mt,
+            &tenant,
+            base_table.as_ref(),
+            base_table_id,
+            retainable_boundary,
+            expired_boundary,
+        )
+        .await?;
+        self.test_branch_gc_removes_dropped_generation(
+            mt,
+            &tenant,
+            base_table.as_ref(),
+            base_table_id,
+        )
+        .await?;
+        self.test_branch_gc_preserves_recreated_name(
+            mt,
+            &tenant,
+            base_table.as_ref(),
+            base_table_id,
+        )
+        .await?;
+        self.test_branch_undrop_retains_or_renews_expiration(
+            mt,
+            &tenant,
+            base_table.as_ref(),
+            base_table_id,
+            retainable_boundary,
+        )
+        .await?;
+        self.test_branch_undrop_ambiguous_name_requires_id(
+            mt,
+            &tenant,
+            base_table.as_ref(),
+            base_table_id,
+            retainable_boundary,
+        )
+        .await?;
+
+        Ok(())
+    }
+
+    async fn test_branch_undrop_retention_boundaries<MT>(
+        &self,
+        mt: &MT,
+        tenant: &Tenant,
+        base_table: &TableInfo,
+        base_table_id: u64,
+        retainable_boundary: DateTime<Utc>,
+        expired_boundary: DateTime<Utc>,
+    ) -> anyhow::Result<()>
+    where
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + KVPbApi
+            + RefApi
+            + TableApi,
+    {
         let branch_name = "branch_keep";
         let branch_id = self
-            .create_active_branch(mt, &tenant, base_table.as_ref(), branch_name, None)
+            .create_active_branch(mt, tenant, base_table, branch_name, None)
             .await?;
         let branch_key = TableIdBranchName::new(base_table_id, branch_name);
         assert!(mt.get_pb(&branch_key).await?.is_some());
@@ -7701,33 +7749,6 @@ impl SchemaApiTestSuite {
         .await?;
 
         let dropped_key = DroppedBranchIdent::new(base_table_id, branch_name, branch_id);
-        assert!(mt.get_pb(&dropped_key).await?.is_some());
-        assert!(
-            mt.get_pb(&TableId {
-                table_id: branch_id
-            })
-            .await?
-            .is_some()
-        );
-
-        let removed = mt
-            .gc_drop_table_branch(GcDroppedTableBranchReq {
-                tenant: tenant.clone(),
-                table_id: base_table_id,
-                branch_name: branch_name.to_string(),
-                branch_id,
-                retention_boundary: retainable_boundary,
-            })
-            .await?;
-        assert_eq!(0, removed, "branch within retention must not be gc'ed");
-        assert!(mt.get_pb(&dropped_key).await?.is_some());
-        assert!(
-            mt.get_pb(&TableId {
-                table_id: branch_id
-            })
-            .await?
-            .is_some()
-        );
         let copied = mt
             .get_table_copied_file_info(GetTableCopiedFileReq {
                 table_id: branch_id,
@@ -7737,7 +7758,7 @@ impl SchemaApiTestSuite {
         assert_eq!(
             2,
             copied.file_info.len(),
-            "within-retention gc must preserve branch copied-file dedup state"
+            "dropped branch should keep copied-file dedup state before final gc"
         );
 
         let err = mt
@@ -7752,8 +7773,7 @@ impl SchemaApiTestSuite {
             .unwrap_err();
         assert_eq!(
             ErrorCode::ReferenceExpired("").code(),
-            ErrorCode::from(err).code(),
-            "out-of-retention branch must not be undropped"
+            ErrorCode::from(err).code()
         );
 
         mt.undrop_table_branch(UndropTableBranchReq {
@@ -7774,71 +7794,143 @@ impl SchemaApiTestSuite {
             .is_some()
         );
 
+        Ok(())
+    }
+
+    async fn test_branch_gc_removes_dropped_generation<MT>(
+        &self,
+        mt: &MT,
+        tenant: &Tenant,
+        base_table: &TableInfo,
+        base_table_id: u64,
+    ) -> anyhow::Result<()>
+    where
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + KVPbApi
+            + RefApi
+            + TableApi,
+    {
+        let branch_name = "branch_gc";
+        let branch_id = self
+            .create_active_branch(mt, tenant, base_table, branch_name, None)
+            .await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id,
+        })
+        .await?;
+
+        let dropped_key = DroppedBranchIdent::new(base_table_id, branch_name, branch_id);
         let removed = mt
             .gc_drop_table_branch(GcDroppedTableBranchReq {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
                 branch_name: branch_name.to_string(),
                 branch_id,
-                retention_boundary: expired_boundary,
             })
             .await?;
-        assert_eq!(
-            0, removed,
-            "branch without dropped marker must be ignored by gc"
-        );
-        assert!(mt.get_pb(&branch_key).await?.is_some());
+        assert!(removed > 0, "dropped branch gc should clean up metadata");
+        assert!(mt.get_pb(&dropped_key).await?.is_none());
         assert!(
             mt.get_pb(&TableId {
                 table_id: branch_id
             })
             .await?
-            .is_some()
+            .is_none()
         );
 
-        let expired_branch_name = "branch_gc";
-        let expired_branch_id = self
-            .create_active_branch(mt, &tenant, base_table.as_ref(), expired_branch_name, None)
+        Ok(())
+    }
+
+    async fn test_branch_gc_preserves_recreated_name<MT>(
+        &self,
+        mt: &MT,
+        tenant: &Tenant,
+        base_table: &TableInfo,
+        base_table_id: u64,
+    ) -> anyhow::Result<()>
+    where
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + KVPbApi
+            + RefApi
+            + TableApi,
+    {
+        let branch_name = "branch_recreated";
+        let old_branch_id = self
+            .create_active_branch(mt, tenant, base_table, branch_name, None)
             .await?;
         mt.drop_table_branch(DropTableBranchReq {
             tenant: tenant.clone(),
             table_id: base_table_id,
-            branch_name: expired_branch_name.to_string(),
-            branch_id: expired_branch_id,
+            branch_name: branch_name.to_string(),
+            branch_id: old_branch_id,
         })
         .await?;
+        let new_branch_id = self
+            .create_active_branch(mt, tenant, base_table, branch_name, None)
+            .await?;
 
-        let expired_dropped_key =
-            DroppedBranchIdent::new(base_table_id, expired_branch_name, expired_branch_id);
+        let branch_key = TableIdBranchName::new(base_table_id, branch_name);
+        let dropped_key = DroppedBranchIdent::new(base_table_id, branch_name, old_branch_id);
         let removed = mt
             .gc_drop_table_branch(GcDroppedTableBranchReq {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
-                branch_name: expired_branch_name.to_string(),
-                branch_id: expired_branch_id,
-                retention_boundary: expired_boundary,
+                branch_name: branch_name.to_string(),
+                branch_id: old_branch_id,
             })
             .await?;
-        assert!(
-            removed > 0,
-            "beyond-retention dropped branch should clean up metadata"
-        );
-        assert!(mt.get_pb(&expired_dropped_key).await?.is_none());
+        assert!(removed > 0, "gc should remove the old dropped generation");
+        let recreated_branch = mt.get_pb(&branch_key).await?.unwrap();
+        assert_eq!(new_branch_id, recreated_branch.data.branch_id);
+        assert!(mt.get_pb(&dropped_key).await?.is_none());
         assert!(
             mt.get_pb(&TableId {
-                table_id: expired_branch_id
+                table_id: old_branch_id
             })
             .await?
             .is_none()
         );
+        assert!(
+            mt.get_pb(&TableId {
+                table_id: new_branch_id
+            })
+            .await?
+            .is_some()
+        );
 
+        Ok(())
+    }
+
+    async fn test_branch_undrop_retains_or_renews_expiration<MT>(
+        &self,
+        mt: &MT,
+        tenant: &Tenant,
+        base_table: &TableInfo,
+        base_table_id: u64,
+        retainable_boundary: DateTime<Utc>,
+    ) -> anyhow::Result<()>
+    where
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + KVPbApi
+            + RefApi
+            + TableApi,
+    {
         let retained_branch_name = "branch_retain";
         let retained_expire_at = Utc::now() + Duration::hours(2);
         let retained_branch_id = self
             .create_active_branch(
                 mt,
-                &tenant,
-                base_table.as_ref(),
+                tenant,
+                base_table,
                 retained_branch_name,
                 Some(retained_expire_at),
             )
@@ -7864,29 +7956,29 @@ impl SchemaApiTestSuite {
             .unwrap();
         assert_eq!(Some(retained_expire_at), retained_branch.data.expire_at);
 
-        let expired_retained_branch_name = "branch_expired_retain";
-        let expired_retained_expire_at = Utc::now() - Duration::hours(2);
-        let expired_retained_branch_id = self
+        let expired_branch_name = "branch_expired_retain";
+        let expired_expire_at = Utc::now() - Duration::hours(2);
+        let expired_branch_id = self
             .create_active_branch(
                 mt,
-                &tenant,
-                base_table.as_ref(),
-                expired_retained_branch_name,
-                Some(expired_retained_expire_at),
+                tenant,
+                base_table,
+                expired_branch_name,
+                Some(expired_expire_at),
             )
             .await?;
         mt.drop_table_branch(DropTableBranchReq {
             tenant: tenant.clone(),
             table_id: base_table_id,
-            branch_name: expired_retained_branch_name.to_string(),
-            branch_id: expired_retained_branch_id,
+            branch_name: expired_branch_name.to_string(),
+            branch_id: expired_branch_id,
         })
         .await?;
         let err = mt
             .undrop_table_branch(UndropTableBranchReq {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
-                branch_name: expired_retained_branch_name.to_string(),
+                branch_name: expired_branch_name.to_string(),
                 retention_boundary: retainable_boundary,
                 new_expire_at: None,
             })
@@ -7894,24 +7986,20 @@ impl SchemaApiTestSuite {
             .unwrap_err();
         assert_eq!(
             ErrorCode::ReferenceExpired("").code(),
-            ErrorCode::from(err).code(),
-            "expired retained branch must provide a new expiration when undropped"
+            ErrorCode::from(err).code()
         );
 
         let renewed_expire_at = Utc::now() + Duration::hours(4);
         mt.undrop_table_branch(UndropTableBranchReq {
-            tenant,
+            tenant: tenant.clone(),
             table_id: base_table_id,
-            branch_name: expired_retained_branch_name.to_string(),
+            branch_name: expired_branch_name.to_string(),
             retention_boundary: retainable_boundary,
             new_expire_at: Some(renewed_expire_at),
         })
         .await?;
         let renewed_branch = mt
-            .get_pb(&TableIdBranchName::new(
-                base_table_id,
-                expired_retained_branch_name,
-            ))
+            .get_pb(&TableIdBranchName::new(base_table_id, expired_branch_name))
             .await?
             .unwrap();
         assert_eq!(Some(renewed_expire_at), renewed_branch.data.expire_at);
@@ -7919,134 +8007,84 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn staged_branch_lifecycle<
-        MT: kvapi::KVApi<Error = MetaError> + DatabaseApi + KVPbApi + RefApi,
-    >(
+    async fn test_branch_undrop_ambiguous_name_requires_id<MT>(
         &self,
         mt: &MT,
-    ) -> anyhow::Result<()> {
-        let tenant_name = "tenant1_staged_branch_lifecycle";
-        let db_name = "db1_staged_branch_lifecycle";
-        let table_name = "tb1_staged_branch_lifecycle";
-        let mut util = DbTableHarness::new(mt, tenant_name, db_name, table_name, "FUSE");
-
-        util.create_db().await?;
-        util.create_table().await?;
-
-        let tenant = util.tenant();
-        let base_table = util.get_table().await?;
-        let base_table_id = base_table.ident.table_id;
-        let base_table_seq = base_table.ident.seq;
-
-        let timed_out_branch_name = "branch_staged_timeout";
-        let timed_out_reply = mt
-            .create_table_branch(CreateTableBranchReq {
-                tenant: tenant.clone(),
-                table_id: base_table_id,
-                source_table_id: base_table_id,
-                seq: MatchSeq::Exact(base_table_seq),
-                branch_name: timed_out_branch_name.to_string(),
-                lvt_check: None,
-            })
+        tenant: &Tenant,
+        base_table: &TableInfo,
+        base_table_id: u64,
+        retainable_boundary: DateTime<Utc>,
+    ) -> anyhow::Result<()>
+    where
+        MT: kvapi::KVApi<Error = MetaError>
+            + DatabaseApi
+            + GarbageCollectionApi
+            + KVPbApi
+            + RefApi
+            + TableApi,
+    {
+        let branch_name = "branch_ambiguous";
+        let branch_id_1 = self
+            .create_active_branch(mt, tenant, base_table, branch_name, None)
             .await?;
-
-        let timed_out_staged_key = StagedBranchIdent::new(base_table_id, timed_out_reply.branch_id);
-        let mut timed_out_staged = mt.get_pb(&timed_out_staged_key).await?.unwrap().data;
-        timed_out_staged.create_on = Utc::now() - STAGED_BRANCH_TIMEOUT - Duration::minutes(1);
-        mt.upsert_pb(&UpsertPB::update(
-            timed_out_staged_key.clone(),
-            timed_out_staged,
-        ))
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id: branch_id_1,
+        })
+        .await?;
+        let branch_id_2 = self
+            .create_active_branch(mt, tenant, base_table, branch_name, None)
+            .await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id: branch_id_2,
+        })
+        .await?;
+        let branch_3 = "another_one";
+        let branch_id_3 = self
+            .create_active_branch(mt, tenant, base_table, branch_3, None)
+            .await?;
+        mt.drop_table_branch(DropTableBranchReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_3.to_string(),
+            branch_id: branch_id_3,
+        })
         .await?;
 
         let err = mt
-            .commit_table_branch_meta(CommitTableBranchMetaReq {
+            .undrop_table_branch(UndropTableBranchReq {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
-                branch_name: timed_out_branch_name.to_string(),
-                branch_id: timed_out_reply.branch_id,
-                auto_increment_start_vals: timed_out_reply.auto_increment_start_vals.clone(),
-                new_table_meta: base_table.meta.clone(),
-                expire_at: None,
+                branch_name: branch_name.to_string(),
+                retention_boundary: retainable_boundary,
+                new_expire_at: None,
             })
             .await
             .unwrap_err();
         assert_eq!(
-            ErrorCode::ReferenceExpired("").code(),
-            ErrorCode::from(err).code(),
-            "timed-out staged branch must not be committed"
+            ErrorCode::UnknownReference("").code(),
+            ErrorCode::from(err).code()
         );
-        assert!(
-            mt.get_pb(&TableIdBranchName::new(
-                base_table_id,
-                timed_out_branch_name,
-            ))
+
+        mt.undrop_table_branch_by_id(UndropTableBranchByIdReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id: branch_id_2,
+            retention_boundary: retainable_boundary,
+            new_expire_at: None,
+        })
+        .await?;
+        let restored_branch = mt
+            .get_pb(&TableIdBranchName::new(base_table_id, branch_name))
             .await?
-            .is_none()
-        );
-        assert!(
-            mt.get_pb(&TableId {
-                table_id: timed_out_reply.branch_id
-            })
-            .await?
-            .is_none()
-        );
-
-        let fresh_branch_name = "branch_staged_fresh";
-        let fresh_reply = mt
-            .create_table_branch(CreateTableBranchReq {
-                tenant: tenant.clone(),
-                table_id: base_table_id,
-                source_table_id: base_table_id,
-                seq: MatchSeq::Exact(base_table_seq),
-                branch_name: fresh_branch_name.to_string(),
-                lvt_check: None,
-            })
-            .await?;
-        let fresh_staged_key = StagedBranchIdent::new(base_table_id, fresh_reply.branch_id);
-
-        let marked = mt
-            .mark_staged_branches_for_cleanup(
-                base_table_id,
-                Some(Utc::now() - STAGED_BRANCH_TIMEOUT),
-            )
-            .await?;
-        assert!(
-            marked.contains(&timed_out_staged_key),
-            "expired staged branch should be marked for cleanup"
-        );
-        assert!(
-            !marked.contains(&fresh_staged_key),
-            "fresh staged branch should not be marked for cleanup"
-        );
-
-        let timed_out_staged = mt.get_pb(&timed_out_staged_key).await?.unwrap().data;
-        assert!(timed_out_staged.cleanup_marked);
-        let fresh_staged = mt.get_pb(&fresh_staged_key).await?.unwrap().data;
-        assert!(!fresh_staged.cleanup_marked);
-
-        let err = mt
-            .commit_table_branch_meta(CommitTableBranchMetaReq {
-                tenant: tenant.clone(),
-                table_id: base_table_id,
-                branch_name: timed_out_branch_name.to_string(),
-                branch_id: timed_out_reply.branch_id,
-                auto_increment_start_vals: timed_out_reply.auto_increment_start_vals,
-                new_table_meta: base_table.meta.clone(),
-                expire_at: None,
-            })
-            .await
-            .unwrap_err();
-        assert_eq!(
-            ErrorCode::ReferenceExpired("").code(),
-            ErrorCode::from(err).code(),
-            "cleanup-marked staged branch must not be committed"
-        );
-
-        mt.drop_staged_table_branch(base_table_id, timed_out_reply.branch_id)
-            .await?;
-        assert!(mt.get_pb(&timed_out_staged_key).await?.is_none());
-        assert!(mt.get_pb(&fresh_staged_key).await?.is_some());
+            .unwrap();
+        assert_eq!(branch_id_2, restored_branch.data.branch_id);
 
         Ok(())
     }
