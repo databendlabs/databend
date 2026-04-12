@@ -23,6 +23,11 @@ pub fn truncate_column_data(s: String) -> String {
     }
 }
 
+#[inline]
+pub fn trim_ascii_space(data: &[u8]) -> &[u8] {
+    data.trim_ascii()
+}
+
 pub fn get_decode_error_by_pos(
     column_index: usize,
     schema: &TableSchemaRef,
@@ -37,5 +42,18 @@ pub fn get_decode_error_by_pos(
         column_name: field.name().to_string(),
         column_type: field.data_type().to_string(),
         column_data: truncate_column_data(column_data),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::trim_ascii_space;
+
+    #[test]
+    fn test_trim_ascii_space() {
+        assert_eq!(trim_ascii_space(b" \t\r\nabc\t "), b"abc");
+        assert_eq!(trim_ascii_space(b"abc"), b"abc");
+        assert_eq!(trim_ascii_space(b" \t\r\n "), b"");
+        assert_eq!(trim_ascii_space(b"\x0b\x0cabc\x0b\x0c"), b"\x0b\x0cabc\x0b");
     }
 }

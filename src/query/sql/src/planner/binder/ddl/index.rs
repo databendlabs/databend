@@ -857,12 +857,9 @@ impl Binder {
         for column in columns {
             match table_schema.field_with_name(&column.name) {
                 Ok(field) => {
-                    if !matches!(
-                        field.data_type.remove_nullable(),
-                        TableDataType::Geometry | TableDataType::Geography
-                    ) {
+                    if !matches!(field.data_type.remove_nullable(), TableDataType::Geometry) {
                         return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Spatial index only support Geometry and Geography type, but the type of column {} is {}",
+                            "Spatial index only supports Geometry type, but the type of column {} is {}",
                             column, field.data_type
                         )));
                     }

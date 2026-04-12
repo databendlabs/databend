@@ -1689,6 +1689,13 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
+    /// TCP connect timeout for inter-node gRPC connections (in seconds).
+    /// This only affects connection establishment, not request duration.
+    /// Per-request timeout is controlled by the `flight_client_timeout` session setting.
+    /// 0 means no connect timeout.
+    ///
+    /// Note: the field name is kept as-is for backward compatibility with
+    /// existing configuration files and CLI flags (`--rpc-client-timeout-secs`).
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub rpc_client_timeout_secs: u64,
 
@@ -3599,7 +3606,7 @@ mod config_converters {
             .transpose()?;
 
         Ok(inner::SpillConfig {
-            local_writeable_root: None,
+            local_writable_root: None,
             path: spill.spill_local_disk_path,
             reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
             global_bytes_limit: spill.spill_local_disk_max_bytes,

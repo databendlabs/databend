@@ -24,6 +24,7 @@ use databend_common_io::geography::*;
 use databend_common_io::wkb::WkbInfo;
 use databend_common_io::wkb::make_point;
 use databend_common_io::wkb::read_wkb_header;
+use geozero::ToGeo;
 use geozero::ToWkt;
 use geozero::wkb::Ewkb;
 use serde::Deserialize;
@@ -82,6 +83,12 @@ impl Debug for GeographyRef<'_> {
 impl GeographyRef<'_> {
     pub fn to_owned(&self) -> Geography {
         Geography(self.0.to_owned())
+    }
+
+    pub fn to_geo(&self) -> Result<geo::Geometry<f64>> {
+        Ewkb(self.0)
+            .to_geo()
+            .map_err(|e| databend_common_exception::ErrorCode::GeometryError(e.to_string()))
     }
 
     pub fn to_ewkt(&self) -> std::result::Result<String, String> {

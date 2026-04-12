@@ -60,6 +60,8 @@ pub struct ReadState {
     pub remain_column_ids: HashSet<ColumnId>,
     pub func_ctx: FunctionContext,
     pub output_schema: DataSchema,
+    pub prewhere_selectivity_threshold: u64,
+    pub use_single_prewhere_reader: bool,
 }
 
 impl ReadState {
@@ -67,8 +69,12 @@ impl ReadState {
         ctx: Arc<dyn TableContext>,
         scan_id: usize,
         prewhere_info: Option<&PrewhereInfo>,
-        block_reader: &BlockReader,
+        block_reader: Arc<BlockReader>,
     ) -> Result<Self> {
+        let prewhere_selectivity_threshold =
+            ctx.get_settings().get_prewhere_selectivity_threshold()?;
+        let use_single_prewhere_reader =
+            prewhere_info.is_some() && prewhere_selectivity_threshold == 0;
         let original_schema = block_reader.original_schema.as_ref();
 
         let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
@@ -90,8 +96,16 @@ impl ReadState {
             Projection::merge(&mut preread_projection, &prewhere_info.prewhere_columns);
         }
 
-        let remain_projection = block_reader.projection.difference(&preread_projection);
-        let prewhere_reader = block_reader.change_projection(preread_projection)?;
+        let remain_projection = if use_single_prewhere_reader {
+            Projection::Columns(vec![])
+        } else {
+            block_reader.projection.difference(&preread_projection)
+        };
+        let prewhere_reader = if use_single_prewhere_reader {
+            block_reader.clone()
+        } else {
+            block_reader.change_projection(preread_projection)?
+        };
         let remain_reader = block_reader.change_projection(remain_projection)?;
         let pre_column_ids = prewhere_reader.schema().to_leaf_column_id_set();
         let remain_column_ids = remain_reader.schema().to_leaf_column_id_set();
@@ -130,6 +144,8 @@ impl ReadState {
             remain_column_ids,
             func_ctx: ctx.get_function_context()?,
             output_schema: block_reader.data_schema(),
+            prewhere_selectivity_threshold,
+            use_single_prewhere_reader,
         })
     }
 
@@ -197,19 +213,34 @@ impl ReadState {
             (None, None) => None,
         };
 
+        let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
+
         if let Some(ref bitmap) = bitmap_selection {
             preread_block = preread_block.filter_with_bitmap(bitmap)?;
         }
 
+        if self.use_single_prewhere_reader {
+            return Ok((preread_block, row_selection, bitmap_selection));
+        }
+
         let remain_columns_chunks =
             Self::filter_column_chunks(&columns_chunks, &self.remain_column_ids)?;
-        let row_selection = bitmap_selection.as_ref().map(RowSelection::from);
+        let push_down_row_selection = row_selection.as_ref().is_some_and(|row_selection| {
+            should_push_down_row_selection(row_selection, self.prewhere_selectivity_threshold)
+        });
 
-        let remain_block = self.remain_reader.deserialize_part(
+        let mut remain_block = self.remain_reader.deserialize_part(
             part,
             remain_columns_chunks,
-            row_selection.as_ref(),
+            push_down_row_selection
+                .then_some(row_selection.as_ref())
+                .flatten(),
         )?;
+        if !push_down_row_selection {
+            if let Some(bitmap) = bitmap_selection.as_ref() {
+                remain_block = remain_block.filter_with_bitmap(bitmap)?;
+            }
+        }
 
         let mut merged_fields = self.pre_reader.data_fields();
         merged_fields.extend(self.remain_reader.data_fields());
@@ -233,5 +264,47 @@ impl ReadState {
             }
         }
         Ok(filtered_columns_chunks)
+    }
+}
+
+fn should_push_down_row_selection(row_selection: &RowSelection, threshold: u64) -> bool {
+    let total_rows = row_selection.bitmap.len();
+    if threshold == 0 || total_rows == 0 {
+        return false;
+    }
+
+    (row_selection.selected_rows as u128) * 100 < (total_rows as u128) * (threshold as u128)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::MutableBitmap;
+
+    use super::*;
+
+    #[test]
+    fn test_should_push_down_row_selection() {
+        let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
+        sparse_bitmap.set(2, true);
+        let sparse_bitmap: Bitmap = sparse_bitmap.into();
+        let sparse_selection = RowSelection::from(&sparse_bitmap);
+
+        assert!(should_push_down_row_selection(&sparse_selection, 50));
+        assert!(!should_push_down_row_selection(&sparse_selection, 20));
+        assert!(!should_push_down_row_selection(&sparse_selection, 0));
+
+        let dense_bitmap: Bitmap = MutableBitmap::from_len_set(5).into();
+        let dense_selection = RowSelection::from(&dense_bitmap);
+        assert!(!should_push_down_row_selection(&dense_selection, 100));
+    }
+
+    #[test]
+    fn test_threshold_zero_disables_row_selection_pushdown() {
+        let mut sparse_bitmap = MutableBitmap::from_len_zeroed(5);
+        sparse_bitmap.set(2, true);
+        let sparse_bitmap: Bitmap = sparse_bitmap.into();
+        let sparse_selection = RowSelection::from(&sparse_bitmap);
+
+        assert!(!should_push_down_row_selection(&sparse_selection, 0));
     }
 }

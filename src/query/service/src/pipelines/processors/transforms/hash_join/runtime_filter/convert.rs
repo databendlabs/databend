@@ -347,6 +347,7 @@ mod tests {
 
     use super::build_inlist_filter;
     use super::build_runtime_filter_infos;
+    use crate::physical_plans::SpatialRuntimeFilterMode;
     use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
     use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
@@ -381,7 +382,7 @@ mod tests {
             enable_bloom_runtime_filter: true,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: true,
-            is_spatial: false,
+            spatial_mode: None,
         };
 
         let mut packets = HashMap::new();
@@ -436,7 +437,7 @@ mod tests {
             enable_bloom_runtime_filter: true,
             enable_inlist_runtime_filter: true,
             enable_min_max_runtime_filter: true,
-            is_spatial: true,
+            spatial_mode: Some(SpatialRuntimeFilterMode::Intersects),
         };
 
         let mut builder = RTreeBuilder::<f64>::new(1);
@@ -452,6 +453,7 @@ mod tests {
             spatial: Some(SpatialPacket {
                 valid: true,
                 srid: Some(4326),
+                mode: SpatialRuntimeFilterMode::Intersects,
                 rtrees,
             }),
         });

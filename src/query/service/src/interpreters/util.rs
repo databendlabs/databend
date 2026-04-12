@@ -259,13 +259,13 @@ pub fn check_view_circular_dependency(
     database: &str,
     view_name: &str,
 ) -> databend_common_exception::Result<()> {
-    for table in metadata.tables() {
-        if table.catalog() == catalog && table.database() == database && table.name() == view_name {
-            return Err(ErrorCode::Internal(format!(
-                "View dependency loop detected (view: {}.{})",
-                database, view_name
-            )));
-        }
+    if metadata.tables().iter().any(|table| {
+        table.catalog() == catalog && table.database() == database && table.name() == view_name
+    }) {
+        return Err(ErrorCode::ViewDependencyError(format!(
+            "View dependency loop detected (view: {}.{})",
+            database, view_name
+        )));
     }
     Ok(())
 }

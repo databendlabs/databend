@@ -407,7 +407,7 @@ impl Default for CatalogHiveConfig {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpillConfig {
-    pub(crate) local_writeable_root: Option<String>,
+    pub(crate) local_writable_root: Option<String>,
     pub(crate) path: String,
 
     /// Ratio of the reserve of the disk space.
@@ -446,7 +446,7 @@ impl SpillConfig {
             return Some(self.path.clone().into());
         }
 
-        if let Some(root) = &self.local_writeable_root {
+        if let Some(root) = &self.local_writable_root {
             return Some(PathBuf::from(root).join("temp/_query_spill"));
         }
 
@@ -493,7 +493,7 @@ impl SpillConfig {
 
     pub fn new_for_test(path: String, reserved_disk_ratio: f64, global_bytes_limit: u64) -> Self {
         Self {
-            local_writeable_root: None,
+            local_writable_root: None,
             path,
             reserved_disk_ratio: OrderedFloat(reserved_disk_ratio),
             global_bytes_limit,
@@ -510,7 +510,7 @@ impl SpillConfig {
 impl Default for SpillConfig {
     fn default() -> Self {
         Self {
-            local_writeable_root: None,
+            local_writable_root: None,
             path: "".to_string(),
             reserved_disk_ratio: OrderedFloat(0.1),
             global_bytes_limit: u64::MAX,

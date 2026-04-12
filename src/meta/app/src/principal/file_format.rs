@@ -47,6 +47,7 @@ const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
+const OPT_TRIM_SPACE: &str = "trim_space";
 const OPT_QUOTED_EMPTY_FIELD_AS: &str = "quoted_empty_field_as";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
@@ -284,6 +285,7 @@ impl FileFormatParams {
                 )?;
                 let allow_quoted_nulls =
                     reader.take_bool(OPT_ALLOW_QUOTED_NULLS, default.allow_quoted_nulls)?;
+                let trim_space = reader.take_bool(OPT_TRIM_SPACE, default.trim_space)?;
                 let quoted_empty_field_as = reader
                     .options
                     .remove(OPT_QUOTED_EMPTY_FIELD_AS)
@@ -302,6 +304,7 @@ impl FileFormatParams {
                     quote,
                     error_on_column_count_mismatch,
                     allow_quoted_nulls,
+                    trim_space,
                     encoding,
                     encoding_error_mode,
                     quoted_empty_field_as,
@@ -336,6 +339,7 @@ impl FileFormatParams {
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
                 )?;
+                let trim_space = reader.take_bool(OPT_TRIM_SPACE, default.trim_space)?;
                 let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Text(TextFileFormatParams {
                     compression,
@@ -349,6 +353,7 @@ impl FileFormatParams {
                     encoding,
                     encoding_error_mode,
                     error_on_column_count_mismatch,
+                    trim_space,
                     empty_field_as,
                     output_header,
                 })
@@ -530,6 +535,8 @@ pub struct CsvFileFormatParams {
     pub escape: String,
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+    #[serde(default)]
+    pub trim_space: bool,
 
     // load only options
     pub allow_quoted_nulls: bool,
@@ -561,6 +568,7 @@ impl Default for CsvFileFormatParams {
             escape: "".to_string(),
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            trim_space: false,
             allow_quoted_nulls: false,
             empty_field_as: EmptyFieldAs::Null,
             quoted_empty_field_as: EmptyFieldAs::String,
@@ -597,6 +605,7 @@ pub struct TextFileFormatParams {
     // not used
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+    pub trim_space: bool,
 
     // load only options
     pub empty_field_as: EmptyFieldAs,
@@ -624,6 +633,7 @@ impl Default for TextFileFormatParams {
             // not used, only for compat
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            trim_space: false,
             empty_field_as: EmptyFieldAs::FieldDefault,
             output_header: false,
             nan_display: "NaN".to_string(),
@@ -973,7 +983,7 @@ impl Display for FileFormatParams {
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
-                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
@@ -988,6 +998,7 @@ impl Display for FileFormatParams {
                     params.empty_field_as,
                     params.binary_format,
                     params.error_on_column_count_mismatch,
+                    params.trim_space,
                     params.allow_quoted_nulls,
                     params.quoted_empty_field_as,
                 )
@@ -999,7 +1010,7 @@ impl Display for FileFormatParams {
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' \
                      SKIP_HEADER = {} OUTPUT_HEADER = {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} \
-                     ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
@@ -1012,6 +1023,7 @@ impl Display for FileFormatParams {
                     escape_string(&params.encoding_error_mode),
                     params.empty_field_as,
                     params.error_on_column_count_mismatch,
+                    params.trim_space,
                 )
             }
             FileFormatParams::Xml(params) => {
@@ -1180,6 +1192,16 @@ mod tests {
         }
     }
 
+    fn get_csv_params(options: BTreeMap<String, String>) -> CsvFileFormatParams {
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .expect("csv file format options should parse");
+        match params {
+            FileFormatParams::Csv(v) => v,
+            _ => unreachable!("expected csv params"),
+        }
+    }
+
     #[test]
     fn test_text_field_delimiter_empty_string() {
         let mut options = BTreeMap::new();
@@ -1204,6 +1226,7 @@ mod tests {
         options.insert("empty_field_as".to_string(), "string".to_string());
         options.insert("encoding".to_string(), "gbk".to_string());
         options.insert("encoding_error_mode".to_string(), "replace".to_string());
+        options.insert("trim_space".to_string(), "true".to_string());
 
         let params = get_text_params(options);
         assert!(!params.error_on_column_count_mismatch);
@@ -1213,6 +1236,17 @@ mod tests {
         assert_eq!(params.encoding, "gbk");
         assert_eq!(params.encoding_error_mode, "replace");
         assert_eq!(params.empty_field_as, EmptyFieldAs::String);
+        assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_csv_trim_space_option() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "CSV".to_string());
+        options.insert("trim_space".to_string(), "true".to_string());
+
+        let params = get_csv_params(options);
+        assert!(params.trim_space);
     }
 
     #[test]

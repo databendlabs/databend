@@ -286,5 +286,91 @@ async fn test_spatial_index_pruning_geometry() -> anyhow::Result<()> {
         assert_eq!(total_blocks, block_metas.len());
     }
 
+    let distance_cases = vec![
+        (
+            "st_dwithin(g, to_geometry('POINT(0.5 0.5)', 4326), 1.0)".to_string(),
+            1,
+        ),
+        (
+            "st_dwithin(g, to_geometry('POINT(5 5)', 4326), 7.0)".to_string(),
+            2,
+        ),
+        (
+            "st_dwithin(g, to_geometry('POINT(5 5)', 4326), 20.0)".to_string(),
+            4,
+        ),
+        (
+            "st_dwithin(g, to_geometry('LINESTRING(49 0.5, 52 0.5)', 4326), 10.0)".to_string(),
+            1,
+        ),
+        (
+            format!(
+                "st_dwithin(g, to_geometry('{}', 4326), 0.0)",
+                polygon_wkt(90.0, 90.0, 110.0, 110.0)
+            ),
+            1,
+        ),
+        (
+            "st_dwithin(g, to_geometry('POINT(200 200)', 4326), 10.0)".to_string(),
+            0,
+        ),
+    ];
+
+    for (filter, expected_blocks) in &distance_cases {
+        let push_down = Some(PushDownInfo {
+            filters: Some(parse_to_filters(ctx.clone(), table.clone(), filter)?),
+            ..Default::default()
+        });
+
+        let block_metas = apply_block_pruning(
+            snapshot.clone(),
+            table.get_table_info().schema(),
+            &push_down,
+            ctx.clone(),
+            fuse_table.get_operator(),
+            fuse_table.bloom_index_cols(),
+            spatial_index_columns.clone(),
+        )
+        .await?;
+
+        assert_eq!(*expected_blocks, block_metas.len(), "filter: {filter}");
+    }
+
+    for (filter, expected_blocks) in &distance_cases {
+        let and_filter = format!("{filter} AND id > 0");
+        let push_down = Some(PushDownInfo {
+            filters: Some(parse_to_filters(ctx.clone(), table.clone(), &and_filter)?),
+            ..Default::default()
+        });
+        let block_metas = apply_block_pruning(
+            snapshot.clone(),
+            table.get_table_info().schema(),
+            &push_down,
+            ctx.clone(),
+            fuse_table.get_operator(),
+            fuse_table.bloom_index_cols(),
+            spatial_index_columns.clone(),
+        )
+        .await?;
+        assert_eq!(*expected_blocks, block_metas.len(), "filter: {and_filter}");
+
+        let or_filter = format!("{filter} OR id > 0");
+        let push_down = Some(PushDownInfo {
+            filters: Some(parse_to_filters(ctx.clone(), table.clone(), &or_filter)?),
+            ..Default::default()
+        });
+        let block_metas = apply_block_pruning(
+            snapshot.clone(),
+            table.get_table_info().schema(),
+            &push_down,
+            ctx.clone(),
+            fuse_table.get_operator(),
+            fuse_table.bloom_index_cols(),
+            spatial_index_columns.clone(),
+        )
+        .await?;
+        assert_eq!(total_blocks, block_metas.len(), "filter: {or_filter}");
+    }
+
     Ok(())
 }

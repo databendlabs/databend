@@ -163,7 +163,7 @@ impl QueryExecutorTasksQueue {
     pub fn completed_async_task(&self, condvar: Arc<WorkersCondvar>, task: CompletedAsyncTask) {
         let mut workers_tasks = self.workers_tasks.lock();
 
-        let mut worker_id = task.worker_id;
+        let mut worker_id = task.worker_id % workers_tasks.workers_completed_async_tasks.len();
         workers_tasks.tasks_size += 1;
         workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
 

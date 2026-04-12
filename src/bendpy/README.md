@@ -1,6 +1,6 @@
-# Databend Python Binding
+# Databend local mode Python Binding
 
-Official Python binding for [Databend](https://databend.com) - The multi-modal data warehouse built for the AI era.
+Python binding for [Databend](https://databend.com) in local mode - The multi-modal data warehouse built for the AI era.
 
 Databend unifies structured data, JSON documents, and vector embeddings in a single platform with near 100% Snowflake compatibility. Built in Rust with MPP architecture and S3-native storage for cloud-scale analytics.
 
@@ -20,8 +20,13 @@ python3 -c "import databend; ctx = databend.SessionContext(); ctx.sql('SELECT ve
 ### Core Operations
 | Method | Description |
 |--------|-------------|
+| `connect(path=":memory:")` | Create a local embedded connection |
 | `SessionContext()` | Create a new session context |
 | `sql(query)` | Execute SQL query, returns DataFrame |
+| `execute(query)` | Execute SQL and return the connection |
+| `table(name)` | Query a registered table or view |
+| `register(name, source)` | Register a local path, pandas/polars frame, or Arrow table |
+| `from_df(obj, name=None)` | Materialize an in-process dataframe-like object as a relation |
 
 ### File Registration
 | Method                                                        | Description |
@@ -58,6 +63,11 @@ python3 -c "import databend; ctx = databend.SessionContext(); ctx.sql('SELECT ve
 | `to_pandas()` | Convert to pandas DataFrame |
 | `to_polars()` | Convert to polars DataFrame |
 | `to_arrow_table()` | Convert to PyArrow Table |
+| `df()` | DuckDB-style alias for `to_pandas()` |
+| `pl()` | Alias for `to_polars()` |
+| `arrow()` | Alias for `to_arrow_table()` |
+| `fetchall()` | Collect result rows as Python tuples |
+| `fetchone()` | Return the first row or `None` |
 
 ## Examples
 
@@ -65,24 +75,42 @@ python3 -c "import databend; ctx = databend.SessionContext(); ctx.sql('SELECT ve
 
 ```python
 import databend
-ctx = databend.SessionContext()
+ctx = databend.connect()
 
 # Create and query in-memory tables
-ctx.sql("CREATE TABLE users (id INT, name STRING, age INT)").collect()
-ctx.sql("INSERT INTO users VALUES (1, 'Alice', 25), (2, 'Bob', 30)").collect()
-df = ctx.sql("SELECT * FROM users WHERE age > 25").to_pandas()
+ctx.execute("CREATE TABLE users (id INT, name STRING, age INT)")
+ctx.execute("INSERT INTO users VALUES (1, 'Alice', 25), (2, 'Bob', 30)")
+df = ctx.sql("SELECT * FROM users WHERE age > 25").df()
 ```
 
 ### Working with Local Files
 
 ```python
 import databend
-ctx = databend.SessionContext()
+ctx = databend.connect("./demo-data")
 
 # Query local Parquet files
-ctx.register_parquet("orders", "/path/to/orders/")
-ctx.register_parquet("customers", "/path/to/customers/")
-df = ctx.sql("SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id").to_pandas()
+ctx.read_parquet("/path/to/orders/", name="orders")
+ctx.register("customers", "/path/to/customers.parquet")
+df = ctx.sql("SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id").df()
+```
+
+### Working with In-Process DataFrames
+
+```python
+import databend
+import pandas as pd
+
+ctx = databend.connect("./memory-store")
+docs = pd.DataFrame(
+    {
+        "id": [1, 2],
+        "content": ["hello", "vector memory"],
+    }
+)
+
+ctx.register("docs", docs)
+rows = ctx.sql("SELECT id, content FROM docs ORDER BY id").fetchall()
 ```
 
 ### Cloud Storage - S3 Files
@@ -124,3 +152,29 @@ uvx maturin develop -E test
 pytest tests/
 ```
 
+## Local Publish Without Docker
+
+```bash
+cd src/bendpy
+
+# Build only
+./scripts/local_publish.sh --python python3.12  --skip-upload
+
+# Build only and clean old artifacts first
+./scripts/local_publish.sh --python python3.12 --clean --skip-upload
+
+# Build multiple Linux targets on the current host
+./scripts/local_publish.sh --python python3.12 --clean --skip-upload \
+  --target x86_64-unknown-linux-gnu \
+  --target aarch64-unknown-linux-gnu
+
+# Build and upload to PyPI
+PYPI_TOKEN=your-token ./scripts/local_publish.sh --python python3.12
+
+# Optional: override the package version for this build
+PYPI_TOKEN=your-token ./scripts/local_publish.sh --python python3.12 --version 0.1.1
+```
+
+This script builds a wheel on the current host with `maturin` and uploads it with `twine`.
+It does not use Docker and does not produce a manylinux wheel. Cross-target builds also depend on
+the host having a working linker/toolchain for the requested target.

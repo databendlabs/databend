@@ -28,6 +28,7 @@ use databend_common_expression::types::geometry::extract_geo_and_srid;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use geo::algorithm::bounding_rect::BoundingRect;
 
+use crate::physical_plans::SpatialRuntimeFilterMode;
 use crate::pipelines::processors::transforms::hash_join::desc::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join::runtime_filter::packet::RuntimeFilterPacket;
@@ -50,7 +51,7 @@ struct SingleFilterBuilder {
     bloom_hashes: Option<Vec<u64>>,
     bloom_threshold: usize,
 
-    is_spatial: bool,
+    spatial_mode: Option<SpatialRuntimeFilterMode>,
     spatial_rects: Vec<(f64, f64, f64, f64)>,
     spatial_srid: Option<i32>,
     spatial_srid_mixed: bool,
@@ -66,7 +67,7 @@ impl SingleFilterBuilder {
         spatial_threshold: usize,
     ) -> Result<Self> {
         let data_type = desc.build_key.data_type().clone();
-        let hash_method = if desc.is_spatial {
+        let hash_method = if desc.spatial_mode.is_some() {
             None
         } else {
             Some(DataBlock::choose_hash_method_with_types(&[
@@ -96,7 +97,7 @@ impl SingleFilterBuilder {
             } else {
                 0
             },
-            is_spatial: desc.is_spatial,
+            spatial_mode: desc.spatial_mode.clone(),
             spatial_rects: Vec::new(),
             spatial_srid: None,
             spatial_srid_mixed: false,
@@ -106,7 +107,7 @@ impl SingleFilterBuilder {
 
     fn add_column(&mut self, column: &Column, total_rows: usize) -> Result<()> {
         let new_total = total_rows + column.len();
-        if self.is_spatial {
+        if self.spatial_mode.is_some() {
             self.add_spatial_bbox(column)?;
             return Ok(());
         }
@@ -192,7 +193,7 @@ impl SingleFilterBuilder {
     }
 
     fn finish(mut self, func_ctx: &FunctionContext) -> Result<RuntimeFilterPacket> {
-        if self.is_spatial {
+        if self.spatial_mode.is_some() {
             let id = self.id;
             let spatial_packet = self.finish_spatial_packet()?;
             Ok(RuntimeFilterPacket {
@@ -232,24 +233,45 @@ impl SingleFilterBuilder {
     }
 
     fn finish_spatial_packet(self) -> Result<SpatialPacket> {
-        if self.spatial_srid_mixed {
+        let SingleFilterBuilder {
+            spatial_rects,
+            spatial_srid,
+            spatial_srid_mixed,
+            spatial_threshold,
+            spatial_mode,
+            ..
+        } = self;
+
+        let spatial_mode = spatial_mode.unwrap();
+        if spatial_srid_mixed {
             return Ok(SpatialPacket {
                 valid: false,
                 srid: None,
+                mode: spatial_mode,
                 rtrees: Vec::new(),
             });
         }
 
-        let rect_count = self.spatial_rects.len();
-        let rtrees = build_rtree_from_rects_with_threshold(
-            self.spatial_rects.into_iter(),
-            rect_count,
-            self.spatial_threshold,
-        )?;
+        let rect_count = spatial_rects.len();
+        let packet_mode = spatial_mode.clone();
+        let rect_mode = spatial_mode.clone();
+        let rects = spatial_rects
+            .into_iter()
+            .map(move |(min_x, min_y, max_x, max_y)| match rect_mode {
+                SpatialRuntimeFilterMode::DistanceWithin(distance) => (
+                    min_x - distance,
+                    min_y - distance,
+                    max_x + distance,
+                    max_y + distance,
+                ),
+                _ => (min_x, min_y, max_x, max_y),
+            });
+        let rtrees = build_rtree_from_rects_with_threshold(rects, rect_count, spatial_threshold)?;
 
         Ok(SpatialPacket {
             valid: true,
-            srid: self.spatial_srid,
+            srid: spatial_srid,
+            mode: packet_mode,
             rtrees,
         })
     }

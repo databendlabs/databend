@@ -17,6 +17,7 @@ use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_base::base::OrderedFloat;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
@@ -26,6 +27,7 @@ use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use databend_storages_common_table_meta::meta::SpatialStatistics;
@@ -225,19 +227,61 @@ fn test_range_index_spatial() -> anyhow::Result<()> {
     );
     run_text_spatial(
         file,
-        "st_equals(g, to_geometry('POINT(20 20)'))",
+        "st_within(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))",
         schema.clone(),
         Some(spatial_stats.clone()),
     );
     run_text_spatial(
         file,
-        "st_equals(g, to_geometry('POINT(5 5)'))",
+        "st_within(g, to_geometry('POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))'))",
         schema.clone(),
         Some(spatial_stats.clone()),
     );
     run_text_spatial(
         file,
-        "st_equals(g, to_geometry('POINT EMPTY'))",
+        "st_within(g, to_geometry('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_within(g, to_geometry('POINT(1 1)'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_dwithin(g, to_geometry('POINT(20 20)'), 9.9)",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_dwithin(g, to_geometry('POINT(20 20)'), 10.2)",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_dwithin(g, to_geometry('LINESTRING(12 2, 12 8)'), 1.9)",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_dwithin(g, to_geometry('LINESTRING(12 2, 12 8)'), 2.0)",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_dwithin(g, to_geometry('POLYGON((20 0, 22 0, 22 2, 20 2, 20 0))'), 9.9)",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_dwithin(g, to_geometry('POLYGON((20 0, 22 0, 22 2, 20 2, 20 0))'), 10.0)",
         schema.clone(),
         Some(spatial_stats.clone()),
     );
@@ -344,7 +388,8 @@ fn run_text_spatial(
 
     let columns = [("g", DataType::Geometry)];
     let expr = parse_expr(text, &columns);
-    let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
+    let (folded_expr, _) = ConstantFolder::fold(&expr, &func_ctx, &BUILTIN_FUNCTIONS);
+    let index = RangeIndex::try_create(func_ctx, &folded_expr, schema, Default::default()).unwrap();
 
     writeln!(file, "text      : {text}").unwrap();
     writeln!(file, "expr      : {expr}").unwrap();

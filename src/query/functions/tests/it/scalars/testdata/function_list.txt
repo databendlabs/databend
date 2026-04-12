@@ -3897,6 +3897,8 @@ Functions overloads:
 1 st_distance(Geometry NULL, Geometry NULL) :: Float64 NULL
 2 st_distance(Geography, Geography) :: Float64
 3 st_distance(Geography NULL, Geography NULL) :: Float64 NULL
+0 st_dwithin(Geometry, Geometry, Float64) :: Boolean
+1 st_dwithin(Geometry NULL, Geometry NULL, Float64 NULL) :: Boolean NULL
 0 st_endpoint(Geometry) :: Geometry NULL
 1 st_endpoint(Geometry NULL) :: Geometry NULL
 2 st_endpoint(Geography) :: Geography NULL
