@@ -161,7 +161,7 @@ fn error_correction(input: &str) -> Option<String> {
 }
 
 fn calculate_similarity(input_tokens: &[&str], pattern: &str) -> f64 {
-    let pattern_tokens: Vec<&str> = pattern.split_whitespace().collect();
+    let pattern_tokens: Vec<&str> = pattern.split([' ', '_']).collect();
     let mut total_score = 0.0;
     let mut matched_tokens = 0;
 
@@ -244,7 +244,7 @@ mod tests {
         // Typo corrections - may return multiple suggestions if scores are close
         assert_eq!(
             suggest_correction("show tabl"), // typos:disable-line
-            Some("Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string())
+            Some("Did you mean `SHOW TABLE_FUNCTIONS` or `SHOW TABLES`?".to_string())
         );
         assert_eq!(
             suggest_correction("vacum drop table"), // typos:disable-line
@@ -261,7 +261,7 @@ mod tests {
         // Should suggest both relevant options for ambiguous input
         assert_eq!(
             suggest_correction("show table"),
-            Some("Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string())
+            Some("Did you mean `SHOW TABLE_FUNCTIONS` or `SHOW TABLES`?".to_string())
         );
 
         // Multiple suggestions when scores are very close
@@ -341,7 +341,7 @@ mod tests {
         // Should prioritize table-related suggestions
         assert_eq!(
             result,
-            "Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string()
+            "Did you mean `SHOW TABLE_FUNCTIONS` or `SHOW TABLES`?".to_string()
         );
     }
 
@@ -362,7 +362,7 @@ mod tests {
         // Should recognize valid starts with similar commands
         assert_eq!(
             suggest_correction("show table"),
-            Some("Did you mean `SHOW TABLES` or `SHOW TABLE_FUNCTIONS`?".to_string())
+            Some("Did you mean `SHOW TABLE_FUNCTIONS` or `SHOW TABLES`?".to_string())
         );
         assert_eq!(
             suggest_correction("vacuum temp"),
