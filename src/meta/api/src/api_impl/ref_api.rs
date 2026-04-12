@@ -999,10 +999,14 @@ where
                 continue;
             };
 
-            // Filter dropped branches by retention boundary
+            // Filter branches whose effective delete time is already beyond the retention window.
             if let Some(retention_boundary) = req.retention_boundary {
                 if let Some((_, drop_on)) = dropped_map.get(&branch_id.table_id) {
                     if *drop_on < retention_boundary {
+                        continue;
+                    }
+                } else if let Some((_, expire_at)) = active_map.get(&branch_id.table_id) {
+                    if expire_at.is_some_and(|expire_at| expire_at < retention_boundary) {
                         continue;
                     }
                 }

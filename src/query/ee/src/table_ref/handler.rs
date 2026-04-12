@@ -53,7 +53,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::table_storage_prefix;
-use log::warn;
 
 pub struct RealTableRefHandler {}
 
@@ -252,7 +251,7 @@ impl TableRefHandler for RealTableRefHandler {
             &new_snapshot,
         );
 
-        let commit_result = catalog
+        catalog
             .commit_table_branch_meta(CommitTableBranchMetaReq {
                 tenant: ctx.get_tenant(),
                 table_id: base_table_id,
@@ -262,21 +261,7 @@ impl TableRefHandler for RealTableRefHandler {
                 new_table_meta: committed_branch_meta,
                 expire_at,
             })
-            .await;
-
-        if commit_result.is_err() {
-            Self::best_effort_cleanup_staged_branch(
-                &catalog,
-                ctx.as_ref(),
-                base_table_id,
-                branch_id,
-                &branch_prefix,
-                fuse_table.get_operator_ref(),
-            )
-            .await;
-        }
-
-        commit_result
+            .await
     }
 
     #[async_backtrace::framed]
@@ -450,33 +435,6 @@ impl RealTableRefHandler {
             OPT_KEY_TABLE_ATTACHED_DATA_URI,
         ] {
             options.remove(key);
-        }
-    }
-
-    async fn best_effort_cleanup_staged_branch(
-        catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
-        _ctx: &dyn TableContext,
-        base_table_id: u64,
-        branch_id: u64,
-        branch_prefix: &str,
-        operator: &opendal::Operator,
-    ) {
-        let branch_dir = format!("{}/", branch_prefix);
-        if let Err(err) = operator.remove_all(&branch_dir).await {
-            warn!(
-                "best-effort cleanup of staged branch data failed, base_table_id: {}, branch_id: {}, err: {}",
-                base_table_id, branch_id, err
-            );
-        }
-
-        if let Err(err) = catalog
-            .drop_staged_table_branch(base_table_id, branch_id)
-            .await
-        {
-            warn!(
-                "best-effort cleanup of staged branch kv failed, base_table_id: {}, branch_id: {}, err: {}",
-                base_table_id, branch_id, err
-            );
         }
     }
 

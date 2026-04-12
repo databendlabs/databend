@@ -141,7 +141,13 @@ where
         let key_dropped_branch =
             DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
 
-        // Copied-file markers: remove once up front (idempotent, best-effort).
+        // Copied-file markers are independent from the dropped-branch key lifecycle.
+        // Remove them once up front so retries only need to protect branch metadata cleanup.
+        //
+        // This API is only called from vacuum_table_v2::final_gc_branch(), which only final-gcs
+        // branches after they are already past the retention boundary. Branch undrop is blocked
+        // once that boundary is crossed, and copied-file dedup markers are best-effort metadata
+        // with their own TTL, so removing them eagerly outside the retry loop is acceptable here.
         let num_removed_copied_files =
             remove_copied_files_for_dropped_table(self, &branch_table_id).await?;
 
