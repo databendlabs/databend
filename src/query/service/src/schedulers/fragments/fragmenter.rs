@@ -353,6 +353,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 query_id: self.query_id.clone(),
 
                 source_fragment_id,
+                source_exchange: exchange,
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSource", plan_id),
             }));
         }

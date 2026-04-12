@@ -51,6 +51,7 @@ pub use exchange_params::GlobalExchangeParams;
 pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
 pub use exchange_sorting::ExchangeSorting;
+pub use exchange_source::via_remote_exchange_source;
 pub use exchange_transform::ExchangeTransform;
 pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
