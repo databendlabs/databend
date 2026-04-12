@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::ReclusterTask;
@@ -82,6 +83,49 @@ pub struct PlanFragment {
 }
 
 impl PlanFragment {
+    fn schedule_scope(&self) -> Result<FragmentScheduleScope> {
+        match &self.fragment_type {
+            FragmentType::Root => Ok(FragmentScheduleScope::LocalOnly),
+            FragmentType::Intermediate => {
+                let has_merge_input = self
+                    .source_fragments
+                    .iter()
+                    .any(|fragment| matches!(&fragment.exchange, Some(DataExchange::Merge(_))));
+                let all_sources_local_only = !self.source_fragments.is_empty()
+                    && self
+                        .source_fragments
+                        .iter()
+                        .map(PlanFragment::schedule_scope)
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
+                        .all(|scope| scope == FragmentScheduleScope::LocalOnly);
+
+                if should_schedule_intermediate_fragment_locally(
+                    has_merge_input,
+                    !self.source_fragments.is_empty(),
+                    all_sources_local_only,
+                ) {
+                    Ok(FragmentScheduleScope::LocalOnly)
+                } else {
+                    Ok(FragmentScheduleScope::Distributed)
+                }
+            }
+            FragmentType::Source => {
+                let data_sources = self.collect_data_sources()?;
+                let action_state = collect_source_action_state(data_sources.values());
+                if matches!(action_state, SourceActionState::NonEmpty) {
+                    Ok(FragmentScheduleScope::Distributed)
+                } else {
+                    Ok(FragmentScheduleScope::LocalOnly)
+                }
+            }
+            FragmentType::MutationSource
+            | FragmentType::ReplaceInto
+            | FragmentType::Compact
+            | FragmentType::Recluster => Ok(FragmentScheduleScope::Distributed),
+        }
+    }
+
     pub fn get_actions(
         &self,
         ctx: Arc<QueryContext>,
@@ -102,13 +146,10 @@ impl PlanFragment {
                 fragment_actions.add_action(action);
             }
             FragmentType::Intermediate => {
-                if self
-                    .source_fragments
-                    .iter()
-                    .any(|fragment| matches!(&fragment.exchange, Some(DataExchange::Merge(_))))
-                {
-                    // If this is a intermediate fragment with merge input,
-                    // we will only send it to coordinator node.
+                if self.schedule_scope()? == FragmentScheduleScope::LocalOnly {
+                    // If this intermediate fragment has merge input,
+                    // or all its upstream work is already coordinator-only,
+                    // we only send it to coordinator node.
                     let action = QueryFragmentAction::create(
                         Fragmenter::get_local_executor(ctx),
                         self.plan.clone(),
@@ -161,7 +202,7 @@ impl PlanFragment {
 
         let data_sources = self.collect_data_sources()?;
 
-        let executors = Fragmenter::get_executors_nodes(ctx);
+        let executors = Fragmenter::get_executors_nodes(ctx.clone());
 
         let mut executor_partitions: HashMap<String, HashMap<u32, DataSource>> = HashMap::new();
 
@@ -213,7 +254,31 @@ impl PlanFragment {
             }
         }
 
+        let has_non_empty_action = executor_partitions.values().any(|sources| {
+            matches!(
+                collect_source_action_state(sources.values()),
+                SourceActionState::NonEmpty
+            )
+        });
+        let has_singleton_action = executor_partitions.values().any(|sources| {
+            matches!(
+                collect_source_action_state(sources.values()),
+                SourceActionState::Singleton
+            )
+        });
+        let local_executor = Fragmenter::get_local_executor(ctx);
+
         for (executor, sources) in executor_partitions {
+            let action_state = collect_source_action_state(sources.values());
+            if !should_schedule_source_action(
+                has_non_empty_action,
+                has_singleton_action,
+                action_state,
+                executor == local_executor,
+            ) {
+                continue;
+            }
+
             // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
             let mut handle = ReadSourceDeriveHandle::create(sources);
             let plan = self.plan.derive_with(&mut handle);
@@ -564,6 +629,93 @@ enum DataSource {
     ConstTable(ConstTableColumn),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FragmentScheduleScope {
+    LocalOnly,
+    Distributed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SourceActionState {
+    Empty,
+    Singleton,
+    NonEmpty,
+}
+
+impl DataSource {
+    fn scheduling_state(&self) -> SourceActionState {
+        match self {
+            DataSource::Table(plan) => {
+                if is_singleton_system_one_source(plan) {
+                    SourceActionState::Singleton
+                } else if !plan.parts.is_empty() {
+                    SourceActionState::NonEmpty
+                } else {
+                    SourceActionState::Empty
+                }
+            }
+            DataSource::ConstTable(columns) => {
+                if columns.num_rows > 0 {
+                    SourceActionState::NonEmpty
+                } else {
+                    SourceActionState::Empty
+                }
+            }
+        }
+    }
+}
+
+fn is_singleton_system_one_source(plan: &DataSourcePlan) -> bool {
+    matches!(
+        &plan.source_info,
+        DataSourceInfo::TableSource(table_info)
+            if table_info.meta.engine == "SystemOne" && table_info.name == "one"
+    )
+}
+
+fn collect_source_action_state<'a>(
+    sources: impl IntoIterator<Item = &'a DataSource>,
+) -> SourceActionState {
+    let mut has_singleton = false;
+
+    for source in sources {
+        match source.scheduling_state() {
+            SourceActionState::NonEmpty => return SourceActionState::NonEmpty,
+            SourceActionState::Singleton => has_singleton = true,
+            SourceActionState::Empty => {}
+        }
+    }
+
+    if has_singleton {
+        SourceActionState::Singleton
+    } else {
+        SourceActionState::Empty
+    }
+}
+
+fn should_schedule_source_action(
+    has_non_empty_action: bool,
+    has_singleton_action: bool,
+    action_state: SourceActionState,
+    is_local_executor: bool,
+) -> bool {
+    match action_state {
+        SourceActionState::NonEmpty => true,
+        SourceActionState::Singleton => !has_non_empty_action && is_local_executor,
+        SourceActionState::Empty => {
+            !has_non_empty_action && !has_singleton_action && is_local_executor
+        }
+    }
+}
+
+fn should_schedule_intermediate_fragment_locally(
+    has_merge_input: bool,
+    has_sources: bool,
+    all_sources_local_only: bool,
+) -> bool {
+    has_merge_input || (has_sources && all_sources_local_only)
+}
+
 impl TryFrom<DataSource> for DataSourcePlan {
     type Error = ErrorCode;
 
@@ -646,6 +798,89 @@ impl DeriveHandle for ReadSourceDeriveHandle {
         }
 
         Err(children)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SourceActionState;
+    use super::should_schedule_intermediate_fragment_locally;
+    use super::should_schedule_source_action;
+
+    #[test]
+    fn test_skip_empty_source_actions_once_real_work_exists() {
+        assert!(should_schedule_source_action(
+            true,
+            false,
+            SourceActionState::NonEmpty,
+            false
+        ));
+        assert!(!should_schedule_source_action(
+            true,
+            false,
+            SourceActionState::Empty,
+            true
+        ));
+        assert!(!should_schedule_source_action(
+            true,
+            false,
+            SourceActionState::Empty,
+            false
+        ));
+    }
+
+    #[test]
+    fn test_keep_single_local_fallback_for_all_empty_sources() {
+        assert!(should_schedule_source_action(
+            false,
+            false,
+            SourceActionState::Empty,
+            true
+        ));
+        assert!(!should_schedule_source_action(
+            false,
+            false,
+            SourceActionState::Empty,
+            false
+        ));
+    }
+
+    #[test]
+    fn test_keep_singleton_sources_local_only() {
+        assert!(should_schedule_source_action(
+            false,
+            true,
+            SourceActionState::Singleton,
+            true
+        ));
+        assert!(!should_schedule_source_action(
+            false,
+            true,
+            SourceActionState::Singleton,
+            false
+        ));
+        assert!(!should_schedule_source_action(
+            false,
+            true,
+            SourceActionState::Empty,
+            true
+        ));
+    }
+
+    #[test]
+    fn test_localize_intermediate_fragment_when_all_inputs_are_local_only() {
+        assert!(should_schedule_intermediate_fragment_locally(
+            false, true, true
+        ));
+        assert!(should_schedule_intermediate_fragment_locally(
+            true, true, false
+        ));
+        assert!(!should_schedule_intermediate_fragment_locally(
+            false, true, false
+        ));
+        assert!(!should_schedule_intermediate_fragment_locally(
+            false, false, true
+        ));
     }
 }
 

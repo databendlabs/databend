@@ -58,7 +58,9 @@ use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
+use crate::physical_plans::ExchangeSink as PhysicalExchangeSink;
 use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::attach_runtime_filter_logger;
@@ -1171,6 +1173,12 @@ impl QueryCoordinator {
                 return Ok(Some(fragment_coordinator.pipeline_build_res.unwrap()));
             }
 
+            if should_inline_locally_subscribed_fragment(&fragment_coordinator.physical_plan) {
+                // Locally subscribed source fragments are merged back into the parent pipeline
+                // through `ExchangeSource`, so their outgoing ExchangeSink should stay bypassed.
+                return Ok(Some(fragment_coordinator.pipeline_build_res.unwrap()));
+            }
+
             let exchange_params = fragment_coordinator
                 .create_exchange_params(
                     info,
@@ -1340,6 +1348,10 @@ impl QueryCoordinator {
     }
 }
 
+fn should_inline_locally_subscribed_fragment(plan: &PhysicalPlan) -> bool {
+    PhysicalExchangeSink::from_physical_plan(plan).is_some()
+}
+
 struct FragmentCoordinator {
     initialized: bool,
     fragment_id: usize,
@@ -1451,8 +1463,15 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_exception::Result;
+    use databend_common_expression::DataSchemaRef;
+    use databend_common_sql::executor::physical_plans::FragmentKind;
 
     use super::QueryCoordinator;
+    use super::should_inline_locally_subscribed_fragment;
+    use crate::physical_plans::ConstantTableScan;
+    use crate::physical_plans::ExchangeSink as PhysicalExchangeSink;
+    use crate::physical_plans::PhysicalPlan;
+    use crate::physical_plans::PhysicalPlanMeta;
 
     #[test]
     fn test_query_coordinator_register_inbound_channel_sets() -> Result<()> {
@@ -1515,5 +1534,39 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_inline_locally_subscribed_exchange_sink_fragments() {
+        let plan = PhysicalPlan::new(PhysicalExchangeSink {
+            meta: PhysicalPlanMeta::new("ExchangeSink"),
+            input: PhysicalPlan::new(ConstantTableScan {
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
+                values: vec![],
+                num_rows: 0,
+                output_schema: DataSchemaRef::default(),
+            }),
+            schema: DataSchemaRef::default(),
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            destination_fragment_id: 0,
+            query_id: "test-query".to_string(),
+            ignore_exchange: false,
+            allow_adjust_parallelism: true,
+        });
+
+        assert!(should_inline_locally_subscribed_fragment(&plan));
+    }
+
+    #[test]
+    fn test_keep_non_sink_fragments_on_exchange_path() {
+        let plan = PhysicalPlan::new(ConstantTableScan {
+            meta: PhysicalPlanMeta::new("ConstantTableScan"),
+            values: vec![],
+            num_rows: 0,
+            output_schema: DataSchemaRef::default(),
+        });
+
+        assert!(!should_inline_locally_subscribed_fragment(&plan));
     }
 }

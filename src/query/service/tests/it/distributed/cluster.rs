@@ -21,6 +21,8 @@ use databend_query::servers::flight::FlightService;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 use tokio::runtime::Builder as TokioRuntimeBuilder;
+use tokio::time::Duration;
+use tokio::time::timeout;
 
 #[test]
 fn test_simple_cluster() -> anyhow::Result<()> {
@@ -89,6 +91,28 @@ fn test_simple_cluster() -> anyhow::Result<()> {
                                 blocks.as_slice(),
                             );
                         }
+
+                        // Regression for distributed 0-row scalar-subquery HAVING queries:
+                        // the pulling executor must surface EOF even when the graph finishes
+                        // before the detached executor thread completes its shutdown path.
+                        {
+                            let res = execute_query(
+                                ctx,
+                                "SELECT SUM(42) HAVING (SELECT SUM(42)) > SUM(80)",
+                            )
+                            .await?;
+                            let blocks = timeout(
+                                Duration::from_secs(5),
+                                res.try_collect::<Vec<DataBlock>>(),
+                            )
+                            .await
+                            .map_err(|_| {
+                                ErrorCode::Internal(
+                                    "cluster scalar-subquery HAVING query timed out",
+                                )
+                            })??;
+                            assert!(blocks.is_empty(), "expected empty result, got {blocks:?}");
+                        }
                     }
 
                     Ok::<(), ErrorCode>(())
@@ -134,5 +158,10 @@ fn setup_cluster(configs: &[InnerConfig]) -> ClusterDescriptor {
             &conf.query.common.flight_api_address,
         );
     }
-    cluster_desc
+
+    let local_id = configs
+        .last()
+        .map(|conf| conf.query.common.cluster_id.clone())
+        .unwrap_or_default();
+    cluster_desc.with_local_id(local_id)
 }

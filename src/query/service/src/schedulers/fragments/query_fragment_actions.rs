@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -25,9 +27,12 @@ use databend_common_expression::DataSchemaRef;
 use databend_meta_client::types::NodeInfo;
 
 use crate::clusters::ClusterHelper;
+use crate::physical_plans::ConstantTableScan;
 use crate::physical_plans::ExchangeSink;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
+use crate::physical_plans::PhysicalPlanVisitor;
+use crate::physical_plans::TableScan;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::packets::DataflowDiagramBuilder;
 use crate::servers::flight::v1::packets::QueryEnv;
@@ -102,6 +107,46 @@ impl QueryFragmentActions {
 
         Ok(actions_schema[0].clone())
     }
+
+    fn prune_empty_source_actions(&mut self, local_executor: &str) -> Result<()> {
+        let states = self
+            .fragment_actions
+            .iter()
+            .map(|action| detect_source_action_state(&action.physical_plan))
+            .collect::<Result<Vec<_>>>()?;
+
+        if !states
+            .iter()
+            .any(|state| !matches!(state, SourceActionState::NoSource))
+        {
+            return Ok(());
+        }
+
+        let has_non_empty_action = states
+            .iter()
+            .any(|state| matches!(state, SourceActionState::NonEmpty));
+        let has_singleton_action = states
+            .iter()
+            .any(|state| matches!(state, SourceActionState::Singleton));
+
+        self.fragment_actions = self
+            .fragment_actions
+            .drain(..)
+            .zip(states)
+            .filter_map(|(action, state)| {
+                let keep = should_keep_source_action(
+                    has_non_empty_action,
+                    has_singleton_action,
+                    state,
+                    action.executor == local_executor,
+                );
+
+                keep.then_some(action)
+            })
+            .collect();
+
+        Ok(())
+    }
 }
 
 pub struct QueryFragmentsActions {
@@ -152,12 +197,15 @@ impl QueryFragmentsActions {
     }
 
     pub fn add_fragment_actions(&mut self, actions: QueryFragmentActions) -> Result<()> {
+        let mut actions = actions;
+        actions.prune_empty_source_actions(&self.get_local_executor())?;
         self.fragments_actions.push(actions);
         Ok(())
     }
 
     pub fn add_fragments_actions(&mut self, actions: QueryFragmentsActions) -> Result<()> {
-        for fragment_actions in actions.fragments_actions.into_iter() {
+        for mut fragment_actions in actions.fragments_actions.into_iter() {
+            fragment_actions.prune_empty_source_actions(&self.get_local_executor())?;
             self.fragments_actions.push(fragment_actions);
         }
 
@@ -176,8 +224,11 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_query_fragments(&self) -> Result<HashMap<String, QueryFragments>> {
+        let mut executors_fragments = self.get_executors_fragments()?;
+        prune_query_fragments(&mut executors_fragments, &self.get_local_executor())?;
+
         let mut query_fragments = HashMap::new();
-        for (executor, fragments) in self.get_executors_fragments() {
+        for (executor, fragments) in executors_fragments {
             query_fragments.insert(executor, QueryFragments {
                 query_id: self.ctx.get_id(),
                 fragments,
@@ -276,7 +327,7 @@ impl QueryFragmentsActions {
         nodes_info
     }
 
-    fn get_executors_fragments(&self) -> HashMap<String, Vec<QueryFragment>> {
+    fn get_executors_fragments(&self) -> Result<HashMap<String, Vec<QueryFragment>>> {
         let mut fragments_packets = HashMap::new();
         for fragment_actions in &self.fragments_actions {
             for fragment_action in &fragment_actions.fragment_actions {
@@ -297,7 +348,7 @@ impl QueryFragmentsActions {
             }
         }
 
-        fragments_packets
+        Ok(fragments_packets)
     }
 }
 
@@ -306,5 +357,207 @@ impl Debug for QueryFragmentsActions {
         f.debug_struct("QueryFragmentsActions")
             .field("actions", &self.fragments_actions)
             .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SourceActionState {
+    NoSource,
+    Empty,
+    Singleton,
+    NonEmpty,
+}
+
+fn should_keep_source_action(
+    has_non_empty_action: bool,
+    has_singleton_action: bool,
+    state: SourceActionState,
+    is_local_executor: bool,
+) -> bool {
+    match state {
+        SourceActionState::NoSource | SourceActionState::NonEmpty => true,
+        SourceActionState::Singleton => !has_non_empty_action && is_local_executor,
+        SourceActionState::Empty => {
+            !has_non_empty_action && !has_singleton_action && is_local_executor
+        }
+    }
+}
+
+fn is_singleton_system_one_source(scan: &TableScan) -> bool {
+    matches!(
+        &scan.source.source_info,
+        DataSourceInfo::TableSource(table_info)
+            if table_info.meta.engine == "SystemOne" && table_info.name == "one"
+    )
+}
+
+fn detect_source_action_state(plan: &PhysicalPlan) -> Result<SourceActionState> {
+    struct SourceActionVisitor {
+        has_source: bool,
+        has_singleton_source: bool,
+        has_non_empty_source: bool,
+    }
+
+    impl SourceActionVisitor {
+        fn create() -> Box<dyn PhysicalPlanVisitor> {
+            Box::new(SourceActionVisitor {
+                has_source: false,
+                has_singleton_source: false,
+                has_non_empty_source: false,
+            })
+        }
+    }
+
+    impl PhysicalPlanVisitor for SourceActionVisitor {
+        fn as_any(&mut self) -> &mut dyn Any {
+            self
+        }
+
+        fn visit(&mut self, plan: &PhysicalPlan) -> Result<()> {
+            if let Some(scan) = TableScan::from_physical_plan(plan) {
+                self.has_source = true;
+                if is_singleton_system_one_source(scan) {
+                    self.has_singleton_source = true;
+                } else if !scan.source.parts.is_empty() {
+                    self.has_non_empty_source = true;
+                }
+            } else if let Some(scan) = ConstantTableScan::from_physical_plan(plan) {
+                self.has_source = true;
+                if scan.num_rows > 0 {
+                    self.has_non_empty_source = true;
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    let mut visitor = SourceActionVisitor::create();
+    plan.visit(&mut visitor)?;
+
+    let visitor = visitor
+        .as_any()
+        .downcast_mut::<SourceActionVisitor>()
+        .ok_or_else(|| ErrorCode::Internal("Failed to downcast SourceActionVisitor"))?;
+
+    Ok(
+        match (
+            visitor.has_source,
+            visitor.has_non_empty_source,
+            visitor.has_singleton_source,
+        ) {
+            (false, _, _) => SourceActionState::NoSource,
+            (true, true, _) => SourceActionState::NonEmpty,
+            (true, false, true) => SourceActionState::Singleton,
+            (true, false, false) => SourceActionState::Empty,
+        },
+    )
+}
+
+fn prune_query_fragments(
+    executors_fragments: &mut HashMap<String, Vec<QueryFragment>>,
+    local_executor: &str,
+) -> Result<()> {
+    let mut fragment_states = HashMap::<usize, Vec<(String, SourceActionState)>>::new();
+
+    for (executor, fragments) in executors_fragments.iter() {
+        for fragment in fragments {
+            fragment_states
+                .entry(fragment.fragment_id)
+                .or_default()
+                .push((
+                    executor.clone(),
+                    detect_source_action_state(&fragment.physical_plan)?,
+                ));
+        }
+    }
+
+    let mut keep_lookup = HashMap::<(usize, String), bool>::new();
+    for (fragment_id, states) in fragment_states {
+        if !states
+            .iter()
+            .any(|(_, state)| !matches!(state, SourceActionState::NoSource))
+        {
+            continue;
+        }
+
+        let has_non_empty_action = states
+            .iter()
+            .any(|(_, state)| matches!(state, SourceActionState::NonEmpty));
+        let has_singleton_action = states
+            .iter()
+            .any(|(_, state)| matches!(state, SourceActionState::Singleton));
+
+        for (executor, state) in states {
+            let keep = should_keep_source_action(
+                has_non_empty_action,
+                has_singleton_action,
+                state,
+                executor == local_executor,
+            );
+            keep_lookup.insert((fragment_id, executor), keep);
+        }
+    }
+
+    executors_fragments.retain(|executor, fragments| {
+        fragments.retain(|fragment| {
+            keep_lookup
+                .get(&(fragment.fragment_id, executor.clone()))
+                .copied()
+                .unwrap_or(true)
+        });
+        !fragments.is_empty()
+    });
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SourceActionState;
+    use super::should_keep_source_action;
+
+    #[test]
+    fn test_prune_singleton_sources_to_local_executor() {
+        assert!(should_keep_source_action(
+            false,
+            true,
+            SourceActionState::Singleton,
+            true
+        ));
+        assert!(!should_keep_source_action(
+            false,
+            true,
+            SourceActionState::Singleton,
+            false
+        ));
+        assert!(!should_keep_source_action(
+            false,
+            true,
+            SourceActionState::Empty,
+            true
+        ));
+    }
+
+    #[test]
+    fn test_keep_non_empty_source_actions_when_real_work_exists() {
+        assert!(should_keep_source_action(
+            true,
+            false,
+            SourceActionState::NonEmpty,
+            false
+        ));
+        assert!(!should_keep_source_action(
+            true,
+            true,
+            SourceActionState::Singleton,
+            true
+        ));
+        assert!(!should_keep_source_action(
+            true,
+            true,
+            SourceActionState::Empty,
+            true
+        ));
     }
 }
