@@ -886,9 +886,7 @@ impl RunningGraph {
     }
 
     pub fn assert_finished_graph(&self) -> Result<()> {
-        let finished_nodes = self.0.finished_nodes.load(Ordering::SeqCst);
-
-        match finished_nodes >= self.0.graph.node_count() {
+        match self.is_all_nodes_finished() {
             true => Ok(()),
             false => Err(ErrorCode::Internal(format!(
                 "Pipeline graph is not finished, details: {}",
@@ -899,7 +897,23 @@ impl RunningGraph {
 
     /// Checks if all nodes in the graph are finished.
     pub fn is_all_nodes_finished(&self) -> bool {
-        self.0.finished_nodes.load(Ordering::SeqCst) >= self.0.graph.node_count()
+        let node_count = self.0.graph.node_count();
+        if self.0.finished_nodes.load(Ordering::SeqCst) >= node_count {
+            return true;
+        }
+
+        let all_finished = self.0.graph.node_indices().all(|node_index| {
+            matches!(
+                *self.0.graph[node_index].state.lock().unwrap(),
+                State::Finished
+            )
+        });
+
+        if all_finished {
+            self.0.finished_nodes.store(node_count, Ordering::SeqCst);
+        }
+
+        all_finished
     }
 
     /// Flag the graph should finish and no more tasks should be scheduled.

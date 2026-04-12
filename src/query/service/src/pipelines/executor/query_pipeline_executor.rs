@@ -478,6 +478,10 @@ impl QueryPipelineExecutor {
                                     }
                                 }
                             }
+
+                            if graph.is_all_nodes_finished() {
+                                self.finish::<()>(None);
+                            }
                         }
                         Err(error_type) => {
                             let cause = error_type.get_error_code();

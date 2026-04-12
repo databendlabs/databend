@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
@@ -36,7 +37,7 @@ use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextTelemetry;
 
 pub struct StatisticsReceiver {
-    _runtime: Runtime,
+    runtime: Runtime,
     shutdown_tx: Option<Sender<bool>>,
     exchange_handler: Vec<JoinHandle<Result<()>>>,
 }
@@ -130,7 +131,7 @@ impl StatisticsReceiver {
 
         Ok(StatisticsReceiver {
             exchange_handler,
-            _runtime: runtime,
+            runtime,
             shutdown_tx: Some(shutdown_tx),
         })
     }
@@ -211,9 +212,29 @@ impl StatisticsReceiver {
 
     pub fn wait_shutdown(&mut self) -> Result<()> {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
-        futures::executor::block_on(async move {
+        self.runtime.block_on(async move {
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(1);
             while let Some(exchange_handler) = exchanges_handler.pop() {
-                exchange_handler.await??;
+                let mut exchange_handler = exchange_handler;
+                match tokio::time::timeout_at(deadline, &mut exchange_handler).await {
+                    Ok(join_res) => join_res??,
+                    Err(_) => {
+                        let timeout_count = exchanges_handler.len() + 1;
+                        log::warn!(
+                            "Timed out waiting statistics receivers to shutdown, aborting {} task(s)",
+                            timeout_count
+                        );
+
+                        exchange_handler.abort();
+                        let _ = exchange_handler.await;
+
+                        for exchange_handler in exchanges_handler {
+                            exchange_handler.abort();
+                        }
+
+                        return Ok(());
+                    }
+                }
             }
 
             Ok(())
