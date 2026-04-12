@@ -28,6 +28,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::GcDroppedTableBranchReq;
 use databend_common_meta_app::schema::LeastVisibleTime;
@@ -35,6 +36,7 @@ use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListTableTagsReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
+use databend_common_meta_store::MetaStore;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::RetentionPolicy;
 use databend_common_storages_fuse::io::SegmentsIO;
@@ -42,6 +44,7 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ASSUMPTION_MAX_TXN_DURATION;
 use databend_common_storages_fuse::operations::SnapshotGcSelection;
+use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
@@ -88,7 +91,16 @@ enum BranchPhaseResult {
     /// Vacuum2 uses the selected gc root, not the earliest historical snapshot, as this branch's
     /// protection boundary. Older snapshots may still exist physically, but once LVT advances to
     /// the gc root they are treated as no longer reachable for branch-history protection.
-    NoCleanup(Option<Arc<TableSnapshot>>),
+    NoCleanup {
+        gc_root_snapshot: Option<Arc<TableSnapshot>>,
+        external_head_snapshot: Option<String>,
+    },
+}
+
+struct BranchCleanupPlan {
+    branch_table: Box<FuseTable>,
+    state: BranchGcState,
+    snapshot_files_to_gc: Vec<String>,
 }
 
 /// Vacuum a table and all its history branches.
@@ -109,7 +121,7 @@ pub async fn do_vacuum2(
     }
 
     let now = Utc::now();
-    let retention_boundary =
+    let retention_time =
         now - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
     let fuse_table = FuseTable::try_from_table(table)?;
@@ -117,20 +129,32 @@ pub async fn do_vacuum2(
         .get_catalog(fuse_table.get_table_info().catalog())
         .await?;
 
-    // Step 0: clean expired staged branches before processing visible branch history.
-    let mut files_to_gc = fuse_table
-        .cleanup_staged_branches(ctx.as_ref(), &catalog, table_id, Some(now))
-        .await?;
+    // Set the tenant-wide vacuum watermark before deleting any S3 data.
+    // This watermark records the retention decision boundary, not per-object delete progress:
+    // once a drop_on is older than this boundary, undrop is intentionally rejected even if this
+    // particular vacuum run ends up deleting nothing for the current table.
+    // The watermark is monotonically increasing, so repeated calls are idempotent.
+    let tenant = ctx.get_tenant();
+    let meta_api = UserApiProvider::instance().get_meta_store_client();
+    meta_api
+        .fetch_set_vacuum_timestamp(&tenant, retention_time)
+        .await
+        .map_err(|e| {
+            ErrorCode::MetaStorageError(format!(
+                "Failed to set vacuum watermark before vacuum2: {}. Vacuum aborted to prevent data inconsistency.",
+                e
+            ))
+        })?;
 
     // Step 1: select and clean the base table if it has a gc root.
     let latest_snapshot = fuse_table.read_table_snapshot().await?;
-    let (base_gc_state, base_snapshot_files) = if let Some(latest_snapshot) = latest_snapshot {
+    let (base_gc_state, mut base_snapshot_files) = if let Some(latest_snapshot) = latest_snapshot {
         vacuum_base_table(fuse_table, &ctx, latest_snapshot, respect_flash_back).await?
     } else {
         (None, vec![])
     };
 
-    files_to_gc.extend(base_snapshot_files);
+    let mut files_to_gc = Vec::new();
     let mut storage_prefixes: StoragePrefixes = HashMap::from([(
         format!("{}/", fuse_table.meta_location_generator().prefix()),
         table_id,
@@ -164,7 +188,7 @@ pub async fn do_vacuum2(
         // For expired branches, `expire_at` acts as the automatic delete effective time.
         let effective_drop_time =
             drop_on.or_else(|| expire_at.filter(|expire_at| *expire_at <= now));
-        if effective_drop_time.is_some_and(|drop_time| drop_time < retention_boundary) {
+        if effective_drop_time.is_some_and(|drop_time| drop_time < retention_time) {
             beyond_retention_branches.push(branch_table);
             continue;
         }
@@ -172,7 +196,7 @@ pub async fn do_vacuum2(
         gc_root_candidates.push(branch_table);
     }
 
-    // Phase B (parallel): select gc roots, cleanup snapshots, and classify — all in one pass.
+    // Phase B (parallel): select gc roots and classify retainable candidates.
     let concurrency = ctx.get_settings().get_max_threads()? as usize;
     let gc_results = futures::stream::iter(gc_root_candidates.into_iter().map(|branch_table| {
         let ctx = ctx.clone();
@@ -180,6 +204,17 @@ pub async fn do_vacuum2(
             let gc_selection =
                 if let Some(latest_snapshot) = branch_table.read_table_snapshot().await? {
                     let latest_snapshot_loc = branch_table.snapshot_loc().unwrap();
+                    let branch_snapshot_prefix =
+                        format!("{}/", branch_table.meta_location_generator().prefix());
+                    if !latest_snapshot_loc.starts_with(&branch_snapshot_prefix) {
+                        // Newly created branches may still point to a head snapshot stored under
+                        // another table/branch prefix. They have no local snapshot history to GC,
+                        // but this head snapshot still defines the protection boundary.
+                        return Ok::<_, ErrorCode>((branch_table, BranchPhaseResult::NoCleanup {
+                            gc_root_snapshot: Some(latest_snapshot),
+                            external_head_snapshot: Some(latest_snapshot_loc),
+                        }));
+                    }
                     prepare_snapshot_gc_selection(
                         branch_table.as_ref(),
                         &ctx,
@@ -192,16 +227,19 @@ pub async fn do_vacuum2(
                     None
                 };
             let Some(gc_selection) = gc_selection else {
-                return Ok::<_, ErrorCode>((branch_table, BranchPhaseResult::NoCleanup(None)));
+                return Ok::<_, ErrorCode>((branch_table, BranchPhaseResult::NoCleanup {
+                    gc_root_snapshot: None,
+                    external_head_snapshot: None,
+                }));
             };
             let snapshot_files_to_gc = gc_selection.snapshots_to_gc;
             if snapshot_files_to_gc.is_empty() {
                 // Keep using the selected gc root as the protection boundary. See
                 // `BranchPhaseResult::NoCleanup` for the LVT-based reachability contract.
-                return Ok((
-                    branch_table,
-                    BranchPhaseResult::NoCleanup(Some(gc_selection.gc_root)),
-                ));
+                return Ok((branch_table, BranchPhaseResult::NoCleanup {
+                    gc_root_snapshot: Some(gc_selection.gc_root),
+                    external_head_snapshot: None,
+                }));
             }
             let gc_root_snapshot_ts = gc_selection.gc_root.timestamp.ok_or_else(|| {
                 ErrorCode::IllegalReference(format!(
@@ -212,9 +250,6 @@ pub async fn do_vacuum2(
             let gc_root_snapshot_meta_ts = gc_selection.gc_root_meta_ts;
             let protected_segments: HashSet<Location> =
                 gc_selection.gc_root.segments.iter().cloned().collect();
-            branch_table
-                .cleanup_snapshot_files(&ctx, &snapshot_files_to_gc, false)
-                .await?;
             let gc_state = BranchGcState {
                 table_id: branch_table.get_id(),
                 gc_root_snapshot_ts,
@@ -231,21 +266,51 @@ pub async fn do_vacuum2(
     .try_collect::<Vec<_>>()
     .await?;
 
-    let mut retainable_with_gc_root = Vec::new();
-    let mut retainable_without_gc_root = Vec::new();
+    let mut cleanup_branches = Vec::new();
+    let mut protection_only_branches = Vec::new();
+    let mut external_head_snapshots = HashSet::new();
     for (branch_table, result) in gc_results {
         match result {
             BranchPhaseResult::NeedsCleanup {
                 state,
                 snapshot_files_to_gc,
             } => {
-                files_to_gc.extend(snapshot_files_to_gc);
-                retainable_with_gc_root.push((branch_table, state));
+                cleanup_branches.push(BranchCleanupPlan {
+                    branch_table,
+                    state,
+                    snapshot_files_to_gc,
+                });
             }
-            BranchPhaseResult::NoCleanup(gc_root_snapshot) => {
-                retainable_without_gc_root.push((branch_table, gc_root_snapshot));
+            BranchPhaseResult::NoCleanup {
+                gc_root_snapshot,
+                external_head_snapshot,
+            } => {
+                if let Some(head) = external_head_snapshot {
+                    external_head_snapshots.insert(head);
+                };
+                protection_only_branches.push((branch_table, gc_root_snapshot));
             }
         }
+    }
+    base_snapshot_files.retain(|path| !external_head_snapshots.contains(path));
+    if !base_snapshot_files.is_empty() {
+        fuse_table
+            .cleanup_snapshot_files(&ctx, &base_snapshot_files, false)
+            .await?;
+        files_to_gc.extend(base_snapshot_files);
+    }
+    for branch in &mut cleanup_branches {
+        branch
+            .snapshot_files_to_gc
+            .retain(|path| !external_head_snapshots.contains(path));
+        if branch.snapshot_files_to_gc.is_empty() {
+            continue;
+        }
+        branch
+            .branch_table
+            .cleanup_snapshot_files(&ctx, &branch.snapshot_files_to_gc, false)
+            .await?;
+        files_to_gc.extend(std::mem::take(&mut branch.snapshot_files_to_gc));
     }
 
     // Step 3: determine which tables are actually at risk in this round. Non-cleanup branches
@@ -254,7 +319,7 @@ pub async fn do_vacuum2(
         .as_ref()
         .map(|s| s.table_id)
         .into_iter()
-        .chain(retainable_with_gc_root.iter().map(|(_, s)| s.table_id))
+        .chain(cleanup_branches.iter().map(|branch| branch.state.table_id))
         .chain(beyond_retention_branches.iter().map(|b| b.get_id()))
         .collect();
     if tables_at_risk.is_empty() {
@@ -265,9 +330,9 @@ pub async fn do_vacuum2(
         return Ok(files_to_gc);
     }
 
-    // Step 4: merge all protected segments that must survive cross-table cleanup.
+    // Step 4: gather cross-table protection before deleting any snapshot files.
     // GC-root tables contribute their protected segments directly.
-    // Non-cleanup branches contribute via collect_external_segments (parallel):
+    // Protection-only branches contribute via collect_external_segments (parallel):
     //   - external segments: stored under at-risk tables, protected as segments.
     //   - self-segments: stored under the branch itself, scanned in Step 5 for cross-table
     //     block references (e.g. after compact on a branch derived from another branch).
@@ -276,7 +341,7 @@ pub async fn do_vacuum2(
     let gc_root_segments = base_gc_state
         .as_ref()
         .into_iter()
-        .chain(retainable_with_gc_root.iter().map(|(_, state)| state));
+        .chain(cleanup_branches.iter().map(|branch| &branch.state));
     for gc_state in gc_root_segments {
         for segment in gc_state.protected_segments.iter() {
             let tid = table_id_by_path(&storage_prefixes, &segment.0)?;
@@ -289,7 +354,7 @@ pub async fn do_vacuum2(
     // Parallel: collect external segments from non-cleanup branches.
     // Branches with a gc root snapshot pass it directly to skip find_earliest_snapshot_via_history.
     let external_segments_results =
-        futures::stream::iter(retainable_without_gc_root.into_iter().map(
+        futures::stream::iter(protection_only_branches.into_iter().map(
             |(branch_table, gc_root_snapshot)| {
                 let storage_prefixes = &storage_prefixes;
                 let tables_at_risk = &tables_at_risk;
@@ -352,19 +417,53 @@ pub async fn do_vacuum2(
         }
     }
 
-    // Step 6: final-gc beyond-retention branches that no longer own protected data.
-    // Use get() instead of remove() so gc-pending branches retain their protection sets for Step 7.
+    // Step 6: for beyond-retention branches, clean unprotected snapshots first, then decide
+    // whether the branch can be final-GC'd or must stay gc-pending because it still owns
+    // protected snapshot/segment/block data.
+    let beyond_retention_results =
+        futures::stream::iter(beyond_retention_branches.into_iter().map(|branch_table| {
+            let ctx = ctx.clone();
+            let external_head_snapshots = &external_head_snapshots;
+            let protected_segments_by_table = &protected_segments_by_table;
+            let protected_blocks_by_table = &protected_blocks_by_table;
+            async move {
+                let bid = branch_table.get_id();
+                let mut snapshots_to_gc = branch_table
+                    .list_files_for_gc(
+                        branch_table
+                            .meta_location_generator()
+                            .snapshot_location_prefix(),
+                        None,
+                    )
+                    .await?;
+                let snapshot_count = snapshots_to_gc.len();
+                snapshots_to_gc.retain(|path| !external_head_snapshots.contains(path));
+                let has_protected_snapshot = snapshots_to_gc.len() != snapshot_count;
+                if !snapshots_to_gc.is_empty() {
+                    branch_table
+                        .cleanup_snapshot_files(&ctx, &snapshots_to_gc, false)
+                        .await?;
+                }
+
+                let has_protected = has_protected_snapshot
+                    || protected_segments_by_table
+                        .get(&bid)
+                        .is_some_and(|s| !s.is_empty())
+                    || protected_blocks_by_table
+                        .get(&bid)
+                        .is_some_and(|b| !b.is_empty());
+                Ok::<_, ErrorCode>((branch_table, has_protected, snapshots_to_gc))
+            }
+        }))
+        .buffer_unordered(concurrency)
+        .collect::<Vec<_>>()
+        .await;
+
     let mut gc_pending_branches = Vec::new();
     let mut final_gc_branches = Vec::new();
-    for branch_table in beyond_retention_branches {
-        let bid = branch_table.get_id();
-        let has_protected = protected_segments_by_table
-            .get(&bid)
-            .is_some_and(|s| !s.is_empty())
-            || protected_blocks_by_table
-                .get(&bid)
-                .is_some_and(|b| !b.is_empty());
-
+    for result in beyond_retention_results {
+        let (branch_table, has_protected, snapshots_to_gc) = result?;
+        files_to_gc.extend(snapshots_to_gc);
         if has_protected {
             gc_pending_branches.push(branch_table);
         } else {
@@ -374,14 +473,15 @@ pub async fn do_vacuum2(
     let final_gc_results =
         futures::stream::iter(final_gc_branches.into_iter().map(|branch_table| {
             let ctx = ctx.clone();
+            let meta_api = meta_api.clone();
             async move {
                 let branch_name = branch_table.get_table_info().name.clone();
                 final_gc_branch(
                     &ctx,
+                    &meta_api,
                     branch_table.as_ref(),
                     table_id,
                     &branch_name,
-                    retention_boundary,
                 )
                 .await
             }
@@ -394,7 +494,7 @@ pub async fn do_vacuum2(
     }
 
     // Step 7: clean table-local segment/block files in parallel for all tables with cleanup work.
-    // Build a unified cleanup target list: (table_ref, table_id, cutoff, needs_snapshot_sweep).
+    // Build a unified cleanup target list: (table_ref, table_id, cutoff).
     let mut cleanup_targets = Vec::new();
     if let Some(ref base_gc_state) = base_gc_state {
         cleanup_targets.push((
@@ -404,28 +504,26 @@ pub async fn do_vacuum2(
                 base_gc_state.gc_root_snapshot_ts,
                 base_gc_state.gc_root_snapshot_meta_ts,
             )),
-            false,
         ));
     }
-    for (branch_table, gc_state) in &retainable_with_gc_root {
+    for branch in &cleanup_branches {
         cleanup_targets.push((
-            branch_table.as_ref(),
-            gc_state.table_id,
+            branch.branch_table.as_ref(),
+            branch.state.table_id,
             Some((
-                gc_state.gc_root_snapshot_ts,
-                gc_state.gc_root_snapshot_meta_ts,
+                branch.state.gc_root_snapshot_ts,
+                branch.state.gc_root_snapshot_meta_ts,
             )),
-            false,
         ));
     }
     for branch_table in &gc_pending_branches {
-        cleanup_targets.push((branch_table.as_ref(), branch_table.get_id(), None, true));
+        cleanup_targets.push((branch_table.as_ref(), branch_table.get_id(), None));
     }
 
     type CleanupFut<'a> = futures::future::BoxFuture<'a, Result<Vec<String>>>;
     let cleanup_futs: Vec<CleanupFut<'_>> = cleanup_targets
         .into_iter()
-        .map(|(table, tid, cutoff, needs_snapshot_sweep)| {
+        .map(|(table, tid, cutoff)| {
             let ctx = ctx.clone();
             let protected_segment_paths = protected_segments_by_table
                 .remove(&tid)
@@ -435,21 +533,11 @@ pub async fn do_vacuum2(
                 .collect::<HashSet<_>>();
             let protected_blocks = protected_blocks_by_table.remove(&tid).unwrap_or_default();
             Box::pin(async move {
-                let snapshots_to_gc = if needs_snapshot_sweep {
-                    table
-                        .list_files_for_gc(
-                            table.meta_location_generator().snapshot_location_prefix(),
-                            None,
-                        )
-                        .await?
-                } else {
-                    vec![]
-                };
                 cleanup_table_data(
                     table,
                     ctx,
                     cutoff,
-                    snapshots_to_gc,
+                    vec![],
                     protected_segment_paths,
                     protected_blocks,
                 )
@@ -520,7 +608,7 @@ async fn vacuum_base_table(
             .expire_at
             .is_some_and(|expire_at| expire_at <= Utc::now())
         {
-            if let Err(err) = catalog
+            match catalog
                 .drop_table_tag(DropTableTagReq {
                     table_id: fuse_table.get_id(),
                     tag_name,
@@ -528,13 +616,15 @@ async fn vacuum_base_table(
                 })
                 .await
             {
-                warn!(
-                    "drop expired tag failed, ignored, table: {}, err: {}",
-                    fuse_table.get_table_info().desc,
-                    err
-                );
+                Ok(()) => continue,
+                Err(err) => {
+                    warn!(
+                        "drop expired tag failed, keep protecting its snapshot, table: {}, err: {}",
+                        fuse_table.get_table_info().desc,
+                        err
+                    );
+                }
             }
-            continue;
         }
 
         protected_snapshot_locs.insert(seq_tag.data.snapshot_loc.clone());
@@ -548,10 +638,6 @@ async fn vacuum_base_table(
             .await?
             {
                 protected_segments.extend(snapshot.segments.iter().cloned());
-                // Protect the table_statistics_location referenced by the tag snapshot.
-                if let Some(ref stats_loc) = snapshot.table_statistics_location {
-                    protected_snapshot_locs.insert(stats_loc.clone());
-                }
             }
         }
     }
@@ -568,9 +654,6 @@ async fn vacuum_base_table(
         return Ok((None, vec![]));
     }
 
-    fuse_table
-        .cleanup_snapshot_files(ctx, &snapshot_files_to_gc, false)
-        .await?;
     let gc_root_snapshot_ts = gc_root.gc_root.timestamp.ok_or_else(|| {
         ErrorCode::IllegalReference(format!(
             "Table {} snapshot lacks required timestamp",
@@ -634,11 +717,21 @@ async fn collect_external_segments(
                 .options
                 .get(OPT_KEY_REFERENCED_BRANCH_IDS)
             {
-                has_at_risk_ref = ref_ids_str
-                    .split(',')
-                    .filter(|s| !s.is_empty())
-                    .filter_map(|s| s.parse::<u64>().ok())
-                    .any(|id| tables_at_risk.contains(&id));
+                for raw_id in ref_ids_str.split(',').filter(|s| !s.is_empty()) {
+                    let ref_id = raw_id.parse::<u64>().map_err(|err| {
+                        ErrorCode::Internal(format!(
+                            "invalid {} value '{}' for branch '{}': {}",
+                            OPT_KEY_REFERENCED_BRANCH_IDS,
+                            raw_id,
+                            branch_table.name(),
+                            err
+                        ))
+                    })?;
+                    if tables_at_risk.contains(&ref_id) {
+                        has_at_risk_ref = true;
+                        break;
+                    }
+                }
             }
         }
         if !has_at_risk_ref {
@@ -649,6 +742,8 @@ async fn collect_external_segments(
     let snapshot = match gc_root_snapshot {
         Some(snap) => snap,
         None => {
+            // TODO(zhyass): avoid walking branch history here if we can persist or derive a cheaper
+            // protection anchor for protection-only branches.
             let Some(snap) = branch_table.find_earliest_snapshot_via_history().await? else {
                 return Ok((HashMap::new(), vec![]));
             };
@@ -747,10 +842,10 @@ async fn cleanup_table_data(
 #[async_backtrace::framed]
 async fn final_gc_branch(
     ctx: &Arc<dyn TableContext>,
+    meta_api: &Arc<MetaStore>,
     fuse_table: &FuseTable,
     base_table_id: u64,
     branch_name: &str,
-    retention_boundary: DateTime<Utc>,
 ) -> Result<Vec<String>> {
     // Final GC deletes both the branch KV metadata and the whole branch storage directory once
     // no protected table-local data remains.
@@ -770,14 +865,12 @@ async fn final_gc_branch(
         return Ok(vec![]);
     }
 
-    let catalog = ctx.get_catalog(table_info.catalog()).await?;
-    if let Err(err) = catalog
+    if let Err(err) = meta_api
         .gc_drop_table_branch(GcDroppedTableBranchReq {
             tenant: ctx.get_tenant(),
             table_id: base_table_id,
             branch_name: branch_name.to_string(),
             branch_id: fuse_table.get_id(),
-            retention_boundary,
         })
         .await
     {
