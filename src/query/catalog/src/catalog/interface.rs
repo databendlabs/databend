@@ -17,15 +17,12 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use std::unimplemented;
 
-use chrono::DateTime;
-use chrono::Utc;
 use databend_common_ast::ast::Engine;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::schema::CatalogInfo;
-use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CommitTableMetaReply;
 use databend_common_meta_app::schema::CommitTableMetaReq;
 use databend_common_meta_app::schema::CreateDatabaseReply;
@@ -38,7 +35,6 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
-use databend_common_meta_app::schema::CreateTableBranchReply;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
@@ -59,7 +55,6 @@ use databend_common_meta_app::schema::DropTableReply;
 use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::DroppedId;
 use databend_common_meta_app::schema::ExtendLockRevReq;
-use databend_common_meta_app::schema::GcDroppedTableBranchReq;
 use databend_common_meta_app::schema::GcDroppedTableReq;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReply;
 use databend_common_meta_app::schema::GetAutoIncrementNextValueReq;
@@ -98,7 +93,6 @@ use databend_common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use databend_common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
-use databend_common_meta_app::schema::StagedBranchIdent;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
 use databend_common_meta_app::schema::TableBranchMeta;
@@ -340,43 +334,9 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         )))
     }
 
-    async fn create_table_branch(
-        &self,
-        _req: CreateTableBranchReq,
-    ) -> Result<CreateTableBranchReply> {
+    async fn create_table_branch(&self, _req: CreateTableBranchReq) -> Result<u64> {
         Err(ErrorCode::Unimplemented(format!(
             "'create_table_branch' not implemented for catalog {}",
-            self.name()
-        )))
-    }
-
-    async fn commit_table_branch_meta(&self, _req: CommitTableBranchMetaReq) -> Result<()> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'commit_table_branch_meta' not implemented for catalog {}",
-            self.name()
-        )))
-    }
-
-    /// Mark staged branches under a base table so storage cleanup can remove their files.
-    ///
-    /// `cleanup_at` is the evaluation timestamp for staged cleanup eligibility:
-    /// entries whose `create_on + STAGED_BRANCH_TIMEOUT` has elapsed by this time are marked.
-    /// `None` means "mark every staged branch under the base table", which is used by
-    /// dropped-table cleanup as a final sweep.
-    async fn mark_staged_branches_for_cleanup(
-        &self,
-        _table_id: u64,
-        _cleanup_at: Option<DateTime<Utc>>,
-    ) -> Result<Vec<StagedBranchIdent>> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'mark_staged_branches_for_cleanup' not implemented for catalog {}",
-            self.name()
-        )))
-    }
-
-    async fn drop_staged_table_branch(&self, _table_id: u64, _branch_id: u64) -> Result<()> {
-        Err(ErrorCode::Unimplemented(format!(
-            "'drop_staged_table_branch' not implemented for catalog {}",
             self.name()
         )))
     }
@@ -439,12 +399,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
             "'list_history_table_branches' not implemented for catalog {}",
             self.name()
         )))
-    }
-
-    async fn gc_drop_table_branch(&self, _req: GcDroppedTableBranchReq) -> Result<usize> {
-        Err(ErrorCode::Unimplemented(
-            "'gc_drop_table_branch' not implemented",
-        ))
     }
 
     /// Get multiple tables by db and table names.

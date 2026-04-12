@@ -20,7 +20,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::schema::CommitTableBranchMetaReq;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableBranchReq;
@@ -34,16 +33,12 @@ use databend_common_sql::plans::CreateTableTagPlan;
 use databend_common_sql::plans::DropTableBranchPlan;
 use databend_common_sql::plans::DropTableTagPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
 use databend_meta_client::types::MatchSeq;
-use databend_storages_common_table_meta::meta::Statistics;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
 use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_REFERENCED_BRANCH_IDS;
@@ -52,8 +47,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION_FIXED_
 use databend_storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
-use databend_storages_common_table_meta::table::table_storage_prefix;
-use log::warn;
 
 pub struct RealTableRefHandler {}
 
@@ -82,17 +75,6 @@ impl TableRefHandler for RealTableRefHandler {
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let base_table_id = fuse_table.get_option(OPT_KEY_BASE_TABLE_ID, source_table_id);
-        let db_id: u64 = table_info
-            .meta
-            .options
-            .get(OPT_KEY_DATABASE_ID)
-            .and_then(|s| s.parse().ok())
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "missing {} in table options for table {}",
-                    OPT_KEY_DATABASE_ID, source_table_id
-                ))
-            })?;
         let source_snapshot_location = match &plan.navigation {
             Some(navigation) => {
                 fuse_table
@@ -134,7 +116,7 @@ impl TableRefHandler for RealTableRefHandler {
                 .insert(OPT_KEY_REFERENCED_BRANCH_IDS.to_string(), ref_ids);
         }
 
-        let (new_snapshot, lvt_check) = if let Some(location) = source_snapshot_location {
+        let lvt_check = if let Some(location) = source_snapshot_location {
             let Some(snapshot) = fuse_table
                 .read_table_snapshot_with_location(Some(location.clone()))
                 .await?
@@ -159,6 +141,9 @@ impl TableRefHandler for RealTableRefHandler {
             }
 
             fuse_table.apply_navigation_metadata(&mut branch_table_meta, &snapshot)?;
+            branch_table_meta
+                .options
+                .insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), location);
             // Check constraints compatibility against the target snapshot schema.
             if !branch_table_meta.constraints.is_empty()
                 && table_info.meta.schema.as_ref() != &snapshot.schema
@@ -184,99 +169,29 @@ impl TableRefHandler for RealTableRefHandler {
                 number_of_segments: Some(snapshot.segments.len() as u64),
                 number_of_blocks: Some(snapshot.summary.block_count),
             };
-
-            let mut branch_snapshot = TableSnapshot::try_from_previous(
-                snapshot.clone(),
-                None,
-                ctx.get_table_meta_timestamps(fuse_table, Some(snapshot.clone()))?,
-            )?;
-            branch_snapshot.prev_snapshot_id = None;
-            // Branch snapshots must not keep inherited base-table statistics files.
-            branch_snapshot.table_statistics_location = None;
-            if let Some(additional_stats_meta) =
-                branch_snapshot.summary.additional_stats_meta.as_mut()
-            {
-                additional_stats_meta.location = ("".to_string(), 0);
-            }
-            branch_snapshot.cluster_key_meta = branch_table_meta.cluster_key_v2.clone();
-
-            (
-                branch_snapshot,
-                Some(TableLvtCheck {
-                    tenant: ctx.get_tenant(),
-                    time: snapshot_timestamp,
-                }),
-            )
+            Some(TableLvtCheck {
+                tenant: ctx.get_tenant(),
+                time: snapshot_timestamp,
+            })
         } else {
-            let branch_snapshot = TableSnapshot::try_new(
-                None,
-                None,
-                branch_table_meta.schema.as_ref().clone(),
-                Statistics::default(),
-                vec![],
-                branch_table_meta.cluster_key_v2.clone(),
-                None,
-                None,
-                ctx.get_table_meta_timestamps(fuse_table, None)?,
-            )?;
-
-            (branch_snapshot, None)
+            None
         };
 
         let expire_at = plan.retain.map(|v| now + v);
         let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let branch_reply = catalog
+        catalog
             .create_table_branch(CreateTableBranchReq {
                 tenant: ctx.get_tenant(),
-                table_id: base_table_id,
-                source_table_id,
+                base_table_id,
+                from_branch_id: (source_table_id != base_table_id).then_some(source_table_id),
                 branch_name: plan.branch_name.clone(),
                 seq: MatchSeq::Exact(seq),
+                new_table_meta: branch_table_meta,
+                expire_at,
                 lvt_check,
             })
             .await?;
-        let branch_id = branch_reply.branch_id;
-        let branch_prefix = table_storage_prefix(db_id, branch_id);
-        let branch_location_gen = TableMetaLocationGenerator::new(branch_prefix.clone());
-        let new_snapshot_location = branch_location_gen
-            .gen_snapshot_location(&new_snapshot.snapshot_id, new_snapshot.format_version)?;
-        fuse_table
-            .get_operator_ref()
-            .write(&new_snapshot_location, new_snapshot.to_bytes()?)
-            .await
-            .map_err(ErrorCode::from)?;
-
-        let committed_branch_meta = FuseTable::build_new_table_meta(
-            &branch_table_meta,
-            &new_snapshot_location,
-            &new_snapshot,
-        );
-
-        let commit_result = catalog
-            .commit_table_branch_meta(CommitTableBranchMetaReq {
-                tenant: ctx.get_tenant(),
-                table_id: base_table_id,
-                branch_name: plan.branch_name.clone(),
-                branch_id,
-                auto_increment_start_vals: branch_reply.auto_increment_start_vals,
-                new_table_meta: committed_branch_meta,
-                expire_at,
-            })
-            .await;
-
-        if commit_result.is_err() {
-            Self::best_effort_cleanup_staged_branch(
-                &catalog,
-                ctx.as_ref(),
-                base_table_id,
-                branch_id,
-                &branch_prefix,
-                fuse_table.get_operator_ref(),
-            )
-            .await;
-        }
-
-        commit_result
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -450,33 +365,6 @@ impl RealTableRefHandler {
             OPT_KEY_TABLE_ATTACHED_DATA_URI,
         ] {
             options.remove(key);
-        }
-    }
-
-    async fn best_effort_cleanup_staged_branch(
-        catalog: &Arc<dyn databend_common_catalog::catalog::Catalog>,
-        _ctx: &dyn TableContext,
-        base_table_id: u64,
-        branch_id: u64,
-        branch_prefix: &str,
-        operator: &opendal::Operator,
-    ) {
-        let branch_dir = format!("{}/", branch_prefix);
-        if let Err(err) = operator.remove_all(&branch_dir).await {
-            warn!(
-                "best-effort cleanup of staged branch data failed, base_table_id: {}, branch_id: {}, err: {}",
-                base_table_id, branch_id, err
-            );
-        }
-
-        if let Err(err) = catalog
-            .drop_staged_table_branch(base_table_id, branch_id)
-            .await
-        {
-            warn!(
-                "best-effort cleanup of staged branch kv failed, base_table_id: {}, branch_id: {}, err: {}",
-                base_table_id, branch_id, err
-            );
         }
     }
 

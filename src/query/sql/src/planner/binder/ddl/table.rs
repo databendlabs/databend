@@ -1090,7 +1090,16 @@ impl Binder {
             };
 
         if let Some(branch_name) = branch.as_ref() {
-            if !matches!(action, AlterTableAction::CreateTableBranch { .. }) {
+            if !matches!(
+                action,
+                AlterTableAction::CreateTableBranch { .. }
+                    | AlterTableAction::RenameColumn { .. }
+                    | AlterTableAction::AddColumn { .. }
+                    | AlterTableAction::ModifyColumn { .. }
+                    | AlterTableAction::DropColumn { .. }
+                    | AlterTableAction::AlterTableClusterKey { .. }
+                    | AlterTableAction::DropTableClusterKey
+            ) {
                 return Err(legacy_table_ref_removed_error(format!(
                     "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
                 )));

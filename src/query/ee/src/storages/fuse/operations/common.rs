@@ -27,20 +27,19 @@ use databend_common_exception::Result;
 pub type StoragePrefixes = HashMap<String, u64>;
 
 /// Resolve which table owns a file by matching its path against known storage prefixes.
-///
-/// Returns `Ok(table_id)` on match, or `Err` if no prefix matches.
-/// Uses `starts_with()` which is correct as long as prefixes are non-overlapping owner roots.
 pub fn table_id_by_path(storage_prefixes: &StoragePrefixes, path: &str) -> Result<u64> {
-    for (prefix, &table_id) in storage_prefixes {
-        if path.starts_with(prefix.as_str()) {
-            return Ok(table_id);
-        }
-    }
-    Err(ErrorCode::Internal(format!(
-        "cannot resolve table by path '{}', known prefixes: {:?}",
-        path,
-        storage_prefixes.keys().collect::<Vec<_>>()
-    )))
+    storage_prefixes
+        .iter()
+        .filter(|(prefix, _)| path.starts_with(prefix.as_str()))
+        .max_by_key(|(prefix, _)| prefix.len())
+        .map(|(_, &table_id)| table_id)
+        .ok_or_else(|| {
+            ErrorCode::Internal(format!(
+                "cannot resolve table by path '{}', known prefixes: {:?}",
+                path,
+                storage_prefixes.keys().collect::<Vec<_>>()
+            ))
+        })
 }
 
 /// Like `table_id_by_path` but returns `None` instead of `Err` when no prefix matches.
@@ -48,6 +47,7 @@ pub fn table_id_by_path(storage_prefixes: &StoragePrefixes, path: &str) -> Resul
 pub fn owner_of_path(storage_prefixes: &StoragePrefixes, path: &str) -> Option<u64> {
     storage_prefixes
         .iter()
-        .find(|(prefix, _)| path.starts_with(prefix.as_str()))
+        .filter(|(prefix, _)| path.starts_with(prefix.as_str()))
+        .max_by_key(|(prefix, _)| prefix.len())
         .map(|(_, &id)| id)
 }
