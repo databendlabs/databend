@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::alloc::Layout;
+use std::collections::HashMap;
 use std::fmt;
 use std::io::BufRead;
 use std::marker::PhantomData;
@@ -156,6 +157,15 @@ trait BitmapOperate: Send + Sync + 'static {
     fn operate(lhs: &mut HybridBitmap, rhs: HybridBitmap);
 
     fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()>;
+
+    fn support_batch() -> bool {
+        false
+    }
+
+    fn batch_op(bitmaps: Vec<HybridBitmap>) -> HybridBitmap {
+        let _ = bitmaps;
+        unreachable!()
+    }
 }
 
 struct BitmapAndOp;
@@ -184,6 +194,14 @@ impl BitmapOperate for BitmapOrOp {
     fn operate_buf(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
         lhs.bitor_assign(deserialize_bitmap(buf)?);
         Ok(())
+    }
+
+    fn support_batch() -> bool {
+        true
+    }
+
+    fn batch_op(bitmaps: Vec<HybridBitmap>) -> HybridBitmap {
+        HybridBitmap::fast_union(bitmaps).unwrap_or_default()
     }
 }
 
@@ -288,6 +306,29 @@ where
 
         let state = place.get::<BitmapAggState>();
 
+        if OP::support_batch() && view.len() > 2 {
+            let mut bitmaps = Vec::with_capacity(view.len() + 1);
+            if let Some(existing) = state.rb.take() {
+                bitmaps.push(existing);
+            }
+            if let Some(validity) = validity {
+                if validity.null_count() == view.len() {
+                    return Ok(());
+                }
+                for (data, valid) in view.iter().zip(validity.iter()) {
+                    if valid {
+                        bitmaps.push(deserialize_bitmap(data)?);
+                    }
+                }
+            } else {
+                for data in view.iter() {
+                    bitmaps.push(deserialize_bitmap(data)?);
+                }
+            }
+            state.rb = Some(OP::batch_op(bitmaps));
+            return Ok(());
+        }
+
         if let Some(validity) = validity {
             if validity.null_count() == view.len() {
                 return Ok(());
@@ -332,6 +373,36 @@ where
         Ok(())
     }
 
+    fn support_accumulate_keys_many(&self) -> bool {
+        OP::support_batch()
+    }
+
+    fn accumulate_many(
+        &self,
+        place: AggrState,
+        columns: ProjectedBlock,
+        rows: &[usize],
+    ) -> Result<()> {
+        if rows.len() == 1 {
+            self.accumulate_row(place, columns, rows[0])?;
+            return Ok(());
+        }
+
+        let view = columns[0].downcast::<BitmapType>().unwrap();
+        let state = place.get::<BitmapAggState>();
+        let mut bitmaps = Vec::with_capacity(rows.len() + 1);
+        if let Some(existing) = state.rb.take() {
+            bitmaps.push(existing);
+        }
+        for &row in rows {
+            if let Some(data) = view.index(row) {
+                bitmaps.push(deserialize_bitmap(data)?);
+            }
+        }
+        state.rb = Some(OP::batch_op(bitmaps));
+        Ok(())
+    }
+
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
         vec![StateSerdeItem::Binary(None)]
     }
@@ -364,28 +435,68 @@ where
         filter: Option<&Bitmap>,
     ) -> Result<()> {
         let view = state.downcast::<UnaryType<BinaryType>>().unwrap();
+
+        if !OP::support_batch() {
+            let iter = places.iter().zip(view.iter());
+            if let Some(filter) = filter {
+                for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v))
+                {
+                    let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+                    let flag = data[0];
+                    data.consume(1);
+                    if flag == 1 {
+                        state.add::<OP>(data)?;
+                    }
+                }
+            } else {
+                for (place, mut data) in iter {
+                    let state = AggrState::new(*place, loc).get::<BitmapAggState>();
+                    let flag = data[0];
+                    data.consume(1);
+                    if flag == 1 {
+                        state.add::<OP>(data)?;
+                    }
+                }
+            }
+            return Ok(());
+        }
+
+        // Batch path: group by place, collect bitmaps, then fast_union per group
+        let mut groups: HashMap<usize, Vec<HybridBitmap>> = HashMap::new();
         let iter = places.iter().zip(view.iter());
 
         if let Some(filter) = filter {
             for (place, mut data) in iter.zip(filter.iter()).filter_map(|(v, b)| b.then_some(v)) {
-                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
                 let flag = data[0];
                 data.consume(1);
                 if flag == 1 {
-                    state.add::<OP>(data)?;
+                    groups
+                        .entry(place.addr())
+                        .or_default()
+                        .push(deserialize_bitmap(data)?);
                 }
             }
         } else {
             for (place, mut data) in iter {
-                let state = AggrState::new(*place, loc).get::<BitmapAggState>();
-
                 let flag = data[0];
                 data.consume(1);
                 if flag == 1 {
-                    state.add::<OP>(data)?;
+                    groups
+                        .entry(place.addr())
+                        .or_default()
+                        .push(deserialize_bitmap(data)?);
                 }
             }
         }
+
+        for (addr, mut bitmaps) in groups {
+            let state = AggrState::new(StateAddr::new(addr), loc).get::<BitmapAggState>();
+            if let Some(existing) = state.rb.take() {
+                bitmaps.insert(0, existing);
+            }
+            state.rb = Some(OP::batch_op(bitmaps));
+        }
+
         Ok(())
     }
 
@@ -396,6 +507,39 @@ where
         if let Some(rb) = other.rb.take() {
             state.add_bitmap::<OP>(rb);
         }
+        Ok(())
+    }
+
+    fn batch_merge_states(
+        &self,
+        places: &[StateAddr],
+        rhses: &[StateAddr],
+        loc: &[AggrStateLoc],
+    ) -> Result<()> {
+        if !OP::support_batch() {
+            for (place, rhs) in places.iter().zip(rhses.iter()) {
+                self.merge_states(AggrState::new(*place, loc), AggrState::new(*rhs, loc))?;
+            }
+            return Ok(());
+        }
+
+        // Batch path: group by dest place, collect all rhs bitmaps, then fast_union per group
+        let mut groups: HashMap<usize, Vec<HybridBitmap>> = HashMap::new();
+        for (place, rhs) in places.iter().zip(rhses.iter()) {
+            let rhs_state = AggrState::new(*rhs, loc).get::<BitmapAggState>();
+            if let Some(rb) = rhs_state.rb.take() {
+                groups.entry(place.addr()).or_default().push(rb);
+            }
+        }
+
+        for (addr, mut bitmaps) in groups {
+            let state = AggrState::new(StateAddr::new(addr), loc).get::<BitmapAggState>();
+            if let Some(existing) = state.rb.take() {
+                bitmaps.insert(0, existing);
+            }
+            state.rb = Some(OP::batch_op(bitmaps));
+        }
+
         Ok(())
     }
 

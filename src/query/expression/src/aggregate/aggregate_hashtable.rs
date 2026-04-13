@@ -48,6 +48,7 @@ pub struct AggregateHashTable {
     current_radix_bits: u64,
     hash_index: HashIndex,
     hash_index_resize_count: usize,
+    total_input_rows: usize,
 }
 
 unsafe impl Send for AggregateHashTable {}
@@ -84,6 +85,7 @@ impl AggregateHashTable {
             hash_index: HashIndex::new(&config, capacity),
             config,
             hash_index_resize_count: 0,
+            total_input_rows: 0,
         }
     }
 
@@ -116,11 +118,33 @@ impl AggregateHashTable {
             hash_index,
             config,
             hash_index_resize_count: 0,
+            total_input_rows: 0,
         }
     }
 
     pub fn len(&self) -> usize {
         self.payload.len()
+    }
+
+    /// Cache-level based minimum reduction ratio thresholds.
+    #[inline]
+    fn should_use_batch(&self) -> bool {
+        let ht_rows = self.hash_index.count();
+        if ht_rows == 0 {
+            return false;
+        }
+
+        let ht_mem = self.hash_index.allocated_bytes();
+        if ht_mem >= 16 * 1024 * 1024 {
+            // Main memory: need 2.0x reduction
+            self.total_input_rows > ht_rows * 2
+        } else if ht_mem >= 1024 * 1024 {
+            // L3 cache: need 1.1x reduction → total_input_rows * 10 > ht_rows * 11
+            self.total_input_rows * 10 > ht_rows * 11
+        } else {
+            // L2 cache: always use batch (min_reduction = 0.0)
+            true
+        }
     }
 
     pub fn add_groups(
@@ -210,6 +234,9 @@ impl AggregateHashTable {
             let state_places = &state.state_places.as_slice()[0..row_count];
             let states_layout = self.payload.row_layout.states_layout.as_ref().unwrap();
             if agg_states.is_empty() {
+                self.total_input_rows += row_count;
+                let use_batch = self.should_use_batch();
+
                 for ((func, params), loc) in self
                     .payload
                     .aggrs
@@ -217,7 +244,11 @@ impl AggregateHashTable {
                     .zip(params.iter())
                     .zip(states_layout.states_loc.iter())
                 {
-                    func.accumulate_keys(state_places, loc, *params, row_count)?;
+                    if use_batch && func.support_accumulate_keys_many() {
+                        func.accumulate_keys_many(state_places, loc, *params, row_count)?;
+                    } else {
+                        func.accumulate_keys(state_places, loc, *params, row_count)?;
+                    }
                 }
             } else {
                 for ((func, state), loc) in self

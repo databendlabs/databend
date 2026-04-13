@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -68,6 +69,48 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     // Used in aggregate_null_adaptor
     fn accumulate_row(&self, place: AggrState, columns: ProjectedBlock, row: usize) -> Result<()>;
+
+    // Whether this function benefits from batch accumulation per group.
+    // When true, the framework may call accumulate_keys_many instead of accumulate_keys.
+    fn support_accumulate_keys_many(&self) -> bool {
+        false
+    }
+
+    // Batch path entry point. Called instead of accumulate_keys when reduction ratio is high.
+    // Default: HashMap grouping by place addr, then call accumulate_many per group.
+    fn accumulate_keys_many(
+        &self,
+        addrs: &[StateAddr],
+        loc: &[AggrStateLoc],
+        columns: ProjectedBlock,
+        _input_rows: usize,
+    ) -> Result<()> {
+        let mut groups: HashMap<usize, Vec<usize>> = HashMap::new();
+
+        for (i, addr) in addrs.iter().enumerate() {
+            groups.entry(addr.addr()).or_default().push(i);
+        }
+
+        for (addr, rows) in groups {
+            self.accumulate_many(AggrState::new(StateAddr::new(addr), loc), columns, &rows)?;
+        }
+
+        Ok(())
+    }
+
+    // Accumulate multiple rows belonging to the SAME group.
+    // Override in concrete functions to implement batch logic (e.g. fastunion).
+    fn accumulate_many(
+        &self,
+        place: AggrState,
+        columns: ProjectedBlock,
+        rows: &[usize],
+    ) -> Result<()> {
+        for &row in rows {
+            self.accumulate_row(place, columns, row)?;
+        }
+        Ok(())
+    }
 
     fn serialize_type(&self) -> Vec<StateSerdeItem>;
 

@@ -181,6 +181,57 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
+    fn support_accumulate_keys_many(&self) -> bool {
+        self.nested.support_accumulate_keys_many()
+    }
+
+    fn accumulate_keys_many(
+        &self,
+        places: &[StateAddr],
+        loc: &[AggrStateLoc],
+        columns: ProjectedBlock,
+        input_rows: usize,
+    ) -> Result<()> {
+        self.nested
+            .accumulate_keys_many(places, &loc[..loc.len() - 1], columns, input_rows)?;
+        let if_cond = self.nested.get_if_condition(columns);
+
+        match if_cond {
+            Some(v) if v.null_count() > 0 => {
+                if v.null_count() == v.len() {
+                    return Ok(());
+                }
+
+                for (&addr, valid) in places.iter().zip(v.iter()) {
+                    if valid {
+                        set_flag(AggrState::new(addr, loc), true);
+                    }
+                }
+            }
+            _ => {
+                for &addr in places {
+                    set_flag(AggrState::new(addr, loc), true);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn accumulate_many(
+        &self,
+        place: AggrState,
+        columns: ProjectedBlock,
+        rows: &[usize],
+    ) -> Result<()> {
+        self.nested
+            .accumulate_many(place.remove_last_loc(), columns, rows)?;
+        if !rows.is_empty() {
+            set_flag(place, true);
+        }
+        Ok(())
+    }
+
     fn serialize_type(&self) -> Vec<StateSerdeItem> {
         self.nested
             .serialize_type()
@@ -298,6 +349,14 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         Ok(())
     }
 
+    fn need_manual_drop_state(&self) -> bool {
+        self.nested.need_manual_drop_state()
+    }
+
+    unsafe fn drop_state(&self, place: AggrState) {
+        unsafe { self.nested.drop_state(place.remove_last_loc()) }
+    }
+
     fn get_own_null_adaptor(
         &self,
         nested_function: AggregateFunctionRef,
@@ -306,14 +365,6 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     ) -> Result<Option<AggregateFunctionRef>> {
         self.nested
             .get_own_null_adaptor(nested_function, params, arguments)
-    }
-
-    fn need_manual_drop_state(&self) -> bool {
-        self.nested.need_manual_drop_state()
-    }
-
-    unsafe fn drop_state(&self, place: AggrState) {
-        unsafe { self.nested.drop_state(place.remove_last_loc()) }
     }
 }
 
