@@ -89,7 +89,6 @@ use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -472,7 +471,7 @@ impl Binder {
                 table, table
             )));
         }
-        // Check for row_access_policy and wrap with SecureFilter if present
+        // Check for row_access_policy and write secure predicates into Scan
         let final_s_expr = if let Some(policy) = &table
             .table()
             .get_table_info()
@@ -567,6 +566,8 @@ impl Binder {
         Ok(res.0)
     }
 
+    /// Bind a security predicate expression and write it into the Scan's
+    /// `secure_push_down_predicates` field instead of creating a SecureFilter node.
     pub fn bind_secure_filter(
         &mut self,
         bind_context: &mut BindContext,
@@ -584,12 +585,44 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
 
-        let filter_plan = SecureFilter {
-            predicates: split_conjunctions(&scalar),
-            table_index,
-        };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
+        let secure_predicates = split_conjunctions(&scalar);
+
+        // Write secure predicates directly into the Scan node.
+        let new_expr =
+            Self::inject_secure_predicates_into_scan(&child, table_index, secure_predicates)?;
         Ok((new_expr, scalar))
+    }
+
+    /// Recursively find the Scan for `table_index` and inject secure predicates into it.
+    fn inject_secure_predicates_into_scan(
+        s_expr: &SExpr,
+        table_index: IndexType,
+        secure_predicates: Vec<ScalarExpr>,
+    ) -> Result<SExpr> {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) if scan.table_index == table_index => {
+                let mut scan = scan.clone();
+                scan.has_row_access_policy = true;
+                match scan.secure_push_down_predicates.as_mut() {
+                    Some(existing) => existing.extend(secure_predicates),
+                    None => scan.secure_push_down_predicates = Some(secure_predicates),
+                }
+                Ok(SExpr::create_leaf(Arc::new(scan.into())))
+            }
+            _ => {
+                // The Scan should be the direct child in normal table binding.
+                // But handle the general case by recursing.
+                let mut children = Vec::with_capacity(s_expr.arity());
+                for child in s_expr.children() {
+                    children.push(Arc::new(Self::inject_secure_predicates_into_scan(
+                        child,
+                        table_index,
+                        secure_predicates.clone(),
+                    )?));
+                }
+                Ok(s_expr.replace_children(children))
+            }
+        }
     }
 
     pub fn resolve_data_source(

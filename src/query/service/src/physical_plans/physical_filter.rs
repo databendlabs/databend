@@ -39,7 +39,7 @@ use crate::pipelines::PipelineBuilder;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
-    meta: PhysicalPlanMeta,
+    pub(crate) meta: PhysicalPlanMeta,
     pub projections: BTreeSet<usize>,
     pub input: PhysicalPlan,
     // Assumption: expression's data type must be `DataType::Boolean`.
@@ -47,6 +47,10 @@ pub struct Filter {
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
+    /// When true, EXPLAIN masks the filter predicates to prevent
+    /// leaking row access policy details.
+    #[serde(default)]
+    pub is_secure: bool,
 }
 
 #[typetag::serde]
@@ -117,6 +121,7 @@ impl IPhysicalPlan for Filter {
             input,
             predicates: self.predicates.clone(),
             stat_info: self.stat_info.clone(),
+            is_secure: self.is_secure,
         })
     }
 
@@ -176,6 +181,7 @@ impl PhysicalPlanBuilder {
                 .collect::<Result<_>>()?,
 
             stat_info: Some(stat_info),
+            is_secure: false,
         }))
     }
 }

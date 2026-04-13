@@ -47,6 +47,8 @@ pub struct MutationSource {
     pub user_predicates: Vec<ScalarExpr>,
     pub predicate_column_index: Option<Symbol>,
     pub read_partition_columns: ColumnSet,
+    /// True when this mutation target is subject to a Row Access Policy.
+    pub has_row_access_policy: bool,
 }
 
 impl PartialEq for MutationSource {

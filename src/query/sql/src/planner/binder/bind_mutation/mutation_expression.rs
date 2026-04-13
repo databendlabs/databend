@@ -267,16 +267,12 @@ impl MutationExpression {
                         user_predicates: vec![],
                         predicate_column_index: None,
                         read_partition_columns: Default::default(),
+                        has_row_access_policy: false,
                     };
 
-                    // Direct mutation must evaluate row-access predicates inside MutationSource.
-                    // Keeping SecureFilter outside would filter rewritten blocks instead of
-                    // constraining the target rows that participate in the mutation.
-                    s_expr = Self::replace_scan_with_mutation_source(
-                        &s_expr,
-                        mutation_source,
-                        Vec::new(),
-                    )?;
+                    // Direct mutation inherits row-access predicates from Scan's
+                    // secure_push_down_predicates field.
+                    s_expr = Self::replace_scan_with_mutation_source(&s_expr, mutation_source)?;
 
                     if !predicates.is_empty() {
                         s_expr = SExpr::create_unary(
@@ -470,38 +466,21 @@ impl MutationExpression {
         }
     }
 
-    /// Replace the Scan leaf node with a MutationSource while removing SecureFilter wrappers.
+    /// Replace the Scan leaf node with a MutationSource, inheriting secure predicates
+    /// directly from the Scan's `secure_push_down_predicates` field.
     fn replace_scan_with_mutation_source(
         s_expr: &SExpr,
         mutation_source: MutationSource,
-        mut secure_predicates: Vec<ScalarExpr>,
     ) -> Result<SExpr> {
         match s_expr.plan() {
-            RelOperator::Scan(_) => {
+            RelOperator::Scan(scan) => {
                 let mut mutation_source = mutation_source;
-                mutation_source.secure_predicates = secure_predicates;
+                mutation_source.secure_predicates =
+                    scan.secure_push_down_predicates.clone().unwrap_or_default();
+                mutation_source.has_row_access_policy = scan.has_row_access_policy;
                 Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
                     mutation_source,
                 ))))
-            }
-            RelOperator::SecureFilter(secure_filter) => {
-                if s_expr.arity() != 1 {
-                    error!(
-                        "Expected unary SecureFilter above Scan in mutation target, \
-                         got arity {} for {:?}",
-                        s_expr.arity(),
-                        s_expr.plan().rel_op(),
-                    );
-                    return Err(ErrorCode::Internal(
-                        "Expected unary SecureFilter above Scan in mutation target".to_string(),
-                    ));
-                }
-                secure_predicates.extend(secure_filter.predicates.clone());
-                Self::replace_scan_with_mutation_source(
-                    s_expr.unary_child(),
-                    mutation_source,
-                    secure_predicates,
-                )
             }
             _ => {
                 if s_expr.arity() != 1 {
@@ -515,11 +494,8 @@ impl MutationExpression {
                         "Expected unary operator above Scan in mutation target".to_string(),
                     ));
                 }
-                let child = Self::replace_scan_with_mutation_source(
-                    s_expr.unary_child(),
-                    mutation_source,
-                    secure_predicates,
-                )?;
+                let child =
+                    Self::replace_scan_with_mutation_source(s_expr.unary_child(), mutation_source)?;
                 Ok(s_expr.replace_children(vec![Arc::new(child)]))
             }
         }

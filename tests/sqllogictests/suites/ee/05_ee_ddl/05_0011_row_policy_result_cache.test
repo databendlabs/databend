@@ -92,9 +92,9 @@ Sort(Single)
 ├── output columns: [rap_cache_test.id (#0), rap_cache_test.app_name (#1), rap_cache_test.data (#2)]
 ├── sort keys: [id ASC NULLS LAST]
 ├── estimated rows: 2.50
-└── SecureFilter
+└── Filter [SECURE]
     ├── output columns: [rap_cache_test.id (#0), rap_cache_test.app_name (#1), rap_cache_test.data (#2)]
-    ├── secure filters: [SECURE: is_true(rap_cache_test.app_name (#1) = 'app_b')]
+    ├── filters: [ROW ACCESS POLICY APPLIED]
     ├── estimated rows: 2.50
     └── TableScan
         ├── table: default.default.rap_cache_test
@@ -106,7 +106,8 @@ Sort(Single)
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
         ├── push downs: [filters: [], limit: NONE]
-        └── estimated rows: 5.00
+        ├── row access policy: APPLIED
+        └── estimated rows: 2.50
 
 ## ========================================
 ## Step 3: SELECT, EXPLAIN SELECT (should hit cache now)

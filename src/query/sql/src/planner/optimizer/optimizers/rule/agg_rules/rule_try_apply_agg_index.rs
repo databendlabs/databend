@@ -227,6 +227,13 @@ impl Rule for RuleTryApplyAggIndex {
         s_expr: &SExpr,
         state: &mut crate::optimizer::optimizers::rule::TransformResult,
     ) -> Result<()> {
+        // Row access policy tables must not use agg index rewrites, because
+        // the pre-aggregated results were computed over the full table without
+        // applying the policy's row-level filter.
+        if self.scan_has_row_access_policy(s_expr) {
+            return Ok(());
+        }
+
         let (table_index, table_name) = self.get_table(s_expr);
         let metadata = self.metadata.read();
         let index_plans = metadata.get_agg_indices(&table_name);
@@ -269,6 +276,19 @@ impl RuleTryApplyAggIndex {
                 )
             }
             _ => self.get_table(s_expr.child(0).unwrap()),
+        }
+    }
+
+    fn scan_has_row_access_policy(&self, s_expr: &SExpr) -> bool {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) => scan.has_row_access_policy,
+            _ => {
+                if let Ok(child) = s_expr.child(0) {
+                    self.scan_has_row_access_policy(child)
+                } else {
+                    false
+                }
+            }
         }
     }
 }

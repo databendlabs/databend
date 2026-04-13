@@ -62,6 +62,7 @@ fn collect_table_signatures_rec(
             || scan.vector_index.is_some()
             || scan.is_lazy_table
             || scan.sample.is_some()
+            || scan.has_row_access_policy
         {
             return;
         }

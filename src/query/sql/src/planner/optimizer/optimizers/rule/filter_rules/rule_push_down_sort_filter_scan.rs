@@ -35,11 +35,10 @@ use crate::plans::Visitor;
 /// Push down order_by and limit from Sort to Scan when filter predicates
 /// use inverted_index or vector_index.
 ///
-/// Note: This rule does NOT match plans with SecureFilter (from row access policy).
-/// When SecureFilter exists, pushing limit to Scan enables TopN pruning based only
-/// on user filter's index match counts, but SecureFilter predicates are not included
-/// in push_down_predicates, so blocks needed after security filtering may be pruned,
-/// causing fewer rows than requested.
+/// Note: When `has_row_access_policy` is true on the Scan, this rule bails out
+/// because storage TopK pruning would return N rows based only on user/index
+/// predicates, then secure predicates filter them further, yielding fewer rows
+/// than requested.
 pub struct RulePushDownSortFilterScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -92,6 +91,9 @@ impl Rule for RulePushDownSortFilterScan {
         //    in Filter to ensure that all filter conditions are pushed down.
         //    (Filter `predicates` has been pushed down in `RulePushDownFilterScan` rule.)
         // 3. Sort must have limit in order to prune unused blocks.
+        // 4. Scan must NOT have row access policy, because storage TopK pruning would
+        //    return N rows based only on user/index predicates, then secure predicates
+        //    filter them further, yielding fewer rows than requested.
         let push_down_predicates = scan.push_down_predicates.clone().unwrap_or_default();
         let has_inverted_index = scan.inverted_index.is_some();
         let has_vector_index = scan.vector_index.is_some();
@@ -99,6 +101,7 @@ impl Rule for RulePushDownSortFilterScan {
             || push_down_predicates.len() != filter.predicates.len()
             || sort.limit.is_none()
             || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
+            || scan.has_row_access_policy
         {
             return Ok(());
         }

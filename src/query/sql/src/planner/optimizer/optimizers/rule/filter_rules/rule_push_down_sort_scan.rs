@@ -25,13 +25,14 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::optimizers::rule::TransformResult;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 use crate::plans::Sort;
 
-/// Matches: Sort -> [EvalScalar ->] [SecureFilter ->] Scan
+/// Matches: Sort -> [EvalScalar ->] Scan
 ///
-/// Push down order_by and limit from Sort to Scan. SecureFilter (from row access policy)
-/// is preserved in the plan tree if present.
+/// Push down order_by and limit from Sort to Scan.
+/// When `has_row_access_policy` is true, limit is not pushed down because
+/// storage TopK pruning would return N rows based only on user predicates,
+/// then secure predicates filter them further, yielding fewer rows than requested.
 pub struct RulePushDownSortScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -43,9 +44,7 @@ impl RulePushDownSortScan {
             id: RuleID::PushDownSortScan,
             matchers: vec![
                 match_op!(Sort -> Scan),
-                match_op!(Sort -> SecureFilter -> Scan),
                 match_op!(Sort -> EvalScalar -> Scan),
-                match_op!(Sort -> EvalScalar -> SecureFilter -> Scan),
             ],
         }
     }
@@ -60,24 +59,12 @@ impl Rule for RulePushDownSortScan {
         let sort: Sort = s_expr.plan().clone().try_into()?;
         let child = s_expr.child(0)?;
 
-        let (eval_scalar, secure_filter, mut scan) = match child.plan() {
-            RelOperator::Scan(scan) => (None, None, scan.clone()),
-            RelOperator::SecureFilter(_) => {
-                let secure_filter: SecureFilter = child.plan().clone().try_into()?;
-                let scan: Scan = child.child(0)?.plan().clone().try_into()?;
-                (None, Some(secure_filter), scan)
-            }
+        let (eval_scalar, mut scan) = match child.plan() {
+            RelOperator::Scan(scan) => (None, scan.clone()),
             RelOperator::EvalScalar(eval_scalar) => {
                 let grand_child = child.child(0)?;
-                match grand_child.plan() {
-                    RelOperator::Scan(scan) => (Some(eval_scalar.clone()), None, scan.clone()),
-                    RelOperator::SecureFilter(_) => {
-                        let secure_filter: SecureFilter = grand_child.plan().clone().try_into()?;
-                        let scan: Scan = grand_child.child(0)?.plan().clone().try_into()?;
-                        (Some(eval_scalar.clone()), Some(secure_filter), scan)
-                    }
-                    _ => unreachable!(),
-                }
+                let scan: Scan = grand_child.plan().clone().try_into()?;
+                (Some(eval_scalar.clone()), scan)
             }
             _ => unreachable!(),
         };
@@ -86,11 +73,9 @@ impl Rule for RulePushDownSortScan {
             scan.order_by = Some(sort.items);
         }
 
-        // When SecureFilter exists, pushing limit is always unsafe because push_down_predicates
-        // never contains SecureFilter predicates. Storage TopK pruning would return N rows based
-        // only on user predicates, then SecureFilter filters them further, yielding fewer rows
-        // than the requested LIMIT.
-        let can_push_limit = secure_filter.is_none();
+        // When row access policy is active, pushing limit is unsafe because
+        // secure predicates are applied after storage-level TopK pruning.
+        let can_push_limit = !scan.has_row_access_policy;
 
         if can_push_limit {
             if let Some(limit) = sort.limit {
@@ -99,21 +84,13 @@ impl Rule for RulePushDownSortScan {
         }
 
         let scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));
-        let scan_parent_expr = if let Some(secure_filter) = secure_filter {
+        let new_child_expr = if let Some(eval_scalar) = eval_scalar {
             SExpr::create_unary(
-                Arc::new(RelOperator::SecureFilter(secure_filter)),
+                Arc::new(RelOperator::EvalScalar(eval_scalar)),
                 Arc::new(scan_expr),
             )
         } else {
             scan_expr
-        };
-        let new_child_expr = if let Some(eval_scalar) = eval_scalar {
-            SExpr::create_unary(
-                Arc::new(RelOperator::EvalScalar(eval_scalar)),
-                Arc::new(scan_parent_expr),
-            )
-        } else {
-            scan_parent_expr
         };
 
         let mut result = s_expr.replace_children(vec![Arc::new(new_child_expr)]);

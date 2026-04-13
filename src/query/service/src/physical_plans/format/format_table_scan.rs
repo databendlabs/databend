@@ -60,18 +60,29 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 table.qualified_name()
             }
         };
-        let filters = self
-            .inner
-            .source
-            .push_downs
-            .as_ref()
-            .and_then(|extras| {
-                extras
-                    .filters
-                    .as_ref()
-                    .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            })
-            .unwrap_or_default();
+        let filters = if self.inner.has_row_access_policy {
+            // When RAP is active, only show user predicates in push downs.
+            // Secure predicates are NOT pushed to storage; they are enforced
+            // by the pipeline Filter [SECURE] node, so showing them here
+            // would misrepresent storage-level pushdown behavior.
+            self.inner
+                .user_filters_display
+                .as_deref()
+                .unwrap_or_default()
+                .to_string()
+        } else {
+            self.inner
+                .source
+                .push_downs
+                .as_ref()
+                .and_then(|extras| {
+                    extras
+                        .filters
+                        .as_ref()
+                        .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                })
+                .unwrap_or_default()
+        };
 
         let limit = self
             .inner
@@ -119,6 +130,14 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         // Push downs.
         let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
         children.push(FormatTreeNode::new(push_downs));
+
+        // Row access policy indicator (separate from push downs since
+        // secure predicates are enforced in the pipeline, not storage).
+        if self.inner.has_row_access_policy {
+            children.push(FormatTreeNode::new(
+                "row access policy: APPLIED".to_string(),
+            ));
+        }
 
         // runtime filters
         let rf = ctx.scan_id_to_runtime_filters.get(&self.inner.scan_id);
