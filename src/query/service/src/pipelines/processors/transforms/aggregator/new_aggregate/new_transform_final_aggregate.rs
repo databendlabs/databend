@@ -47,7 +47,7 @@ use crate::pipelines::processors::transforms::aggregator::statistics::Aggregatio
 use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
 
-const SPILL_BUCKET_NUM: usize = 2;
+const SPILL_BUCKET_NUM: usize = 4;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 
 enum Stage {
@@ -113,11 +113,7 @@ impl NewTransformFinalAggregate {
             ctx.clone(),
             SPILL_BUCKET_NUM,
             params.spill_schema(),
-            LocalPartitionStream::new(
-                params.max_block_rows,
-                params.max_block_bytes,
-                SPILL_BUCKET_NUM,
-            ),
+            LocalPartitionStream::new(0, params.max_block_bytes, SPILL_BUCKET_NUM),
         )?;
 
         Ok(Box::new(NewTransformFinalAggregate {
