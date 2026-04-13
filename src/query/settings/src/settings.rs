@@ -116,6 +116,9 @@ impl Settings {
             geometry_format,
             binary_format,
             http_json_result_mode,
+            headers: 0,
+            json_compact: false,
+            json_strings: false,
             format_null_as_str,
         })
     }

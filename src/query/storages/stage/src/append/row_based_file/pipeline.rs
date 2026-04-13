@@ -65,22 +65,13 @@ pub(crate) fn append_data_to_row_based_files(
     let format = &info.stage.file_format_params;
 
     let format_settings = ctx.get_output_format_settings()?;
-    let output_format = get_output_format(
-        schema.clone(),
-        format.clone(),
-        format_settings.clone(),
-        None,
-    )?;
+    let output_format = get_output_format(schema.clone(), format.clone(), format_settings.clone())?;
     let compression = info.stage.file_format_params.clone().compression();
     let prefix = output_format.serialize_prefix()?;
 
     pipeline.try_add_transformer(|| {
-        let output_format = get_output_format(
-            schema.clone(),
-            format.clone(),
-            format_settings.clone(),
-            None,
-        )?;
+        let output_format =
+            get_output_format(schema.clone(), format.clone(), format_settings.clone())?;
         Ok(SerializeProcessor::new(ctx.clone(), output_format))
     })?;
     pipeline.try_resize(1)?;
