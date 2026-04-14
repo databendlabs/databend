@@ -41,6 +41,7 @@ pub struct PingPongResponse {
 pub trait PingPongCallback: Send + Sync + 'static {
     fn has_pending(&self) -> bool;
     fn on_response(&self, response: PingPongResponse);
+    fn on_closed(&self);
 }
 
 pub struct PingPongExchangeInner {
@@ -178,6 +179,7 @@ impl PingPongExchange {
                         shutdown_fut = Box::pin(inner.shutdown.notified());
                     }
                     Either::Right((None, _)) => {
+                        callback.on_closed();
                         break;
                     }
                     Either::Right((Some(Ok(data)), next_shutdown)) => {
