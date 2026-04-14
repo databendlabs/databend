@@ -34,10 +34,13 @@ fn test_decode_v169_text_file_format_params() -> anyhow::Result<()> {
         escape: "\\".to_string(),
         quote: "\"".to_string(),
         error_on_column_count_mismatch: false,
+        trim_space: false,
         empty_field_as: EmptyFieldAs::FieldDefault,
         output_header: true,
         nan_display: "nan_utf8".to_string(),
         null_display: "NULL".to_string(),
+        encoding: "UTF-8".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
 
     common::test_load_old(

@@ -62,6 +62,7 @@ pub use decimal::display_decimal_256_trimmed;
 pub use escape::escape_string;
 pub use escape::escape_string_with_quote;
 pub use geography::GEOGRAPHY_SRID;
+pub use geography::geography_format;
 pub use geometry::Axis;
 pub use geometry::Extremum;
 pub use geometry::GeometryDataType;

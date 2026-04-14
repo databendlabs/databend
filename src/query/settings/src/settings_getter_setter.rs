@@ -193,10 +193,6 @@ impl Settings {
         Ok(())
     }
 
-    pub fn get_enable_clickhouse_handler(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_clickhouse_handler")? != 0)
-    }
-
     pub fn get_enable_auto_fix_missing_bloom_index(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_auto_fix_missing_bloom_index")? != 0)
     }
@@ -468,6 +464,10 @@ impl Settings {
 
     pub fn get_enable_merge_into_row_fetch(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_merge_into_row_fetch")? != 0)
+    }
+
+    pub fn get_enable_mutation_block_id_repartition(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_mutation_block_id_repartition")? != 0)
     }
 
     pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
@@ -786,6 +786,10 @@ impl Settings {
 
     pub fn get_enable_parquet_prewhere(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
+    }
+
+    pub fn get_prewhere_selectivity_threshold(&self) -> Result<u64> {
+        self.try_get_u64("prewhere_selectivity_threshold")
     }
 
     pub fn get_numeric_cast_option(&self) -> Result<String> {

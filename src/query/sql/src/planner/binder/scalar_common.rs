@@ -224,11 +224,14 @@ impl<'a> JoinPredicate<'a> {
                 };
             }
 
-            if func.arguments.len() > 2 {
-                return Self::Other(scalar);
-            }
-
-            if func.arguments.len() == 2 {
+            // Most join predicates are binary functions. `st_dwithin(left_geom, right_geom, d)`
+            // is a special-case: the third argument is only a constant distance threshold, so
+            // it should still be treated as a predicate between the first two join sides.
+            if (func.arguments.len() == 2)
+                || (func.arguments.len() == 3
+                    && func.func_name == "st_dwithin"
+                    && func.arguments[2].used_columns().is_empty())
+            {
                 let is_equal_op = func.func_name.as_str() == "eq";
                 let left = &func.arguments[0];
                 let right = &func.arguments[1];

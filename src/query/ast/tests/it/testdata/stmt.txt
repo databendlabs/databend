@@ -22738,6 +22738,31 @@ CreateFileFormat {
 
 
 ---------- Input ----------
+CREATE FILE FORMAT my_csv_encoding
+    type = CSV encoding = 'utf8' encoding_error_mode = 'replace';
+---------- Output ---------
+CREATE FILE FORMAT my_csv_encoding encoding = 'utf8', encoding_error_mode = 'replace', type = CSV
+---------- AST ------------
+CreateFileFormat {
+    create_option: Create,
+    name: "my_csv_encoding",
+    file_format_options: FileFormatOptions {
+        options: {
+            "encoding": String(
+                "utf8",
+            ),
+            "encoding_error_mode": String(
+                "replace",
+            ),
+            "type": Keyword(
+                "CSV",
+            ),
+        },
+    },
+}
+
+
+---------- Input ----------
 SHOW FILE FORMATS
 ---------- Output ---------
 SHOW FILE FORMATS

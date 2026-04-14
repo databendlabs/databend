@@ -35,6 +35,7 @@ fn test_geometry() {
     test_st_endpoint(file);
     test_st_dimension(file);
     test_st_distance(file);
+    test_st_dwithin(file);
     test_st_geohash(file);
     test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
@@ -64,6 +65,12 @@ fn test_geometry() {
     test_st_disjoint(file);
     test_st_within(file);
     test_st_equals(file);
+    test_st_centroid(file);
+    test_st_envelope(file);
+    test_st_union(file);
+    test_st_intersection(file);
+    test_st_difference(file);
+    test_st_symdifference(file);
     test_st_area(file);
     test_st_convexhull(file);
     test_st_hilbert(file);
@@ -165,6 +172,49 @@ fn test_st_distance(file: &mut impl Write) {
     run_ast(
         file,
         "st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'))",
+        &[],
+    );
+}
+
+fn test_st_dwithin(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.5)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.414)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 2.0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 1.9)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 3.0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 2.9)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 2.0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 1.9)",
         &[],
     );
 }
@@ -760,6 +810,136 @@ fn test_st_equals(file: &mut impl Write) {
     run_ast(
         file,
         "ST_EQUALS(TO_GEOMETRY('POINT(10 10)'), TO_GEOMETRY('LINESTRING(10 10, 10 10)'))",
+        &[],
+    );
+}
+
+fn test_st_centroid(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_CENTROID(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_CENTROID(TO_GEOMETRY('LINESTRING(0 0, 2 0, 2 2)'))",
+        &[],
+    );
+    run_ast(file, "ST_CENTROID(TO_GEOMETRY('POINT(5 5)'))", &[]);
+    run_ast(
+        file,
+        "ST_CENTROID(TO_GEOMETRY('MULTIPOINT((0 0), (2 0), (0 2), (2 2))'))",
+        &[],
+    );
+}
+
+fn test_st_envelope(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_ENVELOPE(TO_GEOMETRY('LINESTRING(0 0, 2 1, -1 3)'))",
+        &[],
+    );
+    run_ast(file, "ST_ENVELOPE(TO_GEOMETRY('POINT(1 2)'))", &[]);
+    run_ast(
+        file,
+        "ST_ENVELOPE(TO_GEOMETRY('POLYGON((0 0, 3 0, 2 2, 0 3, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_ENVELOPE(TO_GEOMETRY('MULTIPOINT((0 0), (2 1), (-1 3))'))",
+        &[],
+    );
+}
+
+fn test_st_union(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_UNION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_UNION(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_UNION(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(2 2, 3 3)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_UNION(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))",
+        &[],
+    );
+}
+
+fn test_st_intersection(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_INTERSECTION(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_INTERSECTION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(0 0)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(0 2, 2 0)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 3 3)'), TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))",
+        &[],
+    );
+}
+
+fn test_st_difference(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_DIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 2 1, 2 2, 1 2, 1 1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_DIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_DIFFERENCE(TO_GEOMETRY('LINESTRING(0 0, 3 3)'), TO_GEOMETRY('LINESTRING(1 1, 2 2)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_DIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((3 3, 4 3, 4 4, 3 4, 3 3))'))",
+        &[],
+    );
+}
+
+fn test_st_symdifference(file: &mut impl Write) {
+    run_ast(
+        file,
+        "ST_SYMDIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_SYMDIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((1 1, 3 1, 3 3, 1 3, 1 1))'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_SYMDIFFERENCE(TO_GEOMETRY('LINESTRING(0 0, 2 2)'), TO_GEOMETRY('LINESTRING(2 2, 4 4)'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "ST_SYMDIFFERENCE(TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), TO_GEOMETRY('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'))",
         &[],
     );
 }

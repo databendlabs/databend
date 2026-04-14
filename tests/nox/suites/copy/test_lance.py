@@ -235,3 +235,45 @@ def test_copy_into_lance_detailed_output_is_aggregated_once():
         if debug:
             conn.exec(f"remove @{stage}")
             conn.exec(f"drop stage if exists {stage}")
+
+
+def test_copy_into_lance_with_string_literal_projection():
+    client = databend_driver.BlockingDatabendClient(DATABEND_DSL)
+    conn = client.get_conn()
+
+    suffix = uuid.uuid4().hex[:8]
+    stage = f"test_lance_utf8view_{suffix}"
+    dataset = f"ds_utf8view_{suffix}"
+    location = f"@{stage}/{dataset}"
+
+    conn.exec(f"create or replace stage {stage}")
+
+    try:
+        conn.exec(f"remove {location}")
+
+        copy_sql = (
+            f"copy into {location} "
+            "from ("
+            "select number, 'abc' as literal, number + 1 as label "
+            "from numbers(10)"
+            ") "
+            "file_format=(type=lance) "
+            "use_raw_path=true "
+            "overwrite=true "
+            "detailed_output=true"
+        )
+        rows = list(conn.query_iter(copy_sql))
+        assert len(rows) == 1
+        assert rows[0].values()[2] == 10
+
+        dataset_uri = _lance_dataset_uri(stage, dataset)
+        ds = lance.dataset(dataset_uri, storage_options=_build_lance_storage_options())
+        table = ds.to_table()
+
+        assert table.num_rows == 10
+        assert table["literal"].to_pylist() == ["abc"] * 10
+        assert pc.sum(table["label"]).as_py() == 55
+    finally:
+        if debug:
+            conn.exec(f"remove @{stage}")
+            conn.exec(f"drop stage if exists {stage}")

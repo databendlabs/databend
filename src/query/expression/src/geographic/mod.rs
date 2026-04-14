@@ -12,19 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ctor::ctor;
-use regex::Regex;
+mod aggregate;
+mod overlay;
 
-pub struct ClickHouseFederated {}
-
-#[ctor]
-static FORMAT_REGEX: Regex = Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap();
-
-impl ClickHouseFederated {
-    pub fn get_format(query: &str) -> Option<String> {
-        match FORMAT_REGEX.captures(query) {
-            Some(x) => x.get(1).map(|s| s.as_str().to_owned()),
-            None => None,
-        }
-    }
-}
+pub use aggregate::*;
+pub use overlay::*;

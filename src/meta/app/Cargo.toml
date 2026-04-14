@@ -21,6 +21,7 @@ databend-common-meta-app-storage = { workspace = true }
 databend-meta-client = { workspace = true }
 derive_more = { workspace = true }
 display-more = { workspace = true }
+encoding_rs = { workspace = true }
 enumflags2 = { workspace = true }
 hex = { workspace = true }
 itertools = { workspace = true }

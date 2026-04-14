@@ -53,10 +53,11 @@ use geo::Rect;
 
 use super::eliminate_cast::*;
 use crate::Index;
-use crate::SpatialOp;
 use crate::SpatialPredicate;
+use crate::SpatialPredicateOp;
 use crate::collect_spatial_predicates;
 use crate::rect_contains;
+use crate::rects_distance_intersect;
 use crate::rects_intersect;
 use crate::spatial_false_domain;
 
@@ -222,10 +223,21 @@ impl RangeIndex {
                 Point::new(stat.min_x.into_inner(), stat.min_y.into_inner()),
                 Point::new(stat.max_x.into_inner(), stat.max_y.into_inner()),
             );
-            if !rects_intersect(&block_rect, &predicate.query_rect)
-                || (matches!(predicate.op, SpatialOp::Contains | SpatialOp::Equals)
-                    && !rect_contains(&block_rect, &predicate.query_rect))
-            {
+            let maybe_match = match predicate.op {
+                // Block spatial stats only store the union bbox of all geometries in the block.
+                // A block bbox extending outside the query rect does not rule out individual
+                // geometries being within the query rect, so `within` can only use intersect
+                // as a necessary condition at this stage.
+                SpatialPredicateOp::Intersects | SpatialPredicateOp::Within => {
+                    rects_intersect(&block_rect, &predicate.query_rect)
+                }
+                SpatialPredicateOp::Contains => rect_contains(&block_rect, &predicate.query_rect),
+                SpatialPredicateOp::Distance(distance) => {
+                    rects_distance_intersect(&block_rect, &predicate.query_rect, distance)
+                }
+            };
+
+            if !maybe_match {
                 domains.insert(
                     predicate.placeholder.clone(),
                     spatial_false_domain(&predicate.return_type, stat.has_null),

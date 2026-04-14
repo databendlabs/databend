@@ -152,19 +152,19 @@ statement ok
 create or replace view rv_foo2 as (select * from rv_foo);
 
 # Circular: rv_foo -> rv_foo2 -> rv_foo (via scalar subquery)
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select (select * from rv_foo2));
 
 # Direct self-reference
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select * from rv_foo);
 
 # Circular via EXISTS
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select 1 where exists (select * from rv_foo2));
 
 # Circular via IN subquery
-statement error 1001
+statement error 1029
 create or replace view rv_foo as (select * from rv_test where i in (select * from rv_foo2));
 
 # Multi-hop: v1 -> v2 -> v3 -> v1
@@ -186,7 +186,7 @@ create view rv_v2 as select * from rv_v1;
 statement ok
 create view rv_v3 as select * from rv_v2;
 
-statement error 1001
+statement error 1029
 create or replace view rv_v1 as select * from rv_v3;
 
 # Verify non-circular views still work
@@ -199,11 +199,11 @@ select * from rv_v3;
 # Reuse rv_v1 -> rv_v2 -> rv_v3 chain
 
 # Direct self-reference via ALTER VIEW
-statement error 1001
+statement error 1029
 alter view rv_v1 as select * from rv_v1;
 
 # Circular: rv_v1 -> rv_v3 -> rv_v2 -> rv_v1
-statement error 1001
+statement error 1029
 alter view rv_v1 as select * from rv_v3;
 
 # Verify views still work after failed ALTER attempts
@@ -252,6 +252,100 @@ drop table if exists t;
 
 statement ok
 drop view if exists v;
+
+# Test: sibling/scalar subquery referencing the same view should NOT be
+# treated as a circular dependency.
+statement ok
+drop view if exists sv_v;
+
+statement ok
+drop table if exists sv_t;
+
+statement ok
+create table sv_t(a int);
+
+statement ok
+insert into sv_t values (1),(2),(3);
+
+statement ok
+create view sv_v as select a from sv_t;
+
+# Scalar subquery reads the same view — this is legal, not a loop.
+query I
+select (select count(*) from sv_v) from sv_v order by a;
+----
+3
+3
+3
+
+# Sibling reference: view in both sides of a join
+query II
+select t1.a, t2.a from sv_v t1, sv_v t2 where t1.a = t2.a order by t1.a;
+----
+1 1
+2 2
+3 3
+
+# View + unrelated scalar subquery should not inherit the current
+# view-binding context from the outer SELECT.
+query II
+select sv_v.a, (select count(*) from numbers(5)) from sv_v order by a;
+----
+1 5
+2 5
+3 5
+
+statement ok
+drop view if exists sv_v;
+
+statement ok
+drop table if exists sv_t;
+
+# Test: view -> subquery -> view indirect circular dependency
+# The loop goes through a subquery layer: sq_v1 -> sq_v2 -> (subquery referencing sq_v1)
+statement ok
+drop view if exists sq_v2;
+
+statement ok
+drop view if exists sq_v1;
+
+statement ok
+drop table if exists sq_t;
+
+statement ok
+create table sq_t(a int);
+
+statement ok
+insert into sq_t values (1);
+
+statement ok
+create view sq_v1 as select a from sq_t;
+
+statement ok
+create view sq_v2 as select * from sq_v1;
+
+# Circular via subquery: sq_v1 -> sq_v2 -> sq_v1 (wrapped in a subquery)
+statement error 1029
+create or replace view sq_v1 as select * from sq_t where a in (select * from sq_v2);
+
+# Circular via derived table subquery
+statement error 1029
+create or replace view sq_v1 as select * from (select * from sq_v2) sub;
+
+# Verify views still work after failed attempts
+query I
+select * from sq_v2;
+----
+1
+
+statement ok
+drop view if exists sq_v2;
+
+statement ok
+drop view if exists sq_v1;
+
+statement ok
+drop table if exists sq_t;
 
 statement ok
 create table t(id int);

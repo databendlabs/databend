@@ -19,7 +19,6 @@ arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 arrow-select = { workspace = true }
 arrow-udf-runtime = { workspace = true, optional = true }
-async-backtrace = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-cache = { workspace = true }
 databend-common-exception = { workspace = true }

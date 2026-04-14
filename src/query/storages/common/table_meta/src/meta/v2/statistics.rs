@@ -82,8 +82,10 @@ pub struct SpatialStatistics {
     pub max_y: OrderedFloat<f64>,
     pub srid: i32,
     pub has_null: bool,
+    #[serde(default)]
     pub has_empty_rect: bool,
     // Srid mixed or all rects are empty.
+    #[serde(default)]
     pub is_valid: bool,
 }
 

@@ -3497,10 +3497,10 @@ impl<'a> TypeChecker<'a> {
              -> Result<i64> {
                 Ok(args.get(index).map(|arg| {
                     match ConstantFolder::fold(&arg.as_expr()?, &func_ctx, &BUILTIN_FUNCTIONS).0 {
-                        databend_common_expression::Expr::Constant(Constant {
-                                                                       scalar,
-                                                                       ..
-                                                                   }) => Ok(scalar.get_i64()),
+                        EExpr::Constant(Constant {
+                            scalar,
+                            ..
+                        }) => Ok(scalar.get_i64()),
                         _ => Err(ErrorCode::SemanticError(format!("Invalid arguments for `{func_name}`, {arg_name} is only allowed to be a constant"))),
                     }
                 }).transpose()?.flatten().unwrap_or(default))
@@ -5655,13 +5655,22 @@ impl<'a> TypeChecker<'a> {
         like_str: &str,
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let new_like_str = if let Some(escape) = escape {
-            Cow::Owned(convert_escape_pattern(
-                like_str,
-                escape.chars().next().unwrap(),
-            ))
-        } else {
-            Cow::Borrowed(like_str)
+        let new_like_str = match escape.as_ref() {
+            Some(escape_literal) => {
+                let mut chars = escape_literal.chars();
+                let Some(escape_char) = chars.next() else {
+                    // Empty escape literals must stay on the builtin path to match runtime behavior.
+                    return self.resolve_like_escape(op, span, left, right, escape);
+                };
+
+                if chars.next().is_some() {
+                    // Preserve existing builtin behavior for non-single-character escape literals.
+                    return self.resolve_like_escape(op, span, left, right, escape);
+                }
+
+                Cow::Owned(convert_escape_pattern(like_str, escape_char))
+            }
+            None => Cow::Borrowed(like_str),
         };
         if check_percent(&new_like_str) {
             // Convert to `a is not null`

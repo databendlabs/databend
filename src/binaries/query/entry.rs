@@ -178,28 +178,6 @@ pub async fn start_services(conf: &InnerConfig) -> Result<(), MainError> {
         );
     }
 
-    // ClickHouse HTTP handler.
-    {
-        let hostname = conf.query.common.clickhouse_http_handler_host.clone();
-        let listening = format!(
-            "{}:{}",
-            hostname, conf.query.common.clickhouse_http_handler_port
-        );
-
-        let mut srv = HttpHandler::create(HttpHandlerKind::Clickhouse);
-        let listening = srv
-            .start(listening.parse().with_context(make_error)?)
-            .await
-            .with_context(make_error)?;
-        shutdown_handle.add_service("ClickHouseHandler", srv);
-
-        let http_handler_usage = HttpHandlerKind::Clickhouse.usage(listening);
-        info!(
-            "Listening for ClickHouse compatibility http protocol: {}, Usage: {}",
-            listening, http_handler_usage
-        );
-    }
-
     // Databend HTTP handler.
     {
         let hostname = conf.query.common.http_handler_host.clone();

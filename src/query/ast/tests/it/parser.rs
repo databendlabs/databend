@@ -718,6 +718,10 @@ SELECT * from s;"#,
             CREATE OR REPLACE FILE FORMAT my_csv
                 type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;
         "#,
+        r#"
+            CREATE FILE FORMAT my_csv_encoding
+                type = CSV encoding = 'utf8' encoding_error_mode = 'replace';
+        "#,
         r#"SHOW FILE FORMATS"#,
         r#"DROP FILE FORMAT my_csv"#,
         r#"SELECT * FROM t GROUP BY all"#,
@@ -1228,6 +1232,23 @@ fn test_statement_error() {
         writeln!(file, "---------- Output ---------").unwrap();
         writeln!(file, "{}", err.1).unwrap();
     }
+}
+
+#[test]
+fn test_file_format_trim_space_option() {
+    let sql = r#"
+        COPY INTO mytable
+            FROM 's3://mybucket/data.csv'
+            FILE_FORMAT = (
+                type = CSV
+                trim_space = true
+            )
+    "#;
+
+    let tokens = tokenize_sql(sql).unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+    let displayed = stmt.to_string().to_uppercase();
+    assert!(displayed.contains("TRIM_SPACE = true".to_uppercase().as_str()));
 }
 
 #[test]

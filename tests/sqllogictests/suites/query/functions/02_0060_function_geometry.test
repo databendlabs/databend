@@ -24,6 +24,36 @@ SELECT st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'));
 ----
 1.414213562
 
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.5);
+----
+1
+
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.414);
+----
+0
+
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 2.0);
+----
+1
+
+query B
+SELECT st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 1.9);
+----
+0
+
+query B
+SELECT st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 2.0);
+----
+1
+
+query B
+SELECT st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 1.9);
+----
+0
+
 query R
 SELECT st_length(to_geometry('POINT(1 1)'));
 ----
@@ -743,6 +773,84 @@ SELECT ST_HILBERT(g) FROM collect_test;
 4060086272
 2684354560
 2684354560
+
+
+query T
+SELECT ST_ASWKT(ST_CENTROID(TO_GEOMETRY('POINT(1 2)')));
+----
+POINT(1 2)
+
+query T
+SELECT ST_ASWKT(ST_CENTROID(TO_GEOMETRY('LINESTRING(0 0, 2 0)')));
+----
+POINT(1 0)
+
+query T
+SELECT ST_ASWKT(ST_ENVELOPE(TO_GEOMETRY('LINESTRING(0 0, 2 3)')));
+----
+POLYGON((0 0,2 0,2 3,0 3,0 0))
+
+query T
+SELECT ST_ASWKT(ST_UNION(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)')));
+----
+MULTIPOINT(0 0,1 1)
+
+query T
+SELECT ST_ASWKT(ST_INTERSECTION(TO_GEOMETRY('LINESTRING(0 0, 1 1)'), TO_GEOMETRY('LINESTRING(0 0, 1 1)')));
+----
+LINESTRING(0 0,1 1)
+
+query T
+SELECT ST_ASWKT(ST_DIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)')));
+----
+POINT(0 0)
+
+query T
+SELECT ST_ASWKT(ST_SYMDIFFERENCE(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)')));
+----
+MULTIPOINT(0 0,1 1)
+
+statement ok
+CREATE OR REPLACE TABLE geom_union_agg (g GEOMETRY);
+
+statement ok
+INSERT INTO geom_union_agg VALUES ('POINT(0 0)'), ('POINT(1 1)'), ('POINT(2 2)');
+
+query T
+SELECT ST_ASWKT(ST_UNION_AGG(g)) FROM geom_union_agg;
+----
+MULTIPOINT(0 0,1 1,2 2)
+
+statement ok
+DROP TABLE geom_union_agg;
+
+statement ok
+CREATE OR REPLACE TABLE geom_intersection_agg (g GEOMETRY);
+
+statement ok
+INSERT INTO geom_intersection_agg VALUES ('POINT(1 1)'), ('POINT(1 1)');
+
+query T
+SELECT ST_ASWKT(ST_INTERSECTION_AGG(g)) FROM geom_intersection_agg;
+----
+POINT(1 1)
+
+statement ok
+DROP TABLE geom_intersection_agg;
+
+statement ok
+CREATE OR REPLACE TABLE geom_envelope_agg (g GEOMETRY);
+
+statement ok
+INSERT INTO geom_envelope_agg VALUES ('POINT(0 0)'), ('POINT(2 3)');
+
+query T
+SELECT ST_ASWKT(ST_ENVELOPE_AGG(g)) FROM geom_envelope_agg;
+----
+POLYGON((0 0,2 0,2 3,0 3,0 0))
+
+statement ok
+DROP TABLE geom_envelope_agg;
 
 statement ok
 DROP TABLE collect_test;

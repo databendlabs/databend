@@ -40,11 +40,14 @@ fn test_decode_v164_csv_file_format_params() -> anyhow::Result<()> {
         escape: "\\".to_string(),
         quote: "\"".to_string(),
         error_on_column_count_mismatch: true,
+        trim_space: false,
         allow_quoted_nulls: true,
         empty_field_as: EmptyFieldAs::Null,
         quoted_empty_field_as: EmptyFieldAs::FieldDefault,
         binary_format: BinaryFormat::Hex,
         geometry_format: GeometryDataType::EWKB,
+        encoding: "UTF-8".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
 
     common::test_load_old(

@@ -35,6 +35,7 @@ use databend_common_sql::plans::ScalarExpr;
 
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
+use super::types::SpatialRuntimeFilterMode;
 
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx, is_null_equal)
@@ -93,6 +94,7 @@ pub async fn build_runtime_filter(
     build_keys: &[RemoteExpr],
     probe_keys: ProbeKeysWithRuntimeFilter,
     build_table_indexes: Vec<Option<IndexType>>,
+    spatial_modes: Vec<Option<SpatialRuntimeFilterMode>>,
 ) -> Result<PhysicalRuntimeFilters> {
     if !ctx.get_settings().get_enable_join_runtime_filter()? {
         return Ok(Default::default());
@@ -129,11 +131,13 @@ pub async fn build_runtime_filter(
         column_idx,
         is_null_equal,
         build_table_index,
+        spatial_mode,
     ) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
         .zip(build_table_indexes.into_iter())
-        .filter_map(|((b, p), table_idx)| {
+        .zip(spatial_modes.into_iter())
+        .filter_map(|(((b, p), table_idx), spatial_mode)| {
             p.map(|(p, scan_id, table_index, column_idx, is_null_equal)| {
                 (
                     b,
@@ -143,6 +147,7 @@ pub async fn build_runtime_filter(
                     column_idx,
                     is_null_equal,
                     table_idx,
+                    spatial_mode,
                 )
             })
         })
@@ -177,8 +182,7 @@ pub async fn build_runtime_filter(
         let enable_min_max_runtime_filter =
             !is_null_equal && is_type_supported_for_min_max_filter(&data_type);
 
-        let is_spatial = matches!(data_type, DataType::Geometry | DataType::Geography);
-        let enable_inlist_runtime_filter = !is_null_equal && !is_spatial;
+        let enable_inlist_runtime_filter = !is_null_equal && spatial_mode.is_none();
 
         // Create and add the runtime filter
         let runtime_filter = PhysicalRuntimeFilter {
@@ -189,7 +193,7 @@ pub async fn build_runtime_filter(
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
             enable_min_max_runtime_filter,
-            is_spatial,
+            spatial_mode,
         };
         filters.push(runtime_filter);
     }

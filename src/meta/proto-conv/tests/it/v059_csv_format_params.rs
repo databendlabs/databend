@@ -47,11 +47,14 @@ fn test_decode_v59_csv_file_format_params() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             quote: "\'".to_string(),
             error_on_column_count_mismatch: false,
+            trim_space: false,
             allow_quoted_nulls: false,
             empty_field_as: Default::default(),
             quoted_empty_field_as: EmptyFieldAs::String,
             binary_format: Default::default(),
             geometry_format: Default::default(),
+            encoding: "UTF-8".to_string(),
+            encoding_error_mode: "strict".to_string(),
         })
     };
     common::test_load_old(func_name!(), file_format_params_v59.as_slice(), 0, want())?;
