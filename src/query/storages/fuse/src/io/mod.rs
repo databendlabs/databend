@@ -15,6 +15,7 @@
 mod locations;
 pub mod read;
 mod segments;
+mod snapshot_normalizer;
 mod snapshots;
 mod write;
 
@@ -34,6 +35,7 @@ pub use read::VirtualBlockReadResult;
 pub use read::VirtualColumnReader;
 pub use segments::SegmentsIO;
 pub use segments::SerializedSegment;
+pub(crate) use snapshot_normalizer::normalize_snapshot;
 pub use snapshots::SnapshotLiteExtended;
 pub use snapshots::SnapshotsIO;
 pub use write::build_column_hlls;

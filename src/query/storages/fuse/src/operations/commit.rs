@@ -570,6 +570,7 @@ impl FuseTable {
                             reader,
                             Some(snapshot_loc),
                             TableSnapshot::VERSION,
+                            self.get_operator(),
                         )
                         .await
                         .ok()
