@@ -32,7 +32,7 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::InsertInputSource;
 use databend_common_sql::plans::Plan;
-use databend_common_storages_stage::BytesBatch;
+use databend_query_storage_stage_support::BytesBatch;
 use databend_storages_common_session::TxnState;
 use fastrace::future::FutureExt;
 use futures::StreamExt;

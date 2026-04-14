@@ -91,7 +91,6 @@ pub enum EndpointKind {
     HeartBeat,
     StartQuery,
     PollQuery,
-    Clickhouse,
     NoAuth,
     Verify,
     UploadToStage,
@@ -135,9 +134,9 @@ impl EndpointKind {
                     Ok(Some(TokenType::Session))
                 }
             }
-            EndpointKind::Login | EndpointKind::Clickhouse => Err(ErrorCode::AuthenticateFailure(
-                format!("Invalid token usage: databend token cannot be used for {self:?}",),
-            )),
+            EndpointKind::Login => Err(ErrorCode::AuthenticateFailure(format!(
+                "Invalid token usage: databend token cannot be used for {self:?}",
+            ))),
         }
     }
 }
@@ -192,7 +191,7 @@ fn extract_baggage_from_headers(headers: &HeaderMap) -> Option<Vec<(String, Stri
 
 fn get_credential(
     req: &Request,
-    kind: HttpHandlerKind,
+    _kind: HttpHandlerKind,
     endpoint_kind: EndpointKind,
 ) -> Result<Credential> {
     if matches!(endpoint_kind, EndpointKind::NoAuth) {
@@ -208,13 +207,9 @@ fn get_credential(
     }
     let client_ip = get_client_ip(req);
     if std_auth_headers.is_empty() {
-        if matches!(kind, HttpHandlerKind::Clickhouse) {
-            get_clickhouse_name_password(req, client_ip)
-        } else {
-            Err(ErrorCode::AuthenticateFailure(
-                "Authentication error: no authorization header provided",
-            ))
-        }
+        Err(ErrorCode::AuthenticateFailure(
+            "Authentication error: no authorization header provided",
+        ))
     } else {
         get_credential_from_header(&std_auth_headers, client_ip, endpoint_kind)
     }
@@ -295,39 +290,6 @@ fn get_credential_from_header(
         Err(ErrorCode::AuthenticateFailure(
             "Authentication error: unsupported authorization header format",
         ))
-    }
-}
-
-fn get_clickhouse_name_password(req: &Request, client_ip: Option<String>) -> Result<Credential> {
-    let (user, key) = (
-        req.headers().get("X-CLICKHOUSE-USER"),
-        req.headers().get("X-CLICKHOUSE-KEY"),
-    );
-    if let (Some(name), Some(password)) = (user, key) {
-        let c = Credential::Password {
-            name: String::from_utf8(name.as_bytes().to_vec()).unwrap(),
-            password: Some(password.as_bytes().to_vec()),
-            client_ip,
-        };
-        Ok(c)
-    } else {
-        let query_str = req.uri().query().unwrap_or_default();
-        let query_params = serde_urlencoded::from_str::<HashMap<String, String>>(query_str)
-            .map_err(|e| {
-                ErrorCode::BadArguments(format!("Failed to parse query parameters: {}", e))
-            })?;
-        let (user, key) = (query_params.get("user"), query_params.get("password"));
-        if let (Some(name), Some(password)) = (user, key) {
-            Ok(Credential::Password {
-                name: name.clone(),
-                password: Some(password.as_bytes().to_vec()),
-                client_ip,
-            })
-        } else {
-            Err(ErrorCode::AuthenticateFailure(
-                "Authentication error: no credentials found in headers or query parameters",
-            ))
-        }
     }
 }
 
@@ -742,7 +704,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &poem::http::HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
+    let sensitive_headers = ["authorization", "cookie", "x-clickhouse-key"];
     headers
         .iter()
         .map(|(k, v)| {
@@ -784,7 +746,10 @@ pub async fn json_response<E: Endpoint>(next: E, req: Request) -> PoemResult<Res
 
 #[cfg(test)]
 mod tests {
+    use poem::http::HeaderMap;
+
     use crate::servers::http::middleware::session::get_client_ip;
+    use crate::servers::http::middleware::session::sanitize_request_headers;
 
     #[test]
     fn test_parse_ip() {
@@ -793,5 +758,27 @@ mod tests {
             .finish();
         let ip = get_client_ip(&req);
         assert_eq!(ip, Some("1.2.3.4".to_string()));
+    }
+
+    #[test]
+    fn test_sanitize_request_headers_masks_sensitive_values() {
+        let mut headers = HeaderMap::new();
+        headers.insert("authorization", "Bearer secret".parse().unwrap());
+        headers.insert("cookie", "session=secret".parse().unwrap());
+        headers.insert("x-clickhouse-key", "secret-key".parse().unwrap());
+        headers.insert("x-clickhouse-user", "databend".parse().unwrap());
+
+        let sanitized = sanitize_request_headers(&headers);
+
+        assert_eq!(sanitized.get("authorization"), Some(&"******".to_string()));
+        assert_eq!(sanitized.get("cookie"), Some(&"******".to_string()));
+        assert_eq!(
+            sanitized.get("x-clickhouse-key"),
+            Some(&"******".to_string())
+        );
+        assert_eq!(
+            sanitized.get("x-clickhouse-user"),
+            Some(&"databend".to_string())
+        );
     }
 }

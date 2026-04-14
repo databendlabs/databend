@@ -30,5 +30,8 @@ include ./queries.test
 statement ok
 set force_aggregate_data_spill = 1;
 
+statement ok
+set max_aggregate_spill_level = 2;
+
 # TPC-H TEST
 include ./queries.test

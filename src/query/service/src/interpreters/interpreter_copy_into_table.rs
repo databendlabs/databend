@@ -49,7 +49,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
-use databend_common_storages_stage::StageTable;
+use databend_query_storage_stage_support::StageTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
 use itertools::Itertools;

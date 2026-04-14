@@ -91,12 +91,14 @@ impl Settings {
             .map(|s| s == "rounding")
             .unwrap_or(true);
         let disable_variant_check = self.get_disable_variant_check()?;
+        let enable_auto_detect_datetime_format = self.get_enable_auto_detect_datetime_format()?;
         Ok(InputFormatSettings {
             jiff_timezone,
             geometry_format,
             binary_format,
             is_rounding_mode,
             disable_variant_check,
+            enable_auto_detect_datetime_format,
         })
     }
 
@@ -107,11 +109,13 @@ impl Settings {
         })?;
         let geometry_format = self.get_geometry_output_format()?;
         let binary_format = self.get_binary_output_format()?;
+        let http_json_result_mode = self.get_http_json_result_mode()?;
         let format_null_as_str = self.get_format_null_as_str()?;
         Ok(OutputFormatSettings {
             jiff_timezone,
             geometry_format,
             binary_format,
+            http_json_result_mode,
             format_null_as_str,
         })
     }

@@ -17,6 +17,7 @@ fuse_page
 fuse_segment
 fuse_snapshot
 fuse_statistic
+fuse_tag
 fuse_time_travel_size
 fuse_vacuum2
 fuse_vacuum_drop_aggregating_index

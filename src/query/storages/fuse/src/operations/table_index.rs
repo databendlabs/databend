@@ -587,6 +587,7 @@ impl AsyncTransform for NgramIndexTransform {
 
         let mut builder = BloomIndexBuilder::create(
             self.ctx.get_function_context()?,
+            databend_storages_common_index::BloomIndexType::default(),
             BTreeMap::new(),
             &self.index_ngram_args,
         )?;

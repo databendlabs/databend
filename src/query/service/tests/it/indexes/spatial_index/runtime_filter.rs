@@ -199,3 +199,48 @@ async fn test_spatial_runtime_filter_pruner() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_spatial_runtime_filter_pruner_distance_within_bounds() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let table_ctx: Arc<dyn TableContext> = ctx.clone();
+    let settings = ReadSettings::from_ctx(&table_ctx)?;
+
+    let operator = Operator::new(opendal::services::Memory::default())?.finish();
+    let schema = build_schema();
+    let block = build_block()?;
+    let rows_count = block.num_rows() as u64;
+    let (index_location, index_size, spatial_stats) =
+        build_spatial_index(&operator, schema.clone(), block).await?;
+
+    let part = FuseBlockPartInfo::create(
+        "block".to_string(),
+        None,
+        0,
+        Some(index_location),
+        index_size,
+        rows_count,
+        HashMap::new(),
+        None,
+        Some(spatial_stats),
+        Compression::Lz4Raw,
+        None,
+        None,
+        None,
+    );
+
+    // Equivalent to building a distance runtime filter from POINT(100 100) with threshold 10.
+    let pruned_far = prune_with_bounds(schema.clone(), operator.clone(), settings, &part, [
+        90.0, 90.0, 110.0, 110.0,
+    ])
+    .await?;
+    assert!(pruned_far);
+
+    // Equivalent to building a distance runtime filter from POINT(5 5) with threshold 10.
+    let kept_near =
+        prune_with_bounds(schema, operator, settings, &part, [-5.0, -5.0, 15.0, 15.0]).await?;
+    assert!(!kept_near);
+
+    Ok(())
+}

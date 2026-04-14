@@ -14,6 +14,7 @@
 
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
+use databend_common_io::prelude::HttpHandlerDataFormat;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_version::BUILD_INFO;
@@ -92,6 +93,31 @@ async fn test_set_settings() {
                 settings.get_inlist_runtime_bloom_prune_threshold().unwrap(),
                 10
             );
+        }
+
+        {
+            settings
+                .set_setting(
+                    "prewhere_selectivity_threshold".to_string(),
+                    "80".to_string(),
+                )
+                .unwrap();
+            assert_eq!(settings.get_prewhere_selectivity_threshold().unwrap(), 80);
+
+            settings
+                .set_setting(
+                    "prewhere_selectivity_threshold".to_string(),
+                    "0".to_string(),
+                )
+                .unwrap();
+            assert_eq!(settings.get_prewhere_selectivity_threshold().unwrap(), 0);
+
+            let result = settings.set_setting(
+                "prewhere_selectivity_threshold".to_string(),
+                "101".to_string(),
+            );
+            let expect = "WrongValueForVariable. Code: 2803, Text = Value 101 is not within the range [0, 100].";
+            assert_eq!(expect, format!("{}", result.unwrap_err()));
         }
     }
 
@@ -275,4 +301,26 @@ async fn test_flight_keep_alive_settings() {
         err.to_string()
             .contains("flight_client_keep_alive_retries must be less than or equal to u32::MAX")
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_http_json_result_mode_settings() {
+    let settings = Settings::create(Tenant::new_literal("test"));
+
+    assert_eq!(
+        settings.get_http_json_result_mode().unwrap(),
+        HttpHandlerDataFormat::Display
+    );
+
+    settings
+        .set_setting("http_json_result_mode".to_string(), "driver".to_string())
+        .unwrap();
+    assert_eq!(
+        settings.get_http_json_result_mode().unwrap(),
+        HttpHandlerDataFormat::Driver
+    );
+
+    let result = settings.set_setting("http_json_result_mode".to_string(), "invalid".to_string());
+    let expect = "WrongValueForVariable. Code: 2803, Text = Value invalid is not within the allowed values [\"display\", \"driver\"].";
+    assert_eq!(expect, format!("{}", result.unwrap_err()));
 }

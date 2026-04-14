@@ -32,6 +32,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::Finder;
+use super::reject_grouping_functions;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -88,10 +89,7 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
         let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
-            )
+            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
         };
 
         let mut finder = Finder::new(&f);
@@ -102,6 +100,8 @@ impl Binder {
             )
             .set_span(scalar.span()));
         }
+
+        reject_grouping_functions(std::iter::once(&scalar), "Where clause")?;
 
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
@@ -509,8 +509,8 @@ impl Binder {
             || stmt.having.is_some()
             || stmt.distinct
             || stmt.qualify.is_some()
-            || !bind_context.aggregate_info.group_items.is_empty()
-            || !bind_context.aggregate_info.aggregate_functions.is_empty()
+            || bind_context.aggregate_info.has_group_items()
+            || bind_context.aggregate_info.has_aggregate_calls()
             || bind_context.has_srf_recursive()
         {
             return Ok(());

@@ -56,6 +56,7 @@ tantivy-common = { workspace = true }
 tantivy-fst = { workspace = true }
 thiserror = { workspace = true }
 unicase = { workspace = true }
+xorf = { workspace = true }
 xorfilter-rs = { workspace = true }
 zerocopy = { workspace = true }
 

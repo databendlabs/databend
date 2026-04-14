@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::LazyLock;
 
-use arrow_csv::reader::Format;
 use arrow_json::reader::ValueIter;
 use arrow_json::reader::infer_json_schema_from_iterator;
 use arrow_schema::ArrowError;
@@ -24,6 +23,7 @@ use arrow_schema::DataType;
 use arrow_schema::Field;
 use arrow_schema::Fields;
 use arrow_schema::Schema;
+use csv_core::ReadRecordResult;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -33,17 +33,20 @@ use databend_common_expression::TableSchema;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_formats::RecordDelimiter;
+use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::TextFileFormatParams;
 use databend_common_pipeline_transforms::AccumulatingTransform;
-use databend_common_storages_stage::BytesBatch;
-use databend_common_storages_stage::parse_tsv_records_for_infer_schema;
+use databend_query_storage_stage_support::BytesBatch;
+use databend_query_storage_stage_support::parse_tsv_records_for_infer_schema;
 use itertools::Itertools;
 use regex::RegexSet;
 
 use crate::table_functions::infer_schema::merge::merge_schema;
 
 const MAX_SINGLE_FILE_BYTES: usize = 100 * 1024 * 1024;
+const MAX_CSV_COLUMNS: usize = 1024;
 static TEXT_INFER_REGEX_SET: LazyLock<RegexSet> = LazyLock::new(|| {
     RegexSet::new([
         r"(?i)^(true)$|^(false)$(?-i)", // BOOLEAN
@@ -230,6 +233,181 @@ impl InferSchemaSeparator {
             .collect();
         Ok(Schema::new(fields))
     }
+
+    fn process_csv_record(
+        params: &CsvFileFormatParams,
+        row: &[u8],
+        ends: &[usize],
+        headers: &mut Option<Vec<String>>,
+        column_types: &mut Vec<TextInferredDataType>,
+        expected_num_fields: &mut Option<usize>,
+    ) -> std::result::Result<bool, ArrowError> {
+        if let Some(expected) = *expected_num_fields {
+            if ends.len() != expected {
+                return Err(ArrowError::CsvError(format!(
+                    "incorrect number of fields in CSV record: expected {expected}, got {}",
+                    ends.len()
+                )));
+            }
+        }
+
+        let mut field_start = 0usize;
+        let mut fields = Vec::with_capacity(ends.len());
+        for field_end in ends {
+            let field = &row[field_start..*field_end];
+            let field = if params.trim_space {
+                trim_ascii_space(field)
+            } else {
+                field
+            };
+            fields.push(field);
+            field_start = *field_end;
+        }
+
+        if headers.is_none() {
+            *expected_num_fields = Some(fields.len());
+            *headers = Some(if params.headers != 0 {
+                fields
+                    .iter()
+                    .map(|f| String::from_utf8_lossy(f).to_string())
+                    .collect::<Vec<_>>()
+            } else {
+                (0..fields.len())
+                    .map(|i| format!("column_{}", i + 1))
+                    .collect::<Vec<_>>()
+            });
+            *column_types = vec![TextInferredDataType::default(); fields.len()];
+
+            if params.headers != 0 {
+                return Ok(false);
+            }
+        }
+
+        for (idx, inferred) in column_types.iter_mut().enumerate() {
+            if let Some(field) = fields.get(idx) {
+                inferred.update(field);
+            }
+        }
+        Ok(true)
+    }
+
+    fn infer_csv_schema(
+        bytes: &[u8],
+        params: &CsvFileFormatParams,
+        is_eof: bool,
+        max_records: Option<usize>,
+    ) -> std::result::Result<Schema, Option<ArrowError>> {
+        let escape = if params.escape.is_empty() {
+            None
+        } else {
+            Some(params.escape.as_bytes()[0])
+        };
+        let terminator = match params.record_delimiter.as_str().try_into() {
+            Ok(RecordDelimiter::Crlf) => csv_core::Terminator::CRLF,
+            Ok(RecordDelimiter::Any(v)) => csv_core::Terminator::Any(v),
+            Err(err) => return Err(Some(ArrowError::ParseError(err.message()))),
+        };
+
+        let mut reader = csv_core::ReaderBuilder::new()
+            .delimiter_bytes(params.field_delimiter.as_bytes())
+            .quote(params.quote.as_bytes()[0])
+            .escape(escape)
+            .terminator(terminator)
+            .build();
+
+        let max_records = max_records.unwrap_or(usize::MAX);
+        let mut headers: Option<Vec<String>> = None;
+        let mut column_types = vec![];
+        let mut expected_num_fields = None;
+        let mut rows_seen = 0usize;
+
+        let mut buf_in = bytes;
+        let mut flush_on_eof = is_eof;
+        let mut buf_out = vec![0u8; bytes.len().max(1)];
+        let mut buf_out_pos = 0usize;
+        let mut field_ends = vec![0usize; MAX_CSV_COLUMNS];
+        let mut n_end = 0usize;
+
+        loop {
+            let input = if !buf_in.is_empty() {
+                buf_in
+            } else if flush_on_eof {
+                flush_on_eof = false;
+                &[]
+            } else {
+                break;
+            };
+
+            let (result, n_in, n_out, new_ends) =
+                reader.read_record(input, &mut buf_out[buf_out_pos..], &mut field_ends[n_end..]);
+            n_end += new_ends;
+
+            match result {
+                ReadRecordResult::InputEmpty => {
+                    if input.is_empty() {
+                        return Err(Some(ArrowError::CsvError("unexpected eof".to_string())));
+                    }
+                    buf_out_pos += n_out;
+                }
+                ReadRecordResult::OutputFull => {
+                    return Err(Some(ArrowError::CsvError(
+                        "csv output buffer full when inferring schema".to_string(),
+                    )));
+                }
+                ReadRecordResult::OutputEndsFull => {
+                    return Err(Some(ArrowError::CsvError(
+                        "csv field buffer full when inferring schema".to_string(),
+                    )));
+                }
+                ReadRecordResult::Record => {
+                    let row_end = buf_out_pos + n_out;
+                    let counted = Self::process_csv_record(
+                        params,
+                        &buf_out[..row_end],
+                        &field_ends[..n_end],
+                        &mut headers,
+                        &mut column_types,
+                        &mut expected_num_fields,
+                    )
+                    .map_err(Some)?;
+                    buf_out_pos = 0;
+                    n_end = 0;
+                    if counted {
+                        rows_seen += 1;
+                    }
+
+                    if rows_seen >= max_records {
+                        break;
+                    }
+                }
+                ReadRecordResult::End => {
+                    if !input.is_empty() {
+                        return Err(Some(ArrowError::CsvError("unexpected eof".to_string())));
+                    }
+                    buf_out_pos += n_out;
+                }
+            }
+
+            if !input.is_empty() {
+                buf_in = &buf_in[n_in..];
+            }
+        }
+
+        if (!buf_in.is_empty() || buf_out_pos != 0 || n_end != 0) && rows_seen < max_records {
+            return Err(Some(ArrowError::CsvError("unexpected eof".to_string())));
+        }
+
+        let Some(headers) = headers else {
+            return Err(None);
+        };
+
+        let fields: Fields = column_types
+            .iter()
+            .zip(headers.iter())
+            .map(|(inferred, field_name)| Field::new(field_name, inferred.get(), true))
+            .collect();
+        Ok(Schema::new(fields))
+    }
 }
 
 impl AccumulatingTransform for InferSchemaSeparator {
@@ -262,23 +440,7 @@ impl AccumulatingTransform for InferSchemaSeparator {
         let file_bytes = bytes.as_slice();
         let result = match &self.file_format_params {
             FileFormatParams::Csv(params) => {
-                let escape = if params.escape.is_empty() {
-                    None
-                } else {
-                    Some(params.escape.as_bytes()[0])
-                };
-
-                let mut format = Format::default()
-                    .with_delimiter(params.field_delimiter.as_bytes()[0])
-                    .with_quote(params.quote.as_bytes()[0])
-                    .with_header(params.headers != 0);
-                if let Some(escape) = escape {
-                    format = format.with_escape(escape);
-                }
-                format
-                    .infer_schema(Cursor::new(file_bytes), self.max_records)
-                    .map(|(schema, _)| schema)
-                    .map_err(Some)
+                Self::infer_csv_schema(file_bytes, params, batch.is_eof, self.max_records)
             }
             FileFormatParams::Text(params) => {
                 Self::infer_tsv_schema(file_bytes, params, batch.is_eof, self.max_records)
@@ -381,8 +543,13 @@ fn human_readable_size(bytes: usize) -> String {
     }
 }
 
+fn trim_ascii_space(data: &[u8]) -> &[u8] {
+    data.trim_ascii()
+}
+
 #[cfg(test)]
 mod tests {
+    use databend_common_meta_app::principal::CsvFileFormatParams;
     use databend_common_meta_app::principal::TextFileFormatParams;
 
     use super::*;
@@ -510,5 +677,54 @@ mod tests {
             "TIMESTAMP NULL"
         );
         assert_eq!(table_schema.field(8).data_type().sql_name(), "VARCHAR NULL");
+    }
+
+    #[test]
+    fn test_infer_csv_schema_trim_space_numbers() {
+        let params = CsvFileFormatParams {
+            trim_space: true,
+            ..CsvFileFormatParams::default()
+        };
+        let schema =
+            InferSchemaSeparator::infer_csv_schema(b" 42 , 123 \n", &params, true, None).unwrap();
+
+        assert_eq!(schema.fields().len(), 2);
+        assert_eq!(schema.field(0).data_type(), &DataType::Int64);
+        assert_eq!(schema.field(1).data_type(), &DataType::Int64);
+    }
+
+    #[test]
+    fn test_infer_csv_schema_trim_space_header_names() {
+        let params = CsvFileFormatParams {
+            headers: 1,
+            trim_space: true,
+            ..CsvFileFormatParams::default()
+        };
+        let schema = InferSchemaSeparator::infer_csv_schema(
+            b"  id  ,  value  \n 42 , hello \n",
+            &params,
+            true,
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(schema.field(0).name(), "id");
+        assert_eq!(schema.field(1).name(), "value");
+        assert_eq!(schema.field(0).data_type(), &DataType::Int64);
+        assert_eq!(schema.field(1).data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_infer_csv_schema_trim_space_quoted_values() {
+        let params = CsvFileFormatParams {
+            trim_space: true,
+            ..CsvFileFormatParams::default()
+        };
+        let schema =
+            InferSchemaSeparator::infer_csv_schema(b"\" 42 \",\" 3.14 \"\n", &params, true, None)
+                .unwrap();
+
+        assert_eq!(schema.field(0).data_type(), &DataType::Int64);
+        assert_eq!(schema.field(1).data_type(), &DataType::Float64);
     }
 }

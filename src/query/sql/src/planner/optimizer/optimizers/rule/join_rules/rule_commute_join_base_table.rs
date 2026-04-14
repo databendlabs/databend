@@ -25,6 +25,12 @@ use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::Operator;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
+
+fn contains_recursive_cte(expr: &SExpr) -> bool {
+    matches!(expr.plan(), RelOperator::RecursiveCteScan(_))
+        || expr.children().any(contains_recursive_cte)
+}
 
 /// Rule to apply commutativity of join operator.
 /// In opposite to RuleCommuteJoin, this rule only applies to base tables.
@@ -58,6 +64,12 @@ impl Rule for RuleCommuteJoinBaseTable {
         let mut join: Join = s_expr.plan().clone().try_into()?;
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
+
+        if join.join_type == JoinType::Cross
+            && (contains_recursive_cte(left_child) || contains_recursive_cte(right_child))
+        {
+            return Ok(());
+        }
 
         // Skip if the children are not base tables.
         if left_child.plan.rel_op() == RelOp::Join || right_child.plan.rel_op() == RelOp::Join {

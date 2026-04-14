@@ -134,6 +134,7 @@ use crate::plans::AddTableRowAccessPolicyPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTableTagPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -141,6 +142,7 @@ use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTableConstraintPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropTableRowAccessPolicyPlan;
+use crate::plans::DropTableTagPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
@@ -1154,6 +1156,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::AddColumn {
+                if_not_exists,
                 column,
                 option: ast_option,
             } => {
@@ -1163,7 +1166,7 @@ impl Binder {
                     .await?
                     .schema();
                 let (field, comment, is_deterministic, is_nextval, is_autoincrement) =
-                    self.analyze_add_column(column, schema).await?;
+                    self.analyze_add_column(column, schema.clone()).await?;
                 let option = match ast_option {
                     AstAddColumnOption::First => AddColumnOption::First,
                     AstAddColumnOption::After(ident) => AddColumnOption::After(
@@ -1177,6 +1180,7 @@ impl Binder {
                     database,
                     table,
                     branch,
+                    if_not_exists: *if_not_exists,
                     field,
                     comment,
                     option,
@@ -1466,14 +1470,39 @@ impl Binder {
                     },
                 )))
             }
+            AlterTableAction::CreateTableTag { spec } => {
+                let navigation = if let Some(point) = &spec.travel_point {
+                    Some(self.resolve_data_travel_point(bind_context, point)?)
+                } else {
+                    None
+                };
+                let name = self.normalize_identifier(&spec.name).name;
+                Ok(Plan::CreateTableTag(Box::new(CreateTableTagPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    name,
+                    navigation,
+                    retain: spec.retain,
+                })))
+            }
+            AlterTableAction::DropTableTag { tag_name } => {
+                let name = self.normalize_identifier(tag_name).name;
+                Ok(Plan::DropTableTag(Box::new(DropTableTagPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    name,
+                })))
+            }
             AlterTableAction::CreateTableBranch { .. }
-            | AlterTableAction::CreateTableTag { .. }
-            | AlterTableAction::DropTableBranch { .. }
-            | AlterTableAction::DropTableTag { .. } => {
+            | AlterTableAction::DropTableBranch { .. } => {
                 // Keep the grammar reserved for the upcoming redesign, but do
                 // not generate legacy branch/tag DDL plans anymore.
                 Err(legacy_table_ref_removed_error(
-                    "ALTER TABLE ... CREATE/DROP BRANCH|TAG",
+                    "ALTER TABLE ... CREATE/DROP BRANCH",
                 ))
             }
         }

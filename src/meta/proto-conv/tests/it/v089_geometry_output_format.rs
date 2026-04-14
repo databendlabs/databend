@@ -39,11 +39,14 @@ fn test_decode_v89_geometry_output_format() -> anyhow::Result<()> {
         escape: "|".to_string(),
         quote: "\'".to_string(),
         error_on_column_count_mismatch: false,
+        trim_space: false,
         allow_quoted_nulls: false,
         empty_field_as: EmptyFieldAs::String,
         quoted_empty_field_as: EmptyFieldAs::String,
         binary_format: BinaryFormat::Base64,
         geometry_format: GeometryDataType::EWKT,
+        encoding: "UTF-8".to_string(),
+        encoding_error_mode: "strict".to_string(),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(

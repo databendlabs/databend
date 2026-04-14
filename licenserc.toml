@@ -18,6 +18,7 @@ excludes = [
     "src/meta/ee",
     "src/query/ee",
     "src/bendsave",
+    "src/bendpy",
     # hidden files
     ".cargo",
     ".databend",

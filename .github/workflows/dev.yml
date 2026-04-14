@@ -64,6 +64,17 @@ jobs:
       runner_arch: ARM64
       license_type: trial
 
+  mac_check:
+    needs: changes
+    if: needs.changes.outputs.any_src_changed == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/check_macos
+        timeout-minutes: 60
+
   test_bendpy:
     needs: changes
     if: needs.changes.outputs.bendpy_changed == 'true'
@@ -88,6 +99,7 @@ jobs:
     needs:
       - changes
       - linux
+      - mac_check
       - test_bendpy
     steps:
       - name: Check Ready to Merge
@@ -96,6 +108,7 @@ jobs:
           SRC_CHANGED: ${{ needs.changes.outputs.any_src_changed }}
           BENDPY_CHANGED: ${{ needs.changes.outputs.bendpy_changed }}
           LINUX_BUILD_RESULT: ${{ needs.linux.result }}
+          MAC_CHECK_RESULT: ${{ needs.mac_check.result }}
           BENDPY_RESULT: ${{ needs.test_bendpy.result }}
         with:
           script: |
@@ -111,8 +124,12 @@ jobs:
               core.info('Required bendpy checks succeeded, ready to merge');
               return;
             }
+            if (process.env.MAC_CHECK_RESULT != 'success') {
+              core.setFailed(`macOS check did not complete successfully (${process.env.MAC_CHECK_RESULT}), not ready to merge`);
+              return;
+            }
             if (process.env.LINUX_BUILD_RESULT == 'success') {
-              core.info('Linux build succeeded, ready to merge');
+              core.info('Linux build and macOS check succeeded, ready to merge');
               return;
             }
             core.setFailed('Build failed, not ready to merge');

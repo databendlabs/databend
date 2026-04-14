@@ -91,10 +91,7 @@ impl SpatialIndexBuilder {
         let mut spatial_offsets = Vec::new();
         for (offset, field) in schema.fields.iter().enumerate() {
             let data_type = field.data_type().remove_nullable();
-            if matches!(
-                data_type,
-                TableDataType::Geometry | TableDataType::Geography
-            ) {
+            if matches!(data_type, TableDataType::Geometry) {
                 spatial_columns.insert(field.column_id());
                 spatial_offsets.push((offset, field.column_id()));
             }

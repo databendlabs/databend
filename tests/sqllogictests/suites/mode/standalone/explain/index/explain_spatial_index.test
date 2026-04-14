@@ -51,6 +51,21 @@ TableScan
 ├── push downs: [filters: [st_intersects(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or stores.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 4.00
 
+query T
+EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_dwithin(location, to_geometry('POINT(10 10)'), 2.0) AND category = 'coffee' AND status = 'active';
+----
+TableScan
+├── table: default.test_spatial_index_db.stores
+├── scan id: 0
+├── output columns: [store_id (#0), category (#1), store_name (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 4
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
+└── estimated rows: 1.60
+
 statement ok
 INSERT INTO stores VALUES
 (9, 'tea', 'Gamma', 'active', TO_GEOMETRY('POINT(50 50)')),
@@ -90,6 +105,21 @@ TableScan
 ├── push downs: [filters: [st_intersects(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') or stores.category (#1) = 'coffee'], limit: NONE]
 └── estimated rows: 7.00
 
+query T
+EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_dwithin(location, to_geometry('POINT(10 10)'), 2.0) AND category = 'coffee' AND status = 'active';
+----
+TableScan
+├── table: default.test_spatial_index_db.stores
+├── scan id: 0
+├── output columns: [store_id (#0), category (#1), store_name (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 7
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 7 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, bloom pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
+└── estimated rows: 2.80
+
 statement ok
 CREATE TABLE districts (district_id INT, district_name String, geom Geometry);
 
@@ -110,6 +140,43 @@ HashJoin
 ├── probe keys: []
 ├── keys is null equal: []
 ├── filters: [st_within(s.location (#7), d.geom (#2))]
+├── build join filters:
+│   └── filter id:0, build key:d.geom (#2), probe targets:[s.location (#7)@scan1], filter type:spatial
+├── estimated rows: 56.00
+├── TableScan(Build)
+│   ├── table: default.test_spatial_index_db.districts
+│   ├── scan id: 0
+│   ├── output columns: [district_name (#1), geom (#2)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── table: default.test_spatial_index_db.stores
+    ├── scan id: 1
+    ├── output columns: [store_name (#5), location (#7)]
+    ├── read rows: 14
+    ├── read size: < 1 KiB
+    ├── partitions total: 7
+    ├── partitions scanned: 7
+    ├── pruning stats: [segments: <range pruning: 7 to 7 cost: 1 ms>, blocks: <range pruning: 7 to 7 cost: 1 ms>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 14.00
+
+query T
+EXPLAIN SELECT d.district_name, s.store_name FROM districts d JOIN stores s ON st_dwithin(s.location, d.geom, 2.0);
+----
+HashJoin
+├── output columns: [s.store_name (#5), d.district_name (#1)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [st_dwithin(s.location (#7), d.geom (#2), 2)]
 ├── build join filters:
 │   └── filter id:0, build key:d.geom (#2), probe targets:[s.location (#7)@scan1], filter type:spatial
 ├── estimated rows: 56.00
@@ -243,6 +310,66 @@ HashJoin
     ├── apply join filters: [#0]
     └── estimated rows: 14.00
 
+query T
+EXPLAIN ANALYZE SELECT d.district_name, s.store_name FROM districts d JOIN stores s ON st_dwithin(s.location, d.geom, 2.0);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [s.store_name (#5), d.district_name (#1)]
+├── join type: INNER
+├── build keys: []
+├── probe keys: []
+├── keys is null equal: []
+├── filters: [st_dwithin(s.location (#7), d.geom (#2), 2)]
+├── build join filters:
+│   └── filter id:0, build key:d.geom (#2), probe targets:[s.location (#7)@scan1], filter type:spatial
+├── estimated rows: 56.00
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: 4
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from remote: <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.test_spatial_index_db.districts
+│   ├── scan id: 0
+│   ├── output columns: [district_name (#1), geom (#2)]
+│   ├── read rows: 4
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 4.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: 8
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── read from data cache: <slt:ignore>
+    ├── parts pruned by runtime filter: 3
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── runtime filter spatial time: <slt:ignore>
+    ├── table: default.test_spatial_index_db.stores
+    ├── scan id: 1
+    ├── output columns: [store_name (#5), location (#7)]
+    ├── read rows: 14
+    ├── read size: < 1 KiB
+    ├── partitions total: 7
+    ├── partitions scanned: 7
+    ├── pruning stats: [segments: <range pruning: 7 to 7 <slt:ignore>>, blocks: <range pruning: 7 to 7 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 14.00
+
 statement ok
 CREATE TABLE t_nullable (id INT, category String, location Nullable(Geometry), SPATIAL INDEX idx (location)) row_per_block=2 block_per_segment=1
 
@@ -275,4 +402,3 @@ USE default
 
 statement ok
 DROP DATABASE test_spatial_index_db
-

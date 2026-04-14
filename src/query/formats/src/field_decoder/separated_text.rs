@@ -23,14 +23,12 @@ use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::serialize::read_decimal_with_size;
-use databend_common_expression::serialize::uniform_date;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberColumnBuilder;
 use databend_common_expression::types::array::ArrayColumnBuilder;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
-use databend_common_expression::types::date::clamp_date;
 use databend_common_expression::types::decimal::Decimal;
 use databend_common_expression::types::decimal::DecimalColumnBuilder;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -39,7 +37,6 @@ use databend_common_expression::types::vector::VectorColumnBuilder;
 use databend_common_expression::with_decimal_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::Interval;
-use databend_common_io::cursor_ext::BufferReadDateTimeExt;
 use databend_common_io::cursor_ext::collect_number;
 use databend_common_io::cursor_ext::read_num_text_exact;
 use databend_common_io::geography::geography_from_ewkt_bytes;
@@ -248,11 +245,7 @@ impl SeparatedTextDecoder {
     }
 
     fn read_date(&self, column: &mut Vec<i32>, data: &[u8]) -> Result<()> {
-        let mut buffer_readr = Cursor::new(&data);
-        let date = buffer_readr.read_date_text(&self.common_settings.settings.jiff_timezone)?;
-        let days = uniform_date(date);
-        column.push(clamp_date(days as i64));
-        Ok(())
+        super::common::read_date(column, data, &self.common_settings)
     }
 
     fn read_interval(&self, column: &mut Vec<months_days_micros>, data: &[u8]) -> Result<()> {

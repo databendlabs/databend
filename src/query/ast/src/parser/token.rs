@@ -671,6 +671,10 @@ pub enum TokenKind {
     ENABLE,
     #[token("ENABLE_VIRTUAL_HOST_STYLE", ignore(ascii_case))]
     ENABLE_VIRTUAL_HOST_STYLE,
+    #[token("ENCODING", ignore(ascii_case))]
+    ENCODING,
+    #[token("ENCODING_ERROR_MODE", ignore(ascii_case))]
+    ENCODING_ERROR_MODE,
     #[token("END", ignore(ascii_case))]
     END,
     #[token("ENDPOINT", ignore(ascii_case))]
@@ -1343,6 +1347,8 @@ pub enum TokenKind {
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
+    #[token("TRIM_SPACE", ignore(ascii_case))]
+    TRIM_SPACE,
     #[token("TRUE", ignore(ascii_case))]
     TRUE,
     #[token("TRUNCATE", ignore(ascii_case))]

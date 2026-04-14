@@ -24,19 +24,17 @@ mod transform_aggregate_final;
 mod transform_aggregate_partial;
 mod transform_partition_bucket;
 mod transform_single_key;
-mod udaf_script;
 
 pub use aggregate_exchange_injector::AggregateInjector;
 pub use aggregate_meta::*;
 pub use aggregator_params::AggregatorParams;
 pub use build_partition_bucket::build_partition_bucket;
+pub use databend_query_script_udf_support::create_udaf_script_function;
 pub use new_aggregate::*;
 pub use transform_aggregate_expand::TransformExpandGroupingSets;
 pub use transform_aggregate_final::TransformFinalAggregate;
 pub use transform_aggregate_partial::TransformPartialAggregate;
 pub use transform_single_key::FinalSingleStateAggregator;
 pub use transform_single_key::PartialSingleStateAggregator;
-pub use udaf_script::*;
 
 pub use self::serde::*;
-use super::runtime_pool;

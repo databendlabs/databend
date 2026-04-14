@@ -74,10 +74,11 @@ impl AggregateHashTable {
         Self {
             direct_append: false,
             current_radix_bits: config.initial_radix_bits,
-            payload: PartitionedPayload::new(
+            payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
                 1 << config.initial_radix_bits,
+                config.partition_start_bit,
                 vec![arena],
             ),
             hash_index: HashIndex::new(&config, capacity),
@@ -105,10 +106,11 @@ impl AggregateHashTable {
         Self {
             direct_append: !need_init_entry,
             current_radix_bits: config.initial_radix_bits,
-            payload: PartitionedPayload::new(
+            payload: PartitionedPayload::new_with_start_bit(
                 group_types,
                 aggrs,
                 1 << config.initial_radix_bits,
+                config.partition_start_bit,
                 vec![arena],
             ),
             hash_index,

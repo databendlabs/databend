@@ -28,6 +28,7 @@ use databend_common_io::GeometryDataType;
 use databend_common_io::constants::NULL_BYTES_ESCAPE;
 use databend_common_io::escape_string;
 use databend_common_io::prelude::BinaryDisplayFormat;
+use encoding_rs::Encoding;
 use paste::paste;
 use serde::Deserialize;
 use serde::Serialize;
@@ -46,6 +47,7 @@ const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
+const OPT_TRIM_SPACE: &str = "trim_space";
 const OPT_QUOTED_EMPTY_FIELD_AS: &str = "quoted_empty_field_as";
 const MISSING_FIELD_AS: &str = "missing_field_as";
 const NULL_FIELD_AS: &str = "null_field_as";
@@ -53,6 +55,10 @@ const NULL_IF: &str = "null_if";
 const OPT_EMPTY_FIELD_AS: &str = "empty_field_as";
 const OPT_BINARY_FORMAT: &str = "binary_format";
 const OPT_USE_LOGIC_TYPE: &str = "use_logic_type";
+const OPT_ENCODING: &str = "encoding";
+const OPT_ENCODING_ERROR_MODE: &str = "encoding_error_mode";
+const DEFAULT_FILE_FORMAT_ENCODING: &str = "UTF-8";
+const DEFAULT_FILE_FORMAT_ENCODING_ERROR: &str = "strict";
 
 /// File format parameters after checking and parsing.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,6 +264,9 @@ impl FileFormatParams {
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
                 let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let encoding = reader.take_string(OPT_ENCODING, default.encoding);
+                let encoding_error_mode =
+                    reader.take_string(OPT_ENCODING_ERROR_MODE, default.encoding_error_mode);
                 let empty_field_as = reader
                     .options
                     .remove(OPT_EMPTY_FIELD_AS)
@@ -276,6 +285,7 @@ impl FileFormatParams {
                 )?;
                 let allow_quoted_nulls =
                     reader.take_bool(OPT_ALLOW_QUOTED_NULLS, default.allow_quoted_nulls)?;
+                let trim_space = reader.take_bool(OPT_TRIM_SPACE, default.trim_space)?;
                 let quoted_empty_field_as = reader
                     .options
                     .remove(OPT_QUOTED_EMPTY_FIELD_AS)
@@ -294,6 +304,9 @@ impl FileFormatParams {
                     quote,
                     error_on_column_count_mismatch,
                     allow_quoted_nulls,
+                    trim_space,
+                    encoding,
+                    encoding_error_mode,
                     quoted_empty_field_as,
                     empty_field_as,
                     binary_format,
@@ -313,6 +326,9 @@ impl FileFormatParams {
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
                 let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let encoding = reader.take_string(OPT_ENCODING, default.encoding);
+                let encoding_error_mode =
+                    reader.take_string(OPT_ENCODING_ERROR_MODE, default.encoding_error_mode);
                 let empty_field_as = reader
                     .options
                     .remove(OPT_EMPTY_FIELD_AS)
@@ -323,6 +339,7 @@ impl FileFormatParams {
                     OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
                     default.error_on_column_count_mismatch,
                 )?;
+                let trim_space = reader.take_bool(OPT_TRIM_SPACE, default.trim_space)?;
                 let output_header = reader.take_bool(OPT_OUTPUT_HEADER, default.output_header)?;
                 FileFormatParams::Text(TextFileFormatParams {
                     compression,
@@ -333,7 +350,10 @@ impl FileFormatParams {
                     quote,
                     escape,
                     null_display,
+                    encoding,
+                    encoding_error_mode,
                     error_on_column_count_mismatch,
+                    trim_space,
                     empty_field_as,
                     output_header,
                 })
@@ -391,6 +411,8 @@ impl FileFormatParams {
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
+                check_option!(p, encoding)?;
+                check_option!(p, encoding_error_mode)?;
             }
             FileFormatParams::Csv(p) => {
                 check_field_delimiter_csv(&p.field_delimiter).map_err(|msg| {
@@ -404,6 +426,8 @@ impl FileFormatParams {
                 check_option!(p, quote)?;
                 check_option!(p, escape)?;
                 check_option!(p, nan_display)?;
+                check_option!(p, encoding)?;
+                check_option!(p, encoding_error_mode)?;
             }
             _ => {}
         }
@@ -511,6 +535,8 @@ pub struct CsvFileFormatParams {
     pub escape: String,
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+    #[serde(default)]
+    pub trim_space: bool,
 
     // load only options
     pub allow_quoted_nulls: bool,
@@ -526,6 +552,10 @@ pub struct CsvFileFormatParams {
     pub binary_format: BinaryFormat,
     pub geometry_format: GeometryDataType,
     pub null_display: String,
+    #[serde(default = "default_file_format_encoding")]
+    pub encoding: String,
+    #[serde(default = "default_file_format_encoding_error")]
+    pub encoding_error_mode: String,
 }
 
 impl Default for CsvFileFormatParams {
@@ -538,6 +568,7 @@ impl Default for CsvFileFormatParams {
             escape: "".to_string(),
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            trim_space: false,
             allow_quoted_nulls: false,
             empty_field_as: EmptyFieldAs::Null,
             quoted_empty_field_as: EmptyFieldAs::String,
@@ -546,6 +577,8 @@ impl Default for CsvFileFormatParams {
             geometry_format: GeometryDataType::default(),
             nan_display: "NaN".to_string(),
             null_display: NULL_BYTES_ESCAPE.to_string(),
+            encoding: default_file_format_encoding(),
+            encoding_error_mode: default_file_format_encoding_error(),
         }
     }
 }
@@ -572,6 +605,7 @@ pub struct TextFileFormatParams {
     // not used
     pub quote: String,
     pub error_on_column_count_mismatch: bool,
+    pub trim_space: bool,
 
     // load only options
     pub empty_field_as: EmptyFieldAs,
@@ -582,6 +616,10 @@ pub struct TextFileFormatParams {
     // field encoding/decoding
     pub nan_display: String,
     pub null_display: String,
+    #[serde(default = "default_file_format_encoding")]
+    pub encoding: String,
+    #[serde(default = "default_file_format_encoding_error")]
+    pub encoding_error_mode: String,
 }
 
 impl Default for TextFileFormatParams {
@@ -595,10 +633,13 @@ impl Default for TextFileFormatParams {
             // not used, only for compat
             quote: "\"".to_string(),
             error_on_column_count_mismatch: true,
+            trim_space: false,
             empty_field_as: EmptyFieldAs::FieldDefault,
             output_header: false,
             nan_display: "NaN".to_string(),
             null_display: NULL_BYTES_ESCAPE.to_string(),
+            encoding: default_file_format_encoding(),
+            encoding_error_mode: default_file_format_encoding_error(),
         }
     }
 }
@@ -941,8 +982,8 @@ impl Display for FileFormatParams {
                     "TYPE = CSV COMPRESSION = {:?} \
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
-                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
-                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
@@ -952,9 +993,12 @@ impl Display for FileFormatParams {
                     params.output_header,
                     escape_string(&params.null_display),
                     escape_string(&params.nan_display),
+                    escape_string(&params.encoding),
+                    escape_string(&params.encoding_error_mode),
                     params.empty_field_as,
                     params.binary_format,
                     params.error_on_column_count_mismatch,
+                    params.trim_space,
                     params.allow_quoted_nulls,
                     params.quoted_empty_field_as,
                 )
@@ -965,8 +1009,8 @@ impl Display for FileFormatParams {
                     "TYPE = TEXT COMPRESSION = {:?} \
                      FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' ESCAPE = '{}' \
                      SKIP_HEADER = {} OUTPUT_HEADER = {} \
-                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' EMPTY_FIELD_AS = {} \
-                     ERROR_ON_COLUMN_COUNT_MISMATCH = {}",
+                     NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} \
+                     ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {}",
                     params.compression,
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
@@ -975,8 +1019,11 @@ impl Display for FileFormatParams {
                     params.output_header,
                     escape_string(&params.null_display),
                     escape_string(&params.nan_display),
+                    escape_string(&params.encoding),
+                    escape_string(&params.encoding_error_mode),
                     params.empty_field_as,
                     params.error_on_column_count_mismatch,
+                    params.trim_space,
                 )
             }
             FileFormatParams::Xml(params) => {
@@ -1071,6 +1118,33 @@ fn check_nan_display(nan_display: &str) -> std::result::Result<(), String> {
     check_choices(nan_display, &["nan", "NaN", "null", "NULL"])
 }
 
+fn default_file_format_encoding() -> String {
+    DEFAULT_FILE_FORMAT_ENCODING.to_string()
+}
+
+fn default_file_format_encoding_error() -> String {
+    DEFAULT_FILE_FORMAT_ENCODING_ERROR.to_string()
+}
+
+pub fn check_encoding(option: &str) -> std::result::Result<(), String> {
+    if option.is_empty() {
+        return Err("Should not be empty.".into());
+    }
+
+    if Encoding::for_label_no_replacement(option.trim().as_bytes()).is_none() {
+        return Err("Unsupported encoding label.".into());
+    }
+
+    Ok(())
+}
+
+pub fn check_encoding_error_mode(option: &str) -> std::result::Result<(), String> {
+    match option.to_ascii_lowercase().as_str() {
+        "strict" | "replace" => Ok(()),
+        _ => Err("The valid values are 'strict', 'replace'.".into()),
+    }
+}
+
 pub fn check_quote(option: &str) -> std::result::Result<(), String> {
     check_choices(option, &["\'", "\"", "`"])
 }
@@ -1118,6 +1192,16 @@ mod tests {
         }
     }
 
+    fn get_csv_params(options: BTreeMap<String, String>) -> CsvFileFormatParams {
+        let params =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .expect("csv file format options should parse");
+        match params {
+            FileFormatParams::Csv(v) => v,
+            _ => unreachable!("expected csv params"),
+        }
+    }
+
     #[test]
     fn test_text_field_delimiter_empty_string() {
         let mut options = BTreeMap::new();
@@ -1140,12 +1224,61 @@ mod tests {
         options.insert("output_header".to_string(), "true".to_string());
         options.insert("null_display".to_string(), "NULL".to_string());
         options.insert("empty_field_as".to_string(), "string".to_string());
+        options.insert("encoding".to_string(), "gbk".to_string());
+        options.insert("encoding_error_mode".to_string(), "replace".to_string());
+        options.insert("trim_space".to_string(), "true".to_string());
 
         let params = get_text_params(options);
         assert!(!params.error_on_column_count_mismatch);
         assert_eq!(params.headers, 2);
         assert!(params.output_header);
         assert_eq!(params.null_display, "NULL");
+        assert_eq!(params.encoding, "gbk");
+        assert_eq!(params.encoding_error_mode, "replace");
         assert_eq!(params.empty_field_as, EmptyFieldAs::String);
+        assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_csv_trim_space_option() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "CSV".to_string());
+        options.insert("trim_space".to_string(), "true".to_string());
+
+        let params = get_csv_params(options);
+        assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_text_encoding_error_default() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+
+        let params = get_text_params(options);
+        assert_eq!(params.encoding_error_mode, "strict");
+    }
+
+    #[test]
+    fn test_text_invalid_encoding_error() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert("encoding_error_mode".to_string(), "ignore".to_string());
+
+        let err =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .unwrap_err();
+        assert!(err.message().contains("ENCODING_ERROR_MODE"));
+    }
+
+    #[test]
+    fn test_text_invalid_encoding_label() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "TEXT".to_string());
+        options.insert("encoding".to_string(), "utf8_typo".to_string());
+
+        let err =
+            FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)
+                .unwrap_err();
+        assert!(err.message().contains("ENCODING"));
     }
 }

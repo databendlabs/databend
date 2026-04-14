@@ -646,7 +646,7 @@ impl Display for Expr {
                     write_expr(expr, Some(affix), true, f)?;
                     write!(f, " LIKE {modifier} ({subquery})")?;
                     if let Some(escape) = escape {
-                        write!(f, " ESCAPE '{escape}'")?;
+                        write!(f, " ESCAPE {}", QuotedString(escape, '\''))?;
                     }
                 }
                 Expr::LikeAnyWithEscape {
@@ -656,7 +656,7 @@ impl Display for Expr {
                     ..
                 } => {
                     write_expr(left, Some(affix), true, f)?;
-                    write!(f, " LIKE ANY {right} ESCAPE '{escape}'")?;
+                    write!(f, " LIKE ANY {right} ESCAPE {}", QuotedString(escape, '\''))?;
                 }
                 Expr::LikeWithEscape {
                     left,
@@ -669,7 +669,7 @@ impl Display for Expr {
                     if *is_not {
                         write!(f, " NOT")?;
                     }
-                    write!(f, " LIKE {right} ESCAPE '{escape}'")?;
+                    write!(f, " LIKE {right} ESCAPE {}", QuotedString(escape, '\''))?;
                 }
                 Expr::Between {
                     expr,
@@ -1029,6 +1029,7 @@ pub enum Literal {
     },
     // Quoted string literal value
     String(String),
+    Binary(Vec<u8>),
     Boolean(bool),
     Null,
 }
@@ -1076,6 +1077,9 @@ impl Display for Literal {
             }
             Literal::String(val) => {
                 write!(f, "{}", QuotedString(val, '\''))
+            }
+            Literal::Binary(val) => {
+                write!(f, "X'{}'", hex::encode_upper(val))
             }
             Literal::Boolean(val) => {
                 if *val {

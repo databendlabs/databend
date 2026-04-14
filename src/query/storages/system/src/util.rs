@@ -20,7 +20,6 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_expression::expr::*;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_string;
@@ -41,78 +40,6 @@ pub fn generate_default_catalog_meta() -> CatalogMeta {
     CatalogMeta {
         catalog_option: CatalogOption::Default,
         created_on: Default::default(),
-    }
-}
-
-pub fn find_gt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
-    match expr {
-        Expr::Constant(_) | Expr::ColumnRef(_) => {}
-        Expr::Cast(Cast { expr, .. }) => find_gt_filter(expr, visitor),
-        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-            if function.signature.name == "gt" || function.signature.name == "gte" {
-                match args.as_slice() {
-                    [
-                        Expr::ColumnRef(ColumnRef { id, .. }),
-                        Expr::Constant(Constant { scalar, .. }),
-                    ]
-                    | [
-                        Expr::Constant(Constant { scalar, .. }),
-                        Expr::ColumnRef(ColumnRef { id, .. }),
-                    ] => {
-                        visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" {
-                // only support this:
-                // 1. where xx and xx and xx
-                // 2. filter: Column `table`, Column `database`
-                for arg in args {
-                    find_gt_filter(arg, visitor)
-                }
-            }
-        }
-        Expr::LambdaFunctionCall(LambdaFunctionCall { args, .. }) => {
-            for arg in args {
-                find_gt_filter(arg, visitor)
-            }
-        }
-    }
-}
-
-pub fn find_lt_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
-    match expr {
-        Expr::Constant(_) | Expr::ColumnRef(_) => {}
-        Expr::Cast(Cast { expr, .. }) => find_lt_filter(expr, visitor),
-        Expr::FunctionCall(FunctionCall { function, args, .. }) => {
-            if function.signature.name == "lt" || function.signature.name == "lte" {
-                match args.as_slice() {
-                    [
-                        Expr::ColumnRef(ColumnRef { id, .. }),
-                        Expr::Constant(Constant { scalar, .. }),
-                    ]
-                    | [
-                        Expr::Constant(Constant { scalar, .. }),
-                        Expr::ColumnRef(ColumnRef { id, .. }),
-                    ] => {
-                        visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" {
-                // only support this:
-                // 1. where xx and xx and xx
-                // 2. filter: Column `table`, Column `database`
-                for arg in args {
-                    find_lt_filter(arg, visitor)
-                }
-            }
-        }
-        Expr::LambdaFunctionCall(LambdaFunctionCall { args, .. }) => {
-            for arg in args {
-                find_lt_filter(arg, visitor)
-            }
-        }
     }
 }
 

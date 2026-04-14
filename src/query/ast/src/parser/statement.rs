@@ -4798,9 +4798,10 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let add_column = map(
         rule! {
-            ADD ~ COLUMN? ~ #column_def ~ ( #add_column_option )?
+            ADD ~ COLUMN? ~ ( IF ~ NOT ~ EXISTS )? ~ #column_def ~ ( #add_column_option )?
         },
-        |(_, _, column, option)| AlterTableAction::AddColumn {
+        |(_, _, if_not_exists, column, option)| AlterTableAction::AddColumn {
+            if_not_exists: if_not_exists.is_some(),
             column,
             option: option.unwrap_or(AddColumnOption::End),
         },
@@ -4928,10 +4929,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             CREATE ~ BRANCH ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
         },
-        |(_, _, branch_name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
-            branch_name,
-            travel_point: opt_travel_point.map(|(_, point)| point),
-            retain: retain.map(|(_, retain)| retain),
+        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableBranch {
+            spec: CreateTableRefSpec {
+                name,
+                travel_point: opt_travel_point.map(|(_, point)| point),
+                retain: retain.map(|(_, retain)| retain),
+            },
         },
     );
 
@@ -4939,10 +4942,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         rule! {
             CREATE ~ TAG ~ #ident ~ ( AT ~ ^#travel_point )? ~ (RETAIN ~ #literal_duration)?
         },
-        |(_, _, tag_name, opt_travel_point, retain)| AlterTableAction::CreateTableTag {
-            tag_name,
-            travel_point: opt_travel_point.map(|(_, point)| point),
-            retain: retain.map(|(_, retain)| retain),
+        |(_, _, name, opt_travel_point, retain)| AlterTableAction::CreateTableTag {
+            spec: CreateTableRefSpec {
+                name,
+                travel_point: opt_travel_point.map(|(_, point)| point),
+                retain: retain.map(|(_, retain)| retain),
+            },
         },
     );
 

@@ -15,6 +15,7 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
 
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
@@ -25,8 +26,12 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::Visitor;
 use crate::plans::walk_expr;
+
+pub const GROUPING_FUNC_NAME: &str = "grouping";
+pub const GROUPING_ID_COLUMN_NAME: &str = "_grouping_id";
 
 // Visitor that find Expressions that match a particular predicate
 pub struct Finder<'a, F>
@@ -73,6 +78,45 @@ where F: Fn(&ScalarExpr) -> bool
         }
         Ok(())
     }
+}
+
+pub fn is_grouping_function(scalar: &ScalarExpr) -> bool {
+    matches!(
+        scalar,
+        ScalarExpr::FunctionCall(func) if func.func_name.eq_ignore_ascii_case(GROUPING_FUNC_NAME)
+    )
+}
+
+pub fn is_grouping_id_item(
+    item: &ScalarItem,
+    grouping_id_index: databend_common_expression::Symbol,
+) -> bool {
+    item.index == grouping_id_index
+}
+
+pub fn grouping_clause_error(function: &FunctionCall, clause_name: &str) -> ErrorCode {
+    let err = if function.params.is_empty() && function.arguments.is_empty() {
+        ErrorCode::BadArguments("grouping requires at least one argument")
+    } else {
+        ErrorCode::SemanticError(format!("{clause_name} can't contain grouping functions"))
+    };
+
+    err.set_span(function.span)
+}
+
+pub fn reject_grouping_functions<'a>(
+    scalars: impl IntoIterator<Item = &'a ScalarExpr>,
+    clause_name: &str,
+) -> Result<()> {
+    for scalar in scalars {
+        let mut grouping_finder = Finder::new(&is_grouping_function);
+        grouping_finder.visit(scalar)?;
+        if let Some(ScalarExpr::FunctionCall(func)) = grouping_finder.scalars().first() {
+            return Err(grouping_clause_error(func, clause_name));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
@@ -180,11 +224,14 @@ impl<'a> JoinPredicate<'a> {
                 };
             }
 
-            if func.arguments.len() > 2 {
-                return Self::Other(scalar);
-            }
-
-            if func.arguments.len() == 2 {
+            // Most join predicates are binary functions. `st_dwithin(left_geom, right_geom, d)`
+            // is a special-case: the third argument is only a constant distance threshold, so
+            // it should still be treated as a predicate between the first two join sides.
+            if (func.arguments.len() == 2)
+                || (func.arguments.len() == 3
+                    && func.func_name == "st_dwithin"
+                    && func.arguments[2].used_columns().is_empty())
+            {
                 let is_equal_op = func.func_name.as_str() == "eq";
                 let left = &func.arguments[0];
                 let right = &func.arguments[1];

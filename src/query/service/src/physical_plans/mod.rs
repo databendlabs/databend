@@ -24,6 +24,7 @@ mod physical_column_mutation;
 mod physical_commit_sink;
 mod physical_compact_source;
 mod physical_constant_table_scan;
+#[cfg(feature = "storage-stage")]
 mod physical_copy_into_location;
 mod physical_copy_into_table;
 mod physical_distributed_insert_select;
@@ -73,6 +74,7 @@ pub use physical_column_mutation::ColumnMutation;
 pub use physical_commit_sink::*;
 pub use physical_compact_source::CompactSource;
 pub use physical_constant_table_scan::ConstantTableScan;
+#[cfg(feature = "storage-stage")]
 pub use physical_copy_into_location::CopyIntoLocation;
 pub use physical_copy_into_table::*;
 pub use physical_cte_consumer::MaterializeCTERef;
@@ -110,6 +112,7 @@ pub use physical_window::*;
 pub use physical_window_partition::*;
 pub use runtime_filter::PhysicalRuntimeFilter;
 pub use runtime_filter::PhysicalRuntimeFilters;
+pub use runtime_filter::SpatialRuntimeFilterMode;
 
 pub mod explain;
 mod format;

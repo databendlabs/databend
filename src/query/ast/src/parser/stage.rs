@@ -139,6 +139,8 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
                 | QUOTE
                 | NAN_DISPLAY
                 | NULL_DISPLAY
+                | ENCODING
+                | ENCODING_ERROR_MODE
                 | ESCAPE
                 | NULL_FIELD_AS
                 | MISSING_FIELD_AS
@@ -159,7 +161,8 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
             (ERROR_ON_COLUMN_COUNT_MISMATCH
                 | OUTPUT_HEADER
                 | USE_LOGIC_TYPE
-                | ALLOW_QUOTED_NULLS) ~ ^"=" ~ ^#literal_bool
+                | ALLOW_QUOTED_NULLS
+                | TRIM_SPACE) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), FileFormatValue::Bool(v)),
     );
