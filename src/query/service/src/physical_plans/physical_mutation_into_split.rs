@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipe;
 use databend_common_sql::IndexType;
+use databend_common_storages_fuse::operations::BlockIdPartitionExchange;
 use databend_common_storages_fuse::operations::MutationSplitProcessor;
 
 use crate::physical_plans::format::MutationSplitFormatter;
@@ -31,6 +33,9 @@ pub struct MutationSplit {
     pub meta: PhysicalPlanMeta,
     pub input: PhysicalPlan,
     pub split_index: IndexType,
+    /// When true, a block_id repartition is inserted before the split to reduce
+    /// duplicate block reads in the downstream RowFetch stage.
+    pub has_row_fetch: bool,
 }
 
 #[typetag::serde]
@@ -65,15 +70,28 @@ impl IPhysicalPlan for MutationSplit {
             meta: self.meta.clone(),
             input,
             split_index: self.split_index,
+            has_row_fetch: self.has_row_fetch,
         })
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         self.input.build_pipeline(builder)?;
 
-        builder
-            .main_pipeline
-            .try_resize(builder.settings.get_max_threads()? as usize)?;
+        let max_threads = builder.settings.get_max_threads()? as usize;
+
+        // Repartition by block_id so each downstream RowFetch processor handles
+        // a disjoint set of blocks, reducing duplicate block reads.
+        if self.has_row_fetch
+            && max_threads > 1
+            && builder
+                .settings
+                .get_enable_mutation_block_id_repartition()?
+        {
+            let exchange = Arc::new(BlockIdPartitionExchange::create(self.split_index));
+            builder.main_pipeline.exchange(max_threads, exchange)?;
+        } else {
+            builder.main_pipeline.try_resize(max_threads)?;
+        }
 
         // The MutationStrategy is FullOperation, use row_id_idx to split
         let mut items = Vec::with_capacity(builder.main_pipeline.output_len());
