@@ -76,30 +76,23 @@ pub(crate) async fn normalize_snapshot(
 
 fn dedup_snapshot_segments(segments: &[Location]) -> SnapshotSegmentDedupInfo {
     let mut seen = HashSet::with_capacity(segments.len());
-    let mut first_locations = HashMap::with_capacity(segments.len());
     let mut deduped_segments = Vec::with_capacity(segments.len());
-    let mut duplicated_segments: HashMap<String, (Location, usize)> = HashMap::new();
+    let mut duplicated_segments: HashMap<Location, usize> = HashMap::new();
 
     for segment in segments {
-        let key = segment.0.clone();
-        if seen.insert(key.clone()) {
-            first_locations.insert(key, segment.clone());
+        if seen.insert(segment.clone()) {
             deduped_segments.push(segment.clone());
             continue;
         }
 
-        let first_location = first_locations
-            .get(&key)
-            .cloned()
-            .unwrap_or_else(|| segment.clone());
         duplicated_segments
-            .entry(key)
-            .and_modify(|(_, count)| *count += 1)
-            .or_insert((first_location, 1));
+            .entry(segment.clone())
+            .and_modify(|count| *count += 1)
+            .or_insert(1);
     }
 
-    let mut duplicated_segments = duplicated_segments.into_values().collect::<Vec<_>>();
-    duplicated_segments.sort_by(|(left, _), (right, _)| left.0.cmp(&right.0));
+    let mut duplicated_segments = duplicated_segments.into_iter().collect::<Vec<_>>();
+    duplicated_segments.sort_by(|(left, _), (right, _)| left.cmp(right));
 
     SnapshotSegmentDedupInfo {
         deduped_segments,
