@@ -218,6 +218,19 @@ impl PingPongCallback for SinkBufferCallback {
         self.buffer
             .try_flush_remote(self.dest_idx, response.data.err());
     }
+
+    fn on_closed(&self) {
+        let remote = &self.buffer.remotes[self.dest_idx];
+        let state = remote.state.lock();
+
+        for channel in &state.channels {
+            channel.pending_queue.close();
+        }
+
+        for channel in &state.channels {
+            while channel.pending_queue.pop().is_ok() {}
+        }
+    }
 }
 
 pub struct ExchangeSinkBuffer {

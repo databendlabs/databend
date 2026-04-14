@@ -466,6 +466,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_merge_into_row_fetch")? != 0)
     }
 
+    pub fn get_enable_mutation_block_id_repartition(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_mutation_block_id_repartition")? != 0)
+    }
+
     pub fn get_max_cte_recursive_depth(&self) -> Result<usize> {
         Ok(self.try_get_u64("max_cte_recursive_depth")? as usize)
     }
