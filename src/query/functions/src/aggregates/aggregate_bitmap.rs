@@ -307,14 +307,18 @@ where
         let state = place.get::<BitmapAggState>();
 
         if OP::support_batch() && view.len() > 2 {
-            let mut bitmaps = Vec::with_capacity(view.len() + 1);
-            if let Some(existing) = state.rb.take() {
-                bitmaps.push(existing);
-            }
             if let Some(validity) = validity {
                 if validity.null_count() == view.len() {
                     return Ok(());
                 }
+            }
+
+            let mut bitmaps = Vec::with_capacity(view.len() + 1);
+            if let Some(existing) = state.rb.take() {
+                bitmaps.push(existing);
+            }
+
+            if let Some(validity) = validity {
                 for (data, valid) in view.iter().zip(validity.iter()) {
                     if valid {
                         bitmaps.push(deserialize_bitmap(data)?);
@@ -325,6 +329,7 @@ where
                     bitmaps.push(deserialize_bitmap(data)?);
                 }
             }
+
             state.rb = Some(OP::batch_op(bitmaps));
             return Ok(());
         }
