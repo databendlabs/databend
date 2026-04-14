@@ -39,7 +39,7 @@ services:
       - 8181:8181
 
   rustfs:
-    image: rustfs/rustfs
+    image: rustfs/rustfs:v0.1.5
     network_mode: "host"
     environment:
       - RUSTFS_ACCESS_KEY=admin
@@ -47,6 +47,11 @@ services:
       - RUSTFS_SERVER_DOMAINS=rustfs
       - RUSTFS_ADDRESS=0.0.0.0:9002
       - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9003
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9002/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   mc:
     depends_on:
       - rustfs
