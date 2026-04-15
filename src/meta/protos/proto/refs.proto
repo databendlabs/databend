@@ -42,3 +42,11 @@ message DroppedBranchMeta {
   // Option<DateTime<Utc>>
   optional string expire_at = 2;
 }
+
+message TableIdBranchName {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 table_id = 1;
+  string branch_name = 2;
+}

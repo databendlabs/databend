@@ -108,3 +108,30 @@ impl FromToProto for mt::DroppedBranchMeta {
         })
     }
 }
+
+impl FromToProto for mt::TableIdBranchName {
+    type PB = pb::TableIdBranchName;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        Ok(Self {
+            table_id: p.table_id,
+            branch_name: p.branch_name,
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        Ok(Self::PB {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            table_id: self.table_id,
+            branch_name: self.branch_name.clone(),
+        })
+    }
+}

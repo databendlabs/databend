@@ -38,6 +38,7 @@ use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
+use databend_common_meta_app::schema::BranchIdToName;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DBIdTableName;
@@ -376,6 +377,7 @@ where
             let key_branch_table_id = TableId {
                 table_id: branch_id,
             };
+            let key_branch_id_to_name = BranchIdToName { branch_id };
             let table_branch = TableBranch {
                 expire_at: req.expire_at,
                 branch_id,
@@ -395,6 +397,7 @@ where
             let mut if_then = vec![
                 txn_put_pb(&key_branch_table_id, &req.new_table_meta)?,
                 txn_put_pb(&key_branch, &table_branch)?,
+                txn_put_pb(&key_branch_id_to_name, &key_branch)?,
             ];
             // Branch creation does not clone catalog-managed indexes. Index definitions are
             // maintained independently per table/branch and can be created on the branch later.
@@ -1077,6 +1080,20 @@ where
                 return Ok(());
             }
         }
+    }
+
+    async fn get_branch_name_by_id(&self, branch_id: u64) -> Result<Option<String>, MetaError> {
+        debug!(req :? =(&branch_id); "RefApi: {}", func_name!());
+
+        let id_to_name_key = BranchIdToName { branch_id };
+
+        let seq_branch_name = self.get_pb(&id_to_name_key).await?;
+
+        debug!(ident :% =(&id_to_name_key); "get_branch_name_by_id");
+
+        let branch_name = seq_branch_name.map(|s| s.data.branch_name);
+
+        Ok(branch_name)
     }
 }
 

@@ -30,6 +30,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
 use databend_common_meta_app::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
+use databend_common_meta_app::schema::BranchIdToName;
 use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseId;
 use databend_common_meta_app::schema::DatabaseIdHistoryIdent;
@@ -132,6 +133,9 @@ where
         let branch_table_id = TableId {
             table_id: req.branch_id,
         };
+        let branch_id_to_name = BranchIdToName {
+            branch_id: req.branch_id,
+        };
         let key_active_branch = TableIdBranchName::new(req.table_id, &req.branch_name);
         let key_dropped_branch =
             DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
@@ -146,16 +150,15 @@ where
             let mut txn = TxnRequest::default();
 
             if let Some(seq_dropped) = self.get_pb(&key_dropped_branch).await? {
-                txn.condition
-                    .push(txn_cond_eq_seq(&key_dropped_branch, seq_dropped.seq));
-                txn.if_then.push(txn_del(&key_dropped_branch));
+                txn_delete_exact(&mut txn, &key_dropped_branch, seq_dropped.seq);
             }
             if let Some(seq_active) = self.get_pb(&key_active_branch).await? {
                 if seq_active.data.branch_id == req.branch_id {
-                    txn.condition
-                        .push(txn_cond_eq_seq(&key_active_branch, seq_active.seq));
-                    txn.if_then.push(txn_del(&key_active_branch));
+                    txn_delete_exact(&mut txn, &key_active_branch, seq_active.seq);
                 }
+            }
+            if let Some(seq_name) = self.get_pb(&branch_id_to_name).await? {
+                txn_delete_exact(&mut txn, &branch_id_to_name, seq_name.seq);
             }
 
             if txn.if_then.is_empty() {
@@ -918,6 +921,7 @@ where
     let branch_table_id = TableId {
         table_id: branch_id,
     };
+    let branch_id_to_name = BranchIdToName { branch_id };
     // Copied-file markers are outside the txn; remove them once and keep the rest retryable.
     let num_removed_copied_files =
         remove_copied_files_for_dropped_table(kv_api, &branch_table_id).await?;
@@ -932,8 +936,10 @@ where
 
         let mut txn = TxnRequest::default();
         if let Some(seq) = branch_key_seq {
-            txn.condition.push(txn_cond_eq_seq(branch_key, seq));
-            txn.if_then.push(txn_del(branch_key));
+            txn_delete_exact(&mut txn, branch_key, seq);
+        }
+        if let Some(seq_name) = kv_api.get_pb(&branch_id_to_name).await? {
+            txn_delete_exact(&mut txn, &branch_id_to_name, seq_name.seq);
         }
         let _ =
             remove_data_for_dropped_table_impl(kv_api, tenant, None, &branch_table_id, &mut txn)

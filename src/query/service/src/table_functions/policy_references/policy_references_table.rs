@@ -36,6 +36,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
+use databend_common_meta_api::RefApi;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_app::data_mask::DataMaskNameIdent;
@@ -57,6 +58,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_users::UserApiProvider;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
+use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
 
 use crate::meta_service_error;
 
@@ -362,6 +364,31 @@ async fn collect_policy_reference_rows(
                     continue;
                 };
 
+                let base_table_id = seq_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_BASE_TABLE_ID)
+                    .and_then(|s| s.parse::<u64>().ok());
+
+                let (branch_name, table_id) = match base_table_id {
+                    Some(base_table_id) => {
+                        let branch_name = meta
+                            .get_branch_name_by_id(table_id)
+                            .await
+                            .map_err(meta_service_error)?;
+                        (branch_name, base_table_id)
+                    }
+                    None => (None, table_id),
+                };
+
+                let domain = if branch_name.is_some() {
+                    "BRANCH".to_string()
+                } else if seq_meta.data.engine.eq_ignore_ascii_case("VIEW") {
+                    "VIEW".to_string()
+                } else {
+                    "TABLE".to_string()
+                };
+
                 let id_to_name_key = TableIdToName { table_id };
                 let Some(name_entry) = meta
                     .get_pb(&id_to_name_key)
@@ -370,14 +397,11 @@ async fn collect_policy_reference_rows(
                 else {
                     continue;
                 };
+                let table_name = name_entry.data.table_name;
 
                 let db_name = catalog.get_db_name_by_id(name_entry.data.db_id).await?;
-                let table_name = name_entry.data.table_name;
-                let domain = if seq_meta.data.engine.eq_ignore_ascii_case("VIEW") {
-                    "VIEW".to_string()
-                } else {
-                    "TABLE".to_string()
-                };
+                let table_name =
+                    branch_name.map_or(table_name.clone(), |b| format!("{table_name}/{b}"));
                 let column_map = seq_meta
                     .data
                     .schema

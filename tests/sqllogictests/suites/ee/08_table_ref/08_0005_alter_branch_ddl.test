@@ -108,7 +108,10 @@ statement ok
 set enable_experimental_row_access_policy=1;
 
 statement ok
-CREATE OR REPLACE TABLE t2(id INT, sensitive INT)
+DROP TABLE IF EXISTS t2
+
+statement ok
+CREATE TABLE t2(id INT, sensitive INT)
 
 statement ok
 INSERT INTO t2 VALUES (1, 10)
@@ -135,8 +138,17 @@ SELECT * FROM t2 ORDER BY id
 ----
 1 10
 
+query TT
+select ref_entity_name, ref_entity_domain from policy_references(POLICY_NAME => 'mask_branch_const') where ref_database_name = 'test_branch_alter'
+----
+t2/dev BRANCH
+
 statement ok
 ALTER TABLE t2/dev MODIFY COLUMN sensitive UNSET MASKING POLICY
+
+query TT
+select ref_entity_name, ref_entity_domain from policy_references(POLICY_NAME => 'mask_branch_const') where ref_database_name = 'test_branch_alter'
+----
 
 statement ok
 insert into t2/dev values(2, 20)

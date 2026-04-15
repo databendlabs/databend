@@ -75,6 +75,17 @@ impl Display for TableIdBranchName {
     }
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
+pub struct BranchIdToName {
+    pub branch_id: u64,
+}
+
+impl Display for BranchIdToName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BranchIdToName{{{}}}", self.branch_id)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct TableIdTagName {
     pub table_id: u64,
@@ -247,6 +258,7 @@ mod kvapi_key_impl {
     use databend_meta_client::kvapi::KeyParser;
 
     use crate::schema::TableId;
+    use crate::schema::table::BranchIdToName;
     use crate::schema::table::DroppedBranchIdent;
     use crate::schema::table::DroppedBranchMeta;
     use crate::schema::table::TableBranch;
@@ -281,6 +293,17 @@ mod kvapi_key_impl {
         }
     }
 
+    impl kvapi::KeyCodec for BranchIdToName {
+        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+            b.push_u64(self.branch_id)
+        }
+
+        fn decode_key(b: &mut KeyParser) -> Result<Self, KeyError> {
+            let branch_id = b.next_u64()?;
+            Ok(Self { branch_id })
+        }
+    }
+
     /// "__fd_table_branch/<tb_id>/<branch_name> -> TableBranch"
     impl kvapi::Key for TableIdBranchName {
         const PREFIX: &'static str = "__fd_table_branch";
@@ -303,6 +326,17 @@ mod kvapi_key_impl {
         }
     }
 
+    /// "__fd_branch_id_to_name/<branch_id> -> TableIdBranchName"
+    impl kvapi::Key for BranchIdToName {
+        const PREFIX: &'static str = "__fd_branch_id_to_name";
+
+        type ValueType = TableIdBranchName;
+
+        fn parent(&self) -> Option<String> {
+            Some(TableId::new(self.branch_id).to_string_key())
+        }
+    }
+
     impl kvapi::Value for TableBranch {
         type KeyType = TableIdBranchName;
 
@@ -316,6 +350,14 @@ mod kvapi_key_impl {
 
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
+        }
+    }
+
+    impl kvapi::Value for TableIdBranchName {
+        type KeyType = BranchIdToName;
+
+        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
+            [TableId::new(self.table_id).to_string_key()]
         }
     }
 
