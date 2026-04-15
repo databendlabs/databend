@@ -97,7 +97,11 @@ pub(crate) fn lance_compatible_arrow_schema(schema: &ArrowSchema) -> ArrowSchema
                     .iter()
                     .map(|(i, field)| (i, visit_field(field)))
                     .unzip();
-                ArrowDataType::Union(arrow_schema::UnionFields::new(ids, fields), *mode)
+                ArrowDataType::Union(
+                    arrow_schema::UnionFields::try_new(ids, fields)
+                        .expect("existing union fields should remain valid"),
+                    *mode,
+                )
             }
             ArrowDataType::Dictionary(key, value) => {
                 ArrowDataType::Dictionary(Box::new(visit_type(key)), Box::new(visit_type(value)))
