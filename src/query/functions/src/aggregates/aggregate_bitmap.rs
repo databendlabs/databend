@@ -307,10 +307,10 @@ where
         let state = place.get::<BitmapAggState>();
 
         if OP::support_batch() && view.len() > 2 {
-            if let Some(validity) = validity {
-                if validity.null_count() == view.len() {
-                    return Ok(());
-                }
+            if let Some(validity) = validity
+                && validity.null_count() == view.len()
+            {
+                return Ok(());
             }
 
             let mut bitmaps = Vec::with_capacity(view.len() + 1);

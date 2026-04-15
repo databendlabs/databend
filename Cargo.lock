@@ -3518,7 +3518,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "parquet 56.2.0",
  "rand 0.8.5",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "serde",
  "serde_json",
  "sha2",
@@ -3718,7 +3718,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_distr",
  "recursive",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "rust_decimal",
  "rustls 0.23.36",
  "serde",
@@ -3911,7 +3911,7 @@ dependencies = [
  "micromarshal",
  "rand 0.8.5",
  "rmp-serde",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "scroll 0.12.0",
  "serde",
  "smallvec",
@@ -4177,7 +4177,7 @@ dependencies = [
  "opendal",
  "rand 0.8.5",
  "ringbuffer",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "serde",
  "serde_json",
  "snap",
@@ -4385,7 +4385,7 @@ dependencies = [
  "prqlc",
  "recursive",
  "regex",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "serde",
  "serde_json",
  "sha2",
@@ -4604,7 +4604,7 @@ dependencies = [
  "parquet 56.2.0",
  "paste",
  "rand 0.8.5",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "serde",
  "serde_json",
  "sha2",
@@ -6259,7 +6259,7 @@ dependencies = [
  "parquet 56.2.0",
  "rand 0.8.5",
  "rayon",
- "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
+ "roaring 0.10.12 (git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21)",
  "self_cell",
  "serde",
  "serde_json",
@@ -6479,7 +6479,7 @@ dependencies = [
  "object_store",
  "parquet 55.1.0",
  "reqwest",
- "roaring 0.10.12",
+ "roaring 0.10.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version",
  "serde",
  "serde_json",
@@ -6550,7 +6550,7 @@ dependencies = [
  "pin-project-lite",
  "rand 0.8.5",
  "regex",
- "roaring 0.10.12",
+ "roaring 0.10.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "sqlparser 0.56.0",
@@ -9818,7 +9818,7 @@ dependencies = [
  "rand 0.8.5",
  "reqsign",
  "reqwest",
- "roaring 0.11.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "roaring 0.11.3",
  "rust_decimal",
  "serde",
  "serde_bytes",
@@ -10651,7 +10651,7 @@ dependencies = [
  "pin-project",
  "prost",
  "rand 0.9.2",
- "roaring 0.10.12",
+ "roaring 0.10.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json",
  "snafu",
  "tempfile",
@@ -10831,7 +10831,7 @@ dependencies = [
  "protobuf-src",
  "rand 0.9.2",
  "rangemap",
- "roaring 0.10.12",
+ "roaring 0.10.12 (registry+https://github.com/rust-lang/crates.io-index)",
  "semver",
  "serde",
  "serde_json",
@@ -14610,22 +14610,22 @@ dependencies = [
 
 [[package]]
 name = "roaring"
+version = "0.10.12"
+source = "git+https://github.com/zhang2014/roaring-rs.git?rev=cbbea21#cbbea211a5707544ee69710bd9b38ecabc90e30a"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "serde",
+]
+
+[[package]]
+name = "roaring"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ba9ce64a8f45d7fc86358410bb1a82e8c987504c0d4900e9141d69a9f26c885"
 dependencies = [
  "bytemuck",
  "byteorder",
-]
-
-[[package]]
-name = "roaring"
-version = "0.11.3"
-source = "git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651#38dc65193f7a4034dfdc89d74885d6112aee7f7d"
-dependencies = [
- "bytemuck",
- "byteorder",
- "serde",
 ]
 
 [[package]]
