@@ -504,10 +504,13 @@ impl Binder {
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_row_access_policy_handler();
-        // Collect arguments: only include fields whose column_id is in policy.columns_ids
-        let arguments: Vec<Expr> = fields
+        // Collect arguments in policy.columns_ids order (matches the policy parameter list).
+        // Previously this iterated `fields` (schema order) with a contains-filter, which
+        // silently reordered arguments when USING column order differed from schema order.
+        let arguments: Vec<Expr> = policy
+            .columns_ids
             .iter()
-            .filter(|t| policy.columns_ids.contains(&t.column_id))
+            .filter_map(|col_id| fields.iter().find(|t| t.column_id == *col_id))
             .map(|t| Expr::ColumnRef {
                 span: None,
                 column: ColumnRef {
