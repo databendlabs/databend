@@ -25729,6 +25729,57 @@ CreateTask(
 
 
 ---------- Input ----------
+COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_MINIMAL = true OUTPUT_HEADER = true)
+---------- Output ---------
+COPY INTO '@my_internal_stage/minimal.csv' FROM canadian_city_population FILE_FORMAT = (output_header = true, quote_minimal = true, type = CSV)
+---------- AST ------------
+CopyIntoLocation(
+    CopyIntoLocationStmt {
+        with: None,
+        hints: None,
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    46..70,
+                ),
+                name: "canadian_city_population",
+                quote: None,
+                ident_type: None,
+            },
+            with_options: None,
+        },
+        dst: Stage(
+            "my_internal_stage/minimal.csv",
+        ),
+        partition_by: None,
+        file_format: FileFormatOptions {
+            options: {
+                "output_header": Bool(
+                    true,
+                ),
+                "quote_minimal": Bool(
+                    true,
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
+        },
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
+        },
+    },
+)
+
+
+---------- Input ----------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t
 ---------- Output ---------
 CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') <> 'VALIDATION' AS VACUUM TABLE t 

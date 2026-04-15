@@ -19,7 +19,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 
 use crate::field_encoder::FieldEncoderCSV;
-use crate::field_encoder::write_csv_string;
+use crate::field_encoder::write_csv_string_maybe_quoted;
 use crate::output_format::OutputFormat;
 
 pub struct CSVOutputFormat {
@@ -28,6 +28,8 @@ pub struct CSVOutputFormat {
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
     quote: u8,
+    quote_minimal: bool,
+    escape: Option<u8>,
 
     headers: u8,
 }
@@ -45,6 +47,8 @@ impl CSVOutputFormat {
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
             quote: params.quote.as_bytes()[0],
+            quote_minimal: params.quote_minimal,
+            escape: params.escape.as_bytes().first().copied(),
             headers,
         }
     }
@@ -57,7 +61,15 @@ impl CSVOutputFormat {
             if col_index != 0 {
                 buf.push(fd);
             }
-            write_csv_string(v.as_bytes(), &mut buf, self.quote);
+            write_csv_string_maybe_quoted(
+                v.as_bytes(),
+                &mut buf,
+                self.quote,
+                self.quote_minimal,
+                self.field_delimiter,
+                &self.record_delimiter,
+                self.escape,
+            );
         }
 
         buf.extend_from_slice(&self.record_delimiter);

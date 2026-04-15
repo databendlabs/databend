@@ -44,6 +44,7 @@ const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
+const OPT_QUOTE_MINIMAL: &str = "quote_minimal";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
@@ -263,6 +264,7 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
+                let quote_minimal = reader.take_bool(OPT_QUOTE_MINIMAL, default.quote_minimal)?;
                 let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
                 let encoding = reader.take_string(OPT_ENCODING, default.encoding);
                 let encoding_error_mode =
@@ -302,6 +304,7 @@ impl FileFormatParams {
                     nan_display,
                     escape,
                     quote,
+                    quote_minimal,
                     error_on_column_count_mismatch,
                     allow_quoted_nulls,
                     trim_space,
@@ -534,6 +537,8 @@ pub struct CsvFileFormatParams {
     pub record_delimiter: String,
     pub escape: String,
     pub quote: String,
+    #[serde(default)]
+    pub quote_minimal: bool,
     pub error_on_column_count_mismatch: bool,
     #[serde(default)]
     pub trim_space: bool,
@@ -567,6 +572,7 @@ impl Default for CsvFileFormatParams {
             record_delimiter: "\n".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),
+            quote_minimal: false,
             error_on_column_count_mismatch: true,
             trim_space: false,
             allow_quoted_nulls: false,
@@ -980,7 +986,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = CSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' ESCAPE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' QUOTE_MINIMAL = {} ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
@@ -988,6 +994,7 @@ impl Display for FileFormatParams {
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.quote),
+                    params.quote_minimal,
                     escape_string(&params.escape),
                     params.headers,
                     params.output_header,
@@ -1247,6 +1254,16 @@ mod tests {
 
         let params = get_csv_params(options);
         assert!(params.trim_space);
+    }
+
+    #[test]
+    fn test_csv_quote_minimal_option() {
+        let mut options = BTreeMap::new();
+        options.insert("type".to_string(), "CSV".to_string());
+        options.insert("quote_minimal".to_string(), "true".to_string());
+
+        let params = get_csv_params(options);
+        assert!(params.quote_minimal);
     }
 
     #[test]

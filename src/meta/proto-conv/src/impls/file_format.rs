@@ -561,6 +561,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
                 .encoding_error_mode
                 .unwrap_or_else(|| "strict".to_string()),
             trim_space: p.trim_space,
+            quote_minimal: p.quote_minimal,
         })
     }
 
@@ -588,6 +589,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             encoding: Some(self.encoding.clone()),
             encoding_error_mode: Some(self.encoding_error_mode.clone()),
             trim_space: self.trim_space,
+            quote_minimal: self.quote_minimal,
         })
     }
 }

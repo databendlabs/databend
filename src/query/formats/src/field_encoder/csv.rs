@@ -32,14 +32,36 @@ use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::write_tsv_escaped_string;
 
 pub enum StringFormatter {
-    Csv { quote_char: u8 },
-    Text { record_delimiter: u8 },
+    Csv {
+        quote_char: u8,
+        quote_minimal: bool,
+        field_delimiter: u8,
+        record_delimiter: Vec<u8>,
+        escape_char: Option<u8>,
+    },
+    Text {
+        record_delimiter: u8,
+    },
 }
 
 impl StringFormatter {
     fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
         match self {
-            StringFormatter::Csv { quote_char } => write_csv_string(bytes, buf, *quote_char),
+            StringFormatter::Csv {
+                quote_char,
+                quote_minimal,
+                field_delimiter,
+                record_delimiter,
+                escape_char,
+            } => write_csv_string_maybe_quoted(
+                bytes,
+                buf,
+                *quote_char,
+                *quote_minimal,
+                *field_delimiter,
+                record_delimiter,
+                *escape_char,
+            ),
             StringFormatter::Text { record_delimiter } => {
                 write_tsv_escaped_string(bytes, buf, *record_delimiter)
             }
@@ -69,6 +91,39 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
     buf.push(quote);
 }
 
+fn csv_string_needs_quotes(
+    bytes: &[u8],
+    quote: u8,
+    field_delimiter: u8,
+    record_delimiter: &[u8],
+    escape: Option<u8>,
+) -> bool {
+    bytes.iter().any(|byte| {
+        *byte == quote
+            || *byte == field_delimiter
+            || record_delimiter.contains(byte)
+            || escape == Some(*byte)
+    })
+}
+
+pub fn write_csv_string_maybe_quoted(
+    bytes: &[u8],
+    buf: &mut Vec<u8>,
+    quote: u8,
+    quote_minimal: bool,
+    field_delimiter: u8,
+    record_delimiter: &[u8],
+    escape: Option<u8>,
+) {
+    if quote_minimal
+        && !csv_string_needs_quotes(bytes, quote, field_delimiter, record_delimiter, escape)
+    {
+        buf.extend_from_slice(bytes);
+    } else {
+        write_csv_string(bytes, buf, quote);
+    }
+}
+
 pub struct FieldEncoderCSV {
     pub simple: FieldEncoderBytes,
     pub nested: FieldEncoderJSON,
@@ -83,6 +138,10 @@ impl FieldEncoderCSV {
             nested: FieldEncoderJSON::create(settings),
             string_formatter: StringFormatter::Csv {
                 quote_char: params.quote.as_bytes()[0],
+                quote_minimal: params.quote_minimal,
+                field_delimiter: params.field_delimiter.as_bytes()[0],
+                record_delimiter: params.record_delimiter.as_bytes().to_vec(),
+                escape_char: params.escape.as_bytes().first().copied(),
             },
         }
     }

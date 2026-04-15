@@ -21,6 +21,7 @@ mod string;
 pub use bytes::FieldEncoderBytes;
 pub use csv::FieldEncoderCSV;
 pub use csv::write_csv_string;
+pub use csv::write_csv_string_maybe_quoted;
 pub use helpers::write_tsv_escaped_string;
 pub use json::FieldEncoderJSON;
 pub use string::FieldEncoderToString;

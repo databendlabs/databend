@@ -162,6 +162,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
                 | OUTPUT_HEADER
                 | USE_LOGIC_TYPE
                 | ALLOW_QUOTED_NULLS
+                | QUOTE_MINIMAL
                 | TRIM_SPACE) ~ ^"=" ~ ^#literal_bool
         },
         |(k, _, v)| (k.text().to_string(), FileFormatValue::Bool(v)),
