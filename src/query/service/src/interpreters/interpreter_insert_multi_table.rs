@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -26,6 +25,7 @@ use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
+use databend_common_expression::is_internal_column;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::MetadataRef;
@@ -51,7 +51,6 @@ use crate::physical_plans::ChunkFillAndReorder;
 use crate::physical_plans::ChunkFilter;
 use crate::physical_plans::ChunkMerge;
 use crate::physical_plans::Duplicate;
-use crate::physical_plans::EvalScalar;
 use crate::physical_plans::FillAndReorder;
 use crate::physical_plans::MultiInsertEvalScalar;
 use crate::physical_plans::PhysicalPlan;
@@ -134,9 +133,24 @@ impl Interpreter for InsertMultiTableInterpreter {
 
 impl InsertMultiTableInterpreter {
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let (mut root, _) = self.build_source_physical_plan().await?;
+        let (mut root, _, logical_col_order) = self.build_source_physical_plan().await?;
         let update_stream_meta = dml_build_update_stream_req(self.ctx.clone()).await?;
         let source_schema = root.output_schema()?;
+
+        // Lazy materialization (triggered by WHERE + LIMIT) may reorder the physical output
+        // columns by appending lazily-fetched columns at the end.  Build a mapping from each
+        // physical column position to its logical position so we can reorder casted_schemas.
+        // physical_to_logical[phys_pos] = logical_pos  (None for internal cols like _row_id)
+        let physical_to_logical: Vec<Option<usize>> = source_schema
+            .fields()
+            .iter()
+            .map(|f| {
+                logical_col_order
+                    .iter()
+                    .position(|sym| sym.to_string() == f.name().as_str())
+            })
+            .collect();
+
         let branches = self.build_insert_into_branches().await?;
         let serializable_tables = branches
             .build_serializable_target_tables(self.ctx.clone())
@@ -173,7 +187,7 @@ impl InsertMultiTableInterpreter {
                     .unwrap_or_else(|| source_schema.clone())
             })
             .collect::<Vec<_>>();
-        let cast_schemas = branches.build_cast_schema(source_schemas);
+        let cast_schemas = branches.build_cast_schema(source_schemas, &physical_to_logical);
         let fill_and_reorders = branches.build_fill_and_reorder(self.ctx.clone()).await?;
         let group_ids = branches.build_group_ids();
 
@@ -241,7 +255,9 @@ impl InsertMultiTableInterpreter {
         Ok(root)
     }
 
-    async fn build_source_physical_plan(&self) -> Result<(PhysicalPlan, MetadataRef)> {
+    async fn build_source_physical_plan(
+        &self,
+    ) -> Result<(PhysicalPlan, MetadataRef, Vec<databend_common_sql::Symbol>)> {
         match &self.plan.input_source {
             Plan::Query {
                 s_expr,
@@ -252,58 +268,12 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-
-                // Lazy materialization (triggered by WHERE + LIMIT) may reorder the physical
-                // output columns by appending lazily-fetched columns at the end, which breaks
-                // the positional column mapping used by ChunkCastSchema.  Add a reorder
-                // EvalScalar that projects columns back into the order defined by bind_context,
-                // so the physical output always matches the logical schema order.
-                let physical_schema = input_source.output_schema()?;
-                let expected_indices: Vec<usize> = bind_context
-                    .columns
-                    .iter()
-                    .filter_map(|col| physical_schema.index_of(&col.index.to_string()).ok())
-                    .collect();
-
-                // Check whether the physical output is already in the expected order.
-                let already_ordered = expected_indices
-                    .iter()
-                    .enumerate()
-                    .all(|(pos, &phys_pos)| pos == phys_pos);
-
-                if already_ordered || expected_indices.len() != physical_schema.num_fields() {
-                    // Nothing to reorder (or we can't safely reorder – fall through).
-                    return Ok((input_source, metadata.clone()));
-                }
-
-                // Build ColumnRef expressions that pick each column in the correct order.
-                let exprs: Vec<(RemoteExpr, databend_common_sql::Symbol)> = bind_context
-                    .columns
-                    .iter()
-                    .filter_map(|col| {
-                        let phys_pos = physical_schema.index_of(&col.index.to_string()).ok()?;
-                        let data_type = physical_schema.field(phys_pos).data_type().clone();
-                        let remote_expr = RemoteExpr::ColumnRef {
-                            span: None,
-                            id: phys_pos,
-                            data_type,
-                            display_name: col.index.to_string(),
-                        };
-                        Some((remote_expr, col.index))
-                    })
-                    .collect();
-
-                // Project only the reordered columns (indices into input + exprs combined).
-                // Since all exprs are pure ColumnRefs from the input, we project the
-                // input_column_nums..input_column_nums+exprs.len() range.
-                let input_col_num = physical_schema.num_fields();
-                let projections: BTreeSet<usize> =
-                    (input_col_num..input_col_num + exprs.len()).collect();
-
-                let reordered =
-                    PhysicalPlan::new(EvalScalar::create(input_source, exprs, projections, None));
-
-                Ok((reordered, metadata.clone()))
+                // Collect the logical column order from bind_context so that
+                // build_physical_plan can detect and fix any reordering caused by
+                // lazy materialization.
+                let logical_col_order: Vec<databend_common_sql::Symbol> =
+                    bind_context.columns.iter().map(|c| c.index).collect();
+                Ok((input_source, metadata.clone(), logical_col_order))
             }
             _ => unreachable!(),
         }
@@ -522,15 +492,96 @@ impl InsertIntoBranches {
         Ok(eval_scalars)
     }
 
-    fn build_cast_schema(&self, source_schemas: Vec<DataSchemaRef>) -> Vec<Option<CastSchema>> {
+    fn build_cast_schema(
+        &self,
+        source_schemas: Vec<DataSchemaRef>,
+        physical_to_logical: &[Option<usize>],
+    ) -> Vec<Option<CastSchema>> {
         self.casted_schemas
             .iter()
             .zip(source_schemas.iter())
             .map(|(casted_schema, source_schema)| {
-                if casted_schema != source_schema {
+                // Lazy materialization (triggered by WHERE + LIMIT) may:
+                // 1. Reorder physical output columns (lazy cols appended at end)
+                // 2. Include internal columns like _row_id in the physical output
+                //
+                // build_cast_exprs maps columns positionally, so we must:
+                // a) Strip internal columns from source_schema
+                // b) Reorder casted_schema fields to match the non-internal physical column order
+                //
+                // physical_to_logical[phys_pos] = Some(logical_pos) for user columns,
+                //                                 None for internal columns (_row_id etc.)
+
+                let has_internal = source_schema
+                    .fields()
+                    .iter()
+                    .any(|f| is_internal_column(f.name()));
+
+                let has_reorder = physical_to_logical
+                    .windows(2)
+                    .any(|w| matches!((w[0], w[1]), (Some(a), Some(b)) if a >= b));
+
+                if !has_internal && !has_reorder {
+                    // Fast path: no reordering or internal columns needed.
+                    return if casted_schema != source_schema {
+                        Some(CastSchema {
+                            source_schema: source_schema.clone(),
+                            target_schema: casted_schema.clone(),
+                        })
+                    } else {
+                        None
+                    };
+                }
+
+                let logical_len = physical_to_logical.iter().filter(|x| x.is_some()).count();
+                if casted_schema.num_fields() != logical_len {
+                    // source_columns were specified explicitly; positional mapping is correct.
+                    return if casted_schema != source_schema {
+                        Some(CastSchema {
+                            source_schema: source_schema.clone(),
+                            target_schema: casted_schema.clone(),
+                        })
+                    } else {
+                        None
+                    };
+                }
+
+                // Build a filtered source_schema (no internal cols) and a matching
+                // reordered target_schema.
+                let mut filtered_source_fields = Vec::with_capacity(logical_len);
+                let mut reordered_target_fields = Vec::with_capacity(logical_len);
+
+                for (phys_pos, opt_logical_pos) in physical_to_logical.iter().enumerate() {
+                    if let Some(logical_pos) = opt_logical_pos {
+                        if let (Some(src_field), Some(tgt_field)) = (
+                            source_schema.fields().get(phys_pos),
+                            casted_schema.fields().get(*logical_pos),
+                        ) {
+                            filtered_source_fields.push(src_field.clone());
+                            reordered_target_fields.push(tgt_field.clone());
+                        }
+                    }
+                }
+
+                if filtered_source_fields.len() != logical_len {
+                    // Mapping incomplete; fall back to original.
+                    return if casted_schema != source_schema {
+                        Some(CastSchema {
+                            source_schema: source_schema.clone(),
+                            target_schema: casted_schema.clone(),
+                        })
+                    } else {
+                        None
+                    };
+                }
+
+                let new_source: DataSchemaRef = Arc::new(DataSchema::new(filtered_source_fields));
+                let new_target: DataSchemaRef = Arc::new(DataSchema::new(reordered_target_fields));
+
+                if new_source != new_target {
                     Some(CastSchema {
-                        source_schema: source_schema.clone(),
-                        target_schema: casted_schema.clone(),
+                        source_schema: new_source,
+                        target_schema: new_target,
                     })
                 } else {
                     None
