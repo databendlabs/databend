@@ -23,6 +23,7 @@ use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::ToWkt;
 use geozero::wkb::Ewkb;
@@ -38,6 +39,10 @@ pub enum StringFormatter {
         field_delimiter: u8,
         record_delimiter: Vec<u8>,
         escape_char: Option<u8>,
+        null_bytes: Vec<u8>,
+        allow_quoted_nulls: bool,
+        empty_field_as: EmptyFieldAs,
+        quoted_empty_field_as: EmptyFieldAs,
     },
     Text {
         record_delimiter: u8,
@@ -53,6 +58,10 @@ impl StringFormatter {
                 field_delimiter,
                 record_delimiter,
                 escape_char,
+                null_bytes,
+                allow_quoted_nulls,
+                empty_field_as,
+                quoted_empty_field_as,
             } => write_csv_string_maybe_quoted(
                 bytes,
                 buf,
@@ -61,6 +70,10 @@ impl StringFormatter {
                 *field_delimiter,
                 record_delimiter,
                 *escape_char,
+                null_bytes,
+                *allow_quoted_nulls,
+                empty_field_as.clone(),
+                quoted_empty_field_as.clone(),
             ),
             StringFormatter::Text { record_delimiter } => {
                 write_tsv_escaped_string(bytes, buf, *record_delimiter)
@@ -97,7 +110,20 @@ fn csv_string_needs_quotes(
     field_delimiter: u8,
     record_delimiter: &[u8],
     escape: Option<u8>,
+    null_bytes: &[u8],
+    allow_quoted_nulls: bool,
+    empty_field_as: EmptyFieldAs,
+    quoted_empty_field_as: EmptyFieldAs,
 ) -> bool {
+    if bytes.is_empty() {
+        return empty_field_as != EmptyFieldAs::String
+            && quoted_empty_field_as == EmptyFieldAs::String;
+    }
+
+    if !allow_quoted_nulls && bytes == null_bytes {
+        return true;
+    }
+
     bytes.iter().any(|byte| {
         *byte == quote
             || *byte == field_delimiter
@@ -114,9 +140,23 @@ pub fn write_csv_string_maybe_quoted(
     field_delimiter: u8,
     record_delimiter: &[u8],
     escape: Option<u8>,
+    null_bytes: &[u8],
+    allow_quoted_nulls: bool,
+    empty_field_as: EmptyFieldAs,
+    quoted_empty_field_as: EmptyFieldAs,
 ) {
     if quote_minimal
-        && !csv_string_needs_quotes(bytes, quote, field_delimiter, record_delimiter, escape)
+        && !csv_string_needs_quotes(
+            bytes,
+            quote,
+            field_delimiter,
+            record_delimiter,
+            escape,
+            null_bytes,
+            allow_quoted_nulls,
+            empty_field_as,
+            quoted_empty_field_as,
+        )
     {
         buf.extend_from_slice(bytes);
     } else {
@@ -142,6 +182,10 @@ impl FieldEncoderCSV {
                 field_delimiter: params.field_delimiter.as_bytes()[0],
                 record_delimiter: params.record_delimiter.as_bytes().to_vec(),
                 escape_char: params.escape.as_bytes().first().copied(),
+                null_bytes: params.null_display.as_bytes().to_vec(),
+                allow_quoted_nulls: params.allow_quoted_nulls,
+                empty_field_as: params.empty_field_as.clone(),
+                quoted_empty_field_as: params.quoted_empty_field_as.clone(),
             },
         }
     }

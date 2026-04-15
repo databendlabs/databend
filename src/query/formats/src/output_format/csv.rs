@@ -17,6 +17,7 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::EmptyFieldAs;
 
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::write_csv_string_maybe_quoted;
@@ -30,6 +31,10 @@ pub struct CSVOutputFormat {
     quote: u8,
     quote_minimal: bool,
     escape: Option<u8>,
+    null_bytes: Vec<u8>,
+    allow_quoted_nulls: bool,
+    empty_field_as: EmptyFieldAs,
+    quoted_empty_field_as: EmptyFieldAs,
 
     headers: u8,
 }
@@ -49,6 +54,10 @@ impl CSVOutputFormat {
             quote: params.quote.as_bytes()[0],
             quote_minimal: params.quote_minimal,
             escape: params.escape.as_bytes().first().copied(),
+            null_bytes: params.null_display.as_bytes().to_vec(),
+            allow_quoted_nulls: params.allow_quoted_nulls,
+            empty_field_as: params.empty_field_as.clone(),
+            quoted_empty_field_as: params.quoted_empty_field_as.clone(),
             headers,
         }
     }
@@ -69,6 +78,10 @@ impl CSVOutputFormat {
                 self.field_delimiter,
                 &self.record_delimiter,
                 self.escape,
+                &self.null_bytes,
+                self.allow_quoted_nulls,
+                self.empty_field_as.clone(),
+                self.quoted_empty_field_as.clone(),
             );
         }
 

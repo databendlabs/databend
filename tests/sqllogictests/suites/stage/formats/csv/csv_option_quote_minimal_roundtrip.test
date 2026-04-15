@@ -1,0 +1,117 @@
+statement ok
+drop table if exists t_quote_minimal_roundtrip
+
+statement ok
+create table t_quote_minimal_roundtrip(id int, value string null)
+
+statement ok
+insert into t_quote_minimal_roundtrip values
+(1, ''),
+(2, '\\N'),
+(3, NULL),
+(4, 'plain')
+
+statement ok
+drop table if exists t_quote_minimal_roundtrip_copy
+
+statement ok
+create table t_quote_minimal_roundtrip_copy(id int, value string null)
+
+statement ok
+drop table if exists t_quote_minimal_custom_null
+
+statement ok
+create table t_quote_minimal_custom_null(id int, value string null)
+
+statement ok
+insert into t_quote_minimal_custom_null values
+(1, 'NULL'),
+(2, NULL)
+
+statement ok
+drop table if exists t_quote_minimal_custom_null_copy
+
+statement ok
+create table t_quote_minimal_custom_null_copy(id int, value string null)
+
+statement ok
+drop stage if exists s1
+
+statement ok
+create stage s1
+
+statement ok
+remove @s1
+
+query TII
+copy into @s1/default_null_display.csv
+from t_quote_minimal_roundtrip
+file_format = (type = 'csv', quote_minimal = true, escape='\\')
+single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
+----
+default_null_display.csv 25 4
+
+query T
+select $1 from @s1/default_null_display.csv (file_format => 'text') order by metadata$file_row_number
+----
+1,""
+2,"\N"
+3,\N
+4,plain
+
+statement ok
+copy into t_quote_minimal_roundtrip_copy
+from @s1/default_null_display.csv
+file_format = (type = 'csv')
+
+query IT
+select id, iff(value is null, '<null>', concat('[', value, ']'))
+from t_quote_minimal_roundtrip_copy
+order by id
+----
+1 []
+2 [\N]
+3 <null>
+4 [plain]
+
+query TII
+copy into @s1/custom_null_display.csv
+from t_quote_minimal_custom_null
+file_format = (type = 'csv', quote_minimal = true, null_display = 'NULL', escape='\\')
+single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
+----
+custom_null_display.csv 16 2
+
+query T
+select $1 from @s1/custom_null_display.csv (file_format => 'text') order by metadata$file_row_number
+----
+1,"NULL"
+2,NULL
+
+statement ok
+copy into t_quote_minimal_custom_null_copy
+from @s1/custom_null_display.csv
+file_format = (type = 'csv', null_display = 'NULL')
+
+query IT
+select id, iff(value is null, '<null>', concat('[', value, ']'))
+from t_quote_minimal_custom_null_copy
+order by id
+----
+1 [NULL]
+2 <null>
+
+statement ok
+drop stage if exists s1
+
+statement ok
+drop table if exists t_quote_minimal_roundtrip
+
+statement ok
+drop table if exists t_quote_minimal_roundtrip_copy
+
+statement ok
+drop table if exists t_quote_minimal_custom_null
+
+statement ok
+drop table if exists t_quote_minimal_custom_null_copy
