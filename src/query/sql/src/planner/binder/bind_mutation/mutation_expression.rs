@@ -267,7 +267,6 @@ impl MutationExpression {
                         user_predicates: vec![],
                         predicate_column_index: None,
                         read_partition_columns: Default::default(),
-                        has_row_access_policy: false,
                     };
 
                     // Direct mutation inherits row-access predicates from Scan's
@@ -477,7 +476,6 @@ impl MutationExpression {
                 let mut mutation_source = mutation_source;
                 mutation_source.secure_predicates =
                     scan.secure_push_down_predicates.clone().unwrap_or_default();
-                mutation_source.has_row_access_policy = scan.has_row_access_policy;
                 Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
                     mutation_source,
                 ))))

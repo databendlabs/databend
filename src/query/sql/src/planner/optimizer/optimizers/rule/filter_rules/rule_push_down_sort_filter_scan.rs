@@ -35,7 +35,7 @@ use crate::plans::Visitor;
 /// Push down order_by and limit from Sort to Scan when filter predicates
 /// use inverted_index or vector_index.
 ///
-/// Note: When `has_row_access_policy` is true on the Scan, this rule bails out
+/// Note: When `secure_push_down_predicates` is present on the Scan, this rule bails out
 /// because storage TopK pruning would return N rows based only on user/index
 /// predicates, then secure predicates filter them further, yielding fewer rows
 /// than requested.
@@ -101,7 +101,7 @@ impl Rule for RulePushDownSortFilterScan {
             || push_down_predicates.len() != filter.predicates.len()
             || sort.limit.is_none()
             || !filter_contains_only_index_predicates(&filter, has_inverted_index, has_vector_index)
-            || scan.has_row_access_policy
+            || scan.secure_push_down_predicates.is_some()
         {
             return Ok(());
         }

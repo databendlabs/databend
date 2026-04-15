@@ -87,7 +87,7 @@ impl RuleStatsAggregateOptimizer {
         if let RelOperator::Scan(scan) = child.plan.as_ref() {
             if scan.prewhere.is_none()
                 && scan.push_down_predicates.is_none()
-                && !scan.has_row_access_policy
+                && scan.secure_push_down_predicates.is_none()
             {
                 let table = self.metadata.read().table(scan.table_index).table();
                 let schema = table.schema();

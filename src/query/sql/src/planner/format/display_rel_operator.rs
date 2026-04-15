@@ -194,7 +194,7 @@ fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTre
             op.limit.map_or("NONE".to_string(), |l| l.to_string())
         )),
     ];
-    if op.has_row_access_policy {
+    if op.secure_push_down_predicates.is_some() {
         children.push(FormatTreeNode::new("ROW ACCESS POLICY APPLIED".to_string()));
     }
     FormatTreeNode::with_children("Scan".to_string(), children)

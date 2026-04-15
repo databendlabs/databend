@@ -60,7 +60,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 table.qualified_name()
             }
         };
-        let filters = if self.inner.has_row_access_policy {
+        let filters = if self.inner.user_filters_display.is_some() {
             // When RAP is active, only show user predicates in push downs.
             // Secure predicates are NOT pushed to storage; they are enforced
             // by the pipeline Filter [SECURE] node, so showing them here
@@ -133,7 +133,7 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
 
         // Row access policy indicator (separate from push downs since
         // secure predicates are enforced in the pipeline, not storage).
-        if self.inner.has_row_access_policy {
+        if self.inner.user_filters_display.is_some() {
             children.push(FormatTreeNode::new(
                 "row access policy: APPLIED".to_string(),
             ));

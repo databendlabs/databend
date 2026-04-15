@@ -605,7 +605,6 @@ impl Binder {
         match s_expr.plan() {
             RelOperator::Scan(scan) if scan.table_index == table_index => {
                 let mut scan = scan.clone();
-                scan.has_row_access_policy = true;
                 match scan.secure_push_down_predicates.as_mut() {
                     Some(existing) => existing.extend(secure_predicates),
                     None => scan.secure_push_down_predicates = Some(secure_predicates),

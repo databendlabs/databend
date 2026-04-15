@@ -113,10 +113,6 @@ pub struct Scan {
     pub is_lazy_table: bool,
     pub sample: Option<SampleConfig>,
     pub scan_id: usize,
-    /// True when this scan is subject to a Row Access Policy.
-    /// Used for stats suppression, explain mask, limit/topn safety, cache key extra.
-    pub has_row_access_policy: bool,
-
     pub statistics: Arc<Statistics>,
 }
 
@@ -159,7 +155,6 @@ impl Scan {
             is_lazy_table: self.is_lazy_table,
             sample: self.sample.clone(),
             scan_id: self.scan_id,
-            has_row_access_policy: self.has_row_access_policy,
         }
     }
 
@@ -180,7 +175,6 @@ impl Scan {
             // Note: column references inside secure_push_down_predicates are NOT remapped here.
             // The caller (clone_outer_scan) is responsible for remap if needed.
             secure_push_down_predicates: self.secure_push_down_predicates.clone(),
-            has_row_access_policy: self.has_row_access_policy,
             // Everything else: explicit default.
             change_type: None,
             update_stream_columns: false,
@@ -237,7 +231,6 @@ impl PartialEq for Scan {
         self.table_index == other.table_index
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
-            && self.has_row_access_policy == other.has_row_access_policy
             && self.secure_push_down_predicates == other.secure_push_down_predicates
     }
 }
@@ -251,7 +244,6 @@ impl std::hash::Hash for Scan {
             column.hash(state);
         }
         self.push_down_predicates.hash(state);
-        self.has_row_access_policy.hash(state);
         self.secure_push_down_predicates.hash(state);
     }
 }
@@ -407,7 +399,7 @@ impl Operator for Scan {
         // secure predicates first (for reasonable cardinality estimation and
         // join ordering), then suppress column statistics to prevent data
         // leakage through statistical inference.
-        if self.has_row_access_policy {
+        if self.secure_push_down_predicates.is_some() {
             let cardinality = match &self.secure_push_down_predicates {
                 Some(preds) if !preds.is_empty() => {
                     SelectivityEstimator::new(column_stats, cardinality).apply(preds)?
@@ -476,7 +468,6 @@ mod tests {
             change_type: Some(ChangeType::Append),
             update_stream_columns: true,
             is_lazy_table: true,
-            has_row_access_policy: true,
             secure_push_down_predicates: Some(vec![]),
             // Optimizer-phase fields set to non-default to verify they get reset.
             limit: Some(100),
@@ -503,7 +494,6 @@ mod tests {
         assert_eq!(derived.sample, original.sample);
 
         // Security fields must be preserved.
-        assert!(derived.has_row_access_policy);
         assert_eq!(derived.secure_push_down_predicates, Some(vec![]));
 
         // Everything else must be reset to default.

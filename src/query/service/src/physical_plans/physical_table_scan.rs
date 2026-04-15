@@ -94,11 +94,8 @@ pub struct TableScan {
 
     pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
-    /// When true, EXPLAIN masks the filter predicates to prevent
-    /// leaking row access policy details.
-    #[serde(default)]
-    pub has_row_access_policy: bool,
     /// User-only filter display string for EXPLAIN when RAP is active.
+    /// `Some` means RAP is active; `None` means no RAP.
     /// Stored separately because PushDownInfo.filters merges user + secure predicates.
     #[serde(default)]
     pub user_filters_display: Option<String>,
@@ -186,7 +183,6 @@ impl IPhysicalPlan for TableScan {
             internal_column: self.internal_column.clone(),
             table_index: self.table_index,
             stat_info: self.stat_info.clone(),
-            has_row_access_policy: self.has_row_access_policy,
             user_filters_display: self.user_filters_display.clone(),
         })
     }
@@ -249,7 +245,6 @@ impl TableScan {
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-        has_row_access_policy: bool,
         user_filters_display: Option<String>,
     ) -> PhysicalPlan {
         let name = match &source.source_info {
@@ -268,7 +263,6 @@ impl TableScan {
             table_index,
             stat_info,
             internal_column,
-            has_row_access_policy,
             user_filters_display,
         })
     }
@@ -452,30 +446,28 @@ impl PhysicalPlanBuilder {
         // like GETVARIABLE('app_name') are resolved to their concrete values.
         // Without this, different sessions with different variable values would
         // produce the same cache key and incorrectly share cached results.
-        if scan.has_row_access_policy {
-            if let Some(secure_preds) = &scan.secure_push_down_predicates {
-                if !secure_preds.is_empty() {
-                    let mut serialized: Vec<String> = Vec::with_capacity(secure_preds.len());
-                    for p in secure_preds {
-                        let expr = p
-                            .as_raw_expr()
-                            .type_check(&metadata)?
-                            .project_column_ref(|col| Ok(col.column_name.clone()))?;
-                        let (folded, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let remote_expr = folded.as_remote_expr();
-                        serialized.push(serde_json::to_string(&remote_expr).map_err(|e| {
-                            ErrorCode::Internal(format!(
-                                "Failed to serialize secure predicate for cache key: {}",
-                                e
-                            ))
-                        })?);
-                    }
-                    serialized.sort();
-                    let combined = serialized.join("|");
-                    let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
-                    self.ctx.add_cache_key_extra(format!("secure:{}", hash));
+        if let Some(secure_preds) = &scan.secure_push_down_predicates {
+            if !secure_preds.is_empty() {
+                let mut serialized: Vec<String> = Vec::with_capacity(secure_preds.len());
+                for p in secure_preds {
+                    let expr = p
+                        .as_raw_expr()
+                        .type_check(&metadata)?
+                        .project_column_ref(|col| Ok(col.column_name.clone()))?;
+                    let (folded, _) =
+                        ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let remote_expr = folded.as_remote_expr();
+                    serialized.push(serde_json::to_string(&remote_expr).map_err(|e| {
+                        ErrorCode::Internal(format!(
+                            "Failed to serialize secure predicate for cache key: {}",
+                            e
+                        ))
+                    })?);
                 }
+                serialized.sort();
+                let combined = serialized.join("|");
+                let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
+                self.ctx.add_cache_key_extra(format!("secure:{}", hash));
             }
         }
 
@@ -535,8 +527,12 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
-        let user_filters_display = if scan.has_row_access_policy {
-            Self::compute_user_filters_display(&scan, &metadata, &self.func_ctx)
+        let user_filters_display = if scan.secure_push_down_predicates.is_some() {
+            Some(Self::compute_user_filters_display(
+                &scan,
+                &metadata,
+                &self.func_ctx,
+            ))
         } else {
             None
         };
@@ -548,7 +544,6 @@ impl PhysicalPlanBuilder {
             Some(scan.table_index),
             Some(stat_info.clone()),
             internal_column,
-            scan.has_row_access_policy,
             user_filters_display,
         );
 
@@ -684,7 +679,6 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             None,
-            false,
             None,
         ))
     }
@@ -917,7 +911,7 @@ impl PhysicalPlanBuilder {
         scan: &databend_common_sql::plans::Scan,
         metadata: &Metadata,
         func_ctx: &databend_common_expression::FunctionContext,
-    ) -> Option<String> {
+    ) -> String {
         let mut seen = Vec::<&ScalarExpr>::new();
         let mut all_user_preds: Vec<&ScalarExpr> = Vec::new();
         for preds in [
@@ -935,25 +929,22 @@ impl PhysicalPlanBuilder {
             }
         }
         if all_user_preds.is_empty() {
-            return None;
+            return String::new();
         }
-        Some(
-            all_user_preds
-                .iter()
-                .map(|p| {
-                    p.as_raw_expr()
-                        .type_check(metadata)
-                        .and_then(|e| e.project_column_ref(|col| Ok(col.column_name.clone())))
-                        .map(|e| {
-                            let (folded, _) =
-                                ConstantFolder::fold(&e, func_ctx, &BUILTIN_FUNCTIONS);
-                            folded.sql_display()
-                        })
-                        .unwrap_or_default()
-                })
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
+        all_user_preds
+            .iter()
+            .map(|p| {
+                p.as_raw_expr()
+                    .type_check(metadata)
+                    .and_then(|e| e.project_column_ref(|col| Ok(col.column_name.clone())))
+                    .map(|e| {
+                        let (folded, _) = ConstantFolder::fold(&e, func_ctx, &BUILTIN_FUNCTIONS);
+                        folded.sql_display()
+                    })
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
     }
 
     fn build_prewhere_virtual_column_ids(&self, indices: &ColumnSet) -> Option<Vec<u32>> {
