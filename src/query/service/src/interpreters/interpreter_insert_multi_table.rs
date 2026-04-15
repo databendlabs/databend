@@ -262,11 +262,7 @@ impl InsertMultiTableInterpreter {
                 let expected_indices: Vec<usize> = bind_context
                     .columns
                     .iter()
-                    .filter_map(|col| {
-                        physical_schema
-                            .index_of(&col.index.to_string())
-                            .ok()
-                    })
+                    .filter_map(|col| physical_schema.index_of(&col.index.to_string()).ok())
                     .collect();
 
                 // Check whether the physical output is already in the expected order.
@@ -275,9 +271,7 @@ impl InsertMultiTableInterpreter {
                     .enumerate()
                     .all(|(pos, &phys_pos)| pos == phys_pos);
 
-                if already_ordered
-                    || expected_indices.len() != physical_schema.num_fields()
-                {
+                if already_ordered || expected_indices.len() != physical_schema.num_fields() {
                     // Nothing to reorder (or we can't safely reorder – fall through).
                     return Ok((input_source, metadata.clone()));
                 }
@@ -287,9 +281,7 @@ impl InsertMultiTableInterpreter {
                     .columns
                     .iter()
                     .filter_map(|col| {
-                        let phys_pos = physical_schema
-                            .index_of(&col.index.to_string())
-                            .ok()?;
+                        let phys_pos = physical_schema.index_of(&col.index.to_string()).ok()?;
                         let data_type = physical_schema.field(phys_pos).data_type().clone();
                         let remote_expr = RemoteExpr::ColumnRef {
                             span: None,
@@ -308,12 +300,8 @@ impl InsertMultiTableInterpreter {
                 let projections: BTreeSet<usize> =
                     (input_col_num..input_col_num + exprs.len()).collect();
 
-                let reordered = PhysicalPlan::new(EvalScalar::create(
-                    input_source,
-                    exprs,
-                    projections,
-                    None,
-                ));
+                let reordered =
+                    PhysicalPlan::new(EvalScalar::create(input_source, exprs, projections, None));
 
                 Ok((reordered, metadata.clone()))
             }
