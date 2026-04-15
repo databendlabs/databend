@@ -152,7 +152,7 @@ impl LockHolder {
             .await
             {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
-                    "Table is locked by query '{}'(rev: {}, prev_rev: {}, elapsed: {:?})",
+                    "Table is locked, timeout while waiting on previous lock held by query '{}' (rev: {}, prev: {}, elapsed: {:?})",
                     lock_meta.query_id,
                     revision,
                     prev_revision,
