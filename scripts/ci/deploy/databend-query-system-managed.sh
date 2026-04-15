@@ -97,7 +97,6 @@ start_databend_query() {
 			-e "s/admin_api_port/$(find_available_port)/g" \
 			-e "s/metric_api_port/$(find_available_port)/g" \
 			-e "s/mysql_port/${mysql_port}/g" \
-			-e "s/clickhouse_port/$(find_available_port)/g" \
 			-e "s/http_port/${http_port}/g" \
 			-e "s/flight_sql_port/$(find_available_port)/g" \
 			-e "s/query_logs/${log_dir}/g" \

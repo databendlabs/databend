@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
@@ -25,6 +26,7 @@ use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
 use databend_common_pipeline::core::PipeItem;
 use databend_common_pipeline_transforms::create_dummy_item;
+use databend_common_storages_fuse::operations::BlockIdPartitionExchange;
 use databend_common_storages_fuse::operations::row_fetch_processor;
 use itertools::Itertools;
 
@@ -49,6 +51,11 @@ pub struct RowFetch {
     pub row_id_col_offset: usize,
     pub fetched_fields: Vec<DataField>,
     pub need_wrap_nullable: bool,
+    /// When true, a block_id repartition is inserted before RowFetch to reduce
+    /// duplicate block reads. Applicable to join-based mutation paths (MERGE INTO,
+    /// UPDATE...FROM). Not applicable to SELECT+LIMIT where the exchange would
+    /// destroy sort order.
+    pub enable_block_id_repartition: bool,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -108,6 +115,7 @@ impl IPhysicalPlan for RowFetch {
             row_id_col_offset: self.row_id_col_offset,
             fetched_fields: self.fetched_fields.clone(),
             need_wrap_nullable: self.need_wrap_nullable,
+            enable_block_id_repartition: self.enable_block_id_repartition,
             stat_info: self.stat_info.clone(),
         })
     }
@@ -124,8 +132,27 @@ impl IPhysicalPlan for RowFetch {
         )?;
 
         if !MutationSplit::check_physical_plan(&self.input) {
+            // For MatchedOnly MERGE INTO, add block_id repartition before RowFetch
+            // to reduce duplicate block reads.
+            // Not applicable to SELECT+LIMIT: pipeline.exchange() merges partitions
+            // with non-deterministic output order, which would destroy the sort
+            // order produced by Sort+Limit.
+            if self.enable_block_id_repartition {
+                let max_threads = builder.settings.get_max_threads()? as usize;
+                if max_threads > 1
+                    && builder
+                        .settings
+                        .get_enable_mutation_block_id_repartition()?
+                {
+                    let exchange =
+                        Arc::new(BlockIdPartitionExchange::create(self.row_id_col_offset));
+                    builder.main_pipeline.exchange(max_threads, exchange)?;
+                }
+            }
             builder.main_pipeline.add_transform(processor)?;
         } else {
+            // MixedMatched path: MutationSplit is upstream.
+            // Repartition already happened in MutationSplit::build_pipeline2.
             let output_len = builder.main_pipeline.output_len();
             let mut pipe_items = Vec::with_capacity(output_len);
             for i in 0..output_len {

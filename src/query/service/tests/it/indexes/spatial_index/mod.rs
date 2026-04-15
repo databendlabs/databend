@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod builder;
+mod index_refresh;
 mod pruning;
 mod runtime_filter;
