@@ -270,7 +270,7 @@ impl MutationExpression {
                     };
 
                     // Direct mutation inherits row-access predicates from Scan's
-                    // secure_push_down_predicates field.
+                    // secure_predicates field.
                     s_expr = Self::replace_scan_with_mutation_source(&s_expr, mutation_source)?;
 
                     if !predicates.is_empty() {
@@ -466,7 +466,7 @@ impl MutationExpression {
     }
 
     /// Replace the Scan leaf node with a MutationSource, inheriting secure predicates
-    /// directly from the Scan's `secure_push_down_predicates` field.
+    /// directly from the Scan's `secure_predicates` field.
     fn replace_scan_with_mutation_source(
         s_expr: &SExpr,
         mutation_source: MutationSource,
@@ -475,7 +475,7 @@ impl MutationExpression {
             RelOperator::Scan(scan) => {
                 let mut mutation_source = mutation_source;
                 mutation_source.secure_predicates =
-                    scan.secure_push_down_predicates.clone().unwrap_or_default();
+                    scan.secure_predicates.clone().unwrap_or_default();
                 Ok(SExpr::create_leaf(Arc::new(RelOperator::MutationSource(
                     mutation_source,
                 ))))

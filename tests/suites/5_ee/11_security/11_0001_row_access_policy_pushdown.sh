@@ -20,25 +20,22 @@ stmt "ALTER TABLE rap_pushdown_test ADD ROW ACCESS POLICY rap_pushdown_policy ON
 comment "test 1: filter pushdown with RAP - both user and secure predicates in push downs"
 comment "EXPLAIN should show filters pushed down to TableScan (not empty)"
 echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_CONNECT | grep "push downs:" | grep -v "filters: \[\]" | sed 's/^[[:space:]]*//g'
-echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_CONNECT | grep "row access policy: APPLIED" | sed 's/^[[:space:]]*//g'
 
 comment "test 2: limit pushdown with RAP (with WHERE clause)"
 comment "Note: limit is NOT pushed down because sort rule runs before filter pushdown, so push_down_predicates is still empty"
 echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0 LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "push downs:" | grep -v "limit: NONE" | sed 's/^[[:space:]]*//g' || true
 
-comment "test 3: verify SecureFilter node is eliminated and RAP is on Scan"
-comment "SecureFilter should NOT appear in the plan; secure predicates are in Scan's filters"
-echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_CONNECT | grep -c "SecureFilter" || true
+comment "test 3: verify Filter [SECURE] node exists for RAP enforcement"
+comment "Filter [SECURE] should appear in the plan; secure predicates are enforced by pipeline Filter"
+echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_CONNECT | grep -c "Filter \[SECURE\]"
 
 comment "test 4: limit should NOT be pushed down when RAP exists (no user WHERE)"
 comment "This is a safety check - limit without filter predicates could cause incorrect results"
 echo "EXPLAIN SELECT * FROM rap_pushdown_test LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "push downs:" | grep "limit: NONE" | sed 's/^[[:space:]]*//g'
-echo "EXPLAIN SELECT * FROM rap_pushdown_test LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "row access policy: APPLIED" | sed 's/^[[:space:]]*//g'
 
 comment "test 5: sort (ORDER BY + LIMIT) should NOT push limit when RAP exists"
 comment "This is a safety check - TopK pruning could cause incorrect results"
 echo "EXPLAIN SELECT * FROM rap_pushdown_test ORDER BY id LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "push downs:" | grep "limit: NONE" | sed 's/^[[:space:]]*//g'
-echo "EXPLAIN SELECT * FROM rap_pushdown_test ORDER BY id LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "row access policy: APPLIED" | sed 's/^[[:space:]]*//g'
 
 comment "test 6: sort + filter pushdown with RAP"
 comment "Note: limit is NOT pushed down because sort rule runs before filter pushdown"

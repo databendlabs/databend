@@ -71,7 +71,7 @@ use crate::plans::WindowPartition;
 impl SubqueryDecorrelatorOptimizer {
     fn secure_scan_columns(scan: &Scan) -> ColumnSet {
         let mut columns = scan.columns.clone();
-        if let Some(secure_preds) = &scan.secure_push_down_predicates {
+        if let Some(secure_preds) = &scan.secure_predicates {
             for pred in secure_preds {
                 columns.extend(pred.used_columns());
             }
@@ -1216,10 +1216,10 @@ impl SubqueryDecorrelatorOptimizer {
 
         let mut new_scan = scan.derive_decorrelated_scan(columns, scan_id);
 
-        // Remap column references in secure_push_down_predicates to use the
+        // Remap column references in secure_predicates to use the
         // new derived column IDs. Without this, RAP predicates would reference
         // stale column symbols after decorrelation.
-        if let Some(secure_preds) = &mut new_scan.secure_push_down_predicates {
+        if let Some(secure_preds) = &mut new_scan.secure_predicates {
             Self::remap_secure_predicates(secure_preds, &derived_columns.snapshot())?;
         }
 

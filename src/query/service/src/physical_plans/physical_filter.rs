@@ -96,6 +96,9 @@ impl IPhysicalPlan for Filter {
     }
 
     fn get_desc(&self) -> Result<String> {
+        if self.is_secure {
+            return Ok("ROW ACCESS POLICY APPLIED".to_string());
+        }
         Ok(match self.predicates.is_empty() {
             true => String::new(),
             false => self.predicates[0].as_expr(&BUILTIN_FUNCTIONS).sql_display(),
@@ -103,6 +106,11 @@ impl IPhysicalPlan for Filter {
     }
 
     fn get_labels(&self) -> Result<HashMap<String, Vec<String>>> {
+        if self.is_secure {
+            return Ok(HashMap::from([(String::from("Filter condition"), vec![
+                "ROW ACCESS POLICY APPLIED".to_string(),
+            ])]));
+        }
         Ok(HashMap::from([(
             String::from("Filter condition"),
             self.predicates

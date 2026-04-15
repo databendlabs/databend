@@ -281,7 +281,7 @@ impl RuleTryApplyAggIndex {
 
     fn scan_has_secure_predicates(&self, s_expr: &SExpr) -> bool {
         match s_expr.plan() {
-            RelOperator::Scan(scan) => scan.secure_push_down_predicates.is_some(),
+            RelOperator::Scan(scan) => scan.secure_predicates.is_some(),
             _ => {
                 if let Ok(child) = s_expr.child(0) {
                     self.scan_has_secure_predicates(child)

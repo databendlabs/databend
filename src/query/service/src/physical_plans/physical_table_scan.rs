@@ -94,11 +94,6 @@ pub struct TableScan {
 
     pub table_index: Option<IndexType>,
     pub stat_info: Option<PlanStatsInfo>,
-    /// User-only filter display string for EXPLAIN when RAP is active.
-    /// `Some` means RAP is active; `None` means no RAP.
-    /// Stored separately because PushDownInfo.filters merges user + secure predicates.
-    #[serde(default)]
-    pub user_filters_display: Option<String>,
 }
 
 #[typetag::serde]
@@ -183,7 +178,6 @@ impl IPhysicalPlan for TableScan {
             internal_column: self.internal_column.clone(),
             table_index: self.table_index,
             stat_info: self.stat_info.clone(),
-            user_filters_display: self.user_filters_display.clone(),
         })
     }
 
@@ -245,7 +239,6 @@ impl TableScan {
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-        user_filters_display: Option<String>,
     ) -> PhysicalPlan {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
@@ -263,7 +256,6 @@ impl TableScan {
             table_index,
             stat_info,
             internal_column,
-            user_filters_display,
         })
     }
 
@@ -328,7 +320,7 @@ impl PhysicalPlanBuilder {
             // Secure predicates reference columns that must survive pruning,
             // even if they are not in the query output. Without this, a policy
             // on tenant_id would fail when the query only selects id.
-            if let Some(secure_preds) = &scan.secure_push_down_predicates {
+            if let Some(secure_preds) = &scan.secure_predicates {
                 for pred in secure_preds {
                     used = used.union(&pred.used_columns()).cloned().collect();
                 }
@@ -442,33 +434,36 @@ impl PhysicalPlanBuilder {
         )?;
 
         // Generate secure cache key extra for Row Access Policy predicates.
-        // We must constant-fold before hashing so that session-dependent functions
-        // like GETVARIABLE('app_name') are resolved to their concrete values.
-        // Without this, different sessions with different variable values would
-        // produce the same cache key and incorrectly share cached results.
-        if let Some(secure_preds) = &scan.secure_push_down_predicates {
-            if !secure_preds.is_empty() {
-                let mut serialized: Vec<String> = Vec::with_capacity(secure_preds.len());
-                for p in secure_preds {
-                    let expr = p
-                        .as_raw_expr()
-                        .type_check(&metadata)?
-                        .project_column_ref(|col| Ok(col.column_name.clone()))?;
-                    let (folded, _) =
-                        ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let remote_expr = folded.as_remote_expr();
-                    serialized.push(serde_json::to_string(&remote_expr).map_err(|e| {
-                        ErrorCode::Internal(format!(
-                            "Failed to serialize secure predicate for cache key: {}",
-                            e
-                        ))
-                    })?);
-                }
-                serialized.sort();
-                let combined = serialized.join("|");
-                let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
-                self.ctx.add_cache_key_extra(format!("secure:{}", hash));
+        // Constant-fold so session-dependent functions (e.g. GETVARIABLE)
+        // resolve to concrete values. Include scan.table_index so that two
+        // scans on different tables with identical policy text produce
+        // distinct cache-key extras.
+        if scan
+            .secure_predicates
+            .as_ref()
+            .is_some_and(|p| !p.is_empty())
+        {
+            let metadata = self.metadata.read().clone();
+            let secure_preds = scan.secure_predicates.as_deref().unwrap_or_default();
+            let mut serialized: Vec<String> = Vec::with_capacity(secure_preds.len());
+            for pred in secure_preds {
+                let expr = pred
+                    .as_raw_expr()
+                    .type_check(&metadata)?
+                    .project_column_ref(|col| Ok(col.column_name.clone()))?;
+                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let remote = folded.as_remote_expr();
+                serialized.push(serde_json::to_string(&remote).map_err(|e| {
+                    ErrorCode::Internal(format!(
+                        "Failed to serialize secure predicate for cache key: {}",
+                        e
+                    ))
+                })?);
             }
+            serialized.sort();
+            let combined = format!("{}|{}", scan.table_index, serialized.join("|"));
+            let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
+            self.ctx.add_cache_key_extra(format!("secure:{}", hash));
         }
 
         let mut source = table
@@ -527,16 +522,6 @@ impl PhysicalPlanBuilder {
             metadata.set_table_source(scan.table_index, source.clone());
         }
 
-        let user_filters_display = if scan.secure_push_down_predicates.is_some() {
-            Some(Self::compute_user_filters_display(
-                &scan,
-                &metadata,
-                &self.func_ctx,
-            ))
-        } else {
-            None
-        };
-
         let mut plan = TableScan::create(
             scan.scan_id,
             name_mapping,
@@ -544,7 +529,6 @@ impl PhysicalPlanBuilder {
             Some(scan.table_index),
             Some(stat_info.clone()),
             internal_column,
-            user_filters_display,
         );
 
         // Update stream columns if needed.
@@ -557,18 +541,9 @@ impl PhysicalPlanBuilder {
             )?;
         }
 
-        // Row-level secure filter: PushDownInfo.filters only does block/range pruning
-        // in Fuse storage, not row-level filtering. We must add an explicit Filter
-        // operator in the pipeline to enforce RAP predicates on individual rows.
-        // Without this, blocks containing a mix of authorized and unauthorized rows
-        // would leak unauthorized rows to the user.
-        if let Some(secure_preds) = &scan.secure_push_down_predicates {
+        if let Some(secure_preds) = &scan.secure_predicates {
             if !secure_preds.is_empty() {
                 let input_schema = plan.output_schema()?;
-                // Project required columns plus retained columns (e.g. _row_id
-                // for lazy materialization). The old SecureFilter did
-                // required ∪ retained; without retained, RowFetch loses the
-                // hidden columns it needs to fetch lazy-materialized data.
                 let retained = self.metadata.read().get_retained_column().clone();
                 let mut projections = BTreeSet::new();
                 for col in required.union(&retained) {
@@ -592,14 +567,25 @@ impl PhysicalPlanBuilder {
                     })
                     .collect::<Result<Vec<_>>>()?;
 
-                plan = PhysicalPlan::new(crate::physical_plans::Filter {
-                    meta: PhysicalPlanMeta::new("Filter [SECURE]"),
-                    projections,
-                    input: plan,
-                    predicates,
-                    stat_info: Some(stat_info.clone()),
-                    is_secure: true,
+                // After constant folding, skip the Filter if all predicates
+                // folded to constant true (e.g. current_role() matched).
+                let all_true = predicates.iter().all(|p| {
+                    matches!(
+                        p,
+                        RemoteExpr::Constant { scalar, .. }
+                            if scalar == &databend_common_expression::Scalar::Boolean(true)
+                    )
                 });
+                if !all_true {
+                    plan = PhysicalPlan::new(crate::physical_plans::Filter {
+                        meta: PhysicalPlanMeta::new("Filter"),
+                        projections,
+                        input: plan,
+                        predicates,
+                        stat_info: Some(stat_info.clone()),
+                        is_secure: true,
+                    });
+                }
             }
         }
 
@@ -679,7 +665,6 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             None,
-            None,
         ))
     }
 
@@ -718,12 +703,6 @@ impl PhysicalPlanBuilder {
 
         let mut is_deterministic = true;
 
-        // Only push user predicates to storage. Secure predicates are NOT merged
-        // here because storage-specific pushdown builders (e.g. Iceberg's
-        // PredicateBuilder) may return AlwaysTrue for the entire and_filters(...)
-        // when the RAP expression is unsupported, which would suppress legitimate
-        // user filter pruning. Secure predicates are enforced by the pipeline
-        // Filter [SECURE] operator added in build_table_scan.
         let push_down_filter = scan
             .push_down_predicates
             .as_ref()
@@ -894,57 +873,6 @@ impl PhysicalPlanBuilder {
             vector_index: scan.vector_index.clone(),
             sample: scan.sample.clone(),
         })
-    }
-
-    /// Compute user-only filter display for EXPLAIN when RAP is active.
-    /// PushDownInfo.filters merges user + secure predicates, but EXPLAIN
-    /// should only show user predicates and mask secure ones.
-    /// Includes both push_down_predicates and prewhere predicates (deduplicated),
-    /// since RulePushDownPrewhere may move user predicates between the two.
-    ///
-    /// NOTE: This reads from logical predicates (before read_plan), not from
-    /// the final DataSourcePlan.push_downs. This is correct because RAP is
-    /// currently only supported on Fuse engine, which does not rewrite user
-    /// predicates during read planning. If RAP is extended to other engines
-    /// (e.g. Iceberg), this should be revisited.
-    fn compute_user_filters_display(
-        scan: &databend_common_sql::plans::Scan,
-        metadata: &Metadata,
-        func_ctx: &databend_common_expression::FunctionContext,
-    ) -> String {
-        let mut seen = Vec::<&ScalarExpr>::new();
-        let mut all_user_preds: Vec<&ScalarExpr> = Vec::new();
-        for preds in [
-            scan.push_down_predicates.as_deref(),
-            scan.prewhere.as_ref().map(|pw| pw.predicates.as_slice()),
-        ]
-        .into_iter()
-        .flatten()
-        {
-            for p in preds {
-                if !seen.contains(&p) {
-                    seen.push(p);
-                    all_user_preds.push(p);
-                }
-            }
-        }
-        if all_user_preds.is_empty() {
-            return String::new();
-        }
-        all_user_preds
-            .iter()
-            .map(|p| {
-                p.as_raw_expr()
-                    .type_check(metadata)
-                    .and_then(|e| e.project_column_ref(|col| Ok(col.column_name.clone())))
-                    .map(|e| {
-                        let (folded, _) = ConstantFolder::fold(&e, func_ctx, &BUILTIN_FUNCTIONS);
-                        folded.sql_display()
-                    })
-                    .unwrap_or_default()
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
     }
 
     fn build_prewhere_virtual_column_ids(&self, indices: &ColumnSet) -> Option<Vec<u32>> {

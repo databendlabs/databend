@@ -569,8 +569,9 @@ impl Binder {
         Ok(res.0)
     }
 
-    /// Bind a security predicate expression and write it into the Scan's
-    /// `secure_push_down_predicates` field instead of creating a SecureFilter node.
+    /// Bind a Row Access Policy predicate and store it in the Scan's
+    /// `secure_predicates` field. These predicates are later enforced by a
+    /// Filter [SECURE] operator in the physical pipeline.
     pub fn bind_secure_filter(
         &mut self,
         bind_context: &mut BindContext,
@@ -605,9 +606,9 @@ impl Binder {
         match s_expr.plan() {
             RelOperator::Scan(scan) if scan.table_index == table_index => {
                 let mut scan = scan.clone();
-                match scan.secure_push_down_predicates.as_mut() {
+                match scan.secure_predicates.as_mut() {
                     Some(existing) => existing.extend(secure_predicates),
-                    None => scan.secure_push_down_predicates = Some(secure_predicates),
+                    None => scan.secure_predicates = Some(secure_predicates),
                 }
                 Ok(SExpr::create_leaf(Arc::new(scan.into())))
             }

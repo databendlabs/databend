@@ -97,9 +97,11 @@ pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
     pub push_down_predicates: Option<Vec<ScalarExpr>>,
-    /// Row Access Policy security predicates. This is the authoritative runtime
-    /// representation of RAP in the query path — not an optimization copy.
-    pub secure_push_down_predicates: Option<Vec<ScalarExpr>>,
+    /// Row Access Policy predicates. Set during binding when a table has an
+    /// associated RAP. Carried through the optimizer to physical plan building,
+    /// where they are constant-folded and enforced by a Filter [SECURE] pipeline
+    /// operator. Not pushed down to storage.
+    pub secure_predicates: Option<Vec<ScalarExpr>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
@@ -138,7 +140,7 @@ impl Scan {
             table_index: self.table_index,
             columns,
             push_down_predicates: self.push_down_predicates.clone(),
-            secure_push_down_predicates: self.secure_push_down_predicates.clone(),
+            secure_predicates: self.secure_predicates.clone(),
             limit: self.limit,
             order_by: self.order_by.clone(),
             statistics: Arc::new(Statistics {
@@ -172,9 +174,9 @@ impl Scan {
             inverted_index: self.inverted_index.clone(),
             vector_index: self.vector_index.clone(),
             // Security fields: must be preserved (binding-phase, not optimizer annotation).
-            // Note: column references inside secure_push_down_predicates are NOT remapped here.
+            // Note: column references inside secure_predicates are NOT remapped here.
             // The caller (clone_outer_scan) is responsible for remap if needed.
-            secure_push_down_predicates: self.secure_push_down_predicates.clone(),
+            secure_predicates: self.secure_predicates.clone(),
             // Everything else: explicit default.
             change_type: None,
             update_stream_columns: false,
@@ -199,7 +201,7 @@ impl Scan {
                 used_columns.extend(pred.used_columns());
             }
         }
-        if let Some(preds) = &self.secure_push_down_predicates {
+        if let Some(preds) = &self.secure_predicates {
             for pred in preds.iter() {
                 used_columns.extend(pred.used_columns());
             }
@@ -231,7 +233,7 @@ impl PartialEq for Scan {
         self.table_index == other.table_index
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
-            && self.secure_push_down_predicates == other.secure_push_down_predicates
+            && self.secure_predicates == other.secure_predicates
     }
 }
 
@@ -244,7 +246,7 @@ impl std::hash::Hash for Scan {
             column.hash(state);
         }
         self.push_down_predicates.hash(state);
-        self.secure_push_down_predicates.hash(state);
+        self.secure_predicates.hash(state);
     }
 }
 
@@ -256,7 +258,7 @@ impl Operator for Scan {
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         let push_down_iter = self.push_down_predicates.iter().flatten();
 
-        let secure_push_down_iter = self.secure_push_down_predicates.iter().flatten();
+        let secure_predicates_iter = self.secure_predicates.iter().flatten();
 
         let prewhere_iter = self
             .prewhere
@@ -277,7 +279,7 @@ impl Operator for Scan {
         // Chain all iterators together
         Box::new(
             push_down_iter
-                .chain(secure_push_down_iter)
+                .chain(secure_predicates_iter)
                 .chain(prewhere_iter)
                 .chain(agg_index_pred_iter)
                 .chain(agg_index_selection_iter),
@@ -399,8 +401,8 @@ impl Operator for Scan {
         // secure predicates first (for reasonable cardinality estimation and
         // join ordering), then suppress column statistics to prevent data
         // leakage through statistical inference.
-        if self.secure_push_down_predicates.is_some() {
-            let cardinality = match &self.secure_push_down_predicates {
+        if self.secure_predicates.is_some() {
+            let cardinality = match &self.secure_predicates {
                 Some(preds) if !preds.is_empty() => {
                     SelectivityEstimator::new(column_stats, cardinality).apply(preds)?
                 }
@@ -468,7 +470,7 @@ mod tests {
             change_type: Some(ChangeType::Append),
             update_stream_columns: true,
             is_lazy_table: true,
-            secure_push_down_predicates: Some(vec![]),
+            secure_predicates: Some(vec![]),
             // Optimizer-phase fields set to non-default to verify they get reset.
             limit: Some(100),
             order_by: Some(vec![]),
@@ -494,7 +496,7 @@ mod tests {
         assert_eq!(derived.sample, original.sample);
 
         // Security fields must be preserved.
-        assert_eq!(derived.secure_push_down_predicates, Some(vec![]));
+        assert_eq!(derived.secure_predicates, Some(vec![]));
 
         // Everything else must be reset to default.
         assert_eq!(derived.change_type, None);

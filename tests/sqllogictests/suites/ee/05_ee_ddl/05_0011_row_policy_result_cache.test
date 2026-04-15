@@ -106,7 +106,6 @@ Sort(Single)
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
         ├── push downs: [filters: [], limit: NONE]
-        ├── row access policy: APPLIED
         └── estimated rows: 2.50
 
 ## ========================================
