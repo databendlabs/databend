@@ -112,6 +112,7 @@ use parking_lot::Mutex;
 
 use crate::fuse_column::FuseTableColumnStatisticsProvider;
 use crate::fuse_type::FuseTableType;
+use crate::io::normalize_snapshot;
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -371,7 +372,7 @@ impl FuseTable {
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let loc = self.snapshot_loc();
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        Self::read_table_snapshot_with_reader(reader, loc, ver, self.get_operator()).await
     }
 
     #[fastrace::trace]
@@ -382,7 +383,7 @@ impl FuseTable {
     ) -> Result<Option<Arc<TableSnapshot>>> {
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        Self::read_table_snapshot_with_reader(reader, loc, ver, self.get_operator()).await
     }
 
     #[fastrace::trace]
@@ -391,13 +392,14 @@ impl FuseTable {
         let reader = MetaReaders::table_snapshot_reader_without_cache(self.get_operator());
         let loc = self.snapshot_loc();
         let ver = self.snapshot_format_version(loc.clone())?;
-        Self::read_table_snapshot_with_reader(reader, loc, ver).await
+        Self::read_table_snapshot_with_reader(reader, loc, ver, self.get_operator()).await
     }
 
     pub async fn read_table_snapshot_with_reader(
         reader: TableSnapshotReader,
         snapshot_location: Option<String>,
         ver: u64,
+        operator: Operator,
     ) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(location) = snapshot_location {
             let params = LoadParams {
@@ -406,7 +408,8 @@ impl FuseTable {
                 ver,
                 put_cache: true,
             };
-            Ok(Some(reader.read(&params).await?))
+            let snapshot = reader.read(&params).await?;
+            Ok(Some(normalize_snapshot(snapshot, operator).await?))
         } else {
             Ok(None)
         }
@@ -628,8 +631,13 @@ impl FuseTable {
                     let begin = Instant::now();
                     let reader = MetaReaders::table_snapshot_reader_without_cache(operator.clone());
                     let ver = TableMetaLocationGenerator::snapshot_version(loc.as_str());
-                    let snapshot =
-                        Self::read_table_snapshot_with_reader(reader, Some(loc), ver).await?;
+                    let snapshot = Self::read_table_snapshot_with_reader(
+                        reader,
+                        Some(loc),
+                        ver,
+                        operator.clone(),
+                    )
+                    .await?;
                     info!(
                         "[FUSE-TABLE] Table snapshot refreshed, elapsed: {:?}",
                         begin.elapsed()
