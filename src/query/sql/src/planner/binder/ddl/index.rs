@@ -946,7 +946,10 @@ impl Binder {
 
         if !matches!(
             index_type,
-            AstTableIndexType::Inverted | AstTableIndexType::Ngram | AstTableIndexType::Vector
+            AstTableIndexType::Inverted
+                | AstTableIndexType::Ngram
+                | AstTableIndexType::Vector
+                | AstTableIndexType::Spatial
         ) {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table index {} does not support refresh",

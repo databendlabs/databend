@@ -5,6 +5,7 @@ idx_inverted	INVERTED	default	att_phrases
 idx_text	NGRAM	default	att_phrases
 idx_vector	VECTOR	default	att_phrases
 >>>> REFRESH NGRAM INDEX idx_text ON phrases;
+0
 idx_inverted	INVERTED	default	att_phrases
 idx_text	NGRAM	default	att_phrases
 idx_vector	VECTOR	default	att_phrases
@@ -13,6 +14,7 @@ idx_inverted	INVERTED	default	att_phrases
 idx_text	NGRAM	default	att_phrases
 idx_vector	VECTOR	default	att_phrases
 >>>> REFRESH INVERTED INDEX idx_inverted ON phrases;
+0
 idx_inverted	INVERTED	default	att_phrases
 idx_text	NGRAM	default	att_phrases
 idx_vector	VECTOR	default	att_phrases

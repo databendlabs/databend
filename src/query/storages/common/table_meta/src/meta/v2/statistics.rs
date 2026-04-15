@@ -73,7 +73,7 @@ pub struct ClusterStatistics {
     pub pages: Option<Vec<Scalar>>,
 }
 
-/// Spatial statistics for geometry/geography columns.
+/// Spatial statistics for geometry columns.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, Default, FrozenAPI)]
 pub struct SpatialStatistics {
     pub min_x: OrderedFloat<f64>,
