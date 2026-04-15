@@ -123,7 +123,8 @@ impl DefaultExprBinder {
     ) -> Result<(String, bool, bool)> {
         let data_field: DataField = field.into();
         let (scalar_expr, data_type) = self.bind(ast)?;
-        let (evaluable, is_nextval) = scalar_expr.default_value_evaluable();
+        let evaluable = scalar_expr.is_compile_time_evaluable();
+        let is_nextval = scalar_expr.contains_nextval();
         // The nextval can not work with other expressions.
         if !evaluable || (is_nextval && !matches!(scalar_expr, ScalarExpr::AsyncFunctionCall(_))) {
             return Err(ErrorCode::SemanticError(format!(
@@ -150,15 +151,15 @@ impl DefaultExprBinder {
         } else {
             scalar_expr
         };
-        let expr = scalar_expr.as_expr()?;
         let (expr, is_deterministic) = if is_nextval {
-            (expr, false)
-        } else if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            (scalar_expr.as_expr()?, false)
+        } else if scalar_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            let expr = scalar_expr.as_expr()?;
             let (fold_to_constant, _) =
                 ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             (fold_to_constant, true)
         } else {
-            (expr, false)
+            (scalar_expr.as_expr()?, false)
         };
         Ok((expr.sql_display(), is_deterministic, is_nextval))
     }
