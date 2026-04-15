@@ -25,6 +25,7 @@ use databend_common_ast::ast::Connection;
 use databend_common_ast::ast::UriLocation;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
@@ -172,13 +173,17 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
-    // Enable credential chain explicitly only in history-table scope.
-    let allow_credential_chain = ThreadTracker::capture_log_settings()
-        .is_some_and(|settings| settings.level == LevelFilter::Off)
-        .then(|| {
-            info!("Allow credential chain for history tables");
-            true
-        });
+    // Enable credential chain when allow_insecure is set or in history-table scope.
+    let allow_credential_chain = if GlobalConfig::instance().storage.allow_insecure {
+        Some(true)
+    } else {
+        ThreadTracker::capture_log_settings()
+            .is_some_and(|settings| settings.level == LevelFilter::Off)
+            .then(|| {
+                info!("Allow credential chain for history tables");
+                true
+            })
+    };
 
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
