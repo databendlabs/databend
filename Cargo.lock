@@ -3518,7 +3518,7 @@ dependencies = [
  "parking_lot 0.12.3",
  "parquet 56.2.0",
  "rand 0.8.5",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "serde",
  "serde_json",
  "sha2",
@@ -3718,7 +3718,7 @@ dependencies = [
  "rand 0.8.5",
  "rand_distr",
  "recursive",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "rust_decimal",
  "rustls 0.23.36",
  "serde",
@@ -3911,7 +3911,7 @@ dependencies = [
  "micromarshal",
  "rand 0.8.5",
  "rmp-serde",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "scroll 0.12.0",
  "serde",
  "smallvec",
@@ -4177,7 +4177,7 @@ dependencies = [
  "opendal",
  "rand 0.8.5",
  "ringbuffer",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "serde",
  "serde_json",
  "snap",
@@ -4385,7 +4385,7 @@ dependencies = [
  "prqlc",
  "recursive",
  "regex",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "serde",
  "serde_json",
  "sha2",
@@ -4604,7 +4604,7 @@ dependencies = [
  "parquet 56.2.0",
  "paste",
  "rand 0.8.5",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "serde",
  "serde_json",
  "sha2",
@@ -6259,7 +6259,7 @@ dependencies = [
  "parquet 56.2.0",
  "rand 0.8.5",
  "rayon",
- "roaring 0.10.12",
+ "roaring 0.11.3 (git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651)",
  "self_cell",
  "serde",
  "serde_json",
@@ -9818,7 +9818,7 @@ dependencies = [
  "rand 0.8.5",
  "reqsign",
  "reqwest",
- "roaring 0.11.3",
+ "roaring 0.11.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "rust_decimal",
  "serde",
  "serde_bytes",
@@ -14606,7 +14606,6 @@ checksum = "19e8d2cfa184d94d0726d650a9f4a1be7f9b76ac9fdb954219878dc00c1c1e7b"
 dependencies = [
  "bytemuck",
  "byteorder",
- "serde",
 ]
 
 [[package]]
@@ -14617,6 +14616,16 @@ checksum = "8ba9ce64a8f45d7fc86358410bb1a82e8c987504c0d4900e9141d69a9f26c885"
 dependencies = [
  "bytemuck",
  "byteorder",
+]
+
+[[package]]
+name = "roaring"
+version = "0.11.3"
+source = "git+https://github.com/zhang2014/roaring-rs.git?rev=38dc651#38dc65193f7a4034dfdc89d74885d6112aee7f7d"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "serde",
 ]
 
 [[package]]
