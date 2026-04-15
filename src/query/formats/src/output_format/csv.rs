@@ -17,8 +17,8 @@ use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
 use databend_common_meta_app::principal::CsvFileFormatParams;
-use databend_common_meta_app::principal::EmptyFieldAs;
 
+use crate::field_encoder::CsvQuoteSettings;
 use crate::field_encoder::FieldEncoderCSV;
 use crate::field_encoder::write_csv_string_maybe_quoted;
 use crate::output_format::OutputFormat;
@@ -28,13 +28,7 @@ pub struct CSVOutputFormat {
     field_encoder: FieldEncoderCSV,
     field_delimiter: u8,
     record_delimiter: Vec<u8>,
-    quote: u8,
-    quote_minimal: bool,
-    escape: Option<u8>,
-    null_bytes: Vec<u8>,
-    allow_quoted_nulls: bool,
-    empty_field_as: EmptyFieldAs,
-    quoted_empty_field_as: EmptyFieldAs,
+    quote_settings: CsvQuoteSettings,
 
     headers: u8,
 }
@@ -51,13 +45,7 @@ impl CSVOutputFormat {
             field_encoder,
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
-            quote: params.quote.as_bytes()[0],
-            quote_minimal: params.quote_minimal,
-            escape: params.escape.as_bytes().first().copied(),
-            null_bytes: params.null_display.as_bytes().to_vec(),
-            allow_quoted_nulls: params.allow_quoted_nulls,
-            empty_field_as: params.empty_field_as.clone(),
-            quoted_empty_field_as: params.quoted_empty_field_as.clone(),
+            quote_settings: CsvQuoteSettings::from_params(params),
             headers,
         }
     }
@@ -70,19 +58,7 @@ impl CSVOutputFormat {
             if col_index != 0 {
                 buf.push(fd);
             }
-            write_csv_string_maybe_quoted(
-                v.as_bytes(),
-                &mut buf,
-                self.quote,
-                self.quote_minimal,
-                self.field_delimiter,
-                &self.record_delimiter,
-                self.escape,
-                &self.null_bytes,
-                self.allow_quoted_nulls,
-                self.empty_field_as.clone(),
-                self.quoted_empty_field_as.clone(),
-            );
+            write_csv_string_maybe_quoted(v.as_bytes(), &mut buf, &self.quote_settings);
         }
 
         buf.extend_from_slice(&self.record_delimiter);

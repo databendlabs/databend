@@ -19,6 +19,7 @@ mod json;
 mod string;
 
 pub use bytes::FieldEncoderBytes;
+pub use csv::CsvQuoteSettings;
 pub use csv::FieldEncoderCSV;
 pub use csv::write_csv_string;
 pub use csv::write_csv_string_maybe_quoted;

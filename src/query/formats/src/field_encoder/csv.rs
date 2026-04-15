@@ -32,49 +32,44 @@ use crate::field_encoder::FieldEncoderBytes;
 use crate::field_encoder::FieldEncoderJSON;
 use crate::field_encoder::write_tsv_escaped_string;
 
+#[derive(Clone)]
+pub struct CsvQuoteSettings {
+    pub quote_char: u8,
+    pub quote_minimal: bool,
+    pub field_delimiter: u8,
+    pub record_delimiter: Vec<u8>,
+    pub escape_char: Option<u8>,
+    pub null_bytes: Vec<u8>,
+    pub allow_quoted_nulls: bool,
+    pub empty_field_as: EmptyFieldAs,
+    pub quoted_empty_field_as: EmptyFieldAs,
+}
+
+impl CsvQuoteSettings {
+    pub fn from_params(params: &CsvFileFormatParams) -> Self {
+        Self {
+            quote_char: params.quote.as_bytes()[0],
+            quote_minimal: params.quote_minimal,
+            field_delimiter: params.field_delimiter.as_bytes()[0],
+            record_delimiter: params.record_delimiter.as_bytes().to_vec(),
+            escape_char: params.escape.as_bytes().first().copied(),
+            null_bytes: params.null_display.as_bytes().to_vec(),
+            allow_quoted_nulls: params.allow_quoted_nulls,
+            empty_field_as: params.empty_field_as.clone(),
+            quoted_empty_field_as: params.quoted_empty_field_as.clone(),
+        }
+    }
+}
+
 pub enum StringFormatter {
-    Csv {
-        quote_char: u8,
-        quote_minimal: bool,
-        field_delimiter: u8,
-        record_delimiter: Vec<u8>,
-        escape_char: Option<u8>,
-        null_bytes: Vec<u8>,
-        allow_quoted_nulls: bool,
-        empty_field_as: EmptyFieldAs,
-        quoted_empty_field_as: EmptyFieldAs,
-    },
-    Text {
-        record_delimiter: u8,
-    },
+    Csv(CsvQuoteSettings),
+    Text { record_delimiter: u8 },
 }
 
 impl StringFormatter {
     fn write_string(&self, bytes: &[u8], buf: &mut Vec<u8>) {
         match self {
-            StringFormatter::Csv {
-                quote_char,
-                quote_minimal,
-                field_delimiter,
-                record_delimiter,
-                escape_char,
-                null_bytes,
-                allow_quoted_nulls,
-                empty_field_as,
-                quoted_empty_field_as,
-            } => write_csv_string_maybe_quoted(
-                bytes,
-                buf,
-                *quote_char,
-                *quote_minimal,
-                *field_delimiter,
-                record_delimiter,
-                *escape_char,
-                null_bytes,
-                *allow_quoted_nulls,
-                empty_field_as.clone(),
-                quoted_empty_field_as.clone(),
-            ),
+            StringFormatter::Csv(settings) => write_csv_string_maybe_quoted(bytes, buf, settings),
             StringFormatter::Text { record_delimiter } => {
                 write_tsv_escaped_string(bytes, buf, *record_delimiter)
             }
@@ -104,63 +99,29 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
     buf.push(quote);
 }
 
-fn csv_string_needs_quotes(
-    bytes: &[u8],
-    quote: u8,
-    field_delimiter: u8,
-    record_delimiter: &[u8],
-    escape: Option<u8>,
-    null_bytes: &[u8],
-    allow_quoted_nulls: bool,
-    empty_field_as: EmptyFieldAs,
-    quoted_empty_field_as: EmptyFieldAs,
-) -> bool {
+fn csv_string_needs_quotes(bytes: &[u8], settings: &CsvQuoteSettings) -> bool {
     if bytes.is_empty() {
-        return empty_field_as != EmptyFieldAs::String
-            && quoted_empty_field_as == EmptyFieldAs::String;
+        return settings.empty_field_as != EmptyFieldAs::String
+            && settings.quoted_empty_field_as == EmptyFieldAs::String;
     }
 
-    if !allow_quoted_nulls && bytes == null_bytes {
+    if !settings.allow_quoted_nulls && bytes == settings.null_bytes {
         return true;
     }
 
     bytes.iter().any(|byte| {
-        *byte == quote
-            || *byte == field_delimiter
-            || record_delimiter.contains(byte)
-            || escape == Some(*byte)
+        *byte == settings.quote_char
+            || *byte == settings.field_delimiter
+            || settings.record_delimiter.contains(byte)
+            || settings.escape_char == Some(*byte)
     })
 }
 
-pub fn write_csv_string_maybe_quoted(
-    bytes: &[u8],
-    buf: &mut Vec<u8>,
-    quote: u8,
-    quote_minimal: bool,
-    field_delimiter: u8,
-    record_delimiter: &[u8],
-    escape: Option<u8>,
-    null_bytes: &[u8],
-    allow_quoted_nulls: bool,
-    empty_field_as: EmptyFieldAs,
-    quoted_empty_field_as: EmptyFieldAs,
-) {
-    if quote_minimal
-        && !csv_string_needs_quotes(
-            bytes,
-            quote,
-            field_delimiter,
-            record_delimiter,
-            escape,
-            null_bytes,
-            allow_quoted_nulls,
-            empty_field_as,
-            quoted_empty_field_as,
-        )
-    {
+pub fn write_csv_string_maybe_quoted(bytes: &[u8], buf: &mut Vec<u8>, settings: &CsvQuoteSettings) {
+    if settings.quote_minimal && !csv_string_needs_quotes(bytes, settings) {
         buf.extend_from_slice(bytes);
     } else {
-        write_csv_string(bytes, buf, quote);
+        write_csv_string(bytes, buf, settings.quote_char);
     }
 }
 
@@ -176,17 +137,7 @@ impl FieldEncoderCSV {
         Self {
             simple: FieldEncoderBytes::create_for_csv(params, settings.clone()),
             nested: FieldEncoderJSON::create(settings),
-            string_formatter: StringFormatter::Csv {
-                quote_char: params.quote.as_bytes()[0],
-                quote_minimal: params.quote_minimal,
-                field_delimiter: params.field_delimiter.as_bytes()[0],
-                record_delimiter: params.record_delimiter.as_bytes().to_vec(),
-                escape_char: params.escape.as_bytes().first().copied(),
-                null_bytes: params.null_display.as_bytes().to_vec(),
-                allow_quoted_nulls: params.allow_quoted_nulls,
-                empty_field_as: params.empty_field_as.clone(),
-                quoted_empty_field_as: params.quoted_empty_field_as.clone(),
-            },
+            string_formatter: StringFormatter::Csv(CsvQuoteSettings::from_params(params)),
         }
     }
 
