@@ -64,6 +64,7 @@ default-members = [
 # Workspace dependencies
 [workspace.dependencies]
 databend-common-ast = { path = "src/query/ast" }
+databend-common-ast-visit-derive = { path = "src/query/ast/visit_derive" }
 databend-common-base = { path = "src/common/base" }
 databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }
@@ -293,6 +294,8 @@ hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 lru = "0.12"
 perf-event2 = "0.7.4"
+proc-macro2 = "1.0"
+quote = "1.0"
 
 ## in branch dev
 iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e", features = [
@@ -464,6 +467,7 @@ strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
 sub-cache = "0.2.1"
+syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"
 tantivy = "0.26.0"

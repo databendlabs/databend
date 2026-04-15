@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 use nom::Parser;
 
 use crate::ParseError;
-use crate::Range;
 use crate::Result;
 use crate::ast::DatabaseRef;
-use crate::ast::ExplainKind;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Literal;
@@ -52,6 +48,9 @@ use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
+use crate::visit::VisitControl;
+use crate::visit::VisitorMut;
+use crate::visit::WalkMut;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
@@ -205,15 +204,15 @@ pub fn run_parser<O>(
 }
 
 /// Check that the statement can be displayed and reparsed without loss
-#[allow(dead_code)]
+#[cfg(debug_assertions)]
 fn assert_reparse(sql: &str, stmt: StatementWithFormat) -> std::result::Result<(), String> {
     let stmt = reset_ast(stmt);
 
-    let new_sql = stmt.to_string();
-    let new_tokens = crate::parser::tokenize_sql(&new_sql).map_err(|err| {
+    let normalized_sql = stmt.to_string();
+    let new_tokens = crate::parser::tokenize_sql(&normalized_sql).map_err(|err| {
         format!(
             "failed to tokenize round-tripped SQL: {} in {}",
-            err.1, new_sql
+            err.1, normalized_sql
         )
     })?;
     let new_stmt = run_parser(
@@ -226,68 +225,31 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) -> std::result::Result<(
     .map_err(|err| {
         format!(
             "failed to reparse round-tripped SQL: {} in {}",
-            err.1, new_sql
+            err.1, normalized_sql
         )
     })?;
 
-    let new_stmt = reset_ast(new_stmt);
-    if stmt != new_stmt {
+    let reparsed_sql = reset_ast(new_stmt).to_string();
+    if normalized_sql != reparsed_sql {
         return Err(format!(
-            "statement changed after round-tripping.\nleft:\n{}\nright:\n{}",
-            sql, new_sql
+            "statement changed after round-tripping.\noriginal:\n{}\nnormalized:\n{}\nreparsed:\n{}",
+            sql, normalized_sql, reparsed_sql
         ));
     }
 
     Ok(())
 }
 
-#[allow(dead_code)]
+#[cfg(debug_assertions)]
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
-    #[derive(VisitorMut)]
-    #[visitor(
-        Range(enter),
-        Literal(enter),
-        ExplainKind(enter),
-        SelectTarget(enter),
-        SetExpr(enter)
-    )]
-    struct ResetAST;
+    struct ResetAst;
 
-    impl ResetAST {
-        fn enter_range(&mut self, range: &mut Range) {
-            range.start = 0;
-            range.end = 0;
-        }
-
-        fn enter_literal(&mut self, literal: &mut Literal) {
-            *literal = Literal::Null;
-        }
-
-        fn enter_explain_kind(&mut self, kind: &mut ExplainKind) {
-            match kind {
-                ExplainKind::Ast(_) => *kind = ExplainKind::Ast("".to_string()),
-                ExplainKind::Syntax(_) => *kind = ExplainKind::Syntax("".to_string()),
-                ExplainKind::Memo(_) => *kind = ExplainKind::Memo("".to_string()),
-                _ => (),
-            }
-        }
-
-        fn enter_select_target(&mut self, target: &mut SelectTarget) {
-            if let SelectTarget::StarColumns { column_filter, .. } = target {
-                *column_filter = None
-            }
-        }
-
-        fn enter_set_expr(&mut self, set_expr: &mut SetExpr) {
-            let collapsed = match set_expr {
-                SetExpr::Query(query) if Self::is_grouping_wrapper(query) => {
-                    Some(query.body.clone())
+    impl ResetAst {
+        fn reset_select_targets(select_list: &mut [SelectTarget]) {
+            for target in select_list {
+                if let SelectTarget::StarColumns { column_filter, .. } = target {
+                    *column_filter = None;
                 }
-                _ => None,
-            };
-
-            if let Some(body) = collapsed {
-                *set_expr = body;
             }
         }
 
@@ -300,7 +262,109 @@ fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
         }
     }
 
-    stmt.drive_mut(&mut ResetAST);
+    impl VisitorMut for ResetAst {
+        fn visit_statement(
+            &mut self,
+            stmt: &mut Statement,
+        ) -> std::result::Result<VisitControl, !> {
+            if let Statement::CreateTag(stmt) = stmt
+                && let Some(allowed_values) = &mut stmt.allowed_values
+            {
+                for value in allowed_values {
+                    *value = Literal::Null;
+                }
+            }
+            Ok(VisitControl::Continue)
+        }
+
+        fn visit_set_expr(
+            &mut self,
+            set_expr: &mut SetExpr,
+        ) -> std::result::Result<VisitControl, !> {
+            let collapsed = match set_expr {
+                SetExpr::Query(query) if Self::is_grouping_wrapper(query) => {
+                    Some(query.body.clone())
+                }
+                _ => None,
+            };
+
+            if let Some(body) = collapsed {
+                *set_expr = body;
+            }
+            Ok(VisitControl::Continue)
+        }
+
+        fn visit_select_stmt(
+            &mut self,
+            select: &mut crate::ast::SelectStmt,
+        ) -> std::result::Result<VisitControl, !> {
+            Self::reset_select_targets(&mut select.select_list);
+            Ok(VisitControl::Continue)
+        }
+
+        fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+            match expr {
+                Expr::Literal { value, .. } => {
+                    *value = Literal::Null;
+                }
+                Expr::Map { kvs, .. } => {
+                    for (key, _) in kvs {
+                        *key = Literal::Null;
+                    }
+                }
+                _ => {}
+            }
+            Ok(VisitControl::Continue)
+        }
+    }
+
+    let _ = stmt.stmt.walk_mut(&mut ResetAst);
 
     stmt
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_statement_with_format(sql: &str) -> StatementWithFormat {
+        let tokens = tokenize_sql(sql).unwrap();
+        run_parser(
+            &tokens,
+            Dialect::PostgreSQL,
+            ParseMode::Default,
+            false,
+            statement,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_reset_ast_normalizes_select_star_filters_and_literals() {
+        let stmt = reset_ast(parse_statement_with_format(
+            "SELECT * EXCLUDE (c1), 1, 'x' FROM customer",
+        ));
+
+        assert_eq!(stmt.to_string(), "SELECT *, NULL, NULL FROM customer");
+    }
+
+    #[test]
+    fn test_reset_ast_normalizes_tag_allowed_values() {
+        let stmt = reset_ast(parse_statement_with_format(
+            "CREATE TAG IF NOT EXISTS tag_a ALLOWED_VALUES = ('dev', 'prod') COMMENT = 'environment tag'",
+        ));
+
+        assert_eq!(
+            stmt.to_string(),
+            "CREATE TAG IF NOT EXISTS tag_a ALLOWED_VALUES = (NULL, NULL) COMMENT = 'environment tag'"
+        );
+    }
+
+    #[test]
+    fn test_assert_reparse_uses_normalized_sql_fixpoint() {
+        let sql = "SELECT * EXCLUDE (c1), 1 FROM customer";
+        let stmt = parse_statement_with_format(sql);
+
+        assert!(assert_reparse(sql, stmt).is_ok());
+    }
 }

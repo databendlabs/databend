@@ -16,11 +16,12 @@ use databend_common_ast::ast::CreateRowAccessPolicyStmt;
 use databend_common_ast::ast::DescRowAccessPolicyStmt;
 use databend_common_ast::ast::DropRowAccessPolicyStmt;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::is_builtin_function;
-use derive_visitor::Drive;
-use derive_visitor::Visitor;
 use unicase::Ascii;
 
 use crate::Binder;
@@ -45,15 +46,13 @@ impl Binder {
             definition,
         } = stmt;
 
-        #[derive(Visitor)]
-        #[visitor(Expr(enter))]
         struct PolicyVisitor {
             name_resolution_ctx: NameResolutionContext,
             error: Option<ErrorCode>,
         }
 
-        impl PolicyVisitor {
-            fn enter_expr(&mut self, expr: &Expr) {
+        impl Visitor for PolicyVisitor {
+            fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
                 match expr {
                     Expr::FunctionCall { func, span: _ } => {
                         let func_name =
@@ -69,25 +68,27 @@ impl Binder {
                             self.error = Some(ErrorCode::InvalidArgument(
                                 "Row access policy expr only builtin function",
                             ));
+                            return Ok(VisitControl::Break(()));
                         }
                     }
                     Expr::InSubquery { .. } | Expr::LikeSubquery { .. } => {
                         self.error = Some(ErrorCode::InvalidArgument(
                             "Row access policy expr only builtin function",
                         ));
+                        return Ok(VisitControl::Break(()));
                     }
                     _ => {}
                 }
+                Ok(VisitControl::Continue)
             }
         }
 
-        let stmt = stmt.clone();
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut visitor = PolicyVisitor {
             name_resolution_ctx,
             error: None,
         };
-        stmt.drive(&mut visitor);
+        definition.definition.walk(&mut visitor)?;
 
         if let Some(e) = visitor.error {
             return Err(e);

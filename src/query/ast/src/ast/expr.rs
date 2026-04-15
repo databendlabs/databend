@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 use educe::Educe;
@@ -1178,7 +1180,7 @@ pub enum MapAccessor {
     Colon { key: Identifier },
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum TypeName {
     Boolean,
     UInt8,
@@ -1384,7 +1386,7 @@ pub struct WindowDesc {
     pub window: Window,
 }
 
-#[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, EnumAsInner, Drive, DriveMut, Walk, WalkMut)]
 pub enum Window {
     WindowReference(WindowRef),
     WindowSpec(WindowSpec),
@@ -1399,7 +1401,7 @@ impl Display for Window {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowDefinition {
     pub name: Identifier,
     pub spec: WindowSpec,
@@ -1411,7 +1413,7 @@ impl Display for WindowDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowRef {
     pub window_name: Identifier,
 }
@@ -1422,7 +1424,7 @@ impl Display for WindowRef {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowSpec {
     pub existing_window_name: Option<Identifier>,
     pub partition_by: Vec<Expr>,
@@ -1494,21 +1496,21 @@ impl Display for WindowSpec {
 }
 
 /// `RANGE UNBOUNDED PRECEDING` or `ROWS BETWEEN 5 PRECEDING AND CURRENT ROW`.
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct WindowFrame {
     pub units: WindowFrameUnits,
     pub start_bound: WindowFrameBound,
     pub end_bound: WindowFrameBound,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, EnumAsInner, Drive, DriveMut, Walk, WalkMut)]
 pub enum WindowFrameUnits {
     Rows,
     Range,
 }
 
 /// Specifies [WindowFrame]'s `start_bound` and `end_bound`
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum WindowFrameBound {
     /// `CURRENT ROW`
     CurrentRow,
@@ -1518,7 +1520,7 @@ pub enum WindowFrameBound {
     Following(Option<Box<Expr>>),
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct Lambda {
     pub params: Vec<Identifier>,
     pub expr: Box<Expr>,
