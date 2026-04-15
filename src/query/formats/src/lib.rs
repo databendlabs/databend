@@ -17,7 +17,6 @@
 #![allow(clippy::collapsible_if)]
 
 mod binary;
-mod clickhouse;
 mod common_settings;
 mod delimiter;
 mod field_decoder;
@@ -25,7 +24,6 @@ pub mod field_encoder;
 mod file_format_type;
 pub mod output_format;
 
-pub use clickhouse::ClickhouseFormatType;
 pub use delimiter::RecordDelimiter;
 pub use field_decoder::*;
 pub use file_format_type::FileFormatTypeExt;
