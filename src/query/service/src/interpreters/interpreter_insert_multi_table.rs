@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -50,6 +51,7 @@ use crate::physical_plans::ChunkFillAndReorder;
 use crate::physical_plans::ChunkFilter;
 use crate::physical_plans::ChunkMerge;
 use crate::physical_plans::Duplicate;
+use crate::physical_plans::EvalScalar;
 use crate::physical_plans::FillAndReorder;
 use crate::physical_plans::MultiInsertEvalScalar;
 use crate::physical_plans::PhysicalPlan;
@@ -250,7 +252,70 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                Ok((input_source, metadata.clone()))
+
+                // Lazy materialization (triggered by WHERE + LIMIT) may reorder the physical
+                // output columns by appending lazily-fetched columns at the end, which breaks
+                // the positional column mapping used by ChunkCastSchema.  Add a reorder
+                // EvalScalar that projects columns back into the order defined by bind_context,
+                // so the physical output always matches the logical schema order.
+                let physical_schema = input_source.output_schema()?;
+                let expected_indices: Vec<usize> = bind_context
+                    .columns
+                    .iter()
+                    .filter_map(|col| {
+                        physical_schema
+                            .index_of(&col.index.to_string())
+                            .ok()
+                    })
+                    .collect();
+
+                // Check whether the physical output is already in the expected order.
+                let already_ordered = expected_indices
+                    .iter()
+                    .enumerate()
+                    .all(|(pos, &phys_pos)| pos == phys_pos);
+
+                if already_ordered
+                    || expected_indices.len() != physical_schema.num_fields()
+                {
+                    // Nothing to reorder (or we can't safely reorder – fall through).
+                    return Ok((input_source, metadata.clone()));
+                }
+
+                // Build ColumnRef expressions that pick each column in the correct order.
+                let exprs: Vec<(RemoteExpr, databend_common_sql::Symbol)> = bind_context
+                    .columns
+                    .iter()
+                    .filter_map(|col| {
+                        let phys_pos = physical_schema
+                            .index_of(&col.index.to_string())
+                            .ok()?;
+                        let data_type = physical_schema.field(phys_pos).data_type().clone();
+                        let remote_expr = RemoteExpr::ColumnRef {
+                            span: None,
+                            id: phys_pos,
+                            data_type,
+                            display_name: col.index.to_string(),
+                        };
+                        Some((remote_expr, col.index))
+                    })
+                    .collect();
+
+                // Project only the reordered columns (indices into input + exprs combined).
+                // Since all exprs are pure ColumnRefs from the input, we project the
+                // input_column_nums..input_column_nums+exprs.len() range.
+                let input_col_num = physical_schema.num_fields();
+                let projections: BTreeSet<usize> =
+                    (input_col_num..input_col_num + exprs.len()).collect();
+
+                let reordered = PhysicalPlan::new(EvalScalar::create(
+                    input_source,
+                    exprs,
+                    projections,
+                    None,
+                ));
+
+                Ok((reordered, metadata.clone()))
             }
             _ => unreachable!(),
         }
