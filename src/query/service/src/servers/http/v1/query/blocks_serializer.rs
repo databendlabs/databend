@@ -40,6 +40,7 @@ use databend_common_io::geo_to_wkb;
 use databend_common_io::geo_to_wkt;
 use databend_common_io::prelude::OutputFormatSettings;
 use geo::Geometry;
+use jsonb::RawJsonb;
 use log::info;
 use serde::ser::SerializeSeq;
 
@@ -125,7 +126,7 @@ impl BlocksSerializer {
 
         for (block, _) in &self.columns {
             let columns = if let Some(format) = &self.format {
-                format_geo_columns(block, format)?
+                format_arrow_ipc_columns(block, format)?
             } else {
                 block.clone()
             };
@@ -138,14 +139,17 @@ impl BlocksSerializer {
     }
 }
 
-fn format_geo_columns(columns: &[Column], format: &OutputFormatSettings) -> Result<Vec<Column>> {
+fn format_arrow_ipc_columns(
+    columns: &[Column],
+    format: &OutputFormatSettings,
+) -> Result<Vec<Column>> {
     columns
         .iter()
-        .map(|column| format_geo_column(column, format.geometry_format))
+        .map(|column| format_arrow_ipc_column(column, format.geometry_format))
         .collect()
 }
 
-fn format_geo_column(column: &Column, geometry_format: GeometryDataType) -> Result<Column> {
+fn format_arrow_ipc_column(column: &Column, geometry_format: GeometryDataType) -> Result<Column> {
     match column {
         Column::Geometry(column) => Ok(Column::Geometry(format_geometry_column(
             column,
@@ -155,22 +159,23 @@ fn format_geo_column(column: &Column, geometry_format: GeometryDataType) -> Resu
             column,
             geometry_format,
         )?)),
+        Column::Variant(column) => Ok(Column::Variant(format_variant_column(column))),
         Column::Nullable(column) => Ok(NullableColumn::new_column(
-            format_geo_column(&column.column, geometry_format)?,
+            format_arrow_ipc_column(&column.column, geometry_format)?,
             column.validity.clone(),
         )),
         Column::Array(column) => Ok(Column::Array(Box::new(ArrayColumn::new(
-            format_geo_column(&column.underlying_column(), geometry_format)?,
+            format_arrow_ipc_column(&column.underlying_column(), geometry_format)?,
             column.underlying_offsets(),
         )))),
         Column::Map(column) => Ok(Column::Map(Box::new(ArrayColumn::new(
-            format_geo_column(&column.underlying_column(), geometry_format)?,
+            format_arrow_ipc_column(&column.underlying_column(), geometry_format)?,
             column.underlying_offsets(),
         )))),
         Column::Tuple(fields) => Ok(Column::Tuple(
             fields
                 .iter()
-                .map(|field| format_geo_column(field, geometry_format))
+                .map(|field| format_arrow_ipc_column(field, geometry_format))
                 .collect::<Result<Vec<_>>>()?,
         )),
         _ => Ok(column.clone()),
@@ -181,7 +186,7 @@ fn format_geometry_column(
     column: &BinaryColumn,
     geometry_format: GeometryDataType,
 ) -> Result<BinaryColumn> {
-    format_geo_binary_column(
+    format_binary_column(
         column.len(),
         column.total_bytes_len(),
         column.iter(),
@@ -196,7 +201,7 @@ fn format_geography_column(
     column: &GeographyColumn,
     geometry_format: GeometryDataType,
 ) -> Result<GeographyColumn> {
-    Ok(GeographyColumn(format_geo_binary_column(
+    Ok(GeographyColumn(format_binary_column(
         column.len(),
         column.0.total_bytes_len(),
         column.iter(),
@@ -209,7 +214,17 @@ fn format_geography_column(
     )?))
 }
 
-fn format_geo_binary_column<T>(
+fn format_variant_column(column: &BinaryColumn) -> BinaryColumn {
+    format_binary_column(
+        column.len(),
+        column.total_bytes_len(),
+        column.iter(),
+        |value| Ok(RawJsonb::new(value).to_string().into_bytes()),
+    )
+    .expect("formatting variant column to json string should not fail")
+}
+
+fn format_binary_column<T>(
     len: usize,
     data_len: usize,
     values: impl IntoIterator<Item = T>,
