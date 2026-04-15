@@ -183,7 +183,7 @@ mod test {
                 false,
             )?;
             let mut output_format =
-                get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
+                get_output_format(schema, params, settings.get_output_format_settings()?)?;
             let buffer = output_format.serialize_block(&block)?;
 
             let csv_block = String::from_utf8(buffer)?;
@@ -242,7 +242,7 @@ mod test {
         let params =
             FileFormatParams::try_from_reader(FileFormatOptionsReader::from_map(options), false)?;
         let mut output_format =
-            get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
+            get_output_format(schema, params, settings.get_output_format_settings()?)?;
 
         let prefix = String::from_utf8(output_format.serialize_prefix()?)?;
         let body = String::from_utf8(output_format.serialize_block(&block)?)?;
@@ -276,7 +276,7 @@ mod test {
             false,
         )?;
         let mut output_format =
-            get_output_format(schema, params, settings.get_output_format_settings()?, None)?;
+            get_output_format(schema, params, settings.get_output_format_settings()?)?;
 
         let buffer = output_format.serialize_block(&block)?;
 
