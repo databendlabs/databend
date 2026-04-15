@@ -180,13 +180,11 @@ use crate::sql::binder::get_storage_params_from_options;
 use crate::storages::Table;
 
 const MYSQL_VERSION: &str = "8.0.90";
-const CLICKHOUSE_VERSION: &str = "8.12.14";
 const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 
 pub struct QueryContext {
     version: String,
     mysql_version: String,
-    clickhouse_version: String,
     block_threshold: Arc<RwLock<BlockThresholds>>,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
@@ -216,7 +214,6 @@ impl QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("Databend Query {}", shared.version.commit_detail),
             mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
-            clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
@@ -1323,7 +1320,6 @@ impl TableContext for QueryContext {
     fn get_fuse_version(&self) -> String {
         let session = self.get_current_session();
         match session.get_type() {
-            SessionType::ClickHouseHttpHandler => self.clickhouse_version.clone(),
             SessionType::MySQL => self.mysql_version.clone(),
             _ => self.version.clone(),
         }

@@ -81,9 +81,9 @@ impl FuseTable {
         index_schema: TableSchemaRef,
         segment_locs: Option<Vec<Location>>,
         pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let Some(snapshot) = self.read_table_snapshot().await? else {
-            return Ok(());
+            return Ok(0);
         };
 
         let table_schema = self.schema();
@@ -113,7 +113,7 @@ impl FuseTable {
         };
 
         if segment_locs.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
         let operator = self.get_operator_ref();
 
@@ -143,7 +143,7 @@ impl FuseTable {
             }
         }
         if block_metas.is_empty() {
-            return Ok(());
+            return Ok(0);
         }
 
         let data_schema = Arc::new(DataSchema::from(index_schema.as_ref()));
@@ -182,7 +182,7 @@ impl FuseTable {
         pipeline.try_resize(1)?;
         pipeline.add_sink(|input| InvertedIndexSink::try_create(input, block_nums))?;
 
-        Ok(())
+        Ok(block_nums as u64)
     }
 }
 

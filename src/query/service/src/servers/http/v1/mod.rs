@@ -74,7 +74,6 @@ pub use users::create_user_handler;
 pub use users::list_users_handler;
 pub use verify::verify_handler;
 
-pub use crate::servers::http::clickhouse_handler::clickhouse_router;
 pub use crate::servers::http::error::QueryError;
 
 #[cfg(not(feature = "storage-stage"))]
