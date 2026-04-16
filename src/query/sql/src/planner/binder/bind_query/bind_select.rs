@@ -93,8 +93,8 @@ impl Binder {
             let select_list = &stmt.select_list;
             self.bind_dummy_table(bind_context, select_list)?
         } else {
-            let mut max_column_position = MaxColumnPosition::default();
-            stmt.walk(&mut max_column_position)?;
+            let mut max_column_position = MaxColumnPosition::new();
+            let _ = stmt.walk(&mut max_column_position);
             self.metadata
                 .write()
                 .set_max_column_position(max_column_position.max_pos);
@@ -838,24 +838,30 @@ impl SelectRewriter {
     }
 }
 
-#[derive(Default)]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
+}
+
+impl MaxColumnPosition {
+    pub fn new() -> Self {
+        Self { max_pos: 0 }
+    }
 }
 
 impl Visitor for MaxColumnPosition {
     fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
         if let Expr::ColumnRef {
             column:
-                ColumnRef {
+                databend_common_ast::ast::ColumnRef {
                     column: ColumnID::Position(pos),
                     ..
                 },
             ..
         } = expr
-            && pos.pos > self.max_pos
         {
-            self.max_pos = pos.pos;
+            if pos.pos > self.max_pos {
+                self.max_pos = pos.pos;
+            }
         }
         Ok(VisitControl::Continue)
     }

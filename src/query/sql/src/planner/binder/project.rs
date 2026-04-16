@@ -302,7 +302,7 @@ impl Binder {
                             _ => {
                                 let mut expr = expr.clone();
                                 let mut remove_quote_visitor = RemoveIdentifierQuote;
-                                expr.walk_mut(&mut remove_quote_visitor).unwrap();
+                                let _ = expr.walk_mut(&mut remove_quote_visitor);
                                 format!("{:#}", expr)
                             }
                         }

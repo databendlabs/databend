@@ -21,6 +21,9 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
@@ -30,8 +33,6 @@ use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
 use databend_storages_common_cache::InMemoryLruCache;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use derive_visitor::Drive;
-use derive_visitor::Visitor;
 use itertools::Itertools;
 use sha2::Digest;
 use sha2::Sha256;
@@ -79,7 +80,7 @@ impl Planner {
             name_resolution_ctx,
             cache_miss: false,
         };
-        stmt.drive(&mut visitor);
+        let _ = stmt.walk(&mut visitor);
 
         if visitor.schema_snapshots.is_empty() || visitor.cache_miss {
             return (false, None);
@@ -148,8 +149,6 @@ impl Planner {
     }
 }
 
-#[derive(Visitor)]
-#[visitor(TableReference(enter), FunctionCall(enter))]
 struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
     schema_snapshots: Vec<(TableSchemaRef, String)>,
@@ -157,22 +156,25 @@ struct TableRefVisitor {
     cache_miss: bool,
 }
 
-impl TableRefVisitor {
-    fn enter_function_call(&mut self, func: &FunctionCall) {
+impl Visitor for TableRefVisitor {
+    fn visit_function_call(&mut self, func: &FunctionCall) -> Result<VisitControl, !> {
         if self.cache_miss {
-            return;
+            return Ok(VisitControl::Break(()));
         }
 
         let func_name = func.name.name.to_lowercase();
         // If the function is not suitable for caching, we should not cache the plan
         if !is_cacheable_function(&func_name) {
             self.cache_miss = true;
+            return Ok(VisitControl::Break(()));
         }
+
+        Ok(VisitControl::Continue)
     }
 
-    fn enter_table_reference(&mut self, table_ref: &TableReference) {
+    fn visit_table_reference(&mut self, table_ref: &TableReference) -> Result<VisitControl, !> {
         if self.cache_miss {
-            return;
+            return Ok(VisitControl::Break(()));
         }
         if let TableReference::Table {
             table,
@@ -183,7 +185,7 @@ impl TableRefVisitor {
         {
             if temporal.is_some() || with_options.is_some() {
                 self.cache_miss = true;
-                return;
+                return Ok(VisitControl::Break(()));
             }
 
             let catalog = table.catalog.to_owned().unwrap_or(Identifier {
@@ -225,12 +227,15 @@ impl TableRefVisitor {
                         let snapshot = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
                         if let Some(sn) = snapshot {
                             self.schema_snapshots.push((table_meta.schema(), sn));
-                            return;
+                            return Ok(VisitControl::Continue);
                         }
                     }
                 }
                 self.cache_miss = true;
-            });
+                Ok(VisitControl::Break(()))
+            })
+        } else {
+            Ok(VisitControl::Continue)
         }
     }
 }

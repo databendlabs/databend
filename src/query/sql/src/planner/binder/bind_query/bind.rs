@@ -144,7 +144,7 @@ impl Binder {
             cte_ref_count,
             name_resolution_ctx: self.name_resolution_ctx.clone(),
         };
-        query.walk(&mut visitor)?;
+        let _ = query.walk(&mut visitor);
 
         Ok(visitor.cte_ref_count)
     }
@@ -262,7 +262,7 @@ impl Binder {
         } else {
             None
         };
-        as_query.walk_mut(&mut expr_replacer)?;
+        let _ = as_query.walk_mut(&mut expr_replacer);
 
         let source = if cte.alias.columns.is_empty() {
             None

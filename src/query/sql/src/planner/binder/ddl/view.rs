@@ -62,7 +62,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.walk_mut(&mut visitor)?;
+        let _ = query.walk_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -101,7 +101,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.walk_mut(&mut visitor)?;
+        let _ = query.walk_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {

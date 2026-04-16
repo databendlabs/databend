@@ -61,6 +61,7 @@ use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::WalkMut;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
@@ -102,7 +103,6 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::TableCompression;
 use databend_storages_common_table_meta::table::is_reserved_opt_key;
-use derive_visitor::DriveMut;
 use log::debug;
 use opendal::Operator;
 use parking_lot::RwLock;
@@ -2325,7 +2325,7 @@ impl Binder {
             }
 
             let mut cluster_expr = cluster_expr.clone();
-            cluster_expr.drive_mut(&mut normalizer);
+            let _ = cluster_expr.walk_mut(&mut normalizer);
             cluster_keys.push(format!("{:#}", &cluster_expr));
         }
 
