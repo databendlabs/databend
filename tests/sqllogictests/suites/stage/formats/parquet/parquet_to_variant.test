@@ -9,9 +9,9 @@ parquet/tuple.parquet 3 0 NULL NULL
 query ???
 select * from t order by b;
 ----
-{"id":1,"t":{"A":1,"B":"a"}} 0 parquet/tuple.parquet
-{"id":2,"t":{"A":3,"B":"b"}} 1 parquet/tuple.parquet
-{"id":3,"t":{"A":3,"B":"c"}} 2 parquet/tuple.parquet
+{"id":1,"t":{"A":1,"B":"a"}} 3 parquet/tuple.parquet
+{"id":2,"t":{"A":3,"B":"b"}} 4 parquet/tuple.parquet
+{"id":3,"t":{"A":3,"B":"c"}} 5 parquet/tuple.parquet
 
 statement ok
 create or replace stage s1;
