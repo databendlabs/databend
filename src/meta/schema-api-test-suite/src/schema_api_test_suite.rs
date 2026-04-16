@@ -7659,18 +7659,11 @@ impl SchemaApiTestSuite {
         let base_table = util.get_table().await?;
         let base_table_id = base_table.ident.table_id;
 
-        let retainable_boundary = Utc::now() - Duration::days(1);
-        // Use a boundary later than `drop_on` to simulate an out-of-retention branch
-        // without waiting for wall-clock time to pass.
-        let expired_boundary = Utc::now() + Duration::days(1);
-
         self.test_branch_undrop_retention_boundaries(
             mt,
             &tenant,
             base_table.as_ref(),
             base_table_id,
-            retainable_boundary,
-            expired_boundary,
         )
         .await?;
         self.test_branch_gc_removes_dropped_generation(
@@ -7692,15 +7685,13 @@ impl SchemaApiTestSuite {
             &tenant,
             base_table.as_ref(),
             base_table_id,
-            retainable_boundary,
         )
         .await?;
-        self.test_branch_undrop_ambiguous_name_requires_id(
+        self.test_branch_undrop_latest_dropped_generation(
             mt,
             &tenant,
             base_table.as_ref(),
             base_table_id,
-            retainable_boundary,
         )
         .await?;
 
@@ -7713,8 +7704,6 @@ impl SchemaApiTestSuite {
         tenant: &Tenant,
         base_table: &TableInfo,
         base_table_id: u64,
-        retainable_boundary: DateTime<Utc>,
-        expired_boundary: DateTime<Utc>,
     ) -> anyhow::Result<()>
     where
         MT: kvapi::KVApi<Error = MetaError>
@@ -7761,26 +7750,10 @@ impl SchemaApiTestSuite {
             "dropped branch should keep copied-file dedup state before final gc"
         );
 
-        let err = mt
-            .undrop_table_branch(UndropTableBranchReq {
-                tenant: tenant.clone(),
-                table_id: base_table_id,
-                branch_name: branch_name.to_string(),
-                retention_boundary: expired_boundary,
-                new_expire_at: None,
-            })
-            .await
-            .unwrap_err();
-        assert_eq!(
-            ErrorCode::ReferenceExpired("").code(),
-            ErrorCode::from(err).code()
-        );
-
         mt.undrop_table_branch(UndropTableBranchReq {
             tenant: tenant.clone(),
             table_id: base_table_id,
             branch_name: branch_name.to_string(),
-            retention_boundary: retainable_boundary,
             new_expire_at: None,
         })
         .await?;
@@ -7914,7 +7887,6 @@ impl SchemaApiTestSuite {
         tenant: &Tenant,
         base_table: &TableInfo,
         base_table_id: u64,
-        retainable_boundary: DateTime<Utc>,
     ) -> anyhow::Result<()>
     where
         MT: kvapi::KVApi<Error = MetaError>
@@ -7946,7 +7918,6 @@ impl SchemaApiTestSuite {
             tenant: tenant.clone(),
             table_id: base_table_id,
             branch_name: retained_branch_name.to_string(),
-            retention_boundary: retainable_boundary,
             new_expire_at: None,
         })
         .await?;
@@ -7979,7 +7950,6 @@ impl SchemaApiTestSuite {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
                 branch_name: expired_branch_name.to_string(),
-                retention_boundary: retainable_boundary,
                 new_expire_at: None,
             })
             .await
@@ -7994,7 +7964,6 @@ impl SchemaApiTestSuite {
             tenant: tenant.clone(),
             table_id: base_table_id,
             branch_name: expired_branch_name.to_string(),
-            retention_boundary: retainable_boundary,
             new_expire_at: Some(renewed_expire_at),
         })
         .await?;
@@ -8007,13 +7976,12 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    async fn test_branch_undrop_ambiguous_name_requires_id<MT>(
+    async fn test_branch_undrop_latest_dropped_generation<MT>(
         &self,
         mt: &MT,
         tenant: &Tenant,
         base_table: &TableInfo,
         base_table_id: u64,
-        retainable_boundary: DateTime<Utc>,
     ) -> anyhow::Result<()>
     where
         MT: kvapi::KVApi<Error = MetaError>
@@ -8037,6 +8005,20 @@ impl SchemaApiTestSuite {
         let branch_id_2 = self
             .create_active_branch(mt, tenant, base_table, branch_name, None)
             .await?;
+        let err = mt
+            .undrop_table_branch_by_id(UndropTableBranchByIdReq {
+                tenant: tenant.clone(),
+                table_id: base_table_id,
+                branch_name: branch_name.to_string(),
+                branch_id: branch_id_1,
+                new_expire_at: None,
+            })
+            .await
+            .unwrap_err();
+        assert_eq!(
+            ErrorCode::ReferenceAlreadyExists("").code(),
+            ErrorCode::from(err).code()
+        );
         mt.drop_table_branch(DropTableBranchReq {
             tenant: tenant.clone(),
             table_id: base_table_id,
@@ -8056,27 +8038,10 @@ impl SchemaApiTestSuite {
         })
         .await?;
 
-        let err = mt
-            .undrop_table_branch(UndropTableBranchReq {
-                tenant: tenant.clone(),
-                table_id: base_table_id,
-                branch_name: branch_name.to_string(),
-                retention_boundary: retainable_boundary,
-                new_expire_at: None,
-            })
-            .await
-            .unwrap_err();
-        assert_eq!(
-            ErrorCode::UnknownReference("").code(),
-            ErrorCode::from(err).code()
-        );
-
-        mt.undrop_table_branch_by_id(UndropTableBranchByIdReq {
+        mt.undrop_table_branch(UndropTableBranchReq {
             tenant: tenant.clone(),
             table_id: base_table_id,
             branch_name: branch_name.to_string(),
-            branch_id: branch_id_2,
-            retention_boundary: retainable_boundary,
             new_expire_at: None,
         })
         .await?;
@@ -8086,144 +8051,18 @@ impl SchemaApiTestSuite {
             .unwrap();
         assert_eq!(branch_id_2, restored_branch.data.branch_id);
 
+        mt.undrop_table_branch_by_id(UndropTableBranchByIdReq {
+            tenant: tenant.clone(),
+            table_id: base_table_id,
+            branch_name: branch_name.to_string(),
+            branch_id: branch_id_2,
+            new_expire_at: None,
+        })
+        .await
+        .unwrap_err();
+
         Ok(())
     }
-
-    // pub async fn share_create_get_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-    //     let tenant1 = "tenant1";
-    //     let share_name1 = "share1";
-    //     let share_name2 = "share2";
-    //     info!("--- create {}", share_name1);
-    //     {
-    //         let req = CreateShareReq {
-    //             if_not_exists: false,
-    //             tenant: tenant1.to_string(),
-    //             share_name: share_name1.to_string(),
-    //         };
-    //
-    //         let res = mt.create_share(req).await;
-    //         info!("create share res: {:?}", res);
-    //         let res = res.unwrap();
-    //         assert_eq!(1, res.share_id, "first share id is 1");
-    //     }
-    //
-    //     info!("--- get share1");
-    //     {
-    //         let res = mt.get_share(GetShareReq::new(tenant1, share_name1)).await;
-    //         debug!("get present share res: {:?}", res);
-    //         let res = res?;
-    //         assert_eq!(1, res.id, "db1 id is 1");
-    //         assert_eq!(
-    //             share_name1.to_string(),
-    //             res.name,
-    //             "share1.db is {}",
-    //             share_name1
-    //         );
-    //     }
-    //
-    //     info!("--- create share1 again with if_not_exists=false");
-    //     {
-    //         let req = CreateShareReq {
-    //             if_not_exists: false,
-    //             tenant: tenant1.to_string(),
-    //             share_name: share_name1.to_string(),
-    //         };
-    //
-    //         let res = mt.create_share(req).await;
-    //         info!("create share res: {:?}", res);
-    //         let err = res.unwrap_err();
-    //         assert_eq!(
-    //             ErrorCode::ShareAlreadyExists("").code(),
-    //             ErrorCode::from(err).code()
-    //         );
-    //     }
-    //
-    //     info!("--- create share1 again with if_not_exists=true");
-    //     {
-    //         let req = CreateShareReq {
-    //             if_not_exists: true,
-    //             tenant: tenant1.to_string(),
-    //             share_name: share_name1.to_string(),
-    //         };
-    //
-    //         let res = mt.create_share(req).await;
-    //         info!("create database res: {:?}", res);
-    //
-    //         let res = res.unwrap();
-    //         assert_eq!(1, res.share_id, "share1 id is 1");
-    //     }
-    //
-    //     info!("--- create share2");
-    //     {
-    //         let req = CreateShareReq {
-    //             if_not_exists: false,
-    //             tenant: tenant1.to_string(),
-    //             share_name: share_name2.to_string(),
-    //         };
-    //
-    //         let res = mt.create_share(req).await;
-    //         info!("create share res: {:?}", res);
-    //         let res = res.unwrap();
-    //         assert_eq!(2, res.share_id, "second share id is 2 ");
-    //     }
-    //
-    //     info!("--- get share2");
-    //     {
-    //         let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await?;
-    //         assert_eq!(2, res.id, "share2 id is 2");
-    //         assert_eq!(
-    //             share_name2.to_string(),
-    //             res.name,
-    //             "share2.name is {}",
-    //             share_name2
-    //         );
-    //     }
-    //
-    //     info!("--- get absent share");
-    //     {
-    //         let res = mt.get_share(GetShareReq::new(tenant1, "absent")).await;
-    //         debug!("=== get absent share res: {:?}", res);
-    //         assert!(res.is_err());
-    //         let err = res.unwrap_err();
-    //         let err_code = ErrorCode::from(err);
-    //
-    //         assert_eq!(ErrorCode::unknown_share_code(), err_code.code());
-    //         assert!(err_code.message().contains("absent"));
-    //     }
-    //
-    //     info!("--- drop share2");
-    //     {
-    //         mt.drop_share(DropShareReq {
-    //             if_exists: false,
-    //             tenant: tenant1.to_string(),
-    //             share_name: share_name2.to_string(),
-    //         })
-    //         .await?;
-    //     }
-    //
-    //     info!("--- get share2 should not found");
-    //     {
-    //         let res = mt.get_share(GetShareReq::new(tenant1, share_name2)).await;
-    //         let err = res.unwrap_err();
-    //         assert_eq!(
-    //             ErrorCode::UnknownShare("").code(),
-    //             ErrorCode::from(err).code()
-    //         );
-    //     }
-    //
-    //     info!("--- drop share2 with if_exists=true returns no error");
-    //     {
-    //         mt.drop_share(DropShareReq {
-    //             if_exists: true,
-    //             tenant: tenant1.to_string(),
-    //             share_name: share_name2.to_string(),
-    //         })
-    //         .await?;
-    //     }
-    //
-    //     Ok(())
-    // }
-    //
 }
 
 /// Supporting utils

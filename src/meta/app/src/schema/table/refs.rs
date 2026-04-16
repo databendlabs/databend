@@ -192,8 +192,6 @@ pub struct UndropTableBranchReq {
     pub tenant: Tenant,
     pub table_id: u64,
     pub branch_name: String,
-    /// Dropped branches older than this timestamp cannot be restored.
-    pub retention_boundary: DateTime<Utc>,
     /// Optionally replace the restored branch expiration with a new future timestamp.
     pub new_expire_at: Option<DateTime<Utc>>,
 }
@@ -204,8 +202,6 @@ pub struct UndropTableBranchByIdReq {
     pub table_id: u64,
     pub branch_name: String,
     pub branch_id: u64,
-    /// Dropped branches older than this timestamp cannot be restored.
-    pub retention_boundary: DateTime<Utc>,
     /// Optionally replace the restored branch expiration with a new future timestamp.
     pub new_expire_at: Option<DateTime<Utc>>,
 }

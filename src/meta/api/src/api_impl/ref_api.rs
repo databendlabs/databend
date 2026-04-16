@@ -66,7 +66,6 @@ use databend_common_meta_app::schema::UndropTableBranchByIdReq;
 use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
-use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
@@ -90,35 +89,6 @@ use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;
 use crate::txn_del;
 use crate::txn_put_pb;
-
-async fn build_lvt_condition(
-    kv_api: &(impl KVPbApi<Error = MetaError> + ?Sized),
-    table_id: u64,
-    lvt_check: &TableLvtCheck,
-) -> Result<TxnCondition, KVAppError> {
-    let lvt_ident = LeastVisibleTimeIdent::new(&lvt_check.tenant, table_id);
-    let res = kv_api.get_pb(&lvt_ident).await?;
-    let (lvt_seq, current_lvt) = match res {
-        Some(v) => (v.seq, Some(v.data)),
-        None => (0, None),
-    };
-
-    if let Some(current_lvt) = current_lvt {
-        if current_lvt.time > lvt_check.time {
-            return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
-                TableSnapshotExpired::new(
-                    table_id,
-                    format!(
-                        "snapshot timestamp {:?} is older than the table's least visible time {:?}",
-                        lvt_check.time, current_lvt.time
-                    ),
-                ),
-            )));
-        }
-    }
-
-    Ok(txn_cond_seq(&lvt_ident, Eq, lvt_seq))
-}
 
 #[async_trait::async_trait]
 pub trait RefApi
@@ -814,71 +784,64 @@ where
 
     /// Undrop a table branch by name.
     ///
-    /// If multiple dropped branches share the same name, returns an error
-    /// asking the user to specify a branch_id via UNDROP BRANCH ... IDENTIFIER(<id>).
+    /// If multiple dropped branches share the same name, get the latest dropped.
     #[logcall::logcall]
     #[fastrace::trace]
     async fn undrop_table_branch(&self, req: UndropTableBranchReq) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let tenant = &req.tenant;
         let table_id = req.table_id;
         let branch_name = &req.branch_name;
-        let retention_boundary = req.retention_boundary;
+        let vacuum_ident = VacuumWatermarkIdent::new_global(&req.tenant);
+        let dropped_dir =
+            DirName::new_with_level(DroppedBranchIdent::new(table_id, branch_name, 0), 1);
 
-        // List dropped branches with this name: __fd_dropped_branch/<table_id>/<branch_name>/
-        let dropped_prefix = DroppedBranchIdent::new(table_id, branch_name, 0);
-        let dropped_dir = DirName::new_with_level(dropped_prefix, 1);
-        let dropped_entries = self
-            .list_pb_vec(ListOptions::unlimited(&dropped_dir))
-            .await?;
+        let mut trials = txn_backoff(None, func_name!());
+        loop {
+            trials.next().unwrap()?.await;
 
-        if dropped_entries.is_empty() {
-            return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                format!("No dropped branch '{}' found", branch_name),
-            ))));
+            let seq_vacuum = self.get_pb(&vacuum_ident).await?;
+            let vacuum_seq = seq_vacuum.as_ref().map(|s| s.seq).unwrap_or(0);
+            let retention_bound = seq_vacuum.as_ref().map(|sv| sv.data.time);
+
+            // List dropped branches with this name: __fd_dropped_branch/<table_id>/<branch_name>/
+            let dropped_entries = self
+                .list_pb_vec(ListOptions::unlimited(&dropped_dir))
+                .await?;
+
+            let retained_entries = if let Some(boundary) = retention_bound {
+                dropped_entries
+                    .into_iter()
+                    .filter(|(_, meta)| meta.data.drop_on > boundary)
+                    .collect::<Vec<_>>()
+            } else {
+                dropped_entries
+            };
+            if retained_entries.is_empty() {
+                return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
+                    format!("No recoverable dropped branch '{}' found", branch_name),
+                ))));
+            }
+
+            let mut txn = TxnRequest::default();
+            txn.condition
+                .push(txn_cond_seq(&vacuum_ident, Eq, vacuum_seq));
+
+            let (dropped_key, seq_dropped) = retained_entries
+                .into_iter()
+                .max_by_key(|(_, meta)| meta.data.drop_on)
+                .unwrap();
+            let by_id_req = UndropTableBranchByIdReq {
+                tenant: req.tenant.clone(),
+                table_id,
+                branch_name: branch_name.to_string(),
+                branch_id: dropped_key.branch_id,
+                new_expire_at: req.new_expire_at,
+            };
+            if append_undrop_table_branch_txn(self, &by_id_req, seq_dropped, &mut txn).await? {
+                return Ok(());
+            }
         }
-
-        let retained_entries = dropped_entries
-            .into_iter()
-            .filter(|(_, meta)| meta.data.drop_on >= retention_boundary)
-            .collect::<Vec<_>>();
-
-        if retained_entries.is_empty() {
-            return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
-                format!(
-                    "Dropped branch '{}' expired before {} and can no longer be undropped",
-                    branch_name, retention_boundary
-                ),
-            ))));
-        }
-
-        if retained_entries.len() > 1 {
-            let ids: Vec<String> = retained_entries
-                .iter()
-                .map(|(k, _)| k.branch_id.to_string())
-                .collect();
-            return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
-                format!(
-                    "Multiple dropped branches with name '{}' found (ids: {}), use UNDROP BRANCH ... IDENTIFIER(<branch_id>) to specify",
-                    branch_name,
-                    ids.join(", ")
-                ),
-            ))));
-        }
-
-        let (dropped_key, _dropped_meta) = retained_entries.into_iter().next().unwrap();
-        let branch_id = dropped_key.branch_id;
-
-        self.do_undrop_table_branch(
-            tenant,
-            table_id,
-            branch_name,
-            branch_id,
-            retention_boundary,
-            req.new_expire_at,
-        )
-        .await
     }
 
     /// Undrop a table branch by explicit branch_id.
@@ -890,167 +853,41 @@ where
     ) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        self.do_undrop_table_branch(
-            &req.tenant,
-            req.table_id,
-            &req.branch_name,
-            req.branch_id,
-            req.retention_boundary,
-            req.new_expire_at,
-        )
-        .await
-    }
-
-    /// Shared implementation for undrop branch (by name or by id).
-    async fn do_undrop_table_branch(
-        &self,
-        tenant: &Tenant,
-        table_id: u64,
-        branch_name: &str,
-        branch_id: u64,
-        retention_boundary: DateTime<Utc>,
-        new_expire_at: Option<DateTime<Utc>>,
-    ) -> Result<(), KVAppError> {
-        let key_branch = TableIdBranchName::new(table_id, branch_name);
-        let key_dropped = DroppedBranchIdent::new(table_id, branch_name, branch_id);
-        let key_branch_table_id = TableId {
-            table_id: branch_id,
-        };
-        let vacuum_ident = VacuumWatermarkIdent::new_global(tenant.clone());
+        let key_dropped = DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
+        let vacuum_ident = VacuumWatermarkIdent::new_global(req.tenant.clone());
 
         let mut trials = txn_backoff(None, func_name!());
         loop {
             trials.next().unwrap()?.await;
 
-            // 1. Visible entry must not exist (branch name must be free).
-            let seq_branch = self.get_pb(&key_branch).await?;
-            if seq_branch.is_some() {
-                return Err(KVAppError::AppError(AppError::from(
-                    ReferenceAlreadyExists::new(format!(
-                        "Branch '{}' already exists, cannot undrop",
-                        branch_name
-                    )),
-                )));
-            }
-
-            // 2. Dropped entry must exist.
             let seq_dropped = self.get_pb(&key_dropped).await?;
             let Some(seq_dropped) = seq_dropped else {
                 return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
                     format!(
                         "Dropped branch '{}' (id={}) not found",
-                        branch_name, branch_id
+                        req.branch_name, req.branch_id
                     ),
                 ))));
             };
-            if seq_dropped.data.drop_on < retention_boundary {
-                return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
-                    format!(
-                        "Dropped branch '{}' expired at {} and can no longer be undropped",
-                        branch_name, seq_dropped.data.drop_on
-                    ),
-                ))));
-            }
 
-            // 2a. Check vacuum watermark: if a concurrent vacuum has set a watermark
-            // that covers this branch's drop_on, reject the undrop to prevent
-            // restoring a branch whose S3 data may already be deleted.
             let seq_vacuum = self.get_pb(&vacuum_ident).await?;
             if let Some(ref sv) = seq_vacuum {
                 if seq_dropped.data.drop_on <= sv.data.time {
                     return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
                         UndropTableRetentionGuard::new(
-                            format!("branch '{}'", branch_name),
+                            format!("branch '{}'", req.branch_name),
                             seq_dropped.data.drop_on,
                             sv.data.time,
                         ),
                     )));
                 }
             }
-
-            let now = Utc::now();
-            let restored_expire_at = match (new_expire_at, seq_dropped.data.expire_at) {
-                (Some(expire_at), _) => {
-                    if expire_at <= now {
-                        return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
-                            format!(
-                                "Can not undrop branch '{}' with expire_at {} in the past",
-                                branch_name, expire_at
-                            ),
-                        ))));
-                    }
-                    Some(expire_at)
-                }
-                (None, Some(expire_at)) if expire_at <= now => {
-                    return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
-                        format!(
-                            "Dropped branch '{}' expired at {} and must be undropped with a new expiration",
-                            branch_name, expire_at
-                        ),
-                    ))));
-                }
-                (None, expire_at) => expire_at,
-            };
-
-            // 3. Branch table meta must exist.
-            let seq_table_meta = self.get_pb(&key_branch_table_id).await?;
-            let Some(seq_table_meta) = seq_table_meta else {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(branch_id, "undrop_table_branch: branch table meta"),
-                )));
-            };
-            let mut table_meta = seq_table_meta.data;
-
-            // 4. Restore policy references.
-            let (policy_restore_ops, policy_restore_conditions) =
-                restore_policy_references_on_undrop(self, tenant, branch_id, &mut table_meta)
-                    .await
-                    .map_err(KVAppError::from)?;
-
-            // 5. Clear drop_on, build txn.
-            table_meta.drop_on = None;
-
-            let visible_branch = TableBranch {
-                expire_at: restored_expire_at,
-                branch_id,
-            };
-
-            // Concurrent safety: vacuum watermark seq must not change during undrop.
-            // If vacuum updates the watermark between our read and this txn commit,
-            // the txn will fail and we'll retry with the new watermark value.
             let vacuum_seq = seq_vacuum.as_ref().map(|s| s.seq).unwrap_or(0);
 
-            let txn = TxnRequest::new(
-                [
-                    vec![
-                        // Visible entry must still be absent.
-                        txn_cond_seq(&key_branch, Eq, 0),
-                        // Dropped entry must not change.
-                        txn_cond_seq(&key_dropped, Eq, seq_dropped.seq),
-                        // Branch table meta must not change.
-                        txn_cond_seq(&key_branch_table_id, Eq, seq_table_meta.seq),
-                        // Vacuum watermark must not change (prevents race with concurrent vacuum).
-                        txn_cond_seq(&vacuum_ident, Eq, vacuum_seq),
-                    ],
-                    policy_restore_conditions,
-                ]
-                .concat(),
-                [
-                    vec![
-                        // Restore visible entry.
-                        txn_put_pb(&key_branch, &visible_branch)?,
-                        // Clear drop_on in branch table meta.
-                        txn_put_pb(&key_branch_table_id, &table_meta)?,
-                        // Delete dropped entry.
-                        txn_del(&key_dropped),
-                    ],
-                    policy_restore_ops,
-                ]
-                .concat(),
-            );
-
-            let (succ, _responses) = send_txn(self, txn).await?;
-            if succ {
+            let mut txn = TxnRequest::default();
+            txn.condition
+                .push(txn_cond_seq(&vacuum_ident, Eq, vacuum_seq));
+            if append_undrop_table_branch_txn(self, &req, seq_dropped, &mut txn).await? {
                 return Ok(());
             }
         }
@@ -1077,4 +914,120 @@ where
     KV: Send + Sync,
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
 {
+}
+
+async fn build_lvt_condition(
+    kv_api: &(impl KVPbApi<Error = MetaError> + ?Sized),
+    table_id: u64,
+    lvt_check: &TableLvtCheck,
+) -> Result<TxnCondition, KVAppError> {
+    let lvt_ident = LeastVisibleTimeIdent::new(&lvt_check.tenant, table_id);
+    let res = kv_api.get_pb(&lvt_ident).await?;
+    let (lvt_seq, current_lvt) = match res {
+        Some(v) => (v.seq, Some(v.data)),
+        None => (0, None),
+    };
+
+    if let Some(current_lvt) = current_lvt {
+        if current_lvt.time > lvt_check.time {
+            return Err(KVAppError::AppError(AppError::TableSnapshotExpired(
+                TableSnapshotExpired::new(
+                    table_id,
+                    format!(
+                        "snapshot timestamp {:?} is older than the table's least visible time {:?}",
+                        lvt_check.time, current_lvt.time
+                    ),
+                ),
+            )));
+        }
+    }
+
+    Ok(txn_cond_seq(&lvt_ident, Eq, lvt_seq))
+}
+
+async fn append_undrop_table_branch_txn<KV>(
+    kv_api: &KV,
+    req: &UndropTableBranchByIdReq,
+    seq_dropped: SeqV<DroppedBranchMeta>,
+    txn: &mut TxnRequest,
+) -> Result<bool, KVAppError>
+where
+    KV: kvapi::KVApi<Error = MetaError> + ?Sized,
+{
+    let key_branch = TableIdBranchName::new(req.table_id, &req.branch_name);
+    let key_dropped = DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
+    let key_branch_table_id = TableId {
+        table_id: req.branch_id,
+    };
+
+    let now = Utc::now();
+    let restored_expire_at = match (req.new_expire_at, seq_dropped.data.expire_at) {
+        (Some(expire_at), _) => {
+            if expire_at <= now {
+                return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
+                    format!(
+                        "Can not undrop branch '{}' with expire_at {} in the past",
+                        req.branch_name, expire_at
+                    ),
+                ))));
+            }
+            Some(expire_at)
+        }
+        (None, Some(expire_at)) if expire_at <= now => {
+            return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
+                format!(
+                    "Dropped branch '{}' expired at {} and must be undropped with a new expiration",
+                    req.branch_name, expire_at
+                ),
+            ))));
+        }
+        (None, expire_at) => expire_at,
+    };
+    let visible_branch = TableBranch {
+        expire_at: restored_expire_at,
+        branch_id: req.branch_id,
+    };
+
+    let seq_table_meta = kv_api.get_pb(&key_branch_table_id).await?;
+    let Some(seq_table_meta) = seq_table_meta else {
+        return Err(KVAppError::AppError(AppError::UnknownTableId(
+            UnknownTableId::new(req.branch_id, "undrop_table_branch: branch table meta"),
+        )));
+    };
+
+    let mut table_meta = seq_table_meta.data;
+    let (policy_restore_ops, policy_restore_conditions) =
+        restore_policy_references_on_undrop(kv_api, &req.tenant, req.branch_id, &mut table_meta)
+            .await
+            .map_err(KVAppError::from)?;
+    table_meta.drop_on = None;
+
+    txn.condition.extend([
+        txn_cond_seq(&key_branch, Eq, 0),
+        txn_cond_seq(&key_dropped, Eq, seq_dropped.seq),
+        txn_cond_seq(&key_branch_table_id, Eq, seq_table_meta.seq),
+    ]);
+    txn.condition.extend(policy_restore_conditions);
+    txn.if_then.extend([
+        txn_put_pb(&key_branch, &visible_branch)?,
+        txn_put_pb(&key_branch_table_id, &table_meta)?,
+        txn_del(&key_dropped),
+    ]);
+    txn.if_then.extend(policy_restore_ops);
+    let (succ, _responses) = send_txn(kv_api, txn.clone()).await?;
+    if succ {
+        return Ok(true);
+    }
+
+    let seq_branch = kv_api.get_pb(&key_branch).await?;
+    if seq_branch.is_some() {
+        return Err(KVAppError::AppError(AppError::from(
+            ReferenceAlreadyExists::new(format!(
+                "Branch '{}' already exists, cannot undrop",
+                req.branch_name
+            )),
+        )));
+    }
+
+    Ok(false)
 }
