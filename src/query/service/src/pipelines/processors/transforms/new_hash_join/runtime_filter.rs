@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_storages_fuse::pruning::BloomRowFilter;
 
 use crate::physical_plans::HashJoin;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
@@ -107,7 +109,25 @@ impl RuntimeFiltersDesc {
         )
         .await?;
 
-        self.ctx.set_runtime_filter(runtime_filter_infos);
+        self.ctx.set_runtime_filter(runtime_filter_infos.clone());
+
+        // Extract BloomRowFilter trait objects for the new trait-based API
+        for (scan_id, info) in &runtime_filter_infos {
+            let row_filters: Vec<Arc<dyn RowRuntimeFilter>> = info
+                .filters
+                .iter()
+                .filter_map(|entry| {
+                    let bloom = entry.bloom.as_ref()?;
+                    Some(Arc::new(BloomRowFilter::new(
+                        bloom.column_name.clone(),
+                        bloom.filter.clone(),
+                    )) as Arc<dyn RowRuntimeFilter>)
+                })
+                .collect();
+            if !row_filters.is_empty() {
+                self.ctx.add_row_runtime_filters(*scan_id, row_filters);
+            }
+        }
 
         for runtime_filter_ready in self.runtime_filters_ready.iter() {
             runtime_filter_ready

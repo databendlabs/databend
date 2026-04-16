@@ -163,40 +163,29 @@ impl IndexRuntimeFilter for InlistBloomIndexFilter {
         part: &PartInfoPtr,
         operator: &Operator,
     ) -> Result<Option<Box<dyn Any + Send>>> {
-        // No separate index loading needed — bloom index is loaded inside
-        // should_prune_runtime_inlist_by_bloom_index which handles caching.
-        // We pass the operator through as context.
-        let _ = (part, operator);
-        Ok(None)
-    }
-
-    fn prune(&self, part: &PartInfoPtr, _index: Option<&dyn Any>) -> Result<bool> {
-        // This filter requires async IO for bloom index loading.
-        // The sync prune path cannot be used alone — use prune_async instead.
-        // Return false (don't prune) as a safe fallback.
-        let _ = part;
-        Ok(false)
-    }
-}
-
-impl InlistBloomIndexFilter {
-    /// Async prune that loads bloom index and checks inlist values.
-    pub async fn prune_async(&self, part: &PartInfoPtr, operator: &Operator) -> Result<bool> {
         if self.inlist_value_count == 0
             || self.inlist_value_count > self.inlist_bloom_prune_threshold
         {
-            return Ok(false);
+            return Ok(None);
         }
-        let part = FuseBlockPartInfo::from_part(part)?;
-        should_prune_runtime_inlist_by_bloom_index(
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        let pruned = should_prune_runtime_inlist_by_bloom_index(
             &self.func_ctx,
             operator,
             &self.settings,
             &self.table_schema,
             &self.expr,
-            part,
+            fuse_part,
         )
-        .await
+        .await?;
+        Ok(Some(Box::new(pruned)))
+    }
+
+    fn prune(&self, _part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool> {
+        if let Some(result) = index.and_then(|i| i.downcast_ref::<bool>()) {
+            return Ok(*result);
+        }
+        Ok(false)
     }
 }
 
@@ -240,6 +229,30 @@ impl IndexRuntimeFilter for SpatialIndexFilter {
         operator: &Operator,
     ) -> Result<Option<Box<dyn Any + Send>>> {
         let part = FuseBlockPartInfo::from_part(part)?;
+
+        // Fast path: check bounding box stats before any IO
+        if let Some(spatial_stats) = part.spatial_stats.as_ref() {
+            if let Some(stat) = spatial_stats.get(&self.column_id) {
+                if !stat.is_valid || stat.srid != self.srid {
+                    return Ok(None);
+                }
+                if let Some(bounds) = self.rtree_bounds {
+                    let query_rect = Some(Rect::new(
+                        Point::new(bounds[0], bounds[1]),
+                        Point::new(bounds[2], bounds[3]),
+                    ));
+                    let block_rect = Rect::new(
+                        Point::new(stat.min_x.into_inner(), stat.min_y.into_inner()),
+                        Point::new(stat.max_x.into_inner(), stat.max_y.into_inner()),
+                    );
+                    if !rects_intersect(&block_rect, &query_rect) {
+                        // Pruned by bounding box — no need to load index
+                        return Ok(Some(Box::new(true)));
+                    }
+                }
+            }
+        }
+
         let Some(location) = part.spatial_index_location.as_ref() else {
             return Ok(None);
         };
@@ -249,37 +262,15 @@ impl IndexRuntimeFilter for SpatialIndexFilter {
         Ok(Some(Box::new(result)))
     }
 
-    fn prune(&self, part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool> {
-        let part = FuseBlockPartInfo::from_part(part)?;
-        let Some(spatial_stats) = part.spatial_stats.as_ref() else {
-            return Ok(false);
-        };
-
-        // Fast path: check bounding box intersection from stats
-        let Some(stat) = spatial_stats.get(&self.column_id) else {
-            return Ok(false);
-        };
-        if !stat.is_valid || stat.srid != self.srid {
-            return Ok(false);
-        }
-        if let Some(bounds) = self.rtree_bounds {
-            let query_rect = Some(Rect::new(
-                Point::new(bounds[0], bounds[1]),
-                Point::new(bounds[2], bounds[3]),
-            ));
-            let block_rect = Rect::new(
-                Point::new(stat.min_x.into_inner(), stat.min_y.into_inner()),
-                Point::new(stat.max_x.into_inner(), stat.max_y.into_inner()),
-            );
-            if !rects_intersect(&block_rect, &query_rect) {
-                return Ok(true);
-            }
-        }
-
-        // Full path: check rtree intersection from loaded index
+    fn prune(&self, _part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool> {
         let Some(index) = index else {
             return Ok(false);
         };
+        // Fast path: already pruned by bounding box in load_index
+        if let Some(&pruned) = index.downcast_ref::<bool>() {
+            return Ok(pruned);
+        }
+        // Full path: check rtree intersection from loaded index
         let Some(result) = index.downcast_ref::<SpatialIndexReadResult>() else {
             return Ok(false);
         };
