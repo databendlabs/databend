@@ -46,17 +46,18 @@ impl Binder {
             definition,
         } = stmt;
 
-        struct PolicyVisitor {
-            name_resolution_ctx: NameResolutionContext,
-            error: Option<ErrorCode>,
+        struct PolicyVisitor<'a> {
+            name_resolution_ctx: &'a NameResolutionContext,
         }
 
-        impl Visitor for PolicyVisitor {
-            fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
+        impl Visitor for PolicyVisitor<'_> {
+            type Error = ErrorCode;
+
+            fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, ErrorCode> {
                 match expr {
                     Expr::FunctionCall { func, span: _ } => {
                         let func_name =
-                            normalize_identifier(&func.name, &self.name_resolution_ctx).to_string();
+                            normalize_identifier(&func.name, self.name_resolution_ctx).to_string();
                         let func_name = func_name.as_str();
                         let uni_case_func_name = Ascii::new(func_name);
                         if !(is_builtin_function(func_name)
@@ -65,17 +66,15 @@ impl Binder {
                             || func.lambda.is_none()
                             || func.order_by.is_empty())
                         {
-                            self.error = Some(ErrorCode::InvalidArgument(
+                            return Err(ErrorCode::InvalidArgument(
                                 "Row access policy expr only builtin function",
                             ));
-                            return Ok(VisitControl::Break(()));
                         }
                     }
                     Expr::InSubquery { .. } | Expr::LikeSubquery { .. } => {
-                        self.error = Some(ErrorCode::InvalidArgument(
+                        return Err(ErrorCode::InvalidArgument(
                             "Row access policy expr only builtin function",
                         ));
-                        return Ok(VisitControl::Break(()));
                     }
                     _ => {}
                 }
@@ -83,16 +82,10 @@ impl Binder {
             }
         }
 
-        let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut visitor = PolicyVisitor {
-            name_resolution_ctx,
-            error: None,
+            name_resolution_ctx: &self.name_resolution_ctx,
         };
         definition.definition.walk(&mut visitor)?;
-
-        if let Some(e) = visitor.error {
-            return Err(e);
-        }
 
         let tenant = self.ctx.get_tenant();
         let plan = CreateRowAccessPolicyPlan {
