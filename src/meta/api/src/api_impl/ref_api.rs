@@ -310,7 +310,6 @@ where
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let branch_name = &req.branch_name;
-        let forks_from_branch = req.from_branch_id.is_some();
         let source_table_id = req.from_branch_id.unwrap_or(req.base_table_id);
         let key_source_table_id = TableId {
             table_id: source_table_id,
@@ -341,7 +340,20 @@ where
                 )));
             }
 
-            let base_table_seq = if forks_from_branch {
+            if self.get_pb(&key_branch).await?.is_some() {
+                return Err(KVAppError::AppError(AppError::from(
+                    ReferenceAlreadyExists::new(format!("Branch '{}' already exists", branch_name)),
+                )));
+            }
+
+            let mut conditions = vec![
+                txn_cond_seq(&key_source_table_id, Eq, seq_source_table_meta.seq),
+                txn_cond_seq(&key_branch, Eq, 0),
+            ];
+
+            if req.from_branch_id.is_some() {
+                // The source may be a branch table, but the new branch is still created under the
+                // base table namespace, so the base table must still exist and be active.
                 let Some(seq_table_meta) = self.get_pb(&key_table_id).await? else {
                     return Err(KVAppError::AppError(AppError::UnknownTableId(
                         UnknownTableId::new(req.base_table_id, "create_table_branch: base table"),
@@ -355,15 +367,11 @@ where
                         ),
                     )));
                 }
-                Some(seq_table_meta.seq)
-            } else {
-                None
-            };
+                conditions.push(txn_cond_seq(&key_table_id, Eq, seq_table_meta.seq));
+            }
 
-            if self.get_pb(&key_branch).await?.is_some() {
-                return Err(KVAppError::AppError(AppError::from(
-                    ReferenceAlreadyExists::new(format!("Branch '{}' already exists", branch_name)),
-                )));
+            if let Some(lvt_check) = req.lvt_check.as_ref() {
+                conditions.push(build_lvt_condition(self, source_table_id, lvt_check).await?);
             }
 
             let branch_id = match maybe_branch_id {
@@ -382,17 +390,6 @@ where
                 expire_at: req.expire_at,
                 branch_id,
             };
-
-            let mut conditions = vec![
-                txn_cond_seq(&key_source_table_id, Eq, seq_source_table_meta.seq),
-                txn_cond_seq(&key_branch, Eq, 0),
-            ];
-            if let Some(base_table_seq) = base_table_seq {
-                conditions.push(txn_cond_seq(&key_table_id, Eq, base_table_seq));
-            }
-            if let Some(lvt_check) = req.lvt_check.as_ref() {
-                conditions.push(build_lvt_condition(self, source_table_id, lvt_check).await?);
-            }
 
             let mut if_then = vec![
                 txn_put_pb(&key_branch_table_id, &req.new_table_meta)?,
