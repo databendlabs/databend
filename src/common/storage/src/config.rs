@@ -59,6 +59,7 @@ pub struct StorageConfig {
 pub struct CredentialChainConfig {
     pub disable_config_load: bool,
     pub disable_instance_profile: bool,
+    pub allow_insecure: bool,
 }
 
 impl CredentialChainConfig {
