@@ -32,7 +32,6 @@ storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
-arrow-csv = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-json = { workspace = true }
@@ -57,7 +56,6 @@ chrono-tz = { workspace = true }
 concurrent-queue = { workspace = true }
 cron = { workspace = true }
 csv-core = { workspace = true }
-ctor = { workspace = true }
 dashmap = { workspace = true }
 databend-base = { workspace = true }
 databend-common-ast = { workspace = true }
@@ -145,10 +143,8 @@ jiff = { workspace = true }
 jsonb = { workspace = true }
 jwt-simple = { workspace = true }
 log = { workspace = true }
-lz4 = { workspace = true }
 match-template = { workspace = true }
 md-5 = { workspace = true }
-naive-cityhash = { workspace = true }
 num_cpus = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { workspace = true }
@@ -172,7 +168,6 @@ rustls-pki-types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_stacker = { workspace = true }
-serde_urlencoded = { workspace = true }
 sha2 = { workspace = true }
 socket2 = { workspace = true }
 sqlx = { workspace = true }
