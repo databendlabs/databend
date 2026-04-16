@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(try_blocks)]
+#![feature(never_type)]
 
 pub mod ir;
 

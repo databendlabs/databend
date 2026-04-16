@@ -25,6 +25,7 @@ use databend_common_ast::ast::SelectStmt;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table_args::TableArgs;
@@ -40,7 +41,6 @@ use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
-use derive_visitor::DriveMut;
 
 use crate::BindContext;
 use crate::Planner;
@@ -173,7 +173,7 @@ impl Binder {
                         })
                         .collect::<Vec<_>>();
                     let mut visitor = UDFArgVisitor::new(&udtf.arg_types, &args_expr);
-                    stmt.drive_mut(&mut visitor);
+                    let _ = stmt.walk_mut(&mut visitor);
 
                     let binder = Binder::new(
                         self.ctx.clone(),

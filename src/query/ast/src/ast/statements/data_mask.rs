@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -22,13 +24,13 @@ use crate::ast::Expr;
 use crate::ast::TypeName;
 use crate::ast::quote::QuotedString;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DataMaskArg {
     pub arg_name: String,
     pub arg_type: TypeName,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DataMaskPolicy {
     pub args: Vec<DataMaskArg>,
     pub return_type: TypeName,
@@ -36,7 +38,7 @@ pub struct DataMaskPolicy {
     pub comment: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CreateDatamaskPolicyStmt {
     pub if_not_exists: bool,
     pub name: String,

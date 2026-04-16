@@ -3380,6 +3380,7 @@ dependencies = [
 name = "databend-common-ast"
 version = "0.2.5"
 dependencies = [
+ "databend-common-ast-visit-derive",
  "databend_educe",
  "derive-visitor",
  "divan",
@@ -3408,6 +3409,15 @@ dependencies = [
  "unindent",
  "url",
  "zmij",
+]
+
+[[package]]
+name = "databend-common-ast-visit-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -4287,7 +4297,6 @@ version = "0.1.0"
 dependencies = [
  "databend-common-ast",
  "databend-common-exception",
- "derive-visitor",
  "fastrace",
  "goldenfile",
  "tokio",
@@ -4369,7 +4378,6 @@ dependencies = [
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
  "databend_educe",
- "derive-visitor",
  "enum-as-inner",
  "fastrace",
  "globiter",
@@ -5970,7 +5978,6 @@ dependencies = [
  "databend-storages-common-session",
  "databend-storages-common-stage",
  "databend-storages-common-table-meta",
- "derive-visitor",
  "dyn-clone",
  "either",
  "ethnum",
@@ -6151,7 +6158,6 @@ dependencies = [
  "databend-common-functions",
  "databend-common-io",
  "databend-common-sql",
- "derive-visitor",
  "ethnum",
  "itertools 0.13.0",
  "jiff",

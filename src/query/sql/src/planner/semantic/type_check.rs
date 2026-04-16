@@ -52,6 +52,11 @@ use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor as AstVisitor;
+use databend_common_ast::visit::VisitorMut as AstVisitorMut;
+use databend_common_ast::visit::Walk;
+use databend_common_ast::visit::WalkMut;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::plan::InternalColumn;
@@ -135,10 +140,6 @@ use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
-use derive_visitor::Drive;
-use derive_visitor::DriveMut;
-use derive_visitor::Visitor;
-use derive_visitor::VisitorMut;
 use itertools::Itertools;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
@@ -4356,24 +4357,37 @@ impl<'a> TypeChecker<'a> {
                 let select = &select_stmt.select_list[0];
                 if matches!(select, SelectTarget::AliasedExpr { .. }) {
                     // Check if contain aggregation function
-                    #[derive(Visitor)]
-                    #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
                     }
-                    impl AggFuncVisitor {
-                        fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
-                            self.contain_agg = self.contain_agg
-                                || AggregateFunctionFactory::instance()
-                                    .contains(func.name.to_string());
+                    impl AstVisitor for AggFuncVisitor {
+                        fn visit_function_call(
+                            &mut self,
+                            func: &ASTFunctionCall,
+                        ) -> std::result::Result<VisitControl, !> {
+                            if AggregateFunctionFactory::instance().contains(func.name.to_string())
+                            {
+                                self.contain_agg = true;
+                                return Ok(VisitControl::Break(()));
+                            }
+                            Ok(VisitControl::Continue)
                         }
-                        fn enter_expr(&mut self, expr: &Expr) {
-                            self.contain_agg = self.contain_agg
-                                || matches!(expr, Expr::CountAll { window: None, .. });
+
+                        fn visit_expr(
+                            &mut self,
+                            expr: &Expr,
+                        ) -> std::result::Result<VisitControl, !> {
+                            if matches!(expr, Expr::CountAll { window: None, .. }) {
+                                self.contain_agg = true;
+                                return Ok(VisitControl::Break(()));
+                            }
+                            Ok(VisitControl::Continue)
                         }
                     }
                     let mut visitor = AggFuncVisitor { contain_agg: false };
-                    select.drive(&mut visitor);
+                    if let SelectTarget::AliasedExpr { expr, .. } = select {
+                        let _ = expr.walk(&mut visitor);
+                    }
                     contain_agg = Some(visitor.contain_agg);
                 }
             }
@@ -6444,7 +6458,7 @@ impl<'a> TypeChecker<'a> {
         let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
         let mut udf_expr = parse_expr(&sql_tokens, sql_dialect)?;
         let mut visitor = UDFArgVisitor::new(&arg_types, arguments);
-        udf_expr.drive_mut(&mut visitor);
+        let _ = udf_expr.walk_mut(&mut visitor);
 
         // Use current binding context so column references inside arguments can be resolved.
         let box (expr, _) = TypeChecker::try_create(
@@ -7352,21 +7366,23 @@ impl<'a> TypeChecker<'a> {
     #[allow(clippy::only_used_in_recursion)]
     pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
     where F: Fn(&Expr) -> Result<Option<Expr>> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter))]
         struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
 
-        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
+        impl<F: Fn(&Expr) -> Result<Option<Expr>>> AstVisitorMut for ReplacerVisitor<F> {
+            fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
                 let replacement_opt = (self.0)(expr);
                 if let Ok(Some(replacement)) = replacement_opt {
                     *expr = replacement;
+                    return Ok(VisitControl::SkipChildren);
                 }
+
+                Ok(VisitControl::Continue)
             }
         }
+
         let mut visitor = ReplacerVisitor(replacement_fn);
         let mut expr = original_expr.clone();
-        expr.drive_mut(&mut visitor);
+        let _ = expr.walk_mut(&mut visitor);
         Ok(expr)
     }
 

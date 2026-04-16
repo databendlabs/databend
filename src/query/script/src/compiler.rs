@@ -37,10 +37,11 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnaryOperator;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 
 use crate::ir::ColumnAccess;
 use crate::ir::IterRef;
@@ -832,15 +833,13 @@ impl Compiler {
         stmt: &Statement,
         to_set: SetRef,
     ) -> Result<Vec<ScriptIR>> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter), Statement(enter))]
         struct QuoteVisitor<'a> {
             compiler: &'a Compiler,
             error: Option<ErrorCode>,
         }
 
-        impl QuoteVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
+        impl VisitorMut for QuoteVisitor<'_> {
+            fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
                 if let Expr::Hole { span, name } = expr {
                     let index = self
                         .compiler
@@ -857,9 +856,13 @@ impl Compiler {
                         }
                     }
                 }
+                Ok(VisitControl::Continue)
             }
 
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
+            fn visit_identifier(
+                &mut self,
+                ident: &mut Identifier,
+            ) -> std::result::Result<VisitControl, !> {
                 if ident.is_hole() {
                     let index = self.compiler.lookup_var(ident);
                     match index {
@@ -872,10 +875,14 @@ impl Compiler {
                         }
                     }
                 }
+                Ok(VisitControl::Continue)
             }
 
-            // TODO(andylokandy: handle these statement)
-            fn enter_statement(&mut self, stmt: &mut Statement) {
+            fn visit_statement(
+                &mut self,
+                stmt: &mut Statement,
+            ) -> std::result::Result<VisitControl, !> {
+                // TODO(andylokandy: handle these statement)
                 match stmt {
                     Statement::Begin => {
                         self.error = Some(ErrorCode::Unimplemented(
@@ -897,8 +904,9 @@ impl Compiler {
                             "CALL in script is not supported yet".to_string(),
                         ));
                     }
-                    _ => (),
+                    _ => {}
                 }
+                Ok(VisitControl::Continue)
             }
         }
 
@@ -907,7 +915,7 @@ impl Compiler {
             compiler: self,
             error: None,
         };
-        stmt.drive_mut(&mut visitor);
+        let _ = stmt.walk_mut(&mut visitor).unwrap();
 
         if let Some(e) = visitor.error {
             return Err(e);
@@ -1065,16 +1073,14 @@ impl Compiler {
     }
 
     fn quote_expr(&mut self, expr: &Expr) -> Result<(Vec<ScriptIR>, Expr)> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
         struct QuoteVisitor<'a> {
             compiler: &'a mut Compiler,
             output: Vec<ScriptIR>,
             error: Option<ErrorCode>,
         }
 
-        impl QuoteVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
+        impl VisitorMut for QuoteVisitor<'_> {
+            fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
                 match expr {
                     // Transform `variable` to `:index`.
                     Expr::ColumnRef {
@@ -1148,9 +1154,13 @@ impl Compiler {
                     }
                     _ => {}
                 }
+                Ok(VisitControl::Continue)
             }
 
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
+            fn visit_identifier(
+                &mut self,
+                ident: &mut Identifier,
+            ) -> std::result::Result<VisitControl, !> {
                 if ident.is_hole() {
                     self.error = Some(
                         ErrorCode::ScriptSemanticError(
@@ -1159,6 +1169,7 @@ impl Compiler {
                         .set_span(ident.span),
                     );
                 }
+                Ok(VisitControl::Continue)
             }
         }
 
@@ -1168,7 +1179,7 @@ impl Compiler {
             output: vec![],
             error: None,
         };
-        expr.drive_mut(&mut visitor);
+        let _ = expr.walk_mut(&mut visitor).unwrap();
 
         if let Some(err) = visitor.error {
             return Err(err);
