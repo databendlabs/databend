@@ -260,19 +260,19 @@ impl InsertMultiTableInterpreter {
                 // block.
                 let physical_schema = input_source.output_schema()?;
 
-                // Build (phys_pos, symbol) pairs for each logical column, in logical order.
-                let col_refs: Vec<(usize, databend_common_sql::Symbol)> = bind_context
-                    .columns
+                // Build (phys_pos, symbol) pairs for each result column, in final SELECT order.
+                let result_columns = bind_context.result_columns();
+                let col_refs: Vec<(usize, databend_common_sql::Symbol)> = result_columns
                     .iter()
-                    .filter_map(|col| {
-                        let phys_pos = physical_schema.index_of(&col.index.to_string()).ok()?;
-                        Some((phys_pos, col.index))
+                    .filter_map(|(sym, _name)| {
+                        let phys_pos = physical_schema.index_of(&sym.to_string()).ok()?;
+                        Some((phys_pos, *sym))
                     })
                     .collect();
 
-                // If we can't map all columns, or the schema already has no internal columns
+                // If we can't map all result columns, or the schema already has no internal columns
                 // and is already in the right order, skip the reorder node.
-                let needs_reorder = col_refs.len() == bind_context.columns.len()
+                let needs_reorder = col_refs.len() == result_columns.len()
                     && (physical_schema.num_fields() != col_refs.len()
                         || col_refs
                             .iter()
