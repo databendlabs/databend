@@ -14,6 +14,7 @@
 
 #![allow(clippy::collapsible_if)]
 #![feature(box_patterns)]
+#![feature(never_type)]
 
 mod http_client;
 mod query_fuzzer;
