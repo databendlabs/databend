@@ -597,6 +597,7 @@ impl Plan {
             Plan::DescribeTask(plan) => plan.schema(),
             Plan::RefreshVirtualColumn(plan) => plan.schema(),
             Plan::VacuumVirtualColumn(plan) => plan.schema(),
+            Plan::RefreshTableIndex(plan) => plan.schema(),
             Plan::ShowTasks(plan) => plan.schema(),
             Plan::ExecuteTask(plan) => plan.schema(),
             Plan::DescRowAccessPolicy(plan) => plan.schema(),

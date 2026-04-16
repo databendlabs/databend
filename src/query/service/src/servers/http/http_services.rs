@@ -30,23 +30,18 @@ use poem::Route;
 use poem::get;
 use poem::listener::OpensslTlsConfig;
 use poem::middleware::CatchPanic;
-use poem::middleware::CookieJarManager;
 use poem::middleware::NormalizePath;
 use poem::middleware::TrailingSlash;
 
 use super::v1::HttpQueryContext;
 use crate::servers::Server;
-use crate::servers::http::middleware::EndpointKind;
-use crate::servers::http::middleware::HTTPSessionMiddleware;
 use crate::servers::http::middleware::PanicHandler;
 use crate::servers::http::middleware::json_response;
-use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::query_route;
 
 #[derive(Copy, Clone)]
 pub enum HttpHandlerKind {
     Query,
-    Clickhouse,
 }
 
 impl HttpHandlerKind {
@@ -57,14 +52,6 @@ impl HttpHandlerKind {
                     r#" curl -u${{USER}} -p${{PASSWORD}}: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
 "#,
                     sock,
-                )
-            }
-            HttpHandlerKind::Clickhouse => {
-                let json = r#"{"foo": "bar"}"#;
-                format!(
-                    r#" echo 'create table test(foo string)' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}' --data-binary  @-
-echo '{}' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
-                    sock, json, sock,
                 )
             }
         }
@@ -93,14 +80,6 @@ impl HttpHandler {
     #[allow(clippy::let_with_type_underscore)]
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint + use<> {
-        let ep_clickhouse = Route::new()
-            .nest("/", clickhouse_router())
-            .with(HTTPSessionMiddleware::create(
-                self.kind,
-                EndpointKind::Clickhouse,
-            ))
-            .with(CookieJarManager::new());
-
         let ep_usage = Route::new().at(
             "/",
             get(poem::endpoint::make_sync(move |_| {
@@ -113,11 +92,7 @@ impl HttpHandler {
             HttpHandlerKind::Query => Route::new()
                 .at("/", ep_usage)
                 .nest("/health", ep_health)
-                .nest("/v1", query_route())
-                .nest("/clickhouse", ep_clickhouse),
-            HttpHandlerKind::Clickhouse => Route::new()
-                .nest("/", ep_clickhouse)
-                .nest("/health", ep_health),
+                .nest("/v1", query_route()),
         };
         ep.with(NormalizePath::new(TrailingSlash::Trim))
             .with(CatchPanic::new().with_handler(PanicHandler::new()))

@@ -54,6 +54,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use futures_util::TryStreamExt;
 use opendal::Operator;
 
 async fn apply_block_pruning(
@@ -128,7 +129,11 @@ async fn test_block_pruner() -> anyhow::Result<()> {
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     // get table
     let catalog = ctx.get_catalog("default").await?;
@@ -539,7 +544,11 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         segment_locs: None,
     };
     let interpreter = RefreshTableIndexInterpreter::try_create(ctx.clone(), refresh_index_plan)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     let new_table = table.refresh(ctx.as_ref()).await?;
     let fuse_table = FuseTable::create_without_refresh_table_info(
