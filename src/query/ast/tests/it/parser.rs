@@ -796,7 +796,7 @@ SELECT * from s;"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS copy into streams_test.paper_table from @stream_stage FILE_FORMAT = (TYPE = PARQUET) PURGE=true"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 13 * * *' AS COPY INTO @my_internal_stage FROM canadian_city_population FILE_FORMAT = (TYPE = PARQUET)"#,
-        r#"COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_MINIMAL = true OUTPUT_HEADER = true)"#,
+        r#"COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_STYLE = quote_minimal OUTPUT_HEADER = true)"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 AFTER 'task2', 'task3' WHEN SYSTEM$GET_PREDECESSOR_RETURN_VALUE('task_name') != 'VALIDATION' AS VACUUM TABLE t"#,
         r#"CREATE TASK IF NOT EXISTS MyTask1 DATABASE = 'target', TIMEZONE = 'America/Los Angeles'  AS VACUUM TABLE t"#,
         r#"

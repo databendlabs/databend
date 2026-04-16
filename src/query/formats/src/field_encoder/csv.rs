@@ -23,6 +23,7 @@ use databend_common_io::display_decimal_128_trimmed;
 use databend_common_io::display_decimal_256_trimmed;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::CsvQuoteStyle;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::ToWkt;
@@ -35,7 +36,7 @@ use crate::field_encoder::write_tsv_escaped_string;
 #[derive(Clone)]
 pub struct CsvQuoteSettings {
     pub quote_char: u8,
-    pub quote_minimal: bool,
+    pub quote_style: CsvQuoteStyle,
     pub field_delimiter: u8,
     pub record_delimiter: Vec<u8>,
     pub escape_char: Option<u8>,
@@ -49,7 +50,7 @@ impl CsvQuoteSettings {
     pub fn from_params(params: &CsvFileFormatParams) -> Self {
         Self {
             quote_char: params.quote.as_bytes()[0],
-            quote_minimal: params.quote_minimal,
+            quote_style: params.quote_style,
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
             escape_char: params.escape.as_bytes().first().copied(),
@@ -118,7 +119,7 @@ fn csv_string_needs_quotes(bytes: &[u8], settings: &CsvQuoteSettings) -> bool {
 }
 
 pub fn write_csv_string_maybe_quoted(bytes: &[u8], buf: &mut Vec<u8>, settings: &CsvQuoteSettings) {
-    if settings.quote_minimal && !csv_string_needs_quotes(bytes, settings) {
+    if settings.quote_style.is_quote_minimal() && !csv_string_needs_quotes(bytes, settings) {
         buf.extend_from_slice(bytes);
     } else {
         write_csv_string(bytes, buf, settings.quote_char);

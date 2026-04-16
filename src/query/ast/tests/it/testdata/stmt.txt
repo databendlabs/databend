@@ -25729,9 +25729,9 @@ CreateTask(
 
 
 ---------- Input ----------
-COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_MINIMAL = true OUTPUT_HEADER = true)
+COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_STYLE = quote_minimal OUTPUT_HEADER = true)
 ---------- Output ---------
-COPY INTO '@my_internal_stage/minimal.csv' FROM canadian_city_population FILE_FORMAT = (output_header = true, quote_minimal = true, type = CSV)
+COPY INTO '@my_internal_stage/minimal.csv' FROM canadian_city_population FILE_FORMAT = (output_header = true, quote_style = quote_minimal, type = CSV)
 ---------- AST ------------
 CopyIntoLocation(
     CopyIntoLocationStmt {
@@ -25759,8 +25759,8 @@ CopyIntoLocation(
                 "output_header": Bool(
                     true,
                 ),
-                "quote_minimal": Bool(
-                    true,
+                "quote_style": Keyword(
+                    "quote_minimal",
                 ),
                 "type": Keyword(
                     "CSV",

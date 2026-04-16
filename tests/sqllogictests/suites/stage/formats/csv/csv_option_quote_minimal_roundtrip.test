@@ -46,7 +46,7 @@ remove @s1
 query TII
 copy into @s1/default_null_display.csv
 from t_quote_minimal_roundtrip
-file_format = (type = 'csv', quote_minimal = true, escape='\\')
+file_format = (type = 'csv', quote_style = 'quote_minimal', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
 default_null_display.csv 25 4
@@ -77,7 +77,7 @@ order by id
 query TII
 copy into @s1/custom_null_display.csv
 from t_quote_minimal_custom_null
-file_format = (type = 'csv', quote_minimal = true, null_display = 'NULL', escape='\\')
+file_format = (type = 'csv', quote_style = 'quote_minimal', null_display = 'NULL', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
 custom_null_display.csv 16 2

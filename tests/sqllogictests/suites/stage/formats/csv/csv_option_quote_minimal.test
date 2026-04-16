@@ -26,7 +26,7 @@ remove @s1
 query TII
 copy into @s1/minimal.csv
 from t_quote_minimal
-file_format = (type = 'csv', output_header = true, quote_minimal = true, escape='\\')
+file_format = (type = 'csv', output_header = true, quote_style = 'quote_minimal', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
 minimal.csv 156 7

@@ -15,6 +15,7 @@
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::CsvQuoteStyle;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
@@ -38,7 +39,7 @@ fn test_decode_v89_geometry_output_format() -> anyhow::Result<()> {
         nan_display: "my_nan".to_string(),
         escape: "|".to_string(),
         quote: "\'".to_string(),
-        quote_minimal: false,
+        quote_style: CsvQuoteStyle::QuoteAll,
         error_on_column_count_mismatch: false,
         trim_space: false,
         allow_quoted_nulls: false,

@@ -15,6 +15,7 @@
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app::principal::BinaryFormat;
 use databend_common_meta_app::principal::CsvFileFormatParams;
+use databend_common_meta_app::principal::CsvQuoteStyle;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use fastrace::func_name;
@@ -22,13 +23,13 @@ use fastrace::func_name;
 use crate::common;
 
 #[test]
-fn test_decode_v173_csv_file_format_params() -> anyhow::Result<()> {
+fn test_decode_v173_csv_quote_style() -> anyhow::Result<()> {
     let csv_file_format_params_v173 = vec![
         8, 11, 16, 2, 26, 1, 124, 34, 1, 10, 42, 8, 110, 97, 110, 95, 117, 116, 102, 56, 50, 1, 92,
         58, 1, 34, 66, 2, 92, 78, 82, 4, 78, 85, 76, 76, 90, 3, 104, 101, 120, 96, 1, 106, 4, 69,
         87, 75, 66, 112, 1, 122, 13, 70, 73, 69, 76, 68, 95, 68, 69, 70, 65, 85, 76, 84, 130, 1, 3,
-        103, 98, 107, 138, 1, 7, 114, 101, 112, 108, 97, 99, 101, 144, 1, 1, 152, 1, 1, 160, 6,
-        173, 1, 168, 6, 24,
+        103, 98, 107, 138, 1, 7, 114, 101, 112, 108, 97, 99, 101, 144, 1, 1, 154, 1, 13, 113, 117,
+        111, 116, 101, 95, 109, 105, 110, 105, 109, 97, 108, 160, 6, 173, 1, 168, 6, 24,
     ];
     let want = || CsvFileFormatParams {
         compression: StageFileCompression::Zip,
@@ -40,7 +41,7 @@ fn test_decode_v173_csv_file_format_params() -> anyhow::Result<()> {
         nan_display: "nan_utf8".to_string(),
         escape: "\\".to_string(),
         quote: "\"".to_string(),
-        quote_minimal: true,
+        quote_style: CsvQuoteStyle::QuoteMinimal,
         error_on_column_count_mismatch: true,
         trim_space: true,
         allow_quoted_nulls: true,

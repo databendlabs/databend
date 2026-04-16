@@ -44,7 +44,7 @@ const OPT_NAN_DISPLAY: &str = "nan_display";
 const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
-const OPT_QUOTE_MINIMAL: &str = "quote_minimal";
+const OPT_QUOTE_STYLE: &str = "quote_style";
 const OPT_ROW_TAG: &str = "row_tag";
 const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 const OPT_ALLOW_QUOTED_NULLS: &str = "allow_quoted_nulls";
@@ -264,7 +264,7 @@ impl FileFormatParams {
                 let nan_display = reader.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = reader.take_string(OPT_ESCAPE, default.escape);
                 let quote = reader.take_string(OPT_QUOTE, default.quote);
-                let quote_minimal = reader.take_bool(OPT_QUOTE_MINIMAL, default.quote_minimal)?;
+                let quote_style = reader.take_csv_quote_style(default.quote_style)?;
                 let null_display = reader.take_string(OPT_NULL_DISPLAY, default.null_display);
                 let encoding = reader.take_string(OPT_ENCODING, default.encoding);
                 let encoding_error_mode =
@@ -304,7 +304,7 @@ impl FileFormatParams {
                     nan_display,
                     escape,
                     quote,
-                    quote_minimal,
+                    quote_style,
                     error_on_column_count_mismatch,
                     allow_quoted_nulls,
                     trim_space,
@@ -526,6 +526,13 @@ impl FileFormatOptionsReader {
             None => Ok(default),
         }
     }
+
+    fn take_csv_quote_style(&mut self, default: CsvQuoteStyle) -> Result<CsvQuoteStyle> {
+        match self.options.remove(OPT_QUOTE_STYLE) {
+            Some(v) => CsvQuoteStyle::from_str(&v).map_err(ErrorCode::IllegalFileFormat),
+            None => Ok(default),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -538,7 +545,7 @@ pub struct CsvFileFormatParams {
     pub escape: String,
     pub quote: String,
     #[serde(default)]
-    pub quote_minimal: bool,
+    pub quote_style: CsvQuoteStyle,
     pub error_on_column_count_mismatch: bool,
     #[serde(default)]
     pub trim_space: bool,
@@ -572,7 +579,7 @@ impl Default for CsvFileFormatParams {
             record_delimiter: "\n".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),
-            quote_minimal: false,
+            quote_style: CsvQuoteStyle::default(),
             error_on_column_count_mismatch: true,
             trim_space: false,
             allow_quoted_nulls: false,
@@ -703,6 +710,43 @@ pub enum EmptyFieldAs {
     Null,
     String,
     FieldDefault,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CsvQuoteStyle {
+    #[default]
+    QuoteAll,
+    QuoteMinimal,
+}
+
+impl CsvQuoteStyle {
+    pub fn is_quote_minimal(self) -> bool {
+        matches!(self, Self::QuoteMinimal)
+    }
+}
+
+impl FromStr for CsvQuoteStyle {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "quote_all" => Ok(Self::QuoteAll),
+            "quote_minimal" => Ok(Self::QuoteMinimal),
+            _ => Err(format!(
+                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_ALL | QUOTE_MINIMAL."
+            )),
+        }
+    }
+}
+
+impl Display for CsvQuoteStyle {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::QuoteAll => write!(f, "quote_all"),
+            Self::QuoteMinimal => write!(f, "quote_minimal"),
+        }
+    }
 }
 
 impl FromStr for EmptyFieldAs {
@@ -986,7 +1030,7 @@ impl Display for FileFormatParams {
                 write!(
                     f,
                     "TYPE = CSV COMPRESSION = {:?} \
-                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' QUOTE_MINIMAL = {} ESCAPE = '{}' \
+                     FIELD_DELIMITER = '{}' RECORD_DELIMITER = '{}' QUOTE = '{}' QUOTE_STYLE = {} ESCAPE = '{}' \
                      SKIP_HEADER= {} OUTPUT_HEADER= {} \
                      NULL_DISPLAY = '{}' NAN_DISPLAY = '{}' ENCODING = '{}' ENCODING_ERROR_MODE = '{}' EMPTY_FIELD_AS = {} BINARY_FORMAT = {} \
                      ERROR_ON_COLUMN_COUNT_MISMATCH = {} TRIM_SPACE = {} ALLOW_QUOTED_NULLS = {} QUOTED_EMPTY_FIELD_AS = {}",
@@ -994,7 +1038,7 @@ impl Display for FileFormatParams {
                     escape_string(&params.field_delimiter),
                     escape_string(&params.record_delimiter),
                     escape_string(&params.quote),
-                    params.quote_minimal,
+                    params.quote_style,
                     escape_string(&params.escape),
                     params.headers,
                     params.output_header,
@@ -1257,13 +1301,13 @@ mod tests {
     }
 
     #[test]
-    fn test_csv_quote_minimal_option() {
+    fn test_csv_quote_style_option() {
         let mut options = BTreeMap::new();
         options.insert("type".to_string(), "CSV".to_string());
-        options.insert("quote_minimal".to_string(), "true".to_string());
+        options.insert("quote_style".to_string(), "quote_minimal".to_string());
 
         let params = get_csv_params(options);
-        assert!(params.quote_minimal);
+        assert_eq!(params.quote_style, CsvQuoteStyle::QuoteMinimal);
     }
 
     #[test]
