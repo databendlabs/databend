@@ -80,6 +80,9 @@ use crate::plan::PartInfoPtr;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
+use crate::runtime_filter_info::IndexRuntimeFilter;
+use crate::runtime_filter_info::PartitionRuntimeFilter;
+use crate::runtime_filter_info::RowRuntimeFilter;
 use crate::runtime_filter_info::RuntimeBloomFilter;
 use crate::runtime_filter_info::RuntimeFilterEntry;
 use crate::runtime_filter_info::RuntimeFilterInfo;
@@ -405,6 +408,19 @@ pub trait TableContext: Send + Sync {
     fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>>;
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
+
+    fn add_partition_runtime_filters(&self, _: usize, _: Vec<Arc<dyn PartitionRuntimeFilter>>);
+
+    fn add_index_runtime_filters(&self, _: usize, _: Vec<Arc<dyn IndexRuntimeFilter>>);
+
+    fn add_row_runtime_filters(&self, _: usize, _: Vec<Arc<dyn RowRuntimeFilter>>);
+
+    fn get_partition_runtime_filters(&self, _: usize) -> Vec<Arc<dyn PartitionRuntimeFilter>>;
+
+    fn get_row_runtime_filters(&self, _: usize) -> Vec<Arc<dyn RowRuntimeFilter>>;
+
+    fn get_index_runtime_filters(&self, _: usize) -> Vec<Arc<dyn IndexRuntimeFilter>>;
+
     fn txn_mgr(&self) -> TxnManagerRef;
     fn get_table_meta_timestamps(
         &self,

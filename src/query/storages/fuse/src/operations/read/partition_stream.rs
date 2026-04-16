@@ -19,10 +19,12 @@ use std::task::Poll;
 use async_channel::Receiver;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
+use databend_common_expression::TableSchema;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::EventCause;
 use databend_common_pipeline::core::ExecutorWaker;
@@ -36,6 +38,7 @@ use databend_common_sql::IndexType;
 
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::runtime_filter_wait::wait_runtime_filters;
+use crate::pruning::MinMaxPartitionFilter;
 
 #[async_trait::async_trait]
 pub trait PartitionStream: Send + Sync {
@@ -96,6 +99,7 @@ impl PartitionStream for DummyPartitionStream {
 struct RuntimeFilterWaiter {
     ctx: Arc<dyn TableContext>,
     scan_id: IndexType,
+    table_schema: Arc<TableSchema>,
     ready: Option<Vec<Arc<RuntimeFilterReady>>>,
 }
 
@@ -107,6 +111,7 @@ pub struct PartitionStreamSource {
     stream: Arc<dyn PartitionStream>,
     handle: Option<SyncTaskHandle<'static, Result<Option<Vec<PartInfoPtr>>>>>,
     runtime_filter_waiter: Option<RuntimeFilterWaiter>,
+    partition_filters: Vec<Arc<dyn PartitionRuntimeFilter>>,
 }
 
 impl PartitionStreamSource {
@@ -117,6 +122,7 @@ impl PartitionStreamSource {
         stream: Arc<dyn PartitionStream>,
         ctx: Arc<dyn TableContext>,
         scan_id: IndexType,
+        table_schema: Arc<TableSchema>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
@@ -128,8 +134,10 @@ impl PartitionStreamSource {
             runtime_filter_waiter: Some(RuntimeFilterWaiter {
                 ctx,
                 scan_id,
+                table_schema,
                 ready: None,
             }),
+            partition_filters: vec![],
         })))
     }
 
@@ -137,6 +145,16 @@ impl PartitionStreamSource {
         self.stream = Arc::new(DummyPartitionStream);
         self.handle = None;
         self.runtime_filter_waiter = None;
+    }
+
+    fn filter_parts(&self, parts: Vec<PartInfoPtr>) -> Vec<PartInfoPtr> {
+        if self.partition_filters.is_empty() {
+            return parts;
+        }
+        parts
+            .into_iter()
+            .filter(|part| !self.partition_filters.iter().any(|f| f.prune(part)))
+            .collect()
     }
 }
 
@@ -178,9 +196,19 @@ impl Processor for PartitionStreamSource {
             self.handle = Some(self.tasks.spawn(self.id, fut));
         }
 
-        if let Some(mut handle) = self.handle.take() {
+        while let Some(mut handle) = self.handle.take() {
             return match handle.poll(matches!(cause, EventCause::Other)) {
                 Poll::Ready(Ok(Some(parts))) => {
+                    let parts = self.filter_parts(parts);
+
+                    if parts.is_empty() {
+                        let stream = self.stream.clone();
+                        let worker_id = self.worker_id;
+                        let fut = Box::pin(async move { stream.fetch(worker_id).await });
+                        self.handle = Some(self.tasks.spawn(self.id, fut));
+                        continue;
+                    }
+
                     let block = DataBlock::empty_with_meta(BlockPartitionMeta::create(parts));
                     self.output.push_data(Ok(block));
                     Ok(Event::NeedConsume)
@@ -221,6 +249,28 @@ impl Processor for PartitionStreamSource {
                     ready,
                 )
                 .await?;
+
+                // Build partition-level filters from runtime filter entries
+                let func_ctx = waiter.ctx.get_function_context()?;
+                let entries = waiter.ctx.get_runtime_filters(waiter.scan_id);
+                for entry in &entries {
+                    if let Some(ref expr) = entry.min_max {
+                        self.partition_filters
+                            .push(Arc::new(MinMaxPartitionFilter::new(
+                                func_ctx.clone(),
+                                waiter.table_schema.clone(),
+                                expr.clone(),
+                            )));
+                    }
+                    if let Some(ref expr) = entry.inlist {
+                        self.partition_filters
+                            .push(Arc::new(MinMaxPartitionFilter::new(
+                                func_ctx.clone(),
+                                waiter.table_schema.clone(),
+                                expr.clone(),
+                            )));
+                    }
+                }
             }
         }
         Ok(())

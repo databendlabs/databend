@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
+use databend_common_storages_fuse::pruning::BloomRowFilter;
 
 use super::convert::build_runtime_filter_infos;
 use super::global::get_global_runtime_filter_packet;
@@ -70,6 +73,25 @@ pub async fn build_and_push_down_runtime_filter(
         "RUNTIME-FILTER: runtime_filter_infos: {:?}",
         runtime_filter_infos
     );
+
+    // Extract BloomRowFilter trait objects from the entries
+    for (scan_id, info) in &runtime_filter_infos {
+        let row_filters: Vec<Arc<dyn RowRuntimeFilter>> = info
+            .filters
+            .iter()
+            .filter_map(|entry| {
+                let bloom = entry.bloom.as_ref()?;
+                Some(Arc::new(BloomRowFilter::new(
+                    bloom.column_name.clone(),
+                    bloom.filter.clone(),
+                )) as Arc<dyn RowRuntimeFilter>)
+            })
+            .collect();
+
+        if !row_filters.is_empty() {
+            join.ctx.add_row_runtime_filters(*scan_id, row_filters);
+        }
+    }
 
     join.ctx.set_runtime_filter(runtime_filter_infos);
     join.set_bloom_filter_ready()?;

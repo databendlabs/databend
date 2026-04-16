@@ -100,6 +100,7 @@ pub fn build_fuse_source_pipeline(
                 stream.clone(),
                 ctx.clone(),
                 plan.scan_id,
+                table_schema.clone(),
             )?,
         );
     }

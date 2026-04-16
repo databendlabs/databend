@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
+use databend_common_expression::types::Bitmap;
+use opendal::Operator;
 use tokio::sync::watch;
 use tokio::sync::watch::Receiver;
 use tokio::sync::watch::Sender;
 
+use crate::plan::PartInfoPtr;
 use crate::sbbf::Sbbf;
 
 pub type RuntimeBloomFilter = Arc<Sbbf>;
@@ -174,4 +180,36 @@ impl Default for RuntimeFilterReady {
             _runtime_filter_dummy_receiver: dummy_receiver,
         }
     }
+}
+
+/// Runtime filter that prunes partitions using only partition metadata (e.g. min/max stats).
+/// No IO required. Applied in PartitionStreamSource.
+pub trait PartitionRuntimeFilter: Send + Sync {
+    /// Returns true if the partition should be pruned (skipped).
+    fn prune(&self, part: &PartInfoPtr) -> bool;
+}
+
+/// Runtime filter that prunes partitions by loading index files (bloom index, spatial index).
+/// Requires async IO. Applied in ReadDataTransform.
+/// Split into load_index (IO) and prune (computation) for caller-controlled IO scheduling.
+/// ReadSettings should be embedded at construction time.
+#[async_trait::async_trait]
+pub trait IndexRuntimeFilter: Send + Sync {
+    /// Load index data for the given partition.
+    async fn load_index(
+        &self,
+        part: &PartInfoPtr,
+        op: &Operator,
+    ) -> Result<Option<Box<dyn Any + Send>>>;
+
+    /// Returns true if the partition should be pruned (skipped).
+    /// `index` is the data returned by `load_index`, None if no index available.
+    fn prune(&self, part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool>;
+}
+
+/// Runtime filter applied per-row during block deserialization (e.g. Sbbf bloom filter).
+/// Applied in NativeDeserializeDataTransform / ReadState.
+pub trait RowRuntimeFilter: Send + Sync {
+    /// Apply the filter to a DataBlock, returning a bitmap (true = keep row).
+    fn apply(&self, block: &DataBlock) -> Result<Bitmap>;
 }

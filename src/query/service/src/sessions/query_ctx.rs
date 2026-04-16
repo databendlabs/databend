@@ -65,6 +65,9 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::IndexRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
@@ -1849,6 +1852,9 @@ impl TableContext for QueryContext {
         let mut runtime_filters = self.shared.runtime_filters.write();
         runtime_filters.clear();
         self.shared.runtime_filter_ready.write().clear();
+        self.shared.partition_runtime_filters.write().clear();
+        self.shared.index_runtime_filters.write().clear();
+        self.shared.row_runtime_filters.write().clear();
         self.shared
             .runtime_filter_logged
             .store(false, Ordering::SeqCst);
@@ -1971,6 +1977,55 @@ impl TableContext for QueryContext {
                 .any(|entry| entry.bloom.is_some());
         }
         false
+    }
+
+    fn add_partition_runtime_filters(
+        &self,
+        scan_id: usize,
+        filters: Vec<Arc<dyn PartitionRuntimeFilter>>,
+    ) {
+        let mut map = self.shared.partition_runtime_filters.write();
+        map.entry(scan_id).or_default().extend(filters);
+    }
+
+    fn add_index_runtime_filters(&self, scan_id: usize, filters: Vec<Arc<dyn IndexRuntimeFilter>>) {
+        let mut map = self.shared.index_runtime_filters.write();
+        map.entry(scan_id).or_default().extend(filters);
+    }
+
+    fn add_row_runtime_filters(&self, scan_id: usize, filters: Vec<Arc<dyn RowRuntimeFilter>>) {
+        let mut map = self.shared.row_runtime_filters.write();
+        map.entry(scan_id).or_default().extend(filters);
+    }
+
+    fn get_partition_runtime_filters(
+        &self,
+        scan_id: usize,
+    ) -> Vec<Arc<dyn PartitionRuntimeFilter>> {
+        self.shared
+            .partition_runtime_filters
+            .read()
+            .get(&scan_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn get_index_runtime_filters(&self, scan_id: usize) -> Vec<Arc<dyn IndexRuntimeFilter>> {
+        self.shared
+            .index_runtime_filters
+            .read()
+            .get(&scan_id)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn get_row_runtime_filters(&self, scan_id: usize) -> Vec<Arc<dyn RowRuntimeFilter>> {
+        self.shared
+            .row_runtime_filters
+            .read()
+            .get(&scan_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     fn txn_mgr(&self) -> TxnManagerRef {

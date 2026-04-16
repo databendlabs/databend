@@ -47,6 +47,9 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::IndexRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -1435,6 +1438,25 @@ impl TableContext for LiteTableContext {
     }
     fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
         false
+    }
+
+    fn add_partition_runtime_filters(&self, _: usize, _: Vec<Arc<dyn PartitionRuntimeFilter>>) {
+        todo!()
+    }
+    fn add_index_runtime_filters(&self, _: usize, _: Vec<Arc<dyn IndexRuntimeFilter>>) {
+        todo!()
+    }
+    fn add_row_runtime_filters(&self, _: usize, _: Vec<Arc<dyn RowRuntimeFilter>>) {
+        todo!()
+    }
+    fn get_partition_runtime_filters(&self, _: usize) -> Vec<Arc<dyn PartitionRuntimeFilter>> {
+        todo!()
+    }
+    fn get_row_runtime_filters(&self, _: usize) -> Vec<Arc<dyn RowRuntimeFilter>> {
+        todo!()
+    }
+    fn get_index_runtime_filters(&self, _: usize) -> Vec<Arc<dyn IndexRuntimeFilter>> {
+        todo!()
     }
     fn txn_mgr(&self) -> TxnManagerRef {
         TxnManager::init()
