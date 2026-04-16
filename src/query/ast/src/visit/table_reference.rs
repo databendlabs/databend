@@ -97,8 +97,6 @@ impl Walk for TableReference {
                 }
             }
             TableReference::Join { join, .. } => {
-                try_walk!(join.left.walk(visitor));
-                try_walk!(join.right.walk(visitor));
                 match &join.condition {
                     crate::ast::JoinCondition::On(expr) => try_walk!(expr.walk(visitor)),
                     crate::ast::JoinCondition::Using(idents) => {
@@ -108,6 +106,8 @@ impl Walk for TableReference {
                     }
                     crate::ast::JoinCondition::Natural | crate::ast::JoinCondition::None => {}
                 }
+                try_walk!(join.left.walk(visitor));
+                try_walk!(join.right.walk(visitor));
             }
             TableReference::Location { alias, .. } => {
                 if let Some(alias) = alias {
@@ -196,8 +196,6 @@ impl WalkMut for TableReference {
                 }
             }
             TableReference::Join { join, .. } => {
-                try_walk!(join.left.walk_mut(visitor));
-                try_walk!(join.right.walk_mut(visitor));
                 match &mut join.condition {
                     crate::ast::JoinCondition::On(expr) => try_walk!(expr.walk_mut(visitor)),
                     crate::ast::JoinCondition::Using(idents) => {
@@ -207,6 +205,8 @@ impl WalkMut for TableReference {
                     }
                     crate::ast::JoinCondition::Natural | crate::ast::JoinCondition::None => {}
                 }
+                try_walk!(join.left.walk_mut(visitor));
+                try_walk!(join.right.walk_mut(visitor));
             }
             TableReference::Location { alias, .. } => {
                 if let Some(alias) = alias {

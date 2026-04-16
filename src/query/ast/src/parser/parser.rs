@@ -367,4 +367,12 @@ mod tests {
 
         assert!(assert_reparse(sql, stmt).is_ok());
     }
+
+    #[test]
+    fn test_assert_reparse_unset_workload_group_quotas_list() {
+        let sql = "ALTER WORKLOAD GROUP wg UNSET (cpu_quota, max_concurrency)";
+        let stmt = parse_statement_with_format(sql);
+
+        assert!(assert_reparse(sql, stmt).is_ok());
+    }
 }

@@ -532,8 +532,8 @@ impl WalkMut for RefreshTableIndexStmt {
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
         try_walk!(self.index_name.walk_mut(visitor));
+        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
         Ok(VisitControl::Continue)
     }
 }

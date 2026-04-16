@@ -261,12 +261,22 @@ impl Display for UnsetWorkloadGroupQuotasStmt {
         if !self.quotas.is_empty() {
             write!(f, " UNSET")?;
 
-            for (idx, name) in self.quotas.iter().enumerate() {
-                if idx != 0 {
-                    write!(f, ",")?;
+            if self.quotas.len() > 1 {
+                write!(f, " (")?;
+                for (idx, name) in self.quotas.iter().enumerate() {
+                    if idx != 0 {
+                        write!(f, ", ")?;
+                    } else {
+                        write!(f, "{}", name)?;
+                        continue;
+                    }
+                    write!(f, "{}", name)?;
                 }
-
-                write!(f, " {}", name)?;
+                write!(f, ")")?;
+            } else {
+                for name in &self.quotas {
+                    write!(f, " {}", name)?;
+                }
             }
         }
 

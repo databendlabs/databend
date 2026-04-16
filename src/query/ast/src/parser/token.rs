@@ -98,6 +98,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                         TokenKind::INSERT
                             | TokenKind::SELECT
                             | TokenKind::REPLACE
+                            | TokenKind::MERGE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
                             | TokenKind::COPY

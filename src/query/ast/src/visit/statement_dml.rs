@@ -31,15 +31,6 @@ impl Walk for CopyIntoTableStmt {
         if let Some(with) = &self.with {
             try_walk!(with.walk(visitor));
         }
-        if let Some(hint) = &self.hints {
-            try_walk!(hint.walk(visitor));
-        }
-        try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
-        if let Some(dst_columns) = &self.dst_columns {
-            for ident in dst_columns {
-                try_walk!(ident.walk(visitor));
-            }
-        }
         match &self.src {
             CopyIntoTableSource::Location(_) => {}
             CopyIntoTableSource::Query {
@@ -83,6 +74,15 @@ impl Walk for CopyIntoTableStmt {
                 }
             }
         }
+        try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
+        if let Some(dst_columns) = &self.dst_columns {
+            for ident in dst_columns {
+                try_walk!(ident.walk(visitor));
+            }
+        }
+        if let Some(hint) = &self.hints {
+            try_walk!(hint.walk(visitor));
+        }
         Ok(VisitControl::Continue)
     }
 }
@@ -94,15 +94,6 @@ impl WalkMut for CopyIntoTableStmt {
     ) -> Result<VisitControl<V::Break>, V::Error> {
         if let Some(with) = &mut self.with {
             try_walk!(with.walk_mut(visitor));
-        }
-        if let Some(hint) = &mut self.hints {
-            try_walk!(hint.walk_mut(visitor));
-        }
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
-        if let Some(dst_columns) = &mut self.dst_columns {
-            for ident in dst_columns {
-                try_walk!(ident.walk_mut(visitor));
-            }
         }
         match &mut self.src {
             CopyIntoTableSource::Location(_) => {}
@@ -146,6 +137,15 @@ impl WalkMut for CopyIntoTableStmt {
                     try_walk!(alias_name.walk_mut(visitor));
                 }
             }
+        }
+        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
+        if let Some(dst_columns) = &mut self.dst_columns {
+            for ident in dst_columns {
+                try_walk!(ident.walk_mut(visitor));
+            }
+        }
+        if let Some(hint) = &mut self.hints {
+            try_walk!(hint.walk_mut(visitor));
         }
         Ok(VisitControl::Continue)
     }
@@ -254,10 +254,10 @@ impl Walk for MergeIntoStmt {
             try_walk!(hint.walk(visitor));
         }
         try_walk!((&self.catalog, &self.database, &self.table_ident).walk(visitor));
+        try_walk!(self.source.walk(visitor));
         if let Some(alias) = &self.target_alias {
             try_walk!(alias.walk(visitor));
         }
-        try_walk!(self.source.walk(visitor));
         try_walk!(self.join_expr.walk(visitor));
         for option in &self.merge_options {
             match option {
@@ -299,10 +299,10 @@ impl WalkMut for MergeIntoStmt {
             try_walk!(hint.walk_mut(visitor));
         }
         try_walk!((&mut self.catalog, &mut self.database, &mut self.table_ident).walk_mut(visitor));
+        try_walk!(self.source.walk_mut(visitor));
         if let Some(alias) = &mut self.target_alias {
             try_walk!(alias.walk_mut(visitor));
         }
-        try_walk!(self.source.walk_mut(visitor));
         try_walk!(self.join_expr.walk_mut(visitor));
         for option in &mut self.merge_options {
             match option {
