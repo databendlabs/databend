@@ -165,7 +165,14 @@ fn format_arrow_ipc_column(column: &Column, format: &OutputFormatSettings) -> Re
         } else {
             format_variant_column(column)
         })),
+<<<<<<< HEAD
         Column::Nullable(column) => format_nullable_arrow_ipc_column(column, format),
+=======
+        Column::Nullable(column) => Ok(NullableColumn::new_column(
+            format_arrow_ipc_column(&column.column, format)?,
+            column.validity.clone(),
+        )),
+>>>>>>> 9f0f7d11ef (feat: introduce arrow_result_version.)
         Column::Array(column) => Ok(Column::Array(Box::new(ArrayColumn::new(
             format_arrow_ipc_column(&column.underlying_column(), format)?,
             column.underlying_offsets(),
