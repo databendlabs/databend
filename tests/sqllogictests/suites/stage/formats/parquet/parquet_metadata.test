@@ -1,9 +1,9 @@
 query TIII
 select metadata$filename, c1, metadata$file_row_number, id from @data_s3/parquet/ii/ order by metadata$filename, c1 limit 3;
 ----
-parquet/ii/f1.parquet 1 2 1
-parquet/ii/f1.parquet 2 3 2
-parquet/ii/f2.parquet 3 2 3
+parquet/ii/f1.parquet 1 0 1
+parquet/ii/f1.parquet 2 1 2
+parquet/ii/f2.parquet 3 0 3
 
 
 query TIII
