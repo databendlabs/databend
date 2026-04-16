@@ -86,8 +86,10 @@ pub async fn load_last_snapshot_hint(
     let hint_file_path = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT_V2);
     match operator.read(&hint_file_path).await {
         Err(e) => {
-            if e.kind() == ErrorKind::NotFound {
-                // if there is no V2 hint file, fallback to read the legacy hint file
+            if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::PermissionDenied) {
+                // If there is no V2 hint file, fallback to read the legacy hint file.
+                // Note: S3 returns 403 (PermissionDenied) instead of 404 when the
+                // caller lacks s3:ListBucket permission and the key does not exist.
                 try_read_legacy_hint(storage_prefix, operator).await
             } else {
                 Err(e.into())
