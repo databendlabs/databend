@@ -38,6 +38,34 @@ TableScan
 └── estimated rows: 0.00
 
 query T
+explain(verbose) select * from numbers(0)
+----
+TableScan
+├── table: default.system.numbers
+├── scan id: 0
+├── output columns: [number (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 1
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 0.00
+
+query T
+explain verbose select * from numbers(0)
+----
+TableScan
+├── table: default.system.numbers
+├── scan id: 0
+├── output columns: [number (#0)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 1
+├── partitions scanned: 1
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 0.00
+
+query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
