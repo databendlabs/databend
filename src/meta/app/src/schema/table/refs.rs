@@ -24,7 +24,6 @@ use databend_meta_client::types::SeqV;
 use super::TableId;
 use super::TableLvtCheck;
 use super::TableMeta;
-use super::TableNameIdent;
 use crate::tenant::Tenant;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,7 +144,7 @@ pub struct CreateTableBranchReq {
     /// Base table id that owns the branch namespace.
     pub base_table_id: u64,
     /// Fork from this branch. `None` means fork from the base table itself.
-    pub from_branch_id: Option<u64>,
+    pub source_branch_id: Option<u64>,
     pub branch_name: String,
     /// Optimistic seq check for the fork source.
     pub seq: MatchSeq,
@@ -165,7 +164,7 @@ pub struct DropTableBranchReq {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GetTableBranchReq {
-    pub name_ident: TableNameIdent,
+    pub table_id: u64,
     pub branch_name: String,
     pub include_expired: bool,
 }

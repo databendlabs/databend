@@ -671,13 +671,18 @@ impl Catalog for MutableCatalog {
         branch_name: &str,
         include_expired: bool,
     ) -> Result<Arc<dyn Table>> {
+        let name_ident = TableNameIdent::new(tenant, db_name, table_name);
+        let table_id = self.ctx.meta.resolve_table_id(&name_ident).await?;
         let req = GetTableBranchReq {
-            name_ident: TableNameIdent::new(tenant, db_name, table_name),
+            table_id,
             branch_name: branch_name.to_string(),
             include_expired,
         };
         let info = self.ctx.meta.get_table_branch(req).await?;
-        self.get_table_by_info(info.as_ref())
+        let mut info = info;
+        info.name = table_name.to_string();
+        info.desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
+        self.get_table_by_info(&info)
     }
 
     #[async_backtrace::framed]

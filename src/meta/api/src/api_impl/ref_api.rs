@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
@@ -25,7 +24,6 @@ use databend_common_meta_app::app_error::TableSnapshotExpired;
 use databend_common_meta_app::app_error::TableVersionMismatched;
 use databend_common_meta_app::app_error::UndropTableRetentionGuard;
 use databend_common_meta_app::app_error::UnknownReference;
-use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableId;
@@ -41,7 +39,6 @@ use databend_common_meta_app::schema::AutoIncrementStorageValue;
 use databend_common_meta_app::schema::BranchIdToName;
 use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
-use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseType;
 use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableTagReq;
@@ -85,9 +82,7 @@ use log::debug;
 use log::warn;
 
 use crate::api_impl::schema_api::restore_policy_references_on_undrop;
-use crate::database_util::get_db_or_err;
 use crate::fetch_id;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::txn_backoff::txn_backoff;
@@ -310,12 +305,12 @@ where
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let branch_name = &req.branch_name;
-        let source_table_id = req.from_branch_id.unwrap_or(req.base_table_id);
+        // `base_table_id` identifies the base table namespace where the new branch name lives.
+        // `source_table_id` identifies the object being forked from: the base table itself, or
+        // a source branch table when `source_branch_id` is set.
+        let source_table_id = req.source_branch_id.unwrap_or(req.base_table_id);
         let key_source_table_id = TableId {
             table_id: source_table_id,
-        };
-        let key_table_id = TableId {
-            table_id: req.base_table_id,
         };
         let key_branch = TableIdBranchName::new(req.base_table_id, branch_name);
 
@@ -351,9 +346,12 @@ where
                 txn_cond_seq(&key_branch, Eq, 0),
             ];
 
-            if req.from_branch_id.is_some() {
+            if req.source_branch_id.is_some() {
                 // The source may be a branch table, but the new branch is still created under the
                 // base table namespace, so the base table must still exist and be active.
+                let key_table_id = TableId {
+                    table_id: req.base_table_id,
+                };
                 let Some(seq_table_meta) = self.get_pb(&key_table_id).await? else {
                     return Err(KVAppError::AppError(AppError::UnknownTableId(
                         UnknownTableId::new(req.base_table_id, "create_table_branch: base table"),
@@ -594,36 +592,11 @@ where
     /// Resolve a visible branch name to its current branch table metadata.
     #[logcall::logcall]
     #[fastrace::trace]
-    async fn get_table_branch(&self, req: GetTableBranchReq) -> Result<Arc<TableInfo>, KVAppError> {
+    async fn get_table_branch(&self, req: GetTableBranchReq) -> Result<TableInfo, KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let tenant_dbname = req.name_ident.db_name_ident();
-        let (seq_db_id, _db_meta) = get_db_or_err(
-            self,
-            &tenant_dbname,
-            format!("{}: {}", "get_table_branch", tenant_dbname.display()),
-        )
-        .await?;
-        let db_id = *seq_db_id.data;
-
-        let dbid_tbname = DBIdTableName {
-            db_id,
-            table_name: req.name_ident.table_name.clone(),
-        };
-        // Branch names are resolved under the *currently visible* base table id of `db.table`.
-        // This is intentional: branches are treated as refs of the current base table namespace,
-        // not as independently addressable objects. If the base table is dropped or replaced and
-        // `db.table` points to a new table id, previously created branches under the old base
-        // table id become unreachable by design.
-        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-        if tb_id_seq == 0 {
-            return Err(KVAppError::AppError(AppError::UnknownTable(
-                UnknownTable::new(&req.name_ident.table_name, "get_table_branch"),
-            )));
-        }
-
         let branch_name = &req.branch_name;
-        let key_branch = TableIdBranchName::new(table_id, branch_name);
+        let key_branch = TableIdBranchName::new(req.table_id, branch_name);
         let seq_branch = self.get_pb(&key_branch).await?;
         let Some(seq_branch) = seq_branch else {
             return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
@@ -658,11 +631,12 @@ where
                 table_id: branch_id,
                 seq: seq_table_meta.seq,
             },
-            desc: format!(
-                "'{}'.'{}'/'{}'",
-                req.name_ident.db_name, req.name_ident.table_name, branch_name,
-            ),
-            name: req.name_ident.table_name.clone(),
+            // Meta lookup only resolves the branch object by `table_id + branch_name`.
+            // The caller rewrites this into the user-facing form `db.table/branch`.
+            desc: branch_name.clone(),
+            // `name` should be the base table name in the final TableInfo used by query code.
+            // It is filled by the caller after resolving the branch under a specific table name.
+            name: String::new(),
             meta: seq_table_meta.data,
             db_type: DatabaseType::NormalDB,
             // This meta API is currently reached only through the default catalog's branch lookup
@@ -670,7 +644,7 @@ where
             catalog_info: Default::default(),
         };
 
-        Ok(Arc::new(tb_info))
+        Ok(tb_info)
     }
 
     /// List table branches.

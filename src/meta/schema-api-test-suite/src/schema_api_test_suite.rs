@@ -7579,7 +7579,7 @@ impl SchemaApiTestSuite {
             .create_table_branch(CreateTableBranchReq {
                 tenant: tenant.clone(),
                 base_table_id: table_info.ident.table_id,
-                from_branch_id: None,
+                source_branch_id: None,
                 seq: MatchSeq::Exact(table_info.ident.seq),
                 branch_name: branch_name.to_string(),
                 new_table_meta: table_info.meta.clone(),

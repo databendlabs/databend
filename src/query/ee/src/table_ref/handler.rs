@@ -183,7 +183,7 @@ impl TableRefHandler for RealTableRefHandler {
             .create_table_branch(CreateTableBranchReq {
                 tenant: ctx.get_tenant(),
                 base_table_id,
-                from_branch_id: (source_table_id != base_table_id).then_some(source_table_id),
+                source_branch_id: (source_table_id != base_table_id).then_some(source_table_id),
                 branch_name: plan.branch_name.clone(),
                 seq: MatchSeq::Exact(seq),
                 new_table_meta: branch_table_meta,
