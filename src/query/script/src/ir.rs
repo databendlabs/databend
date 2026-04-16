@@ -21,10 +21,11 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 
 pub type VarRef = Ref<0>;
 pub type SetRef = Ref<1>;
@@ -170,15 +171,13 @@ impl StatementTemplate {
     }
 
     pub fn subst(&self, lookup_var: impl Fn(VarRef) -> Result<Expr>) -> Result<Statement> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter), Identifier(enter))]
         struct SubstVisitor<'a> {
             lookup_var: &'a dyn Fn(VarRef) -> Result<Expr>,
             error: Option<ErrorCode>,
         }
 
-        impl SubstVisitor<'_> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
+        impl VisitorMut for SubstVisitor<'_> {
+            fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
                 if let Expr::Hole { span, name } = expr {
                     let index = name.parse::<usize>().unwrap();
                     let value = (self.lookup_var)(VarRef::placeholder(index));
@@ -191,9 +190,13 @@ impl StatementTemplate {
                         }
                     }
                 }
+                Ok(VisitControl::Continue)
             }
 
-            fn enter_identifier(&mut self, ident: &mut Identifier) {
+            fn visit_identifier(
+                &mut self,
+                ident: &mut Identifier,
+            ) -> std::result::Result<VisitControl, !> {
                 if ident.is_hole() {
                     let index = ident.name.parse::<usize>().unwrap();
                     let value = (self.lookup_var)(VarRef::placeholder(index));
@@ -217,6 +220,7 @@ impl StatementTemplate {
                         }
                     }
                 }
+                Ok(VisitControl::Continue)
             }
         }
 
@@ -225,7 +229,7 @@ impl StatementTemplate {
             lookup_var: &lookup_var,
             error: None,
         };
-        stmt.drive_mut(&mut visitor);
+        let _ = stmt.walk_mut(&mut visitor).unwrap();
 
         if let Some(e) = visitor.error {
             return Err(e);

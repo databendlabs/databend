@@ -18,11 +18,11 @@ use databend_common_ast::ast::DescribeViewStmt;
 use databend_common_ast::ast::DropViewStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowViewsStmt;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
-use derive_visitor::DriveMut;
 use log::debug;
 
 use crate::BindContext;
@@ -62,7 +62,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.drive_mut(&mut visitor);
+        let _ = query.walk_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -101,7 +101,7 @@ impl Binder {
         let mut visitor = ViewRewriter {
             current_database: database.clone(),
         };
-        query.drive_mut(&mut visitor);
+        let _ = query.walk_mut(&mut visitor);
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {

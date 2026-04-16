@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![allow(clippy::collapsible_if)]
+#![feature(never_type)]
 
 extern crate core;
 

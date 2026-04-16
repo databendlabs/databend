@@ -19,11 +19,15 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::AlterTableAction;
 use databend_common_ast::ast::AlterTableStmt;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::ModifyColumnAction;
 use databend_common_ast::ast::OptimizeTableAction;
 use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Statement;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_base::base::short_sql;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
@@ -39,8 +43,6 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
 use databend_storages_common_cache::CacheManager;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 use md5::Digest;
 use md5::Md5;
 
@@ -291,17 +293,18 @@ fn attach_query_hash(ctx: &Arc<QueryContext>, stmt: &mut Option<Statement>, sql:
         // Use Literal::Null replace literal. Ignore Literal.
         // SELECT * FROM t1 WHERE name = 'data' => SELECT * FROM t1 WHERE name = NULL
         // SELECT * FROM t1 WHERE name = 'bend' => SELECT * FROM t1 WHERE name = NULL
-        #[derive(VisitorMut)]
-        #[visitor(Literal(enter))]
         struct AstVisitor;
 
-        impl AstVisitor {
-            fn enter_literal(&mut self, lit: &mut Literal) {
-                *lit = Literal::Null;
+        impl VisitorMut for AstVisitor {
+            fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+                if let Expr::Literal { value, .. } = expr {
+                    *value = Literal::Null;
+                }
+                Ok(VisitControl::Continue)
             }
         }
 
-        stmt.drive_mut(&mut AstVisitor);
+        let _ = stmt.walk_mut(&mut AstVisitor);
 
         (query_hash, format!("{:x}", Md5::digest(stmt.to_string())))
     } else {

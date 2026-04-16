@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnPosition;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Expr::Array;
@@ -39,14 +38,15 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnpivotName;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
-use derive_visitor::Drive;
-use derive_visitor::Visitor;
 use log::warn;
 
 use crate::AsyncFunctionRewriter;
@@ -94,7 +94,7 @@ impl Binder {
             self.bind_dummy_table(bind_context, select_list)?
         } else {
             let mut max_column_position = MaxColumnPosition::new();
-            stmt.drive(&mut max_column_position);
+            let _ = stmt.walk(&mut max_column_position);
             self.metadata
                 .write()
                 .set_max_column_position(max_column_position.max_pos);
@@ -838,8 +838,6 @@ impl SelectRewriter {
     }
 }
 
-#[derive(Visitor)]
-#[visitor(ColumnPosition(enter))]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
 }
@@ -850,10 +848,21 @@ impl MaxColumnPosition {
     }
 }
 
-impl MaxColumnPosition {
-    fn enter_column_position(&mut self, pos: &ColumnPosition) {
-        if pos.pos > self.max_pos {
-            self.max_pos = pos.pos;
+impl Visitor for MaxColumnPosition {
+    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
+        if let Expr::ColumnRef {
+            column:
+                databend_common_ast::ast::ColumnRef {
+                    column: ColumnID::Position(pos),
+                    ..
+                },
+            ..
+        } = expr
+        {
+            if pos.pos > self.max_pos {
+                self.max_pos = pos.pos;
+            }
         }
+        Ok(VisitControl::Continue)
     }
 }

@@ -17,11 +17,10 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::Pivot;
-use derive_visitor::VisitorMut;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
 
-#[derive(Debug, Clone, VisitorMut)]
-#[visitor(Expr(exit), Pivot(enter))]
+#[derive(Debug, Clone)]
 pub struct AggregateRewriter {
     // aggr_expr_ptr is used for skipping the rewrite of Pivot.aggregate.
     // It only skips the aggregate itself, while the arguments of the aggregate will still be rewritten.
@@ -37,12 +36,36 @@ impl Default for AggregateRewriter {
     }
 }
 
-impl AggregateRewriter {
-    fn enter_pivot(&mut self, pivot: &mut Pivot) {
-        self.aggr_expr_ptr = &pivot.aggregate
+impl VisitorMut for AggregateRewriter {
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &mut databend_common_ast::ast::TableReference,
+    ) -> Result<VisitControl, !> {
+        if let databend_common_ast::ast::TableReference::Table {
+            pivot: Some(pivot), ..
+        }
+        | databend_common_ast::ast::TableReference::Subquery {
+            pivot: Some(pivot), ..
+        } = table_ref
+        {
+            self.aggr_expr_ptr = &pivot.aggregate;
+        }
+
+        Ok(VisitControl::Continue)
     }
 
-    fn exit_expr(&mut self, expr: &mut Expr) {
+    fn visit_expr(&mut self, expr: &mut Expr) -> Result<VisitControl, !> {
+        if self.aggr_expr_ptr == expr {
+            return Ok(VisitControl::SkipChildren);
+        }
+
+        self.rewrite_expr(expr);
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl AggregateRewriter {
+    fn rewrite_expr(&mut self, expr: &mut Expr) {
         if self.aggr_expr_ptr == expr {
             return;
         }
@@ -235,5 +258,46 @@ impl AggregateRewriter {
                 },
             }),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::Statement;
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_sql;
+    use databend_common_ast::parser::tokenize_sql;
+    use databend_common_ast::visit::WalkMut;
+
+    use super::AggregateRewriter;
+
+    fn parse_stmt(sql: &str) -> Statement {
+        let tokens = tokenize_sql(sql).unwrap();
+        let (stmt, _) = parse_sql(&tokens, Dialect::Experimental).unwrap();
+        stmt
+    }
+
+    #[test]
+    fn test_aggregate_rewriter_skips_table_pivot_aggregate() {
+        let mut stmt = parse_stmt("SELECT * FROM t PIVOT(sum(x + 1) FOR y IN (1))");
+
+        let _ = stmt.walk_mut(&mut AggregateRewriter::default());
+
+        assert_eq!(
+            stmt.to_string(),
+            "SELECT * FROM t PIVOT(sum(x + 1) FOR y IN (1))"
+        );
+    }
+
+    #[test]
+    fn test_aggregate_rewriter_skips_subquery_pivot_aggregate() {
+        let mut stmt = parse_stmt("SELECT * FROM (SELECT * FROM t) PIVOT(sum(x + 1) FOR y IN (1))");
+
+        let _ = stmt.walk_mut(&mut AggregateRewriter::default());
+
+        assert_eq!(
+            stmt.to_string(),
+            "SELECT * FROM (SELECT * FROM t) PIVOT(sum(x + 1) FOR y IN (1))"
+        );
     }
 }
