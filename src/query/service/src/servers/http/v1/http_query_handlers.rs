@@ -68,6 +68,8 @@ use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::ResponseState;
+use super::query::execute_state::SERVER_MAX_ARROW_RESULT_VERSION;
+use super::query::execute_state::legacy_bendsql_python_arrow_result_version;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::HttpHandlerKind;
 use crate::servers::http::error::HttpErrorCode;
@@ -151,6 +153,8 @@ pub struct ResultFormatSettings {
     pub geometry_output_format: String,
     pub binary_output_format: String,
     pub http_json_result_mode: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arrow_result_version: Option<u64>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -209,6 +213,7 @@ impl QueryResponse {
         }: HttpQueryResponseInternal,
         is_final: bool,
         query_result_format: QueryResultFormat,
+        arrow_result_version: Option<u64>,
     ) -> Response {
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -252,6 +257,12 @@ impl QueryResponse {
         }
 
         let rows = data.num_rows();
+        let driver_settings = response_result_format_settings(
+            driver_settings,
+            query_result_format,
+            arrow_result_version,
+        );
+
         let mut res = QueryResponse {
             id: id.clone(),
             session_id: Some(session_id),
@@ -307,6 +318,47 @@ impl QueryResponse {
             }
         }
     }
+}
+
+fn response_result_format_settings(
+    mut settings: Option<ResultFormatSettings>,
+    query_result_format: QueryResultFormat,
+    arrow_result_version: Option<u64>,
+) -> Option<ResultFormatSettings> {
+    if let Some(settings) = settings.as_mut() {
+        settings.arrow_result_version = match query_result_format {
+            QueryResultFormat::Arrow => arrow_result_version,
+            QueryResultFormat::Json => None,
+        };
+    }
+    settings
+}
+
+fn negotiate_arrow_result_version(
+    req: &HttpQueryRequest,
+    query_result_format: QueryResultFormat,
+    user_agent: Option<&str>,
+) -> Result<Option<u64>, ErrorCode> {
+    if matches!(query_result_format, QueryResultFormat::Json) {
+        return Ok(None);
+    }
+
+    if let Some(client_max) = req.arrow_result_version_max {
+        if client_max == 0 {
+            return Err(ErrorCode::BadArguments(format!(
+                "arrow_result_version_max must be greater than 0",
+            )));
+        }
+        return Ok(Some(client_max.min(SERVER_MAX_ARROW_RESULT_VERSION)));
+    }
+
+    if let Some(version) = legacy_bendsql_python_arrow_result_version(user_agent) {
+        return Ok(Some(version));
+    }
+
+    Err(ErrorCode::BadArguments(format!(
+        "Arrow responses require arrow_result_version_max in the request body to declare the client max supported Arrow result format version",
+    )))
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -398,6 +450,11 @@ async fn query_final_handler(
                 let mut response = query
                     .get_response_state_only()
                     .map_err(HttpErrorCode::server_error)?;
+                let arrow_result_version = response
+                    .state
+                    .result_format_settings
+                    .as_ref()
+                    .and_then(|settings| settings.arrow_result_version);
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
@@ -406,6 +463,7 @@ async fn query_final_handler(
                     response,
                     true,
                     query_result_format,
+                    arrow_result_version,
                 ))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -525,6 +583,11 @@ async fn query_page_handler(
                     );
                     poem::Error::from_string(format!("{}", err.message()), StatusCode::NOT_FOUND)
                 })?;
+                let arrow_result_version = resp
+                    .state
+                    .result_format_settings
+                    .as_ref()
+                    .and_then(|settings| settings.arrow_result_version);
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
@@ -533,6 +596,7 @@ async fn query_page_handler(
                     resp,
                     false,
                     query_result_format,
+                    arrow_result_version,
                 ))
             }
         }
@@ -608,17 +672,30 @@ pub(crate) async fn query_handler(
                             StatusCode::NOT_FOUND,
                         )
                     })?;
+                    let arrow_result_version = resp
+                        .state
+                        .result_format_settings
+                        .as_ref()
+                        .and_then(|settings| settings.arrow_result_version);
                     Ok(QueryResponse::from_internal(
                         ctx.query_id.clone(),
                         resp,
                         false,
                         query_result_format,
+                        arrow_result_version,
                     ))
                 };
             };
         }
 
-        match HttpQuery::try_create(ctx, req.clone()).await {
+        let arrow_result_version = negotiate_arrow_result_version(
+            &req,
+            query_result_format,
+            ctx.user_agent.as_deref(),
+        )
+        .map_err(HttpErrorCode::bad_request)?;
+
+        match HttpQuery::try_create(ctx, req.clone(), arrow_result_version).await {
             Err(err) => {
                 let err = err.display_with_sql(&sql);
                 error!("Failed to start SQL query, error: {:?}", err);
@@ -676,6 +753,7 @@ pub(crate) async fn query_handler(
                     resp,
                     false,
                     query_result_format,
+                    arrow_result_version,
                 )
                 .into_response())
             }

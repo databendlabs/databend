@@ -474,6 +474,142 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_arrow_ipc_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::Result<()> {
+    let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec();
+    let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec();
+
+    let schema = DataSchema::new(vec![DataField::new("v", DataType::Variant)]);
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![VariantType::from_data(vec![value1.clone(), value2.clone()])],
+        2,
+    );
+
+    let buf = collector
+        .into_serializer(OutputFormatSettings {
+            http_arrow_use_jsonb: true,
+            ..Default::default()
+        })
+        .to_arrow_ipc(&schema, vec![])?;
+    let (_, batch) = read_first_arrow_batch(buf)?;
+
+    match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
+        Column::Variant(column) => {
+            assert_eq!(column.index(0).unwrap(), value1);
+            assert_eq!(column.index(1).unwrap(), value2);
+        }
+        other => panic!("expected variant column, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_arrow_ipc_nested_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::Result<()> {
+    let value1 = jsonb::parse_value(r#"{"k":[1,2,3]}"#.as_bytes())?.to_vec();
+    let value2 = jsonb::parse_value(r#"{"nested":{"x":"y"}}"#.as_bytes())?.to_vec();
+    let value3 = jsonb::parse_value(r#"[1,{"z":false}]"#.as_bytes())?.to_vec();
+    let value4 = jsonb::parse_value(r#"{"m":null}"#.as_bytes())?.to_vec();
+    let value5 = jsonb::parse_value(r#"123"#.as_bytes())?.to_vec();
+
+    let schema = DataSchema::new(vec![
+        DataField::new(
+            "array_variant",
+            DataType::Array(Box::new(DataType::Variant)),
+        ),
+        DataField::new(
+            "tuple_variant",
+            DataType::Tuple(vec![DataType::Variant, DataType::String]),
+        ),
+        DataField::new(
+            "map_variant",
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                DataType::String,
+                DataType::Variant,
+            ]))),
+        ),
+        DataField::new(
+            "nullable_variant",
+            DataType::Nullable(Box::new(DataType::Variant)),
+        ),
+    ]);
+
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![
+            Column::Array(Box::new(ArrayColumn::new(
+                VariantType::from_data(vec![value1.clone(), value2.clone()]),
+                vec![0_u64, 2].into(),
+            ))),
+            Column::Tuple(vec![
+                VariantType::from_data(vec![value3.clone()]),
+                StringType::from_data(vec!["s"]),
+            ]),
+            Column::Map(Box::new(ArrayColumn::new(
+                Column::Tuple(vec![
+                    StringType::from_data(vec!["k"]),
+                    VariantType::from_data(vec![value4.clone()]),
+                ]),
+                vec![0_u64, 1].into(),
+            ))),
+            NullableColumn::new_column(
+                VariantType::from_data(vec![value5.clone()]),
+                Bitmap::new_constant(true, 1),
+            ),
+        ],
+        1,
+    );
+
+    let buf = collector
+        .into_serializer(OutputFormatSettings {
+            http_arrow_use_jsonb: true,
+            ..Default::default()
+        })
+        .to_arrow_ipc(&schema, vec![])?;
+    let (_, batch) = read_first_arrow_batch(buf)?;
+
+    match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
+        Column::Array(column) => match column.values() {
+            Column::Variant(values) => {
+                assert_eq!(values.index(0).unwrap(), value1);
+                assert_eq!(values.index(1).unwrap(), value2);
+            }
+            other => panic!("expected variant array values, got {other:?}"),
+        },
+        other => panic!("expected array column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(1).clone(), schema.field(1).data_type())? {
+        Column::Tuple(fields) => match &fields[0] {
+            Column::Variant(column) => assert_eq!(column.index(0).unwrap(), value3),
+            other => panic!("expected tuple variant field, got {other:?}"),
+        },
+        other => panic!("expected tuple column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(2).clone(), schema.field(2).data_type())? {
+        Column::Map(column) => match column.values() {
+            Column::Tuple(fields) => match &fields[1] {
+                Column::Variant(column) => assert_eq!(column.index(0).unwrap(), value4),
+                other => panic!("expected map variant value field, got {other:?}"),
+            },
+            other => panic!("expected map tuple values, got {other:?}"),
+        },
+        other => panic!("expected map column, got {other:?}"),
+    }
+
+    match Column::from_arrow_rs(batch.column(3).clone(), schema.field(3).data_type())? {
+        Column::Nullable(column) => match &column.column {
+            Column::Variant(column) => assert_eq!(column.index(0).unwrap(), value5),
+            other => panic!("expected nullable variant inner column, got {other:?}"),
+        },
+        other => panic!("expected nullable column, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_arrow_ipc_nested_geo_binary_payloads() -> anyhow::Result<()> {
     let geom1 = geometry_from_str("SRID=4326;POINT(1 2)", None)?;
     let geom2 = geometry_from_str("SRID=4326;POINT(3 4)", None)?;

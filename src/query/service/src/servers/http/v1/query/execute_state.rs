@@ -58,6 +58,9 @@ use crate::spillers::SpillerType;
 
 type Sender = SizedChannelSender<LiteSpiller>;
 
+pub(crate) const LEGACY_ARROW_RESULT_VERSION: u64 = 1;
+pub(crate) const SERVER_MAX_ARROW_RESULT_VERSION: u64 = 2;
+
 pub struct ExecutionError;
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Eq)]
@@ -123,6 +126,7 @@ impl ExecuteState {
 pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
     pub(crate) sender: Option<Sender>,
+    pub(crate) arrow_result_version: Option<u64>,
 }
 
 pub struct ExecuteRunning {
@@ -377,6 +381,7 @@ impl ExecuteState {
         params: Option<serde_json::Value>,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
+        arrow_result_version: Option<u64>,
         mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
@@ -389,7 +394,8 @@ impl ExecuteState {
             .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
 
-        Self::apply_settings(&ctx, &mut block_sender).with_context(make_error)?;
+        Self::apply_settings(&ctx, arrow_result_version, &mut block_sender)
+            .with_context(make_error)?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await
@@ -424,6 +430,7 @@ impl ExecuteState {
             geometry_output_format,
             binary_output_format,
             http_json_result_mode,
+            arrow_result_version,
         });
 
         let running_state = ExecuteRunning {
@@ -543,7 +550,11 @@ impl ExecuteState {
         }
     }
 
-    fn apply_settings(ctx: &Arc<QueryContext>, block_sender: &mut Sender) -> Result<()> {
+    fn apply_settings(
+        ctx: &Arc<QueryContext>,
+        arrow_result_version: Option<u64>,
+        block_sender: &mut Sender,
+    ) -> Result<()> {
         let settings = ctx.get_settings();
 
         let spiller = if settings.get_enable_result_set_spilling()? {
@@ -571,8 +582,74 @@ impl ExecuteState {
         };
 
         // set_var may change settings
-        let format_settings = ctx.get_output_format_settings()?;
+        let mut format_settings = ctx.get_output_format_settings()?;
+        format_settings.http_arrow_use_jsonb =
+            arrow_result_version == Some(LEGACY_ARROW_RESULT_VERSION);
         block_sender.plan_ready(format_settings, spiller);
         Ok(())
+    }
+}
+
+pub(crate) fn legacy_bendsql_python_arrow_result_version(
+    user_agent: Option<&str>,
+) -> Option<u64> {
+    const MAX_JSONB_VERSION: (u64, u64, u64) = (0, 33, 7);
+
+    parse_bendsql_python_version(user_agent)
+        .is_some_and(|version| version <= MAX_JSONB_VERSION)
+        .then_some(LEGACY_ARROW_RESULT_VERSION)
+}
+
+fn parse_bendsql_python_version(user_agent: Option<&str>) -> Option<(u64, u64, u64)> {
+    const PREFIX: &str = "databend-driver-python/";
+
+    let version = user_agent?
+        .split_whitespace()
+        .find_map(|part| part.strip_prefix(PREFIX))?;
+    let mut parts = version.splitn(4, '.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts
+        .next()?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()?;
+
+    Some((major, minor, patch))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LEGACY_ARROW_RESULT_VERSION;
+    use super::legacy_bendsql_python_arrow_result_version;
+
+    #[test]
+    fn test_legacy_bendsql_python_arrow_result_version_range() {
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some(
+                "databend-driver-python/0.33.7"
+            )),
+            Some(LEGACY_ARROW_RESULT_VERSION)
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some("databend-driver-python/0.1.0")),
+            Some(LEGACY_ARROW_RESULT_VERSION)
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some(
+                "databend-driver-python/0.33.8"
+            )),
+            None
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(Some("bendsql/0.33.7")),
+            None
+        );
+        assert_eq!(
+            legacy_bendsql_python_arrow_result_version(None),
+            None
+        );
     }
 }

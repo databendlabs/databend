@@ -145,11 +145,12 @@ fn format_arrow_ipc_columns(
 ) -> Result<Vec<Column>> {
     columns
         .iter()
-        .map(|column| format_arrow_ipc_column(column, format.geometry_format))
+        .map(|column| format_arrow_ipc_column(column, format))
         .collect()
 }
 
-fn format_arrow_ipc_column(column: &Column, geometry_format: GeometryDataType) -> Result<Column> {
+fn format_arrow_ipc_column(column: &Column, format: &OutputFormatSettings) -> Result<Column> {
+    let geometry_format = format.geometry_format;
     match column {
         Column::Geometry(column) => Ok(Column::Geometry(format_geometry_column(
             column,
@@ -159,23 +160,27 @@ fn format_arrow_ipc_column(column: &Column, geometry_format: GeometryDataType) -
             column,
             geometry_format,
         )?)),
-        Column::Variant(column) => Ok(Column::Variant(format_variant_column(column))),
+        Column::Variant(column) => Ok(Column::Variant(if format.http_arrow_use_jsonb {
+            column.clone()
+        } else {
+            format_variant_column(column)
+        })),
         Column::Nullable(column) => Ok(NullableColumn::new_column(
-            format_arrow_ipc_column(&column.column, geometry_format)?,
+            format_arrow_ipc_column(&column.column, format)?,
             column.validity.clone(),
         )),
         Column::Array(column) => Ok(Column::Array(Box::new(ArrayColumn::new(
-            format_arrow_ipc_column(&column.underlying_column(), geometry_format)?,
+            format_arrow_ipc_column(&column.underlying_column(), format)?,
             column.underlying_offsets(),
         )))),
         Column::Map(column) => Ok(Column::Map(Box::new(ArrayColumn::new(
-            format_arrow_ipc_column(&column.underlying_column(), geometry_format)?,
+            format_arrow_ipc_column(&column.underlying_column(), format)?,
             column.underlying_offsets(),
         )))),
         Column::Tuple(fields) => Ok(Column::Tuple(
             fields
                 .iter()
-                .map(|field| format_arrow_ipc_column(field, geometry_format))
+                .map(|field| format_arrow_ipc_column(field, format))
                 .collect::<Result<Vec<_>>>()?,
         )),
         _ => Ok(column.clone()),
