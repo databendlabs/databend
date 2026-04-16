@@ -544,6 +544,7 @@ pub struct CsvFileFormatParams {
     pub record_delimiter: String,
     pub escape: String,
     pub quote: String,
+    /// Controls whether CSV output quotes every field or only fields that require quoting.
     #[serde(default)]
     pub quote_style: CsvQuoteStyle,
     pub error_on_column_count_mismatch: bool,
@@ -712,11 +713,14 @@ pub enum EmptyFieldAs {
     FieldDefault,
 }
 
+/// Controls how CSV values are quoted during output.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CsvQuoteStyle {
+    /// Quote every field in the CSV output.
     #[default]
     QuoteAll,
+    /// Quote a field only when required for safe CSV encoding or round trips.
     QuoteMinimal,
 }
 
