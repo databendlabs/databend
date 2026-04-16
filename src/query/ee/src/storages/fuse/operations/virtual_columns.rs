@@ -33,6 +33,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VIRTUAL_COLUMNS_LIMIT;
 use databend_common_expression::VirtualDataSchema;
+use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_bytes;
 use databend_common_metrics::storage::metrics_inc_block_virtual_column_write_milliseconds;
@@ -60,6 +61,7 @@ use databend_common_storages_fuse::operations::MutationLogEntry;
 use databend_common_storages_fuse::operations::MutationLogs;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::VirtualSchemaMode;
+use databend_common_users::UserApiProvider;
 use databend_enterprise_virtual_column::VirtualColumnRefreshResult;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -473,6 +475,16 @@ async fn vacuum_virtual_column_orphans(
         .await?;
     let retention_boundary =
         Utc::now() - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
+    let meta_api = UserApiProvider::instance().get_meta_store_client();
+    meta_api
+        .fetch_set_vacuum_timestamp(&ctx.get_tenant(), retention_boundary)
+        .await
+        .map_err(|e| {
+            ErrorCode::MetaStorageError(format!(
+                "Failed to set vacuum watermark before vacuum virtual columns: {}. Vacuum aborted to prevent data inconsistency.",
+                e
+            ))
+        })?;
     let retain_branches = catalog
         .list_history_table_branches(ListHistoryTableBranchesReq {
             table_id: fuse_table.get_id(),
