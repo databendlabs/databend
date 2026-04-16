@@ -19,10 +19,13 @@ use std::sync::Arc;
 
 use concurrent_queue::ConcurrentQueue;
 use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_base::runtime::CaptureLogSettings;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
@@ -40,8 +43,6 @@ use databend_common_settings::Settings;
 use databend_common_sql::Planner;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 use futures_util::StreamExt;
 use log::LevelFilter;
 
@@ -161,18 +162,22 @@ impl ReportIssueInterpreter {
     }
 }
 
-#[derive(VisitorMut)]
-#[visitor(Identifier(enter))]
 struct CollectIdentifiersVisitor {
     index: usize,
     identifiers: HashSet<String>,
 }
 
-impl CollectIdentifiersVisitor {
-    fn enter_identifier(&mut self, identifier: &mut Identifier) {
+impl VisitorMut for CollectIdentifiersVisitor {
+    fn visit_identifier(
+        &mut self,
+        identifier: &mut Identifier,
+    ) -> std::result::Result<VisitControl, !> {
         self.identifiers.insert(identifier.name.clone());
+        Ok(VisitControl::Continue)
     }
+}
 
+impl CollectIdentifiersVisitor {
     pub fn new() -> CollectIdentifiersVisitor {
         CollectIdentifiersVisitor {
             index: 1296,
@@ -234,27 +239,29 @@ impl CollectIdentifiersVisitor {
     }
 }
 
-#[derive(VisitorMut)]
-#[visitor(ColumnRef(enter), TableReference(enter))]
 struct RewriteVisitor {
     mapping: HashMap<String, String>,
 }
 
-impl RewriteVisitor {
-    fn enter_column_ref(&mut self, column_ref: &mut ColumnRef) {
-        if let Some(v) = column_ref.database.as_mut() {
+impl VisitorMut for RewriteVisitor {
+    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+        let Expr::ColumnRef { column, .. } = expr else {
+            return Ok(VisitControl::Continue);
+        };
+
+        if let Some(v) = column.database.as_mut() {
             if let Some(mapped_name) = self.mapping.get(&v.name) {
                 v.name = mapped_name.clone();
             }
         }
 
-        if let Some(v) = column_ref.table.as_mut() {
+        if let Some(v) = column.table.as_mut() {
             if let Some(mapped_name) = self.mapping.get(&v.name) {
                 v.name = mapped_name.clone();
             }
         }
 
-        match &mut column_ref.column {
+        match &mut column.column {
             ColumnID::Name(v) => {
                 if let Some(mapped_name) = self.mapping.get(&v.name) {
                     v.name = mapped_name.clone();
@@ -262,9 +269,14 @@ impl RewriteVisitor {
             }
             ColumnID::Position(_) => {}
         };
+
+        Ok(VisitControl::Continue)
     }
 
-    fn enter_table_reference(&mut self, table_ref: &mut TableReference) {
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &mut TableReference,
+    ) -> std::result::Result<VisitControl, !> {
         if let TableReference::Table { table, .. } = table_ref {
             if let Some(v) = table.catalog.as_mut() {
                 if let Some(mapped_name) = self.mapping.get(&v.name) {
@@ -282,6 +294,8 @@ impl RewriteVisitor {
                 table.table.name = mapped_name.clone();
             }
         }
+
+        Ok(VisitControl::Continue)
     }
 }
 
@@ -342,7 +356,7 @@ impl ReportContext {
         statement: &mut Statement,
     ) -> Result<()> {
         let mut visitor = CollectIdentifiersVisitor::new();
-        statement.drive_mut(&mut visitor);
+        let _ = statement.walk_mut(&mut visitor);
 
         let settings = ShowCreateQuerySettings {
             sql_dialect: Default::default(),
@@ -480,7 +494,7 @@ impl ReportContext {
         }
 
         let mut visitor = RewriteVisitor { mapping };
-        statement.drive_mut(&mut visitor);
+        let _ = statement.walk_mut(&mut visitor);
         self.replication_queries.push(format!("{}", statement));
         Ok(())
     }

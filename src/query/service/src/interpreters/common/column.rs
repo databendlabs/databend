@@ -15,24 +15,34 @@
 use std::collections::HashSet;
 
 use databend_common_ast::ast::ColumnID;
-use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_idents;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::IdentifierNormalizer;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::normalize_identifier;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 
-#[derive(VisitorMut)]
-#[visitor(ColumnRef(enter))]
 struct ColumnRefCollector {
     columns: HashSet<String>,
+}
+
+impl VisitorMut for ColumnRefCollector {
+    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+        if let Expr::ColumnRef { column, .. } = expr {
+            if let ColumnID::Name(ident) = &column.column {
+                self.columns.insert(ident.name.clone());
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
 }
 
 impl ColumnRefCollector {
@@ -41,25 +51,17 @@ impl ColumnRefCollector {
             columns: HashSet::new(),
         }
     }
-
-    fn enter_column_ref(&mut self, column_ref: &mut ColumnRef) {
-        if let ColumnID::Name(ident) = &column_ref.column {
-            self.columns.insert(ident.name.clone());
-        }
-    }
 }
 
 pub fn cluster_key_referenced_columns(cluster_key: &str) -> Result<HashSet<String>> {
     let exprs = parse_cluster_key_exprs(cluster_key)?;
     let mut collector = ColumnRefCollector::new();
     for mut expr in exprs {
-        expr.drive_mut(&mut collector);
+        let _ = expr.walk_mut(&mut collector);
     }
     Ok(collector.columns)
 }
 
-#[derive(VisitorMut)]
-#[visitor(ColumnRef(enter))]
 struct ColumnRenamer<'a> {
     old: &'a str,
     new: &'a str,
@@ -67,16 +69,21 @@ struct ColumnRenamer<'a> {
     changed: bool,
 }
 
-impl<'a> ColumnRenamer<'a> {
-    fn enter_column_ref(&mut self, column_ref: &mut ColumnRef) {
-        if column_ref.column.name() != self.old {
-            return;
+impl VisitorMut for ColumnRenamer<'_> {
+    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+        let Expr::ColumnRef { column, .. } = expr else {
+            return Ok(VisitControl::Continue);
+        };
+
+        if column.column.name() != self.old {
+            return Ok(VisitControl::Continue);
         }
-        if let ColumnID::Name(ident) = &mut column_ref.column {
+        if let ColumnID::Name(ident) = &mut column.column {
             ident.name = self.new.to_string();
             ident.quote = self.new_quote;
             self.changed = true;
         }
+        Ok(VisitControl::Continue)
     }
 }
 
@@ -106,7 +113,7 @@ pub fn rename_column_in_cluster_key(
     };
 
     for expr in exprs.iter_mut() {
-        expr.drive_mut(&mut renamer);
+        let _ = expr.walk_mut(&mut renamer);
     }
 
     if !renamer.changed {
@@ -117,7 +124,7 @@ pub fn rename_column_in_cluster_key(
     let cluster_keys = exprs
         .iter_mut()
         .map(|e| {
-            e.drive_mut(&mut normalizer);
+            let _ = e.walk_mut(&mut normalizer);
             format!("{:#}", e)
         })
         .collect::<Vec<_>>();
