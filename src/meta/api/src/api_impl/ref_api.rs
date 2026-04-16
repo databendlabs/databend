@@ -305,9 +305,12 @@ where
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
         let branch_name = &req.branch_name;
-        // `base_table_id` identifies the base table namespace where the new branch name lives.
-        // `source_table_id` identifies the object being forked from: the base table itself, or
-        // a source branch table when `source_branch_id` is set.
+        // `source_table_id` is the object being forked from at create time, while
+        // `base_table_id` is the base table namespace where the new branch name lives.
+        //
+        // For example, `ALTER TABLE t/b1 CREATE BRANCH b2` uses `b1`'s table id as
+        // `source_table_id`, but still uses `t`'s table id as `base_table_id`,
+        // because the new branch is resolved as `t/b2`.
         let source_table_id = req.source_branch_id.unwrap_or(req.base_table_id);
         let key_source_table_id = TableId {
             table_id: source_table_id,
