@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use core::ops::Range;
+use std::collections::HashSet;
 
 use databend_common_base::base::OrderedFloat;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_expression::BlockEntry;
+use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -561,6 +563,106 @@ pub fn test_scatter() -> databend_common_exception::Result<()> {
             assert_eq!(columns_1[idx].value(), columns_2[idx].value());
         }
     }
+
+    Ok(())
+}
+
+#[test]
+pub fn test_block_partition_stream_lazy_rows_threshold() -> databend_common_exception::Result<()> {
+    let block1 = rand_block_for_all_types(6, DataTypeFilter::All);
+    let block2 = rand_block_for_all_types(5, DataTypeFilter::All);
+
+    let mut stream = BlockPartitionStream::create(4, 0, 3);
+
+    assert!(
+        stream
+            .partition(vec![0, 1, 0, 2, 1, 0], block1.clone(), true)
+            .is_empty()
+    );
+
+    let ready_blocks = stream.partition(vec![2, 0, 1, 0, 2], block2.clone(), true);
+    assert_eq!(ready_blocks.len(), 1);
+    assert_eq!(ready_blocks[0].0, 0);
+
+    let p0_block1 = [0_u32, 2, 5];
+    let p0_block2 = [1_u32, 3];
+    let expected_p0 =
+        DataBlock::concat(&[block1.take(&p0_block1[..])?, block2.take(&p0_block2[..])?])?;
+    assert_block_value_eq(&ready_blocks[0].1, &expected_p0);
+
+    let pending_ids = stream.partition_ids();
+    assert_eq!(pending_ids, vec![1, 2]);
+
+    let p1_block1 = [1_u32, 4];
+    let p1_block2 = [2_u32];
+    let expected_p1 =
+        DataBlock::concat(&[block1.take(&p1_block1[..])?, block2.take(&p1_block2[..])?])?;
+    let p2_block1 = [3_u32];
+    let p2_block2 = [0_u32, 4];
+    let expected_p2 =
+        DataBlock::concat(&[block1.take(&p2_block1[..])?, block2.take(&p2_block2[..])?])?;
+
+    let actual_p1 = stream.finalize_partition(1).unwrap();
+    let actual_p2 = stream.finalize_partition(2).unwrap();
+    assert_block_value_eq(&actual_p1, &expected_p1);
+    assert_block_value_eq(&actual_p2, &expected_p2);
+    assert!(stream.finalize_partition(0).is_none());
+
+    Ok(())
+}
+
+#[test]
+pub fn test_block_partition_stream_take_partitions_preserves_excluded()
+-> databend_common_exception::Result<()> {
+    let block = rand_block_for_all_types(6, DataTypeFilter::All);
+    let mut stream = BlockPartitionStream::create(0, 0, 3);
+
+    assert!(
+        stream
+            .partition(vec![0, 1, 2, 0, 1, 2], block.clone(), false)
+            .is_empty()
+    );
+
+    let taken = stream.take_partitions(&HashSet::from([1_usize]));
+    assert_eq!(taken.len(), 2);
+    assert_eq!(taken[0].0, 0);
+    assert_eq!(taken[1].0, 2);
+
+    let p0_rows = [0_u32, 3];
+    let p2_rows = [2_u32, 5];
+    let expected_p0 = block.take(&p0_rows[..])?;
+    let expected_p2 = block.take(&p2_rows[..])?;
+    assert_block_value_eq(&taken[0].1, &expected_p0);
+    assert_block_value_eq(&taken[1].1, &expected_p2);
+
+    let p1_rows = [1_u32, 4];
+    let expected_p1 = block.take(&p1_rows[..])?;
+    let actual_p1 = stream.finalize_partition(1).unwrap();
+    assert_block_value_eq(&actual_p1, &expected_p1);
+    assert!(stream.finalize_partition(0).is_none());
+    assert!(stream.finalize_partition(2).is_none());
+
+    Ok(())
+}
+
+#[test]
+pub fn test_block_partition_stream_estimated_bytes_threshold()
+-> databend_common_exception::Result<()> {
+    let block = rand_block_for_all_types(4, DataTypeFilter::All);
+    let mut stream = BlockPartitionStream::create(0, 1, 2);
+
+    let ready_blocks = stream.partition(vec![0, 1, 0, 1], block.clone(), true);
+    assert_eq!(ready_blocks.len(), 2);
+
+    let p0_rows = [0_u32, 2];
+    let p1_rows = [1_u32, 3];
+    let expected_p0 = block.take(&p0_rows[..])?;
+    let expected_p1 = block.take(&p1_rows[..])?;
+
+    assert_eq!(ready_blocks[0].0, 0);
+    assert_block_value_eq(&ready_blocks[0].1, &expected_p0);
+    assert_eq!(ready_blocks[1].0, 1);
+    assert_block_value_eq(&ready_blocks[1].1, &expected_p1);
 
     Ok(())
 }
