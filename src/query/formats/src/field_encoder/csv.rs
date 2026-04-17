@@ -95,7 +95,7 @@ fn csv_string_needs_quotes(bytes: &[u8], settings: &CsvQuoteSettings) -> bool {
     bytes.iter().any(|byte| {
         *byte == settings.quote_char
             || *byte == settings.field_delimiter
-            || settings.record_delimiter.contains(byte)
+            || settings.record_delimiter[0] == *byte
             || settings.escape_char == Some(*byte)
     })
 }
