@@ -19,6 +19,8 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContextTableAccess;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
 use databend_common_sql::executor::physical_plans::MutationKind;

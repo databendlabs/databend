@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -23,7 +24,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
 use databend_common_storage::init_stage_operator;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::commit_with_backoff;
 use databend_common_storages_fuse::operations::vacuum_tables_from_info;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;

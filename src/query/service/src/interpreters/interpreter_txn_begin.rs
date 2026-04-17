@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::Result;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_session::TxnManagerRef;
 
 use crate::interpreters::Interpreter;

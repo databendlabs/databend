@@ -15,6 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -22,7 +24,6 @@ use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::CreateCatalogPlan;
-use databend_common_storages_fuse::TableContext;
 use log::debug;
 
 use super::Interpreter;

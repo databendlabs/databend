@@ -93,6 +93,7 @@ use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextSession;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
@@ -1226,14 +1227,6 @@ impl TableContext for QueryContext {
             .await
     }
 
-    fn get_current_session_id(&self) -> String {
-        self.get_current_session().get_id()
-    }
-
-    fn get_current_client_session_id(&self) -> Option<String> {
-        self.get_current_session().get_client_session_id()
-    }
-
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,
@@ -1314,10 +1307,6 @@ impl TableContext for QueryContext {
         })
     }
 
-    fn get_connection_id(&self) -> String {
-        self.shared.get_connection_id()
-    }
-
     // subquery level
     fn get_settings(&self) -> Arc<Settings> {
         // query level change
@@ -1395,16 +1384,30 @@ impl TableContext for QueryContext {
             .get_enterprise_license(self.get_version())
     }
 
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_clusters().await
+    }
+}
+
+impl TableContextSession for QueryContext {
+    fn get_connection_id(&self) -> String {
+        self.shared.get_connection_id()
+    }
+
+    fn get_current_session_id(&self) -> String {
+        self.get_current_session().get_id()
+    }
+
+    fn get_current_client_session_id(&self) -> Option<String> {
+        self.get_current_session().get_client_session_id()
+    }
+
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
     }
 
     fn session_state(&self) -> Result<SessionState> {
         self.shared.session.session_ctx.session_state()
-    }
-
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        self.shared.get_warehouse_clusters().await
     }
 
     fn get_session_type(&self) -> SessionType {

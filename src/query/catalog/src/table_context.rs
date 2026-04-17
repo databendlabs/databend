@@ -38,8 +38,6 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
-use databend_storages_common_session::SessionState;
-use databend_storages_common_session::TxnManagerRef;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -47,7 +45,6 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
-use crate::session_type::SessionType;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
@@ -66,6 +63,7 @@ mod read_block_thresholds;
 mod result_cache;
 mod runtime_filter;
 mod segment_locations;
+mod session;
 mod spill;
 mod stage;
 mod stream;
@@ -88,6 +86,7 @@ pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
 pub use runtime_filter::TableContextRuntimeFilter;
 pub use segment_locations::TableContextSegmentLocations;
+pub use session::TableContextSession;
 pub use spill::TableContextSpillProgress;
 pub use stage::TableContextStage;
 pub use stream::TableContextStream;
@@ -166,6 +165,7 @@ pub trait TableContext:
     + TableContextResultCache
     + TableContextRuntimeFilter
     + TableContextSegmentLocations
+    + TableContextSession
     + TableContextSpillProgress
     + TableContextStage
     + TableContextTableAccess
@@ -242,12 +242,6 @@ pub trait TableContext:
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
     fn get_secondary_roles(&self) -> Option<Vec<String>>;
-    fn get_current_session_id(&self) -> String {
-        unimplemented!()
-    }
-    fn get_current_client_session_id(&self) -> Option<String> {
-        unimplemented!()
-    }
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
 
     async fn validate_privilege(
@@ -270,7 +264,6 @@ pub trait TableContext:
     /// Get the kind of session running query.
     fn get_query_kind(&self) -> QueryKind;
     fn get_function_context(&self) -> Result<FunctionContext>;
-    fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
     fn get_session_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
@@ -299,15 +292,7 @@ pub trait TableContext:
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
 
-    fn txn_mgr(&self) -> TxnManagerRef;
-
-    fn session_state(&self) -> Result<SessionState>;
-
     fn get_shared_settings(&self) -> Arc<Settings>;
-
-    fn get_session_type(&self) -> SessionType {
-        unimplemented!()
-    }
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

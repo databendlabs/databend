@@ -60,6 +60,7 @@ use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextSession;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
@@ -563,10 +564,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn txn_mgr(&self) -> TxnManagerRef {
-        self.ctx.txn_mgr()
-    }
-
     fn incr_total_scan_value(&self, _value: ProgressValues) {
         todo!()
     }
@@ -729,10 +726,6 @@ impl TableContext for CtxDelegation {
         self.ctx.get_function_context()
     }
 
-    fn get_connection_id(&self) -> String {
-        todo!()
-    }
-
     fn get_settings(&self) -> Arc<Settings> {
         Settings::create(Tenant::new_literal("fake_settings"))
     }
@@ -764,10 +757,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn session_state(&self) -> Result<SessionState> {
-        Ok(SessionState::default())
-    }
-
     fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()
     }
@@ -776,12 +765,26 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_session_type(&self) -> SessionType {
-        SessionType::HTTPQuery
-    }
-
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.ctx.get_abort_notify()
+    }
+}
+
+impl TableContextSession for CtxDelegation {
+    fn get_connection_id(&self) -> String {
+        todo!()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.ctx.txn_mgr()
+    }
+
+    fn session_state(&self) -> Result<SessionState> {
+        Ok(SessionState::default())
+    }
+
+    fn get_session_type(&self) -> SessionType {
+        SessionType::HTTPQuery
     }
 }
 

@@ -18,7 +18,9 @@ use std::time::Duration;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -39,7 +41,6 @@ use databend_query::interpreters::DropTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::rcte_hooks::RcteHookRegistry;

@@ -76,6 +76,7 @@ use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextSession;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
@@ -1214,9 +1215,6 @@ impl TableContext for LiteTableContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         Ok(FunctionContext::default())
     }
-    fn get_connection_id(&self) -> String {
-        "lite-conn".to_string()
-    }
     fn get_settings(&self) -> Arc<Settings> {
         self.settings.clone()
     }
@@ -1252,15 +1250,24 @@ impl TableContext for LiteTableContext {
     fn get_license_key(&self) -> String {
         String::new()
     }
-    fn txn_mgr(&self) -> TxnManagerRef {
-        TxnManager::init()
-    }
-    fn session_state(&self) -> Result<SessionState> {
-        Ok(SessionState::default())
-    }
     fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared_settings.clone()
     }
+}
+
+impl TableContextSession for LiteTableContext {
+    fn get_connection_id(&self) -> String {
+        "lite-conn".to_string()
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        TxnManager::init()
+    }
+
+    fn session_state(&self) -> Result<SessionState> {
+        Ok(SessionState::default())
+    }
+
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
     }
