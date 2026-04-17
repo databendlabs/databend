@@ -384,7 +384,8 @@ impl<'a> Evaluator<'a> {
             return err;
         };
 
-        ErrorCode::BadArguments(format!("{}\n\nhint: {hint}", err.message())).set_span(span)
+        err.add_message_back(format!("\n\nhint: {hint}"))
+            .set_span(span)
     }
 
     pub fn run_cast(
