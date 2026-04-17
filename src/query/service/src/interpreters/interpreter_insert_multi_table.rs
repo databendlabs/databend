@@ -28,6 +28,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::executor::physical_plans::MutationKind;
@@ -251,7 +252,20 @@ impl InsertMultiTableInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
+                let source_required = self.source_required_columns();
+                let result_columns = bind_context.result_columns();
+                let logical_output_columns = result_columns.iter().map(|(sym, _)| *sym).collect();
+                let needs_extra_source_columns =
+                    !source_required.is_subset(&logical_output_columns);
+                let mut required = bind_context.column_set();
+                required.extend(source_required);
+                let input_source = builder1.build(s_expr, required).await?;
+
+                // Rewritten WHEN predicates may depend on extra source-side columns. Keep the
+                // physical output intact so branch filters can still reference them.
+                if needs_extra_source_columns {
+                    return Ok((input_source, metadata.clone()));
+                }
 
                 // Lazy materialization (triggered by WHERE + LIMIT) may reorder physical output
                 // columns and inject internal columns like _row_id.  Add a reorder EvalScalar
@@ -261,7 +275,6 @@ impl InsertMultiTableInterpreter {
                 let physical_schema = input_source.output_schema()?;
 
                 // Build (phys_pos, symbol) pairs for each result column, in final SELECT order.
-                let result_columns = bind_context.result_columns();
                 let col_refs: Vec<(usize, databend_common_sql::Symbol)> = result_columns
                     .iter()
                     .filter_map(|(sym, _name)| {
@@ -309,6 +322,14 @@ impl InsertMultiTableInterpreter {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn source_required_columns(&self) -> ColumnSet {
+        let mut required = ColumnSet::new();
+        for when in &self.plan.whens {
+            required.extend(when.condition.used_columns());
+        }
+        required
     }
 
     async fn build_insert_into_branches(&self) -> Result<InsertIntoBranches> {
