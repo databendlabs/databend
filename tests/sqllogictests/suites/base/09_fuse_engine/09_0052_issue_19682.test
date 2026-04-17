@@ -1,0 +1,19 @@
+statement ok
+create or replace table t_19682(a int) cluster by(a);
+
+statement ok
+insert into t_19682 values(1);
+
+statement ok
+insert into t_19682 values(2),(3);
+
+statement ok
+optimize table t_19682 compact segment;
+
+query TTI
+select min,max,level from clustering_statistics('default','t_19682') limit 1;
+----
+[1] [1] 0
+
+statement ok
+drop table t_19682 all;

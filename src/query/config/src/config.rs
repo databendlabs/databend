@@ -1604,22 +1604,6 @@ pub struct QueryConfig {
     )]
     pub max_memory_limit_enabled: bool,
 
-    /// clickhouse tcp support is deprecated
-    #[deprecated(note = "clickhouse tcp support is deprecated")]
-    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
-    pub clickhouse_handler_host: String,
-
-    /// clickhouse tcp support is deprecated
-    #[deprecated(note = "clickhouse tcp support is deprecated")]
-    #[clap(long, value_name = "VALUE", default_value = "9000")]
-    pub clickhouse_handler_port: u16,
-
-    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
-    pub clickhouse_http_handler_host: String,
-
-    #[clap(long, value_name = "VALUE", default_value = "8124")]
-    pub clickhouse_http_handler_port: u16,
-
     #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub http_handler_host: String,
 
@@ -1689,6 +1673,13 @@ pub struct QueryConfig {
     #[clap(long, value_name = "VALUE", default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
+    /// TCP connect timeout for inter-node gRPC connections (in seconds).
+    /// This only affects connection establishment, not request duration.
+    /// Per-request timeout is controlled by the `flight_client_timeout` session setting.
+    /// 0 means no connect timeout.
+    ///
+    /// Note: the field name is kept as-is for backward compatibility with
+    /// existing configuration files and CLI flags (`--rpc-client-timeout-secs`).
     #[clap(long, value_name = "VALUE", default_value = "0")]
     pub rpc_client_timeout_secs: u64,
 
@@ -1928,7 +1919,6 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     }
 }
 
-#[allow(deprecated)]
 impl From<InnerQueryConfig> for QueryConfig {
     fn from(inner: InnerQueryConfig) -> Self {
         let InnerQueryConfig {
@@ -1945,10 +1935,6 @@ impl From<InnerQueryConfig> for QueryConfig {
         common.udfs = builtin.udfs;
         common.quota = tenant_quota;
         common.enable_meta_data_upgrade_json_to_pb_from_v307 = upgrade_to_pb;
-
-        // clickhouse tcp is deprecated
-        common.clickhouse_handler_host = "127.0.0.1".to_string();
-        common.clickhouse_handler_port = 9000;
 
         // obsoleted config entries
         common.table_disk_cache_mb_size = None;
@@ -3599,7 +3585,7 @@ mod config_converters {
             .transpose()?;
 
         Ok(inner::SpillConfig {
-            local_writeable_root: None,
+            local_writable_root: None,
             path: spill.spill_local_disk_path,
             reserved_disk_ratio: spill.spill_local_disk_reserved_space_percentage / 100.0,
             global_bytes_limit: spill.spill_local_disk_max_bytes,

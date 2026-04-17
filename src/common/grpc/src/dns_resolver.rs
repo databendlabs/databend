@@ -176,7 +176,7 @@ impl ConnectionFactory {
         rpc_client_config: Option<RpcClientTlsConfig>,
         keep_alive: Option<TcpKeepAliveConfig>,
     ) -> std::result::Result<Channel, GrpcConnectionError> {
-        let endpoint = Self::create_rpc_endpoint(addr, timeout, rpc_client_config)?;
+        let endpoint = Self::create_rpc_endpoint(addr, rpc_client_config)?;
 
         let mut inner_connector = HttpConnector::new_with_resolver(DNSService);
         inner_connector.set_nodelay(true);
@@ -205,10 +205,9 @@ impl ConnectionFactory {
         }
     }
 
-    /// Creates a gRPC endpoint with optional TLS and timeout.
+    /// Creates a gRPC endpoint with optional TLS.
     fn create_rpc_endpoint(
         addr: impl ToString,
-        timeout: Option<Duration>,
         tls_config: Option<RpcClientTlsConfig>,
     ) -> std::result::Result<Endpoint, GrpcConnectionError> {
         let addr = addr.to_string();
@@ -223,10 +222,6 @@ impl ConnectionFactory {
 
         if let Some(conf) = tls_config {
             endpoint = Self::apply_tls_config(endpoint, &conf)?;
-        }
-
-        if let Some(t) = timeout {
-            endpoint = endpoint.timeout(t);
         }
 
         Ok(endpoint)

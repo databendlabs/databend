@@ -28,6 +28,9 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -39,8 +42,6 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -70,16 +71,15 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::VisitorMut as _;
 
-#[derive(VisitorMut)]
-#[visitor(Identifier(enter))]
 struct RemoveIdentifierQuote;
 
-impl RemoveIdentifierQuote {
-    fn enter_identifier(&mut self, ident: &mut Identifier) {
+impl VisitorMut for RemoveIdentifierQuote {
+    fn visit_identifier(&mut self, ident: &mut Identifier) -> std::result::Result<VisitControl, !> {
         if !ident.is_hole() && !ident.is_variable() {
             ident.quote = None;
             ident.name = ident.name.to_lowercase();
         }
+        Ok(VisitControl::Continue)
     }
 }
 
@@ -423,7 +423,7 @@ impl Binder {
                             _ => {
                                 let mut expr = expr.clone();
                                 let mut remove_quote_visitor = RemoveIdentifierQuote;
-                                expr.drive_mut(&mut remove_quote_visitor);
+                                expr.walk_mut(&mut remove_quote_visitor).unwrap();
                                 format!("{:#}", expr)
                             }
                         }

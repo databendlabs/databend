@@ -98,6 +98,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                         TokenKind::INSERT
                             | TokenKind::SELECT
                             | TokenKind::REPLACE
+                            | TokenKind::MERGE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
                             | TokenKind::COPY
@@ -1347,6 +1348,8 @@ pub enum TokenKind {
     TRANSIENT,
     #[token("TRIM", ignore(ascii_case))]
     TRIM,
+    #[token("TRIM_SPACE", ignore(ascii_case))]
+    TRIM_SPACE,
     #[token("TRUE", ignore(ascii_case))]
     TRUE,
     #[token("TRUNCATE", ignore(ascii_case))]

@@ -2,6 +2,7 @@ import pytest
 import databend_driver
 
 from ..utils import DATABEND_DSL
+from .copy_utils import unload_and_read_stage_text
 
 test_empty_data = [
     # test empty_field_as
@@ -178,3 +179,25 @@ def test_column_not_match(data, check, exp):
 
     res = conn.query_row(select_sql)
     assert res.values()[0] == exp
+
+
+def test_trim_space(copy_env):
+    conn = copy_env.conn
+    name = copy_env.uniq_name
+    path = f"@{name}/trim_space.csv"
+
+    content = unload_and_read_stage_text(
+        copy_env,
+        path,
+        """(select ' 42 ,"  hello  " ,  NULL  ')""",
+        "file_format=(type=TSV)",
+    )
+    assert content == ' 42 ,"  hello  " ,  NULL  \n'
+
+    conn.exec("create or replace table t_trim_csv (a int, b string, c string null)")
+    res = conn.query_row(
+        f"copy into t_trim_csv from {path} "
+        "file_format=(type=csv trim_space=true null_display='NULL')"
+    )
+    assert res.values()[1] == 1
+    assert conn.query_row("select * from t_trim_csv").values() == (42, "hello", None)

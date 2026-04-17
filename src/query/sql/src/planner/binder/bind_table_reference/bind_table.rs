@@ -32,6 +32,7 @@ use databend_storages_common_table_meta::table::get_change_type;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::ViewIdent;
 use crate::binder::util::TableIdentifier;
 use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
@@ -194,7 +195,7 @@ impl Binder {
                     table_meta.clone(),
                     branch_name,
                     table_name_alias,
-                    bind_context.view_info.is_some(),
+                    !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
@@ -262,9 +263,12 @@ impl Binder {
 
         match table_meta.engine() {
             "VIEW" => {
-                // TODO(leiysky): this check is error-prone,
-                // we should find a better way to do this.
-                Self::check_view_dep(bind_context, &catalog, &database, &table_name)?;
+                let view_ident = ViewIdent {
+                    catalog: catalog.clone(),
+                    database: database.clone(),
+                    name: table_name.clone(),
+                };
+                bind_context.check_view_loop(&view_ident)?;
                 let query = table_meta
                     .options()
                     .get(QUERY)
@@ -273,7 +277,7 @@ impl Binder {
                 let (stmt, _) = parse_sql(&tokens, self.dialect)?;
                 // For view, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(bind_context.clone())?;
-                new_bind_context.view_info = Some((catalog.clone(), database.clone(), table_name));
+                new_bind_context.binding_views.insert(view_ident);
                 if let Statement::Query(query) = &stmt {
                     self.metadata.write().add_table(
                         catalog,
@@ -298,6 +302,9 @@ impl Binder {
                             column.table_name = Some(self.normalize_identifier(table).name);
                         }
                     }
+                    // Restore binding_views to the outer scope's value so the
+                    // current view does not leak into sibling/parent contexts.
+                    new_bind_context.binding_views = bind_context.binding_views.clone();
                     new_bind_context.parent = Some(Box::new(bind_context.clone()));
                     Ok((s_expr, new_bind_context))
                 } else {
@@ -314,7 +321,7 @@ impl Binder {
                     table_meta.clone(),
                     branch_name,
                     table_name_alias,
-                    bind_context.view_info.is_some(),
+                    !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,
                     false,
                     cte_suffix_name,
@@ -334,30 +341,6 @@ impl Binder {
 
                 Ok((s_expr, bind_context))
             }
-        }
-    }
-
-    pub(crate) fn check_view_dep(
-        bind_context: &BindContext,
-        catalog: &str,
-        database: &str,
-        view_name: &str,
-    ) -> Result<()> {
-        match &bind_context.parent {
-            Some(parent) => match &parent.view_info {
-                Some((cat, db, v)) => {
-                    if cat == catalog && db == database && v == view_name {
-                        Err(ErrorCode::Internal(format!(
-                            "View dependency loop detected (view: {}.{})",
-                            database, view_name
-                        )))
-                    } else {
-                        Self::check_view_dep(parent, catalog, database, view_name)
-                    }
-                }
-                _ => Ok(()),
-            },
-            _ => Ok(()),
         }
     }
 }

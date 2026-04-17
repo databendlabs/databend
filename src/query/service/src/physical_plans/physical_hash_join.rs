@@ -31,7 +31,7 @@ use databend_common_expression::type_check::check_cast;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::GENERAL_SPATIAL_FUNCTIONS;
+use databend_common_functions::SPATIAL_INDEX_FUNCTIONS;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipe;
@@ -48,11 +48,13 @@ use databend_common_sql::plans::FunctionCall;
 use databend_common_sql::plans::Join;
 use databend_common_sql::plans::JoinEquiCondition;
 use databend_common_sql::plans::JoinType;
+use databend_storages_common_index::scalar_to_distance_threshold;
 use tokio::sync::Barrier;
 use unicase::Ascii;
 
 use super::PhysicalPlanCast;
 use super::runtime_filter::PhysicalRuntimeFilters;
+use super::runtime_filter::SpatialRuntimeFilterMode;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::PhysicalPlanBuilder;
 use crate::physical_plans::explain::PlanStatsInfo;
@@ -91,6 +93,7 @@ type JoinNonEquiConditionsResult = (
     Vec<RemoteExpr>,
     Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
     Vec<Option<IndexType>>,
+    Vec<SpatialRuntimeFilterMode>,
 );
 
 type ProjectionsResult = (
@@ -1238,8 +1241,9 @@ impl PhysicalPlanBuilder {
         let mut spatial_right_join_conditions = Vec::new();
         let mut spatial_left_join_conditions_rt = Vec::new();
         let mut spatial_build_table_indexes = Vec::new();
+        let mut spatial_modes = Vec::new();
 
-        let resolve_spatial_column = |expr: &ScalarExpr| -> Option<(Symbol, DataType)> {
+        let resolve_geometry_column = |expr: &ScalarExpr| -> Option<Symbol> {
             let column_idx = match expr {
                 ScalarExpr::BoundColumnRef(column) => Some(column.column.index),
                 _ => None,
@@ -1250,10 +1254,15 @@ impl PhysicalPlanBuilder {
                 return None;
             }
             let data_type = column.data_type().remove_nullable();
-            if !matches!(data_type, DataType::Geometry | DataType::Geography) {
+            if !matches!(data_type, DataType::Geometry) {
                 return None;
             }
-            Some((column_idx, data_type))
+            Some(column_idx)
+        };
+
+        let extract_distance_threshold = |expr: &ScalarExpr| match expr {
+            ScalarExpr::ConstantExpr(constant) => scalar_to_distance_threshold(&constant.value),
+            _ => None,
         };
 
         // collect spatial functions to build runtime filters.
@@ -1264,19 +1273,26 @@ impl PhysicalPlanBuilder {
 
             let func_name = func.func_name.as_ref();
             let uni_case_func_name = Ascii::new(func_name);
-            if !GENERAL_SPATIAL_FUNCTIONS.contains(&uni_case_func_name) || func.arguments.len() != 2
-            {
+            if !SPATIAL_INDEX_FUNCTIONS.contains(&(uni_case_func_name, func.arguments.len())) {
                 continue;
             }
-            let Some((left_idx, left_type)) = resolve_spatial_column(&func.arguments[0]) else {
+
+            let Some(left_idx) = resolve_geometry_column(&func.arguments[0]) else {
                 continue;
             };
-            let Some((right_idx, right_type)) = resolve_spatial_column(&func.arguments[1]) else {
+            let Some(right_idx) = resolve_geometry_column(&func.arguments[1]) else {
                 continue;
             };
-            if left_type != right_type {
-                continue;
-            }
+            let spatial_mode = if func.arguments.len() == 3 {
+                let Some(distance) = extract_distance_threshold(&func.arguments[2]) else {
+                    continue;
+                };
+                SpatialRuntimeFilterMode::DistanceWithin(distance)
+            } else {
+                SpatialRuntimeFilterMode::Intersects
+            };
+            let left_arg = &func.arguments[0];
+            let right_arg = &func.arguments[1];
 
             let left_in_probe = probe_schema
                 .column_with_name(&left_idx.to_string())
@@ -1292,9 +1308,9 @@ impl PhysicalPlanBuilder {
                 .is_some();
 
             let (probe_arg, build_arg) = if left_in_probe && right_in_build {
-                (&func.arguments[0], &func.arguments[1])
+                (left_arg, right_arg)
             } else if left_in_build && right_in_probe {
-                (&func.arguments[1], &func.arguments[0])
+                (right_arg, left_arg)
             } else {
                 continue;
             };
@@ -1334,6 +1350,7 @@ impl PhysicalPlanBuilder {
                 None
             };
             spatial_build_table_indexes.push(build_table_index);
+            spatial_modes.push(spatial_mode);
         }
 
         let non_equi_conditions = join
@@ -1353,6 +1370,7 @@ impl PhysicalPlanBuilder {
             spatial_right_join_conditions,
             spatial_left_join_conditions_rt,
             spatial_build_table_indexes,
+            spatial_modes,
         ))
     }
 
@@ -1509,6 +1527,7 @@ impl PhysicalPlanBuilder {
             spatial_right_join_conditions,
             spatial_left_join_conditions_rt,
             spatial_build_table_indexes,
+            spatial_modes,
         ) = self.process_non_equi_conditions(join, &probe_schema, &build_schema, &merged_schema)?;
 
         let mut runtime_filter_right_conditions = right_join_conditions.clone();
@@ -1517,6 +1536,8 @@ impl PhysicalPlanBuilder {
         runtime_filter_left_conditions_rt.extend(spatial_left_join_conditions_rt);
         let mut runtime_filter_build_table_indexes = build_table_indexes.clone();
         runtime_filter_build_table_indexes.extend(spatial_build_table_indexes);
+        let mut runtime_filter_spatial_modes = vec![None; right_join_conditions.len()];
+        runtime_filter_spatial_modes.extend(spatial_modes.into_iter().map(Some));
 
         // Step 11: Build runtime filter
         let runtime_filter = build_runtime_filter(
@@ -1527,6 +1548,7 @@ impl PhysicalPlanBuilder {
             &runtime_filter_right_conditions,
             runtime_filter_left_conditions_rt,
             runtime_filter_build_table_indexes,
+            runtime_filter_spatial_modes,
         )
         .await?;
 

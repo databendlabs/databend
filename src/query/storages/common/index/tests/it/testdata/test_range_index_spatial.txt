@@ -18,20 +18,55 @@ expr      : st_contains<Geometry, Geometry>(g, CAST<String>("POLYGON((1 1, 1 2, 
 spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
 keep      : true
 
-text      : st_equals(g, to_geometry('POINT(20 20)'))
-expr      : st_equals<Geometry, Geometry>(g, CAST<String>("POINT(20 20)" AS Geometry))
-spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
-keep      : false
-
-text      : st_equals(g, to_geometry('POINT(5 5)'))
-expr      : st_equals<Geometry, Geometry>(g, CAST<String>("POINT(5 5)" AS Geometry))
+text      : st_within(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))
+expr      : st_within<Geometry, Geometry>(g, CAST<String>("POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))" AS Geometry))
 spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
 keep      : true
 
-text      : st_equals(g, to_geometry('POINT EMPTY'))
-expr      : st_equals<Geometry, Geometry>(g, CAST<String>("POINT EMPTY" AS Geometry))
+text      : st_within(g, to_geometry('POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))'))
+expr      : st_within<Geometry, Geometry>(g, CAST<String>("POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_within(g, to_geometry('POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'))
+expr      : st_within<Geometry, Geometry>(g, CAST<String>("POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_within(g, to_geometry('POINT(1 1)'))
+expr      : st_within<Geometry, Geometry>(g, CAST<String>("POINT(1 1)" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_dwithin(g, to_geometry('POINT(20 20)'), 9.9)
+expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("POINT(20 20)" AS Geometry), CAST<Decimal(2, 1)>(9.9_d64(2,1) AS Float64))
 spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
 keep      : false
+
+text      : st_dwithin(g, to_geometry('POINT(20 20)'), 10.2)
+expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("POINT(20 20)" AS Geometry), CAST<Decimal(3, 1)>(10.2_d64(3,1) AS Float64))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_dwithin(g, to_geometry('LINESTRING(12 2, 12 8)'), 1.9)
+expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("LINESTRING(12 2, 12 8)" AS Geometry), CAST<Decimal(2, 1)>(1.9_d64(2,1) AS Float64))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : false
+
+text      : st_dwithin(g, to_geometry('LINESTRING(12 2, 12 8)'), 2.0)
+expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("LINESTRING(12 2, 12 8)" AS Geometry), CAST<Decimal(2, 1)>(2.0_d64(2,1) AS Float64))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_dwithin(g, to_geometry('POLYGON((20 0, 22 0, 22 2, 20 2, 20 0))'), 9.9)
+expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("POLYGON((20 0, 22 0, 22 2, 20 2, 20 0))" AS Geometry), CAST<Decimal(2, 1)>(9.9_d64(2,1) AS Float64))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : false
+
+text      : st_dwithin(g, to_geometry('POLYGON((20 0, 22 0, 22 2, 20 2, 20 0))'), 10.0)
+expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("POLYGON((20 0, 22 0, 22 2, 20 2, 20 0))" AS Geometry), CAST<Decimal(3, 1)>(10.0_d64(3,1) AS Float64))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
 
 text      : st_intersects(g, to_geometry('POINT(1 1)'))
 expr      : st_intersects<Geometry, Geometry>(g, CAST<String>("POINT(1 1)" AS Geometry))

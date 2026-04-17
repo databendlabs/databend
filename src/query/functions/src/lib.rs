@@ -111,11 +111,12 @@ pub const GENERAL_SEARCH_FUNCTIONS: [Ascii<&str>; 3] = [
     Ascii::new("score"),
 ];
 
-pub const GENERAL_SPATIAL_FUNCTIONS: [Ascii<&str>; 4] = [
-    Ascii::new("st_contains"),
-    Ascii::new("st_intersects"),
-    Ascii::new("st_within"),
-    Ascii::new("st_equals"),
+// The function names and the number of arguments that support spatial index
+pub const SPATIAL_INDEX_FUNCTIONS: [(Ascii<&str>, usize); 4] = [
+    (Ascii::new("st_contains"), 2),
+    (Ascii::new("st_intersects"), 2),
+    (Ascii::new("st_within"), 2),
+    (Ascii::new("st_dwithin"), 3),
 ];
 
 fn builtin_functions() -> FunctionRegistry {

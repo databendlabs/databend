@@ -64,6 +64,7 @@ default-members = [
 # Workspace dependencies
 [workspace.dependencies]
 databend-common-ast = { path = "src/query/ast" }
+databend-common-ast-visit-derive = { path = "src/query/ast/visit_derive" }
 databend-common-base = { path = "src/common/base" }
 databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }
@@ -166,11 +167,11 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260312.5.0"
-databend-meta-test-harness = "260312.5.0"
+databend-meta = "260312.7.0"
+databend-meta-test-harness = "260312.7.0"
 
 # External meta client
-databend-meta-client = "260205.4.0"
+databend-meta-client = "260205.5.0"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }
@@ -242,7 +243,7 @@ crossbeam-channel = "0.5.6"
 csv-core = "0.1.13"
 ctor = "0.2"
 dashmap = { version = "6.1.0", features = ["serde"] }
-databend-base = "0.2.10"
+databend-base = "0.3.0"
 defer = "0.2"
 deltalake = "0.26"
 derive-visitor = { version = "0.4.0", features = ["std-types-drive"] }
@@ -293,6 +294,8 @@ hyper = "1"
 hyper-util = { version = "0.1.9", features = ["client", "client-legacy", "tokio", "service"] }
 lru = "0.12"
 perf-event2 = "0.7.4"
+proc-macro2 = "1.0"
+quote = "1.0"
 
 ## in branch dev
 iceberg = { version = "0.8.0", git = "https://github.com/databendlabs/iceberg-rust", rev = "6ccaa60e", features = [
@@ -464,6 +467,7 @@ strength_reduce = "0.2.4"
 stringslice = "0.2.0"
 strum = "0.24.1"
 sub-cache = "0.2.1"
+syn = { version = "2.0", features = ["full"] }
 sys-info = "0.9"
 sysinfo = "0.34.2"
 tantivy = "0.26.0"
@@ -618,10 +622,10 @@ async-recursion = { git = "https://github.com/datafuse-extras/async-recursion.gi
 backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "72265be" }
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
-databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.2.10" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.5.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.4.0" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.5.0" }
+databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.3.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.7.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.5.0" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.7.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.17" }

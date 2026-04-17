@@ -227,7 +227,7 @@ impl Processor for DeserializeDataTransform {
                             self.ctx.clone(),
                             self.scan_id,
                             self.prewhere_info.as_ref(),
-                            &self.block_reader,
+                            self.block_reader.clone(),
                         )?);
                     }
 

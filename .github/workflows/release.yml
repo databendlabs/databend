@@ -65,6 +65,29 @@ jobs:
           script: |
             const script = require('./.github/scripts/bump_version.js')
             await script({ github, context, core })
+      - name: Generate release notes
+        id: notes
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = '${{ steps.bump.outputs.tag }}';
+            const previous = '${{ steps.bump.outputs.previous }}';
+            const sha = '${{ steps.bump.outputs.sha }}';
+            const { data } = await github.rest.repos.generateReleaseNotes({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              target_commitish: sha,
+              previous_tag_name: previous,
+            });
+            const MAX_LEN = 124000;
+            let body = data.body;
+            if (body.length > MAX_LEN) {
+              core.warning(`Release notes too long (${body.length} chars), truncating to ${MAX_LEN}`);
+              body = body.substring(0, MAX_LEN) + '\n\n> **Note**: changelog truncated due to GitHub size limits. See commit history for full details.';
+            }
+            const fs = require('fs');
+            fs.writeFileSync('/tmp/release_notes.md', body);
       - name: Create release
         env:
           # we need workflow:write permission to create release if there were any workflow changes
@@ -73,13 +96,13 @@ jobs:
         run: |
           case "${{ steps.bump.outputs.type }}" in
             nightly)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --prerelease --draft
               ;;
             stable)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --latest --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --latest --draft
               ;;
             patch)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --generate-notes --notes-start-tag ${{ steps.bump.outputs.previous }} --prerelease --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --prerelease --draft
               ;;
             *)
               echo "Invalid release type: ${{ steps.bump.outputs.type }}"
@@ -96,6 +119,11 @@ jobs:
         with:
           repository: databendlabs/databend-docs
           ref: main
+      - name: Checkout Scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          path: databend
       - name: Get date
         id: date
         shell: bash
@@ -107,8 +135,10 @@ jobs:
           DATE: ${{ steps.date.outputs.DATE }}
         with:
           script: |
-            const script = require('./.github/scripts/generate_release_note.js')
+            const script = require('./databend/.github/scripts/generate_release_note.js')
             await script({ github, context, core })
+      - name: Clean up temporary checkout
+        run: rm -rf databend
       - name: Add Release Note
         run: |
           git add docs/release-stable

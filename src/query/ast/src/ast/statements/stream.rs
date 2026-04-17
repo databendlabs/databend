@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -25,7 +27,7 @@ use crate::ast::TimeTravelPoint;
 use crate::ast::quote::QuotedString;
 use crate::ast::write_dot_separated_list;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct CreateStreamStmt {
     pub create_option: CreateOption,
     pub catalog: Option<Identifier>,
@@ -70,7 +72,7 @@ impl Display for CreateStreamStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropStreamStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -94,7 +96,7 @@ impl Display for DropStreamStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowStreamsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -124,7 +126,7 @@ impl Display for ShowStreamsStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DescribeStreamStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -20,7 +22,7 @@ use crate::ast::Query;
 
 // settings: set a = xxx
 // variable: set variable a = xxx
-#[derive(Debug, Copy, Default, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Copy, Default, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum SetType {
     #[default]
     SettingsSession,
@@ -29,7 +31,7 @@ pub enum SetType {
     SettingsQuery,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum SetValues {
     Expr(Vec<Box<Expr>>),
     Query(Box<Query>),

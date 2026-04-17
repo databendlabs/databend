@@ -35,6 +35,7 @@ fn test_geometry() {
     test_st_endpoint(file);
     test_st_dimension(file);
     test_st_distance(file);
+    test_st_dwithin(file);
     test_st_geohash(file);
     test_st_asgeojson(file);
     test_st_geomfromgeohash(file);
@@ -171,6 +172,49 @@ fn test_st_distance(file: &mut impl Write) {
     run_ast(
         file,
         "st_distance(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'))",
+        &[],
+    );
+}
+
+fn test_st_dwithin(file: &mut impl Write) {
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.5)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('POINT(1 1)'), 1.414)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 2.0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POINT(0 0)'), to_geometry('LINESTRING(2 0, 2 2)'), 1.9)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 3.0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('LINESTRING(0 0, 2 0)'), to_geometry('LINESTRING(0 3, 2 3)'), 2.9)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 2.0)",
+        &[],
+    );
+    run_ast(
+        file,
+        "st_dwithin(to_geometry('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), to_geometry('POLYGON((4 0, 6 0, 6 2, 4 2, 4 0))'), 1.9)",
         &[],
     );
 }

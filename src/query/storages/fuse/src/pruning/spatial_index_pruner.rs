@@ -28,9 +28,11 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::expr::Constant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_storages_common_index::SpatialPredicate;
+use databend_storages_common_index::SpatialPredicateOp;
 use databend_storages_common_index::collect_spatial_predicates;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use geo::Rect;
 use geo_index::rtree::RTreeIndex;
 use geo_index::rtree::RTreeRef;
 use opendal::Operator;
@@ -92,15 +94,9 @@ impl SpatialIndexPruner {
         let Some(spatial_stats) = block_meta.spatial_stats.as_ref() else {
             return Ok(false);
         };
-        let Some(location) = block_meta.spatial_index_location.as_ref() else {
-            return Ok(false);
-        };
-
-        let result = self.reader.read(&location.0).await?;
-        let columns = result.columns;
-        let column_id_to_index = result.column_id_to_index;
 
         let mut domains = self.base_domains.clone();
+        let mut read_result = None;
         for predicate in &self.predicates {
             let Some(stat) = spatial_stats.get(&predicate.column_id) else {
                 continue;
@@ -108,10 +104,19 @@ impl SpatialIndexPruner {
             if !stat.is_valid || stat.srid != predicate.query_srid {
                 continue;
             };
-            let Some(column_index) = column_id_to_index.get(&predicate.column_id) else {
+            let Some(location) = block_meta.spatial_index_location.as_ref() else {
                 continue;
             };
-            let Some(column) = columns.get(*column_index) else {
+            let result = if let Some(result) = read_result.as_ref() {
+                result
+            } else {
+                let result = self.reader.read(&location.0).await?;
+                read_result.insert(result)
+            };
+            let Some(column_index) = result.column_id_to_index.get(&predicate.column_id) else {
+                continue;
+            };
+            let Some(column) = result.columns.get(*column_index) else {
                 continue;
             };
             let Some(ScalarRef::Binary(buffer)) = column.index(0) else {
@@ -125,13 +130,23 @@ impl SpatialIndexPruner {
                     )));
                 }
             };
-            let is_intersect = if let Some(query_rect) = &predicate.query_rect {
-                let hits = tree.search_rect(query_rect);
-                !hits.is_empty()
+
+            let maybe_match = if let Some(query_rect) = &predicate.query_rect {
+                match predicate.op {
+                    SpatialPredicateOp::Distance(distance) => {
+                        let expanded_query_rect = Rect::new(
+                            (query_rect.min().x - distance, query_rect.min().y - distance),
+                            (query_rect.max().x + distance, query_rect.max().y + distance),
+                        );
+                        !tree.search_rect(&expanded_query_rect).is_empty()
+                    }
+                    _ => !tree.search_rect(query_rect).is_empty(),
+                }
             } else {
                 false
             };
-            if !is_intersect {
+
+            if !maybe_match {
                 domains.insert(
                     predicate.placeholder.clone(),
                     spatial_false_domain(&predicate.return_type, stat.has_null),

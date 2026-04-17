@@ -48,6 +48,7 @@ fn test_decode_v171_csv_file_format_params() -> anyhow::Result<()> {
         geometry_format: GeometryDataType::EWKB,
         encoding: "gbk".to_string(),
         encoding_error_mode: "replace".to_string(),
+        trim_space: false,
     };
 
     common::test_load_old(
@@ -82,6 +83,7 @@ fn test_decode_v171_text_file_format_params() -> anyhow::Result<()> {
         null_display: "NULL".to_string(),
         encoding: "gbk".to_string(),
         encoding_error_mode: "replace".to_string(),
+        trim_space: false,
     };
 
     common::test_load_old(

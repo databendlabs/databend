@@ -1,0 +1,267 @@
+## Test block_id repartition optimization for mutation RowFetch.
+## When enabled, rows are partitioned by block_id before RowFetch so each
+## processor handles a disjoint set of blocks, reducing duplicate block reads.
+## Applies to join-based mutations: MERGE INTO and UPDATE...WHERE (subquery).
+
+statement ok
+CREATE OR REPLACE DATABASE test_block_id_repartition
+
+statement ok
+USE test_block_id_repartition
+
+## ==========================================================================
+## Setup: target table with multiple blocks (one INSERT per block),
+## and a source table with overlapping + new rows.
+## ==========================================================================
+
+statement ok
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+## Each INSERT creates a separate block in storage.
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00')
+
+statement ok
+CREATE OR REPLACE TABLE source (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+statement ok
+INSERT INTO source VALUES (1, 'a_new', 'y1', '2024-01-02 00:00:00'), (2, 'b_new', 'y2', '2024-01-02 00:00:00'), (3, 'c_old', 'y3', '2023-12-01 00:00:00'), (6, 'f_new', 'y6', '2024-01-02 00:00:00'), (7, 'g_new', 'y7', '2024-01-02 00:00:00')
+
+## ==========================================================================
+## Test 1: MixedMatched (WHEN MATCHED + WHEN NOT MATCHED), repartition ON.
+## Source ids 1,2 match and have newer ts => updated.
+## Source id 3 matches but has older ts => NOT updated (condition: tar.ts < sou.ts).
+## Source ids 6,7 don't match => inserted.
+## ==========================================================================
+
+statement ok
+SET enable_merge_into_row_fetch = 1
+
+statement ok
+SET enable_mutation_block_id_repartition = 1
+
+query II
+MERGE INTO target AS tar
+USING source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *
+WHEN NOT MATCHED THEN INSERT *;
+----
+2 2
+
+query ITTT
+SELECT id, val, extra, ts FROM target ORDER BY id;
+----
+1 a_new y1 2024-01-02 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c x3 2024-01-01 00:00:00.000000
+4 d x4 2024-01-01 00:00:00.000000
+5 e x5 2024-01-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+## ==========================================================================
+## Test 2: Same scenario with repartition OFF. Results must be identical.
+## ==========================================================================
+
+statement ok
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (5, 'e', 'x5', '2024-01-01 00:00:00')
+
+statement ok
+SET enable_mutation_block_id_repartition = 0
+
+query II
+MERGE INTO target AS tar
+USING source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *
+WHEN NOT MATCHED THEN INSERT *;
+----
+2 2
+
+query ITTT
+SELECT id, val, extra, ts FROM target ORDER BY id;
+----
+1 a_new y1 2024-01-02 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c x3 2024-01-01 00:00:00.000000
+4 d x4 2024-01-01 00:00:00.000000
+5 e x5 2024-01-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+## ==========================================================================
+## Test 3: MatchedOnly (no NOT MATCHED clause), repartition ON.
+## Only ids 1,2 are updated (ts condition). Id 3 not updated.
+## ==========================================================================
+
+statement ok
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
+
+statement ok
+SET enable_mutation_block_id_repartition = 1
+
+query I
+MERGE INTO target AS tar
+USING source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN UPDATE *;
+----
+2
+
+query ITTT
+SELECT id, val, extra, ts FROM target ORDER BY id;
+----
+1 a_new y1 2024-01-02 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c x3 2024-01-01 00:00:00.000000
+
+## ==========================================================================
+## Test 4: NotMatchedOnly (no MATCHED clause), repartition is a no-op
+## since there is no RowFetch in this path.
+## ==========================================================================
+
+statement ok
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
+
+statement ok
+SET enable_mutation_block_id_repartition = 1
+
+query I
+MERGE INTO target AS tar
+USING source AS sou
+ON tar.id = sou.id
+WHEN NOT MATCHED THEN INSERT *;
+----
+4
+
+query ITTT
+SELECT id, val, extra, ts FROM target ORDER BY id;
+----
+1 a x1 2024-01-01 00:00:00.000000
+2 b_new y2 2024-01-02 00:00:00.000000
+3 c_old y3 2023-12-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+## ==========================================================================
+## Test 5: MixedMatched with DELETE instead of UPDATE, repartition ON.
+## Ids 1,2 matched with newer ts => deleted. Ids 6,7 not matched => inserted.
+## ==========================================================================
+
+statement ok
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
+
+statement ok
+SET enable_mutation_block_id_repartition = 1
+
+query II
+MERGE INTO target AS tar
+USING source AS sou
+ON tar.id = sou.id
+WHEN MATCHED AND tar.ts < sou.ts THEN DELETE
+WHEN NOT MATCHED THEN INSERT *;
+----
+2 2
+
+query ITTT
+SELECT id, val, extra, ts FROM target ORDER BY id;
+----
+3 c x3 2024-01-01 00:00:00.000000
+6 f_new y6 2024-01-02 00:00:00.000000
+7 g_new y7 2024-01-02 00:00:00.000000
+
+## ==========================================================================
+## Test 6: UPDATE...WHERE (subquery) with lazy columns, repartition ON.
+## This path uses MatchedOnly strategy with RowFetch when the table has
+## enough columns for lazy materialization.
+## The subquery matches ids 1,2,3 from source; val is updated to 'updated'.
+## ==========================================================================
+
+statement ok
+CREATE OR REPLACE TABLE target (id INT, val VARCHAR, extra VARCHAR, ts TIMESTAMP)
+
+## Each INSERT creates a separate block.
+statement ok
+INSERT INTO target VALUES (1, 'a', 'x1', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (2, 'b', 'x2', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (3, 'c', 'x3', '2024-01-01 00:00:00')
+
+statement ok
+INSERT INTO target VALUES (4, 'd', 'x4', '2024-01-01 00:00:00')
+
+statement ok
+SET enable_mutation_block_id_repartition = 1
+
+statement ok
+SET enable_merge_into_row_fetch = 1
+
+statement ok
+UPDATE target SET val = 'updated' WHERE id IN (SELECT id FROM source WHERE id <= 3)
+
+query ITTT
+SELECT id, val, extra, ts FROM target ORDER BY id;
+----
+1 updated x1 2024-01-01 00:00:00.000000
+2 updated x2 2024-01-01 00:00:00.000000
+3 updated x3 2024-01-01 00:00:00.000000
+4 d x4 2024-01-01 00:00:00.000000
+
+## ==========================================================================
+## Cleanup
+## ==========================================================================
+
+statement ok
+DROP DATABASE test_block_id_repartition

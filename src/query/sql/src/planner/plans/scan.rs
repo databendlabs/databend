@@ -97,6 +97,11 @@ pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
     pub push_down_predicates: Option<Vec<ScalarExpr>>,
+    /// Row Access Policy predicates. Set during binding when a table has an
+    /// associated RAP. Carried through the optimizer to physical plan building,
+    /// where they are constant-folded and enforced by a Filter [SECURE] pipeline
+    /// operator. Not pushed down to storage.
+    pub secure_predicates: Option<Vec<ScalarExpr>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
@@ -110,7 +115,6 @@ pub struct Scan {
     pub is_lazy_table: bool,
     pub sample: Option<SampleConfig>,
     pub scan_id: usize,
-
     pub statistics: Arc<Statistics>,
 }
 
@@ -136,6 +140,7 @@ impl Scan {
             table_index: self.table_index,
             columns,
             push_down_predicates: self.push_down_predicates.clone(),
+            secure_predicates: self.secure_predicates.clone(),
             limit: self.limit,
             order_by: self.order_by.clone(),
             statistics: Arc::new(Statistics {
@@ -155,6 +160,36 @@ impl Scan {
         }
     }
 
+    /// Create a derived scan for decorrelation with new columns and scan_id.
+    /// Only query-semantic read-path metadata (sample, indexes, security quals) is preserved.
+    /// Everything else is explicitly defaulted — the derived scan sits on the
+    /// build side of a decorrelated SEMI/ANTI join, not the mutation target.
+    pub fn derive_decorrelated_scan(&self, columns: ColumnSet, scan_id: usize) -> Self {
+        Scan {
+            table_index: self.table_index,
+            columns,
+            scan_id,
+            // Read-path metadata: preserve from the original scan.
+            sample: self.sample.clone(),
+            inverted_index: self.inverted_index.clone(),
+            vector_index: self.vector_index.clone(),
+            // Security fields: must be preserved (binding-phase, not optimizer annotation).
+            // Note: column references inside secure_predicates are NOT remapped here.
+            // The caller (clone_outer_scan) is responsible for remap if needed.
+            secure_predicates: self.secure_predicates.clone(),
+            // Everything else: explicit default.
+            change_type: None,
+            update_stream_columns: false,
+            is_lazy_table: false,
+            push_down_predicates: None,
+            limit: None,
+            order_by: None,
+            prewhere: None,
+            agg_index: None,
+            statistics: Arc::new(Statistics::default()),
+        }
+    }
+
     pub fn set_update_stream_columns(&mut self, update_stream_columns: bool) {
         self.update_stream_columns = update_stream_columns;
     }
@@ -162,6 +197,11 @@ impl Scan {
     pub(crate) fn used_columns(&self) -> ColumnSet {
         let mut used_columns = ColumnSet::new();
         if let Some(preds) = &self.push_down_predicates {
+            for pred in preds.iter() {
+                used_columns.extend(pred.used_columns());
+            }
+        }
+        if let Some(preds) = &self.secure_predicates {
             for pred in preds.iter() {
                 used_columns.extend(pred.used_columns());
             }
@@ -193,6 +233,7 @@ impl PartialEq for Scan {
         self.table_index == other.table_index
             && self.columns == other.columns
             && self.push_down_predicates == other.push_down_predicates
+            && self.secure_predicates == other.secure_predicates
     }
 }
 
@@ -205,6 +246,7 @@ impl std::hash::Hash for Scan {
             column.hash(state);
         }
         self.push_down_predicates.hash(state);
+        self.secure_predicates.hash(state);
     }
 }
 
@@ -215,6 +257,8 @@ impl Operator for Scan {
 
     fn scalar_expr_iter(&self) -> Box<dyn Iterator<Item = &ScalarExpr> + '_> {
         let push_down_iter = self.push_down_predicates.iter().flatten();
+
+        let secure_predicates_iter = self.secure_predicates.iter().flatten();
 
         let prewhere_iter = self
             .prewhere
@@ -235,6 +279,7 @@ impl Operator for Scan {
         // Chain all iterators together
         Box::new(
             push_down_iter
+                .chain(secure_predicates_iter)
                 .chain(prewhere_iter)
                 .chain(agg_index_pred_iter)
                 .chain(agg_index_selection_iter),
@@ -351,6 +396,27 @@ impl Operator for Scan {
         } else {
             None
         };
+
+        // SECURITY: When row access policy is active, apply selectivity from
+        // secure predicates first (for reasonable cardinality estimation and
+        // join ordering), then suppress column statistics to prevent data
+        // leakage through statistical inference.
+        if self.secure_predicates.is_some() {
+            let cardinality = match &self.secure_predicates {
+                Some(preds) if !preds.is_empty() => {
+                    SelectivityEstimator::new(column_stats, cardinality).apply(preds)?
+                }
+                _ => cardinality,
+            };
+            return Ok(Arc::new(StatInfo {
+                cardinality,
+                statistics: OpStatistics {
+                    precise_cardinality: None,
+                    column_stats: Default::default(),
+                },
+            }));
+        }
+
         Ok(Arc::new(StatInfo {
             cardinality,
             statistics: OpStatistics {
@@ -387,5 +453,61 @@ mod tests {
         );
 
         assert_eq!(reduced.value(), u64::MAX as f64);
+    }
+
+    #[test]
+    fn test_derive_scan_preserves_bind_time_metadata() {
+        let original = Scan {
+            table_index: 42,
+            columns: [Symbol::new(1), Symbol::new(2), Symbol::new(3)]
+                .into_iter()
+                .collect(),
+            scan_id: 10,
+            sample: Some(SampleConfig {
+                row_level: None,
+                block_level: Some(50.0),
+            }),
+            change_type: Some(ChangeType::Append),
+            update_stream_columns: true,
+            is_lazy_table: true,
+            secure_predicates: Some(vec![]),
+            // Optimizer-phase fields set to non-default to verify they get reset.
+            limit: Some(100),
+            order_by: Some(vec![]),
+            ..Default::default()
+        };
+
+        let new_columns = [Symbol::new(10), Symbol::new(20), Symbol::new(30)]
+            .into_iter()
+            .collect();
+        let derived = original.derive_decorrelated_scan(new_columns, 99);
+
+        // New columns and scan_id must be replaced.
+        assert_eq!(
+            derived.columns,
+            [Symbol::new(10), Symbol::new(20), Symbol::new(30)]
+                .into_iter()
+                .collect()
+        );
+        assert_eq!(derived.scan_id, 99);
+        assert_eq!(derived.table_index, 42);
+
+        // Query-semantic read-path metadata must be preserved.
+        assert_eq!(derived.sample, original.sample);
+
+        // Security fields must be preserved.
+        assert_eq!(derived.secure_predicates, Some(vec![]));
+
+        // Everything else must be reset to default.
+        assert_eq!(derived.change_type, None);
+        assert!(!derived.update_stream_columns);
+        assert!(!derived.is_lazy_table);
+
+        // Optimizer-phase fields must be reset.
+        assert!(derived.push_down_predicates.is_none());
+        assert!(derived.limit.is_none());
+        assert!(derived.order_by.is_none());
+        assert!(derived.prewhere.is_none());
+        assert!(derived.agg_index.is_none());
     }
 }

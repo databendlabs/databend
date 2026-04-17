@@ -18,29 +18,28 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::Constant;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::Expr;
 use databend_common_expression::ExprVisitor;
 use databend_common_expression::FunctionCall;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
-use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_functions::GENERAL_SPATIAL_FUNCTIONS;
+use databend_common_functions::SPATIAL_INDEX_FUNCTIONS;
 use databend_common_io::ewkb_to_geo;
 use geo::BoundingRect;
 use geo::Rect;
 use geozero::wkb::Ewkb;
 use unicase::Ascii;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpatialOp {
+use crate::scalar_to_distance_threshold;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SpatialPredicateOp {
     Contains,
     Intersects,
     Within,
-    Equals,
+    Distance(f64),
 }
 
 #[derive(Debug, Clone)]
@@ -50,7 +49,7 @@ pub struct SpatialPredicate {
     // Empty rect will not intersect with any other rect.
     pub query_rect: Option<Rect<f64>>,
     pub query_srid: i32,
-    pub op: SpatialOp,
+    pub op: SpatialPredicateOp,
     pub placeholder: String,
     pub return_type: DataType,
 }
@@ -86,7 +85,6 @@ pub fn collect_spatial_predicates(
 struct SpatialPredicateVisitor<'a> {
     schema: TableSchemaRef,
     spatial_index_columns: Option<&'a HashSet<ColumnId>>,
-    func_ctx: FunctionContext,
     used_names: &'a mut HashSet<String>,
     next_placeholder: usize,
     predicates: Vec<SpatialPredicate>,
@@ -101,7 +99,6 @@ impl<'a> SpatialPredicateVisitor<'a> {
         Self {
             schema,
             spatial_index_columns,
-            func_ctx: FunctionContext::default(),
             used_names,
             next_placeholder: 0,
             predicates: Vec::new(),
@@ -122,7 +119,7 @@ impl<'a> SpatialPredicateVisitor<'a> {
     fn extract_column_arg(expr: &Expr<String>) -> Option<String> {
         match expr {
             Expr::ColumnRef(ColumnRef { id, data_type, .. }) => {
-                if is_spatial_type(data_type) {
+                if is_geometry_type(data_type) {
                     Some(id.clone())
                 } else {
                     None
@@ -132,15 +129,10 @@ impl<'a> SpatialPredicateVisitor<'a> {
         }
     }
 
-    fn extract_constant_arg(&self, expr: &Expr<String>) -> Option<Scalar> {
-        if !expr.column_refs().is_empty() {
-            return None;
-        }
-        let (folded, _) = ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        if let Expr::Constant(Constant { scalar, .. }) = folded {
-            Some(scalar)
-        } else {
-            None
+    fn extract_constant_arg(expr: &Expr<String>) -> Option<Scalar> {
+        match expr {
+            Expr::Constant(Constant { scalar, .. }) => Some(scalar.clone()),
+            _ => None,
         }
     }
 
@@ -151,12 +143,6 @@ impl<'a> SpatialPredicateVisitor<'a> {
                 let (geom, srid) = ewkb_to_geo(&mut ewkb).ok()?;
                 let rect = geom.bounding_rect();
                 Some((rect, srid.unwrap_or(0)))
-            }
-            Scalar::Geography(geo) => {
-                let mut ewkb = Ewkb(geo.0.as_slice());
-                let (geom, _) = ewkb_to_geo(&mut ewkb).ok()?;
-                let rect = geom.bounding_rect();
-                Some((rect, 4326))
             }
             _ => None,
         }
@@ -178,23 +164,51 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
         let func_name = id.name();
         let func_name = func_name.as_ref();
         let uni_case_func_name = Ascii::new(func_name);
-        if !GENERAL_SPATIAL_FUNCTIONS.contains(&uni_case_func_name) || args.len() != 2 {
+        if !SPATIAL_INDEX_FUNCTIONS.contains(&(uni_case_func_name, args.len())) {
             return Self::visit_function_call(call, self);
         }
 
         let (left, right) = (&args[0], &args[1]);
         let (column, constant, column_is_left) = if let (Some(column), Some(constant)) = (
             Self::extract_column_arg(left),
-            self.extract_constant_arg(right),
+            Self::extract_constant_arg(right),
         ) {
             (column, constant, true)
         } else if let (Some(column), Some(constant)) = (
             Self::extract_column_arg(right),
-            self.extract_constant_arg(left),
+            Self::extract_constant_arg(left),
         ) {
             (column, constant, false)
         } else {
             return Self::visit_function_call(call, self);
+        };
+
+        let op = match func_name {
+            "st_contains" => {
+                if column_is_left {
+                    SpatialPredicateOp::Contains
+                } else {
+                    SpatialPredicateOp::Within
+                }
+            }
+            "st_within" => {
+                if column_is_left {
+                    SpatialPredicateOp::Within
+                } else {
+                    SpatialPredicateOp::Contains
+                }
+            }
+            "st_intersects" => SpatialPredicateOp::Intersects,
+            "st_dwithin" => {
+                let Some(distance) = Self::extract_constant_arg(&args[2])
+                    .and_then(|scalar| scalar_to_distance_threshold(&scalar))
+                else {
+                    return Self::visit_function_call(call, self);
+                };
+
+                SpatialPredicateOp::Distance(distance)
+            }
+            _ => unreachable!(),
         };
 
         let Ok(column_id) = self.schema.column_id_of(&column) else {
@@ -210,26 +224,6 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
             return Self::visit_function_call(call, self);
         };
 
-        let op = match func_name {
-            "st_contains" => {
-                if column_is_left {
-                    SpatialOp::Contains
-                } else {
-                    SpatialOp::Within
-                }
-            }
-            "st_within" => {
-                if column_is_left {
-                    SpatialOp::Within
-                } else {
-                    SpatialOp::Contains
-                }
-            }
-            "st_intersects" => SpatialOp::Intersects,
-            "st_equals" => SpatialOp::Equals,
-            _ => unreachable!(),
-        };
-
         let placeholder = self.next_placeholder_name();
         self.predicates.push(SpatialPredicate {
             column_id,
@@ -240,19 +234,20 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
             return_type: return_type.clone(),
         });
 
+        let display_name = placeholder.clone();
         Ok(Some(Expr::ColumnRef(ColumnRef {
             span: *span,
-            id: placeholder.clone(),
+            id: placeholder,
             data_type: return_type.clone(),
-            display_name: placeholder,
+            display_name,
         })))
     }
 }
 
-fn is_spatial_type(data_type: &DataType) -> bool {
+fn is_geometry_type(data_type: &DataType) -> bool {
     match data_type {
-        DataType::Geometry | DataType::Geography => true,
-        DataType::Nullable(inner) => is_spatial_type(inner),
+        DataType::Geometry => true,
+        DataType::Nullable(inner) => is_geometry_type(inner),
         _ => false,
     }
 }

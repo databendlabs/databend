@@ -394,7 +394,7 @@ impl Binder {
             // If there are outer columns in right child, then the join is a correlated lateral join
             let opt_ctx = OptimizerContext::new(self.ctx.clone(), self.metadata.clone());
             let mut decorrelator = SubqueryDecorrelatorOptimizer::new(opt_ctx, Some(self.clone()));
-            right_child = decorrelator.flatten_plan(
+            let (flatten_plan, derived_columns) = decorrelator.flatten_plan(
                 &left_child,
                 &right_child,
                 &right_prop.outer_columns,
@@ -403,10 +403,12 @@ impl Binder {
                 },
                 false,
             )?;
+            right_child = flatten_plan;
             let original_num_conditions = left_conditions.len();
             decorrelator.add_equi_conditions(
                 None,
                 &right_prop.outer_columns,
+                &derived_columns,
                 &mut right_conditions,
                 &mut left_conditions,
             )?;

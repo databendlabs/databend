@@ -42,6 +42,9 @@ pub trait OutputFormat: Send {
 
 #[cfg(test)]
 mod test_utils {
+    use std::str::FromStr;
+
+    use databend_common_exception::ErrorCode;
     use databend_common_exception::Result;
     use databend_common_expression::Column;
     use databend_common_expression::DataBlock;
@@ -58,13 +61,20 @@ mod test_utils {
     use databend_common_expression::types::nullable::NullableColumn;
     use databend_common_expression::types::number::Float64Type;
     use databend_common_expression::types::number::Int32Type;
+    use databend_common_io::prelude::OutputFormatSettings;
     use databend_common_meta_app::principal::FileFormatParams;
+    use databend_common_meta_app::principal::StageFileFormatType;
     use databend_common_meta_app::tenant::Tenant;
     use databend_common_settings::Settings;
 
     use super::OutputFormat;
-    use crate::ClickhouseFormatType;
     use crate::get_output_format;
+
+    const SUFFIX_WITH_NAMES_AND_TYPES: &str = "withnamesandtypes";
+    const SUFFIX_WITH_NAMES: &str = "withnames";
+    const SUFFIX_COMPACT: &str = "compact";
+    const SUFFIX_STRINGS: &str = "strings";
+    const SUFFIX_EACHROW: &str = "eachrow";
 
     pub fn gen_schema_and_block(
         fields: Vec<TableField>,
@@ -124,15 +134,62 @@ mod test_utils {
         gen_schema_and_block(fields, columns)
     }
 
+    fn try_remove_suffix<'a>(name: &'a str, suffix: &str) -> (&'a str, bool) {
+        if name.ends_with(suffix) {
+            (&name[0..(name.len() - suffix.len())], true)
+        } else {
+            (name, false)
+        }
+    }
+
+    fn parse_clickhouse_format(
+        name: &str,
+        settings: &mut OutputFormatSettings,
+    ) -> Result<StageFileFormatType> {
+        let lower = name.to_lowercase();
+        settings.headers = 0;
+        settings.json_compact = false;
+        settings.json_strings = false;
+
+        let (mut base, mut ok) = try_remove_suffix(&lower, SUFFIX_WITH_NAMES_AND_TYPES);
+        if ok {
+            settings.headers = 2;
+        } else {
+            (base, ok) = try_remove_suffix(base, SUFFIX_WITH_NAMES);
+            if ok {
+                settings.headers = 1;
+            }
+        }
+
+        if base.starts_with("json") {
+            let is_eachrow;
+            (base, is_eachrow) = try_remove_suffix(base, SUFFIX_EACHROW);
+            (base, settings.json_strings) = try_remove_suffix(base, SUFFIX_STRINGS);
+            (base, settings.json_compact) = try_remove_suffix(base, SUFFIX_COMPACT);
+            if base != "json" {
+                return Err(ErrorCode::UnknownFormat(name));
+            } else {
+                if !settings.json_compact && settings.headers != 0 {
+                    return Err(ErrorCode::UnknownFormat(name));
+                }
+                if is_eachrow {
+                    base = "ndjson"
+                }
+            }
+        }
+
+        StageFileFormatType::from_str(base).map_err(ErrorCode::UnknownFormat)
+    }
+
     pub fn get_output_format_clickhouse(
         format_name: &str,
         schema: TableSchemaRef,
     ) -> Result<Box<dyn OutputFormat>> {
-        let format = ClickhouseFormatType::parse_clickhouse_format(format_name)?;
-        let settings =
+        let mut settings =
             Settings::create(Tenant::new_literal("default")).get_output_format_settings()?;
-        let params = FileFormatParams::default_by_type(format.typ.clone())?;
-        get_output_format(schema, params, settings, Some(format.suffixes))
+        let format = parse_clickhouse_format(format_name, &mut settings)?;
+        let params = FileFormatParams::default_by_type(format)?;
+        get_output_format(schema, params, settings)
     }
 
     pub fn test_data_block(is_nullable: bool) -> Result<()> {

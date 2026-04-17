@@ -160,7 +160,7 @@ alter table t_1 drop column id;
 statement ok
 alter table t ADD ROW ACCESS POLICY rap_it ON (empl_id);
 
-## t apply row access policy rpa_it
+## t apply row access policy rap_it
 statement error 1133
 drop row access policy rap_it;
 

@@ -15,6 +15,7 @@
 mod computed_columns;
 mod vacuum;
 mod vacuum2;
+mod vacuum_temporary_files;
 mod virtual_column_pruner_reader;
 mod virtual_columns;
 mod virtual_columns_builder;

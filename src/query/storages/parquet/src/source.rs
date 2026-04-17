@@ -429,15 +429,16 @@ impl ParquetSource {
         let delete_info = delete_files.as_ref().map(|tasks| (meta.as_ref(), *tasks));
 
         for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
-            start_row += rg.num_rows() as u64;
+            let row_group_start = start_row;
             // filter by bucket option
             if !should_read(rowgroup_idx, part.bucket_option) {
+                start_row += rg.num_rows() as u64;
                 continue;
             }
 
             let part = ParquetRowGroupPart {
                 location: part.file.clone(),
-                start_row,
+                start_row: row_group_start,
                 meta: rg.clone(),
                 schema_index: 0,
                 uncompressed_size: rg.total_byte_size() as u64,
@@ -462,6 +463,7 @@ impl ParquetSource {
             if let Some(reader) = reader {
                 readers.push_back((reader, part.start_row));
             }
+            start_row += rg.num_rows() as u64;
         }
         Ok(readers)
     }

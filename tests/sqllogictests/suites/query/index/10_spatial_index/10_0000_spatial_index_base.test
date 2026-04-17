@@ -8,12 +8,12 @@ statement ok
 USE test_spatial_index
 
 statement ok
-CREATE TABLE IF NOT EXISTS t(id Int, geom Geometry, geog Geography, SPATIAL INDEX idx (geom, geog)) Engine = Fuse
+CREATE TABLE IF NOT EXISTS t(id Int, geom Geometry, geom2 Geometry, SPATIAL INDEX idx (geom)) Engine = Fuse row_per_block=2
 
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx (geom, geog) ) ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geom2 GEOMETRY NULL, SYNC SPATIAL INDEX idx (geom) ) ENGINE=FUSE
 
 statement ok
 DROP SPATIAL INDEX idx ON t;
@@ -22,15 +22,53 @@ statement error
 CREATE SPATIAL INDEX idx2 ON t(id);
 
 statement ok
-CREATE SPATIAL INDEX idx2 ON t(geom, geog);
+CREATE SPATIAL INDEX idx2 ON t(geom2);
 
 query TT
 SHOW CREATE TABLE t
 ----
-t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geog GEOGRAPHY NULL, SYNC SPATIAL INDEX idx2 (geom, geog) ) ENGINE=FUSE
+t CREATE TABLE t ( id INT NULL, geom GEOMETRY NULL, geom2 GEOMETRY NULL, SYNC SPATIAL INDEX idx2 (geom2) ) ENGINE=FUSE
 
 statement error
 DROP INVERTED INDEX idx2 ON t;
+
+statement ok
+DROP SPATIAL INDEX idx2 ON t;
+
+statement ok
+CREATE SPATIAL INDEX idx ON t(geom);
+
+statement ok
+CREATE ASYNC SPATIAL INDEX idx_refresh ON t(geom2);
+
+statement ok
+INSERT INTO t VALUES
+(1, TO_GEOMETRY('POINT(10 10)'), TO_GEOMETRY('POINT(100 100)')),
+(2, TO_GEOMETRY('POINT(11 11)'), TO_GEOMETRY('POINT(101 101)')),
+(3, TO_GEOMETRY('POINT(20 20)'), TO_GEOMETRY('POINT(200 200)')),
+(4, TO_GEOMETRY('POINT(21 21)'), TO_GEOMETRY('POINT(201 201)')),
+(5, TO_GEOMETRY('POINT(30 30)'), TO_GEOMETRY('POINT(300 300)')),
+(6, TO_GEOMETRY('POINT(40 40)'), TO_GEOMETRY('POINT(400 400)'));
+
+query I
+SELECT count() FROM fuse_block('test_spatial_index', 't') WHERE spatial_index_size IS NULL
+----
+0
+
+query I
+REFRESH SPATIAL INDEX idx_refresh ON t
+----
+3
+
+query I
+SELECT count() FROM fuse_block('test_spatial_index', 't') WHERE spatial_index_size IS NULL
+----
+0
+
+query I
+REFRESH SPATIAL INDEX idx_refresh ON t
+----
+0
 
 statement ok
 CREATE TABLE spatial_stores (store_id INT, category String, store_name String, status String, location Geometry, SPATIAL INDEX idx (location)) row_per_block=2
@@ -87,6 +125,12 @@ SELECT store_id, store_name, category FROM spatial_stores WHERE category IN ('re
 8 Hilton hotel
 13 Burger King restaurant
 
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE st_dwithin(location, to_geometry('POINT(100 100)'), 1.5) ORDER BY store_id;
+----
+5 Peets Coffee coffee
+6 Lipton tea
+
 statement ok
 CREATE TABLE districts (district_id INT, district_name String, geom Geometry);
 
@@ -105,6 +149,11 @@ Central Costa
 
 query TI
 SELECT d.district_name, count(s.store_id) AS store_count FROM districts d JOIN spatial_stores s ON st_within(s.location, d.geom) GROUP BY d.district_name;
+----
+Central 2
+
+query TI
+SELECT d.district_name, count(s.store_id) AS store_count FROM districts d JOIN spatial_stores s ON st_dwithin(s.location, d.geom, 2.0) GROUP BY d.district_name ORDER BY d.district_name;
 ----
 Central 2
 

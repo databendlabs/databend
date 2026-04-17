@@ -21,9 +21,10 @@ use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
 
-use databend_common_pipeline::core::ExecutorWaker;
-use futures_util::future::BoxFuture;
+use futures::future::BoxFuture;
 use petgraph::prelude::NodeIndex;
+
+use crate::core::ExecutorWaker;
 
 /// Synchronous task scheduler. Wraps an `ExecutorWaker` and provides `spawn`
 /// to create [`SyncTaskHandle`]s that can be polled from `event()`.

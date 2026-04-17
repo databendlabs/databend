@@ -47,6 +47,7 @@ fn test_decode_v53_csv_file_format_params() -> anyhow::Result<()> {
             escape: "\\".to_string(),
             quote: "\'".to_string(),
             error_on_column_count_mismatch: true,
+            trim_space: false,
             allow_quoted_nulls: false,
             empty_field_as: Default::default(),
             quoted_empty_field_as: EmptyFieldAs::String,

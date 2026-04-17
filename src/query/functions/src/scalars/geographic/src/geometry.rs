@@ -26,6 +26,7 @@ use databend_common_expression::types::ArrayType;
 use databend_common_expression::types::BinaryType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::F64;
+use databend_common_expression::types::Float64Type;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NullableType;
 use databend_common_expression::types::NumberType;
@@ -76,6 +77,7 @@ use geo::MultiPolygon;
 use geo::Point;
 use geo::Polygon;
 use geo::Rect;
+use geo::Relate;
 use geo::ToDegrees;
 use geo::ToRadians;
 use geo::Triangle;
@@ -95,6 +97,7 @@ use num_traits::AsPrimitive;
 use proj4rs::Proj;
 use proj4rs::transform::transform;
 
+use crate::register::check_incompatible_srid;
 use crate::register::geo_convert_fn;
 use crate::register::geo_convert_with_arg_fn;
 use crate::register::geo_try_convert_fn;
@@ -625,7 +628,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     geometry_binary_fn::<BooleanType>("st_within", registry, |l, r, _| Ok(l.is_within(&r)));
 
     geometry_binary_fn::<BooleanType>("st_equals", registry, |l, r, _| {
-        Ok(l.is_within(&r) && r.is_within(&l))
+        Ok(l.relate(&r).is_equal_topo())
     });
 
     geometry_binary_fn::<NumberType<F64>>("st_distance", registry, |l, r, _| {
@@ -633,6 +636,40 @@ pub fn register(registry: &mut FunctionRegistry) {
         let distance = (distance * 1_000_000_000_f64).round() / 1_000_000_000_f64;
         Ok(distance.into())
     });
+
+    registry.register_passthrough_nullable_3_arg::<GeometryType, GeometryType, Float64Type, BooleanType, _, _>(
+        "st_dwithin",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<GeometryType, GeometryType, Float64Type, BooleanType>(
+            move |l_ewkb, r_ewkb, distance, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.push(false);
+                        return;
+                    }
+                }
+
+                match (
+                    ewkb_to_geo(&mut Ewkb(l_ewkb)),
+                    ewkb_to_geo(&mut Ewkb(r_ewkb)),
+                ) {
+                    (Ok((l_geo, l_srid)), Ok((r_geo, r_srid))) => {
+                        if !check_incompatible_srid(l_srid, r_srid, row, ctx) {
+                            builder.push(false);
+                            return;
+                        }
+                        let is_within = Euclidean.distance_within(&l_geo, &r_geo, distance.0);
+                        builder.push(is_within);
+                    }
+                    (Err(e), _) | (_, Err(e)) => {
+                        ctx.set_error(row, e.to_string());
+                        builder.push(false);
+                    }
+                }
+            },
+        ),
+    );
 
     geometry_binary_combine_fn::<GeometryType>("st_union", registry, |l, r, srid| {
         GeometryUnionAggOp::binary_compute(l, r)?

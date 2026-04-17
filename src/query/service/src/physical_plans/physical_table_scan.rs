@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -70,6 +71,8 @@ use databend_common_storages_fuse::FuseTable;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::physical_plans::AddStreamColumn;
 use crate::physical_plans::PhysicalPlanBuilder;
@@ -314,6 +317,15 @@ impl PhysicalPlanBuilder {
             let mut prewhere = scan.prewhere.clone();
             let mut used: ColumnSet = required.intersection(&columns).cloned().collect();
 
+            // Secure predicates reference columns that must survive pruning,
+            // even if they are not in the query output. Without this, a policy
+            // on tenant_id would fail when the query only selects id.
+            if let Some(secure_preds) = &scan.secure_predicates {
+                for pred in secure_preds {
+                    used = used.union(&pred.used_columns()).cloned().collect();
+                }
+            }
+
             let supported_lazy_materialize = {
                 self.metadata
                     .read()
@@ -421,6 +433,39 @@ impl PhysicalPlanBuilder {
             has_inner_column,
         )?;
 
+        // Generate secure cache key extra for Row Access Policy predicates.
+        // Constant-fold so session-dependent functions (e.g. GETVARIABLE)
+        // resolve to concrete values. Include scan.table_index so that two
+        // scans on different tables with identical policy text produce
+        // distinct cache-key extras.
+        if scan
+            .secure_predicates
+            .as_ref()
+            .is_some_and(|p| !p.is_empty())
+        {
+            let metadata = self.metadata.read().clone();
+            let secure_preds = scan.secure_predicates.as_deref().unwrap_or_default();
+            let mut serialized: Vec<String> = Vec::with_capacity(secure_preds.len());
+            for pred in secure_preds {
+                let expr = pred
+                    .as_raw_expr()
+                    .type_check(&metadata)?
+                    .project_column_ref(|col| Ok(col.column_name.clone()))?;
+                let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let remote = folded.as_remote_expr();
+                serialized.push(serde_json::to_string(&remote).map_err(|e| {
+                    ErrorCode::Internal(format!(
+                        "Failed to serialize secure predicate for cache key: {}",
+                        e
+                    ))
+                })?);
+            }
+            serialized.sort();
+            let combined = format!("{}|{}", scan.table_index, serialized.join("|"));
+            let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
+            self.ctx.add_cache_key_extra(format!("secure:{}", hash));
+        }
+
         let mut source = table
             .read_plan(
                 self.ctx.clone(),
@@ -434,7 +479,7 @@ impl PhysicalPlanBuilder {
                 self.dry_run,
             )
             .await?;
-        if let Some(sample) = scan.sample
+        if let Some(ref sample) = scan.sample
             && !table.use_own_sample_block()
         {
             if let Some(block_sample_value) = sample.block_level {
@@ -482,7 +527,7 @@ impl PhysicalPlanBuilder {
             name_mapping,
             Box::new(source),
             Some(scan.table_index),
-            Some(stat_info),
+            Some(stat_info.clone()),
             internal_column,
         );
 
@@ -494,6 +539,54 @@ impl PhysicalPlanBuilder {
                 scan.table_index,
                 table.get_table_info().ident.seq,
             )?;
+        }
+
+        if let Some(secure_preds) = &scan.secure_predicates {
+            if !secure_preds.is_empty() {
+                let input_schema = plan.output_schema()?;
+                let retained = self.metadata.read().get_retained_column().clone();
+                let mut projections = BTreeSet::new();
+                for col in required.union(&retained) {
+                    if let Some((index, _)) = input_schema.column_with_name(&col.to_string()) {
+                        projections.insert(index);
+                    }
+                }
+                let predicates = secure_preds
+                    .iter()
+                    .map(|scalar| {
+                        let expr = scalar
+                            .as_raw_expr()
+                            .type_check(&metadata)?
+                            .project_column_ref(|col| {
+                                input_schema.index_of(&col.index.to_string())
+                            })?;
+                        let expr = cast_expr_to_non_null_boolean(expr)?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        Ok(expr.as_remote_expr())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
+                // After constant folding, skip the Filter if all predicates
+                // folded to constant true (e.g. current_role() matched).
+                let all_true = predicates.iter().all(|p| {
+                    matches!(
+                        p,
+                        RemoteExpr::Constant { scalar, .. }
+                            if scalar == &databend_common_expression::Scalar::Boolean(true)
+                    )
+                });
+                if !all_true {
+                    plan = PhysicalPlan::new(crate::physical_plans::Filter {
+                        meta: PhysicalPlanMeta::new("Filter"),
+                        projections,
+                        input: plan,
+                        predicates,
+                        stat_info: Some(stat_info.clone()),
+                        is_secure: true,
+                    });
+                }
+            }
         }
 
         Ok(plan)
@@ -609,6 +702,7 @@ impl PhysicalPlanBuilder {
         };
 
         let mut is_deterministic = true;
+
         let push_down_filter = scan
             .push_down_predicates
             .as_ref()
