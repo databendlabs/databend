@@ -32,6 +32,7 @@ candidate functions:
 
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('xx')` in expr `CAST('xx' AS UInt64)`
 
+
 hint: no function matches signature `truncate(String, Int64)`, you might need to add explicit type casts.
 
 candidate functions:
@@ -46,7 +47,6 @@ candidate functions:
   truncate(Float32, Int64) :: Float64
   truncate(Float64, Int64) :: Float64
 ... and 10 more, during run expr: `truncate(CAST('xx' AS UInt64), -1)`
-
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`
 
 
