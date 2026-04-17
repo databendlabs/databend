@@ -33,9 +33,7 @@ use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::LockGuard;
 use databend_common_settings::Settings;
-use databend_common_storage::DataOperator;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
@@ -45,7 +43,6 @@ use databend_storages_common_session::TxnManagerRef;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
-use crate::lock::LockTableOption;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
@@ -72,6 +69,7 @@ mod segment_locations;
 mod spill;
 mod stage;
 mod stream;
+mod table_access;
 mod table_management;
 mod variables;
 
@@ -93,6 +91,7 @@ pub use segment_locations::TableContextSegmentLocations;
 pub use spill::TableContextSpillProgress;
 pub use stage::TableContextStage;
 pub use stream::TableContextStream;
+pub use table_access::TableContextTableAccess;
 pub use table_management::TableContextTableManagement;
 pub use variables::TableContextVariables;
 
@@ -169,6 +168,7 @@ pub trait TableContext:
     + TableContextSegmentLocations
     + TableContextSpillProgress
     + TableContextStage
+    + TableContextTableAccess
     + TableContextTableManagement
     + TableContextStream
     + TableContextVariables
@@ -279,11 +279,6 @@ pub trait TableContext:
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
 
-    /// Get the storage data accessor operator from the session manager.
-    /// Note that this is the application level data accessor, which may be different from
-    /// the table level data accessor (e.g., table with customized storage parameters).
-    fn get_application_level_data_operator(&self) -> Result<DataOperator>;
-
     async fn get_table(
         &self,
         catalog: &str,
@@ -293,23 +288,6 @@ pub trait TableContext:
         self.get_table_with_branch(catalog, database, table, None)
             .await
     }
-
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>>;
-
-    async fn resolve_data_source(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        branch: Option<&str>,
-        max_batch_size: Option<u64>,
-    ) -> Result<Arc<dyn Table>>;
 
     async fn get_zero_table(&self) -> Result<Arc<dyn Table>> {
         let catalog = self.get_catalog("default").await?;
@@ -323,19 +301,7 @@ pub trait TableContext:
 
     fn txn_mgr(&self) -> TxnManagerRef;
 
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        catalog_name: &str,
-        db_name: &str,
-        tbl_name: &str,
-        lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>>;
-
-    fn get_temp_table_prefix(&self) -> Result<String>;
-
     fn session_state(&self) -> Result<SessionState>;
-
-    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
 
     fn get_shared_settings(&self) -> Arc<Settings>;
 

@@ -63,6 +63,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
@@ -752,56 +753,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_application_level_data_operator()
-    }
-
-    async fn get_table_with_branch(
-        &self,
-        _catalog: &str,
-        database: &str,
-        table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        let tenant = self.ctx.get_tenant();
-        let db = database.to_string();
-        let tbl = table.to_string();
-        let table_meta_key = (tenant.tenant_name().to_string(), db, tbl);
-        let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
-        if already_in_cache {
-            self.table_from_cache
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            Ok(self
-                .cache
-                .lock()
-                .get(&table_meta_key)
-                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
-                .clone())
-        } else {
-            self.table_without_cache
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-            let tbl = self
-                .cat
-                .get_table(&self.ctx.get_tenant(), database, table)
-                .await?;
-            let tbl2 = tbl.clone();
-            let mut guard = self.cache.lock();
-            guard.insert(table_meta_key, tbl);
-            Ok(tbl2)
-        }
-    }
-
-    async fn resolve_data_source(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        _branch: Option<&str>,
-        _max_batch_size: Option<u64>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table(catalog, database, table).await
-    }
-
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
@@ -813,26 +764,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        _catalog_name: &str,
-        _db_name: &str,
-        _tbl_name: &str,
-        _lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>> {
-        todo!()
-    }
-
-    fn get_temp_table_prefix(&self) -> Result<String> {
-        todo!()
-    }
-
     fn session_state(&self) -> Result<SessionState> {
         Ok(SessionState::default())
-    }
-
-    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
-        false
     }
 
     fn set_cluster(&self, _: Arc<Cluster>) {
@@ -1043,6 +976,77 @@ impl TableContextCopy for CtxDelegation {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableAccess for CtxDelegation {
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
+    }
+
+    async fn get_table_with_branch(
+        &self,
+        _catalog: &str,
+        database: &str,
+        table: &str,
+        _branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        let tenant = self.ctx.get_tenant();
+        let db = database.to_string();
+        let tbl = table.to_string();
+        let table_meta_key = (tenant.tenant_name().to_string(), db, tbl);
+        let already_in_cache = { self.cache.lock().contains_key(&table_meta_key) };
+        if already_in_cache {
+            self.table_from_cache
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(self
+                .cache
+                .lock()
+                .get(&table_meta_key)
+                .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))?
+                .clone())
+        } else {
+            self.table_without_cache
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let tbl = self
+                .cat
+                .get_table(&self.ctx.get_tenant(), database, table)
+                .await?;
+            let tbl2 = tbl.clone();
+            let mut guard = self.cache.lock();
+            guard.insert(table_meta_key, tbl);
+            Ok(tbl2)
+        }
+    }
+
+    async fn resolve_data_source(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        _branch: Option<&str>,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table(catalog, database, table).await
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        todo!()
+    }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        todo!()
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
     }
 }
 

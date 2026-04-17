@@ -79,6 +79,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1237,9 +1238,6 @@ impl TableContext for LiteTableContext {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         vec![]
     }
-    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
-        unsupported("table_ctx::get_application_level_data_operator")
-    }
     async fn get_table(
         &self,
         catalog: &str,
@@ -1251,49 +1249,14 @@ impl TableContext for LiteTableContext {
             .get_table(&self.tenant, database, table)
             .await
     }
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table(catalog, database, table).await
-    }
-    async fn resolve_data_source(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        branch: Option<&str>,
-        _max_batch_size: Option<u64>,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table_with_branch(catalog, database, table, branch)
-            .await
-    }
     fn get_license_key(&self) -> String {
         String::new()
     }
     fn txn_mgr(&self) -> TxnManagerRef {
         TxnManager::init()
     }
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        _catalog_name: &str,
-        _db_name: &str,
-        _tbl_name: &str,
-        _lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>> {
-        Ok(None)
-    }
-    fn get_temp_table_prefix(&self) -> Result<String> {
-        Ok("lite_temp".to_string())
-    }
     fn session_state(&self) -> Result<SessionState> {
         Ok(SessionState::default())
-    }
-    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
-        false
     }
     fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared_settings.clone()
@@ -1492,6 +1455,53 @@ impl TableContextCopy for LiteTableContext {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.copy_status.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableAccess for LiteTableContext {
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        unsupported("table_ctx::get_application_level_data_operator")
+    }
+
+    async fn get_table_with_branch(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        _branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table(catalog, database, table).await
+    }
+
+    async fn resolve_data_source(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table_with_branch(catalog, database, table, branch)
+            .await
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        Ok(None)
+    }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        Ok("lite_temp".to_string())
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
     }
 }
 

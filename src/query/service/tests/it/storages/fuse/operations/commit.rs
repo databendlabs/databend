@@ -61,6 +61,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
@@ -616,30 +617,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_application_level_data_operator()
-    }
-    async fn get_table_with_branch(
-        &self,
-        _catalog: &str,
-        _database: &str,
-        _table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        todo!()
-    }
-
-    async fn resolve_data_source(
-        &self,
-        _catalog: &str,
-        _database: &str,
-        _table: &str,
-        _branch: Option<&str>,
-        _max_batch_size: Option<u64>,
-    ) -> Result<Arc<dyn Table>> {
-        todo!()
-    }
-
     fn get_license_key(&self) -> String {
         todo!()
     }
@@ -652,26 +629,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        _catalog_name: &str,
-        _db_name: &str,
-        _tbl_name: &str,
-        _lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>> {
-        todo!()
-    }
-
-    fn get_temp_table_prefix(&self) -> Result<String> {
-        todo!()
-    }
-
     fn session_state(&self) -> Result<SessionState> {
         todo!()
-    }
-
-    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
-        false
     }
 
     fn set_cluster(&self, _: Arc<Cluster>) {
@@ -877,6 +836,52 @@ impl TableContextCopy for CtxDelegation {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableAccess for CtxDelegation {
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
+    }
+
+    async fn get_table_with_branch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn resolve_data_source(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        todo!()
+    }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        todo!()
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
     }
 }
 

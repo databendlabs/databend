@@ -96,6 +96,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1389,9 +1390,30 @@ impl TableContext for QueryContext {
             .collect::<Vec<_>>()
     }
 
-    /// Get the storage data accessor operator from the session manager.
-    /// Note that this is the application level data accessor, which may be different from
-    /// the table level data accessor (e.g., table with customized storage parameters).
+    fn get_license_key(&self) -> String {
+        self.get_settings()
+            .get_enterprise_license(self.get_version())
+    }
+
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.shared.session.session_ctx.txn_mgr()
+    }
+
+    fn session_state(&self) -> Result<SessionState> {
+        self.shared.session.session_ctx.session_state()
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_clusters().await
+    }
+
+    fn get_session_type(&self) -> SessionType {
+        self.shared.session.get_type()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableAccess for QueryContext {
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
@@ -1474,19 +1496,6 @@ impl TableContext for QueryContext {
         Ok(table)
     }
 
-    fn get_license_key(&self) -> String {
-        self.get_settings()
-            .get_enterprise_license(self.get_version())
-    }
-
-    fn txn_mgr(&self) -> TxnManagerRef {
-        self.shared.session.session_ctx.txn_mgr()
-    }
-
-    fn session_state(&self) -> Result<SessionState> {
-        self.shared.session.session_ctx.session_state()
-    }
-
     async fn acquire_table_lock(
         self: Arc<Self>,
         catalog_name: &str,
@@ -1533,14 +1542,6 @@ impl TableContext for QueryContext {
                 .temp_tbl_mgr()
                 .lock()
                 .is_temp_table(database_name, table_name)
-    }
-
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        self.shared.get_warehouse_clusters().await
-    }
-
-    fn get_session_type(&self) -> SessionType {
-        self.shared.session.get_type()
     }
 }
 
