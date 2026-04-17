@@ -49,7 +49,7 @@ query T
 select $1 from @s1/default_null_display.csv (file_format => 'text') order by metadata$file_row_number
 ----
 1,
-2,\N
+2,"\N"
 3,\N
 4,plain
 
