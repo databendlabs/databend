@@ -96,6 +96,11 @@ jobs:
         with:
           repository: databendlabs/databend-docs
           ref: main
+      - name: Checkout Scripts
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          path: databend
       - name: Get date
         id: date
         shell: bash
@@ -107,7 +112,7 @@ jobs:
           DATE: ${{ steps.date.outputs.DATE }}
         with:
           script: |
-            const script = require('./.github/scripts/generate_release_note.js')
+            const script = require('./databend/.github/scripts/generate_release_note.js')
             await script({ github, context, core })
       - name: Add Release Note
         run: |
