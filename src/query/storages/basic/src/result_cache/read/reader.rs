@@ -22,6 +22,7 @@ use databend_common_meta_store::MetaStore;
 use databend_common_storage::DataOperator;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
+use log::info;
 
 use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::common::gen_result_cache_meta_key;
@@ -68,6 +69,10 @@ impl ResultCacheReader {
     pub async fn check_cache(&self) -> Result<Option<ResultCacheValue>> {
         if let Some(v) = self.meta_mgr.get(self.meta_key.clone()).await? {
             if self.tolerate_inconsistent || v.partitions_shas == self.partitions_shas {
+                info!(
+                    "Query result cache hit: query_id={}, meta_key={}",
+                    v.query_id, self.meta_key
+                );
                 return Ok(Some(v));
             }
         }

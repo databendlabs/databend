@@ -27,6 +27,7 @@ use databend_common_pipeline::sinks::AsyncMpscSink;
 use databend_common_pipeline::sinks::AsyncMpscSinker;
 use databend_common_storage::DataOperator;
 use databend_meta_client::types::MatchSeq;
+use log::info;
 use tokio::time::Instant;
 
 use super::writer::ResultCacheWriter;
@@ -120,6 +121,10 @@ impl AsyncMpscSink for WriteResultCacheSink {
         self.meta_mgr
             .set(self.meta_key.clone(), value, MatchSeq::GE(0), ttl_interval)
             .await?;
+        info!(
+            "Query result cache write: query_id={}, meta_key={}",
+            self.ctx.get_id(), self.meta_key
+        );
         self.ctx
             .set_query_id_result_cache(self.ctx.get_id(), self.meta_key.clone());
         Ok(())
