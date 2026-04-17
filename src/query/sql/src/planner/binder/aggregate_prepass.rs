@@ -19,18 +19,20 @@ use std::collections::HashSet;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
+use databend_common_ast::ast::FunctionCall;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitResult;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::Walk;
 use databend_common_base::runtime::block_on;
 use databend_common_exception::Result;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::UDFDefinition;
 use databend_common_users::UserApiProvider;
-use derive_visitor::Drive;
-use derive_visitor::Visitor;
 
 use super::ExprContext;
 use crate::BindContext;
@@ -39,6 +41,15 @@ use crate::binder::Binder;
 use crate::binder::select::SelectList;
 use crate::normalize_identifier;
 use crate::plans::ScalarExpr;
+
+macro_rules! try_ast_walk {
+    ($expr:expr) => {
+        match $expr? {
+            VisitControl::Continue | VisitControl::SkipChildren => {}
+            VisitControl::Break(value) => return Ok(VisitControl::Break(value)),
+        }
+    };
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, enum_as_inner::EnumAsInner)]
 pub(super) enum AggregatePrepassSource {
@@ -49,7 +60,7 @@ pub(super) enum AggregatePrepassSource {
 fn is_aggregate_target(
     name_resolution_ctx: &NameResolutionContext,
     udaf_names: &HashSet<String>,
-    func: &ASTFunctionCall,
+    func: &FunctionCall,
 ) -> bool {
     if func.window.is_some() {
         return false;
@@ -76,77 +87,91 @@ struct ExprFlags {
     contains_subquery: bool,
 }
 
-trait AstProbe {
-    fn enter_expr(&mut self, _expr: &Expr, _query_depth: usize) {}
+trait ExprInspection {
+    fn observe_top_level_expr(&mut self, _expr: &Expr) {}
 
-    fn enter_column_ref(&mut self, _column: &ColumnRef, _query_depth: usize) {}
+    fn observe_top_level_column_ref(&mut self, _column: &ColumnRef) {}
 
-    fn enter_query(&mut self, _query: &Query, _query_depth: usize) {}
-}
+    fn mark_contains_subquery(&mut self) {}
 
-impl<L: AstProbe, R: AstProbe> AstProbe for (L, R) {
-    fn enter_expr(&mut self, expr: &Expr, query_depth: usize) {
-        self.0.enter_expr(expr, query_depth);
-        self.1.enter_expr(expr, query_depth);
-    }
-
-    fn enter_column_ref(&mut self, column: &ColumnRef, query_depth: usize) {
-        self.0.enter_column_ref(column, query_depth);
-        self.1.enter_column_ref(column, query_depth);
-    }
-
-    fn enter_query(&mut self, query: &Query, query_depth: usize) {
-        self.0.enter_query(query, query_depth);
-        self.1.enter_query(query, query_depth);
+    fn walk_expr(&mut self, expr: &Expr)
+    where Self: std::marker::Sized {
+        expr.walk(&mut ExprWalker {
+            inspection: self,
+            in_subquery: false,
+        })
+        .unwrap();
     }
 }
 
-#[derive(Visitor)]
-#[visitor(Expr(enter), ColumnRef(enter), Query)]
-struct ProbeWalker<'a> {
-    probe: &'a mut dyn AstProbe,
-    query_depth: usize,
-}
-
-impl ProbeWalker<'_> {
-    fn enter_expr(&mut self, expr: &Expr) {
-        self.probe.enter_expr(expr, self.query_depth);
+impl<L: ExprInspection, R: ExprInspection> ExprInspection for (L, R) {
+    fn observe_top_level_expr(&mut self, expr: &Expr) {
+        self.0.observe_top_level_expr(expr);
+        self.1.observe_top_level_expr(expr);
     }
 
-    fn enter_column_ref(&mut self, column: &ColumnRef) {
-        self.probe.enter_column_ref(column, self.query_depth);
+    fn observe_top_level_column_ref(&mut self, column: &ColumnRef) {
+        self.0.observe_top_level_column_ref(column);
+        self.1.observe_top_level_column_ref(column);
     }
 
-    fn enter_query(&mut self, query: &Query) {
-        self.probe.enter_query(query, self.query_depth);
-        self.query_depth += 1;
-    }
-
-    fn exit_query(&mut self, _query: &Query) {
-        self.query_depth -= 1;
+    fn mark_contains_subquery(&mut self) {
+        self.0.mark_contains_subquery();
+        self.1.mark_contains_subquery();
     }
 }
 
-fn walk_expr_with_probe(expr: &Expr, probe: &mut dyn AstProbe) {
-    let mut walker = ProbeWalker {
-        probe,
-        query_depth: 0,
-    };
-    expr.drive(&mut walker);
+struct ExprWalker<'a, T> {
+    inspection: &'a mut T,
+    in_subquery: bool,
 }
 
-fn analyze_expr_flags(
-    name_resolution_ctx: &NameResolutionContext,
-    udaf_names: &HashSet<String>,
-    expr: &Expr,
-) -> ExprFlags {
-    let mut probe = ExprFlagsProbe {
-        name_resolution_ctx,
-        udaf_names,
-        result: ExprFlags::default(),
-    };
-    walk_expr_with_probe(expr, &mut probe);
-    probe.result
+impl<T> ExprWalker<'_, T>
+where T: ExprInspection
+{
+    fn visit_query_children(&mut self, query: &Query) -> VisitResult {
+        if let Some(with) = &query.with {
+            for cte in &with.ctes {
+                try_ast_walk!(cte.walk(self));
+            }
+        }
+        try_ast_walk!(query.body.walk(self));
+        for item in &query.order_by {
+            try_ast_walk!(item.walk(self));
+        }
+        for expr in &query.limit {
+            try_ast_walk!(expr.walk(self));
+        }
+        if let Some(offset) = &query.offset {
+            try_ast_walk!(offset.walk(self));
+        }
+
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl<T> Visitor for ExprWalker<'_, T>
+where T: ExprInspection
+{
+    fn visit_expr(&mut self, expr: &Expr) -> VisitResult {
+        if !self.in_subquery {
+            self.inspection.observe_top_level_expr(expr);
+            if let Expr::ColumnRef { column, .. } = expr {
+                self.inspection.observe_top_level_column_ref(column);
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_query(&mut self, query: &Query) -> VisitResult {
+        self.inspection.mark_contains_subquery();
+        let was_in_subquery = self.in_subquery;
+        self.in_subquery = true;
+        let result = self.visit_query_children(query);
+        self.in_subquery = was_in_subquery;
+        result?;
+        Ok(VisitControl::SkipChildren)
+    }
 }
 
 struct ExprFlagsProbe<'a> {
@@ -155,12 +180,8 @@ struct ExprFlagsProbe<'a> {
     result: ExprFlags,
 }
 
-impl AstProbe for ExprFlagsProbe<'_> {
-    fn enter_expr(&mut self, expr: &Expr, query_depth: usize) {
-        if query_depth > 0 {
-            return;
-        }
-
+impl ExprInspection for ExprFlagsProbe<'_> {
+    fn observe_top_level_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::CountAll { window: None, .. } => self.result.contains_aggregate = true,
             Expr::FunctionCall { func, .. }
@@ -175,7 +196,7 @@ impl AstProbe for ExprFlagsProbe<'_> {
         }
     }
 
-    fn enter_query(&mut self, _query: &Query, _query_depth: usize) {
+    fn mark_contains_subquery(&mut self) {
         self.result.contains_subquery = true;
     }
 }
@@ -186,12 +207,8 @@ struct ReferencedAliasProbe<'a> {
     referenced_aliases: BTreeSet<String>,
 }
 
-impl AstProbe for ReferencedAliasProbe<'_> {
-    fn enter_column_ref(&mut self, column: &ColumnRef, query_depth: usize) {
-        if query_depth > 0 {
-            return;
-        }
-
+impl ExprInspection for ReferencedAliasProbe<'_> {
+    fn observe_top_level_column_ref(&mut self, column: &ColumnRef) {
         let Some(alias) = resolve_unqualified_alias_name(self.name_resolution_ctx, column) else {
             return;
         };
@@ -207,12 +224,8 @@ struct FunctionNameProbe<'a> {
     names: BTreeSet<String>,
 }
 
-impl AstProbe for FunctionNameProbe<'_> {
-    fn enter_expr(&mut self, expr: &Expr, query_depth: usize) {
-        if query_depth > 0 {
-            return;
-        }
-
+impl ExprInspection for FunctionNameProbe<'_> {
+    fn observe_top_level_expr(&mut self, expr: &Expr) {
         let Expr::FunctionCall { func, .. } = expr else {
             return;
         };
@@ -278,19 +291,26 @@ impl AggregatePrepassExprInfo {
         aliases: &HashSet<&str>,
         expr: &Expr,
     ) -> Self {
-        let expr_flags = analyze_expr_flags(name_resolution_ctx, udaf_names, expr);
-        let mut alias_probe = ReferencedAliasProbe {
-            name_resolution_ctx,
-            aliases,
-            referenced_aliases: BTreeSet::new(),
-        };
-        walk_expr_with_probe(expr, &mut alias_probe);
+        let mut probes = (
+            ExprFlagsProbe {
+                name_resolution_ctx,
+                udaf_names,
+                result: ExprFlags::default(),
+            },
+            ReferencedAliasProbe {
+                name_resolution_ctx,
+                aliases,
+                referenced_aliases: BTreeSet::new(),
+            },
+        );
+        probes.walk_expr(expr);
+        let (expr_flags_probe, alias_probe) = probes;
 
         Self {
             ast: expr.clone(),
-            contains_aggregate: expr_flags.contains_aggregate,
-            contains_window: expr_flags.contains_window,
-            contains_subquery: expr_flags.contains_subquery,
+            contains_aggregate: expr_flags_probe.result.contains_aggregate,
+            contains_window: expr_flags_probe.result.contains_window,
+            contains_subquery: expr_flags_probe.result.contains_subquery,
             referenced_aliases: alias_probe.referenced_aliases.into_iter().collect(),
         }
     }
@@ -376,14 +396,12 @@ impl AggregatePrepassAliasCatalog {
     }
 }
 
-#[derive(Visitor)]
-#[visitor(Expr, ColumnRef(enter), Query)]
 struct Scanner<'a> {
     expr_context: ExprContext,
     name_resolution_ctx: &'a NameResolutionContext,
     udaf_names: &'a HashSet<String>,
     ast_aliases: &'a AggregatePrepassAliasCatalog,
-    query_depth: usize,
+    in_subquery: bool,
     window_depth: usize,
     expanding_aliases: HashSet<String>,
     expansion_stack: Vec<String>,
@@ -403,14 +421,76 @@ impl Scanner<'_> {
             name_resolution_ctx,
             udaf_names,
             ast_aliases,
-            query_depth: 0,
+            in_subquery: false,
             window_depth: 0,
             expanding_aliases: HashSet::new(),
             expansion_stack: Vec::new(),
             facts: Vec::new(),
         };
-        expr.drive(&mut scanner);
+        let _ = expr.walk(&mut scanner);
         scanner.facts
+    }
+
+    fn visit_query_children(&mut self, query: &Query) -> VisitResult {
+        if let Some(with) = &query.with {
+            for cte in &with.ctes {
+                try_ast_walk!(cte.walk(self));
+            }
+        }
+        try_ast_walk!(query.body.walk(self));
+        for item in &query.order_by {
+            try_ast_walk!(item.walk(self));
+        }
+        for expr in &query.limit {
+            try_ast_walk!(expr.walk(self));
+        }
+        if let Some(offset) = &query.offset {
+            try_ast_walk!(offset.walk(self));
+        }
+
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_window_expr_children(&mut self, expr: &Expr) -> VisitResult {
+        match expr {
+            Expr::CountAll {
+                window, qualified, ..
+            } => {
+                for item in qualified {
+                    if let databend_common_ast::ast::Indirection::Identifier(ident) = item {
+                        try_ast_walk!(ident.walk(self));
+                    }
+                }
+                if let Some(window) = window {
+                    try_ast_walk!(window.walk(self));
+                }
+            }
+            Expr::FunctionCall { func, .. } => {
+                try_ast_walk!(func.walk(self));
+            }
+            _ => unreachable!("window expr helper must only be called for window exprs"),
+        }
+
+        Ok(VisitControl::Continue)
+    }
+
+    fn handle_column_ref(&mut self, column: &ColumnRef) {
+        if self.in_subquery || self.window_depth > 0 {
+            return;
+        }
+
+        let Some((alias, alias_expr)) =
+            Self::find_aggregate_prepass_alias(self.name_resolution_ctx, column, self.ast_aliases)
+        else {
+            return;
+        };
+
+        if self.expanding_aliases.insert(alias.clone()) {
+            self.expansion_stack.push(alias.clone());
+            let _ = alias_expr.walk(self);
+            self.expansion_stack.pop();
+            self.expanding_aliases.remove(&alias);
+        }
     }
 
     fn enter_expr(&mut self, expr: &Expr) {
@@ -418,7 +498,7 @@ impl Scanner<'_> {
             self.window_depth += 1;
         }
 
-        if self.window_depth > 0 || self.query_depth > 0 {
+        if self.window_depth > 0 || self.in_subquery {
             return;
         }
 
@@ -435,42 +515,14 @@ impl Scanner<'_> {
         }
     }
 
-    fn exit_expr(&mut self, expr: &Expr) {
-        if is_window_expr(expr) {
-            self.window_depth -= 1;
-        }
-    }
-
-    fn enter_column_ref(&mut self, column: &ColumnRef) {
-        if self.query_depth > 0 || self.window_depth > 0 {
-            return;
-        }
-
-        let Some((alias, alias_expr)) =
-            Self::find_aggregate_prepass_alias(self.name_resolution_ctx, column, self.ast_aliases)
-        else {
-            return;
-        };
-
-        if self.expanding_aliases.insert(alias.clone()) {
-            self.expansion_stack.push(alias.clone());
-            alias_expr.drive(self);
-            self.expansion_stack.pop();
-            self.expanding_aliases.remove(&alias);
-        }
-    }
-
-    fn enter_query(&mut self, _query: &Query) {
-        self.query_depth += 1;
-    }
-
-    fn exit_query(&mut self, _query: &Query) {
-        self.query_depth -= 1;
-    }
-
     fn build_fact(&self, expr: &Expr) -> Option<AggregatePrepassFact> {
-        let expr_flags = analyze_expr_flags(self.name_resolution_ctx, self.udaf_names, expr);
-        if expr_flags.contains_subquery {
+        let mut probe = ExprFlagsProbe {
+            name_resolution_ctx: self.name_resolution_ctx,
+            udaf_names: self.udaf_names,
+            result: ExprFlags::default(),
+        };
+        probe.walk_expr(expr);
+        if probe.result.contains_subquery {
             return None;
         }
 
@@ -478,7 +530,7 @@ impl Scanner<'_> {
             expr_context: self.expr_context,
             source: self.current_source(),
             expr: expr.clone(),
-            contains_window: expr_flags.contains_window,
+            contains_window: probe.result.contains_window,
         })
     }
 
@@ -497,6 +549,34 @@ impl Scanner<'_> {
         let alias = resolve_unqualified_alias_name(name_resolution_ctx, column)?;
         let ast = &ast_aliases.get_unique(&alias)?.ast;
         Some((alias, ast))
+    }
+}
+
+impl Visitor for Scanner<'_> {
+    fn visit_expr(&mut self, expr: &Expr) -> VisitResult {
+        self.enter_expr(expr);
+
+        if let Expr::ColumnRef { column, .. } = expr {
+            self.handle_column_ref(column);
+        }
+
+        if is_window_expr(expr) {
+            let result = self.visit_window_expr_children(expr);
+            self.window_depth -= 1;
+            result?;
+            return Ok(VisitControl::SkipChildren);
+        }
+
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_query(&mut self, query: &Query) -> VisitResult {
+        let was_in_subquery = self.in_subquery;
+        self.in_subquery = true;
+        let result = self.visit_query_children(query);
+        self.in_subquery = was_in_subquery;
+        result?;
+        Ok(VisitControl::SkipChildren)
     }
 }
 
@@ -579,7 +659,7 @@ impl Binder {
             .chain(qualify)
             .chain(order_by.iter().map(|order| &order.expr))
         {
-            walk_expr_with_probe(expr, &mut probe);
+            probe.walk_expr(expr);
         }
 
         self.resolve_udaf_names(bind_context, probe.names)
