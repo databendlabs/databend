@@ -735,10 +735,10 @@ impl FromStr for CsvQuoteStyle {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "quote_notnull" => Ok(Self::QuoteNotNull),
+            "quote_not_null" => Ok(Self::QuoteNotNull),
             "quote_minimal" => Ok(Self::QuoteMinimal),
             _ => Err(format!(
-                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOTNULL | QUOTE_MINIMAL."
+                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOT_NULL | QUOTE_MINIMAL."
             )),
         }
     }
@@ -747,7 +747,7 @@ impl FromStr for CsvQuoteStyle {
 impl Display for CsvQuoteStyle {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::QuoteNotNull => write!(f, "quote_notnull"),
+            Self::QuoteNotNull => write!(f, "quote_not_null"),
             Self::QuoteMinimal => write!(f, "quote_minimal"),
         }
     }
