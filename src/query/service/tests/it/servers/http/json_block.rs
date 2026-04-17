@@ -474,7 +474,6 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
 }
 
 #[test]
-<<<<<<< HEAD
 fn test_arrow_ipc_nullable_variant_distinguishes_sql_null_and_json_null() -> anyhow::Result<()> {
     let json_null = jsonb::parse_value(b"null")?.to_vec();
 
@@ -561,8 +560,6 @@ fn test_arrow_ipc_nested_nullable_variant_distinguishes_sql_null_and_json_null()
 }
 
 #[test]
-=======
->>>>>>> 9f0f7d11ef (feat: introduce arrow_result_version.)
 fn test_arrow_ipc_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::Result<()> {
     let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec();
     let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec();
