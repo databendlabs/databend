@@ -322,7 +322,6 @@ impl SubqueryDecorrelatorOptimizer {
             | RelOperator::Scan(_)
             | RelOperator::ConstantTableScan(_)
             | RelOperator::ExpressionScan(_)
-            | RelOperator::SecureFilter(_)
             | RelOperator::CacheScan(_)
             | RelOperator::Exchange(_)
             | RelOperator::RecursiveCteScan(_)

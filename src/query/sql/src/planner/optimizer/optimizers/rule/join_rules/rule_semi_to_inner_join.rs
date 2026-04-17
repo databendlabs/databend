@@ -155,7 +155,6 @@ fn find_group_by_keys(
         | RelOperator::MaterializedCTE(_)
         | RelOperator::MaterializedCTERef(_)
         | RelOperator::CompactBlock(_)
-        | RelOperator::SecureFilter(_)
         | RelOperator::Sequence(_) => {}
     }
     Ok(())

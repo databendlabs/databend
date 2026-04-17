@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::ErrorCode;
@@ -68,6 +69,31 @@ use crate::plans::WindowFuncType;
 use crate::plans::WindowPartition;
 
 impl SubqueryDecorrelatorOptimizer {
+    fn secure_scan_columns(scan: &Scan) -> ColumnSet {
+        let mut columns = scan.columns.clone();
+        if let Some(secure_preds) = &scan.secure_predicates {
+            for pred in secure_preds {
+                columns.extend(pred.used_columns());
+            }
+        }
+        columns
+    }
+
+    fn remap_secure_predicates(
+        secure_preds: &mut [ScalarExpr],
+        column_mapping: &HashMap<Symbol, Symbol>,
+    ) -> Result<()> {
+        for pred in secure_preds.iter_mut() {
+            for old_col in pred.used_columns() {
+                if let Some(&new_col) = column_mapping.get(&old_col) {
+                    pred.replace_column(old_col, new_col)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[recursive::recursive]
     pub(crate) fn flatten_plan(
         &mut self,
         outer: &SExpr,
@@ -1067,7 +1093,7 @@ impl SubqueryDecorrelatorOptimizer {
             RelOperator::ConstantTableScan(scan) => {
                 self.clone_outer_constant_table_scan(scan, derived_columns)?
             }
-            RelOperator::Scan(scan) => self.clone_outer_scan(scan, derived_columns),
+            RelOperator::Scan(scan) => self.clone_outer_scan(scan, derived_columns)?,
             RelOperator::RecursiveCteScan(scan) => {
                 self.clone_outer_recursive_cte_scan(scan, derived_columns)?
             }
@@ -1171,10 +1197,10 @@ impl SubqueryDecorrelatorOptimizer {
         &mut self,
         scan: &Scan,
         derived_columns: &mut DerivedColumnScope,
-    ) -> RelOperator {
+    ) -> Result<RelOperator> {
         let mut metadata = self.metadata.write();
-        let columns = scan
-            .columns
+        let original_columns = Self::secure_scan_columns(scan);
+        let columns = original_columns
             .iter()
             .copied()
             .map(|col| {
@@ -1186,7 +1212,18 @@ impl SubqueryDecorrelatorOptimizer {
             })
             .collect();
         let scan_id = metadata.next_scan_id();
-        scan.derive_decorrelated_scan(columns, scan_id).into()
+        drop(metadata);
+
+        let mut new_scan = scan.derive_decorrelated_scan(columns, scan_id);
+
+        // Remap column references in secure_predicates to use the
+        // new derived column IDs. Without this, RAP predicates would reference
+        // stale column symbols after decorrelation.
+        if let Some(secure_preds) = &mut new_scan.secure_predicates {
+            Self::remap_secure_predicates(secure_preds, &derived_columns.snapshot())?;
+        }
+
+        Ok(new_scan.into())
     }
 
     fn clone_outer_recursive_cte_scan(
