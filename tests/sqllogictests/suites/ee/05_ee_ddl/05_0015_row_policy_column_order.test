@@ -1,0 +1,70 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+## Regression test: multi-parameter RAP must bind arguments in USING column
+## order, not table schema order. A non-commutative policy body (a > b) makes
+## the difference observable.
+
+statement ok
+set global enable_experimental_row_access_policy = 1;
+
+statement ok
+set enable_planner_cache = 0;
+
+statement ok
+drop table if exists rap_order_test;
+
+statement ok
+drop row access policy if exists rap_order_policy;
+
+## Non-commutative policy: rows visible when a > b.
+statement ok
+create row access policy rap_order_policy as (a int, b int) returns boolean -> a > b;
+
+## Table schema order: (id, lo, hi).
+statement ok
+create table rap_order_test(id int, lo int, hi int);
+
+statement ok
+insert into rap_order_test values (1, 10, 100), (2, 5, 50), (3, 200, 50);
+
+## Attach USING(hi, lo): a=hi, b=lo → predicate is "hi > lo" → rows 1,2 visible.
+statement ok
+alter table rap_order_test add row access policy rap_order_policy on (hi, lo);
+
+query III
+select id, lo, hi from rap_order_test order by id;
+----
+1 10 100
+2 5 50
+
+## Drop and re-attach with reversed USING order.
+statement ok
+alter table rap_order_test drop row access policy rap_order_policy;
+
+## Attach USING(lo, hi): a=lo, b=hi → predicate is "lo > hi" → only row 3 visible.
+statement ok
+alter table rap_order_test add row access policy rap_order_policy on (lo, hi);
+
+query III
+select id, lo, hi from rap_order_test order by id;
+----
+3 200 50
+
+## Cleanup
+statement ok
+drop table rap_order_test;
+
+statement ok
+drop row access policy rap_order_policy;
