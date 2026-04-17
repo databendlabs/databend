@@ -61,6 +61,7 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
@@ -1164,36 +1165,6 @@ impl TableContext for LiteTableContext {
     fn get_current_database(&self) -> String {
         self.current_database.clone()
     }
-    fn get_current_user(&self) -> Result<UserInfo> {
-        Ok(UserInfo::new_no_auth("root", "%"))
-    }
-    fn get_current_role(&self) -> Option<RoleInfo> {
-        None
-    }
-    fn get_secondary_roles(&self) -> Option<Vec<String>> {
-        None
-    }
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
-        Ok(vec![])
-    }
-    async fn validate_privilege(
-        &self,
-        _object: &GrantObject,
-        _privilege: UserPrivilegeType,
-        _check_current_role_only: bool,
-    ) -> Result<()> {
-        Ok(())
-    }
-    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        Ok(vec![])
-    }
-    async fn get_visibility_checker(
-        &self,
-        _ignore_ownership: bool,
-        _object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
-        unsupported("table_ctx::get_visibility_checker")
-    }
     fn get_fuse_version(&self) -> String {
         String::new()
     }
@@ -1270,6 +1241,46 @@ impl TableContextSession for LiteTableContext {
 
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextAuthorization for LiteTableContext {
+    fn get_current_user(&self) -> Result<UserInfo> {
+        Ok(UserInfo::new_no_auth("root", "%"))
+    }
+
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        None
+    }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        None
+    }
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        Ok(vec![])
+    }
+
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        Ok(vec![])
+    }
+
+    async fn get_visibility_checker(
+        &self,
+        _ignore_ownership: bool,
+        _object: Object,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        unsupported("table_ctx::get_visibility_checker")
     }
 }
 

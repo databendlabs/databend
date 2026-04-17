@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

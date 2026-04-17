@@ -78,6 +78,7 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
@@ -1196,48 +1197,6 @@ impl TableContext for QueryContext {
         self.shared.get_current_database()
     }
 
-    fn get_current_user(&self) -> Result<UserInfo> {
-        self.shared.get_current_user()
-    }
-
-    fn get_current_role(&self) -> Option<RoleInfo> {
-        self.shared.get_current_role()
-    }
-
-    fn get_secondary_roles(&self) -> Option<Vec<String>> {
-        self.shared.get_secondary_roles()
-    }
-
-    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        self.get_current_session().get_all_available_roles().await
-    }
-
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
-        self.get_current_session().get_all_effective_roles().await
-    }
-
-    async fn validate_privilege(
-        &self,
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
-        check_current_role_only: bool,
-    ) -> Result<()> {
-        self.get_current_session()
-            .validate_privilege(object, privilege, check_current_role_only)
-            .await
-    }
-
-    async fn get_visibility_checker(
-        &self,
-        ignore_ownership: bool,
-        object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
-        self.shared
-            .session
-            .get_visibility_checker(ignore_ownership, object)
-            .await
-    }
-
     fn get_fuse_version(&self) -> String {
         let session = self.get_current_session();
         match session.get_type() {
@@ -1386,6 +1345,51 @@ impl TableContext for QueryContext {
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         self.shared.get_warehouse_clusters().await
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextAuthorization for QueryContext {
+    fn get_current_user(&self) -> Result<UserInfo> {
+        self.shared.get_current_user()
+    }
+
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        self.shared.get_current_role()
+    }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        self.shared.get_secondary_roles()
+    }
+
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_available_roles().await
+    }
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_effective_roles().await
+    }
+
+    async fn validate_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: UserPrivilegeType,
+        check_current_role_only: bool,
+    ) -> Result<()> {
+        self.get_current_session()
+            .validate_privilege(object, privilege, check_current_role_only)
+            .await
+    }
+
+    async fn get_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+        object: Object,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        self.shared
+            .session
+            .get_visibility_checker(ignore_ownership, object)
+            .await
     }
 }
 

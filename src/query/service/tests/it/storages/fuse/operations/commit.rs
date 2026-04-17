@@ -43,6 +43,7 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
@@ -528,40 +529,6 @@ impl TableContext for CtxDelegation {
         self.ctx.get_current_database()
     }
 
-    fn get_current_user(&self) -> Result<UserInfo> {
-        todo!()
-    }
-
-    fn get_current_role(&self) -> Option<RoleInfo> {
-        todo!()
-    }
-    fn get_secondary_roles(&self) -> Option<Vec<String>> {
-        todo!()
-    }
-    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        todo!()
-    }
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
-        todo!()
-    }
-
-    async fn validate_privilege(
-        &self,
-        _object: &GrantObject,
-        _privilege: UserPrivilegeType,
-        _check_current_role_only: bool,
-    ) -> Result<()> {
-        todo!()
-    }
-
-    async fn get_visibility_checker(
-        &self,
-        _ignore_ownership: bool,
-        _object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
-        todo!()
-    }
-
     fn get_fuse_version(&self) -> String {
         todo!()
     }
@@ -644,6 +611,46 @@ impl TableContextSession for CtxDelegation {
     }
 
     fn session_state(&self) -> Result<SessionState> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextAuthorization for CtxDelegation {
+    fn get_current_user(&self) -> Result<UserInfo> {
+        todo!()
+    }
+
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        todo!()
+    }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        todo!()
+    }
+
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
+
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
+    ) -> Result<()> {
+        todo!()
+    }
+
+    async fn get_visibility_checker(
+        &self,
+        _ignore_ownership: bool,
+        _object: Object,
+    ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
 }

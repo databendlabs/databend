@@ -39,6 +39,7 @@ use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QUERY_QUEUED_TIMEOUT_QUOTA_KEY;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;

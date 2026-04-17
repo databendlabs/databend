@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::KeyWithTenant;

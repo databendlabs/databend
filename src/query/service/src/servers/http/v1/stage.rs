@@ -14,6 +14,7 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;

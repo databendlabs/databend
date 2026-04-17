@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
 use databend_common_sql::plans::CreateFileFormatPlan;

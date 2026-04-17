@@ -28,16 +28,11 @@ use databend_common_exception::ResultExt;
 use databend_common_expression::FunctionContext;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
-use databend_common_users::GrantObjectVisibilityChecker;
-use databend_common_users::Object;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -48,6 +43,7 @@ use crate::query_kind::QueryKind;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
+mod authorization;
 mod broadcast;
 mod copy;
 mod cte;
@@ -71,6 +67,7 @@ mod table_access;
 mod table_management;
 mod variables;
 
+pub use authorization::TableContextAuthorization;
 pub use broadcast::TableContextBroadcast;
 pub use copy::TableContextCopy;
 pub use cte::TableContextCte;
@@ -150,7 +147,8 @@ pub struct FilteredCopyFiles {
 
 #[async_trait::async_trait]
 pub trait TableContext:
-    TableContextBroadcast
+    TableContextAuthorization
+    + TableContextBroadcast
     + TableContextCopy
     + TableContextCte
     + TableContextMergeInto
@@ -239,23 +237,6 @@ pub trait TableContext:
     fn get_error(&self) -> Option<ErrorCode<ContextError>>;
     fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
-    fn get_current_user(&self) -> Result<UserInfo>;
-    fn get_current_role(&self) -> Option<RoleInfo>;
-    fn get_secondary_roles(&self) -> Option<Vec<String>>;
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
-
-    async fn validate_privilege(
-        &self,
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
-        check_current_role_only: bool,
-    ) -> Result<()>;
-    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
-    async fn get_visibility_checker(
-        &self,
-        ignore_ownership: bool,
-        object: Object,
-    ) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_version(&self) -> BuildInfoRef;
     fn get_input_format_settings(&self) -> Result<InputFormatSettings>;

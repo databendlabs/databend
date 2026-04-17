@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::Connection;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;

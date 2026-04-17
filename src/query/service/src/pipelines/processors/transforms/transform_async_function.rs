@@ -25,6 +25,7 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;

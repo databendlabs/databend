@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::plans::CopyIntoLocationPlan;
