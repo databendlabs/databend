@@ -43,7 +43,7 @@ from t_quote_minimal_roundtrip
 file_format = (type = 'csv', quote_style = 'quote_minimal', escape='\\')
 single = true include_query_id = false use_raw_path = true overwrite = true detailed_output = true
 ----
-default_null_display.csv 21 4
+default_null_display.csv 23 4
 
 query T
 select $1 from @s1/default_null_display.csv (file_format => 'text') order by metadata$file_row_number
