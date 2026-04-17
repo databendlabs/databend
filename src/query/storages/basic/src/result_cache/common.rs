@@ -39,9 +39,6 @@ pub(crate) fn gen_result_cache_dir(key: &str) -> String {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ResultCacheValue {
-    /// The associated result cache key hash.
-    #[serde(default, alias = "sql")]
-    pub sql_hash: String,
     /// Associated query id
     pub query_id: String,
     /// The query time.
