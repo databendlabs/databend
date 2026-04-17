@@ -47,8 +47,6 @@ use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
@@ -58,8 +56,6 @@ use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -75,6 +71,7 @@ use crate::table::Table;
 mod broadcast;
 mod cte;
 mod merge_into;
+mod mutation;
 mod on_error;
 mod partitions;
 mod perf;
@@ -83,12 +80,14 @@ mod read_block_thresholds;
 mod result_cache;
 mod runtime_filter;
 mod segment_locations;
+mod spill;
 mod stream;
 mod variables;
 
 pub use broadcast::TableContextBroadcast;
 pub use cte::TableContextCte;
 pub use merge_into::TableContextMergeInto;
+pub use mutation::TableContextMutationStatus;
 pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
@@ -97,6 +96,7 @@ pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
 pub use runtime_filter::TableContextRuntimeFilter;
 pub use segment_locations::TableContextSegmentLocations;
+pub use spill::TableContextSpillProgress;
 pub use stream::TableContextStream;
 pub use variables::TableContextVariables;
 
@@ -159,6 +159,7 @@ pub trait TableContext:
     TableContextBroadcast
     + TableContextCte
     + TableContextMergeInto
+    + TableContextMutationStatus
     + TableContextOnError
     + TableContextPartitionStats
     + TableContextPerf
@@ -167,6 +168,7 @@ pub trait TableContext:
     + TableContextResultCache
     + TableContextRuntimeFilter
     + TableContextSegmentLocations
+    + TableContextSpillProgress
     + TableContextStream
     + TableContextVariables
     + Send
@@ -185,15 +187,7 @@ pub trait TableContext:
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
     fn get_write_progress(&self) -> Arc<Progress>;
-    fn get_join_spill_progress(&self) -> Arc<Progress>;
-    fn get_group_by_spill_progress(&self) -> Arc<Progress>;
-    fn get_aggregate_spill_progress(&self) -> Arc<Progress>;
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress>;
     fn get_write_progress_value(&self) -> ProgressValues;
-    fn get_join_spill_progress_value(&self) -> ProgressValues;
-    fn get_group_by_spill_progress_value(&self) -> ProgressValues;
-    fn get_aggregate_spill_progress_value(&self) -> ProgressValues;
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
@@ -354,14 +348,6 @@ pub trait TableContext:
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
-
-    fn add_mutation_status(&self, mutation_status: MutationStatus);
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>>;
-
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>>;
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;

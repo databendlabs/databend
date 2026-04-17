@@ -48,6 +48,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
+use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
@@ -56,6 +57,7 @@ use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
@@ -579,39 +581,7 @@ impl TableContext for CtxDelegation {
         self.ctx.get_write_progress()
     }
 
-    fn get_join_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_join_spill_progress()
-    }
-
-    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_aggregate_spill_progress()
-    }
-
-    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_group_by_spill_progress()
-    }
-
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_window_partition_spill_progress()
-    }
-
     fn get_write_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_join_spill_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
@@ -897,22 +867,6 @@ impl TableContext for CtxDelegation {
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         todo!()
     }
-    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
-        todo!()
-    }
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        todo!()
-    }
-
-    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
-        todo!()
-    }
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        todo!()
-    }
-
     fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
         todo!()
     }
@@ -1063,6 +1017,58 @@ impl TableContextResultCache for CtxDelegation {
     }
 
     fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
+        todo!()
+    }
+}
+
+impl TableContextMutationStatus for CtxDelegation {
+    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
+        todo!()
+    }
+
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+        todo!()
+    }
+
+    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
+        todo!()
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        todo!()
+    }
+}
+
+impl TableContextSpillProgress for CtxDelegation {
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_join_spill_progress()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_group_by_spill_progress()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_aggregate_spill_progress()
+    }
+
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_window_partition_spill_progress()
+    }
+
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 }

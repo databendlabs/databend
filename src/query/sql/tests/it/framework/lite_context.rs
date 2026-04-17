@@ -64,6 +64,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
+use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
@@ -72,6 +73,7 @@ use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1087,32 +1089,8 @@ impl TableContext for LiteTableContext {
     fn get_write_progress(&self) -> Arc<Progress> {
         self.write_progress.clone()
     }
-    fn get_join_spill_progress(&self) -> Arc<Progress> {
-        self.join_spill_progress.clone()
-    }
-    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
-        self.group_by_spill_progress.clone()
-    }
-    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
-        self.aggregate_spill_progress.clone()
-    }
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
-        self.window_partition_spill_progress.clone()
-    }
     fn get_write_progress_value(&self) -> ProgressValues {
         self.write_progress.get_values()
-    }
-    fn get_join_spill_progress_value(&self) -> ProgressValues {
-        self.join_spill_progress.get_values()
-    }
-    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
-        self.group_by_spill_progress.get_values()
-    }
-    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
-        self.aggregate_spill_progress.get_values()
-    }
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
-        self.window_partition_spill_progress.get_values()
     }
     fn get_result_progress(&self) -> Arc<Progress> {
         self.result_progress.clone()
@@ -1346,23 +1324,6 @@ impl TableContext for LiteTableContext {
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.copy_status.clone()
     }
-    fn add_mutation_status(&self, mutation_status: MutationStatus) {
-        self.mutation_status
-            .write()
-            .merge_mutation_status(mutation_status);
-    }
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        self.mutation_status.clone()
-    }
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        self.multi_table_insert_status
-            .lock()
-            .insert_rows
-            .insert(table_id, num_rows);
-    }
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        self.multi_table_insert_status.clone()
-    }
     fn get_license_key(&self) -> String {
         String::new()
     }
@@ -1487,6 +1448,63 @@ impl TableContextResultCache for LiteTableContext {
     }
 
     fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {}
+}
+
+impl TableContextMutationStatus for LiteTableContext {
+    fn add_mutation_status(&self, mutation_status: MutationStatus) {
+        self.mutation_status
+            .write()
+            .merge_mutation_status(mutation_status);
+    }
+
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+        self.mutation_status.clone()
+    }
+
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
+        self.multi_table_insert_status
+            .lock()
+            .insert_rows
+            .insert(table_id, num_rows);
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        self.multi_table_insert_status.clone()
+    }
+}
+
+impl TableContextSpillProgress for LiteTableContext {
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.join_spill_progress.clone()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.group_by_spill_progress.clone()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.aggregate_spill_progress.clone()
+    }
+
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.window_partition_spill_progress.clone()
+    }
+
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
+        self.join_spill_progress.get_values()
+    }
+
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
+        self.group_by_spill_progress.get_values()
+    }
+
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
+        self.aggregate_spill_progress.get_values()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
+        self.window_partition_spill_progress.get_values()
+    }
 }
 
 impl TableContextPerf for LiteTableContext {

@@ -29,6 +29,7 @@ use serde_json;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextQueryQueue;
+use crate::sessions::TableContextSpillProgress;
 use crate::sessions::convert_query_log_timestamp;
 
 pub struct InterpreterQueryLog;

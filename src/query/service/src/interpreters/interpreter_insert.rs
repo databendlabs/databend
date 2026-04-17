@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;

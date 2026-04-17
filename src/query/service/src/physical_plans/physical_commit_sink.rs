@@ -16,7 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::ReclusterInfoSideCar;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;

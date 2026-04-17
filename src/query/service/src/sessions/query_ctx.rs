@@ -81,6 +81,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
+use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
@@ -89,6 +90,7 @@ use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1011,43 +1013,8 @@ impl TableContext for QueryContext {
         self.shared.write_progress.clone()
     }
 
-    fn get_join_spill_progress(&self) -> Arc<Progress> {
-        self.shared.join_spill_progress.clone()
-    }
-
-    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
-        self.shared.agg_spill_progress.clone()
-    }
-
-    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
-        self.shared.group_by_spill_progress.clone()
-    }
-
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
-        self.shared.window_partition_spill_progress.clone()
-    }
-
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
-    }
-
-    fn get_join_spill_progress_value(&self) -> ProgressValues {
-        self.shared.join_spill_progress.as_ref().get_values()
-    }
-
-    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
-        self.shared.agg_spill_progress.as_ref().get_values()
-    }
-
-    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
-        self.shared.group_by_spill_progress.as_ref().get_values()
-    }
-
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
-        self.shared
-            .window_partition_spill_progress
-            .as_ref()
-            .get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {
@@ -1686,35 +1653,6 @@ impl TableContext for QueryContext {
         self.shared.copy_status.clone()
     }
 
-    fn add_mutation_status(&self, mutation_status: MutationStatus) {
-        self.shared
-            .mutation_status
-            .write()
-            .merge_mutation_status(mutation_status)
-    }
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        self.shared.mutation_status.clone()
-    }
-
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
-        match multi_table_insert_status.insert_rows.get_mut(&table_id) {
-            Some(v) => {
-                *v += num_rows;
-            }
-            None => {
-                multi_table_insert_status
-                    .insert_rows
-                    .insert(table_id, num_rows);
-            }
-        }
-    }
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        self.shared.multi_table_insert_status.clone()
-    }
-
     fn get_license_key(&self) -> String {
         self.get_settings()
             .get_enterprise_license(self.get_version())
@@ -2293,6 +2231,37 @@ impl TableContextResultCache for QueryContext {
     }
 }
 
+impl TableContextMutationStatus for QueryContext {
+    fn add_mutation_status(&self, mutation_status: MutationStatus) {
+        self.shared
+            .mutation_status
+            .write()
+            .merge_mutation_status(mutation_status)
+    }
+
+    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+        self.shared.mutation_status.clone()
+    }
+
+    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
+        let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
+        match multi_table_insert_status.insert_rows.get_mut(&table_id) {
+            Some(v) => {
+                *v += num_rows;
+            }
+            None => {
+                multi_table_insert_status
+                    .insert_rows
+                    .insert(table_id, num_rows);
+            }
+        }
+    }
+
+    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        self.shared.multi_table_insert_status.clone()
+    }
+}
+
 impl TableContextQueryQueue for QueryContext {
     fn get_query_queued_duration(&self) -> std::time::Duration {
         *self.shared.query_queued_duration.read()
@@ -2431,6 +2400,43 @@ impl TableContextRuntimeFilter for QueryContext {
                 .any(|entry| entry.bloom.is_some());
         }
         false
+    }
+}
+
+impl TableContextSpillProgress for QueryContext {
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.shared.join_spill_progress.clone()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.shared.group_by_spill_progress.clone()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.shared.agg_spill_progress.clone()
+    }
+
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.shared.window_partition_spill_progress.clone()
+    }
+
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
+        self.shared.join_spill_progress.as_ref().get_values()
+    }
+
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
+        self.shared.group_by_spill_progress.as_ref().get_values()
+    }
+
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
+        self.shared.agg_spill_progress.as_ref().get_values()
+    }
+
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
+        self.shared
+            .window_partition_spill_progress
+            .as_ref()
+            .get_values()
     }
 }
 

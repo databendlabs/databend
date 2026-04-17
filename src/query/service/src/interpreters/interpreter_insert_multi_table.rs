@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
