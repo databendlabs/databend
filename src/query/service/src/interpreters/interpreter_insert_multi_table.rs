@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
@@ -50,6 +51,7 @@ use crate::physical_plans::ChunkFillAndReorder;
 use crate::physical_plans::ChunkFilter;
 use crate::physical_plans::ChunkMerge;
 use crate::physical_plans::Duplicate;
+use crate::physical_plans::EvalScalar;
 use crate::physical_plans::FillAndReorder;
 use crate::physical_plans::MultiInsertEvalScalar;
 use crate::physical_plans::PhysicalPlan;
@@ -250,7 +252,60 @@ impl InsertMultiTableInterpreter {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
-                Ok((input_source, metadata.clone()))
+
+                // Lazy materialization (triggered by WHERE + LIMIT) may reorder physical output
+                // columns and inject internal columns like _row_id.  Add a reorder EvalScalar
+                // that projects exactly the logical columns in bind_context order, stripping any
+                // internal columns.  This ensures ChunkCastSchema sees a clean, correctly-ordered
+                // block.
+                let physical_schema = input_source.output_schema()?;
+
+                // Build (phys_pos, symbol) pairs for each result column, in final SELECT order.
+                let result_columns = bind_context.result_columns();
+                let col_refs: Vec<(usize, databend_common_sql::Symbol)> = result_columns
+                    .iter()
+                    .filter_map(|(sym, _name)| {
+                        let phys_pos = physical_schema.index_of(&sym.to_string()).ok()?;
+                        Some((phys_pos, *sym))
+                    })
+                    .collect();
+
+                // If we can't map all result columns, or the schema already has no internal columns
+                // and is already in the right order, skip the reorder node.
+                let needs_reorder = col_refs.len() == result_columns.len()
+                    && (physical_schema.num_fields() != col_refs.len()
+                        || col_refs
+                            .iter()
+                            .enumerate()
+                            .any(|(logical_pos, &(phys_pos, _))| logical_pos != phys_pos));
+
+                if !needs_reorder {
+                    return Ok((input_source, metadata.clone()));
+                }
+
+                // Build ColumnRef expressions that pick each logical column in order.
+                let exprs: Vec<(RemoteExpr, databend_common_sql::Symbol)> = col_refs
+                    .iter()
+                    .map(|&(phys_pos, sym)| {
+                        let data_type = physical_schema.field(phys_pos).data_type().clone();
+                        let remote_expr = RemoteExpr::ColumnRef {
+                            span: None,
+                            id: phys_pos,
+                            data_type,
+                            display_name: sym.to_string(),
+                        };
+                        (remote_expr, sym)
+                    })
+                    .collect();
+
+                // Project only the new expr columns (input_col_num .. input_col_num + n).
+                let input_col_num = physical_schema.num_fields();
+                let projections: BTreeSet<usize> =
+                    (input_col_num..input_col_num + exprs.len()).collect();
+
+                let reordered =
+                    PhysicalPlan::new(EvalScalar::create(input_source, exprs, projections, None));
+                Ok((reordered, metadata.clone()))
             }
             _ => unreachable!(),
         }
