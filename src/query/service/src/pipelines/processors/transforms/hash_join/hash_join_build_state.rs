@@ -112,13 +112,8 @@ impl HashJoinBuildState {
     const BUILD_INTERRUPT_CHECK_INTERVAL: usize = 8192;
 
     #[inline]
-    fn check_build_interrupt(interrupt: &AtomicBool, row_index: usize) -> Result<()> {
-        if row_index % Self::BUILD_INTERRUPT_CHECK_INTERVAL == 0
-            && interrupt.load(Ordering::Relaxed)
-        {
-            return Err(ErrorCode::aborting());
-        }
-        Ok(())
+    fn should_check_build_interrupt(row_index: usize) -> bool {
+        row_index % Self::BUILD_INTERRUPT_CHECK_INTERVAL == 0
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -421,6 +416,7 @@ impl HashJoinBuildState {
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let mut is_interrupted = false;
 
         macro_rules! insert_key {
             ($table: expr, $method: expr, $chunk: expr, $build_keys: expr, $valids: expr, $chunk_index: expr, $entry_size: expr, $local_raw_entry_spaces: expr, $t: ty, ) => {{
@@ -441,10 +437,12 @@ impl HashJoinBuildState {
                         for (row_index, (key, valid)) in
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
-                            Self::check_build_interrupt(
-                                &self.hash_join_state.interrupt,
-                                row_index,
-                            )?;
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             if !valid {
                                 continue;
                             }
@@ -468,10 +466,12 @@ impl HashJoinBuildState {
                     }
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
-                            Self::check_build_interrupt(
-                                &self.hash_join_state.interrupt,
-                                row_index,
-                            )?;
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             let row_ptr = RowPtr {
                                 chunk_index: $chunk_index,
                                 row_index: row_index as u32,
@@ -493,6 +493,9 @@ impl HashJoinBuildState {
                 }
 
                 local_raw_entry_spaces.push(local_space);
+                if is_interrupted {
+                    return Err(ErrorCode::aborting());
+                }
             }};
         }
 
@@ -527,10 +530,12 @@ impl HashJoinBuildState {
                         for (row_index, (key, valid)) in
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
-                            Self::check_build_interrupt(
-                                &self.hash_join_state.interrupt,
-                                row_index,
-                            )?;
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             if !valid {
                                 continue;
                             }
@@ -567,10 +572,12 @@ impl HashJoinBuildState {
                     }
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
-                            Self::check_build_interrupt(
-                                &self.hash_join_state.interrupt,
-                                row_index,
-                            )?;
+                            if Self::should_check_build_interrupt(row_index)
+                                && self.hash_join_state.interrupt.load(Ordering::Relaxed)
+                            {
+                                is_interrupted = true;
+                                break;
+                            }
                             let row_ptr = RowPtr {
                                 chunk_index: $chunk_index,
                                 row_index: row_index as u32,
@@ -606,6 +613,9 @@ impl HashJoinBuildState {
 
                 local_raw_entry_spaces.push(entry_local_space);
                 local_raw_entry_spaces.push(string_local_space);
+                if is_interrupted {
+                    return Err(ErrorCode::aborting());
+                }
             }};
         }
 
@@ -911,36 +921,18 @@ impl HashJoinBuildState {
             .iter()
             .any(|rf| rf.enable_bloom_runtime_filter)
     }
-
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering;
-
-    use databend_common_exception::ErrorCode;
-
     use super::HashJoinBuildState;
 
     #[test]
-    fn test_check_build_interrupt_interval() {
-        let interrupt = AtomicBool::new(false);
-        HashJoinBuildState::check_build_interrupt(&interrupt, 0).unwrap();
-        HashJoinBuildState::check_build_interrupt(
-            &interrupt,
+    fn test_should_check_build_interrupt_interval() {
+        assert!(HashJoinBuildState::should_check_build_interrupt(0));
+        assert!(!HashJoinBuildState::should_check_build_interrupt(1));
+        assert!(HashJoinBuildState::should_check_build_interrupt(
             HashJoinBuildState::BUILD_INTERRUPT_CHECK_INTERVAL,
-        )
-        .unwrap();
-
-        interrupt.store(true, Ordering::Relaxed);
-
-        HashJoinBuildState::check_build_interrupt(&interrupt, 1).unwrap();
-        let err = HashJoinBuildState::check_build_interrupt(
-            &interrupt,
-            HashJoinBuildState::BUILD_INTERRUPT_CHECK_INTERVAL,
-        )
-        .unwrap_err();
-        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
+        ));
     }
 }
