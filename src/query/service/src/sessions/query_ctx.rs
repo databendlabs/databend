@@ -80,9 +80,14 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextMergeInto;
+use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextReadBlockThresholds;
+use databend_common_catalog::table_context::TableContextResultCache;
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
@@ -1114,48 +1119,6 @@ impl TableContext for QueryContext {
         self.partition_queue.read().len()
     }
 
-    fn add_partitions_sha(&self, s: String) {
-        let mut shas = self.shared.partitions_shas.write();
-        // Avoid duplicate invalidation keys when the same table is scanned multiple times.
-        // Example: `SELECT * FROM t WHERE a > (SELECT MIN(a) FROM t)`
-        // In this query, table `t` appears twice:
-        // 1. The main TableScan adds SHA via table_read_plan.rs
-        // 2. The scalar subquery is optimized to DummyTableScan, which also
-        //    adds an invalidation key for its source table `t` via build_dummy_table_scan
-        // Without deduplication, the same key would appear twice in the list.
-        if !shas.contains(&s) {
-            shas.push(s);
-        }
-    }
-
-    fn get_partitions_shas(&self) -> Vec<String> {
-        let mut sha = self.shared.partitions_shas.read().clone();
-        // Sort to make sure the keys are stable for the same query.
-        sha.sort();
-        sha
-    }
-
-    fn add_cache_key_extra(&self, extra: String) {
-        let mut extras = self.shared.cache_key_extras.write();
-        if !extras.contains(&extra) {
-            extras.push(extra);
-        }
-    }
-
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        let mut extras = self.shared.cache_key_extras.read().clone();
-        extras.sort();
-        extras
-    }
-
-    fn get_cacheable(&self) -> bool {
-        self.shared.cacheable.load(Ordering::Acquire)
-    }
-
-    fn set_cacheable(&self, cacheable: bool) {
-        self.shared.cacheable.store(cacheable, Ordering::Release);
-    }
-
     fn get_can_scan_from_agg_index(&self) -> bool {
         self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
     }
@@ -1488,37 +1451,8 @@ impl TableContext for QueryContext {
         self.shared.session.session_ctx.get_query_id_history()
     }
 
-    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
-        self.shared
-            .session
-            .session_ctx
-            .get_query_result_cache_key(query_id)
-    }
-
-    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
-        self.shared
-            .session
-            .session_ctx
-            .update_query_ids_results(query_id, Some(result_cache_key))
-    }
-
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        self.shared.get_on_error_map()
-    }
-
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        self.shared.set_on_error_map(map);
-    }
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.shared.get_on_error_mode()
-    }
-    fn set_on_error_mode(&self, mode: OnErrorMode) {
-        self.shared.set_on_error_mode(mode)
-    }
-
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        if let Some(on_error_map) = self.get_on_error_map() {
+        if let Some(on_error_map) = self.shared.get_on_error_map() {
             if on_error_map.is_empty() {
                 return None;
             }
@@ -1798,139 +1732,6 @@ impl TableContext for QueryContext {
         SessionManager::instance().get_queries_profiles()
     }
 
-    fn set_merge_into_join(&self, join: MergeIntoJoin) {
-        let mut merge_into_join = self.shared.merge_into_join.write();
-        *merge_into_join = join;
-    }
-
-    fn clear_runtime_filter(&self) {
-        let mut runtime_filters = self.shared.runtime_filters.write();
-        runtime_filters.clear();
-        self.shared.runtime_filter_ready.write().clear();
-        self.shared
-            .runtime_filter_logged
-            .store(false, Ordering::SeqCst);
-    }
-
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        let query_id = self.get_id();
-        if !self.shared.runtime_filters.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filters should be empty for query {query_id}"
-            )));
-        }
-        if !self.shared.runtime_filter_ready.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter ready set should be empty for query {query_id}"
-            )));
-        }
-        if self.shared.runtime_filter_logged.load(Ordering::Relaxed) {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter logged flag should be reset for query {query_id}"
-            )));
-        }
-        Ok(())
-    }
-
-    fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
-        let mut runtime_filters = self.shared.runtime_filters.write();
-        for (scan_id, filter) in filters {
-            let entry = runtime_filters.entry(scan_id).or_default();
-            for new_filter in filter.filters {
-                entry.filters.push(new_filter);
-            }
-        }
-    }
-
-    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
-        let mut runtime_filter_ready = self.shared.runtime_filter_ready.write();
-        match runtime_filter_ready.entry(table_index) {
-            Entry::Vacant(v) => {
-                v.insert(vec![ready]);
-            }
-            Entry::Occupied(mut v) => {
-                v.get_mut().push(ready);
-            }
-        }
-    }
-
-    fn get_runtime_filter_ready(&self, scan_id: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        let runtime_filter_ready = self.shared.runtime_filter_ready.read();
-        match runtime_filter_ready.get(&scan_id) {
-            Some(v) => v.to_vec(),
-            None => vec![],
-        }
-    }
-
-    fn get_merge_into_join(&self) -> MergeIntoJoin {
-        let merge_into_join = self.shared.merge_into_join.read();
-        MergeIntoJoin {
-            merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
-            is_distributed: merge_into_join.is_distributed,
-            target_tbl_idx: merge_into_join.target_tbl_idx,
-        }
-    }
-
-    fn get_runtime_filters(&self, id: IndexType) -> Vec<RuntimeFilterEntry> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        runtime_filters
-            .get(&id)
-            .map(|v| v.filters.clone())
-            .unwrap_or_default()
-    }
-
-    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
-        self.get_runtime_filters(id)
-            .into_iter()
-            .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))
-            .collect()
-    }
-
-    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        self.get_runtime_filters(id)
-            .into_iter()
-            .filter_map(|entry| entry.inlist)
-            .collect()
-    }
-
-    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        self.get_runtime_filters(id)
-            .into_iter()
-            .filter_map(|entry| entry.min_max)
-            .collect()
-    }
-
-    fn runtime_filter_reports(&self) -> HashMap<IndexType, Vec<RuntimeFilterReport>> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        runtime_filters
-            .iter()
-            .map(|(scan_id, info)| {
-                let reports = info
-                    .filters
-                    .iter()
-                    .map(|entry| RuntimeFilterReport {
-                        filter_id: entry.id,
-                        has_bloom: entry.bloom.is_some(),
-                        has_inlist: entry.inlist.is_some(),
-                        has_min_max: entry.min_max.is_some(),
-                        stats: entry.stats.snapshot(),
-                    })
-                    .collect();
-                (*scan_id, reports)
-            })
-            .collect()
-    }
-
-    fn has_bloom_runtime_filters(&self, id: usize) -> bool {
-        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return runtime_filter
-                .filters
-                .iter()
-                .any(|entry| entry.bloom.is_some());
-        }
-        false
-    }
-
     fn txn_mgr(&self) -> TxnManagerRef {
         self.shared.session.session_ctx.txn_mgr()
     }
@@ -2033,14 +1834,6 @@ impl TableContext for QueryContext {
         }
 
         Ok(table_meta_timestamps)
-    }
-
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        *self.block_threshold.read()
-    }
-
-    fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
-        *self.block_threshold.write() = thresholds;
     }
 
     #[async_backtrace::framed]
@@ -2354,6 +2147,40 @@ impl TableContextCte for QueryContext {
     }
 }
 
+impl TableContextMergeInto for QueryContext {
+    fn set_merge_into_join(&self, join: MergeIntoJoin) {
+        let mut merge_into_join = self.shared.merge_into_join.write();
+        *merge_into_join = join;
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        let merge_into_join = self.shared.merge_into_join.read();
+        MergeIntoJoin {
+            merge_into_join_type: merge_into_join.merge_into_join_type.clone(),
+            is_distributed: merge_into_join.is_distributed,
+            target_tbl_idx: merge_into_join.target_tbl_idx,
+        }
+    }
+}
+
+impl TableContextOnError for QueryContext {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        self.shared.get_on_error_map()
+    }
+
+    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+        self.shared.set_on_error_map(map);
+    }
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        self.shared.get_on_error_mode()
+    }
+
+    fn set_on_error_mode(&self, mode: OnErrorMode) {
+        self.shared.set_on_error_mode(mode)
+    }
+}
+
 impl TableContextPerf for QueryContext {
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         let mut all = SessionManager::instance().get_query_execution_stats();
@@ -2408,6 +2235,64 @@ impl TableContextPartitionStats for QueryContext {
     }
 }
 
+impl TableContextResultCache for QueryContext {
+    fn add_partitions_sha(&self, s: String) {
+        let mut shas = self.shared.partitions_shas.write();
+        // Avoid duplicate invalidation keys when the same table is scanned multiple times.
+        // Example: `SELECT * FROM t WHERE a > (SELECT MIN(a) FROM t)`
+        // In this query, table `t` appears twice:
+        // 1. The main TableScan adds SHA via table_read_plan.rs
+        // 2. The scalar subquery is optimized to DummyTableScan, which also
+        //    adds an invalidation key for its source table `t` via build_dummy_table_scan
+        // Without deduplication, the same key would appear twice in the list.
+        if !shas.contains(&s) {
+            shas.push(s);
+        }
+    }
+
+    fn get_partitions_shas(&self) -> Vec<String> {
+        let mut sha = self.shared.partitions_shas.read().clone();
+        // Sort to make sure the keys are stable for the same query.
+        sha.sort();
+        sha
+    }
+
+    fn add_cache_key_extra(&self, extra: String) {
+        let mut extras = self.shared.cache_key_extras.write();
+        if !extras.contains(&extra) {
+            extras.push(extra);
+        }
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        let mut extras = self.shared.cache_key_extras.read().clone();
+        extras.sort();
+        extras
+    }
+
+    fn get_cacheable(&self) -> bool {
+        self.shared.cacheable.load(Ordering::Acquire)
+    }
+
+    fn set_cacheable(&self, cacheable: bool) {
+        self.shared.cacheable.store(cacheable, Ordering::Release);
+    }
+
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.shared
+            .session
+            .session_ctx
+            .get_query_result_cache_key(query_id)
+    }
+
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.shared
+            .session
+            .session_ctx
+            .update_query_ids_results(query_id, Some(result_cache_key))
+    }
+}
+
 impl TableContextQueryQueue for QueryContext {
     fn get_query_queued_duration(&self) -> std::time::Duration {
         *self.shared.query_queued_duration.read()
@@ -2415,6 +2300,137 @@ impl TableContextQueryQueue for QueryContext {
 
     fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
         *self.shared.query_queued_duration.write() = queued_duration;
+    }
+}
+
+impl TableContextReadBlockThresholds for QueryContext {
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        *self.block_threshold.read()
+    }
+
+    fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
+        *self.block_threshold.write() = thresholds;
+    }
+}
+
+impl TableContextRuntimeFilter for QueryContext {
+    fn clear_runtime_filter(&self) {
+        let mut runtime_filters = self.shared.runtime_filters.write();
+        runtime_filters.clear();
+        self.shared.runtime_filter_ready.write().clear();
+        self.shared
+            .runtime_filter_logged
+            .store(false, Ordering::SeqCst);
+    }
+
+    fn assert_no_runtime_filter_state(&self) -> Result<()> {
+        let query_id = self.get_id();
+        if !self.shared.runtime_filters.read().is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "Runtime filters should be empty for query {query_id}"
+            )));
+        }
+        if !self.shared.runtime_filter_ready.read().is_empty() {
+            return Err(ErrorCode::Internal(format!(
+                "Runtime filter ready set should be empty for query {query_id}"
+            )));
+        }
+        if self.shared.runtime_filter_logged.load(Ordering::Relaxed) {
+            return Err(ErrorCode::Internal(format!(
+                "Runtime filter logged flag should be reset for query {query_id}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
+        let mut runtime_filters = self.shared.runtime_filters.write();
+        for (scan_id, filter) in filters {
+            let entry = runtime_filters.entry(scan_id).or_default();
+            for new_filter in filter.filters {
+                entry.filters.push(new_filter);
+            }
+        }
+    }
+
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
+        let mut runtime_filter_ready = self.shared.runtime_filter_ready.write();
+        match runtime_filter_ready.entry(table_index) {
+            Entry::Vacant(v) => {
+                v.insert(vec![ready]);
+            }
+            Entry::Occupied(mut v) => {
+                v.get_mut().push(ready);
+            }
+        }
+    }
+
+    fn get_runtime_filter_ready(&self, scan_id: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        let runtime_filter_ready = self.shared.runtime_filter_ready.read();
+        match runtime_filter_ready.get(&scan_id) {
+            Some(v) => v.to_vec(),
+            None => vec![],
+        }
+    }
+
+    fn get_runtime_filters(&self, id: IndexType) -> Vec<RuntimeFilterEntry> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        runtime_filters
+            .get(&id)
+            .map(|v| v.filters.clone())
+            .unwrap_or_default()
+    }
+
+    fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
+        self.get_runtime_filters(id)
+            .into_iter()
+            .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))
+            .collect()
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        self.get_runtime_filters(id)
+            .into_iter()
+            .filter_map(|entry| entry.inlist)
+            .collect()
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
+        self.get_runtime_filters(id)
+            .into_iter()
+            .filter_map(|entry| entry.min_max)
+            .collect()
+    }
+
+    fn runtime_filter_reports(&self) -> HashMap<IndexType, Vec<RuntimeFilterReport>> {
+        let runtime_filters = self.shared.runtime_filters.read();
+        runtime_filters
+            .iter()
+            .map(|(scan_id, info)| {
+                let reports = info
+                    .filters
+                    .iter()
+                    .map(|entry| RuntimeFilterReport {
+                        filter_id: entry.id,
+                        has_bloom: entry.bloom.is_some(),
+                        has_inlist: entry.inlist.is_some(),
+                        has_min_max: entry.min_max.is_some(),
+                        stats: entry.stats.snapshot(),
+                    })
+                    .collect();
+                (*scan_id, reports)
+            })
+            .collect()
+    }
+
+    fn has_bloom_runtime_filters(&self, id: usize) -> bool {
+        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
+            return runtime_filter
+                .filters
+                .iter()
+                .any(|entry| entry.bloom.is_some());
+        }
+        false
     }
 }
 

@@ -23,6 +23,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;

@@ -50,6 +50,7 @@ use databend_common_storages_fuse::io::DataItem;
 use databend_common_storages_fuse::io::WriteSettings;
 use databend_common_storages_fuse::io::serialize_block;
 use databend_common_storages_fuse::operations::ReadState;
+use databend_query::sessions::TableContextRuntimeFilter;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::Compression;

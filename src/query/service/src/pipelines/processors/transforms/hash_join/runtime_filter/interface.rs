@@ -14,6 +14,7 @@
 
 use std::time::Instant;
 
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::TableContext;
 

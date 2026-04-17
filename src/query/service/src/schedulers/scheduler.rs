@@ -33,6 +33,7 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextRuntimeFilter;
 use crate::sql::ColumnBinding;
 use crate::stream::PullingExecutorStream;
 

@@ -63,9 +63,14 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextMergeInto;
+use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextReadBlockThresholds;
+use databend_common_catalog::table_context::TableContextResultCache;
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
@@ -1131,18 +1136,6 @@ impl TableContext for LiteTableContext {
     fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
         Ok(())
     }
-    fn add_partitions_sha(&self, _key: String) {}
-    fn get_partitions_shas(&self) -> Vec<String> {
-        vec![]
-    }
-    fn add_cache_key_extra(&self, _extra: String) {}
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        vec![]
-    }
-    fn get_cacheable(&self) -> bool {
-        false
-    }
-    fn set_cacheable(&self, _cacheable: bool) {}
     fn get_can_scan_from_agg_index(&self) -> bool {
         false
     }
@@ -1289,18 +1282,6 @@ impl TableContext for LiteTableContext {
     fn get_query_id_history(&self) -> HashSet<String> {
         HashSet::new()
     }
-    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
-        None
-    }
-    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {}
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        None
-    }
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {}
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        None
-    }
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {}
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         None
     }
@@ -1389,52 +1370,6 @@ impl TableContext for LiteTableContext {
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         vec![]
     }
-    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
-        self.runtime_filter_ready
-            .write()
-            .entry(table_index)
-            .or_default()
-            .push(ready);
-    }
-    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        self.runtime_filter_ready
-            .read()
-            .get(&table_index)
-            .cloned()
-            .unwrap_or_default()
-    }
-    fn clear_runtime_filter(&self) {
-        self.runtime_filter_ready.write().clear();
-    }
-    fn set_merge_into_join(&self, join: MergeIntoJoin) {
-        *self.merge_into_join.write() = join;
-    }
-    fn get_merge_into_join(&self) -> MergeIntoJoin {
-        let join = self.merge_into_join.read();
-        MergeIntoJoin {
-            merge_into_join_type: join.merge_into_join_type.clone(),
-            is_distributed: join.is_distributed,
-            target_tbl_idx: join.target_tbl_idx,
-        }
-    }
-    fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
-        vec![]
-    }
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
-        vec![]
-    }
-    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
-        vec![]
-    }
-    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
-        vec![]
-    }
-    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>> {
-        HashMap::new()
-    }
-    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
-        false
-    }
     fn txn_mgr(&self) -> TxnManagerRef {
         TxnManager::init()
     }
@@ -1445,10 +1380,6 @@ impl TableContext for LiteTableContext {
     ) -> Result<TableMetaTimestamps> {
         unsupported("table_ctx::get_table_meta_timestamps")
     }
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        BlockThresholds::default()
-    }
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {}
     async fn acquire_table_lock(
         self: Arc<Self>,
         _catalog_name: &str,
@@ -1503,6 +1434,61 @@ impl TableContextCte for LiteTableContext {
     }
 }
 
+impl TableContextMergeInto for LiteTableContext {
+    fn set_merge_into_join(&self, join: MergeIntoJoin) {
+        *self.merge_into_join.write() = join;
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        let join = self.merge_into_join.read();
+        MergeIntoJoin {
+            merge_into_join_type: join.merge_into_join_type.clone(),
+            is_distributed: join.is_distributed,
+            target_tbl_idx: join.target_tbl_idx,
+        }
+    }
+}
+
+impl TableContextOnError for LiteTableContext {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        None
+    }
+
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {}
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        None
+    }
+
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {}
+}
+
+impl TableContextResultCache for LiteTableContext {
+    fn add_partitions_sha(&self, _key: String) {}
+
+    fn get_partitions_shas(&self) -> Vec<String> {
+        vec![]
+    }
+
+    fn add_cache_key_extra(&self, _extra: String) {}
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        vec![]
+    }
+
+    fn get_cacheable(&self) -> bool {
+        false
+    }
+
+    fn set_cacheable(&self, _cacheable: bool) {}
+
+    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
+        None
+    }
+
+    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {}
+}
+
 impl TableContextPerf for LiteTableContext {
     fn get_perf_config(&self) -> PerfConfig {
         PerfConfig::default()
@@ -1542,6 +1528,60 @@ impl TableContextQueryQueue for LiteTableContext {
 
     fn set_query_queued_duration(&self, queued_duration: Duration) {
         *self.queued_duration.write() = queued_duration;
+    }
+}
+
+impl TableContextReadBlockThresholds for LiteTableContext {
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        BlockThresholds::default()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {}
+}
+
+impl TableContextRuntimeFilter for LiteTableContext {
+    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
+        self.runtime_filter_ready
+            .write()
+            .entry(table_index)
+            .or_default()
+            .push(ready);
+    }
+
+    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        self.runtime_filter_ready
+            .read()
+            .get(&table_index)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn clear_runtime_filter(&self) {
+        self.runtime_filter_ready.write().clear();
+    }
+
+    fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
+        vec![]
+    }
+
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+        vec![]
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        vec![]
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        vec![]
+    }
+
+    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>> {
+        HashMap::new()
+    }
+
+    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
+        false
     }
 }
 

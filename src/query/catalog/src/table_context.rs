@@ -20,7 +20,6 @@ use std::fmt::Display;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use dashmap::DashMap;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
@@ -28,8 +27,6 @@ use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
-use databend_common_expression::BlockThresholds;
-use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::InputFormatSettings;
@@ -44,7 +41,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
@@ -68,34 +64,38 @@ use parking_lot::RwLock;
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
 use crate::lock::LockTableOption;
-use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
-use crate::runtime_filter_info::RuntimeBloomFilter;
-use crate::runtime_filter_info::RuntimeFilterEntry;
-use crate::runtime_filter_info::RuntimeFilterInfo;
-use crate::runtime_filter_info::RuntimeFilterReady;
-use crate::runtime_filter_info::RuntimeFilterReport;
 use crate::session_type::SessionType;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 mod broadcast;
 mod cte;
+mod merge_into;
+mod on_error;
 mod partitions;
 mod perf;
 mod query_queue;
+mod read_block_thresholds;
+mod result_cache;
+mod runtime_filter;
 mod segment_locations;
 mod stream;
 mod variables;
 
 pub use broadcast::TableContextBroadcast;
 pub use cte::TableContextCte;
+pub use merge_into::TableContextMergeInto;
+pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
 pub use query_queue::TableContextQueryQueue;
+pub use read_block_thresholds::TableContextReadBlockThresholds;
+pub use result_cache::TableContextResultCache;
+pub use runtime_filter::TableContextRuntimeFilter;
 pub use segment_locations::TableContextSegmentLocations;
 pub use stream::TableContextStream;
 pub use variables::TableContextVariables;
@@ -158,9 +158,14 @@ pub struct FilteredCopyFiles {
 pub trait TableContext:
     TableContextBroadcast
     + TableContextCte
+    + TableContextMergeInto
+    + TableContextOnError
     + TableContextPartitionStats
     + TableContextPerf
     + TableContextQueryQueue
+    + TableContextReadBlockThresholds
+    + TableContextResultCache
+    + TableContextRuntimeFilter
     + TableContextSegmentLocations
     + TableContextStream
     + TableContextVariables
@@ -200,16 +205,6 @@ pub trait TableContext:
         unimplemented!()
     }
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
-    /// Add a cache invalidation key for query result cache.
-    ///
-    /// Historically named `partitions_sha` because most callers use a partition SHA256,
-    /// but some callers may use other stable version identifiers (e.g. Fuse snapshot_location).
-    fn add_partitions_sha(&self, key: String);
-    fn get_partitions_shas(&self) -> Vec<String>;
-    fn add_cache_key_extra(&self, extra: String);
-    fn get_cache_key_extras(&self) -> Vec<String>;
-    fn get_cacheable(&self) -> bool;
-    fn set_cacheable(&self, cacheable: bool);
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
     fn get_enable_sort_spill(&self) -> bool;
@@ -299,12 +294,6 @@ pub trait TableContext:
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
     fn get_last_query_id(&self, index: i32) -> Option<String>;
     fn get_query_id_history(&self) -> HashSet<String>;
-    fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
-    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>>;
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>);
-    fn get_on_error_mode(&self) -> Option<OnErrorMode>;
-    fn set_on_error_mode(&self, mode: OnErrorMode);
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
     /// Get the storage data accessor operator from the session manager.
@@ -381,43 +370,12 @@ pub trait TableContext:
 
     fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
-    fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
-        unimplemented!()
-    }
-
-    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
-
-    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
-
-    fn clear_runtime_filter(&self);
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn set_merge_into_join(&self, join: MergeIntoJoin);
-
-    fn get_merge_into_join(&self) -> MergeIntoJoin;
-
-    fn get_runtime_filters(&self, id: usize) -> Vec<RuntimeFilterEntry>;
-
-    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, RuntimeBloomFilter)>;
-
-    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
-
-    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
-
-    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>>;
-
-    fn has_bloom_runtime_filters(&self, id: usize) -> bool;
     fn txn_mgr(&self) -> TxnManagerRef;
     fn get_table_meta_timestamps(
         &self,
         table: &dyn Table,
         previous_snapshot: Option<Arc<TableSnapshot>>,
     ) -> Result<TableMetaTimestamps>;
-
-    fn get_read_block_thresholds(&self) -> BlockThresholds;
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 
     async fn load_datalake_schema(
         &self,

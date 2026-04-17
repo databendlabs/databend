@@ -45,9 +45,14 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextMergeInto;
+use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextReadBlockThresholds;
+use databend_common_catalog::table_context::TableContextResultCache;
+use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
@@ -500,30 +505,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_partitions_sha(&self, _sha: String) {
-        todo!()
-    }
-
-    fn get_partitions_shas(&self) -> Vec<String> {
-        todo!()
-    }
-
-    fn add_cache_key_extra(&self, extra: String) {
-        self.ctx.add_cache_key_extra(extra)
-    }
-
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        self.ctx.get_cache_key_extras()
-    }
-
-    fn get_cacheable(&self) -> bool {
-        todo!()
-    }
-
-    fn set_cacheable(&self, _: bool) {
-        todo!()
-    }
-
     fn get_can_scan_from_agg_index(&self) -> bool {
         todo!()
     }
@@ -688,25 +669,6 @@ impl TableContext for CtxDelegation {
     fn get_query_id_history(&self) -> HashSet<String> {
         todo!()
     }
-    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
-        todo!()
-    }
-    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
-        todo!()
-    }
-
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        todo!()
-    }
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        todo!()
-    }
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        todo!()
-    }
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {
-        todo!()
-    }
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         todo!()
     }
@@ -799,62 +761,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
-        todo!()
-    }
-
-    fn get_merge_into_join(&self) -> MergeIntoJoin {
-        todo!()
-    }
-
-    fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
-        todo!()
-    }
-
-    fn get_runtime_filter_ready(&self, _table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        todo!()
-    }
-
-    fn clear_runtime_filter(&self) {
-        todo!()
-    }
-
-    fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
-        Vec::<RuntimeFilterEntry>::new()
-    }
-
-    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>> {
-        HashMap::new()
-    }
-
-    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
-        todo!()
-    }
-
-    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
-        todo!()
-    }
-
-    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
-        todo!()
-    }
-
-    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
-        todo!()
-    }
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
         todo!()
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
-        todo!()
-    }
-
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        todo!()
-    }
-
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
         todo!()
     }
 
@@ -930,6 +841,68 @@ impl TableContextCte for CtxDelegation {
     }
 }
 
+impl TableContextMergeInto for CtxDelegation {
+    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
+        todo!()
+    }
+
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        todo!()
+    }
+}
+
+impl TableContextOnError for CtxDelegation {
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        todo!()
+    }
+
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+        todo!()
+    }
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        todo!()
+    }
+
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {
+        todo!()
+    }
+}
+
+impl TableContextResultCache for CtxDelegation {
+    fn add_partitions_sha(&self, _sha: String) {
+        todo!()
+    }
+
+    fn get_partitions_shas(&self) -> Vec<String> {
+        todo!()
+    }
+
+    fn add_cache_key_extra(&self, extra: String) {
+        self.ctx.add_cache_key_extra(extra)
+    }
+
+    fn get_cache_key_extras(&self) -> Vec<String> {
+        self.ctx.get_cache_key_extras()
+    }
+
+    fn get_cacheable(&self) -> bool {
+        todo!()
+    }
+
+    fn set_cacheable(&self, _: bool) {
+        todo!()
+    }
+
+    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
+        todo!()
+    }
+
+    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
+        todo!()
+    }
+}
+
 impl TableContextPerf for CtxDelegation {}
 
 impl TableContextPartitionStats for CtxDelegation {}
@@ -940,6 +913,54 @@ impl TableContextQueryQueue for CtxDelegation {
     }
 
     fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
+}
+
+impl TableContextReadBlockThresholds for CtxDelegation {
+    fn get_read_block_thresholds(&self) -> BlockThresholds {
+        todo!()
+    }
+
+    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
+        todo!()
+    }
+}
+
+impl TableContextRuntimeFilter for CtxDelegation {
+    fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
+        todo!()
+    }
+
+    fn get_runtime_filter_ready(&self, _table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
+        todo!()
+    }
+
+    fn clear_runtime_filter(&self) {
+        todo!()
+    }
+
+    fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
+        Vec::<RuntimeFilterEntry>::new()
+    }
+
+    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>> {
+        HashMap::new()
+    }
+
+    fn get_bloom_runtime_filter_with_id(&self, _id: usize) -> Vec<(String, RuntimeBloomFilter)> {
+        todo!()
+    }
+
+    fn get_inlist_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn get_min_max_runtime_filter_with_id(&self, _id: usize) -> Vec<Expr<String>> {
+        todo!()
+    }
+
+    fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
         todo!()
     }
 }

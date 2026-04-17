@@ -15,7 +15,7 @@
 use std::any::Any;
 
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
