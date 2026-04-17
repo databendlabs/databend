@@ -137,6 +137,8 @@ jobs:
           script: |
             const script = require('./databend/.github/scripts/generate_release_note.js')
             await script({ github, context, core })
+      - name: Clean up temporary checkout
+        run: rm -rf databend
       - name: Add Release Note
         run: |
           git add docs/release-stable
