@@ -85,6 +85,7 @@ use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
@@ -1139,27 +1140,6 @@ impl TableContext for QueryContext {
         );
     }
 
-    fn attach_query_str(&self, kind: QueryKind, query: String) {
-        self.shared.attach_query_str(kind, query);
-    }
-
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
-        self.shared.attach_query_hash(text_hash, parameterized_hash);
-    }
-
-    /// Get the session running query.
-    fn get_query_str(&self) -> String {
-        self.shared.get_query_str()
-    }
-
-    fn get_query_parameterized_hash(&self) -> String {
-        self.shared.get_query_parameterized_hash()
-    }
-
-    fn get_query_text_hash(&self) -> String {
-        self.shared.get_query_text_hash()
-    }
-
     fn get_fragment_id(&self) -> usize {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
@@ -1408,14 +1388,6 @@ impl TableContext for QueryContext {
     // Get Stage Attachment.
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         self.shared.get_stage_attachment()
-    }
-
-    fn get_last_query_id(&self, index: i32) -> Option<String> {
-        self.shared.session.session_ctx.get_last_query_id(index)
-    }
-
-    fn get_query_id_history(&self) -> HashSet<String> {
-        self.shared.session.session_ctx.get_query_id_history()
     }
 
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
@@ -2156,6 +2128,36 @@ impl TableContextPerf for QueryContext {
 
     fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
         self.shared.set_perf_events(event_groups);
+    }
+}
+
+impl TableContextQueryIdentity for QueryContext {
+    fn attach_query_str(&self, kind: QueryKind, query: String) {
+        self.shared.attach_query_str(kind, query);
+    }
+
+    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        self.shared.attach_query_hash(text_hash, parameterized_hash);
+    }
+
+    fn get_query_str(&self) -> String {
+        self.shared.get_query_str()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
+        self.shared.get_query_parameterized_hash()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        self.shared.get_query_text_hash()
+    }
+
+    fn get_last_query_id(&self, index: i32) -> Option<String> {
+        self.shared.session.session_ctx.get_last_query_id(index)
+    }
+
+    fn get_query_id_history(&self) -> HashSet<String> {
+        self.shared.session.session_ctx.get_query_id_history()
     }
 }
 

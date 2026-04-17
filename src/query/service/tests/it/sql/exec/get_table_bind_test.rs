@@ -52,6 +52,7 @@ use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
@@ -625,23 +626,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
-    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
-        todo!()
-    }
-
-    fn get_query_str(&self) -> String {
-        todo!()
-    }
-
-    fn get_query_text_hash(&self) -> String {
-        todo!()
-    }
-
-    fn get_query_parameterized_hash(&self) -> String {
-        todo!()
-    }
-
     fn get_fragment_id(&self) -> usize {
         todo!()
     }
@@ -765,13 +749,6 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        todo!()
-    }
-
-    fn get_last_query_id(&self, _index: i32) -> Option<String> {
-        todo!()
-    }
-    fn get_query_id_history(&self) -> HashSet<String> {
         todo!()
     }
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
@@ -1035,6 +1012,34 @@ impl TableContextMutationStatus for CtxDelegation {
     }
 
     fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+        todo!()
+    }
+}
+
+impl TableContextQueryIdentity for CtxDelegation {
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
+
+    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
+        todo!()
+    }
+
+    fn get_query_str(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
+        todo!()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        todo!()
+    }
+
+    fn get_last_query_id(&self, _index: i32) -> Option<String> {
+        todo!()
+    }
+
+    fn get_query_id_history(&self) -> HashSet<String> {
         todo!()
     }
 }

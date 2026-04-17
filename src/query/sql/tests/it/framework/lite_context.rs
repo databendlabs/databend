@@ -68,6 +68,7 @@ use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
@@ -1122,22 +1123,6 @@ impl TableContext for LiteTableContext {
         false
     }
     fn set_enable_sort_spill(&self, _enable: bool) {}
-    fn attach_query_str(&self, _kind: QueryKind, query: String) {
-        *self.query.write() = query;
-    }
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
-        *self.query_text_hash.write() = text_hash;
-        *self.query_parameterized_hash.write() = parameterized_hash;
-    }
-    fn get_query_str(&self) -> String {
-        self.query.read().clone()
-    }
-    fn get_query_parameterized_hash(&self) -> String {
-        self.query_parameterized_hash.read().clone()
-    }
-    fn get_query_text_hash(&self) -> String {
-        self.query_text_hash.read().clone()
-    }
     fn get_fragment_id(&self) -> usize {
         0
     }
@@ -1253,12 +1238,6 @@ impl TableContext for LiteTableContext {
     }
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         None
-    }
-    fn get_last_query_id(&self, _index: i32) -> Option<String> {
-        None
-    }
-    fn get_query_id_history(&self) -> HashSet<String> {
-        HashSet::new()
     }
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         None
@@ -1470,6 +1449,37 @@ impl TableContextMutationStatus for LiteTableContext {
 
     fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
         self.multi_table_insert_status.clone()
+    }
+}
+
+impl TableContextQueryIdentity for LiteTableContext {
+    fn attach_query_str(&self, _kind: QueryKind, query: String) {
+        *self.query.write() = query;
+    }
+
+    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String) {
+        *self.query_text_hash.write() = text_hash;
+        *self.query_parameterized_hash.write() = parameterized_hash;
+    }
+
+    fn get_query_str(&self) -> String {
+        self.query.read().clone()
+    }
+
+    fn get_query_parameterized_hash(&self) -> String {
+        self.query_parameterized_hash.read().clone()
+    }
+
+    fn get_query_text_hash(&self) -> String {
+        self.query_text_hash.read().clone()
+    }
+
+    fn get_last_query_id(&self, _index: i32) -> Option<String> {
+        None
+    }
+
+    fn get_query_id_history(&self) -> HashSet<String> {
+        HashSet::new()
     }
 }
 

@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -75,6 +74,7 @@ mod mutation;
 mod on_error;
 mod partitions;
 mod perf;
+mod query_identity;
 mod query_queue;
 mod read_block_thresholds;
 mod result_cache;
@@ -91,6 +91,7 @@ pub use mutation::TableContextMutationStatus;
 pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
+pub use query_identity::TableContextQueryIdentity;
 pub use query_queue::TableContextQueryQueue;
 pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
@@ -163,6 +164,7 @@ pub trait TableContext:
     + TableContextOnError
     + TableContextPartitionStats
     + TableContextPerf
+    + TableContextQueryIdentity
     + TableContextQueryQueue
     + TableContextReadBlockThresholds
     + TableContextResultCache
@@ -215,13 +217,6 @@ pub trait TableContext:
     fn set_enable_auto_analyze(&self, _enable: bool) {
         unimplemented!()
     }
-
-    fn attach_query_str(&self, kind: QueryKind, query: String);
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
-    fn get_query_str(&self) -> String;
-
-    fn get_query_parameterized_hash(&self) -> String;
-    fn get_query_text_hash(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
@@ -286,8 +281,6 @@ pub trait TableContext:
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
-    fn get_last_query_id(&self, index: i32) -> Option<String>;
-    fn get_query_id_history(&self) -> HashSet<String>;
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
     /// Get the storage data accessor operator from the session manager.

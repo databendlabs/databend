@@ -41,6 +41,7 @@ use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
+use crate::sessions::TableContextQueryIdentity;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {

@@ -33,6 +33,7 @@ pub use databend_common_catalog::table_context::TableContextMergeInto;
 pub use databend_common_catalog::table_context::TableContextMutationStatus;
 pub use databend_common_catalog::table_context::TableContextOnError;
 pub use databend_common_catalog::table_context::TableContextPartitionStats;
+pub use databend_common_catalog::table_context::TableContextQueryIdentity;
 pub use databend_common_catalog::table_context::TableContextQueryQueue;
 pub use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 pub use databend_common_catalog::table_context::TableContextResultCache;
