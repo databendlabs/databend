@@ -539,10 +539,6 @@ impl Settings {
         Ok(self.try_get_u64("query_result_cache_max_bytes")? as usize)
     }
 
-    pub fn get_query_result_cache_max_sql_length(&self) -> Result<usize> {
-        Ok(self.try_get_u64("query_result_cache_max_sql_length")? as usize)
-    }
-
     pub fn get_query_result_cache_min_execute_secs(&self) -> Result<usize> {
         Ok(self.try_get_u64("query_result_cache_min_execute_secs")? as usize)
     }

@@ -63,7 +63,7 @@ impl AsyncSystemTable for QueryCacheTable {
 
         let cached_values = result_cache_mgr.list(prefix.as_str()).await?;
 
-        let mut sql_vec: Vec<&str> = Vec::with_capacity(cached_values.len());
+        let mut sql_hash_vec: Vec<&str> = Vec::with_capacity(cached_values.len());
         let mut query_id_vec: Vec<&str> = Vec::with_capacity(cached_values.len());
         let mut result_size_vec = Vec::with_capacity(cached_values.len());
         let mut num_rows_vec = Vec::with_capacity(cached_values.len());
@@ -73,7 +73,7 @@ impl AsyncSystemTable for QueryCacheTable {
         let mut active_result_scan: Vec<bool> = Vec::with_capacity(cached_values.len());
 
         cached_values.iter().for_each(|x| {
-            sql_vec.push(x.sql.as_str());
+            sql_hash_vec.push(x.sql_hash.as_str());
             query_id_vec.push(x.query_id.as_str());
             result_size_vec.push(x.result_size as u64);
             num_rows_vec.push(x.num_rows as u64);
@@ -103,7 +103,7 @@ impl AsyncSystemTable for QueryCacheTable {
             .collect();
 
         Ok(DataBlock::new_from_columns(vec![
-            StringType::from_data(sql_vec),
+            StringType::from_data(sql_hash_vec),
             StringType::from_data(query_id_vec),
             UInt64Type::from_data(result_size_vec),
             UInt64Type::from_data(num_rows_vec),
@@ -128,7 +128,7 @@ impl AsyncSystemTable for QueryCacheTable {
 impl QueryCacheTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
-            TableField::new("sql", TableDataType::String),
+            TableField::new("sql_hash", TableDataType::String),
             TableField::new("query_id", TableDataType::String),
             TableField::new("result_size", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("num_rows", TableDataType::Number(NumberDataType::UInt64)),

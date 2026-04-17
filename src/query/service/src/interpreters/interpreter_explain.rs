@@ -39,7 +39,6 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_basic::ResultCacheReader;
-use databend_common_storages_basic::allow_result_cache;
 use databend_common_storages_basic::gen_result_cache_key;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
@@ -342,7 +341,10 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
-        if allow_result_cache(self.ctx.as_ref(), formatted_ast.as_ref().map(|s| s.as_str())) {
+        if self.ctx.get_settings().get_enable_query_result_cache()?
+            && self.ctx.get_cacheable()
+            && formatted_ast.is_some()
+        {
             let extras = self.ctx.get_cache_key_extras();
             let key_source = if extras.is_empty() {
                 formatted_ast.as_ref().unwrap().clone()
@@ -362,7 +364,7 @@ impl ExplainInterpreter {
             if let Some(v) = cache_reader.check_cache().await? {
                 // Construct a format tree for result cache reading
                 let children = vec![
-                    FormatTreeNode::new(format!("SQL: {}", v.sql)),
+                    FormatTreeNode::new(format!("SQL Hash: {}", v.sql_hash)),
                     FormatTreeNode::new(format!("Number of rows: {}", v.num_rows)),
                     FormatTreeNode::new(format!("Result size: {}", v.result_size)),
                 ];

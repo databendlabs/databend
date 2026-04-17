@@ -37,7 +37,7 @@ use crate::result_cache::meta_manager::ResultCacheMetaManager;
 
 pub struct WriteResultCacheSink {
     ctx: Arc<dyn TableContext>,
-    sql: String,
+    key: String,
     partitions_shas: Vec<String>,
 
     meta_mgr: ResultCacheMetaManager,
@@ -109,7 +109,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
         let ttl_interval = Duration::from_secs(ttl_sec);
 
         let value = ResultCacheValue {
-            sql: self.sql.clone(),
+            sql_hash: self.key.clone(),
             query_id: self.ctx.get_id(),
             query_time: now,
             ttl: ttl_sec,
@@ -141,7 +141,6 @@ impl WriteResultCacheSink {
         let min_execute_secs = settings.get_query_result_cache_min_execute_secs()?;
         let ttl = settings.get_query_result_cache_ttl_secs()?;
         let tenant = ctx.get_tenant();
-        let sql = ctx.get_query_str();
         let partitions_shas = ctx.get_partitions_shas();
 
         let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
@@ -155,7 +154,7 @@ impl WriteResultCacheSink {
             inputs,
             WriteResultCacheSink {
                 ctx,
-                sql,
+                key: key.to_string(),
                 partitions_shas,
                 meta_mgr: ResultCacheMetaManager::create(kv_store, ttl),
                 meta_key,

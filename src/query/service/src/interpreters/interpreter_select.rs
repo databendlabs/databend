@@ -41,7 +41,6 @@ use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_common_sql::parse_result_scan_args;
 use databend_common_storages_basic::ResultCacheReader;
 use databend_common_storages_basic::WriteResultCacheSink;
-use databend_common_storages_basic::allow_result_cache;
 use databend_common_storages_basic::gen_result_cache_key;
 use databend_common_users::UserApiProvider;
 use log::error;
@@ -304,10 +303,10 @@ impl Interpreter for SelectInterpreter {
 
         info!("Query physical plan:\n{}", query_plan);
 
-        if allow_result_cache(
-            self.ctx.as_ref(),
-            self.formatted_ast.as_ref().map(|s| s.as_str()),
-        ) {
+        if self.ctx.get_settings().get_enable_query_result_cache()?
+            && self.ctx.get_cacheable()
+            && self.formatted_ast.is_some()
+        {
             let extras = self.ctx.get_cache_key_extras();
             let key_source = if extras.is_empty() {
                 self.formatted_ast.as_ref().unwrap().clone()
