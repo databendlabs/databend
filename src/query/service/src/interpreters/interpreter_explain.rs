@@ -39,6 +39,7 @@ use databend_common_sql::MetadataRef;
 use databend_common_sql::binder::ExplainConfig;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_basic::ResultCacheReader;
+use databend_common_storages_basic::allow_result_cache;
 use databend_common_storages_basic::gen_result_cache_key;
 use databend_common_storages_fuse::FuseLazyPartInfo;
 use databend_common_storages_fuse::FuseTable;
@@ -341,10 +342,7 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
-        if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.get_cacheable()
-            && formatted_ast.is_some()
-        {
+        if allow_result_cache(self.ctx.as_ref(), formatted_ast.as_ref().map(|s| s.as_str())) {
             let extras = self.ctx.get_cache_key_extras();
             let key_source = if extras.is_empty() {
                 formatted_ast.as_ref().unwrap().clone()

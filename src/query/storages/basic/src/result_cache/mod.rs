@@ -18,6 +18,7 @@ mod read;
 mod table_function;
 mod write;
 
+pub use common::allow_result_cache;
 pub use common::gen_result_cache_key;
 pub use common::gen_result_cache_meta_key;
 pub use common::gen_result_cache_prefix;

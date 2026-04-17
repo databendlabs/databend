@@ -679,6 +679,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("query_result_cache_max_sql_length", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1024 * 1024),
+                    desc: "Sets the maximum SQL length allowed for query result cache. Queries longer than this will not use result cache.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1024 * 1024)),
+                }),
                 ("query_result_cache_min_execute_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "For a query to be cached, it must take at least this many seconds to fetch the first block. It helps to avoid caching queries that are too fast to execute or queries with streaming scan.",

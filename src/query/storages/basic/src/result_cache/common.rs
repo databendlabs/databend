@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContext;
 use sha2::Digest;
 use sha2::Sha256;
 
@@ -20,6 +21,23 @@ const RESULT_CACHE_PREFIX: &str = "_result_cache";
 #[inline(always)]
 pub fn gen_result_cache_key(raw: &str) -> String {
     format!("{:x}", Sha256::digest(raw))
+}
+
+#[inline(always)]
+pub fn allow_result_cache(ctx: &dyn TableContext, formatted_ast: Option<&str>) -> bool {
+    if !ctx.get_settings().get_enable_query_result_cache().unwrap_or_default() || !ctx.get_cacheable() {
+        return false;
+    }
+
+    let Some(formatted_ast) = formatted_ast else {
+        return false;
+    };
+
+    formatted_ast.len()
+        <= ctx
+            .get_settings()
+            .get_query_result_cache_max_sql_length()
+            .unwrap_or_default()
 }
 
 #[inline(always)]
