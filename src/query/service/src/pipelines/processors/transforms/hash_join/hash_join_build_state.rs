@@ -109,6 +109,18 @@ pub struct HashJoinBuildState {
 }
 
 impl HashJoinBuildState {
+    const BUILD_INTERRUPT_CHECK_INTERVAL: usize = 8192;
+
+    #[inline]
+    fn check_build_interrupt(interrupt: &AtomicBool, row_index: usize) -> Result<()> {
+        if row_index % Self::BUILD_INTERRUPT_CHECK_INTERVAL == 0
+            && interrupt.load(Ordering::Relaxed)
+        {
+            return Err(ErrorCode::aborting());
+        }
+        Ok(())
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
@@ -429,6 +441,10 @@ impl HashJoinBuildState {
                         for (row_index, (key, valid)) in
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
+                            Self::check_build_interrupt(
+                                &self.hash_join_state.interrupt,
+                                row_index,
+                            )?;
                             if !valid {
                                 continue;
                             }
@@ -452,6 +468,10 @@ impl HashJoinBuildState {
                     }
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
+                            Self::check_build_interrupt(
+                                &self.hash_join_state.interrupt,
+                                row_index,
+                            )?;
                             let row_ptr = RowPtr {
                                 chunk_index: $chunk_index,
                                 row_index: row_index as u32,
@@ -507,6 +527,10 @@ impl HashJoinBuildState {
                         for (row_index, (key, valid)) in
                             build_keys_iter.zip(valids.iter()).enumerate()
                         {
+                            Self::check_build_interrupt(
+                                &self.hash_join_state.interrupt,
+                                row_index,
+                            )?;
                             if !valid {
                                 continue;
                             }
@@ -543,6 +567,10 @@ impl HashJoinBuildState {
                     }
                     None => {
                         for (row_index, key) in build_keys_iter.enumerate() {
+                            Self::check_build_interrupt(
+                                &self.hash_join_state.interrupt,
+                                row_index,
+                            )?;
                             let row_ptr = RowPtr {
                                 chunk_index: $chunk_index,
                                 row_index: row_index as u32,
@@ -884,13 +912,35 @@ impl HashJoinBuildState {
             .any(|rf| rf.enable_bloom_runtime_filter)
     }
 
-    /// only used for test
-    pub fn get_enable_min_max_runtime_filter(&self) -> bool {
-        self.hash_join_state
-            .hash_join_desc
-            .runtime_filter
-            .filters
-            .iter()
-            .any(|rf| rf.enable_min_max_runtime_filter)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering;
+
+    use databend_common_exception::ErrorCode;
+
+    use super::HashJoinBuildState;
+
+    #[test]
+    fn test_check_build_interrupt_interval() {
+        let interrupt = AtomicBool::new(false);
+        HashJoinBuildState::check_build_interrupt(&interrupt, 0).unwrap();
+        HashJoinBuildState::check_build_interrupt(
+            &interrupt,
+            HashJoinBuildState::BUILD_INTERRUPT_CHECK_INTERVAL,
+        )
+        .unwrap();
+
+        interrupt.store(true, Ordering::Relaxed);
+
+        HashJoinBuildState::check_build_interrupt(&interrupt, 1).unwrap();
+        let err = HashJoinBuildState::check_build_interrupt(
+            &interrupt,
+            HashJoinBuildState::BUILD_INTERRUPT_CHECK_INTERVAL,
+        )
+        .unwrap_err();
+        assert_eq!(err.code(), ErrorCode::ABORTED_QUERY);
     }
 }
