@@ -473,14 +473,17 @@ pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
     let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
     if candidates.iter().any(|(_, func)| {
-        try_check_function(
+        let Ok((checked_args, _, _)) = try_check_function(
             args,
             &func.signature,
             auto_cast_rules,
             &dynamic_cast_rules,
             fn_registry,
-        )
-        .is_ok()
+        ) else {
+            return false;
+        };
+
+        checked_args == args
     }) {
         return None;
     }

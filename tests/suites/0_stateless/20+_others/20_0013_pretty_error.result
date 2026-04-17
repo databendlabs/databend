@@ -30,7 +30,22 @@ candidate functions:
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
-Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('xx')` in expr `CAST('xx' AS UInt64)`, during run expr: `truncate(CAST('xx' AS UInt64), -1)`
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('xx')` in expr `CAST('xx' AS UInt64)`
+
+hint: no function matches signature `truncate(String, Int8)`, you might need to add explicit type casts.
+
+candidate functions:
+  truncate(UInt8, Int64) :: Float64
+  truncate(UInt16, Int64) :: Float64
+  truncate(UInt32, Int64) :: Float64
+  truncate(UInt64, Int64) :: Float64
+  truncate(Int8, Int64) :: Float64
+  truncate(Int16, Int64) :: Float64
+  truncate(Int32, Int64) :: Float64
+  truncate(Int64, Int64) :: Float64
+  truncate(Float32, Int64) :: Float64
+  truncate(Float64, Int64) :: Float64
+... and 10 more, during run expr: `truncate(CAST('xx' AS UInt64), -1)`
 
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `1 + CAST('a' AS UInt64)`
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST((1, 'a') AS Tuple(String, Int32))`, during run expr: `CAST(get(1)(CAST((1, 'a') AS Tuple(String, Int32))) AS UInt64) + 3`
