@@ -19,6 +19,8 @@ use std::sync::atomic::Ordering;
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextPartitionStats;
+use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_exception::Result;
 use futures_util::future::Either;
 use futures_util::future::select;

@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use chrono_tz::Tz;
 use databend_common_ast::ast::SetType;
+use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

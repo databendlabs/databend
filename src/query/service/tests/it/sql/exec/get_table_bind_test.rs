@@ -45,6 +45,14 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextPartitionStats;
+use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -912,34 +920,12 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
-        todo!()
-    }
-
-    fn clear_written_segment_locations(&self) -> Result<()> {
-        todo!()
-    }
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        todo!()
-    }
-
     fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
         todo!()
     }
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
-    }
-
-    fn set_variable(&self, _key: String, _value: Scalar) {}
-    fn unset_variable(&self, _key: &str) {}
-    fn get_variable(&self, _key: &str) -> Option<Scalar> {
-        None
-    }
-
-    fn get_all_variables(&self) -> HashMap<String, Scalar> {
-        HashMap::new()
     }
 
     fn get_license_key(&self) -> String {
@@ -1032,14 +1018,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_query_queued_duration(&self) -> Duration {
-        todo!()
-    }
-
-    fn set_query_queued_duration(&self, _queued_duration: Duration) {
-        todo!()
-    }
-
     async fn acquire_table_lock(
         self: Arc<Self>,
         _catalog_name: &str,
@@ -1047,27 +1025,6 @@ impl TableContext for CtxDelegation {
         _tbl_name: &str,
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
-        todo!()
-    }
-
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
-    }
-
-    fn add_recursive_cte_temp_table(
-        &self,
-        _catalog_name: &str,
-        _database_name: &str,
-        _table_name: &str,
-    ) {
-        todo!()
-    }
-
-    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
         todo!()
     }
 
@@ -1099,10 +1056,6 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_next_broadcast_id(&self) -> u32 {
-        self.ctx.get_next_broadcast_id()
-    }
-
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
     }
@@ -1113,6 +1066,80 @@ impl TableContext for CtxDelegation {
 
     fn assert_no_runtime_filter_state(&self) -> Result<()> {
         Ok(())
+    }
+}
+
+impl TableContextBroadcast for CtxDelegation {
+    fn get_next_broadcast_id(&self) -> u32 {
+        self.ctx.get_next_broadcast_id()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCte for CtxDelegation {
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
+        todo!()
+    }
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn add_recursive_cte_temp_table(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+    ) {
+        todo!()
+    }
+
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+}
+
+impl TableContextPerf for CtxDelegation {}
+
+impl TableContextPartitionStats for CtxDelegation {}
+
+impl TableContextQueryQueue for CtxDelegation {
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
+}
+
+impl TableContextSegmentLocations for CtxDelegation {
+    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
+        todo!()
+    }
+
+    fn clear_written_segment_locations(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
+        todo!()
+    }
+}
+
+impl TableContextStream for CtxDelegation {}
+
+impl TableContextVariables for CtxDelegation {
+    fn set_variable(&self, _key: String, _value: Scalar) {}
+
+    fn unset_variable(&self, _key: &str) {}
+
+    fn get_variable(&self, _key: &str) -> Option<Scalar> {
+        None
+    }
+
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
     }
 }
 

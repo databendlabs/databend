@@ -77,6 +77,15 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextPartitionStats;
+use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -130,7 +139,6 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
@@ -1450,12 +1458,6 @@ impl TableContext for QueryContext {
         SessionManager::instance().processes_info()
     }
 
-    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
-        let mut all = SessionManager::instance().get_query_execution_stats();
-        all.extend(DataExchangeManager::instance().get_query_execution_stats());
-        all
-    }
-
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         let queries = QueriesQueueManager::instance()
             .list()
@@ -1737,46 +1739,6 @@ impl TableContext for QueryContext {
             files_to_copy,
             duplicated_files,
         })
-    }
-
-    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()> {
-        let mut segment_locations = self.written_segment_locs.write();
-        segment_locations.insert(segment_loc);
-        Ok(())
-    }
-
-    fn clear_written_segment_locations(&self) -> Result<()> {
-        let mut segment_locations = self.written_segment_locs.write();
-        segment_locations.clear();
-        Ok(())
-    }
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        Ok(self
-            .written_segment_locs
-            .read()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>())
-    }
-
-    fn add_selected_segment_location(&self, segment_loc: Location) {
-        let mut segment_locations = self.shared.selected_segment_locs.write();
-        segment_locations.insert(segment_loc);
-    }
-
-    fn get_selected_segment_locations(&self) -> Vec<Location> {
-        self.shared
-            .selected_segment_locs
-            .read()
-            .iter()
-            .cloned()
-            .collect()
-    }
-
-    fn clear_selected_segment_locations(&self) {
-        let mut segment_locations = self.shared.selected_segment_locs.write();
-        segment_locations.clear();
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
@@ -2081,30 +2043,6 @@ impl TableContext for QueryContext {
         *self.block_threshold.write() = thresholds;
     }
 
-    fn get_query_queued_duration(&self) -> std::time::Duration {
-        *self.shared.query_queued_duration.read()
-    }
-
-    fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
-        *self.shared.query_queued_duration.write() = queued_duration;
-    }
-
-    fn set_variable(&self, key: String, value: Scalar) {
-        self.shared.session.session_ctx.set_variable(key, value)
-    }
-
-    fn unset_variable(&self, key: &str) {
-        self.shared.session.session_ctx.unset_variable(key)
-    }
-
-    fn get_variable(&self, key: &str) -> Option<Scalar> {
-        self.shared.session.session_ctx.get_variable(key)
-    }
-
-    fn get_all_variables(&self) -> HashMap<String, Scalar> {
-        self.shared.session.session_ctx.get_all_variables()
-    }
-
     #[async_backtrace::framed]
     async fn load_datalake_schema(
         &self,
@@ -2352,23 +2290,29 @@ impl TableContext for QueryContext {
                 .is_temp_table(database_name, table_name)
     }
 
-    fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
-        let mut streams = self.shared.streams_refs.write();
-        let stream_key = (
-            catalog.to_string(),
-            database.to_string(),
-            stream.to_string(),
-        );
-        streams
-            .entry(stream_key)
-            .and_modify(|v| {
-                if consume {
-                    *v = true;
-                }
-            })
-            .or_insert(consume);
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_clusters().await
     }
 
+    fn get_session_type(&self) -> SessionType {
+        self.shared.session.get_type()
+    }
+}
+
+impl TableContextBroadcast for QueryContext {
+    fn get_next_broadcast_id(&self) -> u32 {
+        self.shared
+            .next_broadcast_id
+            .fetch_add(1, Ordering::Acquire)
+    }
+
+    fn reset_broadcast_id(&self) {
+        self.shared.next_broadcast_id.store(0, Ordering::Release);
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCte for QueryContext {
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
         let entry = (database_name.to_string(), table_name.to_string());
         let mut tables = self.m_cte_temp_table.write();
@@ -2408,51 +2352,13 @@ impl TableContext for QueryContext {
         self.shared.recursive_cte_temp_tables.write().clear();
         Ok(())
     }
+}
 
-    fn get_consume_streams(&self, query: bool) -> Result<Vec<Arc<dyn Table>>> {
-        let streams_refs = self.shared.streams_refs.read();
-        let tables = self.shared.tables_refs.lock();
-        let mut streams_meta = Vec::with_capacity(streams_refs.len());
-        for (stream_key, consume) in streams_refs.iter() {
-            if query && !consume {
-                continue;
-            }
-            let stream = tables
-                .get(stream_key)
-                .ok_or_else(|| ErrorCode::Internal("Stream reference not found in tables cache"))?;
-            streams_meta.push(stream.clone());
-        }
-        Ok(streams_meta)
-    }
-
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        self.shared.get_warehouse_clusters().await
-    }
-
-    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
-        self.shared.get_pruned_partitions_stats()
-    }
-
-    fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
-        self.shared.set_pruned_partitions_stats(plan_id, stats);
-    }
-
-    fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
-        self.shared.merge_pruned_partitions_stats(other);
-    }
-
-    fn get_next_broadcast_id(&self) -> u32 {
-        self.shared
-            .next_broadcast_id
-            .fetch_add(1, Ordering::Acquire)
-    }
-
-    fn reset_broadcast_id(&self) {
-        self.shared.next_broadcast_id.store(0, Ordering::Release);
-    }
-
-    fn get_session_type(&self) -> SessionType {
-        self.shared.session.get_type()
+impl TableContextPerf for QueryContext {
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        let mut all = SessionManager::instance().get_query_execution_stats();
+        all.extend(DataExchangeManager::instance().get_query_execution_stats());
+        all
     }
 
     fn get_perf_config(&self) -> PerfConfig {
@@ -2485,6 +2391,125 @@ impl TableContext for QueryContext {
 
     fn set_perf_events(&self, event_groups: Vec<Vec<PerfEvent>>) {
         self.shared.set_perf_events(event_groups);
+    }
+}
+
+impl TableContextPartitionStats for QueryContext {
+    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
+        self.shared.get_pruned_partitions_stats()
+    }
+
+    fn set_pruned_partitions_stats(&self, plan_id: u32, stats: PartStatistics) {
+        self.shared.set_pruned_partitions_stats(plan_id, stats);
+    }
+
+    fn merge_pruned_partitions_stats(&self, other: &HashMap<u32, PartStatistics>) {
+        self.shared.merge_pruned_partitions_stats(other);
+    }
+}
+
+impl TableContextQueryQueue for QueryContext {
+    fn get_query_queued_duration(&self) -> std::time::Duration {
+        *self.shared.query_queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
+    }
+}
+
+impl TableContextSegmentLocations for QueryContext {
+    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.written_segment_locs.write();
+        segment_locations.insert(segment_loc);
+        Ok(())
+    }
+
+    fn clear_written_segment_locations(&self) -> Result<()> {
+        let mut segment_locations = self.written_segment_locs.write();
+        segment_locations.clear();
+        Ok(())
+    }
+
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(self
+            .written_segment_locs
+            .read()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>())
+    }
+
+    fn add_selected_segment_location(&self, segment_loc: Location) {
+        let mut segment_locations = self.shared.selected_segment_locs.write();
+        segment_locations.insert(segment_loc);
+    }
+
+    fn get_selected_segment_locations(&self) -> Vec<Location> {
+        self.shared
+            .selected_segment_locs
+            .read()
+            .iter()
+            .cloned()
+            .collect()
+    }
+
+    fn clear_selected_segment_locations(&self) {
+        let mut segment_locations = self.shared.selected_segment_locs.write();
+        segment_locations.clear();
+    }
+}
+
+impl TableContextStream for QueryContext {
+    fn add_streams_ref(&self, catalog: &str, database: &str, stream: &str, consume: bool) {
+        let mut streams = self.shared.streams_refs.write();
+        let stream_key = (
+            catalog.to_string(),
+            database.to_string(),
+            stream.to_string(),
+        );
+        streams
+            .entry(stream_key)
+            .and_modify(|v| {
+                if consume {
+                    *v = true;
+                }
+            })
+            .or_insert(consume);
+    }
+
+    fn get_consume_streams(&self, query: bool) -> Result<Vec<Arc<dyn Table>>> {
+        let streams_refs = self.shared.streams_refs.read();
+        let tables = self.shared.tables_refs.lock();
+        let mut streams_meta = Vec::with_capacity(streams_refs.len());
+        for (stream_key, consume) in streams_refs.iter() {
+            if query && !consume {
+                continue;
+            }
+            let stream = tables
+                .get(stream_key)
+                .ok_or_else(|| ErrorCode::Internal("Stream reference not found in tables cache"))?;
+            streams_meta.push(stream.clone());
+        }
+        Ok(streams_meta)
+    }
+}
+
+impl TableContextVariables for QueryContext {
+    fn set_variable(&self, key: String, value: Scalar) {
+        self.shared.session.session_ctx.set_variable(key, value)
+    }
+
+    fn unset_variable(&self, key: &str) {
+        self.shared.session.session_ctx.unset_variable(key)
+    }
+
+    fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.shared.session.session_ctx.get_variable(key)
+    }
+
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.shared.session.session_ctx.get_all_variables()
     }
 }
 

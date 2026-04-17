@@ -18,7 +18,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::SystemTime;
 
 use dashmap::DashMap;
@@ -26,16 +25,12 @@ use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::ExecutorStatsSnapshot;
-use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
@@ -65,7 +60,6 @@ use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use parking_lot::Mutex;
@@ -77,7 +71,6 @@ use crate::lock::LockTableOption;
 use crate::merge_into_join::MergeIntoJoin;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
-use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
 use crate::runtime_filter_info::RuntimeBloomFilter;
@@ -88,6 +81,24 @@ use crate::runtime_filter_info::RuntimeFilterReport;
 use crate::session_type::SessionType;
 use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
+
+mod broadcast;
+mod cte;
+mod partitions;
+mod perf;
+mod query_queue;
+mod segment_locations;
+mod stream;
+mod variables;
+
+pub use broadcast::TableContextBroadcast;
+pub use cte::TableContextCte;
+pub use partitions::TableContextPartitionStats;
+pub use perf::TableContextPerf;
+pub use query_queue::TableContextQueryQueue;
+pub use segment_locations::TableContextSegmentLocations;
+pub use stream::TableContextStream;
+pub use variables::TableContextVariables;
 
 pub struct ContextError;
 
@@ -144,7 +155,18 @@ pub struct FilteredCopyFiles {
 }
 
 #[async_trait::async_trait]
-pub trait TableContext: Send + Sync {
+pub trait TableContext:
+    TableContextBroadcast
+    + TableContextCte
+    + TableContextPartitionStats
+    + TableContextPerf
+    + TableContextQueryQueue
+    + TableContextSegmentLocations
+    + TableContextStream
+    + TableContextVariables
+    + Send
+    + Sync
+{
     fn as_any(&self) -> &dyn Any;
     /// Build a table instance the plan wants to operate on.
     ///
@@ -340,24 +362,6 @@ pub trait TableContext: Send + Sync {
         max_files: Option<usize>,
     ) -> Result<FilteredCopyFiles>;
 
-    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()>;
-
-    fn clear_written_segment_locations(&self) -> Result<()>;
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>>;
-
-    fn add_selected_segment_location(&self, _segment_loc: Location) {
-        unimplemented!()
-    }
-
-    fn get_selected_segment_locations(&self) -> Vec<Location> {
-        unimplemented!()
-    }
-
-    fn clear_selected_segment_locations(&self) {
-        unimplemented!()
-    }
-
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
@@ -415,14 +419,6 @@ pub trait TableContext: Send + Sync {
     fn get_read_block_thresholds(&self) -> BlockThresholds;
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
 
-    fn get_query_queued_duration(&self) -> Duration;
-    fn set_query_queued_duration(&self, queued_duration: Duration);
-
-    fn set_variable(&self, key: String, value: Scalar);
-    fn unset_variable(&self, key: &str);
-    fn get_variable(&self, key: &str) -> Option<Scalar>;
-    fn get_all_variables(&self) -> HashMap<String, Scalar>;
-
     async fn load_datalake_schema(
         &self,
         _kind: &str,
@@ -457,74 +453,7 @@ pub trait TableContext: Send + Sync {
 
     fn get_shared_settings(&self) -> Arc<Settings>;
 
-    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()>;
-
-    fn add_recursive_cte_temp_table(
-        &self,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-    );
-
-    async fn drop_recursive_cte_temp_table(&self) -> Result<()>;
-
-    fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
-        unimplemented!()
-    }
-
-    fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
-        unimplemented!()
-    }
-
-    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
-        unimplemented!()
-    }
-
-    fn set_pruned_partitions_stats(&self, _plan_id: u32, _stats: PartStatistics) {
-        unimplemented!()
-    }
-
-    /// Calling this function will automatically create a pipeline for broadcast data in `build_distributed_pipeline()`
-    ///
-    /// The returned id can be used to get sender and receiver for broadcasting data.
-    fn get_next_broadcast_id(&self) -> u32;
-
-    fn reset_broadcast_id(&self) {
-        unimplemented!()
-    }
     fn get_session_type(&self) -> SessionType {
-        unimplemented!()
-    }
-    fn get_perf_config(&self) -> PerfConfig {
-        unimplemented!()
-    }
-    fn set_perf_config(&self, _config: PerfConfig) {
-        unimplemented!()
-    }
-    fn get_perf_flag(&self) -> bool {
-        unimplemented!()
-    }
-    fn set_perf_flag(&self, _flag: bool) {
-        unimplemented!()
-    }
-    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
-        unimplemented!()
-    }
-    fn set_nodes_perf(&self, _node: String, _perf: String) {
-        unimplemented!()
-    }
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        unimplemented!()
-    }
-    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {
-        unimplemented!()
-    }
-    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
-        unimplemented!()
-    }
-    fn merge_pruned_partitions_stats(&self, _other: &HashMap<u32, PartStatistics>) {
         unimplemented!()
     }
 }

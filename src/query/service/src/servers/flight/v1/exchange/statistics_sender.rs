@@ -22,6 +22,8 @@ use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextPartitionStats;
+use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::PlanProfile;

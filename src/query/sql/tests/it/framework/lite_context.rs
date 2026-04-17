@@ -61,6 +61,14 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextPartitionStats;
+use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextSegmentLocations;
+use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -1350,15 +1358,6 @@ impl TableContext for LiteTableContext {
     ) -> Result<FilteredCopyFiles> {
         Ok(FilteredCopyFiles::default())
     }
-    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
-        Ok(())
-    }
-    fn clear_written_segment_locations(&self) -> Result<()> {
-        Ok(())
-    }
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        Ok(vec![])
-    }
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
         self.copy_status.add_chunk(file_path, file_status);
         Ok(())
@@ -1450,24 +1449,6 @@ impl TableContext for LiteTableContext {
         BlockThresholds::default()
     }
     fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {}
-    fn get_query_queued_duration(&self) -> Duration {
-        *self.queued_duration.read()
-    }
-    fn set_query_queued_duration(&self, queued_duration: Duration) {
-        *self.queued_duration.write() = queued_duration;
-    }
-    fn set_variable(&self, key: String, value: Scalar) {
-        self.variables.write().insert(key, value);
-    }
-    fn unset_variable(&self, key: &str) {
-        self.variables.write().remove(key);
-    }
-    fn get_variable(&self, key: &str) -> Option<Scalar> {
-        self.variables.read().get(key).cloned()
-    }
-    fn get_all_variables(&self) -> HashMap<String, Scalar> {
-        self.variables.read().clone()
-    }
     async fn acquire_table_lock(
         self: Arc<Self>,
         _catalog_name: &str,
@@ -1489,7 +1470,21 @@ impl TableContext for LiteTableContext {
     fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared_settings.clone()
     }
+    fn get_session_type(&self) -> SessionType {
+        SessionType::HTTPQuery
+    }
+}
+
+impl TableContextBroadcast for LiteTableContext {
+    fn get_next_broadcast_id(&self) -> u32 {
+        0
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCte for LiteTableContext {
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {}
+
     async fn drop_m_cte_temp_table(&self) -> Result<()> {
         Ok(())
     }
@@ -1506,37 +1501,87 @@ impl TableContext for LiteTableContext {
     async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
         unsupported("table_ctx::drop_recursive_cte_temp_table")
     }
+}
 
+impl TableContextPerf for LiteTableContext {
+    fn get_perf_config(&self) -> PerfConfig {
+        PerfConfig::default()
+    }
+
+    fn set_perf_config(&self, _config: PerfConfig) {}
+
+    fn get_perf_flag(&self) -> bool {
+        false
+    }
+
+    fn set_perf_flag(&self, _flag: bool) {}
+
+    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    fn set_nodes_perf(&self, _node: String, _perf: String) {}
+
+    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
+        vec![]
+    }
+
+    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {}
+
+    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
+        vec![]
+    }
+}
+
+impl TableContextPartitionStats for LiteTableContext {}
+
+impl TableContextQueryQueue for LiteTableContext {
+    fn get_query_queued_duration(&self) -> Duration {
+        *self.queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.queued_duration.write() = queued_duration;
+    }
+}
+
+impl TableContextSegmentLocations for LiteTableContext {
+    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
+        Ok(())
+    }
+
+    fn clear_written_segment_locations(&self) -> Result<()> {
+        Ok(())
+    }
+
+    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(vec![])
+    }
+}
+
+impl TableContextStream for LiteTableContext {
     fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {}
 
     fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
         Ok(vec![])
     }
+}
 
-    fn get_next_broadcast_id(&self) -> u32 {
-        0
+impl TableContextVariables for LiteTableContext {
+    fn set_variable(&self, key: String, value: Scalar) {
+        self.variables.write().insert(key, value);
     }
-    fn get_session_type(&self) -> SessionType {
-        SessionType::HTTPQuery
+
+    fn unset_variable(&self, key: &str) {
+        self.variables.write().remove(key);
     }
-    fn get_perf_config(&self) -> PerfConfig {
-        PerfConfig::default()
+
+    fn get_variable(&self, key: &str) -> Option<Scalar> {
+        self.variables.read().get(key).cloned()
     }
-    fn set_perf_config(&self, _config: PerfConfig) {}
-    fn get_perf_flag(&self) -> bool {
-        false
-    }
-    fn set_perf_flag(&self, _flag: bool) {}
-    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
-        Arc::new(Mutex::new(HashMap::new()))
-    }
-    fn set_nodes_perf(&self, _node: String, _perf: String) {}
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        vec![]
-    }
-    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {}
-    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
-        vec![]
+
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        self.variables.read().clone()
     }
 }
 

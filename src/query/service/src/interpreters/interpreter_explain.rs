@@ -23,6 +23,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;

@@ -14,7 +14,7 @@
 
 use std::any::Any;
 
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::executor::physical_plans::FragmentKind;
@@ -149,7 +149,7 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
     }))
 }
 
-pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>> {
+pub fn build_broadcast_plans(ctx: &dyn TableContextBroadcast) -> Result<Vec<PhysicalPlan>> {
     let mut plans = vec![];
     let next_broadcast_id = ctx.get_next_broadcast_id();
     ctx.reset_broadcast_id();

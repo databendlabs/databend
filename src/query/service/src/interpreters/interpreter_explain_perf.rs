@@ -23,6 +23,7 @@ use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

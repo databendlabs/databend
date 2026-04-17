@@ -82,6 +82,7 @@ use crate::schedulers::ServiceQueryExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextSegmentLocations;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
