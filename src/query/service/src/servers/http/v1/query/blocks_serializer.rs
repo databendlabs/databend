@@ -165,10 +165,7 @@ fn format_arrow_ipc_column(column: &Column, format: &OutputFormatSettings) -> Re
         } else {
             format_variant_column(column)
         })),
-        Column::Nullable(column) => Ok(NullableColumn::new_column(
-            format_arrow_ipc_column(&column.column, format)?,
-            column.validity.clone(),
-        )),
+        Column::Nullable(column) => format_nullable_arrow_ipc_column(column, format),
         Column::Array(column) => Ok(Column::Array(Box::new(ArrayColumn::new(
             format_arrow_ipc_column(&column.underlying_column(), format)?,
             column.underlying_offsets(),
@@ -184,6 +181,22 @@ fn format_arrow_ipc_column(column: &Column, format: &OutputFormatSettings) -> Re
                 .collect::<Result<Vec<_>>>()?,
         )),
         _ => Ok(column.clone()),
+    }
+}
+
+fn format_nullable_arrow_ipc_column(
+    column: &NullableColumn<databend_common_expression::types::AnyType>,
+    format: &OutputFormatSettings,
+) -> Result<Column> {
+    match &column.column {
+        Column::Variant(inner) if !format.http_arrow_use_jsonb => Ok(NullableColumn::new_column(
+            Column::Variant(format_nullable_variant_column(inner, &column.validity)),
+            column.validity.clone(),
+        )),
+        _ => Ok(NullableColumn::new_column(
+            format_arrow_ipc_column(&column.column, format)?,
+            column.validity.clone(),
+        )),
     }
 }
 
@@ -224,9 +237,27 @@ fn format_variant_column(column: &BinaryColumn) -> BinaryColumn {
         column.len(),
         column.total_bytes_len(),
         column.iter(),
-        |value| Ok(RawJsonb::new(value).to_string().into_bytes()),
+        |value| Ok(format_variant_value(value)),
     )
     .expect("formatting variant column to json string should not fail")
+}
+
+fn format_nullable_variant_column(
+    column: &BinaryColumn,
+    validity: &databend_common_column::bitmap::Bitmap,
+) -> BinaryColumn {
+    let mut builder = BinaryColumnBuilder::with_capacity(column.len(), column.total_bytes_len());
+    for (is_valid, value) in validity.iter().zip(column.iter()) {
+        if is_valid {
+            builder.put_slice(&format_variant_value(value));
+        }
+        builder.commit_row();
+    }
+    builder.build()
+}
+
+fn format_variant_value(value: &[u8]) -> Vec<u8> {
+    RawJsonb::new(value).to_string().into_bytes()
 }
 
 fn format_binary_column<T>(

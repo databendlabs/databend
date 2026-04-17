@@ -474,6 +474,92 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_arrow_ipc_nullable_variant_distinguishes_sql_null_and_json_null() -> anyhow::Result<()> {
+    let json_null = jsonb::parse_value(b"null")?.to_vec();
+
+    let schema = DataSchema::new(vec![DataField::new(
+        "nullable_variant",
+        DataType::Nullable(Box::new(DataType::Variant)),
+    )]);
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![NullableColumn::new_column(
+            VariantType::from_data(vec![Vec::new(), json_null.clone()]),
+            Bitmap::from([false, true]),
+        )],
+        2,
+    );
+
+    let buf = collector
+        .into_serializer(OutputFormatSettings::default())
+        .to_arrow_ipc(&schema, vec![])?;
+    let (_, batch) = read_first_arrow_batch(buf)?;
+
+    match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
+        Column::Nullable(column) => match &column.column {
+            Column::Variant(values) => {
+                assert!(!column.validity.get_bit(0));
+                assert!(column.validity.get_bit(1));
+                assert!(values.index(0).unwrap().is_empty());
+                assert_eq!(values.index(1).unwrap(), b"null");
+            }
+            other => panic!("expected nullable variant inner column, got {other:?}"),
+        },
+        other => panic!("expected nullable column, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_arrow_ipc_nested_nullable_variant_distinguishes_sql_null_and_json_null()
+-> anyhow::Result<()> {
+    let json_null = jsonb::parse_value(b"null")?.to_vec();
+
+    let schema = DataSchema::new(vec![DataField::new(
+        "tuple_nullable_variant",
+        DataType::Tuple(vec![
+            DataType::Nullable(Box::new(DataType::Variant)),
+            DataType::String,
+        ]),
+    )]);
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![Column::Tuple(vec![
+            NullableColumn::new_column(
+                VariantType::from_data(vec![Vec::new(), json_null.clone()]),
+                Bitmap::from([false, true]),
+            ),
+            StringType::from_data(vec!["a", "b"]),
+        ])],
+        2,
+    );
+
+    let buf = collector
+        .into_serializer(OutputFormatSettings::default())
+        .to_arrow_ipc(&schema, vec![])?;
+    let (_, batch) = read_first_arrow_batch(buf)?;
+
+    match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
+        Column::Tuple(fields) => match &fields[0] {
+            Column::Nullable(column) => match &column.column {
+                Column::Variant(values) => {
+                    assert!(!column.validity.get_bit(0));
+                    assert!(column.validity.get_bit(1));
+                    assert!(values.index(0).unwrap().is_empty());
+                    assert_eq!(values.index(1).unwrap(), b"null");
+                }
+                other => panic!("expected tuple nullable variant inner column, got {other:?}"),
+            },
+            other => panic!("expected tuple nullable variant field, got {other:?}"),
+        },
+        other => panic!("expected tuple column, got {other:?}"),
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_arrow_ipc_variant_jsonb_payloads_for_legacy_bendsql_python() -> anyhow::Result<()> {
     let value1 = jsonb::parse_value(r#"{"a":1,"b":[true,null,"x"]}"#.as_bytes())?.to_vec();
     let value2 = jsonb::parse_value(r#""plain string""#.as_bytes())?.to_vec();
