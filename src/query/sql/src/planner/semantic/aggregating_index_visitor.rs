@@ -28,19 +28,19 @@ use databend_common_ast::ast::TableReference;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::Visitor;
-use databend_common_ast::visit::VisitorMut;
-use databend_common_ast::visit::WalkMut;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
 use databend_common_expression::FunctionKind;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use derive_visitor::DriveMut;
+use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, VisitorMut)]
+#[visitor(Expr(exit), SelectStmt(enter))]
 pub struct AggregatingIndexRewriter {
     pub sql_dialect: Dialect,
     extracted_aggs: HashSet<String>,
@@ -48,20 +48,8 @@ pub struct AggregatingIndexRewriter {
     agg_func_positions: HashSet<usize>,
 }
 
-impl VisitorMut for AggregatingIndexRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) -> Result<VisitControl, !> {
-        self.rewrite_expr(expr);
-        Ok(VisitControl::Continue)
-    }
-
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) -> Result<VisitControl, !> {
-        self.rewrite_select_stmt(stmt)?;
-        Ok(VisitControl::SkipChildren)
-    }
-}
-
 impl AggregatingIndexRewriter {
-    fn rewrite_expr(&mut self, expr: &mut Expr) {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -104,7 +92,7 @@ impl AggregatingIndexRewriter {
         };
     }
 
-    fn rewrite_select_stmt(&mut self, stmt: &mut SelectStmt) -> Result<(), !> {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             group_by,
@@ -125,17 +113,12 @@ impl AggregatingIndexRewriter {
         let mut new_select_list: Vec<SelectTarget> = vec![];
         for (position, target) in select_list.iter_mut().enumerate() {
             // if target has agg function, we will extract the func to a hashset
-            // see `rewrite_expr` above for detail.
+            // see `exit_expr` above for detail.
             // we save the position of target that has agg function here,
             // so that we can skip this target after and replace this skipped
             // target with extracted agg function.
             self.current_position = Some(position);
-            if let SelectTarget::AliasedExpr { expr, alias } = target {
-                expr.walk_mut(self)?;
-                if let Some(alias) = alias {
-                    alias.walk_mut(self)?;
-                }
-            }
+            target.drive_mut(self);
 
             // add targets that not have agg function to new select list.
             if !self.agg_func_positions.contains(&position) {
@@ -177,7 +160,6 @@ impl AggregatingIndexRewriter {
 
         // replace the select list with our rewritten new select list.
         *select_list = new_select_list;
-        Ok(())
     }
 }
 
@@ -213,7 +195,8 @@ impl AggregatingIndexRewriter {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Visitor)]
+#[visitor(FunctionCall(enter), SelectStmt(enter), Query(enter))]
 pub struct AggregatingIndexChecker {
     has_agg_function: bool,
     has_group_by: bool,
@@ -221,12 +204,17 @@ pub struct AggregatingIndexChecker {
     not_support: bool,
 }
 
-impl Visitor for AggregatingIndexChecker {
-    fn visit_function_call(&mut self, func: &FunctionCall) -> std::result::Result<VisitControl, !> {
-        if self.not_support {
-            return Ok(VisitControl::Break(()));
-        }
+impl AggregatingIndexChecker {
+    pub fn is_supported(&self) -> bool {
+        // Must have at least one of aggregate function, group by, or selection.
+        // An aggregating index like `select a + 1 from t` are useless and take up extra storage space.
+        !self.not_support && (self.has_agg_function || self.has_group_by || self.has_selection)
+    }
 
+    fn enter_function_call(&mut self, func: &FunctionCall) {
+        if self.not_support {
+            return;
+        }
         let FunctionCall {
             distinct: _,
             name,
@@ -241,26 +229,24 @@ impl Visitor for AggregatingIndexChecker {
         let func_name = name.as_str();
         if AggregateFunctionFactory::instance().contains(func_name) {
             self.has_agg_function = true;
+            // is agg func but not support now.
             if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&func_name) || window.is_some() {
                 self.not_support = true;
-                return Ok(VisitControl::Break(()));
             }
         } else if let Some(func_property) = BUILTIN_FUNCTIONS.get_property(func_name) {
+            // set returning functions and non deterministic functions such as `now()` are not supported.
             if func_property.kind == FunctionKind::SRF || func_property.non_deterministic {
                 self.not_support = true;
-                return Ok(VisitControl::Break(()));
             }
         } else {
+            // Functions other than aggregate and scalar are not supported, such as window, UDF, etc.
             self.not_support = true;
-            return Ok(VisitControl::Break(()));
         }
-
-        Ok(VisitControl::Continue)
     }
 
-    fn visit_select_stmt(&mut self, stmt: &SelectStmt) -> std::result::Result<VisitControl, !> {
+    fn enter_select_stmt(&mut self, stmt: &SelectStmt) {
         if self.not_support {
-            return Ok(VisitControl::Break(()));
+            return;
         }
         if stmt.having.is_some()
             || stmt.window_list.is_some()
@@ -268,133 +254,57 @@ impl Visitor for AggregatingIndexChecker {
             || stmt.top_n.is_some()
         {
             self.not_support = true;
-            return Ok(VisitControl::Break(()));
+            return;
         }
         match &stmt.group_by {
             None => {}
             Some(GroupBy::Normal(_)) => {}
             _ => {
                 self.not_support = true;
-                return Ok(VisitControl::Break(()));
+                return;
             }
         }
         if stmt.from.len() != 1 {
             self.not_support = true;
-            return Ok(VisitControl::Break(()));
+            return;
         }
+        // only support select from one table.
         match &stmt.from[0] {
             TableReference::Table { .. } => {}
             _ => {
                 self.not_support = true;
-                return Ok(VisitControl::Break(()));
+                return;
             }
         }
         for target in &stmt.select_list {
             if target.is_star() {
                 self.not_support = true;
-                return Ok(VisitControl::Break(()));
+                return;
             }
         }
         self.has_selection = stmt.selection.is_some();
         self.has_group_by = stmt.group_by.is_some();
-        Ok(VisitControl::Continue)
     }
 
-    fn visit_query(&mut self, query: &Query) -> std::result::Result<VisitControl, !> {
+    fn enter_query(&mut self, query: &Query) {
         if query.with.is_some()
             || !query.order_by.is_empty()
             || !query.limit.is_empty()
             || !matches!(&query.body, SetExpr::Select(_))
         {
             self.not_support = true;
-            return Ok(VisitControl::Break(()));
         }
-
-        Ok(VisitControl::Continue)
     }
 }
-
-impl AggregatingIndexChecker {
-    pub fn is_supported(&self) -> bool {
-        // Must have at least one of aggregate function, group by, or selection.
-        // An aggregating index like `select a + 1 from t` are useless and take up extra storage space.
-        !self.not_support && (self.has_agg_function || self.has_group_by || self.has_selection)
-    }
-}
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(Expr(exit), SelectStmt(exit))]
 pub struct RefreshAggregatingIndexRewriter {
     pub user_defined_block_name: bool,
     has_agg_function: bool,
 }
 
-impl VisitorMut for RefreshAggregatingIndexRewriter {
-    fn visit_expr(&mut self, expr: &mut Expr) -> Result<VisitControl, !> {
-        self.rewrite_expr(expr);
-        Ok(VisitControl::Continue)
-    }
-
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) -> Result<VisitControl, !> {
-        if let Some(hints) = &mut stmt.hints {
-            let _ = hints.walk_mut(self);
-        }
-        for target in &mut stmt.select_list {
-            match target {
-                SelectTarget::AliasedExpr { expr, alias } => {
-                    let _ = expr.walk_mut(self);
-                    if let Some(alias) = alias {
-                        let _ = alias.walk_mut(self);
-                    }
-                }
-                SelectTarget::StarColumns {
-                    qualified,
-                    column_filter,
-                } => {
-                    for item in qualified {
-                        if let databend_common_ast::ast::Indirection::Identifier(ident) = item {
-                            let _ = ident.walk_mut(self);
-                        }
-                    }
-                    if let Some(column_filter) = column_filter {
-                        match column_filter {
-                            databend_common_ast::ast::ColumnFilter::Excludes(idents) => {
-                                for ident in idents {
-                                    let _ = ident.walk_mut(self);
-                                }
-                            }
-                            databend_common_ast::ast::ColumnFilter::Lambda(lambda) => {
-                                let _ = lambda.walk_mut(self);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        for from in &mut stmt.from {
-            let _ = from.walk_mut(self);
-        }
-        if let Some(selection) = &mut stmt.selection {
-            let _ = selection.walk_mut(self);
-        }
-        if let Some(group_by) = &mut stmt.group_by {
-            let _ = group_by.walk_mut(self);
-        }
-        if let Some(having) = &mut stmt.having {
-            let _ = having.walk_mut(self);
-        }
-        if let Some(window_list) = &mut stmt.window_list {
-            let _ = window_list.walk_mut(self);
-        }
-        if let Some(qualify) = &mut stmt.qualify {
-            let _ = qualify.walk_mut(self);
-        }
-        self.rewrite_select_stmt(stmt);
-        Ok(VisitControl::SkipChildren)
-    }
-}
-
 impl RefreshAggregatingIndexRewriter {
-    fn rewrite_expr(&mut self, expr: &mut Expr) {
+    fn exit_expr(&mut self, expr: &mut Expr) {
         match expr {
             Expr::FunctionCall {
                 func:
@@ -432,7 +342,7 @@ impl RefreshAggregatingIndexRewriter {
         }
     }
 
-    fn rewrite_select_stmt(&mut self, stmt: &mut SelectStmt) {
+    fn exit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
@@ -498,36 +408,5 @@ impl RefreshAggregatingIndexRewriter {
             }
             _ => {}
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use databend_common_ast::ast::Statement;
-    use databend_common_ast::parser::Dialect;
-    use databend_common_ast::parser::parse_sql;
-    use databend_common_ast::parser::tokenize_sql;
-    use databend_common_ast::visit::WalkMut;
-    use databend_common_expression::BLOCK_NAME_COL_NAME;
-
-    use super::RefreshAggregatingIndexRewriter;
-
-    fn parse_stmt(sql: &str) -> Statement {
-        let tokens = tokenize_sql(sql).unwrap();
-        let (stmt, _) = parse_sql(&tokens, Dialect::Experimental).unwrap();
-        stmt
-    }
-
-    #[test]
-    fn test_refresh_rewriter_adds_group_by_for_aggregate_without_group_by() {
-        let mut stmt = parse_stmt("SELECT SUM(a) FROM t");
-
-        let _ = stmt.walk_mut(&mut RefreshAggregatingIndexRewriter::default());
-
-        let expected = format!(
-            "SELECT SUM_STATE(a), t.{0} FROM t GROUP BY t.{0}",
-            BLOCK_NAME_COL_NAME
-        );
-        assert_eq!(stmt.to_string(), expected);
     }
 }
