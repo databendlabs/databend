@@ -34,6 +34,7 @@ use crate::expr::*;
 use crate::expression::Expr;
 use crate::function::EvalContext;
 use crate::type_check::check_function;
+use crate::type_check::format_function_argument_mismatch_hint;
 use crate::type_check::get_simple_cast_function;
 use crate::types::BooleanType;
 use crate::types::DataType;
@@ -293,10 +294,22 @@ impl<'a> Evaluator<'a> {
             child_option.strict_eval = false;
         }
 
-        let args = args
-            .iter()
-            .map(|expr| self.partial_run(expr, validity.clone(), &mut child_option))
-            .collect::<Result<Vec<_>>>()?;
+        let mut args_value = Vec::with_capacity(args.len());
+        for expr in args {
+            match self.partial_run(expr, validity.clone(), &mut child_option) {
+                Ok(value) => args_value.push(value),
+                Err(err) => {
+                    return Err(self.attach_function_argument_mismatch_hint(
+                        err,
+                        *span,
+                        &function.signature.name,
+                        id.params(),
+                        args,
+                    ));
+                }
+            }
+        }
+        let args = args_value;
 
         assert!(
             args.iter()
@@ -340,6 +353,38 @@ impl<'a> Evaluator<'a> {
             )?;
         }
         Ok(result)
+    }
+
+    fn attach_function_argument_mismatch_hint(
+        &self,
+        err: ErrorCode,
+        span: Span,
+        name: &str,
+        params: &[Scalar],
+        args: &[Expr],
+    ) -> ErrorCode {
+        let mut has_top_level_cast = false;
+        let hint_args = args
+            .iter()
+            .map(|arg| match arg {
+                Expr::Cast(Cast { expr, .. }) => {
+                    has_top_level_cast = true;
+                    expr.as_ref().clone()
+                }
+                _ => arg.clone(),
+            })
+            .collect::<Vec<_>>();
+        if !has_top_level_cast {
+            return err;
+        }
+
+        let Some(hint) =
+            format_function_argument_mismatch_hint(name, params, &hint_args, self.fn_registry)
+        else {
+            return err;
+        };
+
+        ErrorCode::BadArguments(format!("{}\n\nhint: {hint}", err.message())).set_span(span)
     }
 
     pub fn run_cast(
