@@ -301,7 +301,6 @@ impl<'a> Evaluator<'a> {
                 Err(err) => {
                     return Err(self.attach_function_argument_mismatch_hint(
                         err,
-                        *span,
                         &function.signature.name,
                         id.params(),
                         args,
@@ -358,7 +357,6 @@ impl<'a> Evaluator<'a> {
     fn attach_function_argument_mismatch_hint(
         &self,
         err: ErrorCode,
-        span: Span,
         name: &str,
         params: &[Scalar],
         args: &[Expr],
@@ -385,7 +383,6 @@ impl<'a> Evaluator<'a> {
         };
 
         err.add_message_back(format!("\n\nhint: {hint}"))
-            .set_span(span)
     }
 
     pub fn run_cast(
