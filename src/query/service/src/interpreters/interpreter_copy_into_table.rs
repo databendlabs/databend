@@ -22,6 +22,7 @@ use databend_common_ast::ast::ColumnMatchMode;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;

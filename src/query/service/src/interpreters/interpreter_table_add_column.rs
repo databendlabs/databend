@@ -18,6 +18,7 @@ use chrono::Utc;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;

@@ -96,6 +96,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -1428,10 +1429,6 @@ impl TableContext for QueryContext {
             .await
     }
 
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
-    }
-
     #[async_backtrace::framed]
     async fn resolve_data_source(
         &self,
@@ -1488,301 +1485,6 @@ impl TableContext for QueryContext {
 
     fn session_state(&self) -> Result<SessionState> {
         self.shared.session.session_ctx.session_state()
-    }
-
-    fn get_table_meta_timestamps(
-        &self,
-        table: &dyn Table,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableMetaTimestamps> {
-        let table_id = table.get_id();
-
-        let cached_table_timestamps = {
-            self.shared
-                .table_meta_timestamps
-                .lock()
-                .get(&table_id)
-                .copied()
-        };
-
-        if let Some(ts) = cached_table_timestamps {
-            return Ok(ts);
-        }
-
-        let fuse_table = FuseTable::try_from_table(table)?;
-        let is_transient = fuse_table.is_transient();
-        let delta = {
-            let duration = if is_transient {
-                Duration::from_secs(0)
-            } else {
-                let settings = self.get_settings();
-                let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
-                if max_exec_time_secs != 0 {
-                    Duration::from_secs(max_exec_time_secs)
-                } else {
-                    // no limit, use retention period as delta
-                    // prefer table-level retention setting.
-                    match fuse_table.get_table_retention_period() {
-                        None => Duration::from_days(settings.get_data_retention_time_in_days()?),
-                        Some(v) => v,
-                    }
-                }
-            };
-
-            chrono::Duration::from_std(duration).map_err(|e| {
-                ErrorCode::Internal(format!(
-                    "Unable to construct delta duration of table meta timestamp: {e}",
-                ))
-            })?
-        };
-
-        let validation_context = SnapshotTimestampValidationContext {
-            table_id,
-            is_transient,
-        };
-
-        let table_meta_timestamps = TableMetaTimestamps::with_snapshot_timestamp_validation_context(
-            previous_snapshot,
-            delta,
-            Some(validation_context),
-        );
-
-        {
-            let txn_mgr_ref = self.txn_mgr();
-            let mut txn_mgr = txn_mgr_ref.lock();
-
-            if txn_mgr.is_active() {
-                // Transaction Timestamp Tracking:
-                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
-
-                if let Some(existing_ts) = existing_timestamp {
-                    // Defensively check that:
-                    // Inside an active transaction, if we already have a transaction timestamp for this table,
-                    // ensure the new segment_block_timestamp is greater than or equal to it.
-                    // This maintains timestamp monotonicity within the transaction, which is crucial for
-                    // the safety of vacuum operation.
-                    if table_meta_timestamps.segment_block_timestamp < existing_ts {
-                        return Err(ErrorCode::Internal(format!(
-                            "Transaction timestamp violation: table_id = {}, new segment timestamp {:?} is lesser than existing transaction timestamp {:?}",
-                            table_id, table_meta_timestamps.segment_block_timestamp, existing_ts
-                        )));
-                    }
-                } else {
-                    // When a table is first mutated within an active transaction, record its
-                    // segment_block_timestamp as the transaction's begin timestamp for this table.
-                    txn_mgr.set_table_txn_begin_timestamp(
-                        table_id,
-                        table_meta_timestamps.segment_block_timestamp,
-                    );
-                }
-            }
-        }
-
-        {
-            let mut cache = self.shared.table_meta_timestamps.lock();
-            cache.insert(table_id, table_meta_timestamps);
-        }
-
-        Ok(table_meta_timestamps)
-    }
-
-    #[async_backtrace::framed]
-    async fn load_datalake_schema(
-        &self,
-        kind: &str,
-        sp: &StorageParams,
-    ) -> Result<(TableSchema, String)> {
-        match kind {
-            "delta" => {
-                let table = DeltaTable::load(sp).await?;
-                DeltaTable::get_meta(&table).await
-            }
-            // TODO: iceberg doesn't support load from storage directly.
-            _ => Err(ErrorCode::Internal(
-                "Unsupported datalake type for schema loading",
-            )),
-        }
-    }
-
-    #[cfg(feature = "storage-stage")]
-    async fn create_stage_table(
-        &self,
-        stage_info: StageInfo,
-        files_info: StageFilesInfo,
-        files_to_copy: Option<Vec<StageFileInfo>>,
-        max_column_position: usize,
-        on_error_mode: Option<OnErrorMode>,
-    ) -> Result<Arc<dyn Table>> {
-        let copy_options = CopyIntoTableOptions {
-            on_error: on_error_mode.unwrap_or_default(),
-            ..Default::default()
-        };
-        let operator = init_stage_operator(&stage_info)?;
-        let info = operator.info();
-        let stage_root = format!("{}{}", info.name(), info.root());
-        let stage_root = if stage_root.ends_with('/') {
-            stage_root
-        } else {
-            format!("{}/", stage_root)
-        };
-        match &stage_info.file_format_params {
-            FileFormatParams::Parquet(fmt) => {
-                if max_column_position > 1 {
-                    Err(ErrorCode::SemanticError(
-                        "Query from parquet file only support $1 as column position",
-                    ))
-                } else if max_column_position == 0 {
-                    let settings = self.get_settings();
-                    let mut read_options = ParquetReadOptions::default();
-
-                    if !settings.get_enable_parquet_page_index()? {
-                        read_options = read_options.with_prune_pages(false);
-                    }
-
-                    if !settings.get_enable_parquet_rowgroup_pruning()? {
-                        read_options = read_options.with_prune_row_groups(false);
-                    }
-
-                    if !settings.get_enable_parquet_prewhere()? {
-                        read_options = read_options.with_do_prewhere(false);
-                    }
-                    ParquetTable::create(
-                        self,
-                        stage_info.clone(),
-                        files_info,
-                        read_options,
-                        files_to_copy,
-                        self.get_settings(),
-                        self.get_query_kind(),
-                        fmt,
-                    )
-                    .await
-                } else {
-                    let schema = Arc::new(TableSchema::new(vec![TableField::new(
-                        "_$1",
-                        TableDataType::Variant,
-                    )]));
-                    let info = StageTableInfo {
-                        schema,
-                        stage_info,
-                        files_info,
-                        files_to_copy,
-                        duplicated_files_detected: vec![],
-                        is_select: true,
-                        default_exprs: None,
-                        copy_into_table_options: copy_options.clone(),
-                        stage_root,
-                        is_variant: true,
-                        parquet_metas: None,
-                    };
-                    StageTable::try_create(info)
-                }
-            }
-            FileFormatParams::Orc(..) => {
-                let is_variant = match max_column_position {
-                    0 => false,
-                    1 => true,
-                    _ => {
-                        return Err(ErrorCode::SemanticError(
-                            "Query from ORC file only support $1 as column position",
-                        ));
-                    }
-                };
-                let schema = Arc::new(TableSchema::empty());
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    stage_root,
-                    is_variant,
-                    is_select: true,
-                    copy_into_table_options: copy_options.clone(),
-                    ..Default::default()
-                };
-                OrcTable::try_create(self, info).await
-            }
-            FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
-                let schema = Arc::new(TableSchema::new(vec![TableField::new(
-                    "_$1", // TODO: this name should be in visible
-                    TableDataType::Variant,
-                )]));
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    is_select: true,
-                    is_variant: true,
-                    stage_root,
-                    copy_into_table_options: copy_options.clone(),
-                    ..Default::default()
-                };
-                StageTable::try_create(info)
-            }
-            FileFormatParams::Csv(..) | FileFormatParams::Text(..) => {
-                if max_column_position == 0 {
-                    let file_type = match stage_info.file_format_params {
-                        FileFormatParams::Csv(..) => "CSV",
-                        FileFormatParams::Text(..) => "TEXT",
-                        _ => unreachable!(), // This branch should never be reached
-                    };
-
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
-                        file_type
-                    )));
-                }
-                if let FileFormatParams::Text(fmt) = &stage_info.file_format_params {
-                    if fmt.field_delimiter.is_empty() && max_column_position > 1 {
-                        return Err(ErrorCode::SemanticError(
-                            "Query from TEXT line mode only supports $1 as column position",
-                        ));
-                    }
-                }
-
-                let mut fields = vec![];
-                for i in 1..(max_column_position + 1) {
-                    fields.push(TableField::new(
-                        &format!("_${}", i),
-                        TableDataType::Nullable(Box::new(TableDataType::String)),
-                    ));
-                }
-
-                let schema = Arc::new(TableSchema::new(fields));
-                let info = StageTableInfo {
-                    schema,
-                    stage_info,
-                    files_info,
-                    files_to_copy,
-                    is_select: true,
-                    stage_root,
-                    copy_into_table_options: copy_options.clone(),
-                    ..Default::default()
-                };
-                StageTable::try_create(info)
-            }
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TEXT. Provided: '{}'",
-                    stage_info.file_format_params
-                )));
-            }
-        }
-    }
-
-    #[cfg(not(feature = "storage-stage"))]
-    async fn create_stage_table(
-        &self,
-        _stage_info: StageInfo,
-        _files_info: StageFilesInfo,
-        _files_to_copy: Option<Vec<StageFileInfo>>,
-        _max_column_position: usize,
-        _on_error_mode: Option<OnErrorMode>,
-    ) -> Result<Arc<dyn Table>> {
-        Err(ErrorCode::Unimplemented(
-            "Stage table support is disabled, rebuild with cargo feature 'storage-stage'",
-        ))
     }
 
     async fn acquire_table_lock(
@@ -2168,6 +1870,308 @@ impl TableContextCopy for QueryContext {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.shared.copy_status.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableManagement for QueryContext {
+    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
+        self.shared.evict_table_from_cache(catalog, database, table)
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        let table_id = table.get_id();
+
+        let cached_table_timestamps = {
+            self.shared
+                .table_meta_timestamps
+                .lock()
+                .get(&table_id)
+                .copied()
+        };
+
+        if let Some(ts) = cached_table_timestamps {
+            return Ok(ts);
+        }
+
+        let fuse_table = FuseTable::try_from_table(table)?;
+        let is_transient = fuse_table.is_transient();
+        let delta = {
+            let duration = if is_transient {
+                Duration::from_secs(0)
+            } else {
+                let settings = self.get_settings();
+                let max_exec_time_secs = settings.get_max_execute_time_in_seconds()?;
+                if max_exec_time_secs != 0 {
+                    Duration::from_secs(max_exec_time_secs)
+                } else {
+                    // no limit, use retention period as delta
+                    // prefer table-level retention setting.
+                    match fuse_table.get_table_retention_period() {
+                        None => Duration::from_days(settings.get_data_retention_time_in_days()?),
+                        Some(v) => v,
+                    }
+                }
+            };
+
+            chrono::Duration::from_std(duration).map_err(|e| {
+                ErrorCode::Internal(format!(
+                    "Unable to construct delta duration of table meta timestamp: {e}",
+                ))
+            })?
+        };
+
+        let validation_context = SnapshotTimestampValidationContext {
+            table_id,
+            is_transient,
+        };
+
+        let table_meta_timestamps = TableMetaTimestamps::with_snapshot_timestamp_validation_context(
+            previous_snapshot,
+            delta,
+            Some(validation_context),
+        );
+
+        {
+            let txn_mgr_ref = self.txn_mgr();
+            let mut txn_mgr = txn_mgr_ref.lock();
+
+            if txn_mgr.is_active() {
+                // Transaction Timestamp Tracking:
+                let existing_timestamp = txn_mgr.get_table_txn_begin_timestamp(table_id);
+
+                if let Some(existing_ts) = existing_timestamp {
+                    // Defensively check that:
+                    // Inside an active transaction, if we already have a transaction timestamp for this table,
+                    // ensure the new segment_block_timestamp is greater than or equal to it.
+                    // This maintains timestamp monotonicity within the transaction, which is crucial for
+                    // the safety of vacuum operation.
+                    if table_meta_timestamps.segment_block_timestamp < existing_ts {
+                        return Err(ErrorCode::Internal(format!(
+                            "Transaction timestamp violation: table_id = {}, new segment timestamp {:?} is lesser than existing transaction timestamp {:?}",
+                            table_id, table_meta_timestamps.segment_block_timestamp, existing_ts
+                        )));
+                    }
+                } else {
+                    // When a table is first mutated within an active transaction, record its
+                    // segment_block_timestamp as the transaction's begin timestamp for this table.
+                    txn_mgr.set_table_txn_begin_timestamp(
+                        table_id,
+                        table_meta_timestamps.segment_block_timestamp,
+                    );
+                }
+            }
+        }
+
+        {
+            let mut cache = self.shared.table_meta_timestamps.lock();
+            cache.insert(table_id, table_meta_timestamps);
+        }
+
+        Ok(table_meta_timestamps)
+    }
+
+    #[async_backtrace::framed]
+    async fn load_datalake_schema(
+        &self,
+        kind: &str,
+        sp: &StorageParams,
+    ) -> Result<(TableSchema, String)> {
+        match kind {
+            "delta" => {
+                let table = DeltaTable::load(sp).await?;
+                DeltaTable::get_meta(&table).await
+            }
+            // TODO: iceberg doesn't support load from storage directly.
+            _ => Err(ErrorCode::Internal(
+                "Unsupported datalake type for schema loading",
+            )),
+        }
+    }
+
+    #[cfg(feature = "storage-stage")]
+    async fn create_stage_table(
+        &self,
+        stage_info: StageInfo,
+        files_info: StageFilesInfo,
+        files_to_copy: Option<Vec<StageFileInfo>>,
+        max_column_position: usize,
+        on_error_mode: Option<OnErrorMode>,
+    ) -> Result<Arc<dyn Table>> {
+        let copy_options = CopyIntoTableOptions {
+            on_error: on_error_mode.unwrap_or_default(),
+            ..Default::default()
+        };
+        let operator = init_stage_operator(&stage_info)?;
+        let info = operator.info();
+        let stage_root = format!("{}{}", info.name(), info.root());
+        let stage_root = if stage_root.ends_with('/') {
+            stage_root
+        } else {
+            format!("{}/", stage_root)
+        };
+        match &stage_info.file_format_params {
+            FileFormatParams::Parquet(fmt) => {
+                if max_column_position > 1 {
+                    Err(ErrorCode::SemanticError(
+                        "Query from parquet file only support $1 as column position",
+                    ))
+                } else if max_column_position == 0 {
+                    let settings = self.get_settings();
+                    let mut read_options = ParquetReadOptions::default();
+
+                    if !settings.get_enable_parquet_page_index()? {
+                        read_options = read_options.with_prune_pages(false);
+                    }
+
+                    if !settings.get_enable_parquet_rowgroup_pruning()? {
+                        read_options = read_options.with_prune_row_groups(false);
+                    }
+
+                    if !settings.get_enable_parquet_prewhere()? {
+                        read_options = read_options.with_do_prewhere(false);
+                    }
+                    ParquetTable::create(
+                        self,
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                        self.get_settings(),
+                        self.get_query_kind(),
+                        fmt,
+                    )
+                    .await
+                } else {
+                    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                        "_$1",
+                        TableDataType::Variant,
+                    )]));
+                    let info = StageTableInfo {
+                        schema,
+                        stage_info,
+                        files_info,
+                        files_to_copy,
+                        duplicated_files_detected: vec![],
+                        is_select: true,
+                        default_exprs: None,
+                        copy_into_table_options: copy_options.clone(),
+                        stage_root,
+                        is_variant: true,
+                        parquet_metas: None,
+                    };
+                    StageTable::try_create(info)
+                }
+            }
+            FileFormatParams::Orc(..) => {
+                let is_variant = match max_column_position {
+                    0 => false,
+                    1 => true,
+                    _ => {
+                        return Err(ErrorCode::SemanticError(
+                            "Query from ORC file only support $1 as column position",
+                        ));
+                    }
+                };
+                let schema = Arc::new(TableSchema::empty());
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    stage_root,
+                    is_variant,
+                    is_select: true,
+                    copy_into_table_options: copy_options.clone(),
+                    ..Default::default()
+                };
+                OrcTable::try_create(self, info).await
+            }
+            FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
+                let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                    "_$1", // TODO: this name should be in visible
+                    TableDataType::Variant,
+                )]));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    is_select: true,
+                    is_variant: true,
+                    stage_root,
+                    copy_into_table_options: copy_options.clone(),
+                    ..Default::default()
+                };
+                StageTable::try_create(info)
+            }
+            FileFormatParams::Csv(..) | FileFormatParams::Text(..) => {
+                if max_column_position == 0 {
+                    let file_type = match stage_info.file_format_params {
+                        FileFormatParams::Csv(..) => "CSV",
+                        FileFormatParams::Text(..) => "TEXT",
+                        _ => unreachable!(), // This branch should never be reached
+                    };
+
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Query from {} file lacks column positions. Specify as $1, $2, etc.",
+                        file_type
+                    )));
+                }
+                if let FileFormatParams::Text(fmt) = &stage_info.file_format_params {
+                    if fmt.field_delimiter.is_empty() && max_column_position > 1 {
+                        return Err(ErrorCode::SemanticError(
+                            "Query from TEXT line mode only supports $1 as column position",
+                        ));
+                    }
+                }
+
+                let mut fields = vec![];
+                for i in 1..(max_column_position + 1) {
+                    fields.push(TableField::new(
+                        &format!("_${}", i),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ));
+                }
+
+                let schema = Arc::new(TableSchema::new(fields));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy,
+                    is_select: true,
+                    stage_root,
+                    copy_into_table_options: copy_options.clone(),
+                    ..Default::default()
+                };
+                StageTable::try_create(info)
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported file format in query stage. Supported formats: Parquet, NDJson, AVRO, CSV, TEXT. Provided: '{}'",
+                    stage_info.file_format_params
+                )));
+            }
+        }
+    }
+
+    #[cfg(not(feature = "storage-stage"))]
+    async fn create_stage_table(
+        &self,
+        _stage_info: StageInfo,
+        _files_info: StageFilesInfo,
+        _files_to_copy: Option<Vec<StageFileInfo>>,
+        _max_column_position: usize,
+        _on_error_mode: Option<OnErrorMode>,
+    ) -> Result<Arc<dyn Table>> {
+        Err(ErrorCode::Unimplemented(
+            "Stage table support is disabled, rebuild with cargo feature 'storage-stage'",
+        ))
     }
 }
 

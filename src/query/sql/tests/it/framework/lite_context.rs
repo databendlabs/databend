@@ -79,6 +79,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
@@ -1250,9 +1251,6 @@ impl TableContext for LiteTableContext {
             .get_table(&self.tenant, database, table)
             .await
     }
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
-        Ok(())
-    }
     async fn get_table_with_branch(
         &self,
         catalog: &str,
@@ -1278,13 +1276,6 @@ impl TableContext for LiteTableContext {
     }
     fn txn_mgr(&self) -> TxnManagerRef {
         TxnManager::init()
-    }
-    fn get_table_meta_timestamps(
-        &self,
-        _table: &dyn Table,
-        _previous_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableMetaTimestamps> {
-        unsupported("table_ctx::get_table_meta_timestamps")
     }
     async fn acquire_table_lock(
         self: Arc<Self>,
@@ -1501,6 +1492,21 @@ impl TableContextCopy for LiteTableContext {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.copy_status.clone()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableManagement for LiteTableContext {
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+        Ok(())
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        _table: &dyn Table,
+        _previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        unsupported("table_ctx::get_table_meta_timestamps")
     }
 }
 

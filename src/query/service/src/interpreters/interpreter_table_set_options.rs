@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;

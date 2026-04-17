@@ -26,29 +26,22 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::TableSchema;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StageFileInfo;
-use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -79,6 +72,7 @@ mod segment_locations;
 mod spill;
 mod stage;
 mod stream;
+mod table_management;
 mod variables;
 
 pub use broadcast::TableContextBroadcast;
@@ -99,6 +93,7 @@ pub use segment_locations::TableContextSegmentLocations;
 pub use spill::TableContextSpillProgress;
 pub use stage::TableContextStage;
 pub use stream::TableContextStream;
+pub use table_management::TableContextTableManagement;
 pub use variables::TableContextVariables;
 
 pub struct ContextError;
@@ -174,6 +169,7 @@ pub trait TableContext:
     + TableContextSegmentLocations
     + TableContextSpillProgress
     + TableContextStage
+    + TableContextTableManagement
     + TableContextStream
     + TableContextVariables
     + Send
@@ -322,36 +318,10 @@ pub trait TableContext:
             .await
     }
 
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
-
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
 
     fn txn_mgr(&self) -> TxnManagerRef;
-
-    fn get_table_meta_timestamps(
-        &self,
-        table: &dyn Table,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableMetaTimestamps>;
-
-    async fn load_datalake_schema(
-        &self,
-        _kind: &str,
-        _sp: &StorageParams,
-    ) -> Result<(TableSchema, String)> {
-        unimplemented!()
-    }
-    async fn create_stage_table(
-        &self,
-        _stage_info: StageInfo,
-        _files_info: StageFilesInfo,
-        _files_to_copy: Option<Vec<StageFileInfo>>,
-        _max_column_position: usize,
-        _on_error_mode: Option<OnErrorMode>,
-    ) -> Result<Arc<dyn Table>> {
-        unimplemented!()
-    }
 
     async fn acquire_table_lock(
         self: Arc<Self>,

@@ -63,6 +63,7 @@ use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
+use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
@@ -790,10 +791,6 @@ impl TableContext for CtxDelegation {
         }
     }
 
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
-        todo!()
-    }
-
     async fn resolve_data_source(
         &self,
         catalog: &str,
@@ -824,14 +821,6 @@ impl TableContext for CtxDelegation {
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
-    }
-
-    fn get_table_meta_timestamps(
-        &self,
-        table: &dyn Table,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableMetaTimestamps> {
-        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
     }
 
     fn get_temp_table_prefix(&self) -> Result<String> {
@@ -1054,6 +1043,21 @@ impl TableContextCopy for CtxDelegation {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableManagement for CtxDelegation {
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+        todo!()
+    }
+
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
     }
 }
 
