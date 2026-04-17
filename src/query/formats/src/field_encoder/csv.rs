@@ -24,7 +24,6 @@ use databend_common_io::display_decimal_256_trimmed;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::CsvFileFormatParams;
 use databend_common_meta_app::principal::CsvQuoteStyle;
-use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::TextFileFormatParams;
 use geozero::ToWkt;
 use geozero::wkb::Ewkb;
@@ -40,10 +39,6 @@ pub struct CsvQuoteSettings {
     pub field_delimiter: u8,
     pub record_delimiter: Vec<u8>,
     pub escape_char: Option<u8>,
-    pub null_bytes: Vec<u8>,
-    pub allow_quoted_nulls: bool,
-    pub empty_field_as: EmptyFieldAs,
-    pub quoted_empty_field_as: EmptyFieldAs,
 }
 
 impl CsvQuoteSettings {
@@ -54,10 +49,6 @@ impl CsvQuoteSettings {
             field_delimiter: params.field_delimiter.as_bytes()[0],
             record_delimiter: params.record_delimiter.as_bytes().to_vec(),
             escape_char: params.escape.as_bytes().first().copied(),
-            null_bytes: params.null_display.as_bytes().to_vec(),
-            allow_quoted_nulls: params.allow_quoted_nulls,
-            empty_field_as: params.empty_field_as.clone(),
-            quoted_empty_field_as: params.quoted_empty_field_as.clone(),
         }
     }
 }
@@ -101,15 +92,6 @@ pub fn write_csv_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
 }
 
 fn csv_string_needs_quotes(bytes: &[u8], settings: &CsvQuoteSettings) -> bool {
-    if bytes.is_empty() {
-        return settings.empty_field_as != EmptyFieldAs::String
-            && settings.quoted_empty_field_as == EmptyFieldAs::String;
-    }
-
-    if !settings.allow_quoted_nulls && bytes == settings.null_bytes {
-        return true;
-    }
-
     bytes.iter().any(|byte| {
         *byte == settings.quote_char
             || *byte == settings.field_delimiter

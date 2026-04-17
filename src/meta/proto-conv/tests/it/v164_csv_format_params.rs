@@ -40,7 +40,7 @@ fn test_decode_v164_csv_file_format_params() -> anyhow::Result<()> {
         nan_display: "nan_utf8".to_string(),
         escape: "\\".to_string(),
         quote: "\"".to_string(),
-        quote_style: CsvQuoteStyle::QuoteAll,
+        quote_style: CsvQuoteStyle::QuoteNotNull,
         error_on_column_count_mismatch: true,
         trim_space: false,
         allow_quoted_nulls: true,

@@ -717,10 +717,10 @@ pub enum EmptyFieldAs {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CsvQuoteStyle {
-    /// Quote every field in the CSV output.
+    /// Quote every non-NULL field in the CSV output.
     #[default]
-    QuoteAll,
-    /// Quote a field only when required for safe CSV encoding or round trips.
+    QuoteNotNull,
+    /// Quote a field only when required by the CSV output format.
     QuoteMinimal,
 }
 
@@ -735,10 +735,10 @@ impl FromStr for CsvQuoteStyle {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "quote_all" => Ok(Self::QuoteAll),
+            "quote_notnull" => Ok(Self::QuoteNotNull),
             "quote_minimal" => Ok(Self::QuoteMinimal),
             _ => Err(format!(
-                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_ALL | QUOTE_MINIMAL."
+                "Invalid option value: QUOTE_STYLE is set to {s}. The valid values are QUOTE_NOTNULL | QUOTE_MINIMAL."
             )),
         }
     }
@@ -747,7 +747,7 @@ impl FromStr for CsvQuoteStyle {
 impl Display for CsvQuoteStyle {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            Self::QuoteAll => write!(f, "quote_all"),
+            Self::QuoteNotNull => write!(f, "quote_notnull"),
             Self::QuoteMinimal => write!(f, "quote_minimal"),
         }
     }

@@ -47,7 +47,7 @@ fn test_decode_v72_csv_file_format_params() -> anyhow::Result<()> {
             nan_display: "my_nan".to_string(),
             escape: "|".to_string(),
             quote: "\'".to_string(),
-            quote_style: mt::principal::CsvQuoteStyle::QuoteAll,
+            quote_style: mt::principal::CsvQuoteStyle::QuoteNotNull,
             error_on_column_count_mismatch: false,
             trim_space: false,
             allow_quoted_nulls: false,
