@@ -103,10 +103,10 @@ impl Binder {
                 from,
                 alias_name,
             } => {
-                let mut max_column_position = MaxColumnPosition::new();
+                let mut max_column_position = MaxColumnPosition::default();
                 for target in select_list.iter() {
                     if let SelectTarget::AliasedExpr { expr, .. } = target {
-                        let _ = expr.walk(&mut max_column_position);
+                        expr.walk(&mut max_column_position)?;
                     }
                 }
                 self.metadata

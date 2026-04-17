@@ -14,20 +14,22 @@
 
 use std::collections::HashSet;
 
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::Visitor;
-use databend_common_ast::visit::Walk;
+use databend_common_ast::ast::Lambda;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ToErrorCode;
 use databend_common_functions::is_builtin_function;
+use derive_visitor::Drive;
+use derive_visitor::Visitor;
 
 use crate::plans::UDFLanguage;
 
-#[derive(Default)]
+#[derive(Default, Visitor)]
+#[visitor(ColumnRef(enter), FunctionCall(enter), Lambda(enter))]
 pub struct UDFValidator {
     pub name: String,
     pub parameters: Vec<String>,
@@ -37,34 +39,27 @@ pub struct UDFValidator {
     pub has_recursive: bool,
 }
 
-impl Visitor for UDFValidator {
-    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
-        if let Expr::ColumnRef { column, .. } = expr {
-            self.expr_params.insert(column.column.name().to_string());
-        }
-        Ok(VisitControl::Continue)
+impl UDFValidator {
+    fn enter_column_ref(&mut self, column: &ColumnRef) {
+        self.expr_params.insert(column.column.name().to_string());
     }
 
-    fn visit_function_call(&mut self, func: &FunctionCall) -> std::result::Result<VisitControl, !> {
+    fn enter_function_call(&mut self, func: &FunctionCall) {
         let name = &func.name.name;
         if !is_builtin_function(name) && self.name.eq_ignore_ascii_case(name) {
             self.has_recursive = true;
         }
-        if let Some(lambda) = &func.lambda {
-            self.lambda_parameters
-                .extend(lambda.params.iter().map(|v| v.name.clone()));
-        }
-        Ok(VisitControl::Continue)
     }
-}
 
-impl UDFValidator {
+    fn enter_lambda(&mut self, lambda: &Lambda) {
+        self.lambda_parameters
+            .extend(lambda.params.iter().map(|v| v.name.clone()));
+    }
+
     pub fn verify_definition_expr(&mut self, definition_expr: &Expr) -> Result<()> {
         self.expr_params.clear();
-        self.lambda_parameters.clear();
-        self.has_recursive = false;
 
-        let _ = definition_expr.walk(self);
+        definition_expr.drive(self);
 
         if self.has_recursive {
             return Err(ErrorCode::SyntaxException("Recursive UDF is not supported"));

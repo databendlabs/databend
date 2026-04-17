@@ -17,12 +17,11 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::VisitorMut as AstVisitorMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::convert_to_type_name;
+use derive_visitor::VisitorMut as StatementVisitorMut;
 use itertools::Itertools;
 
 use crate::ColumnBindingBuilder;
@@ -243,16 +242,22 @@ impl<'a> VisitorMut<'a> for UdfRewriter {
     }
 }
 
+#[derive(StatementVisitorMut)]
+#[visitor(Expr(exit))]
 pub struct UDFArgVisitor<'a> {
     arg_types: &'a [(String, DataType)],
     args: &'a [Expr],
 }
 
-impl AstVisitorMut for UDFArgVisitor<'_> {
-    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+impl<'a> UDFArgVisitor<'a> {
+    pub fn new(arg_types: &'a [(String, DataType)], args: &'a [Expr]) -> Self {
+        Self { arg_types, args }
+    }
+
+    fn exit_expr(&mut self, expr: &mut Expr) {
         if let Expr::ColumnRef { span, column } = expr {
             if column.database.is_some() || column.table.is_some() {
-                return Ok(VisitControl::SkipChildren);
+                return;
             }
             assert_eq!(self.arg_types.len(), self.args.len());
             let Some((pos, (_, ty))) = self
@@ -260,7 +265,7 @@ impl AstVisitorMut for UDFArgVisitor<'_> {
                 .iter()
                 .find_position(|(name, _)| name == column.column.name())
             else {
-                return Ok(VisitControl::SkipChildren);
+                return;
             };
 
             *expr = Expr::Cast {
@@ -268,16 +273,7 @@ impl AstVisitorMut for UDFArgVisitor<'_> {
                 expr: Box::new(self.args[pos].clone()),
                 target_type: convert_to_type_name(ty),
                 pg_style: false,
-            };
-            return Ok(VisitControl::SkipChildren);
+            }
         }
-
-        Ok(VisitControl::Continue)
-    }
-}
-
-impl<'a> UDFArgVisitor<'a> {
-    pub fn new(arg_types: &'a [(String, DataType)], args: &'a [Expr]) -> Self {
-        Self { arg_types, args }
     }
 }
