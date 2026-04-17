@@ -13,21 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
-use dashmap::DashMap;
-use databend_common_exception::ErrorCode;
-use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_pipeline::core::InputError;
+use databend_common_pipeline::core::PlanProfile;
 
-pub trait TableContextOnError: Send + Sync {
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>>;
+pub trait TableContextQueryProfile: Send + Sync {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
 
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>);
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>);
 
-    fn get_on_error_mode(&self) -> Option<OnErrorMode>;
-
-    fn set_on_error_mode(&self, mode: OnErrorMode);
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
+    fn get_query_profiles(&self) -> Vec<PlanProfile>;
 }

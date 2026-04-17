@@ -22,6 +22,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_exception::Result;
 use futures_util::future::Either;
 use futures_util::future::select;

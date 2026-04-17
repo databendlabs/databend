@@ -86,6 +86,7 @@ use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
+use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
@@ -1390,24 +1391,6 @@ impl TableContext for QueryContext {
         self.shared.get_stage_attachment()
     }
 
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        if let Some(on_error_map) = self.shared.get_on_error_map() {
-            if on_error_map.is_empty() {
-                return None;
-            }
-            let mut m = HashMap::<String, ErrorCode>::new();
-            on_error_map
-                .iter()
-                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
-                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
-                        m.insert(x.key().to_string(), max_v.1.err.clone());
-                    }
-                });
-            return Some(m);
-        }
-        None
-    }
-
     /// Get the storage data accessor operator from the session manager.
     /// Note that this is the application level data accessor, which may be different from
     /// the table level data accessor (e.g., table with customized storage parameters).
@@ -1628,18 +1611,6 @@ impl TableContext for QueryContext {
     fn get_license_key(&self) -> String {
         self.get_settings()
             .get_enterprise_license(self.get_version())
-    }
-
-    fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        self.shared.get_query_profiles()
-    }
-
-    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
-        self.shared.add_query_profiles(profiles)
-    }
-
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
-        SessionManager::instance().get_queries_profiles()
     }
 
     fn txn_mgr(&self) -> TxnManagerRef {
@@ -2089,6 +2060,24 @@ impl TableContextOnError for QueryContext {
     fn set_on_error_mode(&self, mode: OnErrorMode) {
         self.shared.set_on_error_mode(mode)
     }
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        if let Some(on_error_map) = self.shared.get_on_error_map() {
+            if on_error_map.is_empty() {
+                return None;
+            }
+            let mut m = HashMap::<String, ErrorCode>::new();
+            on_error_map
+                .iter()
+                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
+                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
+                        m.insert(x.key().to_string(), max_v.1.err.clone());
+                    }
+                });
+            return Some(m);
+        }
+        None
+    }
 }
 
 impl TableContextPerf for QueryContext {
@@ -2158,6 +2147,20 @@ impl TableContextQueryIdentity for QueryContext {
 
     fn get_query_id_history(&self) -> HashSet<String> {
         self.shared.session.session_ctx.get_query_id_history()
+    }
+}
+
+impl TableContextQueryProfile for QueryContext {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        SessionManager::instance().get_queries_profiles()
+    }
+
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        self.shared.add_query_profiles(profiles)
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        self.shared.get_query_profiles()
     }
 }
 

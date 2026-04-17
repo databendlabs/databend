@@ -20,6 +20,7 @@ use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_exception::ErrorCode;
 use databend_common_pipeline::core::PlanProfile;

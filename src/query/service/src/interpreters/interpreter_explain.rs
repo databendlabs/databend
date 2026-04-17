@@ -24,6 +24,7 @@ use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextPartitionStats;
+use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::ErrorCode;

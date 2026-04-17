@@ -18,6 +18,7 @@ use std::time::Instant;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;

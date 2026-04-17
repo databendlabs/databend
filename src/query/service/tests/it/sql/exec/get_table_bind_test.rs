@@ -53,6 +53,7 @@ use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
+use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
@@ -751,9 +752,6 @@ impl TableContext for CtxDelegation {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         todo!()
     }
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        todo!()
-    }
 
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_application_level_data_operator()
@@ -839,17 +837,6 @@ impl TableContext for CtxDelegation {
 
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
-    }
-
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
-        todo!()
-    }
-    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
-        todo!()
-    }
-
-    fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        todo!()
     }
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
         todo!()
@@ -962,6 +949,10 @@ impl TableContextOnError for CtxDelegation {
     fn set_on_error_mode(&self, _mode: OnErrorMode) {
         todo!()
     }
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        todo!()
+    }
 }
 
 impl TableContextResultCache for CtxDelegation {
@@ -1040,6 +1031,20 @@ impl TableContextQueryIdentity for CtxDelegation {
     }
 
     fn get_query_id_history(&self) -> HashSet<String> {
+        todo!()
+    }
+}
+
+impl TableContextQueryProfile for CtxDelegation {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        todo!()
+    }
+
+    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
+        todo!()
+    }
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
         todo!()
     }
 }

@@ -69,6 +69,7 @@ use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
+use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
@@ -1233,13 +1234,7 @@ impl TableContext for LiteTableContext {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         vec![]
     }
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
-        HashMap::new()
-    }
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        None
-    }
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         None
     }
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
@@ -1305,10 +1300,6 @@ impl TableContext for LiteTableContext {
     }
     fn get_license_key(&self) -> String {
         String::new()
-    }
-    fn add_query_profiles(&self, _profiles: &HashMap<u32, PlanProfile>) {}
-    fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        vec![]
     }
     fn txn_mgr(&self) -> TxnManagerRef {
         TxnManager::init()
@@ -1401,6 +1392,10 @@ impl TableContextOnError for LiteTableContext {
     }
 
     fn set_on_error_mode(&self, _mode: OnErrorMode) {}
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        None
+    }
 }
 
 impl TableContextResultCache for LiteTableContext {
@@ -1480,6 +1475,18 @@ impl TableContextQueryIdentity for LiteTableContext {
 
     fn get_query_id_history(&self) -> HashSet<String> {
         HashSet::new()
+    }
+}
+
+impl TableContextQueryProfile for LiteTableContext {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        HashMap::new()
+    }
+
+    fn add_query_profiles(&self, _profiles: &HashMap<u32, PlanProfile>) {}
+
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        vec![]
     }
 }
 

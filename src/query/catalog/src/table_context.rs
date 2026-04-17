@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -41,7 +40,6 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::LockGuard;
-use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
@@ -75,6 +73,7 @@ mod on_error;
 mod partitions;
 mod perf;
 mod query_identity;
+mod query_profile;
 mod query_queue;
 mod read_block_thresholds;
 mod result_cache;
@@ -92,6 +91,7 @@ pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
 pub use query_identity::TableContextQueryIdentity;
+pub use query_profile::TableContextQueryProfile;
 pub use query_queue::TableContextQueryQueue;
 pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
@@ -165,6 +165,7 @@ pub trait TableContext:
     + TableContextPartitionStats
     + TableContextPerf
     + TableContextQueryIdentity
+    + TableContextQueryProfile
     + TableContextQueryQueue
     + TableContextReadBlockThresholds
     + TableContextResultCache
@@ -279,9 +280,7 @@ pub trait TableContext:
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 
     /// Get the storage data accessor operator from the session manager.
     /// Note that this is the application level data accessor, which may be different from
@@ -344,10 +343,6 @@ pub trait TableContext:
 
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
-
-    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>);
-
-    fn get_query_profiles(&self) -> Vec<PlanProfile>;
 
     fn txn_mgr(&self) -> TxnManagerRef;
     fn get_table_meta_timestamps(
