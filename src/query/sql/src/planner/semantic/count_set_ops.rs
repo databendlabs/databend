@@ -12,20 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_ast::ast::SetExpr;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::ast::SetOperation;
+use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(SetOperation(enter))]
 pub struct CountSetOps {
     pub count: usize,
 }
 
-impl VisitorMut for CountSetOps {
-    fn visit_set_expr(&mut self, set_expr: &mut SetExpr) -> Result<VisitControl, !> {
-        if matches!(set_expr, SetExpr::SetOperation(_)) {
-            self.count += 1;
-        }
-        Ok(VisitControl::Continue)
+impl CountSetOps {
+    pub fn enter_set_operation(&mut self, _set_operation: &SetOperation) {
+        self.count += 1;
     }
 }

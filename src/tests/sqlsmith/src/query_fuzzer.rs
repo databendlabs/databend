@@ -35,11 +35,10 @@ use databend_common_ast::ast::WindowDesc;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::Visitor;
-use databend_common_ast::visit::VisitorMut;
-use databend_common_ast::visit::Walk;
-use databend_common_ast::visit::WalkMut;
+use derive_visitor::Drive;
+use derive_visitor::DriveMut;
+use derive_visitor::Visitor;
+use derive_visitor::VisitorMut;
 use ethnum::I256;
 use rand::Rng;
 use rand::SeedableRng;
@@ -147,34 +146,13 @@ const SIMPLE_CAST_FUNCTIONS: [&str; 42] = [
     "try_parse_json",
 ];
 
+#[derive(Visitor)]
+#[visitor(Expr(enter), TableReference(enter))]
 struct CollectorVisitor {
     column_like_map: HashMap<String, Expr>,
     column_like: Vec<(String, Expr)>,
     table_like_map: HashMap<String, TableReference>,
     table_like: Vec<(String, TableReference)>,
-}
-
-impl Visitor for CollectorVisitor {
-    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
-        let name = format!("{}", expr);
-        if !self.column_like_map.contains_key(&name) {
-            self.column_like_map.insert(name.clone(), expr.clone());
-            self.column_like.push((name, expr.clone()));
-        }
-        Ok(VisitControl::Continue)
-    }
-
-    fn visit_table_reference(
-        &mut self,
-        table_ref: &TableReference,
-    ) -> std::result::Result<VisitControl, !> {
-        let name = format!("{}", table_ref);
-        if !self.table_like_map.contains_key(&name) {
-            self.table_like_map.insert(name.clone(), table_ref.clone());
-            self.table_like.push((name, table_ref.clone()));
-        }
-        Ok(VisitControl::Continue)
-    }
 }
 
 impl CollectorVisitor {
@@ -186,30 +164,29 @@ impl CollectorVisitor {
             table_like: Vec::new(),
         }
     }
+
+    fn enter_expr(&mut self, expr: &Expr) {
+        let name = format!("{}", expr);
+        if !self.column_like_map.contains_key(&name) {
+            self.column_like_map.insert(name.clone(), expr.clone());
+            self.column_like.push((name, expr.clone()));
+        }
+    }
+
+    fn enter_table_reference(&mut self, table_ref: &TableReference) {
+        let name = format!("{}", table_ref);
+        if !self.table_like_map.contains_key(&name) {
+            self.table_like_map.insert(name.clone(), table_ref.clone());
+            self.table_like.push((name, table_ref.clone()));
+        }
+    }
 }
 
+#[derive(VisitorMut)]
+#[visitor(Query(enter), SelectStmt(enter))]
 struct QueryVisitor {
     rng: SmallRng,
     collector_visitor: CollectorVisitor,
-}
-
-impl VisitorMut for QueryVisitor {
-    fn visit_query(&mut self, query: &mut Query) -> std::result::Result<VisitControl, !> {
-        self.fuzz_order_by(&mut query.order_by);
-        Ok(VisitControl::Continue)
-    }
-
-    fn visit_select_stmt(
-        &mut self,
-        select_stmt: &mut SelectStmt,
-    ) -> std::result::Result<VisitControl, !> {
-        self.fuzz_select_list(&mut select_stmt.select_list);
-        self.fuzz_expr_opt(&mut select_stmt.selection);
-        self.fuzz_group_by(&mut select_stmt.group_by);
-        self.fuzz_expr_opt(&mut select_stmt.having);
-        self.fuzz_expr_opt(&mut select_stmt.qualify);
-        Ok(VisitControl::Continue)
-    }
 }
 
 impl QueryVisitor {
@@ -223,6 +200,24 @@ impl QueryVisitor {
             rng,
             collector_visitor: CollectorVisitor::new(),
         }
+    }
+
+    fn enter_query(&mut self, query: &mut Query) {
+        // fuzz order by
+        self.fuzz_order_by(&mut query.order_by);
+    }
+
+    fn enter_select_stmt(&mut self, select_stmt: &mut SelectStmt) {
+        // fuzz select list
+        self.fuzz_select_list(&mut select_stmt.select_list);
+        // fuzz where selection
+        self.fuzz_expr_opt(&mut select_stmt.selection);
+        // fuzz group by
+        self.fuzz_group_by(&mut select_stmt.group_by);
+        // fuzz having
+        self.fuzz_expr_opt(&mut select_stmt.having);
+        // fuzz qualify
+        self.fuzz_expr_opt(&mut select_stmt.qualify);
     }
 
     fn fuzz_select_list(&mut self, select_list: &mut Vec<SelectTarget>) {
@@ -943,14 +938,14 @@ impl QueryFuzzer {
     pub fn fuzz(&mut self, stmt: Statement) -> Statement {
         self.collect_fuzz_info(stmt.clone());
         let mut fuzzed_stmt = stmt.clone();
-        let _ = fuzzed_stmt.walk_mut(&mut self.query_visitor);
+        fuzzed_stmt.drive_mut(&mut self.query_visitor);
         fuzzed_stmt
     }
 
     fn collect_fuzz_info(&mut self, stmt: Statement) {
         match stmt {
             Statement::Query(_) => {
-                let _ = stmt.walk(&mut self.query_visitor.collector_visitor);
+                stmt.drive(&mut self.query_visitor.collector_visitor);
             }
             _ => {
                 // todo

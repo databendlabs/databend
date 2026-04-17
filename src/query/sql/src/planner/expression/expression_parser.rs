@@ -18,7 +18,6 @@ use databend_common_ast::ast::Expr as AExpr;
 use databend_common_ast::parser::parse_cluster_key_exprs;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::Table;
@@ -40,6 +39,7 @@ use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use derive_visitor::DriveMut;
 use parking_lot::RwLock;
 
 use crate::BaseTableColumn;
@@ -335,7 +335,7 @@ pub fn parse_computed_expr_to_string(
     }
     let mut ast = ast.clone();
     let mut normalizer = IdentifierNormalizer::new(&name_resolution_ctx);
-    let _ = ast.walk_mut(&mut normalizer);
+    ast.drive_mut(&mut normalizer);
     Ok(format!("{:#}", ast))
 }
 
@@ -504,7 +504,7 @@ pub fn analyze_cluster_keys(
         exprs.push(expr);
 
         let mut cluster_by = ast.clone();
-        let _ = cluster_by.walk_mut(&mut normalizer);
+        cluster_by.drive_mut(&mut normalizer);
         cluster_keys.push(format!("{:#}", &cluster_by));
     }
 
