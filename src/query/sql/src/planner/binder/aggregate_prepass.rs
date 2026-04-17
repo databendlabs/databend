@@ -135,6 +135,20 @@ fn walk_expr_with_probe(expr: &Expr, probe: &mut dyn AstProbe) {
     expr.drive(&mut walker);
 }
 
+fn analyze_expr_flags(
+    name_resolution_ctx: &NameResolutionContext,
+    udaf_names: &HashSet<String>,
+    expr: &Expr,
+) -> ExprFlags {
+    let mut probe = ExprFlagsProbe {
+        name_resolution_ctx,
+        udaf_names,
+        result: ExprFlags::default(),
+    };
+    walk_expr_with_probe(expr, &mut probe);
+    probe.result
+}
+
 struct ExprFlagsProbe<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
     udaf_names: &'a HashSet<String>,
@@ -264,26 +278,20 @@ impl AggregatePrepassExprInfo {
         aliases: &HashSet<&str>,
         expr: &Expr,
     ) -> Self {
-        let mut probe = (
-            ExprFlagsProbe {
-                name_resolution_ctx,
-                udaf_names,
-                result: ExprFlags::default(),
-            },
-            ReferencedAliasProbe {
-                name_resolution_ctx,
-                aliases,
-                referenced_aliases: BTreeSet::new(),
-            },
-        );
-        walk_expr_with_probe(expr, &mut probe);
+        let expr_flags = analyze_expr_flags(name_resolution_ctx, udaf_names, expr);
+        let mut alias_probe = ReferencedAliasProbe {
+            name_resolution_ctx,
+            aliases,
+            referenced_aliases: BTreeSet::new(),
+        };
+        walk_expr_with_probe(expr, &mut alias_probe);
 
         Self {
             ast: expr.clone(),
-            contains_aggregate: probe.0.result.contains_aggregate,
-            contains_window: probe.0.result.contains_window,
-            contains_subquery: probe.0.result.contains_subquery,
-            referenced_aliases: probe.1.referenced_aliases.into_iter().collect(),
+            contains_aggregate: expr_flags.contains_aggregate,
+            contains_window: expr_flags.contains_window,
+            contains_subquery: expr_flags.contains_subquery,
+            referenced_aliases: alias_probe.referenced_aliases.into_iter().collect(),
         }
     }
 }
@@ -461,13 +469,8 @@ impl Scanner<'_> {
     }
 
     fn build_fact(&self, expr: &Expr) -> Option<AggregatePrepassFact> {
-        let mut probe = ExprFlagsProbe {
-            name_resolution_ctx: self.name_resolution_ctx,
-            udaf_names: self.udaf_names,
-            result: ExprFlags::default(),
-        };
-        walk_expr_with_probe(expr, &mut probe);
-        if probe.result.contains_subquery {
+        let expr_flags = analyze_expr_flags(self.name_resolution_ctx, self.udaf_names, expr);
+        if expr_flags.contains_subquery {
             return None;
         }
 
@@ -475,7 +478,7 @@ impl Scanner<'_> {
             expr_context: self.expr_context,
             source: self.current_source(),
             expr: expr.clone(),
-            contains_window: probe.result.contains_window,
+            contains_window: expr_flags.contains_window,
         })
     }
 

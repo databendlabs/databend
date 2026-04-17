@@ -258,10 +258,10 @@ impl Binder {
             stmt.qualify.as_ref(),
             order_by,
         )?;
-        let aliases = self.collect_aggregate_prepass_aliases(&udaf_names, &select_list);
+        let prepass_aliases = self.collect_aggregate_prepass_aliases(&udaf_names, &select_list);
         let clause_facts = self.build_select_clause_facts(
             &udaf_names,
-            &aliases,
+            &prepass_aliases,
             stmt.having.as_ref(),
             stmt.qualify.as_ref(),
             order_by,
@@ -269,7 +269,7 @@ impl Binder {
 
         let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
             &udaf_names,
-            &aliases,
+            &prepass_aliases,
             clause_facts
                 .aggregate_prepass_inputs
                 .iter()
@@ -300,7 +300,7 @@ impl Binder {
             "SELECT projection expects aggregate/UDAF calls to be rewritten before projection analysis",
         );
 
-        let aliases = select_list
+        let rewritten_aliases = select_list
             .items
             .iter()
             .map(|item| (item.alias.clone(), item.scalar.clone()))
@@ -336,7 +336,7 @@ impl Binder {
         let mut select_info = self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
-            Some(self.analyze_aggregate_having(&mut from_context, &aliases, having)?)
+            Some(self.analyze_aggregate_having(&mut from_context, &rewritten_aliases, having)?)
         } else {
             None
         };
