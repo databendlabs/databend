@@ -46,6 +46,7 @@ use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
 use databend_common_catalog::table_context::TableContextMutationStatus;
@@ -60,6 +61,7 @@ use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
+use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
@@ -749,20 +751,8 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        todo!()
-    }
-
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_application_level_data_operator()
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        todo!()
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
-        todo!()
     }
 
     async fn get_table_with_branch(
@@ -813,26 +803,6 @@ impl TableContext for CtxDelegation {
         _max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         self.get_table(catalog, database, table).await
-    }
-
-    async fn filter_out_copied_files(
-        &self,
-        _catalog_name: &str,
-        _database_name: &str,
-        _table_name: &str,
-        _files: &[StageFileInfo],
-        _path_prefix: Option<String>,
-        _max_files: Option<usize>,
-    ) -> Result<FilteredCopyFiles> {
-        todo!()
-    }
-
-    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
-        todo!()
-    }
-
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
-        todo!()
     }
 
     fn get_license_key(&self) -> String {
@@ -1045,6 +1015,44 @@ impl TableContextQueryProfile for CtxDelegation {
     }
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextStage for CtxDelegation {
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        todo!()
+    }
+
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
+        todo!()
+    }
+
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCopy for CtxDelegation {
+    async fn filter_out_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
+        _max_files: Option<usize>,
+    ) -> Result<FilteredCopyFiles> {
+        todo!()
+    }
+
+    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
+        todo!()
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
     }
 }

@@ -29,21 +29,17 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::TableSchema;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
-use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_settings::Settings;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
-use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
@@ -66,6 +62,7 @@ use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table::Table;
 
 mod broadcast;
+mod copy;
 mod cte;
 mod merge_into;
 mod mutation;
@@ -80,10 +77,12 @@ mod result_cache;
 mod runtime_filter;
 mod segment_locations;
 mod spill;
+mod stage;
 mod stream;
 mod variables;
 
 pub use broadcast::TableContextBroadcast;
+pub use copy::TableContextCopy;
 pub use cte::TableContextCte;
 pub use merge_into::TableContextMergeInto;
 pub use mutation::TableContextMutationStatus;
@@ -98,6 +97,7 @@ pub use result_cache::TableContextResultCache;
 pub use runtime_filter::TableContextRuntimeFilter;
 pub use segment_locations::TableContextSegmentLocations;
 pub use spill::TableContextSpillProgress;
+pub use stage::TableContextStage;
 pub use stream::TableContextStream;
 pub use variables::TableContextVariables;
 
@@ -158,6 +158,7 @@ pub struct FilteredCopyFiles {
 #[async_trait::async_trait]
 pub trait TableContext:
     TableContextBroadcast
+    + TableContextCopy
     + TableContextCte
     + TableContextMergeInto
     + TableContextMutationStatus
@@ -172,6 +173,7 @@ pub trait TableContext:
     + TableContextRuntimeFilter
     + TableContextSegmentLocations
     + TableContextSpillProgress
+    + TableContextStage
     + TableContextStream
     + TableContextVariables
     + Send
@@ -280,16 +282,11 @@ pub trait TableContext:
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
-    fn get_stage_attachment(&self) -> Option<StageAttachment>;
 
     /// Get the storage data accessor operator from the session manager.
     /// Note that this is the application level data accessor, which may be different from
     /// the table level data accessor (e.g., table with customized storage parameters).
     fn get_application_level_data_operator(&self) -> Result<DataOperator>;
-
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
-
-    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
 
     async fn get_table(
         &self,
@@ -327,24 +324,11 @@ pub trait TableContext:
 
     fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
 
-    async fn filter_out_copied_files(
-        &self,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        files: &[StageFileInfo],
-        path_prefix: Option<String>,
-        max_files: Option<usize>,
-    ) -> Result<FilteredCopyFiles>;
-
-    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
-
-    fn get_copy_status(&self) -> Arc<CopyStatus>;
-
     /// Get license key from context, return empty if license is not found or error happened.
     fn get_license_key(&self) -> String;
 
     fn txn_mgr(&self) -> TxnManagerRef;
+
     fn get_table_meta_timestamps(
         &self,
         table: &dyn Table,

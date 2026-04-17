@@ -19,6 +19,7 @@ use std::sync::atomic::Ordering;
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;

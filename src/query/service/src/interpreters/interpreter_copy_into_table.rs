@@ -72,6 +72,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextCopy;
 use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;

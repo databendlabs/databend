@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextStage;
 use databend_common_exception::Result;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;

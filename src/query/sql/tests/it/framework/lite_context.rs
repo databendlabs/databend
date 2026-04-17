@@ -62,6 +62,7 @@ use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
 use databend_common_catalog::table_context::TableContextMutationStatus;
@@ -76,6 +77,7 @@ use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
+use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1234,17 +1236,8 @@ impl TableContext for LiteTableContext {
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         vec![]
     }
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        None
-    }
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         unsupported("table_ctx::get_application_level_data_operator")
-    }
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        unsupported("table_ctx::get_file_format")
-    }
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
-        unsupported("table_ctx::get_connection")
     }
     async fn get_table(
         &self,
@@ -1279,24 +1272,6 @@ impl TableContext for LiteTableContext {
     ) -> Result<Arc<dyn Table>> {
         self.get_table_with_branch(catalog, database, table, branch)
             .await
-    }
-    async fn filter_out_copied_files(
-        &self,
-        _catalog_name: &str,
-        _database_name: &str,
-        _table_name: &str,
-        _files: &[StageFileInfo],
-        _path_prefix: Option<String>,
-        _max_files: Option<usize>,
-    ) -> Result<FilteredCopyFiles> {
-        Ok(FilteredCopyFiles::default())
-    }
-    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        self.copy_status.add_chunk(file_path, file_status);
-        Ok(())
-    }
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
-        self.copy_status.clone()
     }
     fn get_license_key(&self) -> String {
         String::new()
@@ -1487,6 +1462,45 @@ impl TableContextQueryProfile for LiteTableContext {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         vec![]
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextStage for LiteTableContext {
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        None
+    }
+
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
+        unsupported("table_ctx::get_file_format")
+    }
+
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
+        unsupported("table_ctx::get_connection")
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCopy for LiteTableContext {
+    async fn filter_out_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
+        _max_files: Option<usize>,
+    ) -> Result<FilteredCopyFiles> {
+        Ok(FilteredCopyFiles::default())
+    }
+
+    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
+        self.copy_status.add_chunk(file_path, file_status);
+        Ok(())
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
+        self.copy_status.clone()
     }
 }
 

@@ -79,6 +79,7 @@ use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
 use databend_common_catalog::table_context::TableContextMutationStatus;
@@ -93,6 +94,7 @@ use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSpillProgress;
+use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1386,48 +1388,11 @@ impl TableContext for QueryContext {
             .collect::<Vec<_>>()
     }
 
-    // Get Stage Attachment.
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        self.shared.get_stage_attachment()
-    }
-
     /// Get the storage data accessor operator from the session manager.
     /// Note that this is the application level data accessor, which may be different from
     /// the table level data accessor (e.g., table with customized storage parameters).
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
-    }
-
-    #[async_backtrace::framed]
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
-        match StageFileFormatType::from_str(name) {
-            Ok(typ) => FileFormatParams::default_by_type(typ),
-            Err(_) => {
-                let user_mgr = UserApiProvider::instance();
-                let tenant = self.get_tenant();
-                Ok(user_mgr
-                    .get_file_format(&tenant, name)
-                    .await?
-                    .file_format_params)
-            }
-        }
-    }
-    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        if self
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            let visibility_checker = self
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            if !visibility_checker.check_connection_visibility(name) {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
-                    &self.get_current_user()?.identity().display(),
-                )));
-            }
-        }
-        self.shared.get_connection(name).await
     }
 
     /// Fetch a Table by db and table name.
@@ -1510,102 +1475,6 @@ impl TableContext for QueryContext {
             ));
         }
         Ok(table)
-    }
-
-    #[async_backtrace::framed]
-    async fn filter_out_copied_files(
-        &self,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        files: &[StageFileInfo],
-        path_prefix: Option<String>,
-        max_files: Option<usize>,
-    ) -> Result<FilteredCopyFiles> {
-        if files.is_empty() {
-            info!("No files to filter for copy operation");
-            return Ok(FilteredCopyFiles::default());
-        }
-
-        let collect_duplicated_files = self
-            .get_settings()
-            .get_enable_purge_duplicated_files_in_copy()?;
-
-        let tenant = self.get_tenant();
-        let catalog = self.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
-            .await?;
-        let table_id = table.get_id();
-
-        let mut result_size: usize = 0;
-        let max_files = max_files.unwrap_or(usize::MAX);
-        let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
-
-        let mut files_to_copy = Vec::with_capacity(files.len());
-        let mut duplicated_files = Vec::with_capacity(files.len());
-
-        for chunk in files.chunks(batch_size) {
-            let files = chunk
-                .iter()
-                .map(|v| {
-                    if let Some(p) = &path_prefix {
-                        format!("{}{}", p, v.path)
-                    } else {
-                        v.path.clone()
-                    }
-                })
-                .collect::<Vec<_>>();
-            let req = GetTableCopiedFileReq {
-                table_id,
-                files: files.clone(),
-            };
-            let start_request = Instant::now();
-            let copied_files = catalog
-                .get_table_copied_file_info(&tenant, database_name, req)
-                .await?
-                .file_info;
-
-            metrics_inc_copy_filter_out_copied_files_request_milliseconds(
-                Instant::now().duration_since(start_request).as_millis() as u64,
-            );
-            // Colored
-            for (file, key) in chunk.iter().zip(files.iter()) {
-                if !copied_files.contains_key(key) {
-                    files_to_copy.push(file.clone());
-                    result_size += 1;
-                    if result_size == max_files {
-                        return Ok(FilteredCopyFiles {
-                            files_to_copy,
-                            duplicated_files,
-                        });
-                    }
-                    if result_size > COPY_MAX_FILES_PER_COMMIT {
-                        return Err(ErrorCode::Internal(format!(
-                            "{}",
-                            COPY_MAX_FILES_COMMIT_MSG
-                        )));
-                    }
-                } else if collect_duplicated_files && duplicated_files.len() < max_files {
-                    duplicated_files.push(file.path.clone());
-                }
-            }
-        }
-        Ok(FilteredCopyFiles {
-            files_to_copy,
-            duplicated_files,
-        })
-    }
-
-    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        if matches!(self.get_query_kind(), QueryKind::CopyIntoTable) {
-            self.shared.copy_status.add_chunk(file_path, file_status);
-        }
-        Ok(())
-    }
-
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
-        self.shared.copy_status.clone()
     }
 
     fn get_license_key(&self) -> String {
@@ -2161,6 +2030,144 @@ impl TableContextQueryProfile for QueryContext {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         self.shared.get_query_profiles()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextStage for QueryContext {
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
+        match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatParams::default_by_type(typ),
+            Err(_) => {
+                let user_mgr = UserApiProvider::instance();
+                let tenant = self.get_tenant();
+                Ok(user_mgr
+                    .get_file_format(&tenant, name)
+                    .await?
+                    .file_format_params)
+            }
+        }
+    }
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        if self
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let visibility_checker = self
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
+            if !visibility_checker.check_connection_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
+                    &self.get_current_user()?.identity().display(),
+                )));
+            }
+        }
+        self.shared.get_connection(name).await
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCopy for QueryContext {
+    #[async_backtrace::framed]
+    async fn filter_out_copied_files(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+        files: &[StageFileInfo],
+        path_prefix: Option<String>,
+        max_files: Option<usize>,
+    ) -> Result<FilteredCopyFiles> {
+        if files.is_empty() {
+            info!("No files to filter for copy operation");
+            return Ok(FilteredCopyFiles::default());
+        }
+
+        let collect_duplicated_files = self
+            .get_settings()
+            .get_enable_purge_duplicated_files_in_copy()?;
+
+        let tenant = self.get_tenant();
+        let catalog = self.get_catalog(catalog_name).await?;
+        let table = catalog
+            .get_table(&tenant, database_name, table_name)
+            .await?;
+        let table_id = table.get_id();
+
+        let mut result_size: usize = 0;
+        let max_files = max_files.unwrap_or(usize::MAX);
+        let batch_size = min(COPIED_FILES_FILTER_BATCH_SIZE, max_files);
+
+        let mut files_to_copy = Vec::with_capacity(files.len());
+        let mut duplicated_files = Vec::with_capacity(files.len());
+
+        for chunk in files.chunks(batch_size) {
+            let files = chunk
+                .iter()
+                .map(|v| {
+                    if let Some(p) = &path_prefix {
+                        format!("{}{}", p, v.path)
+                    } else {
+                        v.path.clone()
+                    }
+                })
+                .collect::<Vec<_>>();
+            let req = GetTableCopiedFileReq {
+                table_id,
+                files: files.clone(),
+            };
+            let start_request = Instant::now();
+            let copied_files = catalog
+                .get_table_copied_file_info(&tenant, database_name, req)
+                .await?
+                .file_info;
+
+            metrics_inc_copy_filter_out_copied_files_request_milliseconds(
+                Instant::now().duration_since(start_request).as_millis() as u64,
+            );
+            for (file, key) in chunk.iter().zip(files.iter()) {
+                if !copied_files.contains_key(key) {
+                    files_to_copy.push(file.clone());
+                    result_size += 1;
+                    if result_size == max_files {
+                        return Ok(FilteredCopyFiles {
+                            files_to_copy,
+                            duplicated_files,
+                        });
+                    }
+                    if result_size > COPY_MAX_FILES_PER_COMMIT {
+                        return Err(ErrorCode::Internal(format!(
+                            "{}",
+                            COPY_MAX_FILES_COMMIT_MSG
+                        )));
+                    }
+                } else if collect_duplicated_files && duplicated_files.len() < max_files {
+                    duplicated_files.push(file.path.clone());
+                }
+            }
+        }
+        Ok(FilteredCopyFiles {
+            files_to_copy,
+            duplicated_files,
+        })
+    }
+
+    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
+        if matches!(self.get_query_kind(), QueryKind::CopyIntoTable) {
+            self.shared.copy_status.add_chunk(file_path, file_status);
+        }
+        Ok(())
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
+        self.shared.copy_status.clone()
     }
 }
 

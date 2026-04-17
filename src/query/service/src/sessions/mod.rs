@@ -29,6 +29,7 @@ mod session_status;
 
 pub use databend_common_base::base::BuildInfoRef;
 pub use databend_common_catalog::table_context::TableContext;
+pub use databend_common_catalog::table_context::TableContextCopy;
 pub use databend_common_catalog::table_context::TableContextMergeInto;
 pub use databend_common_catalog::table_context::TableContextMutationStatus;
 pub use databend_common_catalog::table_context::TableContextOnError;
@@ -41,6 +42,7 @@ pub use databend_common_catalog::table_context::TableContextResultCache;
 pub use databend_common_catalog::table_context::TableContextRuntimeFilter;
 pub use databend_common_catalog::table_context::TableContextSegmentLocations;
 pub use databend_common_catalog::table_context::TableContextSpillProgress;
+pub use databend_common_catalog::table_context::TableContextStage;
 pub use databend_common_catalog::table_context::TableContextVariables;
 pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;
