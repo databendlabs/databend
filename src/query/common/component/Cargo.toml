@@ -1,0 +1,22 @@
+[package]
+name = "databend-common-component"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+async-channel = { workspace = true }
+dashmap = { workspace = true }
+databend-common-catalog = { workspace = true }
+databend-common-exception = { workspace = true }
+databend-common-expression = { workspace = true }
+databend-common-meta-app = { workspace = true }
+databend-common-pipeline = { workspace = true }
+databend-common-storage = { workspace = true }
+databend-storages-common-table-meta = { workspace = true }
+parking_lot = { workspace = true }
+
+[lints]
+workspace = true

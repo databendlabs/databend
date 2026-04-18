@@ -3586,6 +3586,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "databend-common-component"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "dashmap 6.1.0",
+ "databend-common-catalog",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-meta-app",
+ "databend-common-pipeline",
+ "databend-common-storage",
+ "databend-storages-common-table-meta",
+ "parking_lot 0.12.3",
+]
+
+[[package]]
 name = "databend-common-compress"
 version = "0.1.0"
 dependencies = [
@@ -5918,6 +5934,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-cloud-control",
  "databend-common-column",
+ "databend-common-component",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",

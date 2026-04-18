@@ -73,6 +73,7 @@ databend-common-catalog = { path = "src/query/catalog" }
 databend-common-cloud-control = { path = "src/common/cloud_control" }
 databend-common-codegen = { path = "src/query/codegen" }
 databend-common-column = { path = "src/common/column" }
+databend-common-component = { path = "src/query/common/component" }
 databend-common-compress = { path = "src/common/compress" }
 databend-common-config = { path = "src/query/config" }
 databend-common-datavalues = { path = "src/query/datavalues" }

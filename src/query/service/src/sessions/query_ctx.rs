@@ -20,11 +20,9 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::collections::hash_map::Entry;
 use std::future::Future;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
@@ -34,7 +32,6 @@ use std::time::UNIX_EPOCH;
 use async_channel::Receiver;
 use async_channel::Sender;
 use dashmap::DashMap;
-use dashmap::mapref::multiple::RefMulti;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
@@ -78,6 +75,9 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::prelude::*;
+use databend_common_component::FragmentId;
+use databend_common_component::ReadBlockThresholdsState;
+use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -184,13 +184,13 @@ const COPIED_FILES_FILTER_BATCH_SIZE: usize = 1000;
 pub struct QueryContext {
     version: String,
     mysql_version: String,
-    block_threshold: Arc<RwLock<BlockThresholds>>,
+    read_block_thresholds: ReadBlockThresholdsState,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
-    fragment_id: Arc<AtomicUsize>,
+    fragment_id: FragmentId,
     // Used by synchronized generate aggregating indexes when new data written.
-    written_segment_locs: Arc<RwLock<HashSet<Location>>>,
+    written_segment_locs: SegmentLocationsState,
     // Temp table for materialized CTE, first string is the database_name, second string is the table_name
     // All temp tables' catalog is `CATALOG_DEFAULT`, so we don't need to store it.
     m_cte_temp_table: Arc<RwLock<Vec<(String, String)>>>,
@@ -215,9 +215,9 @@ impl QueryContext {
             mysql_version: format!("{MYSQL_VERSION}-{}", shared.version.commit_detail),
             shared,
             query_settings,
-            fragment_id: Arc::new(AtomicUsize::new(0)),
+            fragment_id: Default::default(),
             written_segment_locs: Default::default(),
-            block_threshold: Default::default(),
+            read_block_thresholds: Default::default(),
             m_cte_temp_table: Arc::new(RwLock::new(Vec::new())),
         })
     }
@@ -428,14 +428,14 @@ impl QueryContext {
     }
 
     pub fn broadcast_source_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
-        self.shared.broadcast_source_receiver(broadcast_id)
+        self.shared.broadcast_registry.source_receiver(broadcast_id)
     }
 
     /// Get a sender to broadcast data
     ///
     /// Note: The channel must be closed by calling close() after data transmission is completed
     pub fn broadcast_source_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
-        self.shared.broadcast_source_sender(broadcast_id)
+        self.shared.broadcast_registry.source_sender(broadcast_id)
     }
 
     /// A receiver to receive broadcast data
@@ -443,11 +443,11 @@ impl QueryContext {
     /// Note: receive() can be called repeatedly until an Error is returned, indicating
     /// that the upstream channel has been closed
     pub fn broadcast_sink_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
-        self.shared.broadcast_sink_receiver(broadcast_id)
+        self.shared.broadcast_registry.sink_receiver(broadcast_id)
     }
 
     pub fn broadcast_sink_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
-        self.shared.broadcast_sink_sender(broadcast_id)
+        self.shared.broadcast_registry.sink_sender(broadcast_id)
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -659,10 +659,7 @@ impl QueryContext {
     }
 
     pub fn should_log_runtime_filters(&self) -> bool {
-        !self
-            .shared
-            .runtime_filter_logged
-            .swap(true, Ordering::SeqCst)
+        self.shared.runtime_filter_state.should_log()
     }
 
     pub fn log_runtime_filter_stats(&self) {
@@ -680,16 +677,19 @@ impl QueryContext {
             enabled: bool,
         }
 
-        let runtime_filters = self.shared.runtime_filters.read();
+        let runtime_filters = self.shared.runtime_filter_state.runtime_filter_reports();
         let mut snapshots: Vec<(IndexType, Vec<FilterLogEntry>)> = Vec::new();
-        for (scan_id, info) in runtime_filters.iter() {
-            if info.filters.is_empty() {
+        for (scan_id, reports) in runtime_filters {
+            if reports.is_empty() {
                 continue;
             }
 
-            let mut filters = Vec::with_capacity(info.filters.len());
-            for entry in &info.filters {
-                filters.push(FilterLogEntry {
+            let filters = self
+                .shared
+                .runtime_filter_state
+                .get_runtime_filters(scan_id)
+                .into_iter()
+                .map(|entry| FilterLogEntry {
                     filter_id: entry.id,
                     probe_expr: entry.probe_expr.sql_display(),
                     bloom_column: entry.bloom.as_ref().map(|bloom| bloom.column_name.clone()),
@@ -701,14 +701,13 @@ impl QueryContext {
                     build_rows: entry.build_rows,
                     build_table_rows: entry.build_table_rows,
                     enabled: entry.enabled,
-                });
-            }
+                })
+                .collect::<Vec<_>>();
 
             if !filters.is_empty() {
-                snapshots.push((*scan_id, filters));
+                snapshots.push((scan_id, filters));
             }
         }
-        drop(runtime_filters);
 
         if snapshots.is_empty() {
             return;
@@ -1450,13 +1449,11 @@ impl TableContextTableAccess for QueryContext {
 
 impl TableContextBroadcast for QueryContext {
     fn get_next_broadcast_id(&self) -> u32 {
-        self.shared
-            .next_broadcast_id
-            .fetch_add(1, Ordering::Acquire)
+        self.shared.broadcast_registry.next_broadcast_id()
     }
 
     fn reset_broadcast_id(&self) {
-        self.shared.next_broadcast_id.store(0, Ordering::Release);
+        self.shared.broadcast_registry.reset_broadcast_id();
     }
 }
 
@@ -1561,7 +1558,7 @@ impl TableContextPerf for QueryContext {
 
 impl TableContextFragment for QueryContext {
     fn get_fragment_id(&self) -> usize {
-        self.fragment_id.fetch_add(1, Ordering::Release)
+        self.fragment_id.next_fragment_id()
     }
 }
 
@@ -1741,47 +1738,35 @@ impl TableContextCopy for QueryContext {
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
         if matches!(self.get_query_kind(), QueryKind::CopyIntoTable) {
-            self.shared.copy_status.add_chunk(file_path, file_status);
+            self.shared
+                .copy_state
+                .add_file_status(file_path, file_status);
         }
         Ok(())
     }
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
-        self.shared.copy_status.clone()
+        self.shared.copy_state.copy_status()
     }
 
     fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        self.shared.get_on_error_map()
+        self.shared.copy_state.get_on_error_map()
     }
 
     fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        self.shared.set_on_error_map(map);
+        self.shared.copy_state.set_on_error_map(map);
     }
 
     fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.shared.get_on_error_mode()
+        self.shared.copy_state.get_on_error_mode()
     }
 
     fn set_on_error_mode(&self, mode: OnErrorMode) {
-        self.shared.set_on_error_mode(mode)
+        self.shared.copy_state.set_on_error_mode(mode)
     }
 
     fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        if let Some(on_error_map) = self.shared.get_on_error_map() {
-            if on_error_map.is_empty() {
-                return None;
-            }
-            let mut m = HashMap::<String, ErrorCode>::new();
-            on_error_map
-                .iter()
-                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
-                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
-                        m.insert(x.key().to_string(), max_v.1.err.clone());
-                    }
-                });
-            return Some(m);
-        }
-        None
+        self.shared.copy_state.get_maximum_error_per_file()
     }
 }
 
@@ -2193,45 +2178,27 @@ impl TableContextPartitionStats for QueryContext {
 
 impl TableContextResultCache for QueryContext {
     fn add_partitions_sha(&self, s: String) {
-        let mut shas = self.shared.partitions_shas.write();
-        // Avoid duplicate invalidation keys when the same table is scanned multiple times.
-        // Example: `SELECT * FROM t WHERE a > (SELECT MIN(a) FROM t)`
-        // In this query, table `t` appears twice:
-        // 1. The main TableScan adds SHA via table_read_plan.rs
-        // 2. The scalar subquery is optimized to DummyTableScan, which also
-        //    adds an invalidation key for its source table `t` via build_dummy_table_scan
-        // Without deduplication, the same key would appear twice in the list.
-        if !shas.contains(&s) {
-            shas.push(s);
-        }
+        self.shared.result_cache_state.add_partitions_sha(s);
     }
 
     fn get_partitions_shas(&self) -> Vec<String> {
-        let mut sha = self.shared.partitions_shas.read().clone();
-        // Sort to make sure the keys are stable for the same query.
-        sha.sort();
-        sha
+        self.shared.result_cache_state.partitions_shas()
     }
 
     fn add_cache_key_extra(&self, extra: String) {
-        let mut extras = self.shared.cache_key_extras.write();
-        if !extras.contains(&extra) {
-            extras.push(extra);
-        }
+        self.shared.result_cache_state.add_cache_key_extra(extra);
     }
 
     fn get_cache_key_extras(&self) -> Vec<String> {
-        let mut extras = self.shared.cache_key_extras.read().clone();
-        extras.sort();
-        extras
+        self.shared.result_cache_state.cache_key_extras()
     }
 
     fn get_cacheable(&self) -> bool {
-        self.shared.cacheable.load(Ordering::Acquire)
+        self.shared.result_cache_state.cacheable()
     }
 
     fn set_cacheable(&self, cacheable: bool) {
-        self.shared.cacheable.store(cacheable, Ordering::Release);
+        self.shared.result_cache_state.set_cacheable(cacheable);
     }
 
     fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
@@ -2252,162 +2219,92 @@ impl TableContextResultCache for QueryContext {
 impl TableContextMutationStatus for QueryContext {
     fn add_mutation_status(&self, mutation_status: MutationStatus) {
         self.shared
-            .mutation_status
-            .write()
-            .merge_mutation_status(mutation_status)
+            .mutation_state
+            .add_mutation_status(mutation_status)
     }
 
     fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        self.shared.mutation_status.clone()
+        self.shared.mutation_state.mutation_status()
     }
 
     fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        let mut multi_table_insert_status = self.shared.multi_table_insert_status.lock();
-        match multi_table_insert_status.insert_rows.get_mut(&table_id) {
-            Some(v) => {
-                *v += num_rows;
-            }
-            None => {
-                multi_table_insert_status
-                    .insert_rows
-                    .insert(table_id, num_rows);
-            }
-        }
+        self.shared
+            .mutation_state
+            .update_multi_table_insert_status(table_id, num_rows);
     }
 
     fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        self.shared.multi_table_insert_status.clone()
+        self.shared.mutation_state.multi_table_insert_status()
     }
 }
 
 impl TableContextReadBlockThresholds for QueryContext {
     fn get_read_block_thresholds(&self) -> BlockThresholds {
-        *self.block_threshold.read()
+        self.read_block_thresholds.get()
     }
 
     fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
-        *self.block_threshold.write() = thresholds;
+        self.read_block_thresholds.set(thresholds);
     }
 }
 
 impl TableContextRuntimeFilter for QueryContext {
     fn clear_runtime_filter(&self) {
-        let mut runtime_filters = self.shared.runtime_filters.write();
-        runtime_filters.clear();
-        self.shared.runtime_filter_ready.write().clear();
-        self.shared
-            .runtime_filter_logged
-            .store(false, Ordering::SeqCst);
+        self.shared.runtime_filter_state.clear();
     }
 
     fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        let query_id = self.get_id();
-        if !self.shared.runtime_filters.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filters should be empty for query {query_id}"
-            )));
-        }
-        if !self.shared.runtime_filter_ready.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter ready set should be empty for query {query_id}"
-            )));
-        }
-        if self.shared.runtime_filter_logged.load(Ordering::Relaxed) {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter logged flag should be reset for query {query_id}"
-            )));
-        }
-        Ok(())
+        self.shared
+            .runtime_filter_state
+            .assert_empty(&self.get_id())
     }
 
     fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
-        let mut runtime_filters = self.shared.runtime_filters.write();
-        for (scan_id, filter) in filters {
-            let entry = runtime_filters.entry(scan_id).or_default();
-            for new_filter in filter.filters {
-                entry.filters.push(new_filter);
-            }
-        }
+        self.shared.runtime_filter_state.set_runtime_filter(filters);
     }
 
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
-        let mut runtime_filter_ready = self.shared.runtime_filter_ready.write();
-        match runtime_filter_ready.entry(table_index) {
-            Entry::Vacant(v) => {
-                v.insert(vec![ready]);
-            }
-            Entry::Occupied(mut v) => {
-                v.get_mut().push(ready);
-            }
-        }
+        self.shared
+            .runtime_filter_state
+            .set_runtime_filter_ready(table_index, ready);
     }
 
     fn get_runtime_filter_ready(&self, scan_id: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        let runtime_filter_ready = self.shared.runtime_filter_ready.read();
-        match runtime_filter_ready.get(&scan_id) {
-            Some(v) => v.to_vec(),
-            None => vec![],
-        }
+        self.shared
+            .runtime_filter_state
+            .get_runtime_filter_ready(scan_id)
     }
 
     fn get_runtime_filters(&self, id: IndexType) -> Vec<RuntimeFilterEntry> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        runtime_filters
-            .get(&id)
-            .map(|v| v.filters.clone())
-            .unwrap_or_default()
+        self.shared.runtime_filter_state.get_runtime_filters(id)
     }
 
     fn get_bloom_runtime_filter_with_id(&self, id: IndexType) -> Vec<(String, RuntimeBloomFilter)> {
-        self.get_runtime_filters(id)
-            .into_iter()
-            .filter_map(|entry| entry.bloom.map(|bloom| (bloom.column_name, bloom.filter)))
-            .collect()
+        self.shared
+            .runtime_filter_state
+            .get_bloom_runtime_filter_with_id(id)
     }
 
     fn get_inlist_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        self.get_runtime_filters(id)
-            .into_iter()
-            .filter_map(|entry| entry.inlist)
-            .collect()
+        self.shared
+            .runtime_filter_state
+            .get_inlist_runtime_filter_with_id(id)
     }
 
     fn get_min_max_runtime_filter_with_id(&self, id: IndexType) -> Vec<Expr<String>> {
-        self.get_runtime_filters(id)
-            .into_iter()
-            .filter_map(|entry| entry.min_max)
-            .collect()
+        self.shared
+            .runtime_filter_state
+            .get_min_max_runtime_filter_with_id(id)
     }
 
     fn runtime_filter_reports(&self) -> HashMap<IndexType, Vec<RuntimeFilterReport>> {
-        let runtime_filters = self.shared.runtime_filters.read();
-        runtime_filters
-            .iter()
-            .map(|(scan_id, info)| {
-                let reports = info
-                    .filters
-                    .iter()
-                    .map(|entry| RuntimeFilterReport {
-                        filter_id: entry.id,
-                        has_bloom: entry.bloom.is_some(),
-                        has_inlist: entry.inlist.is_some(),
-                        has_min_max: entry.min_max.is_some(),
-                        stats: entry.stats.snapshot(),
-                    })
-                    .collect();
-                (*scan_id, reports)
-            })
-            .collect()
+        self.shared.runtime_filter_state.runtime_filter_reports()
     }
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool {
-        if let Some(runtime_filter) = self.shared.runtime_filters.read().get(&id) {
-            return runtime_filter
-                .filters
-                .iter()
-                .any(|entry| entry.bloom.is_some());
-        }
-        false
+        self.shared
+            .runtime_filter_state
+            .has_bloom_runtime_filters(id)
     }
 }
 
@@ -2450,43 +2347,29 @@ impl TableContextSpillProgress for QueryContext {
 
 impl TableContextSegmentLocations for QueryContext {
     fn add_written_segment_location(&self, segment_loc: Location) -> Result<()> {
-        let mut segment_locations = self.written_segment_locs.write();
-        segment_locations.insert(segment_loc);
+        self.written_segment_locs.add(segment_loc);
         Ok(())
     }
 
     fn clear_written_segment_locations(&self) -> Result<()> {
-        let mut segment_locations = self.written_segment_locs.write();
-        segment_locations.clear();
+        self.written_segment_locs.clear();
         Ok(())
     }
 
     fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        Ok(self
-            .written_segment_locs
-            .read()
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>())
+        Ok(self.written_segment_locs.list())
     }
 
     fn add_selected_segment_location(&self, segment_loc: Location) {
-        let mut segment_locations = self.shared.selected_segment_locs.write();
-        segment_locations.insert(segment_loc);
+        self.shared.selected_segment_locs.add(segment_loc);
     }
 
     fn get_selected_segment_locations(&self) -> Vec<Location> {
-        self.shared
-            .selected_segment_locs
-            .read()
-            .iter()
-            .cloned()
-            .collect()
+        self.shared.selected_segment_locs.list()
     }
 
     fn clear_selected_segment_locations(&self) {
-        let mut segment_locations = self.shared.selected_segment_locs.write();
-        segment_locations.clear();
+        self.shared.selected_segment_locs.clear();
     }
 }
 
