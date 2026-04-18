@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -42,6 +41,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::binder::bind_table_reference::JoinConditions;
+use crate::binder::project::SelectInfo;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::optimizer::ir::SExpr;
 use crate::planner::binder::BindContext;
@@ -52,7 +52,6 @@ use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 use crate::plans::UnionAll;
 use crate::plans::Visitor as _;
 
@@ -77,8 +76,7 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        let last_expr_context = bind_context.expr_context.clone();
-        bind_context.set_expr_context(ExprContext::WhereClause);
+        let last_expr_context = bind_context.replace_expr_context(ExprContext::WhereClause);
 
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -107,7 +105,7 @@ impl Binder {
             predicates: split_conjunctions(&scalar),
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
-        bind_context.set_expr_context(last_expr_context);
+        bind_context.expr_context = last_expr_context;
 
         Ok((new_expr, scalar))
     }
@@ -310,14 +308,9 @@ impl Binder {
         );
 
         if distinct {
-            let columns = new_bind_context.all_column_bindings().to_vec();
-            new_expr = self.bind_distinct(
-                left_span,
-                &mut new_bind_context,
-                &columns,
-                &mut HashMap::new(),
-                new_expr,
-            )?;
+            let mut select_info =
+                SelectInfo::from_columns(new_bind_context.all_column_bindings().to_vec());
+            new_expr = self.bind_distinct(left_span, &mut select_info, new_expr)?;
         }
 
         Ok((new_expr, new_bind_context))
@@ -388,14 +381,8 @@ impl Binder {
             .set_cte_context(right_context.cte_context);
 
         // then apply distinct
-        let columns = left_context.all_column_bindings().to_vec();
-        let s_expr = self.bind_distinct(
-            left_span,
-            &mut left_context,
-            &columns,
-            &mut HashMap::new(),
-            s_expr,
-        )?;
+        let mut select_info = SelectInfo::from_columns(left_context.all_column_bindings().to_vec());
+        let s_expr = self.bind_distinct(left_span, &mut select_info, s_expr)?;
         Ok((s_expr, left_context))
     }
 
@@ -495,7 +482,7 @@ impl Binder {
         &self,
         bind_context: &BindContext,
         stmt: &SelectStmt,
-        scalar_items: &HashMap<Symbol, ScalarItem>,
+        select_info: &SelectInfo,
         select_list: &SelectList,
         where_scalar: &Option<ScalarExpr>,
         order_by: &[OrderItem],
@@ -592,7 +579,7 @@ impl Binder {
 
         let mut order_by_cols = HashSet::with_capacity(order_by.len());
         for o in order_by {
-            if let Some(scalar) = scalar_items.get(&o.index) {
+            if let Some(scalar) = select_info.source_scalar_item(o.index) {
                 let cols = scalar.scalar.used_columns();
                 order_by_cols.extend(cols);
             } else {

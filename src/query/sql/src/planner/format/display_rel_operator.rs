@@ -32,7 +32,6 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
@@ -52,7 +51,6 @@ fn to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &RelOperator) -> FormatT
         RelOperator::Scan(op) => scan_to_format_tree(id_humanizer, op),
         RelOperator::EvalScalar(op) => eval_scalar_to_format_tree(id_humanizer, op),
         RelOperator::Filter(op) => filter_to_format_tree(id_humanizer, op),
-        RelOperator::SecureFilter(op) => secure_filter_to_format_tree(id_humanizer, op),
         RelOperator::Aggregate(op) => aggregate_to_format_tree(id_humanizer, op),
         RelOperator::Window(op) => window_to_format_tree(id_humanizer, op),
         RelOperator::Udf(op) => udf_to_format_tree(id_humanizer, op),
@@ -163,7 +161,7 @@ fn format_scalar_item<I: IdHumanizer>(id_humanizer: &I, item: &ScalarItem) -> St
 }
 
 fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTreeNode {
-    FormatTreeNode::with_children("Scan".to_string(), vec![
+    let mut children = vec![
         FormatTreeNode::new(format!(
             "table: {}",
             id_humanizer.humanize_table_id(op.table_index)
@@ -195,7 +193,11 @@ fn scan_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Scan) -> FormatTre
             "limit: {}",
             op.limit.map_or("NONE".to_string(), |l| l.to_string())
         )),
-    ])
+    ];
+    if op.secure_predicates.is_some() {
+        children.push(FormatTreeNode::new("ROW ACCESS POLICY APPLIED".to_string()));
+    }
+    FormatTreeNode::with_children("Scan".to_string(), children)
 }
 
 fn join_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Join) -> FormatTreeNode {
@@ -329,20 +331,6 @@ fn filter_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &Filter) -> Forma
         "filters: [{}]",
         scalars
     ))])
-}
-
-fn secure_filter_to_format_tree<I: IdHumanizer>(
-    id_humanizer: &I,
-    op: &SecureFilter,
-) -> FormatTreeNode {
-    let scalars = op
-        .predicates
-        .iter()
-        .map(|expr| format_scalar(id_humanizer, expr))
-        .join(", ");
-    FormatTreeNode::with_children("SecureFilter".to_string(), vec![FormatTreeNode::new(
-        format!("secure filters: [{}]", scalars),
-    )])
 }
 
 fn eval_scalar_to_format_tree<I: IdHumanizer>(id_humanizer: &I, op: &EvalScalar) -> FormatTreeNode {

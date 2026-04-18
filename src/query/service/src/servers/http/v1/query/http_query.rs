@@ -90,6 +90,7 @@ pub struct HttpQueryRequest {
     pub stage_attachment: Option<StageAttachmentConf>,
     #[serde(default)]
     pub params: Option<serde_json::Value>,
+    pub arrow_result_version_max: Option<u64>,
 }
 
 impl HttpQueryRequest {
@@ -159,6 +160,7 @@ impl Debug for HttpQueryRequest {
             .field("string_fields", &self.string_fields)
             .field("stage_attachment", &self.stage_attachment)
             .field("params", &self.params)
+            .field("arrow_result_version_max", &self.arrow_result_version_max)
             .finish()
     }
 }
@@ -629,6 +631,7 @@ impl HttpQuery {
     pub async fn try_create(
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
+        arrow_result_version: Option<u64>,
     ) -> Result<HttpQuery> {
         http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
@@ -662,6 +665,7 @@ impl HttpQuery {
             state: ExecuteState::Starting(ExecuteStarting {
                 ctx: ctx.clone(),
                 sender: Some(sender),
+                arrow_result_version,
             }),
         }));
 
@@ -824,7 +828,7 @@ impl HttpQuery {
         sql: String,
         params: Option<serde_json::Value>,
     ) -> Result<()> {
-        let (block_sender, query_context) = {
+        let (block_sender, query_context, arrow_result_version) = {
             let state = &mut self.execute_state.lock().state;
             let ExecuteState::Starting(state) = state else {
                 return Err(ErrorCode::Internal(
@@ -832,7 +836,11 @@ impl HttpQuery {
                 ));
             };
 
-            (state.sender.take().unwrap(), state.ctx.clone())
+            (
+                state.sender.take().unwrap(),
+                state.ctx.clone(),
+                state.arrow_result_version,
+            )
         };
 
         let query_session = query_context.get_current_session();
@@ -848,6 +856,7 @@ impl HttpQuery {
                     params,
                     query_session,
                     query_context.clone(),
+                    arrow_result_version,
                     block_sender,
                 ))
                 .await

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod normalize_scalar;
 mod push_down_filter_project_set;

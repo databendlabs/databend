@@ -59,11 +59,11 @@ FROM (
 query IITRI
 select * from target1 order by purchased_item;
 ----
-101 1 coffee 6.0 3
-101 1 donut 5.0 1
+101 1 coffee 2.5 6
+101 1 donut 1.2 5
 
 query IITRI
 select * from target2 order by purchased_item;
 ----
-102 2 bagel 5.0 2
-102 2 muffin 6.0 2
+102 2 bagel 1.8 5
+102 2 muffin 2.0 6

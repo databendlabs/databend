@@ -66,7 +66,7 @@ use crate::plans::ScalarExpr;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
-#[derive(Debug, Clone, Default, EnumAsInner)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumAsInner)]
 pub enum ExprContext {
     SelectClause,
     WhereClause,
@@ -937,8 +937,10 @@ impl BindContext {
         self.columns.iter().map(|c| c.index).collect()
     }
 
-    pub fn set_expr_context(&mut self, expr_context: ExprContext) {
-        self.expr_context = expr_context;
+    pub fn replace_expr_context(&mut self, new: ExprContext) -> ExprContext {
+        let old = self.expr_context;
+        self.expr_context = new;
+        old
     }
 }
 
