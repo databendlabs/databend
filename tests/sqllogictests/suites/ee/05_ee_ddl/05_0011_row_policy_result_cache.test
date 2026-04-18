@@ -125,7 +125,6 @@ query T
 EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ----
 ReadQueryResultCache
-├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 3
 └── Result size: 177
 

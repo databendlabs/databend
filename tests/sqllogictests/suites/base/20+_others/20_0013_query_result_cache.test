@@ -318,7 +318,6 @@ query T
 EXPLAIN SELECT *, (SELECT MIN(b) FROM t_scalar_subquery) as min_val FROM t_scalar_subquery ORDER BY a;
 ----
 ReadQueryResultCache
-├── SQL: SELECT *, (SELECT MIN(b) FROM t_scalar_subquery) AS min_val FROM t_scalar_subquery ORDER BY a
 ├── Number of rows: 3
 └── Result size: 39
 
