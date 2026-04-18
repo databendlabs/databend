@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::statistics::data_cache_statistics::DataCacheMetrics;
-
-pub trait TableContextObservability: Send + Sync {
-    fn get_status_info(&self) -> String;
-
-    fn set_status_info(&self, info: &str);
-
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
+pub trait TableContextLicense: Send + Sync {
+    fn get_license_key(&self) -> String;
 }

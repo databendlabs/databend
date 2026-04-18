@@ -12,10 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
+use crate::statistics::data_cache_statistics::DataCacheMetrics;
 use crate::table_context::ProcessInfo;
 
-pub trait TableContextProcessInfo: Send + Sync {
+pub trait TableContextTelemetry: Send + Sync {
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo>;
+
+    fn get_status_info(&self) -> String;
+
+    fn set_status_info(&self, info: &str);
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
+
+    fn get_query_queued_duration(&self) -> Duration;
+
+    fn set_query_queued_duration(&self, queued_duration: Duration);
 }

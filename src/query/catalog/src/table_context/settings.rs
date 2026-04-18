@@ -26,6 +26,4 @@ pub trait TableContextSettings: Send + Sync {
     fn get_session_settings(&self) -> Arc<Settings>;
 
     fn get_shared_settings(&self) -> Arc<Settings>;
-
-    fn get_license_key(&self) -> String;
 }

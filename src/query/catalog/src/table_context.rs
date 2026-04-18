@@ -31,18 +31,15 @@ mod cluster;
 mod copy;
 mod cte;
 mod fragment;
+mod license;
 mod merge_into;
 mod mutation;
-mod observability;
-mod on_error;
 mod partitions;
 mod perf;
-mod process_info;
 mod progress;
 mod query_identity;
 mod query_info;
 mod query_profile;
-mod query_queue;
 mod query_state;
 mod read_block_thresholds;
 mod result_cache;
@@ -56,6 +53,7 @@ mod stream;
 mod table_access;
 mod table_factory;
 mod table_management;
+mod telemetry;
 mod variables;
 
 pub use authorization::TableContextAuthorization;
@@ -64,18 +62,15 @@ pub use cluster::TableContextCluster;
 pub use copy::TableContextCopy;
 pub use cte::TableContextCte;
 pub use fragment::TableContextFragment;
+pub use license::TableContextLicense;
 pub use merge_into::TableContextMergeInto;
 pub use mutation::TableContextMutationStatus;
-pub use observability::TableContextObservability;
-pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
-pub use process_info::TableContextProcessInfo;
 pub use progress::TableContextProgress;
 pub use query_identity::TableContextQueryIdentity;
 pub use query_info::TableContextQueryInfo;
 pub use query_profile::TableContextQueryProfile;
-pub use query_queue::TableContextQueryQueue;
 pub use query_state::TableContextQueryState;
 pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
@@ -89,6 +84,7 @@ pub use stream::TableContextStream;
 pub use table_access::TableContextTableAccess;
 pub use table_factory::TableContextTableFactory;
 pub use table_management::TableContextTableManagement;
+pub use telemetry::TableContextTelemetry;
 pub use variables::TableContextVariables;
 
 pub mod prelude {
@@ -99,18 +95,15 @@ pub mod prelude {
     pub use super::TableContextCopy;
     pub use super::TableContextCte;
     pub use super::TableContextFragment;
+    pub use super::TableContextLicense;
     pub use super::TableContextMergeInto;
     pub use super::TableContextMutationStatus;
-    pub use super::TableContextObservability;
-    pub use super::TableContextOnError;
     pub use super::TableContextPartitionStats;
     pub use super::TableContextPerf;
-    pub use super::TableContextProcessInfo;
     pub use super::TableContextProgress;
     pub use super::TableContextQueryIdentity;
     pub use super::TableContextQueryInfo;
     pub use super::TableContextQueryProfile;
-    pub use super::TableContextQueryQueue;
     pub use super::TableContextQueryState;
     pub use super::TableContextReadBlockThresholds;
     pub use super::TableContextResultCache;
@@ -124,6 +117,7 @@ pub mod prelude {
     pub use super::TableContextTableAccess;
     pub use super::TableContextTableFactory;
     pub use super::TableContextTableManagement;
+    pub use super::TableContextTelemetry;
     pub use super::TableContextVariables;
 }
 
@@ -189,18 +183,15 @@ pub trait TableContext:
     + TableContextCopy
     + TableContextCte
     + TableContextFragment
+    + TableContextLicense
     + TableContextMergeInto
     + TableContextMutationStatus
-    + TableContextOnError
-    + TableContextObservability
     + TableContextPartitionStats
     + TableContextPerf
-    + TableContextProcessInfo
     + TableContextProgress
     + TableContextQueryIdentity
     + TableContextQueryInfo
     + TableContextQueryProfile
-    + TableContextQueryQueue
     + TableContextQueryState
     + TableContextReadBlockThresholds
     + TableContextResultCache
@@ -213,6 +204,7 @@ pub trait TableContext:
     + TableContextTableAccess
     + TableContextTableFactory
     + TableContextTableManagement
+    + TableContextTelemetry
     + TableContextStream
     + TableContextVariables
     + Send

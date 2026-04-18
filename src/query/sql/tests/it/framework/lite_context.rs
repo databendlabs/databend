@@ -60,39 +60,7 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextBroadcast;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextCopy;
-use databend_common_catalog::table_context::TableContextCte;
-use databend_common_catalog::table_context::TableContextFragment;
-use databend_common_catalog::table_context::TableContextMergeInto;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextObservability;
-use databend_common_catalog::table_context::TableContextOnError;
-use databend_common_catalog::table_context::TableContextPartitionStats;
-use databend_common_catalog::table_context::TableContextPerf;
-use databend_common_catalog::table_context::TableContextProcessInfo;
-use databend_common_catalog::table_context::TableContextProgress;
-use databend_common_catalog::table_context::TableContextQueryIdentity;
-use databend_common_catalog::table_context::TableContextQueryInfo;
-use databend_common_catalog::table_context::TableContextQueryProfile;
-use databend_common_catalog::table_context::TableContextQueryQueue;
-use databend_common_catalog::table_context::TableContextQueryState;
-use databend_common_catalog::table_context::TableContextReadBlockThresholds;
-use databend_common_catalog::table_context::TableContextResultCache;
-use databend_common_catalog::table_context::TableContextRuntimeFilter;
-use databend_common_catalog::table_context::TableContextSegmentLocations;
-use databend_common_catalog::table_context::TableContextSession;
-use databend_common_catalog::table_context::TableContextSettings;
-use databend_common_catalog::table_context::TableContextSpillProgress;
-use databend_common_catalog::table_context::TableContextStage;
-use databend_common_catalog::table_context::TableContextStream;
-use databend_common_catalog::table_context::TableContextTableAccess;
-use databend_common_catalog::table_context::TableContextTableFactory;
-use databend_common_catalog::table_context::TableContextTableManagement;
-use databend_common_catalog::table_context::TableContextVariables;
+use databend_common_catalog::table_context::prelude::*;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -1121,7 +1089,9 @@ impl TableContextSettings for LiteTableContext {
     fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared_settings.clone()
     }
+}
 
+impl TableContextLicense for LiteTableContext {
     fn get_license_key(&self) -> String {
         String::new()
     }
@@ -1167,13 +1137,30 @@ impl TableContextAuthorization for LiteTableContext {
     }
 }
 
-impl TableContextProcessInfo for LiteTableContext {
+impl TableContextTelemetry for LiteTableContext {
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         vec![]
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         vec![]
+    }
+    fn get_status_info(&self) -> String {
+        String::new()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        &self.data_cache_metrics
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        *self.queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: Duration) {
+        *self.queued_duration.write() = queued_duration;
     }
 }
 
@@ -1230,18 +1217,6 @@ impl TableContextProgress for LiteTableContext {
 
     fn get_result_progress_value(&self) -> ProgressValues {
         self.result_progress.get_values()
-    }
-}
-
-impl TableContextObservability for LiteTableContext {
-    fn get_status_info(&self) -> String {
-        String::new()
-    }
-
-    fn set_status_info(&self, _info: &str) {}
-
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        &self.data_cache_metrics
     }
 }
 
@@ -1316,24 +1291,6 @@ impl TableContextMergeInto for LiteTableContext {
             is_distributed: join.is_distributed,
             target_tbl_idx: join.target_tbl_idx,
         }
-    }
-}
-
-impl TableContextOnError for LiteTableContext {
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        None
-    }
-
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {}
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        None
-    }
-
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {}
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        None
     }
 }
 
@@ -1475,6 +1432,22 @@ impl TableContextCopy for LiteTableContext {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.copy_status.clone()
+    }
+
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        None
+    }
+
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {}
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        None
+    }
+
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {}
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        None
     }
 }
 
@@ -1677,16 +1650,6 @@ impl TableContextPartitionStats for LiteTableContext {
     }
 
     fn set_enable_sort_spill(&self, _enable: bool) {}
-}
-
-impl TableContextQueryQueue for LiteTableContext {
-    fn get_query_queued_duration(&self) -> Duration {
-        *self.queued_duration.read()
-    }
-
-    fn set_query_queued_duration(&self, queued_duration: Duration) {
-        *self.queued_duration.write() = queued_duration;
-    }
 }
 
 impl TableContextReadBlockThresholds for LiteTableContext {

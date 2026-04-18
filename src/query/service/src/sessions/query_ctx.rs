@@ -77,39 +77,7 @@ use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextBroadcast;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextCopy;
-use databend_common_catalog::table_context::TableContextCte;
-use databend_common_catalog::table_context::TableContextFragment;
-use databend_common_catalog::table_context::TableContextMergeInto;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextObservability;
-use databend_common_catalog::table_context::TableContextOnError;
-use databend_common_catalog::table_context::TableContextPartitionStats;
-use databend_common_catalog::table_context::TableContextPerf;
-use databend_common_catalog::table_context::TableContextProcessInfo;
-use databend_common_catalog::table_context::TableContextProgress;
-use databend_common_catalog::table_context::TableContextQueryIdentity;
-use databend_common_catalog::table_context::TableContextQueryInfo;
-use databend_common_catalog::table_context::TableContextQueryProfile;
-use databend_common_catalog::table_context::TableContextQueryQueue;
-use databend_common_catalog::table_context::TableContextQueryState;
-use databend_common_catalog::table_context::TableContextReadBlockThresholds;
-use databend_common_catalog::table_context::TableContextResultCache;
-use databend_common_catalog::table_context::TableContextRuntimeFilter;
-use databend_common_catalog::table_context::TableContextSegmentLocations;
-use databend_common_catalog::table_context::TableContextSession;
-use databend_common_catalog::table_context::TableContextSettings;
-use databend_common_catalog::table_context::TableContextSpillProgress;
-use databend_common_catalog::table_context::TableContextStage;
-use databend_common_catalog::table_context::TableContextStream;
-use databend_common_catalog::table_context::TableContextTableAccess;
-use databend_common_catalog::table_context::TableContextTableFactory;
-use databend_common_catalog::table_context::TableContextTableManagement;
-use databend_common_catalog::table_context::TableContextVariables;
+use databend_common_catalog::table_context::prelude::*;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -1114,26 +1082,7 @@ impl TableContextProgress for QueryContext {
     }
 }
 
-impl TableContextObservability for QueryContext {
-    fn get_status_info(&self) -> String {
-        let status = self.shared.status.read();
-        status.clone()
-    }
-
-    fn set_status_info(&self, info: &str) {
-        // set_status_info is not called frequently, so we can use info! here.
-        // make it easier to match the status to the log.
-        info!("Status update: {}", info);
-        let mut status = self.shared.status.write();
-        *status = info.to_string();
-    }
-
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        self.shared.get_query_cache_metrics()
-    }
-}
-
-impl TableContextProcessInfo for QueryContext {
+impl TableContextTelemetry for QueryContext {
     // Get all the processes list info.
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         SessionManager::instance().processes_info()
@@ -1154,6 +1103,31 @@ impl TableContextProcessInfo for QueryContext {
                 Some(query_id) => queries.contains(query_id),
             })
             .collect::<Vec<_>>()
+    }
+
+    fn get_status_info(&self) -> String {
+        let status = self.shared.status.read();
+        status.clone()
+    }
+
+    fn set_status_info(&self, info: &str) {
+        // set_status_info is not called frequently, so we can use info! here.
+        // make it easier to match the status to the log.
+        info!("Status update: {}", info);
+        let mut status = self.shared.status.write();
+        *status = info.to_string();
+    }
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        self.shared.get_query_cache_metrics()
+    }
+
+    fn get_query_queued_duration(&self) -> std::time::Duration {
+        *self.shared.query_queued_duration.read()
+    }
+
+    fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
+        *self.shared.query_queued_duration.write() = queued_duration;
     }
 }
 
@@ -1282,7 +1256,9 @@ impl TableContextSettings for QueryContext {
     fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared.query_settings.clone()
     }
+}
 
+impl TableContextLicense for QueryContext {
     fn get_license_key(&self) -> String {
         self.get_settings()
             .get_enterprise_license(self.get_version())
@@ -1543,42 +1519,6 @@ impl TableContextMergeInto for QueryContext {
     }
 }
 
-impl TableContextOnError for QueryContext {
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        self.shared.get_on_error_map()
-    }
-
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        self.shared.set_on_error_map(map);
-    }
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.shared.get_on_error_mode()
-    }
-
-    fn set_on_error_mode(&self, mode: OnErrorMode) {
-        self.shared.set_on_error_mode(mode)
-    }
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        if let Some(on_error_map) = self.shared.get_on_error_map() {
-            if on_error_map.is_empty() {
-                return None;
-            }
-            let mut m = HashMap::<String, ErrorCode>::new();
-            on_error_map
-                .iter()
-                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
-                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
-                        m.insert(x.key().to_string(), max_v.1.err.clone());
-                    }
-                });
-            return Some(m);
-        }
-        None
-    }
-}
-
 impl TableContextPerf for QueryContext {
     fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
         let mut all = SessionManager::instance().get_query_execution_stats();
@@ -1808,6 +1748,40 @@ impl TableContextCopy for QueryContext {
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.shared.copy_status.clone()
+    }
+
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        self.shared.get_on_error_map()
+    }
+
+    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+        self.shared.set_on_error_map(map);
+    }
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        self.shared.get_on_error_mode()
+    }
+
+    fn set_on_error_mode(&self, mode: OnErrorMode) {
+        self.shared.set_on_error_mode(mode)
+    }
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+        if let Some(on_error_map) = self.shared.get_on_error_map() {
+            if on_error_map.is_empty() {
+                return None;
+            }
+            let mut m = HashMap::<String, ErrorCode>::new();
+            on_error_map
+                .iter()
+                .for_each(|x: RefMulti<String, HashMap<u16, InputError>>| {
+                    if let Some(max_v) = x.value().iter().max_by_key(|entry| entry.1.num) {
+                        m.insert(x.key().to_string(), max_v.1.err.clone());
+                    }
+                });
+            return Some(m);
+        }
+        None
     }
 }
 
@@ -2303,16 +2277,6 @@ impl TableContextMutationStatus for QueryContext {
 
     fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
         self.shared.multi_table_insert_status.clone()
-    }
-}
-
-impl TableContextQueryQueue for QueryContext {
-    fn get_query_queued_duration(&self) -> std::time::Duration {
-        *self.shared.query_queued_duration.read()
-    }
-
-    fn set_query_queued_duration(&self, queued_duration: std::time::Duration) {
-        *self.shared.query_queued_duration.write() = queued_duration;
     }
 }
 

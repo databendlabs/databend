@@ -421,12 +421,29 @@ impl TableContextQueryState for CtxDelegation {
     }
 }
 
-impl TableContextProcessInfo for CtxDelegation {
+impl TableContextTelemetry for CtxDelegation {
     fn get_processes_info(&self) -> Vec<ProcessInfo> {
         todo!()
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+    fn get_status_info(&self) -> String {
+        "".to_string()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        todo!()
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
         todo!()
     }
 }
@@ -487,18 +504,6 @@ impl TableContextProgress for CtxDelegation {
     }
 }
 
-impl TableContextObservability for CtxDelegation {
-    fn get_status_info(&self) -> String {
-        "".to_string()
-    }
-
-    fn set_status_info(&self, _info: &str) {}
-
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        todo!()
-    }
-}
-
 #[async_trait::async_trait]
 impl TableContextCluster for CtxDelegation {
     fn get_cluster(&self) -> Arc<Cluster> {
@@ -544,7 +549,9 @@ impl TableContextSettings for CtxDelegation {
     fn get_shared_settings(&self) -> Arc<Settings> {
         Settings::create(Tenant::new_literal("fake_shared_settings"))
     }
+}
 
+impl TableContextLicense for CtxDelegation {
     fn get_license_key(&self) -> String {
         todo!()
     }
@@ -626,28 +633,6 @@ impl TableContextMergeInto for CtxDelegation {
     }
 
     fn get_merge_into_join(&self) -> MergeIntoJoin {
-        todo!()
-    }
-}
-
-impl TableContextOnError for CtxDelegation {
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        todo!()
-    }
-
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        todo!()
-    }
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        todo!()
-    }
-
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {
-        todo!()
-    }
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         todo!()
     }
 }
@@ -790,6 +775,26 @@ impl TableContextCopy for CtxDelegation {
     }
 
     fn get_copy_status(&self) -> Arc<CopyStatus> {
+        todo!()
+    }
+
+    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+        todo!()
+    }
+
+    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
+        todo!()
+    }
+
+    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
+        todo!()
+    }
+
+    fn set_on_error_mode(&self, _mode: OnErrorMode) {
+        todo!()
+    }
+
+    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         todo!()
     }
 }
@@ -947,16 +952,6 @@ impl TableContextPartitionStats for CtxDelegation {
     }
 
     fn set_enable_sort_spill(&self, _enable: bool) {
-        todo!()
-    }
-}
-
-impl TableContextQueryQueue for CtxDelegation {
-    fn get_query_queued_duration(&self) -> Duration {
-        todo!()
-    }
-
-    fn set_query_queued_duration(&self, _queued_duration: Duration) {
         todo!()
     }
 }
