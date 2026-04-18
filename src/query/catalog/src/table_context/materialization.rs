@@ -18,6 +18,22 @@ use databend_common_exception::Result;
 
 use crate::table::Table;
 
+#[async_trait::async_trait]
+pub trait TableContextCte: Send + Sync {
+    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
+
+    async fn drop_m_cte_temp_table(&self) -> Result<()>;
+
+    fn add_recursive_cte_temp_table(
+        &self,
+        catalog_name: &str,
+        database_name: &str,
+        table_name: &str,
+    );
+
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()>;
+}
+
 pub trait TableContextStream: Send + Sync {
     fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
         unimplemented!()

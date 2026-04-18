@@ -12,11 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
+use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 
+use crate::plan::DataSourcePlan;
+use crate::table::Table;
 use crate::table_context::FilteredCopyFiles;
+use crate::table_context::StageAttachment;
+
+pub trait TableContextTableFactory: Send + Sync {
+    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
+}
+
+#[async_trait::async_trait]
+pub trait TableContextStage: Send + Sync {
+    fn get_stage_attachment(&self) -> Option<StageAttachment>;
+
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
+
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
+}
 
 #[async_trait::async_trait]
 pub trait TableContextCopy: Send + Sync {

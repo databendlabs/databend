@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
+use databend_common_settings::Settings;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 
+use crate::cluster_info::Cluster;
 use crate::session_type::SessionType;
 
 pub trait TableContextSession: Send + Sync {
@@ -36,4 +41,23 @@ pub trait TableContextSession: Send + Sync {
     fn get_session_type(&self) -> SessionType {
         unimplemented!()
     }
+}
+
+pub trait TableContextSettings: Send + Sync {
+    fn get_function_context(&self) -> Result<FunctionContext>;
+
+    fn get_settings(&self) -> Arc<Settings>;
+
+    fn get_session_settings(&self) -> Arc<Settings>;
+
+    fn get_shared_settings(&self) -> Arc<Settings>;
+}
+
+#[async_trait::async_trait]
+pub trait TableContextCluster: Send + Sync {
+    fn get_cluster(&self) -> Arc<Cluster>;
+
+    fn set_cluster(&self, cluster: Arc<Cluster>);
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
 }
