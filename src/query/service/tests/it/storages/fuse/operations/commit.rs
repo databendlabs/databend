@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
@@ -42,10 +41,10 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
+use databend_common_catalog::table_context::prelude::*;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -54,7 +53,6 @@ use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedConnection;
@@ -134,15 +132,11 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FuseTable;
@@ -153,19 +147,15 @@ use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::table_context_ext::*;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -398,6 +388,38 @@ impl CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {
+    fn broadcast_registry(&self) -> &BroadcastRegistry {
+        self.ctx.broadcast_registry()
+    }
+
+    fn copy_state(&self) -> &CopyState {
+        self.ctx.copy_state()
+    }
+
+    fn fragment_id(&self) -> &FragmentId {
+        self.ctx.fragment_id()
+    }
+
+    fn mutation_state(&self) -> &MutationState {
+        self.ctx.mutation_state()
+    }
+
+    fn read_block_thresholds(&self) -> &ReadBlockThresholdsState {
+        self.ctx.read_block_thresholds()
+    }
+
+    fn result_cache_state(&self) -> &ResultCacheState {
+        self.ctx.result_cache_state()
+    }
+
+    fn written_segment_locations(&self) -> &SegmentLocationsState {
+        self.ctx.written_segment_locations()
+    }
+
+    fn selected_segment_locations(&self) -> &SegmentLocationsState {
+        self.ctx.selected_segment_locations()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -597,12 +619,6 @@ impl TableContextAuthorization for CtxDelegation {
     }
 }
 
-impl TableContextBroadcast for CtxDelegation {
-    fn get_next_broadcast_id(&self) -> u32 {
-        self.ctx.get_next_broadcast_id()
-    }
-}
-
 #[async_trait::async_trait]
 impl TableContextCte for CtxDelegation {
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
@@ -637,58 +653,6 @@ impl TableContextMergeInto for CtxDelegation {
     }
 }
 
-impl TableContextResultCache for CtxDelegation {
-    fn add_partitions_sha(&self, _sha: String) {
-        todo!()
-    }
-
-    fn get_partitions_shas(&self) -> Vec<String> {
-        todo!()
-    }
-
-    fn add_cache_key_extra(&self, extra: String) {
-        self.ctx.add_cache_key_extra(extra)
-    }
-
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        self.ctx.get_cache_key_extras()
-    }
-
-    fn get_cacheable(&self) -> bool {
-        todo!()
-    }
-
-    fn set_cacheable(&self, _: bool) {
-        todo!()
-    }
-
-    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
-        todo!()
-    }
-
-    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
-        todo!()
-    }
-}
-
-impl TableContextMutationStatus for CtxDelegation {
-    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
-        todo!()
-    }
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        todo!()
-    }
-
-    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
-        todo!()
-    }
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        todo!()
-    }
-}
-
 impl TableContextQueryIdentity for CtxDelegation {
     fn get_id(&self) -> String {
         self.ctx.get_id()
@@ -717,12 +681,6 @@ impl TableContextQueryIdentity for CtxDelegation {
     }
 
     fn get_query_id_history(&self) -> HashSet<String> {
-        todo!()
-    }
-}
-
-impl TableContextFragment for CtxDelegation {
-    fn get_fragment_id(&self) -> usize {
         todo!()
     }
 }
@@ -771,30 +729,6 @@ impl TableContextCopy for CtxDelegation {
     }
 
     fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
-        todo!()
-    }
-
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
-        todo!()
-    }
-
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        todo!()
-    }
-
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        todo!()
-    }
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        todo!()
-    }
-
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {
-        todo!()
-    }
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
         todo!()
     }
 }
@@ -956,16 +890,6 @@ impl TableContextPartitionStats for CtxDelegation {
     }
 }
 
-impl TableContextReadBlockThresholds for CtxDelegation {
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        todo!()
-    }
-
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
-        todo!()
-    }
-}
-
 impl TableContextRuntimeFilter for CtxDelegation {
     fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
         todo!()
@@ -1004,17 +928,14 @@ impl TableContextRuntimeFilter for CtxDelegation {
     }
 }
 
-impl TableContextSegmentLocations for CtxDelegation {
-    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
-        todo!()
+impl TableContextResultCache for CtxDelegation {
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.ctx.get_result_cache_key(query_id)
     }
 
-    fn clear_written_segment_locations(&self) -> Result<()> {
-        todo!()
-    }
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        todo!()
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.ctx
+            .set_query_id_result_cache(query_id, result_cache_key)
     }
 }
 

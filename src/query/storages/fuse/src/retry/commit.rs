@@ -162,7 +162,7 @@ async fn try_rebuild_req(
         update_failed_tbls
     );
     let insert_rows = {
-        let stats = ctx.get_multi_table_insert_status();
+        let stats = ctx.mutation_state().multi_table_insert_status();
         let status = stats.lock();
         status.insert_rows.clone()
     };

@@ -410,7 +410,7 @@ impl PhysicalPlanBuilder {
         let table = table_entry.table();
 
         if !table.result_can_be_cached() {
-            self.ctx.set_cacheable(false);
+            self.ctx.result_cache_state().set_cacheable(false);
         }
 
         let mut table_schema = table.schema_with_stream();
@@ -463,7 +463,9 @@ impl PhysicalPlanBuilder {
             serialized.sort();
             let combined = format!("{}|{}", scan.table_index, serialized.join("|"));
             let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
-            self.ctx.add_cache_key_extra(format!("secure:{}", hash));
+            self.ctx
+                .result_cache_state()
+                .add_cache_key_extra(format!("secure:{}", hash));
         }
 
         let mut source = table
@@ -634,7 +636,7 @@ impl PhysicalPlanBuilder {
 
                 // Check if the source table supports result caching at all.
                 if !source_table.result_can_be_cached() {
-                    self.ctx.set_cacheable(false);
+                    self.ctx.result_cache_state().set_cacheable(false);
                     break;
                 }
 
@@ -643,10 +645,11 @@ impl PhysicalPlanBuilder {
                 // we conservatively disable caching to avoid returning stale results.
                 if let Ok(fuse_table) = FuseTable::try_from_table(source_table.as_ref()) {
                     self.ctx
+                        .result_cache_state()
                         .add_partitions_sha(fuse_table.query_result_cache_id());
                 } else {
                     // Non-FuseTable (system table, memory table, etc.), disable caching.
-                    self.ctx.set_cacheable(false);
+                    self.ctx.result_cache_state().set_cacheable(false);
                     break;
                 }
             }

@@ -58,7 +58,7 @@ impl PipelineBuilder {
                     GlobalIORuntime::instance().block_on(async move {
                         // 1. log on_error mode errors.
                         // todo(ariesdevil): persist errors with query_id
-                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                        if let Some(error_map) = ctx.copy_state().get_maximum_error_per_file() {
                             for (file_name, e) in error_map {
                                 error!(
                                     "copy(on_error={}): file {} encounter error {},",

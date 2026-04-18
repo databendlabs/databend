@@ -13,22 +13,6 @@
 // limitations under the License.
 
 pub trait TableContextResultCache: Send + Sync {
-    /// Add a cache invalidation key for query result cache.
-    ///
-    /// Historically named `partitions_sha` because most callers use a partition SHA256,
-    /// but some callers may use other stable version identifiers (e.g. Fuse snapshot_location).
-    fn add_partitions_sha(&self, key: String);
-
-    fn get_partitions_shas(&self) -> Vec<String>;
-
-    fn add_cache_key_extra(&self, extra: String);
-
-    fn get_cache_key_extras(&self) -> Vec<String>;
-
-    fn get_cacheable(&self) -> bool;
-
-    fn set_cacheable(&self, cacheable: bool);
-
     fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
 
     fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);

@@ -117,7 +117,7 @@ impl AsyncMpscSink for WriteResultCacheSink {
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
-            cache_key_extras: self.ctx.get_cache_key_extras(),
+            cache_key_extras: self.ctx.result_cache_state().cache_key_extras(),
         };
         self.meta_mgr
             .set(self.meta_key.clone(), value, MatchSeq::GE(0), ttl_interval)
@@ -142,7 +142,7 @@ impl WriteResultCacheSink {
         let ttl = settings.get_query_result_cache_ttl_secs()?;
         let tenant = ctx.get_tenant();
         let sql = ctx.get_query_str();
-        let partitions_shas = ctx.get_partitions_shas();
+        let partitions_shas = ctx.result_cache_state().partitions_shas();
 
         let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
         let location = gen_result_cache_dir(key);

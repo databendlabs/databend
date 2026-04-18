@@ -342,10 +342,10 @@ impl ExplainInterpreter {
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
         if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.get_cacheable()
+            && self.ctx.result_cache_state().cacheable()
             && formatted_ast.is_some()
         {
-            let extras = self.ctx.get_cache_key_extras();
+            let extras = self.ctx.result_cache_state().cache_key_extras();
             let key_source = if extras.is_empty() {
                 formatted_ast.as_ref().unwrap().clone()
             } else {

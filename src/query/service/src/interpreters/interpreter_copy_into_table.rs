@@ -327,7 +327,7 @@ impl CopyIntoTableInterpreter {
             .stage_table_info
             .copy_into_table_options
             .return_failed_only;
-        let cs = self.ctx.get_copy_status();
+        let cs = self.ctx.copy_state().copy_status();
 
         let mut results = cs.files.iter().collect::<Vec<_>>();
         results.sort_by(|a, b| a.key().cmp(b.key()));

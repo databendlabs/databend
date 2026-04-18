@@ -31,7 +31,6 @@ use std::time::UNIX_EPOCH;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use dashmap::DashMap;
 use databend_base::uniq_id::GlobalUniq;
 #[cfg(feature = "storage-stage")]
 use databend_common_ast::ast::CopyIntoTableOptions;
@@ -75,13 +74,16 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::prelude::*;
+use databend_common_component::BroadcastRegistry;
+use databend_common_component::CopyState;
 use databend_common_component::FragmentId;
+use databend_common_component::MutationState;
 use databend_common_component::ReadBlockThresholdsState;
+use databend_common_component::ResultCacheState;
 use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -113,16 +115,12 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_metrics::storage::*;
-use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
 use databend_common_sql::IndexType;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
@@ -145,7 +143,6 @@ use databend_storages_common_blocks::memory::InMemoryDataKey;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_session::drop_table_by_id;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SnapshotTimestampValidationContext;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -956,6 +953,38 @@ impl QueryContext {
 
 #[async_trait::async_trait]
 impl TableContext for QueryContext {
+    fn broadcast_registry(&self) -> &BroadcastRegistry {
+        &self.shared.broadcast_registry
+    }
+
+    fn copy_state(&self) -> &CopyState {
+        &self.shared.copy_state
+    }
+
+    fn fragment_id(&self) -> &FragmentId {
+        &self.fragment_id
+    }
+
+    fn mutation_state(&self) -> &MutationState {
+        &self.shared.mutation_state
+    }
+
+    fn read_block_thresholds(&self) -> &ReadBlockThresholdsState {
+        &self.read_block_thresholds
+    }
+
+    fn result_cache_state(&self) -> &ResultCacheState {
+        &self.shared.result_cache_state
+    }
+
+    fn written_segment_locations(&self) -> &SegmentLocationsState {
+        &self.written_segment_locs
+    }
+
+    fn selected_segment_locations(&self) -> &SegmentLocationsState {
+        &self.shared.selected_segment_locs
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -1447,16 +1476,6 @@ impl TableContextTableAccess for QueryContext {
     }
 }
 
-impl TableContextBroadcast for QueryContext {
-    fn get_next_broadcast_id(&self) -> u32 {
-        self.shared.broadcast_registry.next_broadcast_id()
-    }
-
-    fn reset_broadcast_id(&self) {
-        self.shared.broadcast_registry.reset_broadcast_id();
-    }
-}
-
 #[async_trait::async_trait]
 impl TableContextCte for QueryContext {
     fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str) {
@@ -1556,12 +1575,6 @@ impl TableContextPerf for QueryContext {
     }
 }
 
-impl TableContextFragment for QueryContext {
-    fn get_fragment_id(&self) -> usize {
-        self.fragment_id.next_fragment_id()
-    }
-}
-
 impl TableContextQueryIdentity for QueryContext {
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
@@ -1593,60 +1606,6 @@ impl TableContextQueryIdentity for QueryContext {
 
     fn get_query_id_history(&self) -> HashSet<String> {
         self.shared.session.session_ctx.get_query_id_history()
-    }
-}
-
-impl TableContextQueryProfile for QueryContext {
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
-        SessionManager::instance().get_queries_profiles()
-    }
-
-    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
-        self.shared.add_query_profiles(profiles)
-    }
-
-    fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        self.shared.get_query_profiles()
-    }
-}
-
-#[async_trait::async_trait]
-impl TableContextStage for QueryContext {
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        self.shared.get_stage_attachment()
-    }
-
-    #[async_backtrace::framed]
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
-        match StageFileFormatType::from_str(name) {
-            Ok(typ) => FileFormatParams::default_by_type(typ),
-            Err(_) => {
-                let user_mgr = UserApiProvider::instance();
-                let tenant = self.get_tenant();
-                Ok(user_mgr
-                    .get_file_format(&tenant, name)
-                    .await?
-                    .file_format_params)
-            }
-        }
-    }
-
-    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        if self
-            .get_settings()
-            .get_enable_experimental_connection_privilege_check()?
-        {
-            let visibility_checker = self
-                .get_visibility_checker(false, Object::Connection)
-                .await?;
-            if !visibility_checker.check_connection_visibility(name) {
-                return Err(ErrorCode::PermissionDenied(format!(
-                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
-                    &self.get_current_user()?.identity().display(),
-                )));
-            }
-        }
-        self.shared.get_connection(name).await
     }
 }
 
@@ -1744,29 +1703,59 @@ impl TableContextCopy for QueryContext {
         }
         Ok(())
     }
+}
 
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
-        self.shared.copy_state.copy_status()
+impl TableContextQueryProfile for QueryContext {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+        SessionManager::instance().get_queries_profiles()
     }
 
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        self.shared.copy_state.get_on_error_map()
+    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        self.shared.add_query_profiles(profiles)
     }
 
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        self.shared.copy_state.set_on_error_map(map);
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        self.shared.get_query_profiles()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextStage for QueryContext {
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        self.shared.get_stage_attachment()
     }
 
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.shared.copy_state.get_on_error_mode()
+    #[async_backtrace::framed]
+    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams> {
+        match StageFileFormatType::from_str(name) {
+            Ok(typ) => FileFormatParams::default_by_type(typ),
+            Err(_) => {
+                let user_mgr = UserApiProvider::instance();
+                let tenant = self.get_tenant();
+                Ok(user_mgr
+                    .get_file_format(&tenant, name)
+                    .await?
+                    .file_format_params)
+            }
+        }
     }
 
-    fn set_on_error_mode(&self, mode: OnErrorMode) {
-        self.shared.copy_state.set_on_error_mode(mode)
-    }
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        self.shared.copy_state.get_maximum_error_per_file()
+    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
+        if self
+            .get_settings()
+            .get_enable_experimental_connection_privilege_check()?
+        {
+            let visibility_checker = self
+                .get_visibility_checker(false, Object::Connection)
+                .await?;
+            if !visibility_checker.check_connection_visibility(name) {
+                return Err(ErrorCode::PermissionDenied(format!(
+                    "Permission denied: privilege AccessConnection is required on connection {name} for user {}",
+                    &self.get_current_user()?.identity().display(),
+                )));
+            }
+        }
+        self.shared.get_connection(name).await
     }
 }
 
@@ -2176,78 +2165,6 @@ impl TableContextPartitionStats for QueryContext {
     }
 }
 
-impl TableContextResultCache for QueryContext {
-    fn add_partitions_sha(&self, s: String) {
-        self.shared.result_cache_state.add_partitions_sha(s);
-    }
-
-    fn get_partitions_shas(&self) -> Vec<String> {
-        self.shared.result_cache_state.partitions_shas()
-    }
-
-    fn add_cache_key_extra(&self, extra: String) {
-        self.shared.result_cache_state.add_cache_key_extra(extra);
-    }
-
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        self.shared.result_cache_state.cache_key_extras()
-    }
-
-    fn get_cacheable(&self) -> bool {
-        self.shared.result_cache_state.cacheable()
-    }
-
-    fn set_cacheable(&self, cacheable: bool) {
-        self.shared.result_cache_state.set_cacheable(cacheable);
-    }
-
-    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
-        self.shared
-            .session
-            .session_ctx
-            .get_query_result_cache_key(query_id)
-    }
-
-    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
-        self.shared
-            .session
-            .session_ctx
-            .update_query_ids_results(query_id, Some(result_cache_key))
-    }
-}
-
-impl TableContextMutationStatus for QueryContext {
-    fn add_mutation_status(&self, mutation_status: MutationStatus) {
-        self.shared
-            .mutation_state
-            .add_mutation_status(mutation_status)
-    }
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        self.shared.mutation_state.mutation_status()
-    }
-
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        self.shared
-            .mutation_state
-            .update_multi_table_insert_status(table_id, num_rows);
-    }
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        self.shared.mutation_state.multi_table_insert_status()
-    }
-}
-
-impl TableContextReadBlockThresholds for QueryContext {
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        self.read_block_thresholds.get()
-    }
-
-    fn set_read_block_thresholds(&self, thresholds: BlockThresholds) {
-        self.read_block_thresholds.set(thresholds);
-    }
-}
-
 impl TableContextRuntimeFilter for QueryContext {
     fn clear_runtime_filter(&self) {
         self.shared.runtime_filter_state.clear();
@@ -2308,6 +2225,22 @@ impl TableContextRuntimeFilter for QueryContext {
     }
 }
 
+impl TableContextResultCache for QueryContext {
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.shared
+            .session
+            .session_ctx
+            .get_query_result_cache_key(query_id)
+    }
+
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.shared
+            .session
+            .session_ctx
+            .update_query_ids_results(query_id, Some(result_cache_key))
+    }
+}
+
 impl TableContextSpillProgress for QueryContext {
     fn get_join_spill_progress(&self) -> Arc<Progress> {
         self.shared.join_spill_progress.clone()
@@ -2342,34 +2275,6 @@ impl TableContextSpillProgress for QueryContext {
             .window_partition_spill_progress
             .as_ref()
             .get_values()
-    }
-}
-
-impl TableContextSegmentLocations for QueryContext {
-    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()> {
-        self.written_segment_locs.add(segment_loc);
-        Ok(())
-    }
-
-    fn clear_written_segment_locations(&self) -> Result<()> {
-        self.written_segment_locs.clear();
-        Ok(())
-    }
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        Ok(self.written_segment_locs.list())
-    }
-
-    fn add_selected_segment_location(&self, segment_loc: Location) {
-        self.shared.selected_segment_locs.add(segment_loc);
-    }
-
-    fn get_selected_segment_locations(&self) -> Vec<Location> {
-        self.shared.selected_segment_locs.list()
-    }
-
-    fn clear_selected_segment_locations(&self) {
-        self.shared.selected_segment_locs.clear();
     }
 }
 

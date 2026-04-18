@@ -12,15 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
-use dashmap::DashMap;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_pipeline::core::InputError;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
 
@@ -39,16 +31,4 @@ pub trait TableContextCopy: Send + Sync {
     ) -> Result<FilteredCopyFiles>;
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
-
-    fn get_copy_status(&self) -> Arc<CopyStatus>;
-
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>>;
-
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>);
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode>;
-
-    fn set_on_error_mode(&self, mode: OnErrorMode);
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
 }

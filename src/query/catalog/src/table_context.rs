@@ -19,6 +19,13 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_base::base::ProgressValues;
+pub use databend_common_component::BroadcastRegistry;
+pub use databend_common_component::CopyState;
+pub use databend_common_component::FragmentId;
+pub use databend_common_component::MutationState;
+pub use databend_common_component::ReadBlockThresholdsState;
+pub use databend_common_component::ResultCacheState;
+pub use databend_common_component::SegmentLocationsState;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_settings::Settings;
@@ -26,14 +33,11 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 
 mod authorization;
-mod broadcast;
 mod cluster;
 mod copy;
 mod cte;
-mod fragment;
 mod license;
 mod merge_into;
-mod mutation;
 mod partitions;
 mod perf;
 mod progress;
@@ -41,10 +45,8 @@ mod query_identity;
 mod query_info;
 mod query_profile;
 mod query_state;
-mod read_block_thresholds;
 mod result_cache;
 mod runtime_filter;
-mod segment_locations;
 mod session;
 mod settings;
 mod spill;
@@ -57,14 +59,12 @@ mod telemetry;
 mod variables;
 
 pub use authorization::TableContextAuthorization;
-pub use broadcast::TableContextBroadcast;
 pub use cluster::TableContextCluster;
 pub use copy::TableContextCopy;
 pub use cte::TableContextCte;
-pub use fragment::TableContextFragment;
+pub use databend_common_component::BroadcastChannel;
 pub use license::TableContextLicense;
 pub use merge_into::TableContextMergeInto;
-pub use mutation::TableContextMutationStatus;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
 pub use progress::TableContextProgress;
@@ -72,10 +72,8 @@ pub use query_identity::TableContextQueryIdentity;
 pub use query_info::TableContextQueryInfo;
 pub use query_profile::TableContextQueryProfile;
 pub use query_state::TableContextQueryState;
-pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
 pub use runtime_filter::TableContextRuntimeFilter;
-pub use segment_locations::TableContextSegmentLocations;
 pub use session::TableContextSession;
 pub use settings::TableContextSettings;
 pub use spill::TableContextSpillProgress;
@@ -88,16 +86,20 @@ pub use telemetry::TableContextTelemetry;
 pub use variables::TableContextVariables;
 
 pub mod prelude {
+    pub use super::BroadcastRegistry;
+    pub use super::CopyState;
+    pub use super::FragmentId;
+    pub use super::MutationState;
+    pub use super::ReadBlockThresholdsState;
+    pub use super::ResultCacheState;
+    pub use super::SegmentLocationsState;
     pub use super::TableContext;
     pub use super::TableContextAuthorization;
-    pub use super::TableContextBroadcast;
     pub use super::TableContextCluster;
     pub use super::TableContextCopy;
     pub use super::TableContextCte;
-    pub use super::TableContextFragment;
     pub use super::TableContextLicense;
     pub use super::TableContextMergeInto;
-    pub use super::TableContextMutationStatus;
     pub use super::TableContextPartitionStats;
     pub use super::TableContextPerf;
     pub use super::TableContextProgress;
@@ -105,10 +107,8 @@ pub mod prelude {
     pub use super::TableContextQueryInfo;
     pub use super::TableContextQueryProfile;
     pub use super::TableContextQueryState;
-    pub use super::TableContextReadBlockThresholds;
     pub use super::TableContextResultCache;
     pub use super::TableContextRuntimeFilter;
-    pub use super::TableContextSegmentLocations;
     pub use super::TableContextSession;
     pub use super::TableContextSettings;
     pub use super::TableContextSpillProgress;
@@ -178,14 +178,11 @@ pub struct FilteredCopyFiles {
 #[async_trait::async_trait]
 pub trait TableContext:
     TableContextAuthorization
-    + TableContextBroadcast
     + TableContextCluster
     + TableContextCopy
     + TableContextCte
-    + TableContextFragment
     + TableContextLicense
     + TableContextMergeInto
-    + TableContextMutationStatus
     + TableContextPartitionStats
     + TableContextPerf
     + TableContextProgress
@@ -193,10 +190,8 @@ pub trait TableContext:
     + TableContextQueryInfo
     + TableContextQueryProfile
     + TableContextQueryState
-    + TableContextReadBlockThresholds
     + TableContextResultCache
     + TableContextRuntimeFilter
-    + TableContextSegmentLocations
     + TableContextSession
     + TableContextSettings
     + TableContextSpillProgress
@@ -210,6 +205,22 @@ pub trait TableContext:
     + Send
     + Sync
 {
+    fn broadcast_registry(&self) -> &BroadcastRegistry;
+
+    fn copy_state(&self) -> &CopyState;
+
+    fn fragment_id(&self) -> &FragmentId;
+
+    fn mutation_state(&self) -> &MutationState;
+
+    fn read_block_thresholds(&self) -> &ReadBlockThresholdsState;
+
+    fn result_cache_state(&self) -> &ResultCacheState;
+
+    fn written_segment_locations(&self) -> &SegmentLocationsState;
+
+    fn selected_segment_locations(&self) -> &SegmentLocationsState;
+
     fn as_any(&self) -> &dyn Any;
 }
 

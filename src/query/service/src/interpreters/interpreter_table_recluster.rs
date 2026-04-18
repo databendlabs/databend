@@ -243,8 +243,8 @@ impl ReclusterTableInterpreter {
             let table = self.plan.table.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
-                    ctx.clear_written_segment_locations()?;
-                    ctx.clear_selected_segment_locations();
+                    ctx.written_segment_locations().clear();
+                    ctx.selected_segment_locations().clear();
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();

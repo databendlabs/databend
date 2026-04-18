@@ -45,7 +45,6 @@ use databend_common_component::BroadcastRegistry;
 use databend_common_component::CopyState;
 use databend_common_component::MutationState;
 use databend_common_component::ResultCacheState;
-use databend_common_component::RuntimeFilterState;
 use databend_common_component::SegmentLocationsState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -73,6 +72,7 @@ use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::Session;
 use crate::sessions::query_affect::QueryAffect;
+use crate::sessions::runtime_filter_state::RuntimeFilterState;
 use crate::spillers;
 use crate::storages::Table;
 

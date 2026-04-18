@@ -117,7 +117,7 @@ impl IPhysicalPlan for CommitSink {
                 };
                 let snapshot_gen = TruncateGenerator::new(mode.clone());
                 if matches!(mode, TruncateMode::Delete) {
-                    let mutation_status = builder.ctx.get_mutation_status();
+                    let mutation_status = builder.ctx.mutation_state().mutation_status();
                     let deleted_rows = self
                         .snapshot
                         .as_ref()

@@ -168,12 +168,13 @@ impl StatisticsReceiver {
             }
             Ok(Some(DataPacket::CopyStatus(status))) => {
                 log::info!("Merge CopyStatus for {} files", status.files.len());
-                ctx.get_copy_status().merge(status);
+                ctx.copy_state().copy_status().merge(status);
                 Ok(false)
             }
             Ok(Some(DataPacket::MutationStatus(status))) => {
                 log::info!("Merge MutationStatus");
-                ctx.get_mutation_status()
+                ctx.mutation_state()
+                    .mutation_status()
                     .write()
                     .merge_mutation_status(status);
                 Ok(false)

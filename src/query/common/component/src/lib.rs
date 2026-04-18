@@ -28,7 +28,6 @@ mod fragment;
 mod mutation;
 mod read_block_thresholds;
 mod result_cache;
-mod runtime_filter;
 mod segment_locations;
 
 pub use broadcast::BroadcastChannel;
@@ -38,5 +37,4 @@ pub use fragment::FragmentId;
 pub use mutation::MutationState;
 pub use read_block_thresholds::ReadBlockThresholdsState;
 pub use result_cache::ResultCacheState;
-pub use runtime_filter::RuntimeFilterState;
 pub use segment_locations::SegmentLocationsState;

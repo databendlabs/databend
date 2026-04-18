@@ -203,7 +203,7 @@ async fn compact_table(
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
             // Clears previously generated segment locations to avoid duplicate data in the refresh phase
-            ctx.clear_written_segment_locations()?;
+            ctx.written_segment_locations().clear();
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
             drop(complete_executor);

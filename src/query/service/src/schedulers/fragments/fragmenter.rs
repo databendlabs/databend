@@ -102,10 +102,10 @@ impl Fragmenter {
             fragment_type = FragmentType::Intermediate;
         }
 
-        fragments.insert(self.ctx.get_fragment_id(), PlanFragment {
+        fragments.insert(self.ctx.fragment_id().next_fragment_id(), PlanFragment {
             plan: root,
             fragment_type,
-            fragment_id: self.ctx.get_fragment_id(),
+            fragment_id: self.ctx.fragment_id().next_fragment_id(),
             exchange: None,
             query_id: self.query_id.clone(),
             source_fragments: self.fragments,
@@ -282,7 +282,7 @@ impl DeriveHandle for FragmentDeriveHandle {
             let input_schema = input.output_schema().unwrap();
 
             let plan_id = v.get_id();
-            let source_fragment_id = self.ctx.get_fragment_id();
+            let source_fragment_id = self.ctx.fragment_id().next_fragment_id();
 
             let plan: PhysicalPlan = PhysicalPlan::new(ExchangeSink {
                 input,
@@ -344,7 +344,7 @@ impl DeriveHandle for FragmentDeriveHandle {
             let fragment_type_visitor = FragmentTypeVisitor::from_visitor(&mut visitor);
             let fragment_type = fragment_type_visitor.fragment_type.clone();
 
-            let fragment_id = self.ctx.get_fragment_id();
+            let fragment_id = self.ctx.fragment_id().next_fragment_id();
             let fragment = PlanFragment {
                 plan: plan.clone(),
                 fragment_type,

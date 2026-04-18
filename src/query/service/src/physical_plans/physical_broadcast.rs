@@ -149,10 +149,10 @@ pub fn build_broadcast_plan(broadcast_id: u32) -> Result<PhysicalPlan> {
     }))
 }
 
-pub fn build_broadcast_plans(ctx: &dyn TableContextBroadcast) -> Result<Vec<PhysicalPlan>> {
+pub fn build_broadcast_plans(ctx: &dyn TableContext) -> Result<Vec<PhysicalPlan>> {
     let mut plans = vec![];
-    let next_broadcast_id = ctx.get_next_broadcast_id();
-    ctx.reset_broadcast_id();
+    let next_broadcast_id = ctx.broadcast_registry().next_broadcast_id();
+    ctx.broadcast_registry().reset_broadcast_id();
     for broadcast_id in 0..next_broadcast_id {
         plans.push(build_broadcast_plan(broadcast_id)?);
     }

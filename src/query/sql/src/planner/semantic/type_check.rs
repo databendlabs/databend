@@ -3572,7 +3572,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            self.ctx.set_cacheable(false);
+            self.ctx.result_cache_state().set_cacheable(false);
         }
 
         if let Some(constant) = self.try_fold_constant(&expr, true) {
@@ -5897,7 +5897,7 @@ impl<'a> TypeChecker<'a> {
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.bind_context.have_udf_server = true;
-        self.ctx.set_cacheable(false);
+        self.ctx.result_cache_state().set_cacheable(false);
         Ok(Box::new((
             UDFCall {
                 span,
@@ -6278,7 +6278,7 @@ impl<'a> TypeChecker<'a> {
         let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
-        self.ctx.set_cacheable(false);
+        self.ctx.result_cache_state().set_cacheable(false);
         Ok(Box::new((
             UDFCall {
                 span,
@@ -6352,7 +6352,7 @@ impl<'a> TypeChecker<'a> {
         );
 
         self.bind_context.have_udf_script = true;
-        self.ctx.set_cacheable(false);
+        self.ctx.result_cache_state().set_cacheable(false);
         Ok(Box::new((
             UDAFCall {
                 span,

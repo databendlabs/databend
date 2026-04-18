@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use chrono::Utc;
-use dashmap::DashMap;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::BuildInfo;
@@ -65,7 +64,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -82,7 +80,6 @@ use databend_common_meta_app::principal::*;
 use databend_common_meta_app::schema::*;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStoreProvider;
-use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
@@ -96,11 +93,8 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
@@ -113,7 +107,6 @@ use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -646,12 +639,17 @@ pub struct LiteTableContext {
     window_partition_spill_progress: Arc<Progress>,
     result_progress: Arc<Progress>,
     data_cache_metrics: DataCacheMetrics,
-    copy_status: Arc<CopyStatus>,
-    mutation_status: Arc<RwLock<MutationStatus>>,
-    multi_table_insert_status: Arc<Mutex<MultiTableInsertStatus>>,
+    broadcast_registry: BroadcastRegistry,
+    copy_state: CopyState,
+    fragment_id: FragmentId,
+    mutation_state: MutationState,
     merge_into_join: RwLock<MergeIntoJoin>,
+    read_block_thresholds: ReadBlockThresholdsState,
+    result_cache_state: ResultCacheState,
     variables: RwLock<HashMap<String, Scalar>>,
     runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
+    written_segment_locations: SegmentLocationsState,
+    selected_segment_locations: SegmentLocationsState,
     queued_duration: RwLock<Duration>,
     next_table_id: AtomicU64,
 }
@@ -802,12 +800,17 @@ impl LiteTableContext {
             window_partition_spill_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
             data_cache_metrics: DataCacheMetrics::new(),
-            copy_status: Arc::new(CopyStatus::default()),
-            mutation_status: Arc::new(RwLock::new(MutationStatus::default())),
-            multi_table_insert_status: Arc::new(Mutex::new(MultiTableInsertStatus::default())),
+            broadcast_registry: Default::default(),
+            copy_state: Default::default(),
+            fragment_id: Default::default(),
+            mutation_state: Default::default(),
             merge_into_join: RwLock::new(MergeIntoJoin::default()),
+            read_block_thresholds: Default::default(),
+            result_cache_state: Default::default(),
             variables: RwLock::new(HashMap::new()),
             runtime_filter_ready: RwLock::new(HashMap::new()),
+            written_segment_locations: Default::default(),
+            selected_segment_locations: Default::default(),
             queued_duration: RwLock::new(Duration::default()),
             next_table_id: AtomicU64::new(1),
         });
@@ -1050,6 +1053,38 @@ impl LiteTableContext {
 
 #[async_trait::async_trait]
 impl TableContext for LiteTableContext {
+    fn broadcast_registry(&self) -> &BroadcastRegistry {
+        &self.broadcast_registry
+    }
+
+    fn copy_state(&self) -> &CopyState {
+        &self.copy_state
+    }
+
+    fn fragment_id(&self) -> &FragmentId {
+        &self.fragment_id
+    }
+
+    fn mutation_state(&self) -> &MutationState {
+        &self.mutation_state
+    }
+
+    fn read_block_thresholds(&self) -> &ReadBlockThresholdsState {
+        &self.read_block_thresholds
+    }
+
+    fn result_cache_state(&self) -> &ResultCacheState {
+        &self.result_cache_state
+    }
+
+    fn written_segment_locations(&self) -> &SegmentLocationsState {
+        &self.written_segment_locations
+    }
+
+    fn selected_segment_locations(&self) -> &SegmentLocationsState {
+        &self.selected_segment_locations
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -1251,12 +1286,6 @@ impl TableContextQueryState for LiteTableContext {
     fn push_warning(&self, _warning: String) {}
 }
 
-impl TableContextBroadcast for LiteTableContext {
-    fn get_next_broadcast_id(&self) -> u32 {
-        0
-    }
-}
-
 #[async_trait::async_trait]
 impl TableContextCte for LiteTableContext {
     fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {}
@@ -1291,55 +1320,6 @@ impl TableContextMergeInto for LiteTableContext {
             is_distributed: join.is_distributed,
             target_tbl_idx: join.target_tbl_idx,
         }
-    }
-}
-
-impl TableContextResultCache for LiteTableContext {
-    fn add_partitions_sha(&self, _key: String) {}
-
-    fn get_partitions_shas(&self) -> Vec<String> {
-        vec![]
-    }
-
-    fn add_cache_key_extra(&self, _extra: String) {}
-
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        vec![]
-    }
-
-    fn get_cacheable(&self) -> bool {
-        false
-    }
-
-    fn set_cacheable(&self, _cacheable: bool) {}
-
-    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
-        None
-    }
-
-    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {}
-}
-
-impl TableContextMutationStatus for LiteTableContext {
-    fn add_mutation_status(&self, mutation_status: MutationStatus) {
-        self.mutation_status
-            .write()
-            .merge_mutation_status(mutation_status);
-    }
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
-        self.mutation_status.clone()
-    }
-
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        self.multi_table_insert_status
-            .lock()
-            .insert_rows
-            .insert(table_id, num_rows);
-    }
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
-        self.multi_table_insert_status.clone()
     }
 }
 
@@ -1378,12 +1358,6 @@ impl TableContextQueryIdentity for LiteTableContext {
     }
 }
 
-impl TableContextFragment for LiteTableContext {
-    fn get_fragment_id(&self) -> usize {
-        0
-    }
-}
-
 impl TableContextQueryProfile for LiteTableContext {
     fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         HashMap::new()
@@ -1393,21 +1367,6 @@ impl TableContextQueryProfile for LiteTableContext {
 
     fn get_query_profiles(&self) -> Vec<PlanProfile> {
         vec![]
-    }
-}
-
-#[async_trait::async_trait]
-impl TableContextStage for LiteTableContext {
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
-        None
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        unsupported("table_ctx::get_file_format")
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
-        unsupported("table_ctx::get_connection")
     }
 }
 
@@ -1426,28 +1385,23 @@ impl TableContextCopy for LiteTableContext {
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        self.copy_status.add_chunk(file_path, file_status);
+        self.copy_state.add_file_status(file_path, file_status);
         Ok(())
     }
+}
 
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
-        self.copy_status.clone()
-    }
-
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
+#[async_trait::async_trait]
+impl TableContextStage for LiteTableContext {
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
         None
     }
 
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {}
-
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        None
+    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
+        unsupported("table_ctx::get_file_format")
     }
 
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {}
-
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
-        None
+    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
+        unsupported("table_ctx::get_connection")
     }
 }
 
@@ -1652,14 +1606,6 @@ impl TableContextPartitionStats for LiteTableContext {
     fn set_enable_sort_spill(&self, _enable: bool) {}
 }
 
-impl TableContextReadBlockThresholds for LiteTableContext {
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        BlockThresholds::default()
-    }
-
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {}
-}
-
 impl TableContextRuntimeFilter for LiteTableContext {
     fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
         self.runtime_filter_ready
@@ -1706,18 +1652,12 @@ impl TableContextRuntimeFilter for LiteTableContext {
     }
 }
 
-impl TableContextSegmentLocations for LiteTableContext {
-    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
-        Ok(())
+impl TableContextResultCache for LiteTableContext {
+    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
+        None
     }
 
-    fn clear_written_segment_locations(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
-        Ok(vec![])
-    }
+    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {}
 }
 
 impl TableContextStream for LiteTableContext {

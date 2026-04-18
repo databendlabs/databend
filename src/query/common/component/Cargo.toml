@@ -9,7 +9,6 @@ edition = { workspace = true }
 [dependencies]
 async-channel = { workspace = true }
 dashmap = { workspace = true }
-databend-common-catalog = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-meta-app = { workspace = true }

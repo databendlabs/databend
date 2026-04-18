@@ -164,7 +164,8 @@ impl IPhysicalPlan for CopyIntoTable {
             CopyIntoTableSource::Stage(input) => {
                 builder
                     .ctx
-                    .set_read_block_thresholds(to_table.get_block_thresholds());
+                    .read_block_thresholds()
+                    .set(to_table.get_block_thresholds());
 
                 builder.build_pipeline(input)?;
                 self.required_source_schema.clone()

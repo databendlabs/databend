@@ -96,7 +96,7 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
         let mut hlls = HashMap::with_capacity(self.commit_metas.len());
         let insert_rows = {
-            let stats = self.ctx.get_multi_table_insert_status();
+            let stats = self.ctx.mutation_state().multi_table_insert_status();
             let status = stats.lock();
             status.insert_rows.clone()
         };

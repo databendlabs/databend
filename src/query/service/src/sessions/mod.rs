@@ -18,6 +18,7 @@ mod query_affect;
 pub mod query_ctx;
 mod query_ctx_shared;
 mod queue_mgr;
+mod runtime_filter_state;
 mod session;
 mod session_ctx;
 mod session_info;
@@ -33,19 +34,13 @@ pub mod table_context_ext {
 
 pub use databend_common_base::base::BuildInfoRef;
 pub use databend_common_catalog::table_context::TableContext;
-pub use databend_common_catalog::table_context::TableContextCopy;
-pub use databend_common_catalog::table_context::TableContextFragment;
 pub use databend_common_catalog::table_context::TableContextLicense;
 pub use databend_common_catalog::table_context::TableContextMergeInto;
-pub use databend_common_catalog::table_context::TableContextMutationStatus;
 pub use databend_common_catalog::table_context::TableContextPartitionStats;
 pub use databend_common_catalog::table_context::TableContextProgress;
 pub use databend_common_catalog::table_context::TableContextQueryIdentity;
 pub use databend_common_catalog::table_context::TableContextQueryProfile;
-pub use databend_common_catalog::table_context::TableContextReadBlockThresholds;
-pub use databend_common_catalog::table_context::TableContextResultCache;
 pub use databend_common_catalog::table_context::TableContextRuntimeFilter;
-pub use databend_common_catalog::table_context::TableContextSegmentLocations;
 pub use databend_common_catalog::table_context::TableContextSession;
 pub use databend_common_catalog::table_context::TableContextSettings;
 pub use databend_common_catalog::table_context::TableContextSpillProgress;
