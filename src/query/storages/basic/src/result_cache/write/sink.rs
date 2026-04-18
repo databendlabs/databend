@@ -123,7 +123,8 @@ impl AsyncMpscSink for WriteResultCacheSink {
             .await?;
         info!(
             "Query result cache write: query_id={}, meta_key={}",
-            self.ctx.get_id(), self.meta_key
+            self.ctx.get_id(),
+            self.meta_key
         );
         self.ctx
             .set_query_id_result_cache(self.ctx.get_id(), self.meta_key.clone());

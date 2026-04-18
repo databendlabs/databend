@@ -20,9 +20,9 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_meta_store::MetaStore;
 use databend_common_storage::DataOperator;
+use log::info;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
-use log::info;
 
 use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::common::gen_result_cache_meta_key;
