@@ -87,6 +87,7 @@ use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextProcessInfo;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
@@ -1301,28 +1302,6 @@ impl TableContext for QueryContext {
         self.shared.set_cluster(cluster)
     }
 
-    // Get all the processes list info.
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        SessionManager::instance().processes_info()
-    }
-
-    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
-        let queries = QueriesQueueManager::instance()
-            .list()
-            .iter()
-            .map(|x| x.query_id.clone())
-            .collect::<HashSet<_>>();
-
-        SessionManager::instance()
-            .processes_info()
-            .into_iter()
-            .filter(|x| match &x.current_query_id {
-                None => false,
-                Some(query_id) => queries.contains(query_id),
-            })
-            .collect::<Vec<_>>()
-    }
-
     fn get_license_key(&self) -> String {
         self.get_settings()
             .get_enterprise_license(self.get_version())
@@ -1375,6 +1354,30 @@ impl TableContextAuthorization for QueryContext {
             .session
             .get_visibility_checker(ignore_ownership, object)
             .await
+    }
+}
+
+impl TableContextProcessInfo for QueryContext {
+    // Get all the processes list info.
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        SessionManager::instance().processes_info()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        let queries = QueriesQueueManager::instance()
+            .list()
+            .iter()
+            .map(|x| x.query_id.clone())
+            .collect::<HashSet<_>>();
+
+        SessionManager::instance()
+            .processes_info()
+            .into_iter()
+            .filter(|x| match &x.current_query_id {
+                None => false,
+                Some(query_id) => queries.contains(query_id),
+            })
+            .collect::<Vec<_>>()
     }
 }
 

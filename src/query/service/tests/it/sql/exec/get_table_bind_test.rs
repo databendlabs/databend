@@ -54,6 +54,7 @@ use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextProcessInfo;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
@@ -697,18 +698,10 @@ impl TableContext for CtxDelegation {
         self.ctx.get_cluster()
     }
 
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        todo!()
-    }
-
     fn get_license_key(&self) -> String {
         self.ctx.get_license_key()
     }
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        todo!()
-    }
-
-    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
 
@@ -735,6 +728,16 @@ impl TableContextQueryState for CtxDelegation {
     }
 
     fn push_warning(&self, _warn: String) {
+        todo!()
+    }
+}
+
+impl TableContextProcessInfo for CtxDelegation {
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
 }

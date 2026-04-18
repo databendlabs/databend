@@ -70,6 +70,7 @@ use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
+use databend_common_catalog::table_context::TableContextProcessInfo;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
@@ -1192,12 +1193,6 @@ impl TableContext for LiteTableContext {
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         Ok(self.get_cluster())
     }
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        vec![]
-    }
-    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
-        vec![]
-    }
     async fn get_table(
         &self,
         catalog: &str,
@@ -1272,6 +1267,16 @@ impl TableContextAuthorization for LiteTableContext {
         _object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
         unsupported("table_ctx::get_visibility_checker")
+    }
+}
+
+impl TableContextProcessInfo for LiteTableContext {
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        vec![]
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        vec![]
     }
 }
 

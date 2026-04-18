@@ -50,6 +50,7 @@ mod mutation;
 mod on_error;
 mod partitions;
 mod perf;
+mod process_info;
 mod query_identity;
 mod query_profile;
 mod query_queue;
@@ -75,6 +76,7 @@ pub use mutation::TableContextMutationStatus;
 pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
+pub use process_info::TableContextProcessInfo;
 pub use query_identity::TableContextQueryIdentity;
 pub use query_profile::TableContextQueryProfile;
 pub use query_queue::TableContextQueryQueue;
@@ -156,6 +158,7 @@ pub trait TableContext:
     + TableContextOnError
     + TableContextPartitionStats
     + TableContextPerf
+    + TableContextProcessInfo
     + TableContextQueryIdentity
     + TableContextQueryProfile
     + TableContextQueryQueue
@@ -247,8 +250,6 @@ pub trait TableContext:
     fn get_cluster(&self) -> Arc<Cluster>;
     fn set_cluster(&self, cluster: Arc<Cluster>);
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
-    fn get_processes_info(&self) -> Vec<ProcessInfo>;
-    fn get_queued_queries(&self) -> Vec<ProcessInfo>;
 
     async fn get_table(
         &self,
