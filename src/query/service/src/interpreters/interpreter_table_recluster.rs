@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PartInfoType;
@@ -56,6 +55,7 @@ use databend_enterprise_hilbert_clustering::get_hilbert_clustering_handler;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
+use derive_visitor::DriveMut;
 use log::error;
 use log::warn;
 
@@ -626,7 +626,7 @@ impl ReclusterTableInterpreter {
         let cluster_keys_len = ast_exprs.len();
         let mut cluster_key_strs = Vec::with_capacity(cluster_keys_len);
         for mut ast in ast_exprs {
-            let _ = ast.walk_mut(&mut normalizer);
+            ast.drive_mut(&mut normalizer);
             cluster_key_strs.push(format!("{:#}", &ast));
         }
 

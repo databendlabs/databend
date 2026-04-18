@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 databend-common-ast = { workspace = true }
 databend-common-exception = { workspace = true }
+derive-visitor = { workspace = true }
 fastrace = { workspace = true }
 
 [dev-dependencies]
