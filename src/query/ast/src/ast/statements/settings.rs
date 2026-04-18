@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -22,7 +24,7 @@ use crate::ast::Identifier;
 use crate::ast::SetType;
 use crate::ast::SetValues;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct Settings {
     pub set_type: SetType,
     pub identifiers: Vec<Identifier>,

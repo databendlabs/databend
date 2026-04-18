@@ -87,7 +87,6 @@ impl DefaultCostModel {
 
             RelOperator::EvalScalar(_)
             | RelOperator::Filter(_)
-            | RelOperator::SecureFilter(_)
             | RelOperator::Window(_)
             | RelOperator::Sort(_)
             | RelOperator::ProjectSet(_)

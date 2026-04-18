@@ -117,6 +117,7 @@ impl Settings {
             binary_format,
             http_json_result_mode,
             headers: 0,
+            http_arrow_use_jsonb: false,
             json_compact: false,
             json_strings: false,
             format_null_as_str,

@@ -34,6 +34,7 @@ use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::Walk;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
@@ -61,7 +62,6 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
-use derive_visitor::Drive;
 use log::LevelFilter;
 use log::debug;
 use log::warn;
@@ -103,8 +103,12 @@ impl Binder {
                 from,
                 alias_name,
             } => {
-                let mut max_column_position = MaxColumnPosition::new();
-                select_list.drive(&mut max_column_position);
+                let mut max_column_position = MaxColumnPosition::default();
+                for target in select_list.iter() {
+                    if let SelectTarget::AliasedExpr { expr, .. } = target {
+                        expr.walk(&mut max_column_position)?;
+                    }
+                }
                 self.metadata
                     .write()
                     .set_max_column_position(max_column_position.max_pos);
@@ -519,22 +523,17 @@ impl Binder {
                 ));
             };
         }
-        let (scalar_items, projections) = self.analyze_projection(
-            &from_context.aggregate_info,
-            &from_context.windows,
-            &select_list,
-        )?;
+        let select_info = self.analyze_projection(&from_context, &select_list)?;
 
-        if projections.len() != plan.required_source_schema.num_fields() {
+        if select_info.column_count() != plan.required_source_schema.num_fields() {
             return Err(ErrorCode::BadArguments(format!(
                 "Number of columns in select list ({}) does not match that of the corresponding table ({})",
-                projections.len(),
+                select_info.column_count(),
                 plan.required_source_schema.num_fields(),
             )));
         }
 
-        let mut s_expr =
-            self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+        let mut s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;
 
         // rewrite async function and udf
         s_expr = self.rewrite_udf(&mut from_context, s_expr)?;

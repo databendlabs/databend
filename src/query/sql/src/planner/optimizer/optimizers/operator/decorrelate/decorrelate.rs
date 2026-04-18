@@ -28,6 +28,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::DerivedColumnScope;
 use crate::ColumnSet;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::JoinPredicate;
@@ -244,17 +245,17 @@ impl SubqueryDecorrelatorOptimizer {
         Ok(Some(result))
     }
 
-    pub fn try_decorrelate_subquery(
+    pub(crate) fn try_decorrelate_subquery(
         &mut self,
         outer: &SExpr,
         subquery: &SubqueryExpr,
         flatten_info: &mut FlattenInfo,
         is_conjunctive_predicate: bool,
-    ) -> Result<(SExpr, UnnestResult)> {
+    ) -> Result<(SExpr, UnnestResult, DerivedColumnScope)> {
         match subquery.typ {
             SubqueryType::Scalar => {
                 let correlated_columns = &subquery.outer_columns;
-                let flatten_plan = self.flatten_plan(
+                let (flatten_plan, derived_columns) = self.flatten_plan(
                     outer,
                     &subquery.subquery,
                     correlated_columns,
@@ -267,6 +268,7 @@ impl SubqueryDecorrelatorOptimizer {
                 self.add_equi_conditions(
                     subquery.span,
                     correlated_columns,
+                    &derived_columns,
                     &mut right_conditions,
                     &mut left_conditions,
                 )?;
@@ -304,16 +306,20 @@ impl SubqueryDecorrelatorOptimizer {
                     Arc::new(outer.clone()),
                     Arc::new(flatten_plan),
                 );
-                Ok((s_expr, UnnestResult::SingleJoin))
+                Ok((s_expr, UnnestResult::SingleJoin, derived_columns))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
-                if is_conjunctive_predicate {
-                    if let Some(result) = self.try_decorrelate_simple_subquery(outer, subquery)? {
-                        return Ok((result, UnnestResult::SimpleJoin { output_index: None }));
-                    }
+                if is_conjunctive_predicate
+                    && let Some(result) = self.try_decorrelate_simple_subquery(outer, subquery)?
+                {
+                    return Ok((
+                        result,
+                        UnnestResult::SimpleJoin { output_index: None },
+                        Default::default(),
+                    ));
                 }
                 let correlated_columns = &subquery.outer_columns;
-                let flatten_plan = self.flatten_plan(
+                let (flatten_plan, derived_columns) = self.flatten_plan(
                     outer,
                     &subquery.subquery,
                     correlated_columns,
@@ -326,6 +332,7 @@ impl SubqueryDecorrelatorOptimizer {
                 self.add_equi_conditions(
                     subquery.span,
                     correlated_columns,
+                    &derived_columns,
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
@@ -368,11 +375,15 @@ impl SubqueryDecorrelatorOptimizer {
                     Arc::new(outer.clone()),
                     Arc::new(flatten_plan),
                 );
-                Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
+                Ok((
+                    s_expr,
+                    UnnestResult::MarkJoin { marker_index },
+                    derived_columns,
+                ))
             }
             SubqueryType::Any => {
                 let correlated_columns = &subquery.outer_columns;
-                let flatten_plan = self.flatten_plan(
+                let (flatten_plan, derived_columns) = self.flatten_plan(
                     outer,
                     &subquery.subquery,
                     correlated_columns,
@@ -384,6 +395,7 @@ impl SubqueryDecorrelatorOptimizer {
                 self.add_equi_conditions(
                     subquery.span,
                     correlated_columns,
+                    &derived_columns,
                     &mut left_conditions,
                     &mut right_conditions,
                 )?;
@@ -453,16 +465,18 @@ impl SubqueryDecorrelatorOptimizer {
                         Arc::new(flatten_plan),
                     ),
                     UnnestResult::MarkJoin { marker_index },
+                    derived_columns,
                 ))
             }
             _ => unreachable!(),
         }
     }
 
-    pub fn add_equi_conditions(
+    pub(crate) fn add_equi_conditions(
         &self,
         span: Span,
         correlated_columns: &ColumnSet,
+        derived_columns: &DerivedColumnScope,
         left_conditions: &mut Vec<ScalarExpr>,
         right_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<()> {
@@ -482,15 +496,15 @@ impl SubqueryDecorrelatorOptimizer {
                 .table_index(column_entry.table_index())
                 .build(),
             });
-            let Some(derive_column) = self.derived_columns.get(&correlated_column) else {
+            let Some(derive_column) = derived_columns.resolve(correlated_column) else {
                 continue;
             };
-            let column_entry = metadata.column(*derive_column);
+            let column_entry = metadata.column(derive_column);
             let left_column = ScalarExpr::BoundColumnRef(BoundColumnRef {
                 span,
                 column: ColumnBindingBuilder::new(
                     column_entry.name(),
-                    *derive_column,
+                    derive_column,
                     Box::from(column_entry.data_type()),
                     Visibility::Visible,
                 )
@@ -507,43 +521,40 @@ impl SubqueryDecorrelatorOptimizer {
     // If correlated_columns only occur in equi-conditions, such as `where t1.a = t.a and t1.b = t.b`(t1 is outer table)
     // Then we won't join outer and inner table.
     pub(crate) fn join_outer_inner_table(
-        &mut self,
+        &self,
         filter: &Filter,
         correlated_columns: &ColumnSet,
-    ) -> Result<bool> {
-        Ok(!filter.predicates.iter().all(|predicate| {
+    ) -> Result<(bool, DerivedColumnScope)> {
+        let mut derived_columns = DerivedColumnScope::default();
+        let can_reuse_inner_columns = filter.predicates.iter().all(|predicate| {
             if predicate
                 .used_columns()
                 .iter()
-                .any(|column| correlated_columns.contains(column))
+                .all(|column| !correlated_columns.contains(column))
             {
-                if let ScalarExpr::FunctionCall(func) = predicate {
-                    if func.func_name == "eq" {
-                        if let (
-                            ScalarExpr::BoundColumnRef(left),
-                            ScalarExpr::BoundColumnRef(right),
-                        ) = (&func.arguments[0], &func.arguments[1])
-                        {
-                            if correlated_columns.contains(&left.column.index)
-                                && !correlated_columns.contains(&right.column.index)
-                            {
-                                self.derived_columns
-                                    .insert(left.column.index, right.column.index);
-                            }
-                            if !correlated_columns.contains(&left.column.index)
-                                && correlated_columns.contains(&right.column.index)
-                            {
-                                self.derived_columns
-                                    .insert(right.column.index, left.column.index);
-                            }
-                            return true;
-                        }
-                    }
-                }
-                return false;
+                return true;
             }
-            true
-        }))
+            if let ScalarExpr::FunctionCall(func) = predicate
+                && func.func_name == "eq"
+                && let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
+                    (&func.arguments[0], &func.arguments[1])
+            {
+                if correlated_columns.contains(&left.column.index)
+                    && !correlated_columns.contains(&right.column.index)
+                {
+                    derived_columns.record(left.column.index, right.column.index);
+                }
+                if !correlated_columns.contains(&left.column.index)
+                    && correlated_columns.contains(&right.column.index)
+                {
+                    derived_columns.record(right.column.index, left.column.index);
+                }
+                true
+            } else {
+                false
+            }
+        });
+        Ok((!can_reuse_inner_columns, derived_columns))
     }
 
     // Try folding the subquery into a constant value expression,
