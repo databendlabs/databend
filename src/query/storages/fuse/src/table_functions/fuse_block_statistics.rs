@@ -91,9 +91,11 @@ impl TableMetaFunc for FuseBlockStatistics {
                         .map(|stats| stats.iter().collect::<BTreeMap<_, _>>());
 
                     for (column_id, column_stat) in col_stats {
+                        let Ok(field) = schema.field_of_column_id(*column_id) else {
+                            continue;
+                        };
                         block_locations.push(block.location.0.clone());
                         column_ids.push(*column_id as u64);
-                        let field = schema.field_of_column_id(*column_id)?;
                         column_names.push(field.name().to_string());
 
                         let distinct_count = column_stat
@@ -119,9 +121,11 @@ impl TableMetaFunc for FuseBlockStatistics {
 
                     if let Some(spatial_stats) = &spatial_stats {
                         for (column_id, spatial_stat) in spatial_stats {
+                            let Ok(field) = schema.field_of_column_id(**column_id) else {
+                                continue;
+                            };
                             block_locations.push(block.location.0.clone());
                             column_ids.push(**column_id as u64);
-                            let field = schema.field_of_column_id(**column_id)?;
                             column_names.push(field.name().to_string());
 
                             let statistic = format!(
