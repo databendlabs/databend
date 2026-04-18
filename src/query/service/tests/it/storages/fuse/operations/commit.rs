@@ -45,6 +45,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
@@ -559,23 +560,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_cluster(&self) -> Arc<Cluster> {
-        todo!()
-    }
-
     fn get_license_key(&self) -> String {
         todo!()
     }
 
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        todo!()
-    }
-
-    fn set_cluster(&self, _: Arc<Cluster>) {
-        todo!()
-    }
-
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
 }
@@ -604,6 +593,21 @@ impl TableContextProcessInfo for CtxDelegation {
     }
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCluster for CtxDelegation {
+    fn get_cluster(&self) -> Arc<Cluster> {
+        todo!()
+    }
+
+    fn set_cluster(&self, _: Arc<Cluster>) {
+        todo!()
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
 }

@@ -63,6 +63,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
@@ -1184,15 +1185,6 @@ impl TableContext for LiteTableContext {
     fn get_session_settings(&self) -> Arc<Settings> {
         self.settings.clone()
     }
-    fn get_cluster(&self) -> Arc<Cluster> {
-        self.cluster.read().clone()
-    }
-    fn set_cluster(&self, cluster: Arc<Cluster>) {
-        *self.cluster.write() = cluster;
-    }
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        Ok(self.get_cluster())
-    }
     async fn get_table(
         &self,
         catalog: &str,
@@ -1277,6 +1269,21 @@ impl TableContextProcessInfo for LiteTableContext {
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         vec![]
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCluster for LiteTableContext {
+    fn get_cluster(&self) -> Arc<Cluster> {
+        self.cluster.read().clone()
+    }
+
+    fn set_cluster(&self, cluster: Arc<Cluster>) {
+        *self.cluster.write() = cluster;
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        Ok(self.get_cluster())
     }
 }
 

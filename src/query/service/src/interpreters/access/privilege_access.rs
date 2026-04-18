@@ -21,6 +21,7 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;

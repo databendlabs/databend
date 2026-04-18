@@ -16,7 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::Result;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;

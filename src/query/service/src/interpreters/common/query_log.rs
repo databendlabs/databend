@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use databend_common_catalog::table_context::TableContextAuthorization;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextSession;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;

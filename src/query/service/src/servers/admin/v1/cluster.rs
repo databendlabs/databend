@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::session_type::SessionType;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_meta_client::types::NodeInfo;
@@ -25,7 +26,6 @@ use poem::web::Json;
 
 use crate::clusters::ClusterHelper;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContext;
 
 // GET /v1/cluster/list
 // list all nodes in current databend-query cluster

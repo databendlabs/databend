@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::InputPort;

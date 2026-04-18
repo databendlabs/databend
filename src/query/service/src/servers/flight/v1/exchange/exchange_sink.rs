@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;

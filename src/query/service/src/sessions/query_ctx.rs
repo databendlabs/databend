@@ -80,6 +80,7 @@ use databend_common_catalog::table_context::StageAttachment;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextBroadcast;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
 use databend_common_catalog::table_context::TableContextMergeInto;
@@ -1294,21 +1295,9 @@ impl TableContext for QueryContext {
         self.shared.get_settings()
     }
 
-    fn get_cluster(&self) -> Arc<Cluster> {
-        self.shared.get_cluster()
-    }
-
-    fn set_cluster(&self, cluster: Arc<Cluster>) {
-        self.shared.set_cluster(cluster)
-    }
-
     fn get_license_key(&self) -> String {
         self.get_settings()
             .get_enterprise_license(self.get_version())
-    }
-
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        self.shared.get_warehouse_clusters().await
     }
 }
 
@@ -1354,6 +1343,21 @@ impl TableContextAuthorization for QueryContext {
             .session
             .get_visibility_checker(ignore_ownership, object)
             .await
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextCluster for QueryContext {
+    fn get_cluster(&self) -> Arc<Cluster> {
+        self.shared.get_cluster()
+    }
+
+    fn set_cluster(&self, cluster: Arc<Cluster>) {
+        self.shared.set_cluster(cluster)
+    }
+
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        self.shared.get_warehouse_clusters().await
     }
 }
 

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::Planner;

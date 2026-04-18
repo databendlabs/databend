@@ -33,7 +33,6 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::StorageMetrics;
 
 use crate::catalog::Catalog;
-use crate::cluster_info::Cluster;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
@@ -43,6 +42,7 @@ use crate::table::Table;
 
 mod authorization;
 mod broadcast;
+mod cluster;
 mod copy;
 mod cte;
 mod merge_into;
@@ -69,6 +69,7 @@ mod variables;
 
 pub use authorization::TableContextAuthorization;
 pub use broadcast::TableContextBroadcast;
+pub use cluster::TableContextCluster;
 pub use copy::TableContextCopy;
 pub use cte::TableContextCte;
 pub use merge_into::TableContextMergeInto;
@@ -151,6 +152,7 @@ pub struct FilteredCopyFiles {
 pub trait TableContext:
     TableContextAuthorization
     + TableContextBroadcast
+    + TableContextCluster
     + TableContextCopy
     + TableContextCte
     + TableContextMergeInto
@@ -247,9 +249,6 @@ pub trait TableContext:
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_settings(&self) -> Arc<Settings>;
     fn get_session_settings(&self) -> Arc<Settings>;
-    fn get_cluster(&self) -> Arc<Cluster>;
-    fn set_cluster(&self, cluster: Arc<Cluster>);
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
 
     async fn get_table(
         &self,

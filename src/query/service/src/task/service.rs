@@ -32,7 +32,7 @@ use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;

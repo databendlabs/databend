@@ -19,6 +19,7 @@ use std::sync::Arc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::ReclusterTask;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;

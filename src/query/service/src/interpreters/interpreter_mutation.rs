@@ -19,6 +19,7 @@ use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::table::TableExt;
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;

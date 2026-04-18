@@ -14,6 +14,7 @@
 
 use std::time::SystemTime;
 
+use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_metrics::interpreter::*;
 
