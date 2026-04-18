@@ -41,7 +41,7 @@ use log::info;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 const DRY_RUN_LIMIT: usize = 1000;
 

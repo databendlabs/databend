@@ -23,7 +23,6 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 pub use databend_common_exception::Result;
@@ -51,6 +50,8 @@ use databend_common_storages_factory::Table;
 use humantime::Duration as HumanDuration;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
+
+use crate::sessions::table_context_ext::*;
 
 pub struct LicenseInfoTable {
     table_info: TableInfo,

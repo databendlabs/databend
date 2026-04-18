@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::SetType;
-use databend_common_catalog::table_context::TableContextQueryState;
-use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -27,7 +25,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct UnSetInterpreter {
     ctx: Arc<QueryContext>,

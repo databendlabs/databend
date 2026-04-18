@@ -27,6 +27,10 @@ mod session_mgr_status;
 mod session_privilege_mgr;
 mod session_status;
 
+pub mod table_context_ext {
+    pub use databend_common_catalog::table_context::prelude::*;
+}
+
 pub use databend_common_base::base::BuildInfoRef;
 pub use databend_common_catalog::table_context::TableContext;
 pub use databend_common_catalog::table_context::TableContextCopy;
@@ -34,6 +38,7 @@ pub use databend_common_catalog::table_context::TableContextMergeInto;
 pub use databend_common_catalog::table_context::TableContextMutationStatus;
 pub use databend_common_catalog::table_context::TableContextOnError;
 pub use databend_common_catalog::table_context::TableContextPartitionStats;
+pub use databend_common_catalog::table_context::TableContextProgress;
 pub use databend_common_catalog::table_context::TableContextQueryIdentity;
 pub use databend_common_catalog::table_context::TableContextQueryProfile;
 pub use databend_common_catalog::table_context::TableContextQueryQueue;
@@ -41,8 +46,10 @@ pub use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 pub use databend_common_catalog::table_context::TableContextResultCache;
 pub use databend_common_catalog::table_context::TableContextRuntimeFilter;
 pub use databend_common_catalog::table_context::TableContextSegmentLocations;
+pub use databend_common_catalog::table_context::TableContextSession;
 pub use databend_common_catalog::table_context::TableContextSpillProgress;
 pub use databend_common_catalog::table_context::TableContextStage;
+pub use databend_common_catalog::table_context::TableContextTableAccess;
 pub use databend_common_catalog::table_context::TableContextVariables;
 pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;

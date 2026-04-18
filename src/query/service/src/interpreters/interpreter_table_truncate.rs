@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::Result;
 use databend_common_sql::plans::TruncateTablePlan;
 
@@ -28,7 +26,7 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::TRUNCATE_TABLE;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct TruncateTableInterpreter {
     ctx: Arc<QueryContext>,

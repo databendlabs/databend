@@ -17,7 +17,6 @@ use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 use databend_common_expression::SortColumnDescription;
@@ -39,6 +38,7 @@ use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
+use crate::sessions::table_context_ext::*;
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -53,6 +52,7 @@ use crate::physical_plans::TableScan;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct RefreshIndexInterpreter {
     ctx: Arc<QueryContext>,

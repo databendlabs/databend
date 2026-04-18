@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::lock::Lock;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::LockKey;
 use databend_common_meta_app::schema::LockType;
@@ -23,6 +22,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::LockGuard;
 
 use crate::locks::LockManager;
+use crate::sessions::table_context_ext::*;
 
 pub struct TableLock {
     lock_mgr: Arc<LockManager>,

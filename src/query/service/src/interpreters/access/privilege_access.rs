@@ -19,10 +19,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -66,6 +62,7 @@ use crate::interpreters::access::AccessChecker;
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
+use crate::sessions::table_context_ext::*;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {

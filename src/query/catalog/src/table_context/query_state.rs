@@ -17,10 +17,28 @@ use std::sync::Arc;
 use databend_common_base::base::WatchNotify;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_exception::ResultExt;
 
+use crate::table_context::AbortChecker;
+use crate::table_context::CheckAbort;
 use crate::table_context::ContextError;
 
 pub trait TableContextQueryState: Send + Sync {
+    fn get_abort_checker(self: Arc<Self>) -> AbortChecker
+    where Self: 'static {
+        struct Checker<S> {
+            this: S,
+        }
+
+        impl<S: TableContextQueryState + ?Sized> CheckAbort for Checker<Arc<S>> {
+            fn try_check_aborting(&self) -> Result<()> {
+                self.this.check_aborting().with_context(|| "query aborted")
+            }
+        }
+
+        Arc::new(Checker { this: self })
+    }
+
     fn check_aborting(&self) -> Result<(), ContextError>;
 
     fn get_abort_notify(&self) -> Arc<WatchNotify>;

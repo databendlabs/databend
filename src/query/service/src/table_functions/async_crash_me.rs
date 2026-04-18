@@ -36,7 +36,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::storages::Table;
 
 pub struct AsyncCrashMeTable {

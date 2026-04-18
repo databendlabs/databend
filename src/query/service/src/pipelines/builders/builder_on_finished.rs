@@ -17,9 +17,6 @@ use std::time::Instant;
 
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextOnError;
-use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
@@ -32,6 +29,7 @@ use log::info;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(

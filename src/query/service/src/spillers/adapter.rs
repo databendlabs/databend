@@ -24,8 +24,6 @@ use std::time::Instant;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::dma_buffer_to_bytes;
 use databend_common_base::base::dma_read_file_range;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
@@ -49,6 +47,7 @@ use super::row_group_encoder::*;
 use super::serialize::*;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone)]
 pub struct PartitionAdapter {

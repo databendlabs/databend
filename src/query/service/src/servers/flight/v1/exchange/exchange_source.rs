@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::InputPort;
@@ -33,6 +32,7 @@ use crate::clusters::ClusterHelper;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::exchange::ExchangeInjector;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 /// Add Exchange Source to the pipeline.
 pub fn via_exchange_source(

@@ -44,33 +44,6 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextBroadcast;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextCopy;
-use databend_common_catalog::table_context::TableContextCte;
-use databend_common_catalog::table_context::TableContextMergeInto;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextOnError;
-use databend_common_catalog::table_context::TableContextPartitionStats;
-use databend_common_catalog::table_context::TableContextPerf;
-use databend_common_catalog::table_context::TableContextProcessInfo;
-use databend_common_catalog::table_context::TableContextQueryIdentity;
-use databend_common_catalog::table_context::TableContextQueryProfile;
-use databend_common_catalog::table_context::TableContextQueryQueue;
-use databend_common_catalog::table_context::TableContextQueryState;
-use databend_common_catalog::table_context::TableContextReadBlockThresholds;
-use databend_common_catalog::table_context::TableContextResultCache;
-use databend_common_catalog::table_context::TableContextRuntimeFilter;
-use databend_common_catalog::table_context::TableContextSegmentLocations;
-use databend_common_catalog::table_context::TableContextSession;
-use databend_common_catalog::table_context::TableContextSpillProgress;
-use databend_common_catalog::table_context::TableContextStage;
-use databend_common_catalog::table_context::TableContextStream;
-use databend_common_catalog::table_context::TableContextTableAccess;
-use databend_common_catalog::table_context::TableContextTableManagement;
-use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -180,6 +153,7 @@ use databend_meta_client::types::MetaId;
 use databend_meta_client::types::SeqV;
 use databend_query::sessions::BuildInfoRef;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::table_context_ext::*;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
@@ -563,11 +537,59 @@ impl TableContext for CtxDelegation {
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
 
-    fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+impl TableContextQueryState for CtxDelegation {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         todo!()
     }
 
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.ctx.get_abort_notify()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
+        todo!()
+    }
+
+    fn push_warning(&self, _warn: String) {
+        todo!()
+    }
+}
+
+impl TableContextProcessInfo for CtxDelegation {
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+}
+
+impl TableContextQueryInfo for CtxDelegation {
+    fn get_fuse_version(&self) -> String {
+        todo!()
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
+        todo!()
+    }
+
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        todo!()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        todo!()
+    }
+
+    fn get_query_kind(&self) -> QueryKind {
+        todo!()
+    }
+}
+
+impl TableContextProgress for CtxDelegation {
     fn incr_total_scan_value(&self, _value: ProgressValues) {
         todo!()
     }
@@ -606,127 +628,7 @@ impl TableContext for CtxDelegation {
 
     fn set_status_info(&self, _info: &str) {}
 
-    fn get_partition(&self) -> Option<PartInfoPtr> {
-        todo!()
-    }
-
-    fn get_partitions(&self, _: usize) -> Vec<PartInfoPtr> {
-        todo!()
-    }
-
-    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
-        todo!()
-    }
-
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        self.ctx.get_can_scan_from_agg_index()
-    }
-    fn set_can_scan_from_agg_index(&self, _: bool) {
-        todo!()
-    }
-
-    fn get_enable_sort_spill(&self) -> bool {
-        todo!()
-    }
-    fn set_enable_sort_spill(&self, _enable: bool) {
-        todo!()
-    }
-
-    fn get_fragment_id(&self) -> usize {
-        todo!()
-    }
-
-    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.ctx.get_catalog(catalog_name).await
-    }
-
-    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.ctx.get_default_catalog()
-    }
-
-    fn get_id(&self) -> String {
-        self.ctx.get_id()
-    }
-
-    fn get_current_catalog(&self) -> String {
-        "default".to_owned()
-    }
-
-    fn get_current_database(&self) -> String {
-        self.ctx.get_current_database()
-    }
-    fn get_fuse_version(&self) -> String {
-        todo!()
-    }
-
-    fn get_version(&self) -> BuildInfoRef {
-        todo!()
-    }
-
-    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
-        todo!()
-    }
-
-    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
-        todo!()
-    }
-
-    fn get_tenant(&self) -> Tenant {
-        self.ctx.get_tenant()
-    }
-
-    fn get_query_kind(&self) -> QueryKind {
-        todo!()
-    }
-
-    fn get_function_context(&self) -> Result<FunctionContext> {
-        self.ctx.get_function_context()
-    }
-
-    fn get_settings(&self) -> Arc<Settings> {
-        Settings::create(Tenant::new_literal("fake_settings"))
-    }
-
-    fn get_shared_settings(&self) -> Arc<Settings> {
-        Settings::create(Tenant::new_literal("fake_shared_settings"))
-    }
-
-    fn get_session_settings(&self) -> Arc<Settings> {
-        todo!()
-    }
-
-    fn get_license_key(&self) -> String {
-        self.ctx.get_license_key()
-    }
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        todo!()
-    }
-}
-
-impl TableContextQueryState for CtxDelegation {
-    fn check_aborting(&self) -> Result<(), ContextError> {
-        todo!()
-    }
-
-    fn get_abort_notify(&self) -> Arc<WatchNotify> {
-        self.ctx.get_abort_notify()
-    }
-
-    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
-        todo!()
-    }
-
-    fn push_warning(&self, _warn: String) {
-        todo!()
-    }
-}
-
-impl TableContextProcessInfo for CtxDelegation {
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        todo!()
-    }
-
-    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         todo!()
     }
 }
@@ -761,6 +663,26 @@ impl TableContextSession for CtxDelegation {
 
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
+    }
+
+    fn get_function_context(&self) -> Result<FunctionContext> {
+        self.ctx.get_function_context()
+    }
+
+    fn get_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_settings"))
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
+    fn get_shared_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_shared_settings"))
+    }
+
+    fn get_license_key(&self) -> String {
+        self.ctx.get_license_key()
     }
 }
 
@@ -919,6 +841,14 @@ impl TableContextMutationStatus for CtxDelegation {
 }
 
 impl TableContextQueryIdentity for CtxDelegation {
+    fn get_id(&self) -> String {
+        self.ctx.get_id()
+    }
+
+    fn get_fragment_id(&self) -> usize {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
@@ -1000,6 +930,30 @@ impl TableContextCopy for CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContextTableAccess for CtxDelegation {
+    fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        self.ctx.get_catalog(catalog_name).await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.ctx.get_default_catalog()
+    }
+
+    fn get_current_catalog(&self) -> String {
+        "default".to_owned()
+    }
+
+    fn get_current_database(&self) -> String {
+        self.ctx.get_current_database()
+    }
+
+    fn get_tenant(&self) -> Tenant {
+        self.ctx.get_tenant()
+    }
+
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_application_level_data_operator()
     }
@@ -1120,7 +1074,39 @@ impl TableContextSpillProgress for CtxDelegation {
 
 impl TableContextPerf for CtxDelegation {}
 
-impl TableContextPartitionStats for CtxDelegation {}
+impl TableContextPartitionStats for CtxDelegation {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
+        todo!()
+    }
+
+    fn get_partitions(&self, _num: usize) -> Vec<PartInfoPtr> {
+        todo!()
+    }
+
+    fn partition_num(&self) -> usize {
+        todo!()
+    }
+
+    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
+        todo!()
+    }
+
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        self.ctx.get_can_scan_from_agg_index()
+    }
+
+    fn set_can_scan_from_agg_index(&self, _enable: bool) {
+        todo!()
+    }
+
+    fn get_enable_sort_spill(&self) -> bool {
+        todo!()
+    }
+
+    fn set_enable_sort_spill(&self, _enable: bool) {
+        todo!()
+    }
+}
 
 impl TableContextQueryQueue for CtxDelegation {
     fn get_query_queued_duration(&self) -> Duration {

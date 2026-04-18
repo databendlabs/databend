@@ -21,9 +21,6 @@ use std::time::Instant;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextSegmentLocations;
-use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
@@ -46,6 +43,7 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct CompactTargetTableDescription {
     pub catalog: String,

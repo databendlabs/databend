@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::executor::physical_plans::FragmentKind;
@@ -28,6 +27,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
 use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {

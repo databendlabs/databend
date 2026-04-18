@@ -171,11 +171,11 @@ pub fn rename_column_in_comma_separated_ident(
 mod tests {
     use databend_common_ast::ast::quote::ident_opt_quote;
     use databend_common_ast::parser::Dialect;
-    use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
 
     use super::rename_column_in_cluster_key;
     use super::rename_column_in_comma_separated_ident;
+    use crate::sessions::table_context_ext::*;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
@@ -30,7 +29,7 @@ use crate::interpreters::Interpreter;
 use crate::meta_service_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct CreateRowAccessPolicyInterpreter {
     ctx: Arc<QueryContext>,

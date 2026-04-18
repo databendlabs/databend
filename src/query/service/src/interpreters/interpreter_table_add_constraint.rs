@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::DatabaseType;
@@ -26,6 +25,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_table_add_column::update_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone, Debug)]
 pub struct AddTableConstraintInterpreter {

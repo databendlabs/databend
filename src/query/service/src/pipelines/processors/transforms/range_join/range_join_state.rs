@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -41,6 +40,7 @@ use crate::physical_plans::RangeJoinType;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct RangeJoinState {
     pub(crate) ctx: Arc<QueryContext>,

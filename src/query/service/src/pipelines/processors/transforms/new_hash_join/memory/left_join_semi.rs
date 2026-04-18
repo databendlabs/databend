@@ -18,7 +18,6 @@ use std::sync::PoisonError;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,6 +43,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStre
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct SemiLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,

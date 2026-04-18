@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::Int32Type;
 use databend_common_storage::DataOperator;
+use databend_query::sessions::table_context_ext::*;
 use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;

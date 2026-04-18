@@ -14,7 +14,6 @@
 
 use std::any::Any;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_pipeline::sources::AsyncSourcer;
@@ -27,6 +26,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
 use crate::pipelines::ValueSource;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {

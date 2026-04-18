@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::Result;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
@@ -50,6 +49,7 @@ use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggr
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::sessions::table_context_ext::*;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {

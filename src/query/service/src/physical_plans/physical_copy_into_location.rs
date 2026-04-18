@@ -17,7 +17,6 @@ use std::any::Any;
 use chrono::Duration;
 use databend_common_base::base::Version;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -35,6 +34,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoLocation {

@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_ast::ast::AlterNotificationOptions;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::AlterNotificationRequest;
@@ -28,6 +27,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::get_notification_client_config;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct AlterNotificationInterpreter {

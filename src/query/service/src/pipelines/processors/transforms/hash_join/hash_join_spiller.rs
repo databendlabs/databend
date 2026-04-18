@@ -26,11 +26,11 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;

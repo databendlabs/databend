@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
@@ -31,6 +30,7 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct OptimizeCompactBlockInterpreter {
     ctx: Arc<QueryContext>,

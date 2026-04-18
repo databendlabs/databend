@@ -19,8 +19,6 @@ use std::sync::Arc;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::cluster_info::Cluster;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::Result;
 use databend_common_sql::executor::physical_plans::FragmentKind;
 use databend_meta_client::types::NodeInfo;
@@ -52,6 +50,7 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::NodeToNodeExchange;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
 pub struct Fragmenter {

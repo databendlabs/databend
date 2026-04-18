@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::types::DataType;
@@ -36,6 +35,7 @@ use databend_common_sql::plans::ScalarExpr;
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
 use super::types::SpatialRuntimeFilterMode;
+use crate::sessions::table_context_ext::*;
 
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx, is_null_equal)

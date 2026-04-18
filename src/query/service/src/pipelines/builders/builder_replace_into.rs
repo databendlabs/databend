@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
@@ -36,6 +35,7 @@ use databend_common_sql::NameResolutionContext;
 use parking_lot::RwLock;
 
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::table_context_ext::*;
 
 impl PipelineBuilder {
     // check if cast needed

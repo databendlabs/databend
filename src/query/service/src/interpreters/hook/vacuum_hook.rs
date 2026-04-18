@@ -19,9 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextCte;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature::Vacuum;
@@ -34,6 +31,7 @@ use rand::Rng;
 
 use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let settings = query_ctx.get_settings();

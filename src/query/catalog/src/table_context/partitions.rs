@@ -14,9 +14,61 @@
 
 use std::collections::HashMap;
 
+use databend_common_exception::Result;
+
+use crate::plan::PartInfoPtr;
 use crate::plan::PartStatistics;
+use crate::plan::Partitions;
 
 pub trait TableContextPartitionStats: Send + Sync {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
+        unimplemented!()
+    }
+
+    fn get_partitions(&self, _num: usize) -> Vec<PartInfoPtr> {
+        unimplemented!()
+    }
+
+    fn partition_num(&self) -> usize {
+        unimplemented!()
+    }
+
+    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
+        unimplemented!()
+    }
+
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        unimplemented!()
+    }
+
+    fn set_can_scan_from_agg_index(&self, _enable: bool) {
+        unimplemented!()
+    }
+
+    fn get_enable_sort_spill(&self) -> bool {
+        unimplemented!()
+    }
+
+    fn set_enable_sort_spill(&self, _enable: bool) {
+        unimplemented!()
+    }
+
+    fn set_compaction_num_block_hint(&self, _table_name: &str, _hint: u64) {
+        unimplemented!()
+    }
+
+    fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
+        unimplemented!()
+    }
+
+    fn get_enable_auto_analyze(&self) -> bool {
+        unimplemented!()
+    }
+
+    fn set_enable_auto_analyze(&self, _enable: bool) {
+        unimplemented!()
+    }
+
     fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         unimplemented!()
     }

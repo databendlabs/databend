@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContextTableAccess;
-use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
@@ -30,7 +28,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::MetaWriter;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::table_context_ext::*;
 use databend_query::sql::Planner;
 use databend_query::sql::plans::Plan;
 use databend_query::test_kits::*;

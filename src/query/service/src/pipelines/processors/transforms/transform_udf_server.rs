@@ -20,7 +20,6 @@ use backon::ExponentialBuilder;
 use backon::Retryable;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -37,6 +36,7 @@ use tonic::transport::Endpoint;
 
 use crate::physical_plans::UdfFunctionDesc;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct TransformUdfServer {
     ctx: Arc<QueryContext>,

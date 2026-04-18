@@ -72,7 +72,9 @@ use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextProcessInfo;
+use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
+use databend_common_catalog::table_context::TableContextQueryInfo;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -1079,129 +1081,6 @@ impl TableContext for LiteTableContext {
     fn as_any(&self) -> &dyn Any {
         self
     }
-
-    fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
-        unsupported("table_ctx::build_table_from_source_plan")
-    }
-
-    fn incr_total_scan_value(&self, value: ProgressValues) {
-        self.scan_progress.incr(&value);
-    }
-
-    fn get_total_scan_value(&self) -> ProgressValues {
-        self.scan_progress.get_values()
-    }
-    fn get_scan_progress(&self) -> Arc<Progress> {
-        self.scan_progress.clone()
-    }
-    fn get_scan_progress_value(&self) -> ProgressValues {
-        self.scan_progress.get_values()
-    }
-    fn get_write_progress(&self) -> Arc<Progress> {
-        self.write_progress.clone()
-    }
-    fn get_write_progress_value(&self) -> ProgressValues {
-        self.write_progress.get_values()
-    }
-    fn get_result_progress(&self) -> Arc<Progress> {
-        self.result_progress.clone()
-    }
-    fn get_result_progress_value(&self) -> ProgressValues {
-        self.result_progress.get_values()
-    }
-    fn get_status_info(&self) -> String {
-        String::new()
-    }
-    fn set_status_info(&self, _info: &str) {}
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        &self.data_cache_metrics
-    }
-    fn get_partition(&self) -> Option<PartInfoPtr> {
-        None
-    }
-    fn get_partitions(&self, _num: usize) -> Vec<PartInfoPtr> {
-        vec![]
-    }
-    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
-        Ok(())
-    }
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        false
-    }
-    fn set_can_scan_from_agg_index(&self, _enable: bool) {}
-    fn get_enable_sort_spill(&self) -> bool {
-        false
-    }
-    fn set_enable_sort_spill(&self, _enable: bool) {}
-    fn get_fragment_id(&self) -> usize {
-        0
-    }
-    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.catalog_manager
-            .get_catalog(
-                self.tenant.tenant_name(),
-                catalog_name,
-                SessionState::default(),
-            )
-            .await
-    }
-    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.catalog_manager
-            .get_default_catalog(SessionState::default())
-    }
-    fn get_id(&self) -> String {
-        "lite-query".to_string()
-    }
-    fn get_current_catalog(&self) -> String {
-        self.current_catalog.clone()
-    }
-    fn get_current_database(&self) -> String {
-        self.current_database.clone()
-    }
-    fn get_fuse_version(&self) -> String {
-        String::new()
-    }
-    fn get_version(&self) -> BuildInfoRef {
-        &TEST_BUILD_INFO
-    }
-    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
-        Ok(Default::default())
-    }
-    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
-        Ok(Default::default())
-    }
-    fn get_tenant(&self) -> Tenant {
-        self.tenant.clone()
-    }
-    fn get_query_kind(&self) -> QueryKind {
-        QueryKind::Query
-    }
-    fn get_function_context(&self) -> Result<FunctionContext> {
-        Ok(FunctionContext::default())
-    }
-    fn get_settings(&self) -> Arc<Settings> {
-        self.settings.clone()
-    }
-    fn get_session_settings(&self) -> Arc<Settings> {
-        self.settings.clone()
-    }
-    async fn get_table(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_catalog(catalog)
-            .await?
-            .get_table(&self.tenant, database, table)
-            .await
-    }
-    fn get_license_key(&self) -> String {
-        String::new()
-    }
-    fn get_shared_settings(&self) -> Arc<Settings> {
-        self.shared_settings.clone()
-    }
 }
 
 impl TableContextSession for LiteTableContext {
@@ -1219,6 +1098,26 @@ impl TableContextSession for LiteTableContext {
 
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
+    }
+
+    fn get_function_context(&self) -> Result<FunctionContext> {
+        Ok(FunctionContext::default())
+    }
+
+    fn get_settings(&self) -> Arc<Settings> {
+        self.settings.clone()
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
+        self.settings.clone()
+    }
+
+    fn get_shared_settings(&self) -> Arc<Settings> {
+        self.shared_settings.clone()
+    }
+
+    fn get_license_key(&self) -> String {
+        String::new()
     }
 }
 
@@ -1269,6 +1168,72 @@ impl TableContextProcessInfo for LiteTableContext {
 
     fn get_queued_queries(&self) -> Vec<ProcessInfo> {
         vec![]
+    }
+}
+
+impl TableContextQueryInfo for LiteTableContext {
+    fn get_fuse_version(&self) -> String {
+        String::new()
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
+        &TEST_BUILD_INFO
+    }
+
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        Ok(Default::default())
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        Ok(Default::default())
+    }
+
+    fn get_query_kind(&self) -> QueryKind {
+        QueryKind::Query
+    }
+}
+
+impl TableContextProgress for LiteTableContext {
+    fn incr_total_scan_value(&self, value: ProgressValues) {
+        self.scan_progress.incr(&value);
+    }
+
+    fn get_total_scan_value(&self) -> ProgressValues {
+        self.scan_progress.get_values()
+    }
+
+    fn get_scan_progress(&self) -> Arc<Progress> {
+        self.scan_progress.clone()
+    }
+
+    fn get_scan_progress_value(&self) -> ProgressValues {
+        self.scan_progress.get_values()
+    }
+
+    fn get_write_progress(&self) -> Arc<Progress> {
+        self.write_progress.clone()
+    }
+
+    fn get_write_progress_value(&self) -> ProgressValues {
+        self.write_progress.get_values()
+    }
+
+    fn get_result_progress(&self) -> Arc<Progress> {
+        self.result_progress.clone()
+    }
+
+    fn get_result_progress_value(&self) -> ProgressValues {
+        self.result_progress.get_values()
+    }
+
+    fn get_status_info(&self) -> String {
+        String::new()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        &self.data_cache_metrics
     }
 }
 
@@ -1414,6 +1379,14 @@ impl TableContextMutationStatus for LiteTableContext {
 }
 
 impl TableContextQueryIdentity for LiteTableContext {
+    fn get_id(&self) -> String {
+        "lite-query".to_string()
+    }
+
+    fn get_fragment_id(&self) -> usize {
+        0
+    }
+
     fn attach_query_str(&self, _kind: QueryKind, query: String) {
         *self.query.write() = query;
     }
@@ -1497,8 +1470,51 @@ impl TableContextCopy for LiteTableContext {
 
 #[async_trait::async_trait]
 impl TableContextTableAccess for LiteTableContext {
+    fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        unsupported("table_ctx::build_table_from_source_plan")
+    }
+
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        self.catalog_manager
+            .get_catalog(
+                self.tenant.tenant_name(),
+                catalog_name,
+                SessionState::default(),
+            )
+            .await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.catalog_manager
+            .get_default_catalog(SessionState::default())
+    }
+
+    fn get_current_catalog(&self) -> String {
+        self.current_catalog.clone()
+    }
+
+    fn get_current_database(&self) -> String {
+        self.current_database.clone()
+    }
+
+    fn get_tenant(&self) -> Tenant {
+        self.tenant.clone()
+    }
+
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         unsupported("table_ctx::get_application_level_data_operator")
+    }
+
+    async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_catalog(catalog)
+            .await?
+            .get_table(&self.tenant, database, table)
+            .await
     }
 
     async fn get_table_with_branch(
@@ -1621,7 +1637,35 @@ impl TableContextPerf for LiteTableContext {
     }
 }
 
-impl TableContextPartitionStats for LiteTableContext {}
+impl TableContextPartitionStats for LiteTableContext {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
+        None
+    }
+
+    fn get_partitions(&self, _num: usize) -> Vec<PartInfoPtr> {
+        vec![]
+    }
+
+    fn partition_num(&self) -> usize {
+        0
+    }
+
+    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
+        Ok(())
+    }
+
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        false
+    }
+
+    fn set_can_scan_from_agg_index(&self, _enable: bool) {}
+
+    fn get_enable_sort_spill(&self) -> bool {
+        false
+    }
+
+    fn set_enable_sort_spill(&self, _enable: bool) {}
+}
 
 impl TableContextQueryQueue for LiteTableContext {
     fn get_query_queued_duration(&self) -> Duration {

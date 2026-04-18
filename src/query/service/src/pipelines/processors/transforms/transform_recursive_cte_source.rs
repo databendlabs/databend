@@ -21,9 +21,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextCte;
-use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -64,6 +61,7 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 use crate::stream::PullingExecutorStream;
 
 // The whole recursive cte as source.

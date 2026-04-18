@@ -20,12 +20,12 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageType;
 use databend_common_sql::plans::AlterStageActionPlan;
 use databend_common_sql::plans::AlterStagePlan;
-use databend_common_storages_fuse::TableContext;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct AlterUserStageInterpreter {

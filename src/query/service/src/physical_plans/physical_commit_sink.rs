@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::ReclusterInfoSideCar;
-use databend_common_catalog::table_context::TableContextMutationStatus;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
@@ -40,6 +39,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::table_context_ext::*;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.

@@ -34,7 +34,7 @@ use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct RenameTableColumnInterpreter {
     ctx: Arc<QueryContext>,

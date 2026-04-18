@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::UserDefinedFileFormat;
 use databend_common_sql::plans::CreateFileFormatPlan;
@@ -24,7 +23,7 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct CreateFileFormatInterpreter {

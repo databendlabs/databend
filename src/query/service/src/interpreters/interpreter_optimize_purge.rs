@@ -22,7 +22,7 @@ use databend_common_storages_factory::NavigationPoint;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct OptimizePurgeInterpreter {
     ctx: Arc<QueryContext>,

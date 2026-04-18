@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -87,6 +86,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::table_context_ext::*;
 
 // The predicate column symbol should not conflict with update expr column bindings.
 pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;

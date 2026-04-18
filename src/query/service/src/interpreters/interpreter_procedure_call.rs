@@ -29,13 +29,13 @@ use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
 use databend_common_script::compile;
 use databend_common_sql::plans::CallProcedurePlan;
-use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_execute_immediate::ProcedureState;
 use crate::interpreters::util::ScriptClient;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct CallProcedureInterpreter {

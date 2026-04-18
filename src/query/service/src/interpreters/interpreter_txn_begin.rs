@@ -14,13 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::Result;
 use databend_storages_common_session::TxnManagerRef;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 pub struct BeginInterpreter {
     txn_manager: TxnManagerRef,
 }

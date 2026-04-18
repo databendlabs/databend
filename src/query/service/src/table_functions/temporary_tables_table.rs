@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -39,6 +38,7 @@ use databend_common_storages_system::SyncSystemTable;
 
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::SessionManager;
+use crate::sessions::table_context_ext::*;
 
 pub struct TemporaryTablesTable {
     table_info: TableInfo,

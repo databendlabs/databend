@@ -18,9 +18,6 @@ use chrono::Duration;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextTableAccess;
-use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -64,7 +61,7 @@ use crate::pipelines::RawValueSource;
 use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::stream::DataBlockStream;
 
 pub struct InsertInterpreter {

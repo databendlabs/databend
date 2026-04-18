@@ -18,9 +18,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,7 +34,7 @@ use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 // Query plan fragment with executor name
 #[derive(Debug)]

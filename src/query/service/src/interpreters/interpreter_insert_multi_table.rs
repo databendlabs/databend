@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -65,7 +63,7 @@ use crate::physical_plans::ShuffleStrategy;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::storages::Table;
 use crate::stream::DataBlockStream;

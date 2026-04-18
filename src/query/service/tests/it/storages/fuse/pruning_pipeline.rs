@@ -48,7 +48,7 @@ use databend_query::interpreters::Interpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::table_context_ext::*;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::storages::fuse::io::MetaReaders;

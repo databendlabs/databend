@@ -15,20 +15,19 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::Result;
 use databend_common_management::RoleApi;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CreateSequenceReq;
 use databend_common_sql::plans::CreateSequencePlan;
-use databend_common_storages_fuse::TableContext;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct CreateSequenceInterpreter {
     ctx: Arc<QueryContext>,

@@ -22,7 +22,7 @@ use databend_common_pipeline::core::Pipeline;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::storages::Table;
 use crate::stream::PullingExecutorStream;
 

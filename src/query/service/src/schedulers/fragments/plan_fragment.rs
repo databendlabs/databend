@@ -19,14 +19,12 @@ use std::sync::Arc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::ReclusterTask;
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_settings::ReplaceIntoShuffleStrategy;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::BlockSlotDescription;
 use databend_storages_common_table_meta::meta::Location;
 
@@ -49,6 +47,7 @@ use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 /// Type of plan fragment
 #[derive(Clone, Debug, PartialEq, Eq)]

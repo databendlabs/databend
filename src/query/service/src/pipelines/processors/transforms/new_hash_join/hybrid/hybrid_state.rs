@@ -17,7 +17,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use concurrent_queue::ConcurrentQueue;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::plans::JoinType;
@@ -26,6 +25,7 @@ use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HybridHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct HybridHashJoinState {
     pub ctx: Arc<QueryContext>,

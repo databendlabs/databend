@@ -31,7 +31,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -83,6 +82,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {

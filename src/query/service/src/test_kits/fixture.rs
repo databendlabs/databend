@@ -84,7 +84,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::sql::Planner;
 use crate::storages::Table;
 use crate::test_kits::ClusterDescriptor;

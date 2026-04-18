@@ -26,7 +26,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 pub struct ModifyTableCommentInterpreter {
     ctx: Arc<QueryContext>,
     plan: ModifyTableCommentPlan,

@@ -17,9 +17,6 @@ use std::fmt::Write;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextCluster;
-use databend_common_catalog::table_context::TableContextSession;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -30,11 +27,8 @@ use log::info;
 use serde_json;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
-use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextQueryQueue;
-use crate::sessions::TableContextSpillProgress;
 use crate::sessions::convert_query_log_timestamp;
+use crate::sessions::table_context_ext::*;
 
 pub struct InterpreterQueryLog;
 

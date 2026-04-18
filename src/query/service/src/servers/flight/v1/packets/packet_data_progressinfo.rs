@@ -26,7 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug)]

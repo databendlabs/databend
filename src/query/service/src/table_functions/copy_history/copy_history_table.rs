@@ -22,7 +22,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -46,6 +45,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_meta_client::types::MetaId;
 
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 use crate::table_functions::TableFunction;
 
 pub struct CopyHistoryTable {

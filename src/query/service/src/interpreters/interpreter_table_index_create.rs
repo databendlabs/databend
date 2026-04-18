@@ -20,11 +20,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::CreateTableIndexPlan;
-use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct CreateTableIndexInterpreter {
     ctx: Arc<QueryContext>,

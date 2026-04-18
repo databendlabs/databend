@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_storages_fuse::TableContext;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::IntoResponse;
@@ -26,6 +25,7 @@ use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Deserialize, Clone)]
 struct LoginRequest {

@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -23,6 +22,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 use crate::sql::plans::Plan;
 
 pub struct ManagementModeAccess {}

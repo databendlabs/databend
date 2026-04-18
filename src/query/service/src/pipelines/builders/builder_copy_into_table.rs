@@ -18,7 +18,6 @@ use std::time::Duration;
 
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
@@ -40,6 +39,7 @@ use log::info;
 use crate::physical_plans::CopyIntoTable;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 /// This file implements copy into table pipeline builder.
 impl PipelineBuilder {

@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_exception::Result;
 use databend_query_task_support::TaskContext;
 
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[async_trait::async_trait]
 impl TaskContext for QueryContext {

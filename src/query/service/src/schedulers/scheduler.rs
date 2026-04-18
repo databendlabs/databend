@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_sql::Planner;
@@ -33,8 +32,7 @@ use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
-use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::table_context_ext::*;
 use crate::sql::ColumnBinding;
 use crate::stream::PullingExecutorStream;
 

@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use async_channel::Receiver;
 use async_channel::Sender;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -27,6 +26,8 @@ use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+
+use crate::sessions::table_context_ext::*;
 
 pub struct BroadcastSourceProcessor {
     pub receiver: Receiver<DataBlock>,

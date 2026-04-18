@@ -14,12 +14,11 @@
 
 use std::time::SystemTime;
 
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_metrics::interpreter::*;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct InterpreterMetrics;
 

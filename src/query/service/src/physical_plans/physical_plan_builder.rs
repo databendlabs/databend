@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -33,6 +32,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::sessions::table_context_ext::*;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,

@@ -21,11 +21,6 @@ use databend_common_base::JoinHandle;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::QueryPerfGuard;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextCopy;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextPartitionStats;
-use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::PlanProfile;
@@ -41,6 +36,7 @@ use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,

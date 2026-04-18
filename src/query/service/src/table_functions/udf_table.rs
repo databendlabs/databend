@@ -22,7 +22,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,6 +43,7 @@ use databend_common_sql::binder::resolve_stage_location;
 
 use crate::pipelines::builders::UdtfFunctionDesc;
 use crate::pipelines::builders::UdtfServerSource;
+use crate::sessions::table_context_ext::*;
 
 pub struct UDTFTable {
     desc: UdtfFunctionDesc,

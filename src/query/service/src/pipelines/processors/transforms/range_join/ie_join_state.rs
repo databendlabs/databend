@@ -15,7 +15,6 @@
 use core::time::Duration;
 use std::sync::atomic::Ordering;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::bitmap::MutableBitmap;
 use databend_common_column::buffer::Buffer;
@@ -45,6 +44,7 @@ use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
+use crate::sessions::table_context_ext::*;
 
 pub struct IEJoinState {
     _l1_data_type: DataType,

@@ -14,7 +14,6 @@
 
 use async_compat::CompatExt;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
@@ -30,7 +29,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {

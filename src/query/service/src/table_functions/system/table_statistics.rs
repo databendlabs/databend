@@ -37,7 +37,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use futures::stream::StreamExt;
 use log::warn;
 
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct TableStatisticsArgs {
     database_name: String,

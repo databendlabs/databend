@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
@@ -29,6 +28,7 @@ use databend_common_sql::Symbol;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone)]
 pub enum CacheSourceState {

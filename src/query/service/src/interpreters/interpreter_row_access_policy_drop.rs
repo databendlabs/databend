@@ -28,7 +28,7 @@ use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct DropRowAccessPolicyInterpreter {
     ctx: Arc<QueryContext>,

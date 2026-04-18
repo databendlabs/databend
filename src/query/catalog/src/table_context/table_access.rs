@@ -15,14 +15,50 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_storage::DataOperator;
 
+use crate::catalog::Catalog;
 use crate::lock::LockTableOption;
+use crate::plan::DataSourcePlan;
 use crate::table::Table;
 
 #[async_trait::async_trait]
 pub trait TableContextTableAccess: Send + Sync {
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
+
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
+
+    fn get_current_catalog(&self) -> String;
+
+    fn get_current_database(&self) -> String;
+
+    fn get_tenant(&self) -> Tenant;
+
+    async fn get_table(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+    ) -> Result<Arc<dyn Table>> {
+        self.get_table_with_branch(catalog, database, table, None)
+            .await
+    }
+
+    async fn get_zero_table(&self) -> Result<Arc<dyn Table>> {
+        let catalog = self.get_catalog("default").await?;
+        catalog
+            .get_table(&self.get_tenant(), "system", "zero")
+            .await
+    }
+
     /// Get the storage data accessor operator from the session manager.
     /// Note that this is the application level data accessor, which may be different from
     /// the table level data accessor (e.g., table with customized storage parameters).

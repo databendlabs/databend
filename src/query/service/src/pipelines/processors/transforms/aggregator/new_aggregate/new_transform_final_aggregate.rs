@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 use async_channel::Receiver;
 use async_channel::Sender;
 use bumpalo::Bump;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -46,6 +45,7 @@ use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 const SPILL_BUCKET_NUM: usize = 2;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;

@@ -33,7 +33,7 @@ use crate::interpreters::RemoveUserStageInterpreter;
 use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct DropUserStageInterpreter {

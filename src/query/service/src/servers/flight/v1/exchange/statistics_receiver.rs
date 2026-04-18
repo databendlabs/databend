@@ -18,12 +18,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextCopy;
-use databend_common_catalog::table_context::TableContextMutationStatus;
-use databend_common_catalog::table_context::TableContextPartitionStats;
-use databend_common_catalog::table_context::TableContextPerf;
-use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_exception::Result;
 use futures_util::future::Either;
 use futures_util::future::select;
@@ -35,6 +29,7 @@ use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::MemoryUpdater;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct StatisticsReceiver {
     _runtime: Runtime,

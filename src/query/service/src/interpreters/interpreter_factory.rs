@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -122,6 +121,7 @@ use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 #[cfg(feature = "task-support")]
 use crate::interpreters::task;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.

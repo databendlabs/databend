@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -44,7 +43,7 @@ use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct ExchangeSink;
 

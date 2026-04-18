@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
+use databend_common_settings::Settings;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
 
@@ -36,4 +40,14 @@ pub trait TableContextSession: Send + Sync {
     fn get_session_type(&self) -> SessionType {
         unimplemented!()
     }
+
+    fn get_function_context(&self) -> Result<FunctionContext>;
+
+    fn get_settings(&self) -> Arc<Settings>;
+
+    fn get_session_settings(&self) -> Arc<Settings>;
+
+    fn get_shared_settings(&self) -> Arc<Settings>;
+
+    fn get_license_key(&self) -> String;
 }

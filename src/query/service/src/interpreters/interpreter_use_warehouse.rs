@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -25,6 +24,7 @@ use databend_enterprise_resources_management::ResourcesManagement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct UseWarehouseInterpreter {
     ctx: Arc<QueryContext>,

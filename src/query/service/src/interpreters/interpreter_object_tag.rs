@@ -50,7 +50,7 @@ use crate::meta_service_error;
 use crate::meta_txn_error;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct SetObjectTagsInterpreter {
     ctx: Arc<QueryContext>,

@@ -21,7 +21,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -40,6 +39,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
+
+use crate::sessions::table_context_ext::*;
 
 const SHOW_VARIABLES: &str = "show_variables";
 

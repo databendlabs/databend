@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
@@ -56,7 +55,7 @@ use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::sql::BindContext;
 use crate::sql::optimizer::ir::SExpr;
 

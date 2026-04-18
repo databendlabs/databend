@@ -23,8 +23,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -74,6 +72,7 @@ use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::hash_join_table::STRING_EARLY_SIZE;
 use crate::pipelines::processors::transforms::hash_join_table::StringRawEntry;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {

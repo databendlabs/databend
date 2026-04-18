@@ -36,7 +36,7 @@ use crate::physical_plans::PhysicalPlanBuilder;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct AnalyzeTableInterpreter {
     ctx: Arc<QueryContext>,

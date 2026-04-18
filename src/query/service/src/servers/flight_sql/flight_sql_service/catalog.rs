@@ -23,13 +23,13 @@ use arrow_schema::Field;
 use arrow_schema::Schema;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use futures_util::stream;
 use log::warn;
 use tonic::Status;
 
 use crate::servers::flight_sql::flight_sql_service::DoGetStream;
+use crate::sessions::table_context_ext::*;
 
 pub(super) struct CatalogInfoProvider {}
 

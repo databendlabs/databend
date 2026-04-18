@@ -21,8 +21,6 @@ use databend_common_ast::ast;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -51,6 +49,7 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct RefreshDesc {
     pub catalog: String,

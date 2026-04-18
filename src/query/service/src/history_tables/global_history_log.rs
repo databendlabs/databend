@@ -24,7 +24,6 @@ use databend_common_base::runtime::Runtime;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_base::runtime::spawn;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -67,6 +66,7 @@ use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 const DEAD_IN_SECS: u64 = 60;
 

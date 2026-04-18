@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
@@ -57,6 +56,7 @@ use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Duplicate {

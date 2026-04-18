@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
-use databend_common_catalog::table_context::TableContext;
-use databend_common_catalog::table_context::TableContextSession;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogIdIdent;
 use databend_common_meta_app::schema::CatalogInfo;
@@ -29,6 +27,7 @@ use log::debug;
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct CreateCatalogInterpreter {

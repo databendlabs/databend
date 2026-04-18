@@ -20,11 +20,11 @@ use databend_common_exception::Result;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::DropTableIndexPlan;
-use databend_common_storages_fuse::TableContext;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct DropTableIndexInterpreter {
     ctx: Arc<QueryContext>,

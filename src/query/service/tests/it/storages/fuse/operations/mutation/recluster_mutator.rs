@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_catalog::plan::ReclusterParts;
-use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
@@ -36,7 +35,7 @@ use databend_common_storages_fuse::operations::ReclusterMutator;
 use databend_common_storages_fuse::pruning::create_segment_location_vector;
 use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::reducers::reduce_block_metas;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::table_context_ext::*;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;

@@ -89,7 +89,9 @@ use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextProcessInfo;
+use databend_common_catalog::table_context::TableContextProgress;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
+use databend_common_catalog::table_context::TableContextQueryInfo;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
 use databend_common_catalog::table_context::TableContextQueryState;
@@ -986,319 +988,6 @@ impl TableContext for QueryContext {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    /// Build a table instance the plan wants to operate on.
-    ///
-    /// A plan just contains raw information about a table or table function.
-    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
-    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
-        match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
-            }
-            DataSourceInfo::StageSource(stage_info) => {
-                self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
-            }
-            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
-            DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
-            DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
-        }
-    }
-
-    fn incr_total_scan_value(&self, value: ProgressValues) {
-        self.shared.total_scan_values.as_ref().incr(&value);
-    }
-
-    fn get_total_scan_value(&self) -> ProgressValues {
-        self.shared.total_scan_values.as_ref().get_values()
-    }
-
-    fn get_scan_progress(&self) -> Arc<Progress> {
-        self.shared.scan_progress.clone()
-    }
-
-    fn get_scan_progress_value(&self) -> ProgressValues {
-        self.shared.scan_progress.as_ref().get_values()
-    }
-
-    fn get_write_progress(&self) -> Arc<Progress> {
-        self.shared.write_progress.clone()
-    }
-
-    fn get_write_progress_value(&self) -> ProgressValues {
-        self.shared.write_progress.as_ref().get_values()
-    }
-
-    fn get_result_progress(&self) -> Arc<Progress> {
-        self.shared.result_progress.clone()
-    }
-
-    fn get_result_progress_value(&self) -> ProgressValues {
-        self.shared.result_progress.as_ref().get_values()
-    }
-
-    fn get_status_info(&self) -> String {
-        let status = self.shared.status.read();
-        status.clone()
-    }
-
-    fn set_status_info(&self, info: &str) {
-        // set_status_info is not called frequently, so we can use info! here.
-        // make it easier to match the status to the log.
-        info!("Status update: {}", info);
-        let mut status = self.shared.status.write();
-        *status = info.to_string();
-    }
-
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        self.shared.get_query_cache_metrics()
-    }
-
-    fn get_partition(&self) -> Option<PartInfoPtr> {
-        if let Some(part) = self.partition_queue.write().pop_front() {
-            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
-            return Some(part);
-        }
-
-        None
-    }
-
-    fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
-        let mut res = Vec::with_capacity(num);
-        let mut queue_guard = self.partition_queue.write();
-
-        for _index in 0..num {
-            match queue_guard.pop_front() {
-                None => {
-                    break;
-                }
-                Some(part) => {
-                    res.push(part);
-                }
-            };
-        }
-
-        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, res.len());
-
-        res
-    }
-
-    // Update the context partition pool from the pipeline builder.
-    fn set_partitions(&self, partitions: Partitions) -> Result<()> {
-        let mut partition_queue = self.partition_queue.write();
-
-        partition_queue.clear();
-        for part in partitions.partitions {
-            partition_queue.push_back(part);
-        }
-        Ok(())
-    }
-
-    fn partition_num(&self) -> usize {
-        self.partition_queue.read().len()
-    }
-
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
-    }
-
-    fn set_can_scan_from_agg_index(&self, enable: bool) {
-        self.shared
-            .can_scan_from_agg_index
-            .store(enable, Ordering::Release);
-    }
-
-    fn get_enable_sort_spill(&self) -> bool {
-        self.shared.enable_sort_spill.load(Ordering::Acquire)
-    }
-
-    fn get_enable_auto_analyze(&self) -> bool {
-        self.shared.enable_auto_analyze.load(Ordering::Acquire)
-    }
-
-    fn set_enable_auto_analyze(&self, enable: bool) {
-        self.shared
-            .enable_auto_analyze
-            .store(enable, Ordering::Release);
-    }
-
-    fn set_enable_sort_spill(&self, enable: bool) {
-        self.shared
-            .enable_sort_spill
-            .store(enable, Ordering::Release);
-    }
-
-    // get a hint at the number of blocks that need to be compacted.
-    fn get_compaction_num_block_hint(&self, table_name: &str) -> u64 {
-        self.shared
-            .num_fragmented_block_hint
-            .lock()
-            .get(table_name)
-            .copied()
-            .unwrap_or_default()
-    }
-
-    // set a hint at the number of blocks that need to be compacted.
-    fn set_compaction_num_block_hint(&self, table_name: &str, hint: u64) {
-        let old = self
-            .shared
-            .num_fragmented_block_hint
-            .lock()
-            .insert(table_name.to_string(), hint);
-        info!(
-            "Set compaction hint for table '{}': old={:?}, new={}",
-            table_name, old, hint
-        );
-    }
-
-    fn get_fragment_id(&self) -> usize {
-        self.fragment_id.fetch_add(1, Ordering::Release)
-    }
-
-    #[async_backtrace::framed]
-    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        self.shared
-            .catalog_manager
-            .get_catalog(
-                self.get_tenant().tenant_name(),
-                catalog_name.as_ref(),
-                self.session_state()?,
-            )
-            .await
-    }
-
-    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        self.shared
-            .catalog_manager
-            .get_default_catalog(self.session_state()?)
-    }
-
-    fn get_id(&self) -> String {
-        self.shared.init_query_id.as_ref().read().clone()
-    }
-
-    fn get_current_catalog(&self) -> String {
-        self.shared.get_current_catalog()
-    }
-
-    fn get_current_database(&self) -> String {
-        self.shared.get_current_database()
-    }
-
-    fn get_fuse_version(&self) -> String {
-        let session = self.get_current_session();
-        match session.get_type() {
-            SessionType::MySQL => self.mysql_version.clone(),
-            _ => self.version.clone(),
-        }
-    }
-
-    fn get_version(&self) -> BuildInfoRef {
-        self.shared.version
-    }
-
-    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
-        self.get_settings().get_input_format_settings()
-    }
-
-    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
-        self.get_settings().get_output_format_settings()
-    }
-
-    fn get_tenant(&self) -> Tenant {
-        self.shared.get_tenant()
-    }
-
-    fn get_query_kind(&self) -> QueryKind {
-        self.shared.get_query_kind()
-    }
-
-    fn get_function_context(&self) -> Result<FunctionContext> {
-        let settings = self.get_settings();
-
-        let tz_string = settings.get_timezone()?;
-        let tz = TimeZone::get(&tz_string).map_err(|e| {
-            ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
-        })?;
-        let now = Zoned::now().with_time_zone(TimeZone::UTC);
-        let numeric_cast_option = settings.get_numeric_cast_option()?;
-        let rounding_mode = numeric_cast_option.as_str() == "rounding";
-        let disable_variant_check = settings.get_disable_variant_check()?;
-        let geometry_output_format = settings.get_geometry_output_format()?;
-        let binary_input_format = settings.get_binary_input_format()?;
-        let binary_output_format = settings.get_binary_output_format()?;
-        let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
-        let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
-        let enable_auto_detect_datetime_format =
-            settings.get_enable_auto_detect_datetime_format()?;
-        let week_start = settings.get_week_start()? as u8;
-        let date_format_style = settings.get_date_format_style()?;
-        let random_function_seed = settings.get_random_function_seed()?;
-
-        Ok(FunctionContext {
-            now,
-            tz,
-            rounding_mode,
-            disable_variant_check,
-            enable_selector_executor: settings.get_enable_selector_executor()?,
-
-            geometry_output_format,
-            binary_input_format,
-            binary_output_format,
-            parse_datetime_ignore_remainder,
-            enable_strict_datetime_parser,
-            enable_auto_detect_datetime_format,
-            random_function_seed,
-            week_start,
-            date_format_style,
-        })
-    }
-
-    // subquery level
-    fn get_settings(&self) -> Arc<Settings> {
-        // query level change
-        if self.shared.query_settings.is_changed()
-            && self.shared.query_settings.query_level_change()
-        {
-            let shared_settings = self.shared.query_settings.changes();
-            // if has session level change, should not cover query level change
-            if self.get_session_settings().is_changed() {
-                for r in self.get_session_settings().changes().iter() {
-                    if !self.shared.query_settings.changes().contains_key(r.key()) {
-                        shared_settings.insert(r.key().clone(), r.value().clone());
-                    }
-                }
-                unsafe {
-                    self.query_settings.unchecked_apply_changes(shared_settings);
-                }
-            } else {
-                unsafe {
-                    self.query_settings.unchecked_apply_changes(shared_settings);
-                }
-            }
-        } else {
-            unsafe {
-                // apply session level changes
-                self.query_settings
-                    .unchecked_apply_changes(self.get_session_settings().changes())
-            }
-        }
-
-        self.query_settings.clone()
-    }
-
-    fn get_shared_settings(&self) -> Arc<Settings> {
-        self.shared.query_settings.clone()
-    }
-
-    fn get_session_settings(&self) -> Arc<Settings> {
-        // get session settings from query shared
-        self.shared.get_settings()
-    }
-
-    fn get_license_key(&self) -> String {
-        self.get_settings()
-            .get_enterprise_license(self.get_version())
-    }
 }
 
 #[async_trait::async_trait]
@@ -1358,6 +1047,83 @@ impl TableContextCluster for QueryContext {
 
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         self.shared.get_warehouse_clusters().await
+    }
+}
+
+impl TableContextQueryInfo for QueryContext {
+    fn get_fuse_version(&self) -> String {
+        let session = self.get_current_session();
+        match session.get_type() {
+            SessionType::MySQL => self.mysql_version.clone(),
+            _ => self.version.clone(),
+        }
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
+        self.shared.version
+    }
+
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        self.get_settings().get_input_format_settings()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        self.get_settings().get_output_format_settings()
+    }
+
+    fn get_query_kind(&self) -> QueryKind {
+        self.shared.get_query_kind()
+    }
+}
+
+impl TableContextProgress for QueryContext {
+    fn incr_total_scan_value(&self, value: ProgressValues) {
+        self.shared.total_scan_values.as_ref().incr(&value);
+    }
+
+    fn get_total_scan_value(&self) -> ProgressValues {
+        self.shared.total_scan_values.as_ref().get_values()
+    }
+
+    fn get_scan_progress(&self) -> Arc<Progress> {
+        self.shared.scan_progress.clone()
+    }
+
+    fn get_scan_progress_value(&self) -> ProgressValues {
+        self.shared.scan_progress.as_ref().get_values()
+    }
+
+    fn get_write_progress(&self) -> Arc<Progress> {
+        self.shared.write_progress.clone()
+    }
+
+    fn get_write_progress_value(&self) -> ProgressValues {
+        self.shared.write_progress.as_ref().get_values()
+    }
+
+    fn get_result_progress(&self) -> Arc<Progress> {
+        self.shared.result_progress.clone()
+    }
+
+    fn get_result_progress_value(&self) -> ProgressValues {
+        self.shared.result_progress.as_ref().get_values()
+    }
+
+    fn get_status_info(&self) -> String {
+        let status = self.shared.status.read();
+        status.clone()
+    }
+
+    fn set_status_info(&self, info: &str) {
+        // set_status_info is not called frequently, so we can use info! here.
+        // make it easier to match the status to the log.
+        info!("Status update: {}", info);
+        let mut status = self.shared.status.write();
+        *status = info.to_string();
+    }
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        self.shared.get_query_cache_metrics()
     }
 }
 
@@ -1427,10 +1193,144 @@ impl TableContextSession for QueryContext {
     fn get_session_type(&self) -> SessionType {
         self.shared.session.get_type()
     }
+
+    fn get_function_context(&self) -> Result<FunctionContext> {
+        let settings = self.get_settings();
+
+        let tz_string = settings.get_timezone()?;
+        let tz = TimeZone::get(&tz_string).map_err(|e| {
+            ErrorCode::InvalidTimezone(format!("Timezone validation failed: {}", e))
+        })?;
+        let now = Zoned::now().with_time_zone(TimeZone::UTC);
+        let numeric_cast_option = settings.get_numeric_cast_option()?;
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
+        let disable_variant_check = settings.get_disable_variant_check()?;
+        let geometry_output_format = settings.get_geometry_output_format()?;
+        let binary_input_format = settings.get_binary_input_format()?;
+        let binary_output_format = settings.get_binary_output_format()?;
+        let parse_datetime_ignore_remainder = settings.get_parse_datetime_ignore_remainder()?;
+        let enable_strict_datetime_parser = settings.get_enable_strict_datetime_parser()?;
+        let enable_auto_detect_datetime_format =
+            settings.get_enable_auto_detect_datetime_format()?;
+        let week_start = settings.get_week_start()? as u8;
+        let date_format_style = settings.get_date_format_style()?;
+        let random_function_seed = settings.get_random_function_seed()?;
+
+        Ok(FunctionContext {
+            now,
+            tz,
+            rounding_mode,
+            disable_variant_check,
+            enable_selector_executor: settings.get_enable_selector_executor()?,
+            geometry_output_format,
+            binary_input_format,
+            binary_output_format,
+            parse_datetime_ignore_remainder,
+            enable_strict_datetime_parser,
+            enable_auto_detect_datetime_format,
+            random_function_seed,
+            week_start,
+            date_format_style,
+        })
+    }
+
+    fn get_settings(&self) -> Arc<Settings> {
+        // query level change
+        if self.shared.query_settings.is_changed()
+            && self.shared.query_settings.query_level_change()
+        {
+            let shared_settings = self.shared.query_settings.changes();
+            // if has session level change, should not cover query level change
+            if self.get_session_settings().is_changed() {
+                for r in self.get_session_settings().changes().iter() {
+                    if !self.shared.query_settings.changes().contains_key(r.key()) {
+                        shared_settings.insert(r.key().clone(), r.value().clone());
+                    }
+                }
+                unsafe {
+                    self.query_settings.unchecked_apply_changes(shared_settings);
+                }
+            } else {
+                unsafe {
+                    self.query_settings.unchecked_apply_changes(shared_settings);
+                }
+            }
+        } else {
+            unsafe {
+                // apply session level changes
+                self.query_settings
+                    .unchecked_apply_changes(self.get_session_settings().changes())
+            }
+        }
+
+        self.query_settings.clone()
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
+        // get session settings from query shared
+        self.shared.get_settings()
+    }
+
+    fn get_shared_settings(&self) -> Arc<Settings> {
+        self.shared.query_settings.clone()
+    }
+
+    fn get_license_key(&self) -> String {
+        self.get_settings()
+            .get_enterprise_license(self.get_version())
+    }
 }
 
 #[async_trait::async_trait]
 impl TableContextTableAccess for QueryContext {
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        match &plan.source_info {
+            DataSourceInfo::TableSource(table_info) => {
+                self.build_table_by_table_info(table_info, plan.tbl_args.clone())
+            }
+            DataSourceInfo::StageSource(stage_info) => {
+                self.build_external_by_table_info(stage_info, plan.tbl_args.clone())
+            }
+            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
+            DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
+            DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        self.shared
+            .catalog_manager
+            .get_catalog(
+                self.get_tenant().tenant_name(),
+                catalog_name.as_ref(),
+                self.session_state()?,
+            )
+            .await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.shared
+            .catalog_manager
+            .get_default_catalog(self.session_state()?)
+    }
+
+    fn get_current_catalog(&self) -> String {
+        self.shared.get_current_catalog()
+    }
+
+    fn get_current_database(&self) -> String {
+        self.shared.get_current_database()
+    }
+
+    fn get_tenant(&self) -> Tenant {
+        self.shared.get_tenant()
+    }
+
     fn get_application_level_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
     }
@@ -1710,6 +1610,14 @@ impl TableContextPerf for QueryContext {
 }
 
 impl TableContextQueryIdentity for QueryContext {
+    fn get_id(&self) -> String {
+        self.shared.init_query_id.as_ref().read().clone()
+    }
+
+    fn get_fragment_id(&self) -> usize {
+        self.fragment_id.fetch_add(1, Ordering::Release)
+    }
+
     fn attach_query_str(&self, kind: QueryKind, query: String) {
         self.shared.attach_query_str(kind, query);
     }
@@ -2194,6 +2102,96 @@ impl TableContextTableManagement for QueryContext {
 }
 
 impl TableContextPartitionStats for QueryContext {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
+        if let Some(part) = self.partition_queue.write().pop_front() {
+            Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+            return Some(part);
+        }
+
+        None
+    }
+
+    fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr> {
+        let mut res = Vec::with_capacity(num);
+        let mut queue_guard = self.partition_queue.write();
+
+        for _index in 0..num {
+            match queue_guard.pop_front() {
+                None => break,
+                Some(part) => res.push(part),
+            };
+        }
+
+        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, res.len());
+
+        res
+    }
+
+    fn partition_num(&self) -> usize {
+        self.partition_queue.read().len()
+    }
+
+    fn set_partitions(&self, partitions: Partitions) -> Result<()> {
+        let mut partition_queue = self.partition_queue.write();
+
+        partition_queue.clear();
+        for part in partitions.partitions {
+            partition_queue.push_back(part);
+        }
+        Ok(())
+    }
+
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
+    }
+
+    fn set_can_scan_from_agg_index(&self, enable: bool) {
+        self.shared
+            .can_scan_from_agg_index
+            .store(enable, Ordering::Release);
+    }
+
+    fn get_enable_sort_spill(&self) -> bool {
+        self.shared.enable_sort_spill.load(Ordering::Acquire)
+    }
+
+    fn set_enable_sort_spill(&self, enable: bool) {
+        self.shared
+            .enable_sort_spill
+            .store(enable, Ordering::Release);
+    }
+
+    fn set_compaction_num_block_hint(&self, table_name: &str, hint: u64) {
+        let old = self
+            .shared
+            .num_fragmented_block_hint
+            .lock()
+            .insert(table_name.to_string(), hint);
+        info!(
+            "Set compaction hint for table '{}': old={:?}, new={}",
+            table_name, old, hint
+        );
+    }
+
+    fn get_compaction_num_block_hint(&self, table_name: &str) -> u64 {
+        self.shared
+            .num_fragmented_block_hint
+            .lock()
+            .get(table_name)
+            .copied()
+            .unwrap_or_default()
+    }
+
+    fn get_enable_auto_analyze(&self) -> bool {
+        self.shared.enable_auto_analyze.load(Ordering::Acquire)
+    }
+
+    fn set_enable_auto_analyze(&self, enable: bool) {
+        self.shared
+            .enable_auto_analyze
+            .store(enable, Ordering::Release);
+    }
+
     fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
         self.shared.get_pruned_partitions_stats()
     }

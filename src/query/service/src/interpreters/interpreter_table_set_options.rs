@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::UpsertTableOptionReq;
@@ -31,7 +30,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::segment_format_from_location;
@@ -66,6 +64,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::table_context_ext::*;
 
 pub struct SetOptionsInterpreter {
     ctx: Arc<QueryContext>,

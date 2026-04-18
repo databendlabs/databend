@@ -20,7 +20,6 @@ use backon::ExponentialBuilder;
 use backon::Retryable;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -33,6 +32,8 @@ use databend_common_metrics::external_server::record_retry_external;
 use databend_common_pipeline::sources::AsyncSource;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
+
+use crate::sessions::table_context_ext::*;
 
 pub struct UdtfServerSource {
     ctx: Arc<dyn TableContext>,

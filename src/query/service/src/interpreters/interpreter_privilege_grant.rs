@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -40,7 +39,7 @@ use crate::interpreters::util::check_system_history;
 use crate::interpreters::util::check_system_history_stage;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 
 #[derive(Debug)]
 pub struct GrantPrivilegeInterpreter {

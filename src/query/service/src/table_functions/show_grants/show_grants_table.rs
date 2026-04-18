@@ -24,7 +24,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -63,6 +62,7 @@ use databend_enterprise_resources_management::ResourcesManagement;
 use itertools::Itertools;
 
 use crate::meta_service_error;
+use crate::sessions::table_context_ext::*;
 
 const SHOW_GRANTS: &str = "show_grants";
 

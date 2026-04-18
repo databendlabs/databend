@@ -57,7 +57,7 @@ use databend_storages_common_stage::SingleFilePartition;
 use opendal::Scheme;
 
 use super::parquet::ParquetInferSchemaSource;
-use crate::sessions::TableContext;
+use crate::sessions::table_context_ext::*;
 use crate::table_functions::TableFunction;
 use crate::table_functions::infer_schema::separator::InferSchemaSeparator;
 use crate::table_functions::infer_schema::table_args::InferSchemaArgsParsed;
