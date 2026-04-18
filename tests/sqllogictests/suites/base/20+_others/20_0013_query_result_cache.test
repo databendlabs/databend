@@ -79,7 +79,6 @@ query T
 EXPLAIN SELECT * FROM t1 ORDER BY a;
 ----
 ReadQueryResultCache
-├── SQL: SELECT * FROM t1 ORDER BY a
 ├── Number of rows: 3
 └── Result size: 12
 
@@ -87,7 +86,6 @@ query T
 EXPLAIN SELECT * FROM t1, t2 ORDER BY a, b;
 ----
 ReadQueryResultCache
-├── SQL: SELECT * FROM t1, t2 ORDER BY a, b
 ├── Number of rows: 9
 └── Result size: 180
 
