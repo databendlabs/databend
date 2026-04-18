@@ -25,7 +25,7 @@ use crate::pipelines::processors::transforms::HashJoinFactory;
 use crate::pipelines::processors::transforms::HybridHashJoin;
 use crate::pipelines::processors::transforms::new_hash_join::grace::GraceHashJoinState;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct HybridHashJoinState {
     pub ctx: Arc<QueryContext>,

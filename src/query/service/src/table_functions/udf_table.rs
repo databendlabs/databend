@@ -43,7 +43,7 @@ use databend_common_sql::binder::resolve_stage_location;
 
 use crate::pipelines::builders::UdtfFunctionDesc;
 use crate::pipelines::builders::UdtfServerSource;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct UDTFTable {
     desc: UdtfFunctionDesc,

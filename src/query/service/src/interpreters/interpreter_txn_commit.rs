@@ -35,7 +35,7 @@ use log::warn;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct CommitInterpreter {
     ctx: Arc<QueryContext>,

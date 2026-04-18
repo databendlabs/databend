@@ -50,7 +50,7 @@ use databend_common_storage::read_metadata_async;
 use databend_common_storages_fuse::table_functions::string_literal;
 use databend_common_users::Object;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::table_functions::TableFunction;
 
 const INSPECT_PARQUET: &str = "inspect_parquet";

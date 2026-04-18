@@ -55,7 +55,12 @@ use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextResultCache;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTelemetry;
 use crate::sql::BindContext;
 use crate::sql::optimizer::ir::SExpr;
 

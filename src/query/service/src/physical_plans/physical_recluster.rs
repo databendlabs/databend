@@ -56,7 +56,9 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

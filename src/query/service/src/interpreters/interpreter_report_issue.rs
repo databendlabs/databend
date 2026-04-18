@@ -52,7 +52,9 @@ use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct ReportIssueInterpreter {

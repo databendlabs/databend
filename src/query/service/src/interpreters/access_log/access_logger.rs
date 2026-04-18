@@ -33,8 +33,9 @@ use crate::interpreters::access_log::log_entry::DDLOperationType;
 use crate::interpreters::access_log::log_entry::ModifyByDDLObject;
 use crate::interpreters::access_log::log_entry::ObjectDomain;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::convert_query_log_timestamp;
-use crate::sessions::table_context_ext::*;
 
 pub struct AccessLogger {
     entry: AccessLogEntry,

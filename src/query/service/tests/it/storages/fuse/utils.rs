@@ -19,7 +19,7 @@ use chrono::Duration;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
 use databend_common_storages_fuse::FuseTable;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;

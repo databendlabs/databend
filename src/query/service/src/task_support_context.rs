@@ -16,7 +16,10 @@ use databend_common_exception::Result;
 use databend_query_task_support::TaskContext;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[async_trait::async_trait]
 impl TaskContext for QueryContext {

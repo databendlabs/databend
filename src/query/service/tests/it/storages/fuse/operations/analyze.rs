@@ -15,7 +15,8 @@
 use std::sync::Arc;
 
 use databend_common_storages_fuse::FuseTable;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 
 use crate::storages::fuse::utils::do_insertions;

@@ -24,7 +24,8 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_basic::RecursiveCteMemoryTable;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextTableAccess;
 
 pub struct TransformRecursiveCteScan {
     ctx: Arc<QueryContext>,

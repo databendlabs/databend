@@ -45,7 +45,7 @@ use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct HashJoinFactory {
     mutex: Mutex<()>,

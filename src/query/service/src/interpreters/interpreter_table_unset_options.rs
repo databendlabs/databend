@@ -26,7 +26,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::table_option_validation::UNSET_TABLE_OPTIONS_WHITE_LIST;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 
 pub struct UnsetOptionsInterpreter {
     ctx: Arc<QueryContext>,

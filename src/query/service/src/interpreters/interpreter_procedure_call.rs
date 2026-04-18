@@ -35,7 +35,7 @@ use crate::interpreters::interpreter_execute_immediate::ProcedureState;
 use crate::interpreters::util::ScriptClient;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 #[derive(Debug)]
 pub struct CallProcedureInterpreter {

@@ -29,7 +29,11 @@ use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::MemoryUpdater;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextTelemetry;
 
 pub struct StatisticsReceiver {
     _runtime: Runtime,

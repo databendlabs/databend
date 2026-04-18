@@ -47,7 +47,8 @@ use super::row_group_encoder::*;
 use super::serialize::*;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 
 #[derive(Clone)]
 pub struct PartitionAdapter {

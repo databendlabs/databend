@@ -29,7 +29,8 @@ use databend_enterprise_virtual_column::get_virtual_column_handler;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
 
 pub struct VacuumVirtualColumnInterpreter {
     ctx: Arc<QueryContext>,

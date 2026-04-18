@@ -43,7 +43,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStre
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct SemiLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,

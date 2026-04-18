@@ -20,7 +20,7 @@ use databend_common_storages_system::ClusteringHistoryLogElement;
 use databend_common_storages_system::ClusteringHistoryQueue;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
 
 pub struct InterpreterClusteringHistory;
 

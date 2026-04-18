@@ -28,7 +28,10 @@ use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextSpillProgress;
 
 pub fn log_query_start(ctx: &QueryContext) {
     InterpreterMetrics::record_query_start(ctx);

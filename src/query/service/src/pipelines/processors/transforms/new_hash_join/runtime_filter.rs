@@ -25,7 +25,8 @@ use crate::pipelines::processors::transforms::RuntimeFilterDesc;
 use crate::pipelines::processors::transforms::build_runtime_filter_infos;
 use crate::pipelines::processors::transforms::get_global_runtime_filter_packet;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 
 pub struct RuntimeFiltersDesc {
     ctx: Arc<QueryContext>,

@@ -38,7 +38,7 @@ use crate::pipelines::processors::transforms::SortStrategy;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
 use crate::pipelines::processors::transforms::WindowPartitionExchange;
 use crate::pipelines::processors::transforms::WindowPartitionTopNExchange;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextQueryIdentity;
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

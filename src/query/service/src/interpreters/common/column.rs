@@ -175,7 +175,7 @@ mod tests {
 
     use super::rename_column_in_cluster_key;
     use super::rename_column_in_comma_separated_ident;
-    use crate::sessions::table_context_ext::*;
+    use crate::sessions::TableContextSettings;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

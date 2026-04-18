@@ -22,7 +22,7 @@ use databend_common_sql::plans::DropIndexPlan;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropIndexInterpreter {
     ctx: Arc<QueryContext>,

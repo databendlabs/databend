@@ -35,7 +35,7 @@ use databend_common_sql::plans::ScalarExpr;
 use super::types::PhysicalRuntimeFilter;
 use super::types::PhysicalRuntimeFilters;
 use super::types::SpatialRuntimeFilterMode;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 /// Type alias for probe keys with runtime filter information
 /// Contains: (RemoteExpr, scan_id, table_index, column_idx, is_null_equal)

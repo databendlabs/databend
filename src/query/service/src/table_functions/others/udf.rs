@@ -51,7 +51,7 @@ use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_storages_factory::Table;
 use url::Url;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct UdfEchoTable {
     table_info: TableInfo,

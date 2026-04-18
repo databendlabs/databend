@@ -35,7 +35,7 @@ use databend_common_sql::NameResolutionContext;
 use parking_lot::RwLock;
 
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 impl PipelineBuilder {
     // check if cast needed

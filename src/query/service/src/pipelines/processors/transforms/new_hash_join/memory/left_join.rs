@@ -43,7 +43,7 @@ use crate::pipelines::processors::transforms::new_hash_join::memory::basic::Basi
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct OuterLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,

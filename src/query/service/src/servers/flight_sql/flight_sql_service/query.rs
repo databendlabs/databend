@@ -49,7 +49,8 @@ use super::status;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
 
 /// A app_metakey which indicates the data is a progress type
 static H_PROGRESS: u8 = 0x01;

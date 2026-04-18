@@ -45,7 +45,7 @@ use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformBranchedAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::processors::transforms::build_expression_transform;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 impl PipelineBuilder {
     pub fn build_fill_columns_in_merge_into(

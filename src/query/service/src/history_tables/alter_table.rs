@@ -31,7 +31,7 @@ use log::info;
 
 use crate::history_tables::external::ExternalStorageConnection;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 
 pub async fn get_schemas(
     ctx: Arc<QueryContext>,

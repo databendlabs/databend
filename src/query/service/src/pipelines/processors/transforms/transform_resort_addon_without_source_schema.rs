@@ -33,7 +33,7 @@ use databend_common_sql::parse_exprs_to_field_index;
 use databend_common_storages_factory::Table;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 // this processor will receive 3 kinds of blocks:
 // 1. from update, in this case, the block has entire target_table schema, no need to do anything

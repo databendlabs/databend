@@ -30,7 +30,7 @@ use databend_enterprise_query::test_kits::context::EESetup;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::SegmentInfo;

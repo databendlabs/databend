@@ -40,7 +40,7 @@ use crate::physical_plans::RangeJoinType;
 use crate::pipelines::executor::WatchNotify;
 use crate::pipelines::processors::transforms::range_join::IEJoinState;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct RangeJoinState {
     pub(crate) ctx: Arc<QueryContext>,

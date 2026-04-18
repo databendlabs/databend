@@ -25,7 +25,8 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::SET_PRIORITY;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 pub struct SetPriorityInterpreter {
     ctx: Arc<QueryContext>,

@@ -36,7 +36,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::SyncSource;
 use databend_common_pipeline::sources::SyncSourcer;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunction;
 

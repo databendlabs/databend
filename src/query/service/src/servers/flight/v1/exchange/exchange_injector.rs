@@ -29,7 +29,8 @@ use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 pub trait ExchangeInjector: Send + Sync + 'static {
     fn flight_scatter(

@@ -29,7 +29,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {

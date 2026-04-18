@@ -19,7 +19,7 @@ use databend_common_users::UserApiProvider;
 use databend_meta_client::kvapi::KvApiExt;
 
 use crate::meta_service_error;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 /// Checks if a duplicate label exists in the meta store.
 ///

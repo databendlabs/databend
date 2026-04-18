@@ -44,7 +44,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use itertools::Itertools;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 const SHOW_ROLES: &str = "show_roles";
 

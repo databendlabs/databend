@@ -34,7 +34,7 @@ use databend_common_management::WorkloadMgr;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
 
 pub struct ShowWorkloadGroupsInterpreter {
     ctx: Arc<QueryContext>,

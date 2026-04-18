@@ -25,7 +25,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::test_kits::TestFixture;
 

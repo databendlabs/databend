@@ -157,7 +157,7 @@ use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
 use crate::meta_service_error;
 use crate::meta_txn_error;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;

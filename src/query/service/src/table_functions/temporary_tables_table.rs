@@ -38,7 +38,7 @@ use databend_common_storages_system::SyncSystemTable;
 
 use crate::servers::http::v1::ClientSessionManager;
 use crate::sessions::SessionManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct TemporaryTablesTable {
     table_info: TableInfo,

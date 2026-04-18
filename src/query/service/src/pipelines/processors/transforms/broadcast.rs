@@ -27,7 +27,7 @@ use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct BroadcastSourceProcessor {
     pub receiver: Receiver<DataBlock>,

@@ -31,7 +31,12 @@ use rand::Rng;
 
 use crate::clusters::ClusterHelper;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextCte;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
 
 pub fn hook_vacuum_temp_files(query_ctx: &Arc<QueryContext>) -> Result<()> {
     let settings = query_ctx.get_settings();

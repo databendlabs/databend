@@ -26,7 +26,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::servers::flight::v1::actions::KILL_QUERY;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 pub struct KillInterpreter {
     ctx: Arc<QueryContext>,

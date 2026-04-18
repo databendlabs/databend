@@ -22,7 +22,7 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct ManagementModeAccess {}

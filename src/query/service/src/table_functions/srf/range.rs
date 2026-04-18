@@ -50,7 +50,7 @@ use databend_common_sql::validate_function_arg;
 use databend_common_storages_factory::Table;
 use itertools::Itertools;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct RangeTable {
     table_info: TableInfo,

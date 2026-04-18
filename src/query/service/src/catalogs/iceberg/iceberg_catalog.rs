@@ -106,7 +106,7 @@ use databend_meta_client::types::SeqV;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[derive(Debug)]

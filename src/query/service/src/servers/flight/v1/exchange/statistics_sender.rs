@@ -36,7 +36,11 @@ use crate::servers::flight::FlightSender;
 use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextTelemetry;
 
 pub struct StatisticsSender {
     _spawner: Arc<QueryContext>,

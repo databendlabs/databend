@@ -25,7 +25,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropViewInterpreter {
     ctx: Arc<QueryContext>,

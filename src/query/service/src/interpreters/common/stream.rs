@@ -34,7 +34,8 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_NAME;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextStream;
 
 pub async fn dml_build_update_stream_req(
     ctx: Arc<QueryContext>,

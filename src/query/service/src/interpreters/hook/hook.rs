@@ -32,7 +32,7 @@ use crate::interpreters::hook::compact_hook::hook_compact;
 use crate::interpreters::hook::refresh_hook::RefreshDesc;
 use crate::interpreters::hook::refresh_hook::hook_refresh;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 /// Hook operator.
 pub struct HookOperator {

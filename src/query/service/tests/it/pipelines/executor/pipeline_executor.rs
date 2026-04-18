@@ -31,7 +31,7 @@ use databend_common_pipeline::sources::SyncReceiverSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::Sender;

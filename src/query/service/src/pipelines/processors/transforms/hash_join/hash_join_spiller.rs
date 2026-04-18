@@ -30,7 +30,7 @@ use databend_common_storage::DataOperator;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;

@@ -111,7 +111,7 @@ use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)

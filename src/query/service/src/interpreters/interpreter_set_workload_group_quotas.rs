@@ -28,7 +28,8 @@ use crate::interpreters::interpreter_create_workload_group::to_quota_value;
 use crate::interpreters::util::AuditElement;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
 
 pub struct SetWorkloadGroupQuotasInterpreter {
     ctx: Arc<QueryContext>,

@@ -29,7 +29,8 @@ use log::info;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextSession;
 
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(

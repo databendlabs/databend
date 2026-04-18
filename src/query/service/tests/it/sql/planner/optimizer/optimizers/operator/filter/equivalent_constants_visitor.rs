@@ -30,7 +30,7 @@ use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::optimizers::operator::EquivalentConstantsVisitor;
 use databend_common_sql::plans::VisitorMut;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 use parking_lot::RwLock;
 

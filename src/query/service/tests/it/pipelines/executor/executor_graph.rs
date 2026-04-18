@@ -33,7 +33,7 @@ use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
 use petgraph::stable_graph::NodeIndex;
 use tokio::sync::mpsc::Receiver;

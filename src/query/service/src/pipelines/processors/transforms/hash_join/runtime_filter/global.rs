@@ -18,7 +18,7 @@ use databend_common_exception::Result;
 use super::merge::merge_join_runtime_filter_packets;
 use super::packet::JoinRuntimeFilterPacket;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub async fn get_global_runtime_filter_packet(
     broadcast_id: u32,

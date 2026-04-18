@@ -27,7 +27,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::BroadcastSinkProcessor;
 use crate::pipelines::processors::transforms::BroadcastSourceProcessor;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BroadcastSource {

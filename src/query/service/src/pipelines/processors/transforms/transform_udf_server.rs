@@ -36,7 +36,10 @@ use tonic::transport::Endpoint;
 
 use crate::physical_plans::UdfFunctionDesc;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct TransformUdfServer {
     ctx: Arc<QueryContext>,

@@ -20,7 +20,7 @@ use databend_storages_common_session::TxnManagerRef;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSession;
 pub struct BeginInterpreter {
     txn_manager: TxnManagerRef,
 }

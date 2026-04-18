@@ -29,7 +29,7 @@ use databend_common_storages_fuse::operations::do_refresh_table_index;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshTableIndexInterpreter {
     ctx: Arc<QueryContext>,

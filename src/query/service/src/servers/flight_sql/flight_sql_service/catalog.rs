@@ -29,7 +29,7 @@ use log::warn;
 use tonic::Status;
 
 use crate::servers::flight_sql::flight_sql_service::DoGetStream;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub(super) struct CatalogInfoProvider {}
 

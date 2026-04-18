@@ -72,7 +72,8 @@ use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::hash_join_table::STRING_EARLY_SIZE;
 use crate::pipelines::processors::transforms::hash_join_table::StringRawEntry;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {

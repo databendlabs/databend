@@ -76,7 +76,7 @@ use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
 use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
 use crate::task::session::get_task_user;

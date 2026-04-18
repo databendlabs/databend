@@ -50,7 +50,7 @@ use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
 use fastrace::func_name;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct TenantQuotaTable {
     table_info: TableInfo,

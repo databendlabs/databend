@@ -129,7 +129,7 @@ use super::super::merge_options;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::default::SessionCatalog;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
 use crate::table_functions::UDTFTable;

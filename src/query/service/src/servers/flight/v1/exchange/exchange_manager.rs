@@ -85,7 +85,10 @@ use crate::servers::flight::v1::packets::QueryEnv;
 use crate::servers::flight::v1::packets::QueryFragment;
 use crate::servers::flight::v1::packets::QueryFragments;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 
 enum QueryExchange {
     Fragment {

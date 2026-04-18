@@ -49,7 +49,7 @@ use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggr
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {

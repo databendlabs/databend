@@ -64,7 +64,12 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 

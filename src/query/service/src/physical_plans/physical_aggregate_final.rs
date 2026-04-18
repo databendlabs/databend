@@ -52,7 +52,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::aggregator::AggregateInjector;
 use crate::pipelines::processors::transforms::aggregator::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::aggregator::build_partition_bucket;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregateFinal {

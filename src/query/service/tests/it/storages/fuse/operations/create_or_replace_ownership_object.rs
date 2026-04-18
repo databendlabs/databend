@@ -21,7 +21,7 @@ use databend_common_meta_app::principal::TenantOwnershipObjectIdent;
 use databend_common_meta_store::MetaStore;
 use databend_common_meta_store::MetaStoreProvider;
 use databend_meta_runtime::DatabendRuntime;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::*;
 
 #[tokio::test(flavor = "multi_thread")]

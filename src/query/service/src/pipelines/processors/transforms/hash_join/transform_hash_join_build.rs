@@ -30,7 +30,7 @@ use super::runtime_filter::build_and_push_down_runtime_filter;
 use super::runtime_filter::merge_join_runtime_filter_packets;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinSpiller;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 /// There are three types of hash table:
 /// 1. FirstRound: it is the first time the hash table is constructed.

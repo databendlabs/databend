@@ -51,7 +51,7 @@ use humantime::Duration as HumanDuration;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct LicenseInfoTable {
     table_info: TableInfo,

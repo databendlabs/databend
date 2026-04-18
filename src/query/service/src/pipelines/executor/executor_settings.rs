@@ -19,7 +19,7 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {

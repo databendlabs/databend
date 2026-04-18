@@ -121,7 +121,7 @@ use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 #[cfg(feature = "task-support")]
 use crate::interpreters::task;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
 use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.

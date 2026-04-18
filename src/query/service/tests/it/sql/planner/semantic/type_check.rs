@@ -18,7 +18,8 @@ use databend_common_sql::Planner;
 use databend_common_sql::parse_exprs;
 use databend_common_sql::plans::Plan;
 use databend_query::physical_plans::PhysicalPlanBuilder;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]

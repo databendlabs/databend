@@ -39,7 +39,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.

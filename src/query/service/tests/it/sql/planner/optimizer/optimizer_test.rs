@@ -34,7 +34,8 @@ use databend_meta_client::types::NodeInfo;
 use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextCluster;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 
 use crate::sql::planner::optimizer::test_utils::execute_sql;

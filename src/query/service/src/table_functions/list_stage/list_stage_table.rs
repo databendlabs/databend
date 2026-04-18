@@ -51,7 +51,7 @@ use databend_common_users::Object;
 use futures_util::StreamExt;
 use futures_util::stream::Chunks;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::table_functions::list_stage::table_args::ListStageArgsParsed;
 
 const LIST_STAGE: &str = "list_stage";

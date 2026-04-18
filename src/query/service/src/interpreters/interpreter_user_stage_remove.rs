@@ -28,7 +28,8 @@ use opendal::Operator;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {

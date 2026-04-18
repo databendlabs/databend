@@ -27,7 +27,8 @@ use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextStage;
+use crate::sessions::TableContextTableAccess;
 
 #[async_backtrace::framed]
 pub async fn validate_grant_object_exists(

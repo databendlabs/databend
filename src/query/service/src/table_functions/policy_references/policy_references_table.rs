@@ -58,7 +58,7 @@ use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
 
 use crate::meta_service_error;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 const POLICY_REFERENCES_FUNC: &str = "policy_references";
 const POLICY_REFERENCES_ENGINE: &str = "POLICY_REFERENCES";

@@ -46,7 +46,7 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use databend_common_users::Object;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 const SHOW_SEQUENCES: &str = "show_sequences";
 

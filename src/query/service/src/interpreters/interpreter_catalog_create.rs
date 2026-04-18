@@ -27,7 +27,8 @@ use log::debug;
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSession;
 
 #[derive(Debug)]
 pub struct CreateCatalogInterpreter {

@@ -32,7 +32,7 @@ use tokio::sync::mpsc;
 
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,

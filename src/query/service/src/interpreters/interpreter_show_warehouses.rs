@@ -29,7 +29,8 @@ use databend_enterprise_resources_management::ResourcesManagement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
 
 pub struct ShowWarehousesInterpreter {
     ctx: Arc<QueryContext>,

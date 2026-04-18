@@ -62,7 +62,10 @@ use crate::interpreters::access::AccessChecker;
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {

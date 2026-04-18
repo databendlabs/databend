@@ -40,7 +40,8 @@ use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregat
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 fn build_partition_bucket_experimental(
     pipeline: &mut Pipeline,

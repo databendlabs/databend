@@ -128,7 +128,7 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use crate::catalogs::Catalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::servers::http::v1::ClientSessionManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {

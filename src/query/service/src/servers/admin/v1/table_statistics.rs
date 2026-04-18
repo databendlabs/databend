@@ -25,7 +25,7 @@ use poem::web::Json;
 use poem::web::Path;
 
 use crate::sessions::SessionManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 #[poem::handler]
 #[async_backtrace::framed]

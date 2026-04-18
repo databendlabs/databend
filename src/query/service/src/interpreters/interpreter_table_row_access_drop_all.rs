@@ -24,7 +24,8 @@ use databend_common_sql::plans::DropAllTableRowAccessPoliciesPlan;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
 
 pub struct DropAllTableRowAccessPoliciesInterpreter {
     ctx: Arc<QueryContext>,

@@ -29,7 +29,7 @@ use crate::pipelines::processors::transforms::SequenceCounters;
 use crate::pipelines::processors::transforms::SequenceNextValFetcher;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::AsyncFunctionArgument;
 
 /// The key of branches is `SourceSchemaIndex`, see `TransformResortAddOnWithoutSourceSchema`.

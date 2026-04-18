@@ -32,7 +32,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,

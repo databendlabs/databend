@@ -20,7 +20,7 @@ use databend_common_expression::ScalarRef;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberScalar;
 use databend_common_storage::DataOperator;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextSettings;
 use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;

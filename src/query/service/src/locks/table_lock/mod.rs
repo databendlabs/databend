@@ -22,7 +22,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::LockGuard;
 
 use crate::locks::LockManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct TableLock {
     lock_mgr: Arc<LockManager>,

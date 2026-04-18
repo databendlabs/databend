@@ -66,7 +66,7 @@ use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
 
 const DEAD_IN_SECS: u64 = 60;
 

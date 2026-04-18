@@ -28,7 +28,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::util::generate_desc_schema;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::Planner;
 
 pub struct DescribeTableInterpreter {

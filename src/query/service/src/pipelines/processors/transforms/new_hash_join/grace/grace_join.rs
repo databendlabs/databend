@@ -38,7 +38,7 @@ use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state:
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;

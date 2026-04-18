@@ -48,7 +48,9 @@ use crate::interpreters::interpreter_table_create::is_valid_column;
 use crate::interpreters::interpreter_table_modify_column::build_select_insert_plan;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct AddTableColumnInterpreter {
     ctx: Arc<QueryContext>,

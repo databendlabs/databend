@@ -45,7 +45,8 @@ use databend_common_pipeline::sources::AsyncSourcer;
 use databend_meta_client::types::MetaId;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 use crate::table_functions::TableFunction;
 
 pub struct CopyHistoryTable {

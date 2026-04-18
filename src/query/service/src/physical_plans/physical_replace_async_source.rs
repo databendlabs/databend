@@ -26,7 +26,7 @@ use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::RawValueSource;
 use crate::pipelines::ValueSource;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReplaceAsyncSourcer {

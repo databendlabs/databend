@@ -43,7 +43,7 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 use log::warn;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 enum Vacuum2TableArgs {
     SingleTable {

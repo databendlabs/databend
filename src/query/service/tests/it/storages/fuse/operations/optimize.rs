@@ -14,7 +14,7 @@
 
 use databend_common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::*;
 use futures_util::TryStreamExt;
 

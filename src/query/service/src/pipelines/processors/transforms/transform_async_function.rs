@@ -62,7 +62,9 @@ use tokio::sync::Mutex;
 
 use crate::pipelines::processors::transforms::transform_dictionary::DictionaryOperator;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::AsyncFunctionArgument;
 use crate::sql::plans::ReadFileFunctionArgument;
 

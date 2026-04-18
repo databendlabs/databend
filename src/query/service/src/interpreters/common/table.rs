@@ -20,7 +20,7 @@ use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::parse_computed_expr;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub fn check_referenced_computed_columns(
     ctx: Arc<dyn TableContext>,

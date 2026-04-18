@@ -65,7 +65,10 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::stream::DataBlockStream;
 
 struct InteractiveWorkerBase {

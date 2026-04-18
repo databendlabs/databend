@@ -27,7 +27,7 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
 
 pub struct DropDataMaskInterpreter {
     ctx: Arc<QueryContext>,

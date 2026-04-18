@@ -40,7 +40,7 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 const SHOW_VARIABLES: &str = "show_variables";
 

@@ -33,7 +33,7 @@ use databend_common_pipeline::sources::AsyncSource;
 use tokio::sync::Semaphore;
 use tonic::transport::Endpoint;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 pub struct UdtfServerSource {
     ctx: Arc<dyn TableContext>,

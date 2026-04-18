@@ -41,7 +41,7 @@ use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_scatter::ScatterTransform;
 use super::serde::ExchangeSerializeMeta;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,

@@ -35,7 +35,7 @@ use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone)]
 pub struct HttpQueryContext {

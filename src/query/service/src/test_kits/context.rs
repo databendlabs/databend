@@ -25,7 +25,7 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 use crate::sql::Planner;
 
 /// If you no need to care the ctx please use TestFixture.execute_query().

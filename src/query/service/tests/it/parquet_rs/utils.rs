@@ -19,7 +19,7 @@ use databend_common_exception::Result;
 use databend_common_sql::Planner;
 use databend_common_sql::plans::Plan;
 use databend_query::physical_plans::PhysicalPlanBuilder;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContext;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 

@@ -62,7 +62,7 @@ use databend_enterprise_resources_management::ResourcesManagement;
 use itertools::Itertools;
 
 use crate::meta_service_error;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 const SHOW_GRANTS: &str = "show_grants";
 

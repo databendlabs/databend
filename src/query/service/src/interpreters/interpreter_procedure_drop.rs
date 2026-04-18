@@ -29,7 +29,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::cleanup_object_tags;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextQueryIdentity;
 
 #[derive(Debug)]
 pub struct DropProcedureInterpreter {

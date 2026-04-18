@@ -43,7 +43,8 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextSettings;
 
 pub struct ExplainPerfInterpreter {
     pub sql: String,

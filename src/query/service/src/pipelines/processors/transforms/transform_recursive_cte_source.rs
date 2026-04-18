@@ -61,7 +61,12 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCte;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::stream::PullingExecutorStream;
 
 // The whole recursive cte as source.

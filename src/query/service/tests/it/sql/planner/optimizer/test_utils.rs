@@ -49,7 +49,7 @@ use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContextSettings;
 
 // TPC-DS Test Utilities
 

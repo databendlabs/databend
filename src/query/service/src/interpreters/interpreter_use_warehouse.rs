@@ -24,7 +24,8 @@ use databend_enterprise_resources_management::ResourcesManagement;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextSettings;
 
 pub struct UseWarehouseInterpreter {
     ctx: Arc<QueryContext>,

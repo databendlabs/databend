@@ -66,7 +66,7 @@ use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 
 use crate::meta_service_error;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 const TAG_REFERENCES_FUNC: &str = "tag_references";
 const TAG_REFERENCES_ENGINE: &str = "TAG_REFERENCES";

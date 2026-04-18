@@ -82,7 +82,9 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableFactory;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {

@@ -18,7 +18,7 @@ use chrono::Duration;
 use chrono::Utc;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::MetaWriter;
-use databend_query::sessions::table_context_ext::*;
+use databend_query::sessions::TableContext;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::TableSnapshot;

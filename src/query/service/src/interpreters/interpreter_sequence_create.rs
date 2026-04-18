@@ -27,7 +27,9 @@ use databend_common_users::UserApiProvider;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct CreateSequenceInterpreter {
     ctx: Arc<QueryContext>,

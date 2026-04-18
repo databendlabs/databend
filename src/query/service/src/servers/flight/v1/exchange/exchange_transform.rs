@@ -39,7 +39,7 @@ use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_cha
 use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct ExchangeTransform;
 

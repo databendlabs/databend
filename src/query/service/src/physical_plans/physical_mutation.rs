@@ -86,7 +86,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 
 // The predicate column symbol should not conflict with update expr column bindings.
 pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;

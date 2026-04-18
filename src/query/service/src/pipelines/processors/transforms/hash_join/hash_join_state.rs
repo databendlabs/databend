@@ -51,7 +51,7 @@ use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHas
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub type UniqueSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
 pub type UniqueSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;

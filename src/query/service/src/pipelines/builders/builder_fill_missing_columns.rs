@@ -28,7 +28,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOn;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 /// This file implements append to table pipeline builder.
 impl PipelineBuilder {

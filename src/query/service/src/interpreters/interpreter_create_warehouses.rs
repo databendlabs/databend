@@ -32,7 +32,9 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::util::AuditElement;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
 
 pub struct CreateWarehouseInterpreter {
     #[allow(dead_code)]

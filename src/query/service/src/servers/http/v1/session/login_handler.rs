@@ -25,7 +25,7 @@ use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Deserialize, Clone)]
 struct LoginRequest {

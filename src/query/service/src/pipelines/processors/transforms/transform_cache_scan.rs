@@ -28,7 +28,7 @@ use databend_common_sql::Symbol;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextProgress;
 
 #[derive(Clone)]
 pub enum CacheSourceState {

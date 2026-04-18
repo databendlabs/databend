@@ -23,7 +23,8 @@ use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryProfile;
 
 fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
     hook_clear_m_cte_temp_table(&query_ctx)?;

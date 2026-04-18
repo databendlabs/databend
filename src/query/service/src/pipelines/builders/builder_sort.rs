@@ -34,7 +34,8 @@ use databend_common_storage::DataOperator;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::spillers::SortSpillerImpl;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;

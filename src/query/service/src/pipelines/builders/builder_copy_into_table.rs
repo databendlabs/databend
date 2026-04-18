@@ -39,7 +39,7 @@ use log::info;
 use crate::physical_plans::CopyIntoTable;
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 /// This file implements copy into table pipeline builder.
 impl PipelineBuilder {

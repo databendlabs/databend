@@ -50,7 +50,10 @@ use crate::servers::flight::v1::exchange::DataExchange;
 use crate::servers::flight::v1::exchange::MergeExchange;
 use crate::servers::flight::v1::exchange::NodeToNodeExchange;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 
 /// Visitor to split a `PhysicalPlan` into fragments.
 pub struct Fragmenter {

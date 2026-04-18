@@ -47,7 +47,8 @@ use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::servers::flight::v1::exchange::DataExchange;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 /// Type of plan fragment
 #[derive(Clone, Debug, PartialEq, Eq)]

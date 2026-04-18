@@ -29,7 +29,7 @@ use databend_meta_client::types::NodeType;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextLicense;
 
 pub struct InspectWarehouseInterpreter {
     ctx: Arc<QueryContext>,

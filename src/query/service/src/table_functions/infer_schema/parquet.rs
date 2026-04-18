@@ -33,7 +33,7 @@ use databend_common_storage::read_parquet_schema_async_rs;
 use futures_util::future::try_join_all;
 use itertools::Itertools;
 
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::table_functions::infer_schema::infer_schema_table::INFER_SCHEMA;
 
 pub(crate) struct ParquetInferSchemaSource {

@@ -53,7 +53,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 
 use super::NumbersPartInfo;
 use super::numbers_part::generate_numbers_parts;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunction;
 

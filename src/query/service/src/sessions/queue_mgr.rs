@@ -70,7 +70,12 @@ use tokio::sync::Semaphore;
 use tokio::time::error::Elapsed;
 
 use crate::sessions::QueryContext;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTelemetry;
 
 pub trait QueueData: Send + Sync + 'static {
     type Key: Send + Sync + Eq + Hash + Display + Clone + ToString + 'static;
@@ -479,7 +484,6 @@ where T: Future<Output =  std::result::Result<std::result::Result<Permit, E>, El
 {
     #[pin]
     inner: T,
-
 
     has_pending: bool,
     is_abort: Arc<AtomicBool>,

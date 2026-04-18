@@ -44,7 +44,7 @@ use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::filter_block;
 use crate::pipelines::processors::transforms::range_join::order_match;
 use crate::pipelines::processors::transforms::range_join::probe_l1;
-use crate::sessions::table_context_ext::*;
+use crate::sessions::TableContextSettings;
 
 pub struct IEJoinState {
     _l1_data_type: DataType,
