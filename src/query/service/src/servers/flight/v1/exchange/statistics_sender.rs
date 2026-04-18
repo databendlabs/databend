@@ -212,7 +212,7 @@ impl StatisticsSender {
     ) -> Result<()> {
         let mutation_status = {
             let binding = ctx.mutation_state().mutation_status();
-            let status = binding.read();
+            let status = binding.read().unwrap();
             MutationStatus {
                 insert_rows: status.insert_rows,
                 deleted_rows: status.deleted_rows,

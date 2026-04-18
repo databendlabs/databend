@@ -163,7 +163,7 @@ async fn try_rebuild_req(
     );
     let insert_rows = {
         let stats = ctx.mutation_state().multi_table_insert_status();
-        let status = stats.lock();
+        let status = stats.lock().unwrap();
         status.insert_rows.clone()
     };
     let txn_mgr = ctx.txn_mgr();

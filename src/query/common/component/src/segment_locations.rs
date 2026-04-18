@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::RwLock;
 
 use databend_storages_common_table_meta::meta::Location;
-use parking_lot::RwLock;
 
 #[derive(Default)]
 pub struct SegmentLocationsState {
@@ -24,14 +24,14 @@ pub struct SegmentLocationsState {
 
 impl SegmentLocationsState {
     pub fn add(&self, location: Location) {
-        self.locations.write().insert(location);
+        self.locations.write().unwrap().insert(location);
     }
 
     pub fn clear(&self) {
-        self.locations.write().clear();
+        self.locations.write().unwrap().clear();
     }
 
     pub fn list(&self) -> Vec<Location> {
-        self.locations.read().iter().cloned().collect()
+        self.locations.read().unwrap().iter().cloned().collect()
     }
 }

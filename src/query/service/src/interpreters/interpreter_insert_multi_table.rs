@@ -125,7 +125,7 @@ impl Interpreter for InsertMultiTableInterpreter {
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
         let mut columns = vec![];
         let status = self.ctx.mutation_state().multi_table_insert_status();
-        let guard = status.lock();
+        let guard = status.lock().unwrap();
         for (tid, _) in &self.plan.target_tables {
             let insert_rows = guard.insert_rows.get(tid).cloned().unwrap_or_default();
             columns.push(UInt64Type::from_data(vec![insert_rows]));

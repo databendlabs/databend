@@ -3597,7 +3597,6 @@ dependencies = [
  "databend-common-pipeline",
  "databend-common-storage",
  "databend-storages-common-table-meta",
- "parking_lot 0.12.3",
 ]
 
 [[package]]

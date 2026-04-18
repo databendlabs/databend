@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::RwLock;
 
 use dashmap::DashMap;
 use dashmap::mapref::multiple::RefMulti;
@@ -22,7 +23,6 @@ use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_pipeline::core::InputError;
 use databend_common_storage::CopyStatus;
 use databend_common_storage::FileStatus;
-use parking_lot::RwLock;
 
 type OnErrorMap = Arc<DashMap<String, HashMap<u16, InputError>>>;
 
@@ -52,19 +52,19 @@ impl CopyState {
     }
 
     pub fn set_on_error_map(&self, map: OnErrorMap) {
-        *self.on_error_map.write() = Some(map);
+        *self.on_error_map.write().unwrap() = Some(map);
     }
 
     pub fn get_on_error_map(&self) -> Option<OnErrorMap> {
-        self.on_error_map.read().as_ref().cloned()
+        self.on_error_map.read().unwrap().as_ref().cloned()
     }
 
     pub fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        self.on_error_mode.read().clone()
+        self.on_error_mode.read().unwrap().clone()
     }
 
     pub fn set_on_error_mode(&self, mode: OnErrorMode) {
-        *self.on_error_mode.write() = Some(mode);
+        *self.on_error_mode.write().unwrap() = Some(mode);
     }
 
     pub fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {

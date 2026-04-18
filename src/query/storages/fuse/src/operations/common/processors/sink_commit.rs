@@ -316,7 +316,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
 
         if has_hll {
             let binding = self.ctx.mutation_state().mutation_status();
-            let status = binding.read();
+            let status = binding.read().unwrap();
             self.insert_rows = status.insert_rows + status.update_rows;
             self.insert_hll = hll;
         }

@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::RwLock;
+
 use databend_common_expression::BlockThresholds;
-use parking_lot::RwLock;
 
 #[derive(Default)]
 pub struct ReadBlockThresholdsState {
@@ -22,10 +23,10 @@ pub struct ReadBlockThresholdsState {
 
 impl ReadBlockThresholdsState {
     pub fn get(&self) -> BlockThresholds {
-        *self.thresholds.read()
+        *self.thresholds.read().unwrap()
     }
 
     pub fn set(&self, thresholds: BlockThresholds) {
-        *self.thresholds.write() = thresholds;
+        *self.thresholds.write().unwrap() = thresholds;
     }
 }

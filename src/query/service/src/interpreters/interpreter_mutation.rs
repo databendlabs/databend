@@ -185,7 +185,7 @@ impl MutationInterpreter {
 
     fn get_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
         let binding = self.ctx.mutation_state().mutation_status();
-        let status = binding.read();
+        let status = binding.read().unwrap();
         let mut columns = Vec::new();
         for field in self.schema.as_ref().fields() {
             match field.name().as_str() {

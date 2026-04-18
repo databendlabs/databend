@@ -102,7 +102,7 @@ pub trait Interpreter: Sync + Send {
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         {
             let mutation_status = ctx.mutation_state().mutation_status();
-            let mut mutation_status = mutation_status.write();
+            let mut mutation_status = mutation_status.write().unwrap();
             mutation_status.insert_rows = 0;
             mutation_status.deleted_rows = 0;
             mutation_status.update_rows = 0;

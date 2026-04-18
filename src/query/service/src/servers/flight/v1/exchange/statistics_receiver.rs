@@ -180,6 +180,7 @@ impl StatisticsReceiver {
                 ctx.mutation_state()
                     .mutation_status()
                     .write()
+                    .unwrap()
                     .merge_mutation_status(status);
                 Ok(false)
             }

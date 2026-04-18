@@ -362,7 +362,7 @@ impl Interpreter for InsertInterpreter {
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
         let binding = self.ctx.mutation_state().mutation_status();
-        let status = binding.read();
+        let status = binding.read().unwrap();
         let blocks = vec![DataBlock::new_from_columns(vec![UInt64Type::from_data(
             vec![status.insert_rows],
         )])];

@@ -126,7 +126,7 @@ impl IPhysicalPlan for CommitSink {
                         .main_pipeline
                         .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                             Ok(_) => {
-                                mutation_status.write().deleted_rows = deleted_rows;
+                                mutation_status.write().unwrap().deleted_rows = deleted_rows;
                                 Ok(())
                             }
                             Err(error_code) => Err(error_code.clone()),

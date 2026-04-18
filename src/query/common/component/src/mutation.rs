@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 
 use databend_common_storage::MultiTableInsertStatus;
 use databend_common_storage::MutationStatus;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
 
 #[derive(Default)]
 pub struct MutationState {
@@ -29,6 +29,7 @@ impl MutationState {
     pub fn add_mutation_status(&self, mutation_status: MutationStatus) {
         self.mutation_status
             .write()
+            .unwrap()
             .merge_mutation_status(mutation_status)
     }
 
@@ -37,7 +38,7 @@ impl MutationState {
     }
 
     pub fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64) {
-        let mut status = self.multi_table_insert_status.lock();
+        let mut status = self.multi_table_insert_status.lock().unwrap();
         match status.insert_rows.get_mut(&table_id) {
             Some(v) => *v += num_rows,
             None => {

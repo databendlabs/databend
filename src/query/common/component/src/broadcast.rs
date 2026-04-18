@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 
 use async_channel::Receiver;
 use async_channel::Sender;
 use databend_common_expression::DataBlock;
-use parking_lot::Mutex;
 
 #[derive(Default)]
 pub struct BroadcastChannel {
@@ -45,7 +45,7 @@ impl BroadcastRegistry {
     }
 
     pub fn source_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
-        let mut channels = self.channels.lock();
+        let mut channels = self.channels.lock().unwrap();
         let entry = channels.entry(broadcast_id).or_default();
         match entry.source_receiver.take() {
             Some(receiver) => receiver,
@@ -58,7 +58,7 @@ impl BroadcastRegistry {
     }
 
     pub fn source_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
-        let mut channels = self.channels.lock();
+        let mut channels = self.channels.lock().unwrap();
         let entry = channels.entry(broadcast_id).or_default();
         match entry.source_sender.take() {
             Some(sender) => sender,
@@ -71,7 +71,7 @@ impl BroadcastRegistry {
     }
 
     pub fn sink_receiver(&self, broadcast_id: u32) -> Receiver<DataBlock> {
-        let mut channels = self.channels.lock();
+        let mut channels = self.channels.lock().unwrap();
         let entry = channels.entry(broadcast_id).or_default();
         match entry.sink_receiver.take() {
             Some(receiver) => receiver,
@@ -84,7 +84,7 @@ impl BroadcastRegistry {
     }
 
     pub fn sink_sender(&self, broadcast_id: u32) -> Sender<DataBlock> {
-        let mut channels = self.channels.lock();
+        let mut channels = self.channels.lock().unwrap();
         let entry = channels.entry(broadcast_id).or_default();
         match entry.sink_sender.take() {
             Some(sender) => sender,
