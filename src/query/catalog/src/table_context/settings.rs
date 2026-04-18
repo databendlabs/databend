@@ -12,24 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::sync::Arc;
 
-use crate::query_kind::QueryKind;
+use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
+use databend_common_settings::Settings;
 
-pub trait TableContextQueryIdentity: Send + Sync {
-    fn get_id(&self) -> String;
+pub trait TableContextSettings: Send + Sync {
+    fn get_function_context(&self) -> Result<FunctionContext>;
 
-    fn attach_query_str(&self, kind: QueryKind, query: String);
+    fn get_settings(&self) -> Arc<Settings>;
 
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
+    fn get_session_settings(&self) -> Arc<Settings>;
 
-    fn get_query_str(&self) -> String;
+    fn get_shared_settings(&self) -> Arc<Settings>;
 
-    fn get_query_parameterized_hash(&self) -> String;
-
-    fn get_query_text_hash(&self) -> String;
-
-    fn get_last_query_id(&self, index: i32) -> Option<String>;
-
-    fn get_query_id_history(&self) -> HashSet<String>;
+    fn get_license_key(&self) -> String;
 }

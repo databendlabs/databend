@@ -30,8 +30,10 @@ mod broadcast;
 mod cluster;
 mod copy;
 mod cte;
+mod fragment;
 mod merge_into;
 mod mutation;
+mod observability;
 mod on_error;
 mod partitions;
 mod perf;
@@ -47,10 +49,12 @@ mod result_cache;
 mod runtime_filter;
 mod segment_locations;
 mod session;
+mod settings;
 mod spill;
 mod stage;
 mod stream;
 mod table_access;
+mod table_factory;
 mod table_management;
 mod variables;
 
@@ -59,8 +63,10 @@ pub use broadcast::TableContextBroadcast;
 pub use cluster::TableContextCluster;
 pub use copy::TableContextCopy;
 pub use cte::TableContextCte;
+pub use fragment::TableContextFragment;
 pub use merge_into::TableContextMergeInto;
 pub use mutation::TableContextMutationStatus;
+pub use observability::TableContextObservability;
 pub use on_error::TableContextOnError;
 pub use partitions::TableContextPartitionStats;
 pub use perf::TableContextPerf;
@@ -76,10 +82,12 @@ pub use result_cache::TableContextResultCache;
 pub use runtime_filter::TableContextRuntimeFilter;
 pub use segment_locations::TableContextSegmentLocations;
 pub use session::TableContextSession;
+pub use settings::TableContextSettings;
 pub use spill::TableContextSpillProgress;
 pub use stage::TableContextStage;
 pub use stream::TableContextStream;
 pub use table_access::TableContextTableAccess;
+pub use table_factory::TableContextTableFactory;
 pub use table_management::TableContextTableManagement;
 pub use variables::TableContextVariables;
 
@@ -90,8 +98,10 @@ pub mod prelude {
     pub use super::TableContextCluster;
     pub use super::TableContextCopy;
     pub use super::TableContextCte;
+    pub use super::TableContextFragment;
     pub use super::TableContextMergeInto;
     pub use super::TableContextMutationStatus;
+    pub use super::TableContextObservability;
     pub use super::TableContextOnError;
     pub use super::TableContextPartitionStats;
     pub use super::TableContextPerf;
@@ -107,10 +117,12 @@ pub mod prelude {
     pub use super::TableContextRuntimeFilter;
     pub use super::TableContextSegmentLocations;
     pub use super::TableContextSession;
+    pub use super::TableContextSettings;
     pub use super::TableContextSpillProgress;
     pub use super::TableContextStage;
     pub use super::TableContextStream;
     pub use super::TableContextTableAccess;
+    pub use super::TableContextTableFactory;
     pub use super::TableContextTableManagement;
     pub use super::TableContextVariables;
 }
@@ -176,9 +188,11 @@ pub trait TableContext:
     + TableContextCluster
     + TableContextCopy
     + TableContextCte
+    + TableContextFragment
     + TableContextMergeInto
     + TableContextMutationStatus
     + TableContextOnError
+    + TableContextObservability
     + TableContextPartitionStats
     + TableContextPerf
     + TableContextProcessInfo
@@ -193,9 +207,11 @@ pub trait TableContext:
     + TableContextRuntimeFilter
     + TableContextSegmentLocations
     + TableContextSession
+    + TableContextSettings
     + TableContextSpillProgress
     + TableContextStage
     + TableContextTableAccess
+    + TableContextTableFactory
     + TableContextTableManagement
     + TableContextStream
     + TableContextVariables

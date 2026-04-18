@@ -83,8 +83,10 @@ use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextFragment;
 use databend_common_catalog::table_context::TableContextMergeInto;
 use databend_common_catalog::table_context::TableContextMutationStatus;
+use databend_common_catalog::table_context::TableContextObservability;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
@@ -100,10 +102,12 @@ use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSession;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextTableAccess;
+use databend_common_catalog::table_context::TableContextTableFactory;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1108,7 +1112,9 @@ impl TableContextProgress for QueryContext {
     fn get_result_progress_value(&self) -> ProgressValues {
         self.shared.result_progress.as_ref().get_values()
     }
+}
 
+impl TableContextObservability for QueryContext {
     fn get_status_info(&self) -> String {
         let status = self.shared.status.read();
         status.clone()
@@ -1193,7 +1199,9 @@ impl TableContextSession for QueryContext {
     fn get_session_type(&self) -> SessionType {
         self.shared.session.get_type()
     }
+}
 
+impl TableContextSettings for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let settings = self.get_settings();
 
@@ -1281,8 +1289,7 @@ impl TableContextSession for QueryContext {
     }
 }
 
-#[async_trait::async_trait]
-impl TableContextTableAccess for QueryContext {
+impl TableContextTableFactory for QueryContext {
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.
@@ -1300,7 +1307,10 @@ impl TableContextTableAccess for QueryContext {
             DataSourceInfo::ORCSource(table_info) => OrcTable::from_info(table_info),
         }
     }
+}
 
+#[async_trait::async_trait]
+impl TableContextTableAccess for QueryContext {
     #[async_backtrace::framed]
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
@@ -1609,13 +1619,15 @@ impl TableContextPerf for QueryContext {
     }
 }
 
+impl TableContextFragment for QueryContext {
+    fn get_fragment_id(&self) -> usize {
+        self.fragment_id.fetch_add(1, Ordering::Release)
+    }
+}
+
 impl TableContextQueryIdentity for QueryContext {
     fn get_id(&self) -> String {
         self.shared.init_query_id.as_ref().read().clone()
-    }
-
-    fn get_fragment_id(&self) -> usize {
-        self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
     fn attach_query_str(&self, kind: QueryKind, query: String) {

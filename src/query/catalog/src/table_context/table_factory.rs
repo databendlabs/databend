@@ -12,24 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::sync::Arc;
 
-use crate::query_kind::QueryKind;
+use databend_common_exception::Result;
 
-pub trait TableContextQueryIdentity: Send + Sync {
-    fn get_id(&self) -> String;
+use crate::plan::DataSourcePlan;
+use crate::table::Table;
 
-    fn attach_query_str(&self, kind: QueryKind, query: String);
-
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
-
-    fn get_query_str(&self) -> String;
-
-    fn get_query_parameterized_hash(&self) -> String;
-
-    fn get_query_text_hash(&self) -> String;
-
-    fn get_last_query_id(&self, index: i32) -> Option<String>;
-
-    fn get_query_id_history(&self) -> HashSet<String>;
+pub trait TableContextTableFactory: Send + Sync {
+    /// Build a table instance the plan wants to operate on.
+    ///
+    /// A plan just contains raw information about a table or table function.
+    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
+    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
 }

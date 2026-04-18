@@ -21,17 +21,10 @@ use databend_common_storage::DataOperator;
 
 use crate::catalog::Catalog;
 use crate::lock::LockTableOption;
-use crate::plan::DataSourcePlan;
 use crate::table::Table;
 
 #[async_trait::async_trait]
 pub trait TableContextTableAccess: Send + Sync {
-    /// Build a table instance the plan wants to operate on.
-    ///
-    /// A plan just contains raw information about a table or table function.
-    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
-    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
-
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
 
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;

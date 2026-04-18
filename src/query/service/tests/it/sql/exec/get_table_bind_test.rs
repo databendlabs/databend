@@ -621,7 +621,9 @@ impl TableContextProgress for CtxDelegation {
     fn get_result_progress_value(&self) -> ProgressValues {
         todo!()
     }
+}
 
+impl TableContextObservability for CtxDelegation {
     fn get_status_info(&self) -> String {
         "".to_string()
     }
@@ -664,7 +666,9 @@ impl TableContextSession for CtxDelegation {
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
     }
+}
 
+impl TableContextSettings for CtxDelegation {
     fn get_function_context(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
     }
@@ -845,10 +849,6 @@ impl TableContextQueryIdentity for CtxDelegation {
         self.ctx.get_id()
     }
 
-    fn get_fragment_id(&self) -> usize {
-        todo!()
-    }
-
     fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
 
     fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
@@ -872,6 +872,12 @@ impl TableContextQueryIdentity for CtxDelegation {
     }
 
     fn get_query_id_history(&self) -> HashSet<String> {
+        todo!()
+    }
+}
+
+impl TableContextFragment for CtxDelegation {
+    fn get_fragment_id(&self) -> usize {
         todo!()
     }
 }
@@ -928,12 +934,14 @@ impl TableContextCopy for CtxDelegation {
     }
 }
 
-#[async_trait::async_trait]
-impl TableContextTableAccess for CtxDelegation {
+impl TableContextTableFactory for CtxDelegation {
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         todo!()
     }
+}
 
+#[async_trait::async_trait]
+impl TableContextTableAccess for CtxDelegation {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.ctx.get_catalog(catalog_name).await
     }

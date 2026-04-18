@@ -17,8 +17,6 @@ use std::sync::Arc;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 
-use crate::statistics::data_cache_statistics::DataCacheMetrics;
-
 pub trait TableContextProgress: Send + Sync {
     fn incr_total_scan_value(&self, value: ProgressValues);
 
@@ -35,10 +33,4 @@ pub trait TableContextProgress: Send + Sync {
     fn get_result_progress(&self) -> Arc<Progress>;
 
     fn get_result_progress_value(&self) -> ProgressValues;
-
-    fn get_status_info(&self) -> String;
-
-    fn set_status_info(&self, info: &str);
-
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
 }

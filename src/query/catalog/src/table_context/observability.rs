@@ -12,24 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use crate::statistics::data_cache_statistics::DataCacheMetrics;
 
-use crate::query_kind::QueryKind;
+pub trait TableContextObservability: Send + Sync {
+    fn get_status_info(&self) -> String;
 
-pub trait TableContextQueryIdentity: Send + Sync {
-    fn get_id(&self) -> String;
+    fn set_status_info(&self, info: &str);
 
-    fn attach_query_str(&self, kind: QueryKind, query: String);
-
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
-
-    fn get_query_str(&self) -> String;
-
-    fn get_query_parameterized_hash(&self) -> String;
-
-    fn get_query_text_hash(&self) -> String;
-
-    fn get_last_query_id(&self, index: i32) -> Option<String>;
-
-    fn get_query_id_history(&self) -> HashSet<String>;
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
 }

@@ -66,8 +66,10 @@ use databend_common_catalog::table_context::TableContextBroadcast;
 use databend_common_catalog::table_context::TableContextCluster;
 use databend_common_catalog::table_context::TableContextCopy;
 use databend_common_catalog::table_context::TableContextCte;
+use databend_common_catalog::table_context::TableContextFragment;
 use databend_common_catalog::table_context::TableContextMergeInto;
 use databend_common_catalog::table_context::TableContextMutationStatus;
+use databend_common_catalog::table_context::TableContextObservability;
 use databend_common_catalog::table_context::TableContextOnError;
 use databend_common_catalog::table_context::TableContextPartitionStats;
 use databend_common_catalog::table_context::TableContextPerf;
@@ -83,10 +85,12 @@ use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
 use databend_common_catalog::table_context::TableContextSegmentLocations;
 use databend_common_catalog::table_context::TableContextSession;
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextSpillProgress;
 use databend_common_catalog::table_context::TableContextStage;
 use databend_common_catalog::table_context::TableContextStream;
 use databend_common_catalog::table_context::TableContextTableAccess;
+use databend_common_catalog::table_context::TableContextTableFactory;
 use databend_common_catalog::table_context::TableContextTableManagement;
 use databend_common_catalog::table_context::TableContextVariables;
 use databend_common_config::GlobalConfig;
@@ -1099,7 +1103,9 @@ impl TableContextSession for LiteTableContext {
     fn get_session_type(&self) -> SessionType {
         SessionType::HTTPQuery
     }
+}
 
+impl TableContextSettings for LiteTableContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         Ok(FunctionContext::default())
     }
@@ -1225,7 +1231,9 @@ impl TableContextProgress for LiteTableContext {
     fn get_result_progress_value(&self) -> ProgressValues {
         self.result_progress.get_values()
     }
+}
 
+impl TableContextObservability for LiteTableContext {
     fn get_status_info(&self) -> String {
         String::new()
     }
@@ -1383,10 +1391,6 @@ impl TableContextQueryIdentity for LiteTableContext {
         "lite-query".to_string()
     }
 
-    fn get_fragment_id(&self) -> usize {
-        0
-    }
-
     fn attach_query_str(&self, _kind: QueryKind, query: String) {
         *self.query.write() = query;
     }
@@ -1414,6 +1418,12 @@ impl TableContextQueryIdentity for LiteTableContext {
 
     fn get_query_id_history(&self) -> HashSet<String> {
         HashSet::new()
+    }
+}
+
+impl TableContextFragment for LiteTableContext {
+    fn get_fragment_id(&self) -> usize {
+        0
     }
 }
 
@@ -1468,12 +1478,14 @@ impl TableContextCopy for LiteTableContext {
     }
 }
 
-#[async_trait::async_trait]
-impl TableContextTableAccess for LiteTableContext {
+impl TableContextTableFactory for LiteTableContext {
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         unsupported("table_ctx::build_table_from_source_plan")
     }
+}
 
+#[async_trait::async_trait]
+impl TableContextTableAccess for LiteTableContext {
     async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.catalog_manager
             .get_catalog(
