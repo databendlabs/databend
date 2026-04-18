@@ -22,13 +22,13 @@ databend-common-storages-parquet = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+log = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-log = { workspace = true }
 tokio = { workspace = true }
 typetag = { workspace = true }
 uuid = { workspace = true }
