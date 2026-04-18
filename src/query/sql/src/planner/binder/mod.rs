@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate;
+mod aggregate_prepass;
 mod async_function_desc;
 mod bind_context;
 mod bind_mutation;
@@ -92,8 +93,10 @@ pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::get_storage_params_from_options;
 pub use location::parse_storage_params_from_uri;
 pub use location::parse_uri_location;
+pub use project::SelectInfo;
 pub use scalar::ScalarBinder;
 pub use scalar_common::*;
+pub(crate) use sort::OrderByRewriteFlags;
 pub use stream_column_factory::STREAM_COLUMN_FACTORY;
 pub use window::WindowFunctionInfo;
 pub use window::WindowOrderByInfo;

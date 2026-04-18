@@ -349,7 +349,7 @@ pub fn parse_lambda_expr(
     // Use parent metadata if provided (for masking policies on outer columns)
     // Otherwise create empty metadata (for better performance in community edition)
     let metadata = parent_metadata.unwrap_or_else(|| Arc::new(RwLock::new(Metadata::default())));
-    lambda_context.set_expr_context(ExprContext::InLambdaFunction);
+    lambda_context.expr_context = ExprContext::InLambdaFunction;
 
     for (lambda_column, lambda_column_type) in lambda_columns.iter() {
         let column_index = lambda_context.next_column_index();
