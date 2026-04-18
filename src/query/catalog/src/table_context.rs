@@ -21,8 +21,6 @@ use std::time::SystemTime;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::base::WatchNotify;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
 use databend_common_expression::FunctionContext;
@@ -55,6 +53,7 @@ mod perf;
 mod query_identity;
 mod query_profile;
 mod query_queue;
+mod query_state;
 mod read_block_thresholds;
 mod result_cache;
 mod runtime_filter;
@@ -79,6 +78,7 @@ pub use perf::TableContextPerf;
 pub use query_identity::TableContextQueryIdentity;
 pub use query_profile::TableContextQueryProfile;
 pub use query_queue::TableContextQueryQueue;
+pub use query_state::TableContextQueryState;
 pub use read_block_thresholds::TableContextReadBlockThresholds;
 pub use result_cache::TableContextResultCache;
 pub use runtime_filter::TableContextRuntimeFilter;
@@ -159,6 +159,7 @@ pub trait TableContext:
     + TableContextQueryIdentity
     + TableContextQueryProfile
     + TableContextQueryQueue
+    + TableContextQueryState
     + TableContextReadBlockThresholds
     + TableContextResultCache
     + TableContextRuntimeFilter
@@ -220,8 +221,6 @@ pub trait TableContext:
     fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
-    fn check_aborting(&self) -> Result<(), ContextError>;
-    fn get_abort_notify(&self) -> Arc<WatchNotify>;
     fn get_abort_checker(self: Arc<Self>) -> AbortChecker
     where Self: 'static {
         struct Checker<S> {
@@ -234,8 +233,6 @@ pub trait TableContext:
         }
         Arc::new(Checker { this: self })
     }
-    fn get_error(&self) -> Option<ErrorCode<ContextError>>;
-    fn push_warning(&self, warning: String);
     fn get_current_database(&self) -> String;
     fn get_fuse_version(&self) -> String;
     fn get_version(&self) -> BuildInfoRef;

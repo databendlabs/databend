@@ -73,6 +73,7 @@ use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
@@ -1152,16 +1153,6 @@ impl TableContext for LiteTableContext {
     fn get_current_catalog(&self) -> String {
         self.current_catalog.clone()
     }
-    fn check_aborting(&self) -> std::result::Result<(), ErrorCode<ContextError>> {
-        Ok(())
-    }
-    fn get_abort_notify(&self) -> Arc<WatchNotify> {
-        self.abort_notify.clone()
-    }
-    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
-        None
-    }
-    fn push_warning(&self, _warning: String) {}
     fn get_current_database(&self) -> String {
         self.current_database.clone()
     }
@@ -1282,6 +1273,22 @@ impl TableContextAuthorization for LiteTableContext {
     ) -> Result<GrantObjectVisibilityChecker> {
         unsupported("table_ctx::get_visibility_checker")
     }
+}
+
+impl TableContextQueryState for LiteTableContext {
+    fn check_aborting(&self) -> std::result::Result<(), ErrorCode<ContextError>> {
+        Ok(())
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.abort_notify.clone()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
+        None
+    }
+
+    fn push_warning(&self, _warning: String) {}
 }
 
 impl TableContextBroadcast for LiteTableContext {

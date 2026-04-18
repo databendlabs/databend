@@ -41,6 +41,7 @@ use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

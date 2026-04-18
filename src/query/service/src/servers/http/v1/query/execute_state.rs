@@ -20,6 +20,7 @@ use ExecuteState::*;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::SpillProgress;
 use databend_common_base::runtime::CatchUnwindFuture;
+use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;

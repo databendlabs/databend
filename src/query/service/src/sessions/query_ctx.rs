@@ -90,6 +90,7 @@ use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
@@ -1177,22 +1178,6 @@ impl TableContext for QueryContext {
         self.shared.get_current_catalog()
     }
 
-    fn check_aborting(&self) -> Result<(), ContextError> {
-        self.shared.check_aborting()
-    }
-
-    fn get_abort_notify(&self) -> Arc<WatchNotify> {
-        self.shared.abort_notify.clone()
-    }
-
-    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
-        self.shared.get_error()
-    }
-
-    fn push_warning(&self, warn: String) {
-        self.shared.push_warning(warn)
-    }
-
     fn get_current_database(&self) -> String {
         self.shared.get_current_database()
     }
@@ -1390,6 +1375,24 @@ impl TableContextAuthorization for QueryContext {
             .session
             .get_visibility_checker(ignore_ownership, object)
             .await
+    }
+}
+
+impl TableContextQueryState for QueryContext {
+    fn check_aborting(&self) -> Result<(), ContextError> {
+        self.shared.check_aborting()
+    }
+
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.shared.abort_notify.clone()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
+        self.shared.get_error()
+    }
+
+    fn push_warning(&self, warn: String) {
+        self.shared.push_warning(warn)
     }
 }
 

@@ -57,6 +57,7 @@ use databend_common_catalog::table_context::TableContextPerf;
 use databend_common_catalog::table_context::TableContextQueryIdentity;
 use databend_common_catalog::table_context::TableContextQueryProfile;
 use databend_common_catalog::table_context::TableContextQueryQueue;
+use databend_common_catalog::table_context::TableContextQueryState;
 use databend_common_catalog::table_context::TableContextReadBlockThresholds;
 use databend_common_catalog::table_context::TableContextResultCache;
 use databend_common_catalog::table_context::TableContextRuntimeFilter;
@@ -649,18 +650,6 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn check_aborting(&self) -> Result<(), ContextError> {
-        todo!()
-    }
-
-    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
-        todo!()
-    }
-
-    fn push_warning(&self, _warn: String) {
-        todo!()
-    }
-
     fn get_current_database(&self) -> String {
         self.ctx.get_current_database()
     }
@@ -730,9 +719,23 @@ impl TableContext for CtxDelegation {
     async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
         todo!()
     }
+}
+
+impl TableContextQueryState for CtxDelegation {
+    fn check_aborting(&self) -> Result<(), ContextError> {
+        todo!()
+    }
 
     fn get_abort_notify(&self) -> Arc<WatchNotify> {
         self.ctx.get_abort_notify()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
+        todo!()
+    }
+
+    fn push_warning(&self, _warn: String) {
+        todo!()
     }
 }
 
