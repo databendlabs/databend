@@ -747,6 +747,31 @@ select id, name, created_at from dst2_19716 order by id;
 1 bob 2026-04-12 08:00:00.000000
 
 statement ok
+truncate table dst1_19716;
+
+statement ok
+truncate table dst2_19716;
+
+# Case 5: WHERE + LIMIT with subquery WHEN keeps source column order
+statement ok
+INSERT ALL
+  WHEN id = (SELECT 0) THEN INTO dst1_19716
+  WHEN id = (SELECT 1) THEN INTO dst2_19716
+SELECT * FROM src_19716
+WHERE created_at >= '2026-04-01' AND created_at < '2026-04-15'
+LIMIT 2;
+
+query ITT
+select id, name, created_at from dst1_19716 order by id;
+----
+0 alice 2026-04-10 08:00:00.000000
+
+query ITT
+select id, name, created_at from dst2_19716 order by id;
+----
+1 bob 2026-04-12 08:00:00.000000
+
+statement ok
 drop table src_19716;
 
 statement ok
