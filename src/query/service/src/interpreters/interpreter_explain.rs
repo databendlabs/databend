@@ -365,7 +365,6 @@ impl ExplainInterpreter {
             if let Some(v) = cache_reader.check_cache().await? {
                 // Construct a format tree for result cache reading
                 let children = vec![
-                    FormatTreeNode::new(format!("SQL: {}", v.sql)),
                     FormatTreeNode::new(format!("Number of rows: {}", v.num_rows)),
                     FormatTreeNode::new(format!("Result size: {}", v.result_size)),
                 ];
