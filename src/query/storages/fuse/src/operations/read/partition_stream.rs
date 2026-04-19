@@ -19,7 +19,7 @@ use std::task::Poll;
 use async_channel::Receiver;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
-use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -111,7 +111,7 @@ pub struct PartitionStreamSource {
     stream: Arc<dyn PartitionStream>,
     handle: Option<SyncTaskHandle<'static, Result<Option<Vec<PartInfoPtr>>>>>,
     runtime_filter_waiter: Option<RuntimeFilterWaiter>,
-    partition_filters: Vec<Arc<dyn PartitionRuntimeFilter>>,
+    partition_filters: PartitionRuntimeFilters,
 }
 
 impl PartitionStreamSource {

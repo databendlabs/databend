@@ -189,6 +189,10 @@ pub trait PartitionRuntimeFilter: Send + Sync {
     fn prune(&self, part: &PartInfoPtr) -> bool;
 }
 
+pub type PartitionRuntimeFilters = Vec<Arc<dyn PartitionRuntimeFilter>>;
+pub type IndexRuntimeFilters = Vec<Arc<dyn IndexRuntimeFilter>>;
+pub type RowRuntimeFilters = Vec<Arc<dyn RowRuntimeFilter>>;
+
 /// Runtime filter that prunes partitions by loading index files (bloom index, spatial index).
 /// Requires async IO. Applied in ReadDataTransform.
 /// Split into load_index (IO) and prune (computation) for caller-controlled IO scheduling.

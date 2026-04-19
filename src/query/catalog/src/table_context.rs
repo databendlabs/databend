@@ -80,9 +80,9 @@ use crate::plan::PartInfoPtr;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::query_kind::QueryKind;
-use crate::runtime_filter_info::IndexRuntimeFilter;
-use crate::runtime_filter_info::PartitionRuntimeFilter;
-use crate::runtime_filter_info::RowRuntimeFilter;
+use crate::runtime_filter_info::IndexRuntimeFilters;
+use crate::runtime_filter_info::PartitionRuntimeFilters;
+use crate::runtime_filter_info::RowRuntimeFilters;
 use crate::runtime_filter_info::RuntimeBloomFilter;
 use crate::runtime_filter_info::RuntimeFilterEntry;
 use crate::runtime_filter_info::RuntimeFilterInfo;
@@ -409,17 +409,17 @@ pub trait TableContext: Send + Sync {
 
     fn has_bloom_runtime_filters(&self, id: usize) -> bool;
 
-    fn add_partition_runtime_filters(&self, _: usize, _: Vec<Arc<dyn PartitionRuntimeFilter>>);
+    fn add_partition_runtime_filters(&self, _: usize, _: PartitionRuntimeFilters);
 
-    fn add_index_runtime_filters(&self, _: usize, _: Vec<Arc<dyn IndexRuntimeFilter>>);
+    fn add_index_runtime_filters(&self, _: usize, _: IndexRuntimeFilters);
 
-    fn add_row_runtime_filters(&self, _: usize, _: Vec<Arc<dyn RowRuntimeFilter>>);
+    fn add_row_runtime_filters(&self, _: usize, _: RowRuntimeFilters);
 
-    fn get_partition_runtime_filters(&self, _: usize) -> Vec<Arc<dyn PartitionRuntimeFilter>>;
+    fn get_partition_runtime_filters(&self, _: usize) -> PartitionRuntimeFilters;
 
-    fn get_row_runtime_filters(&self, _: usize) -> Vec<Arc<dyn RowRuntimeFilter>>;
+    fn get_row_runtime_filters(&self, _: usize) -> RowRuntimeFilters;
 
-    fn get_index_runtime_filters(&self, _: usize) -> Vec<Arc<dyn IndexRuntimeFilter>>;
+    fn get_index_runtime_filters(&self, _: usize) -> IndexRuntimeFilters;
 
     fn txn_mgr(&self) -> TxnManagerRef;
     fn get_table_meta_timestamps(

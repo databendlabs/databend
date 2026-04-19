@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -113,15 +113,15 @@ impl RuntimeFiltersDesc {
 
         // Extract BloomRowFilter trait objects for the new trait-based API
         for (scan_id, info) in &runtime_filter_infos {
-            let row_filters: Vec<Arc<dyn RowRuntimeFilter>> = info
+            let row_filters: RowRuntimeFilters = info
                 .filters
                 .iter()
                 .filter_map(|entry| {
                     let bloom = entry.bloom.as_ref()?;
-                    Some(Arc::new(BloomRowFilter::new(
+                    Some(BloomRowFilter::create(
                         bloom.column_name.clone(),
                         bloom.filter.clone(),
-                    )) as Arc<dyn RowRuntimeFilter>)
+                    ))
                 })
                 .collect();
             if !row_filters.is_empty() {

@@ -31,9 +31,9 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::runtime_filter_info::IndexRuntimeFilter;
-use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilter;
-use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::IndexRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -864,22 +864,22 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn add_partition_runtime_filters(&self, _: usize, _: Vec<Arc<dyn PartitionRuntimeFilter>>) {
+    fn add_partition_runtime_filters(&self, _: usize, _: PartitionRuntimeFilters) {
         todo!()
     }
-    fn add_index_runtime_filters(&self, _: usize, _: Vec<Arc<dyn IndexRuntimeFilter>>) {
+    fn add_index_runtime_filters(&self, _: usize, _: IndexRuntimeFilters) {
         todo!()
     }
-    fn add_row_runtime_filters(&self, _: usize, _: Vec<Arc<dyn RowRuntimeFilter>>) {
+    fn add_row_runtime_filters(&self, _: usize, _: RowRuntimeFilters) {
         todo!()
     }
-    fn get_partition_runtime_filters(&self, _: usize) -> Vec<Arc<dyn PartitionRuntimeFilter>> {
+    fn get_partition_runtime_filters(&self, _: usize) -> PartitionRuntimeFilters {
         todo!()
     }
-    fn get_row_runtime_filters(&self, _: usize) -> Vec<Arc<dyn RowRuntimeFilter>> {
+    fn get_row_runtime_filters(&self, _: usize) -> RowRuntimeFilters {
         todo!()
     }
-    fn get_index_runtime_filters(&self, _: usize) -> Vec<Arc<dyn IndexRuntimeFilter>> {
+    fn get_index_runtime_filters(&self, _: usize) -> IndexRuntimeFilters {
         todo!()
     }
     fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
