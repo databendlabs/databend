@@ -1082,6 +1082,8 @@ pub enum TokenKind {
     QUERY,
     #[token("QUOTE", ignore(ascii_case))]
     QUOTE,
+    #[token("QUOTE_STYLE", ignore(ascii_case))]
+    QUOTE_STYLE,
     #[token("QUOTED_EMPTY_FIELD_AS", ignore(ascii_case))]
     QUOTED_EMPTY_FIELD_AS,
     #[token("QUOTED_IDENTIFIERS", ignore(ascii_case))]
