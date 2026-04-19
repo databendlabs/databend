@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::IndexRuntimeFilter;
 use databend_common_catalog::table_context::TableContext;
@@ -125,6 +127,10 @@ impl ReadDataTransform {
                 let index = filter.load_index(&part, &operator).await?;
                 let index_ref = index.as_ref().map(|b| b.as_ref() as &dyn std::any::Any);
                 if filter.prune(&part, index_ref)? {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::RuntimeFilterPruneParts,
+                        1,
+                    );
                     continue 'next_part;
                 }
             }
