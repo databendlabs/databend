@@ -23,6 +23,7 @@ databend-meta-kvapi = { workspace = true }
 databend-meta-types = { workspace = true }
 databend-storages-common-blocks = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+log = { workspace = true }
 opendal = { workspace = true }
 parking_lot = { workspace = true }
 parquet = { workspace = true }

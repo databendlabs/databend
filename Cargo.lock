@@ -4469,6 +4469,7 @@ dependencies = [
  "databend-meta-types",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "log",
  "opendal",
  "parking_lot 0.12.3",
  "parquet 56.2.0",
