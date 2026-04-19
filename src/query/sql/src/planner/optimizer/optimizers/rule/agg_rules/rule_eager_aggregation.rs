@@ -1171,11 +1171,6 @@ impl EagerAnalysis {
         aggregate_function: &mut AggregateFunction,
         eager_count_index: Symbol,
     ) -> Result<ScalarItem, ErrorCode> {
-        let new_index = metadata.write().add_derived_column(
-            format!("{} * _eager_count", aggregate_function.display_name),
-            aggregate_function.args[0].data_type()?,
-        );
-
         let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
             let mut scalar_idx = input.extra_eval_scalar.items.len();
             for (idx, eval_scalar) in input.extra_eval_scalar.items.iter().enumerate() {
@@ -1192,35 +1187,41 @@ impl EagerAnalysis {
             unreachable!()
         };
 
+        let scalar = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "multiply".to_string(),
+            params: vec![],
+            arguments: vec![
+                new_scalar,
+                wrap_cast(
+                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: ColumnBindingBuilder::new(
+                            "_eager_count".to_string(),
+                            eager_count_index,
+                            Box::new(DataType::Nullable(Box::new(DataType::Number(
+                                NumberDataType::UInt64,
+                            )))),
+                            Visibility::Visible,
+                        )
+                        .build(),
+                    }),
+                    &DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+        });
+        let scalar_type = scalar.data_type()?;
+        let new_index = metadata.write().add_derived_column(
+            format!("{} * _eager_count", aggregate_function.display_name),
+            scalar_type.clone(),
+        );
         let new_scalar_item = ScalarItem {
-            scalar: ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "multiply".to_string(),
-                params: vec![],
-                arguments: vec![
-                    new_scalar,
-                    wrap_cast(
-                        &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                            span: None,
-                            column: ColumnBindingBuilder::new(
-                                "_eager_count".to_string(),
-                                eager_count_index,
-                                Box::new(DataType::Nullable(Box::new(DataType::Number(
-                                    NumberDataType::UInt64,
-                                )))),
-                                Visibility::Visible,
-                            )
-                            .build(),
-                        }),
-                        &DataType::Number(NumberDataType::UInt64),
-                    ),
-                ],
-            }),
+            scalar,
             index: new_index,
         };
         if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
             column.column.index = new_index;
-            column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
+            column.column.data_type = Box::new(scalar_type);
         }
         Ok(new_scalar_item)
     }
