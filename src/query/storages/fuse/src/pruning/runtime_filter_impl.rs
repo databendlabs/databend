@@ -23,10 +23,10 @@ use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
 use databend_common_catalog::sbbf::Sbbf;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Column;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -338,15 +338,11 @@ impl BloomRowFilter {
 }
 
 impl RowRuntimeFilter for BloomRowFilter {
-    fn apply(&self, block: &DataBlock) -> Result<Bitmap> {
-        let schema = block.infer_schema();
-        let column_index = schema.index_of(&self.column_name).map_err(|_| {
-            ErrorCode::Internal(format!(
-                "BloomRowFilter: column '{}' not found in block schema",
-                self.column_name
-            ))
-        })?;
-        let column = block.get_by_offset(column_index).to_column();
+    fn column_name(&self) -> &str {
+        &self.column_name
+    }
+
+    fn apply(&self, column: Column) -> Result<Bitmap> {
         let bitmap = ExprBloomFilter::new(&self.filter).apply(column)?;
         Ok(bitmap.into())
     }

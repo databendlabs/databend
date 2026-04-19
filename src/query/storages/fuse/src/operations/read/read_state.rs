@@ -29,6 +29,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
+use databend_common_expression::FieldIndex;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::types::Bitmap;
@@ -41,11 +42,16 @@ use crate::io::BlockReader;
 use crate::io::DataItem;
 use crate::io::RowSelection;
 
+struct ResolvedRowFilter {
+    column_index: FieldIndex,
+    filter: Arc<dyn RowRuntimeFilter>,
+}
+
 pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
-    pub row_runtime_filters: Vec<Arc<dyn RowRuntimeFilter>>,
+    resolved_row_filters: Vec<ResolvedRowFilter>,
     pub pre_column_ids: HashSet<ColumnId>,
     pub remain_column_ids: HashSet<ColumnId>,
     pub func_ctx: FunctionContext,
@@ -67,7 +73,7 @@ impl ReadState {
             prewhere_info.is_some() && prewhere_selectivity_threshold == 0;
         let original_schema = block_reader.original_schema.as_ref();
 
-        // Use old API for column name extraction (preread projection setup)
+        // Extract bloom filter column names for preread projection
         let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
         let runtime_filter_column_names: Vec<_> = runtime_filter_entries
             .iter()
@@ -101,11 +107,21 @@ impl ReadState {
         let pre_column_ids = prewhere_reader.schema().to_leaf_column_id_set();
         let remain_column_ids = remain_reader.schema().to_leaf_column_id_set();
 
-        // Use new trait-based API for row-level filtering
-        let row_runtime_filters = ctx.get_row_runtime_filters(scan_id);
+        let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
+
+        let row_filters = ctx.get_row_runtime_filters(scan_id);
+        let resolved_row_filters: Vec<ResolvedRowFilter> = row_filters
+            .into_iter()
+            .filter_map(|filter| {
+                let column_index = prewhere_schema.index_of(filter.column_name()).ok()?;
+                Some(ResolvedRowFilter {
+                    column_index,
+                    filter,
+                })
+            })
+            .collect();
 
         let prewhere_filter = if let Some(prewhere_info) = prewhere_info {
-            let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
             let filter = prewhere_info
                 .filter
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -119,7 +135,7 @@ impl ReadState {
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
-            row_runtime_filters,
+            resolved_row_filters,
             pre_column_ids,
             remain_column_ids,
             func_ctx: ctx.get_function_context()?,
@@ -147,15 +163,16 @@ impl ReadState {
         block: &DataBlock,
         _num_rows: usize,
     ) -> Result<Option<MutableBitmap>> {
-        if self.row_runtime_filters.is_empty() {
+        if self.resolved_row_filters.is_empty() {
             return Ok(None);
         }
 
         let bloom_start = Instant::now();
 
         let mut bitmaps: Vec<Bitmap> = vec![];
-        for rf in &self.row_runtime_filters {
-            bitmaps.push(rf.apply(block)?);
+        for rf in &self.resolved_row_filters {
+            let column = block.get_by_offset(rf.column_index).to_column();
+            bitmaps.push(rf.filter.apply(column)?);
         }
 
         let result_bitmap = bitmaps.into_iter().reduce(|acc, b| &acc & &b);

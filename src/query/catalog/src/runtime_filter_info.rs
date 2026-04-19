@@ -20,7 +20,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 use databend_common_exception::Result;
-use databend_common_expression::DataBlock;
+use databend_common_expression::Column;
 use databend_common_expression::Expr;
 use databend_common_expression::types::Bitmap;
 use opendal::Operator;
@@ -210,6 +210,6 @@ pub trait IndexRuntimeFilter: Send + Sync {
 /// Runtime filter applied per-row during block deserialization (e.g. Sbbf bloom filter).
 /// Applied in NativeDeserializeDataTransform / ReadState.
 pub trait RowRuntimeFilter: Send + Sync {
-    /// Apply the filter to a DataBlock, returning a bitmap (true = keep row).
-    fn apply(&self, block: &DataBlock) -> Result<Bitmap>;
+    fn column_name(&self) -> &str;
+    fn apply(&self, column: Column) -> Result<Bitmap>;
 }
