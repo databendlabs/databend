@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -33,7 +35,7 @@ impl Display for ShareNameIdent {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UserIdentity {
     pub username: String,
     pub hostname: String,
@@ -65,7 +67,7 @@ impl Display for PrincipalIdentity {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum CreateOption {
     Create,
     CreateIfNotExists,
@@ -108,7 +110,7 @@ impl Display for CatalogType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum UserPrivilegeType {
     // UsagePrivilege is a synonym for “no privileges”, if object is udf, means can use this udf
     Usage,

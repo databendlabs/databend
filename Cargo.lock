@@ -3380,6 +3380,7 @@ dependencies = [
 name = "databend-common-ast"
 version = "0.2.5"
 dependencies = [
+ "databend-common-ast-visit-derive",
  "databend_educe",
  "derive-visitor",
  "divan",
@@ -3408,6 +3409,15 @@ dependencies = [
  "unindent",
  "url",
  "zmij",
+]
+
+[[package]]
+name = "databend-common-ast-visit-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
 ]
 
 [[package]]
@@ -4484,6 +4494,7 @@ dependencies = [
  "databend-meta-client 260205.5.0",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "log",
  "opendal",
  "parking_lot 0.12.3",
  "parquet 56.2.0",

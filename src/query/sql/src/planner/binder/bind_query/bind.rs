@@ -29,14 +29,15 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::TableType;
 use databend_common_ast::ast::With;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::Walk;
+use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::convert_to_type_name;
-use derive_visitor::Drive;
-use derive_visitor::DriveMut;
-use derive_visitor::Visitor;
-use derive_visitor::VisitorMut;
 
 use crate::NameResolutionContext;
 use crate::normalize_identifier;
@@ -48,21 +49,24 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 use crate::plans::Sort;
 use crate::plans::SortItem;
-#[derive(Debug, Default, Visitor)]
-#[visitor(TableReference(enter))]
+#[derive(Debug, Default)]
 struct CTERefCounter {
     cte_ref_count: HashMap<String, usize>,
     name_resolution_ctx: NameResolutionContext,
 }
 
-impl CTERefCounter {
-    fn enter_table_reference(&mut self, table_ref: &TableReference) {
+impl Visitor for CTERefCounter {
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &TableReference,
+    ) -> std::result::Result<VisitControl, !> {
         if let TableReference::Table { table, .. } = table_ref {
             let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
             if let Some(count) = self.cte_ref_count.get_mut(&table_name) {
                 *count += 1;
             }
         }
+        Ok(VisitControl::Continue)
     }
 }
 
@@ -140,7 +144,7 @@ impl Binder {
             cte_ref_count,
             name_resolution_ctx: self.name_resolution_ctx.clone(),
         };
-        query.drive(&mut visitor);
+        query.walk(&mut visitor)?;
 
         Ok(visitor.cte_ref_count)
     }
@@ -258,7 +262,7 @@ impl Binder {
         } else {
             None
         };
-        as_query.drive_mut(&mut expr_replacer);
+        as_query.walk_mut(&mut expr_replacer)?;
 
         let source = if cte.alias.columns.is_empty() {
             None
@@ -326,12 +330,36 @@ impl Binder {
     }
 }
 
-#[derive(VisitorMut)]
-#[visitor(TableReference(enter), Expr(enter))]
 pub struct TableNameReplacer {
     database: String,
     new_name: HashMap<String, String>,
     name_resolution_ctx: NameResolutionContext,
+}
+
+impl VisitorMut for TableNameReplacer {
+    fn visit_table_reference(
+        &mut self,
+        table_reference: &mut TableReference,
+    ) -> std::result::Result<VisitControl, !> {
+        if let TableReference::Table { table, .. } = table_reference {
+            if table.database.is_none() || table.database.as_ref().unwrap().name == self.database {
+                self.replace_identifier(&mut table.table);
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+        if let Expr::ColumnRef { column, .. } = expr {
+            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
+            {
+                if let Some(table_identifier) = &mut column.table {
+                    self.replace_identifier(table_identifier);
+                }
+            }
+        }
+        Ok(VisitControl::Continue)
+    }
 }
 
 impl TableNameReplacer {
@@ -351,27 +379,6 @@ impl TableNameReplacer {
         let name = normalize_identifier(identifier, &self.name_resolution_ctx).name;
         if let Some(new_name) = self.new_name.get(&name) {
             identifier.name = new_name.clone();
-        }
-    }
-
-    #[recursive::recursive]
-    fn enter_table_reference(&mut self, table_reference: &mut TableReference) {
-        if let TableReference::Table { table, .. } = table_reference {
-            if table.database.is_none() || table.database.as_ref().unwrap().name == self.database {
-                self.replace_identifier(&mut table.table);
-            }
-        }
-    }
-
-    #[recursive::recursive]
-    fn enter_expr(&mut self, expr: &mut Expr) {
-        if let Expr::ColumnRef { column, .. } = expr {
-            if column.database.is_none() || column.database.as_ref().unwrap().name == self.database
-            {
-                if let Some(table_identifier) = &mut column.table {
-                    self.replace_identifier(table_identifier);
-                }
-            }
         }
     }
 }

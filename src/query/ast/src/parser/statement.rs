@@ -79,9 +79,19 @@ fn query_statement(i: Input) -> IResult<Statement> {
 }
 
 pub fn statement_body(i: Input) -> IResult<Statement> {
+    let explain_options = map(
+        rule! {
+            "(" ~ #comma_separated_list1(explain_option) ~ ")"
+        },
+        |(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts),
+    );
+    let explain_verbose_alias = map(rule! { VERBOSE }, |verbose| {
+        (Some(verbose.span), vec![ExplainOption::Verbose])
+    });
+
     let explain = map_res(
         rule! {
-            EXPLAIN ~ ( "(" ~ #comma_separated_list1(explain_option) ~ ")" )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
+            EXPLAIN ~ ( #explain_options | #explain_verbose_alias )? ~ ( AST | SYNTAX | PIPELINE | JOIN | GRAPH | FRAGMENTS | RAW | OPTIMIZED | MEMO | DECORRELATED | PERF)? ~ #statement
         },
         |(_, options, opt_kind, statement)| {
             Ok(Statement::Explain {
@@ -105,9 +115,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                     None => ExplainKind::Plan,
                     _ => unreachable!(),
                 },
-                options: options
-                    .map(|(a, opts, b)| (merge_span(Some(a.span), Some(b.span)), opts))
-                    .unwrap_or_default(),
+                options: options.unwrap_or_default(),
                 query: Box::new(statement.stmt),
             })
         },
@@ -2783,7 +2791,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         HintPrefix | LParen | FROM => query_statement(i),
         EXPLAIN => rule!(
             #explain_perf : "`EXPLAIN PERF [(events='<event>,...')] <statement>`"
-            | #explain : "`EXPLAIN [PIPELINE | GRAPH] <statement>`"
+            | #explain : "`EXPLAIN [VERBOSE | (<option>, ...)] [PIPELINE | GRAPH] <statement>`"
             | #explain_analyze : "`EXPLAIN ANALYZE <statement>`"
         ).parse(i),
         REPORT => rule!(#report: "`REPORT ISSUE <statement>`").parse(i),

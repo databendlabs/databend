@@ -30,10 +30,10 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v173_table_branch() -> anyhow::Result<()> {
-    let table_branch_v173: Vec<u8> = vec![
+fn test_decode_v174_table_branch() -> anyhow::Result<()> {
+    let table_branch_v174: Vec<u8> = vec![
         10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
-        84, 67, 16, 1, 160, 6, 173, 1, 168, 6, 24,
+        84, 67, 16, 1, 160, 6, 174, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableBranch {
@@ -42,5 +42,46 @@ fn test_decode_v173_table_branch() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), table_branch_v173.as_slice(), 173, want())
+    common::test_load_old(func_name!(), table_branch_v174.as_slice(), 174, want())
+}
+
+#[test]
+fn test_decode_v174_dropped_branch() -> anyhow::Result<()> {
+    let table_dropped_branch_v174: Vec<u8> = vec![
+        10, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 49, 58, 50, 54, 58, 48, 57, 32, 85,
+        84, 67, 18, 23, 50, 48, 50, 51, 45, 49, 50, 45, 49, 53, 32, 48, 54, 58, 53, 57, 58, 50, 57,
+        32, 85, 84, 67, 160, 6, 174, 1, 168, 6, 24,
+    ];
+
+    let want = || mt::DroppedBranchMeta {
+        drop_on: DateTime::<Utc>::from_timestamp(1702603569, 0).unwrap(),
+        expire_at: DateTime::<Utc>::from_timestamp(1702623569, 0),
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(
+        func_name!(),
+        table_dropped_branch_v174.as_slice(),
+        174,
+        want(),
+    )
+}
+
+#[test]
+fn test_decode_v174_table_id_branch_name() -> anyhow::Result<()> {
+    let table_id_branch_name_v174: Vec<u8> =
+        vec![8, 1, 18, 3, 100, 101, 118, 160, 6, 174, 1, 168, 6, 24];
+
+    let want = || mt::TableIdBranchName {
+        table_id: 1,
+        branch_name: "dev".to_string(),
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(
+        func_name!(),
+        table_id_branch_name_v174.as_slice(),
+        174,
+        want(),
+    )
 }
