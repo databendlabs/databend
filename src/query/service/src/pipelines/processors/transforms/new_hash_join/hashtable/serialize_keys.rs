@@ -226,7 +226,7 @@ impl<const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
                 break;
             }
 
-            if !MATCHED && res.unmatched.len() == max_rows {
+            if !MATCHED && res.unmatched.len() >= max_rows {
                 break;
             }
 
@@ -358,7 +358,7 @@ impl<'a, const MATCHED: bool, const MATCH_FIRST: bool> ProbeStream
                 break;
             }
 
-            if !MATCHED && res.unmatched.len() == max_rows {
+            if !MATCHED && res.unmatched.len() >= max_rows {
                 break;
             }
 

@@ -212,7 +212,7 @@ impl<Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRST: b
                 break;
             }
 
-            if !MATCHED && res.unmatched.len() == max_rows {
+            if !MATCHED && res.unmatched.len() >= max_rows {
                 break;
             }
 
@@ -337,7 +337,7 @@ impl<'a, Key: FixedKey + HashtableKeyable, const MATCHED: bool, const MATCH_FIRS
                 break;
             }
 
-            if !MATCHED && res.unmatched.len() == max_rows {
+            if !MATCHED && res.unmatched.len() >= max_rows {
                 break;
             }
 
