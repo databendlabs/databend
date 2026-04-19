@@ -136,7 +136,7 @@ impl FuseTable {
                 seq: branch.branch_meta.seq,
             },
             desc: format!("{}/'{}'", self.table_info.desc, branch.branch_name),
-            name: branch.branch_name,
+            name: format!("{}/{}", self.table_info.name, branch.branch_name),
             meta: branch.branch_meta.data,
             db_type: DatabaseType::NormalDB,
             // Internal synthetic branch tables must inherit the source table's catalog identity,

@@ -170,7 +170,7 @@ pub async fn do_vacuum2(
     // Step 2: classify branch history and select gc roots.
     // Phase A (serial): construct branch tables and classify beyond-retention.
     // Phase B (parallel): select gc roots for retainable candidates.
-    let mut beyond_retention_branches: Vec<Box<FuseTable>> = Vec::new();
+    let mut beyond_retention_branches: Vec<(Box<FuseTable>, String)> = Vec::new();
     let mut gc_root_candidates: Vec<Box<FuseTable>> = Vec::new();
     for branch in history_branches {
         if ctx.check_aborting().is_err() {
@@ -180,6 +180,7 @@ pub async fn do_vacuum2(
         let branch_id = branch.branch_id.table_id;
         let expire_at = branch.expire_at;
         let drop_on = branch.branch_meta.data.drop_on;
+        let branch_name = branch.branch_name.clone();
         let branch_table = fuse_table.branch_table_from_meta(branch, &s3_storage_class)?;
 
         let storage_prefix = format!("{}/", branch_table.meta_location_generator().prefix());
@@ -189,7 +190,7 @@ pub async fn do_vacuum2(
         let effective_drop_time =
             drop_on.or_else(|| expire_at.filter(|expire_at| *expire_at <= now));
         if effective_drop_time.is_some_and(|drop_time| drop_time < retention_time) {
-            beyond_retention_branches.push(branch_table);
+            beyond_retention_branches.push((branch_table, branch_name));
             continue;
         }
 
@@ -320,7 +321,7 @@ pub async fn do_vacuum2(
         .map(|s| s.table_id)
         .into_iter()
         .chain(cleanup_branches.iter().map(|branch| branch.state.table_id))
-        .chain(beyond_retention_branches.iter().map(|b| b.get_id()))
+        .chain(beyond_retention_branches.iter().map(|(b, _)| b.get_id()))
         .collect();
     if tables_at_risk.is_empty() {
         info!(
@@ -421,40 +422,42 @@ pub async fn do_vacuum2(
     // whether the branch can be final-GC'd or must stay gc-pending because it still owns
     // protected snapshot/segment/block data.
     let beyond_retention_results =
-        futures::stream::iter(beyond_retention_branches.into_iter().map(|branch_table| {
-            let ctx = ctx.clone();
-            let external_head_snapshots = &external_head_snapshots;
-            let protected_segments_by_table = &protected_segments_by_table;
-            let protected_blocks_by_table = &protected_blocks_by_table;
-            async move {
-                let bid = branch_table.get_id();
-                let mut snapshots_to_gc = branch_table
-                    .list_files_for_gc(
-                        branch_table
-                            .meta_location_generator()
-                            .snapshot_location_prefix(),
-                        None,
-                    )
-                    .await?;
-                let snapshot_count = snapshots_to_gc.len();
-                snapshots_to_gc.retain(|path| !external_head_snapshots.contains(path));
-                let has_protected_snapshot = snapshots_to_gc.len() != snapshot_count;
-                if !snapshots_to_gc.is_empty() {
-                    branch_table
-                        .cleanup_snapshot_files(&ctx, &snapshots_to_gc, false)
+        futures::stream::iter(beyond_retention_branches.into_iter().map(
+            |(branch_table, branch_name)| {
+                let ctx = ctx.clone();
+                let external_head_snapshots = &external_head_snapshots;
+                let protected_segments_by_table = &protected_segments_by_table;
+                let protected_blocks_by_table = &protected_blocks_by_table;
+                async move {
+                    let bid = branch_table.get_id();
+                    let mut snapshots_to_gc = branch_table
+                        .list_files_for_gc(
+                            branch_table
+                                .meta_location_generator()
+                                .snapshot_location_prefix(),
+                            None,
+                        )
                         .await?;
-                }
+                    let snapshot_count = snapshots_to_gc.len();
+                    snapshots_to_gc.retain(|path| !external_head_snapshots.contains(path));
+                    let has_protected_snapshot = snapshots_to_gc.len() != snapshot_count;
+                    if !snapshots_to_gc.is_empty() {
+                        branch_table
+                            .cleanup_snapshot_files(&ctx, &snapshots_to_gc, false)
+                            .await?;
+                    }
 
-                let has_protected = has_protected_snapshot
-                    || protected_segments_by_table
-                        .get(&bid)
-                        .is_some_and(|s| !s.is_empty())
-                    || protected_blocks_by_table
-                        .get(&bid)
-                        .is_some_and(|b| !b.is_empty());
-                Ok::<_, ErrorCode>((branch_table, has_protected, snapshots_to_gc))
-            }
-        }))
+                    let has_protected = has_protected_snapshot
+                        || protected_segments_by_table
+                            .get(&bid)
+                            .is_some_and(|s| !s.is_empty())
+                        || protected_blocks_by_table
+                            .get(&bid)
+                            .is_some_and(|b| !b.is_empty());
+                    Ok::<_, ErrorCode>((branch_table, branch_name, has_protected, snapshots_to_gc))
+                }
+            },
+        ))
         .buffer_unordered(concurrency)
         .collect::<Vec<_>>()
         .await;
@@ -462,20 +465,19 @@ pub async fn do_vacuum2(
     let mut gc_pending_branches = Vec::new();
     let mut final_gc_branches = Vec::new();
     for result in beyond_retention_results {
-        let (branch_table, has_protected, snapshots_to_gc) = result?;
+        let (branch_table, branch_name, has_protected, snapshots_to_gc) = result?;
         files_to_gc.extend(snapshots_to_gc);
         if has_protected {
             gc_pending_branches.push(branch_table);
         } else {
-            final_gc_branches.push(branch_table);
+            final_gc_branches.push((branch_table, branch_name));
         }
     }
-    let final_gc_results =
-        futures::stream::iter(final_gc_branches.into_iter().map(|branch_table| {
+    let final_gc_results = futures::stream::iter(final_gc_branches.into_iter().map(
+        |(branch_table, branch_name)| {
             let ctx = ctx.clone();
             let meta_api = meta_api.clone();
             async move {
-                let branch_name = branch_table.get_table_info().name.clone();
                 final_gc_branch(
                     &ctx,
                     &meta_api,
@@ -485,10 +487,11 @@ pub async fn do_vacuum2(
                 )
                 .await
             }
-        }))
-        .buffer_unordered(concurrency)
-        .collect::<Vec<_>>()
-        .await;
+        },
+    ))
+    .buffer_unordered(concurrency)
+    .collect::<Vec<_>>()
+    .await;
     for result in final_gc_results {
         files_to_gc.extend(result?);
     }

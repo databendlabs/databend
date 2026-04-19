@@ -680,7 +680,7 @@ impl Catalog for MutableCatalog {
         };
         let info = self.ctx.meta.get_table_branch(req).await?;
         let mut info = info;
-        info.name = table_name.to_string();
+        info.name = format!("{table_name}/{branch_name}");
         info.desc = format!("'{}'.'{}'/'{}'", db_name, table_name, branch_name);
         self.get_table_by_info(&info)
     }
