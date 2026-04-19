@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -54,8 +55,377 @@ use crate::optimizer::ir::SExpr;
 use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
+use crate::planner::binder::ExprContext;
+use crate::planner::binder::aggregate_prepass::AggregatePrepassAliasCatalog;
+use crate::planner::binder::aggregate_prepass::AggregatePrepassExprInfo;
+use crate::planner::binder::aggregate_prepass::AggregatePrepassFacts;
+use crate::planner::binder::project::SelectInfo;
+use crate::planner::binder::select::SelectList;
+use crate::planner::binder::sort::OrderByRewriteFlags;
+use crate::planner::binder::sort::OrderItems;
+use crate::plans::ScalarExpr;
+
+#[derive(Clone)]
+struct SelectClauseFact {
+    ast: Expr,
+    contains_aggregate: bool,
+    contains_window: bool,
+    referenced_aliases: Vec<String>,
+    references_aggregate_aliases: bool,
+    references_window_aliases: bool,
+}
+
+#[derive(Clone, Default)]
+struct SelectClauseFacts {
+    having: Option<SelectClauseFact>,
+    qualify: Option<SelectClauseFact>,
+    order_by: Vec<SelectClauseFact>,
+    aggregate_prepass_inputs: Vec<(Expr, ExprContext)>,
+}
+
+struct SelectGlobalView {
+    semantic_aliases: Vec<(String, ScalarExpr)>,
+    qualify: Option<SelectClauseFact>,
+    order_by: Vec<SelectClauseFact>,
+    aggregate_prepass_facts: AggregatePrepassFacts,
+}
+
+struct SelectPreparation<'a> {
+    s_expr: SExpr,
+    from_context: BindContext,
+    select_list: SelectList<'a>,
+    global_view: SelectGlobalView,
+    rewritten_aliases: Vec<(String, ScalarExpr)>,
+}
+
+struct AnalyzedSelect {
+    s_expr: SExpr,
+    from_context: BindContext,
+    select_info: SelectInfo,
+    having: Option<ScalarExpr>,
+    qualify: Option<ScalarExpr>,
+    order_items: OrderItems,
+}
 
 impl Binder {
+    fn bind_select_source(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &SelectStmt,
+    ) -> Result<(SExpr, BindContext)> {
+        if stmt.from.is_empty() {
+            return self.bind_dummy_table(bind_context, &stmt.select_list);
+        }
+
+        let mut max_column_position = MaxColumnPosition::default();
+        stmt.walk(&mut max_column_position)?;
+        self.metadata
+            .write()
+            .set_max_column_position(max_column_position.max_pos);
+
+        let cross_joins = stmt
+            .from
+            .iter()
+            .cloned()
+            .reduce(|left, right| TableReference::Join {
+                span: None,
+                join: Join {
+                    op: JoinOperator::CrossJoin,
+                    condition: JoinCondition::None,
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+            })
+            .unwrap();
+        self.bind_table_reference(bind_context, &cross_joins)
+    }
+
+    fn prepare_select_binding<'a>(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &'a SelectStmt,
+        order_by: &[OrderByExpr],
+    ) -> Result<SelectPreparation<'a>> {
+        let (s_expr, mut from_context) = self.bind_select_source(bind_context, stmt)?;
+
+        // Try put window definitions into bind context.
+        // This operation should be before `normalize_select_list` because window functions can be used in select list.
+        self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
+
+        // Generate a analyzed select list with from context
+        let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
+
+        // analyze set returning functions
+        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
+
+        // Preserve the original select-item semantics for clause alias resolution
+        // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
+        // pre-window expressions behind aliases, but SRF aliases must already point
+        // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
+        let semantic_aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
+        // This will potentially add some alias group items to `from_context` if find some.
+        if let Some(group_by) = stmt.group_by.as_ref() {
+            self.analyze_group_items(&mut from_context, &select_list, group_by)?;
+        }
+
+        self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
+        let udaf_names = self.find_and_load_udaf(
+            &from_context,
+            &select_list,
+            stmt.having.as_ref(),
+            stmt.qualify.as_ref(),
+            order_by,
+        )?;
+        let prepass_aliases = self.collect_aggregate_prepass_aliases(&udaf_names, &select_list);
+        let clause_facts = self.build_select_clause_facts(
+            &udaf_names,
+            &prepass_aliases,
+            stmt.having.as_ref(),
+            stmt.qualify.as_ref(),
+            order_by,
+        );
+
+        let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
+            &udaf_names,
+            &prepass_aliases,
+            clause_facts
+                .aggregate_prepass_inputs
+                .iter()
+                .map(|(expr, expr_context)| (expr, *expr_context)),
+        );
+        let global_view = SelectGlobalView {
+            semantic_aliases,
+            qualify: clause_facts.qualify,
+            order_by: clause_facts.order_by,
+            aggregate_prepass_facts,
+        };
+
+        self.bind_aggregate_prepass_facts(
+            &mut from_context,
+            &global_view.semantic_aliases,
+            &global_view.aggregate_prepass_facts,
+        )?;
+
+        // `analyze_window` should behind `analyze_aggregate_select`,
+        // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
+        self.analyze_window(&mut from_context, &mut select_list)?;
+
+        debug_assert!(
+            select_list
+                .items
+                .iter()
+                .all(|item| !item.scalar.is_aggregate()),
+            "SELECT projection expects aggregate/UDAF calls to be rewritten before projection analysis",
+        );
+
+        let rewritten_aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
+        Ok(SelectPreparation {
+            s_expr,
+            from_context,
+            select_list,
+            global_view,
+            rewritten_aliases,
+        })
+    }
+
+    fn analyze_select_clauses(
+        &mut self,
+        stmt: &SelectStmt,
+        order_by: &[OrderByExpr],
+        limit: Option<usize>,
+        preparation: SelectPreparation<'_>,
+    ) -> Result<AnalyzedSelect> {
+        let SelectPreparation {
+            mut s_expr,
+            mut from_context,
+            select_list,
+            global_view,
+            rewritten_aliases,
+        } = preparation;
+
+        // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
+        // set as lazy Set-returning functions.
+        if !from_context.srf_info.srfs.is_empty() {
+            self.rewrite_project_set_select(&mut from_context)?;
+        }
+
+        // Bind Set-returning functions before filter plan and aggregate plan.
+        if !from_context.srf_info.srfs.is_empty() {
+            s_expr = self.bind_project_set(&mut from_context, s_expr, false)?;
+        }
+
+        // Bind WHERE after select-list analysis so aliases are available, but
+        // resolve them against the original pre-rewrite select-item semantics.
+        let where_scalar = if let Some(expr) = &stmt.selection {
+            let (new_expr, scalar) = self.bind_where(
+                &mut from_context,
+                &global_view.semantic_aliases,
+                expr,
+                s_expr,
+            )?;
+            s_expr = new_expr;
+            Some(scalar)
+        } else {
+            None
+        };
+
+        // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
+        let mut select_info = self.analyze_projection(&from_context, &select_list)?;
+
+        let having = if let Some(having) = &stmt.having {
+            Some(self.analyze_aggregate_having(&mut from_context, &rewritten_aliases, having)?)
+        } else {
+            None
+        };
+
+        let qualify = if let Some(qualify) = global_view.qualify.as_ref() {
+            Some(self.analyze_window_qualify(
+                &mut from_context,
+                &global_view.semantic_aliases,
+                &qualify.ast,
+                qualify.contains_window || qualify.references_window_aliases,
+            )?)
+        } else {
+            None
+        };
+
+        let order_by_rewrite_flags = global_view
+            .order_by
+            .iter()
+            .map(|fact| {
+                OrderByRewriteFlags::new(
+                    !fact.referenced_aliases.is_empty(),
+                    fact.contains_aggregate || fact.references_aggregate_aliases,
+                    fact.contains_window || fact.references_window_aliases,
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let order_items = self.analyze_order_items(
+            &mut from_context,
+            &mut select_info,
+            // Keep ORDER BY alias resolution on the same read-only semantic alias
+            // snapshot used by the clause prepass. This avoids binding against
+            // already-rewritten select-item scalars when a later clause only
+            // needs the original alias semantics.
+            &global_view.semantic_aliases,
+            &order_by_rewrite_flags,
+            order_by,
+            stmt.distinct,
+        )?;
+        self.refresh_select_output(&from_context, &mut select_info)?;
+
+        // After all analysis is done.
+        if from_context.srf_info.srfs.is_empty() {
+            // Ignore SRFs.
+            self.analyze_lazy_materialization(
+                &from_context,
+                stmt,
+                &select_info,
+                &select_list,
+                &where_scalar,
+                &order_items.items,
+                limit.unwrap_or_default(),
+            )?;
+        }
+
+        Ok(AnalyzedSelect {
+            s_expr,
+            from_context,
+            select_info,
+            having,
+            qualify,
+            order_items,
+        })
+    }
+
+    fn build_select_clause_facts(
+        &self,
+        udaf_names: &HashSet<String>,
+        aliases: &AggregatePrepassAliasCatalog,
+        having: Option<&Expr>,
+        qualify: Option<&Expr>,
+        order_by: &[OrderByExpr],
+    ) -> SelectClauseFacts {
+        let alias_names = aliases.alias_names();
+        std::iter::chain(
+            having
+                .into_iter()
+                .map(|expr| (expr, ExprContext::HavingClause)),
+            qualify
+                .into_iter()
+                .map(|expr| (expr, ExprContext::QualifyClause)),
+        )
+        .chain(
+            order_by
+                .iter()
+                .map(|order| (&order.expr, ExprContext::OrderByClause)),
+        )
+        .fold(
+            SelectClauseFacts::default(),
+            |mut facts, (expr, expr_context)| {
+                let AggregatePrepassExprInfo {
+                    ast,
+                    contains_aggregate,
+                    contains_window,
+                    referenced_aliases,
+                    ..
+                } = AggregatePrepassExprInfo::analyze(
+                    &self.name_resolution_ctx,
+                    udaf_names,
+                    &alias_names,
+                    expr,
+                );
+
+                let references_aggregate_aliases = aliases
+                    .references_aliases_matching(&referenced_aliases, &|alias| {
+                        alias.contains_aggregate
+                    });
+                let references_window_aliases = aliases
+                    .references_aliases_matching(&referenced_aliases, &|alias| {
+                        alias.contains_window
+                    });
+
+                let fact = SelectClauseFact {
+                    ast,
+                    contains_aggregate,
+                    contains_window,
+                    references_aggregate_aliases,
+                    references_window_aliases,
+                    referenced_aliases,
+                };
+
+                if expr_context == ExprContext::QualifyClause {
+                    facts.qualify = Some(fact);
+                    return facts;
+                }
+
+                if contains_aggregate || references_aggregate_aliases {
+                    facts
+                        .aggregate_prepass_inputs
+                        .push((fact.ast.clone(), expr_context));
+                }
+
+                match expr_context {
+                    ExprContext::HavingClause => facts.having = Some(fact),
+                    ExprContext::OrderByClause => facts.order_by.push(fact),
+                    _ => unreachable!("aggregate prepass only inspects HAVING/QUALIFY/ORDER BY"),
+                }
+                facts
+            },
+        )
+    }
+
     #[async_backtrace::framed]
     pub(crate) fn bind_select(
         &mut self,
@@ -89,133 +459,15 @@ impl Binder {
         let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
 
-        let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
-            let select_list = &stmt.select_list;
-            self.bind_dummy_table(bind_context, select_list)?
-        } else {
-            let mut max_column_position = MaxColumnPosition::new();
-            let _ = stmt.walk(&mut max_column_position);
-            self.metadata
-                .write()
-                .set_max_column_position(max_column_position.max_pos);
-
-            let cross_joins = stmt
-                .from
-                .iter()
-                .cloned()
-                .reduce(|left, right| TableReference::Join {
-                    span: None,
-                    join: Join {
-                        op: JoinOperator::CrossJoin,
-                        condition: JoinCondition::None,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    },
-                })
-                .unwrap();
-            self.bind_table_reference(bind_context, &cross_joins)?
-        };
-
-        // Try put window definitions into bind context.
-        // This operation should be before `normalize_select_list` because window functions can be used in select list.
-        self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
-
-        // Generate a analyzed select list with from context
-        let mut select_list = self.normalize_select_list(&mut from_context, &stmt.select_list)?;
-
-        // analyze set returning functions
-        self.analyze_project_set_select(&mut from_context, &mut select_list)?;
-
-        // Preserve the original select-item semantics for clause alias resolution
-        // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
-        // pre-window expressions behind aliases, but SRF aliases must already point
-        // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
-        let semantic_aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
-
-        // This will potentially add some alias group items to `from_context` if find some.
-        if let Some(group_by) = stmt.group_by.as_ref() {
-            self.analyze_group_items(&mut from_context, &select_list, group_by)?;
-        }
-
-        self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
-
-        // `analyze_window` should behind `analyze_aggregate_select`,
-        // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
-        self.analyze_window(&mut from_context, &mut select_list)?;
-
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
-
-        // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
-        // set as lazy Set-returning functions.
-        if !from_context.srf_info.srfs.is_empty() {
-            self.rewrite_project_set_select(&mut from_context)?;
-        }
-
-        // Bind Set-returning functions before filter plan and aggregate plan.
-        if !from_context.srf_info.srfs.is_empty() {
-            s_expr = self.bind_project_set(&mut from_context, s_expr, false)?;
-        }
-
-        // Bind WHERE after select-list analysis so aliases are available, but
-        // resolve them against the original pre-rewrite select-item semantics.
-        let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) =
-                self.bind_where(&mut from_context, &semantic_aliases, expr, s_expr)?;
-            s_expr = new_expr;
-            Some(scalar)
-        } else {
-            None
-        };
-
-        // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
-        let (mut scalar_items, projections) = self.analyze_projection(
-            &from_context.aggregate_info,
-            &from_context.windows,
-            &select_list,
-        )?;
-
-        let having = if let Some(having) = &stmt.having {
-            Some(self.analyze_aggregate_having(&mut from_context, &aliases, having)?)
-        } else {
-            None
-        };
-
-        let qualify = if let Some(qualify) = &stmt.qualify {
-            Some(self.analyze_window_qualify(&mut from_context, &semantic_aliases, qualify)?)
-        } else {
-            None
-        };
-
-        let order_items = self.analyze_order_items(
-            &mut from_context,
-            &mut scalar_items,
-            &aliases,
-            &projections,
-            order_by,
-            stmt.distinct,
-        )?;
-
-        // After all analysis is done.
-        if from_context.srf_info.srfs.is_empty() {
-            // Ignore SRFs.
-            self.analyze_lazy_materialization(
-                &from_context,
-                stmt,
-                &scalar_items,
-                &select_list,
-                &where_scalar,
-                &order_items.items,
-                limit.unwrap_or_default(),
-            )?;
-        }
+        let preparation = self.prepare_select_binding(bind_context, stmt, order_by)?;
+        let AnalyzedSelect {
+            mut s_expr,
+            mut from_context,
+            mut select_info,
+            having,
+            qualify,
+            order_items,
+        } = self.analyze_select_clauses(stmt, order_by, limit, preparation)?;
 
         if from_context.aggregate_info.has_aggregate_calls()
             || from_context.aggregate_info.has_group_items()
@@ -243,19 +495,13 @@ impl Binder {
         }
 
         if stmt.distinct {
-            s_expr = self.bind_distinct(
-                stmt.span,
-                &mut from_context,
-                &projections,
-                &mut scalar_items,
-                s_expr,
-            )?;
+            s_expr = self.bind_distinct(stmt.span, &mut select_info, s_expr)?;
         }
 
-        s_expr = self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
+        s_expr = self.bind_projection(&mut from_context, select_info, s_expr)?;
 
         if !order_items.items.is_empty() {
-            s_expr = self.bind_order_by(&from_context, order_items, &select_list, s_expr)?;
+            s_expr = self.bind_order_by(order_items, s_expr)?;
         }
 
         if from_context.have_async_func {
@@ -286,10 +532,8 @@ impl Binder {
 /// It is useful when implementing some SQL syntax sugar,
 ///
 /// to rewrite the SelectStmt, just add a new rewrite_* function and call it in the `rewrite` function.
-#[allow(dead_code)]
 struct SelectRewriter {
     new_stmt: Option<SelectStmt>,
-    is_unquoted_ident_case_sensitive: bool,
     subquery_executor: Option<Arc<dyn QueryExecutor>>,
 }
 
@@ -380,10 +624,9 @@ impl SelectRewriter {
 }
 
 impl SelectRewriter {
-    fn new(is_unquoted_ident_case_sensitive: bool) -> Self {
+    fn new(_is_unquoted_ident_case_sensitive: bool) -> Self {
         SelectRewriter {
             new_stmt: None,
-            is_unquoted_ident_case_sensitive,
             subquery_executor: None,
         }
     }
@@ -838,30 +1081,24 @@ impl SelectRewriter {
     }
 }
 
+#[derive(Default)]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
-}
-
-impl MaxColumnPosition {
-    pub fn new() -> Self {
-        Self { max_pos: 0 }
-    }
 }
 
 impl Visitor for MaxColumnPosition {
     fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
         if let Expr::ColumnRef {
             column:
-                databend_common_ast::ast::ColumnRef {
+                ColumnRef {
                     column: ColumnID::Position(pos),
                     ..
                 },
             ..
         } = expr
+            && pos.pos > self.max_pos
         {
-            if pos.pos > self.max_pos {
-                self.max_pos = pos.pos;
-            }
+            self.max_pos = pos.pos;
         }
         Ok(VisitControl::Continue)
     }

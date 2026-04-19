@@ -25,14 +25,14 @@ use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TableReference;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::VisitorMut;
+use derive_visitor::VisitorMut;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, VisitorMut)]
+#[visitor(SelectStmt(enter))]
 pub struct DistinctToGroupBy {}
 
-impl VisitorMut for DistinctToGroupBy {
-    fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) -> std::result::Result<VisitControl, !> {
+impl DistinctToGroupBy {
+    fn enter_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
             from,
@@ -62,7 +62,7 @@ impl VisitorMut for DistinctToGroupBy {
             } = &select_list[0]
             {
                 if window.is_some() {
-                    return Ok(VisitControl::Continue);
+                    return;
                 }
                 let sub_query_name = "_distinct_group_by_subquery";
                 if ((name.name.eq_ignore_ascii_case("count") && *distinct)
@@ -175,7 +175,5 @@ impl VisitorMut for DistinctToGroupBy {
                 }
             }
         }
-
-        Ok(VisitControl::SkipChildren)
     }
 }

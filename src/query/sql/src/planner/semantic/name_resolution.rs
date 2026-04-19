@@ -20,14 +20,12 @@ use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::quote::ident_needs_quote;
 use databend_common_ast::ast::quote::ident_opt_quote;
 use databend_common_ast::parser::Dialect;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::VisitorMut;
-use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_settings::Settings;
+use derive_visitor::VisitorMut;
 
 #[derive(Debug, Clone)]
 pub struct NameResolutionContext {
@@ -120,45 +118,11 @@ pub fn compare_table_name(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter), MapAccessor)]
 pub struct IdentifierNormalizer<'a> {
     ctx: &'a NameResolutionContext,
     in_map_accessor: bool,
-}
-
-impl<'a> VisitorMut for IdentifierNormalizer<'a> {
-    fn visit_identifier(&mut self, ident: &mut Identifier) -> std::result::Result<VisitControl, !> {
-        // Skip normalization if inside a MapAccessor,
-        // because MapAccessor is used to extract internal fields of nested types,
-        // altering the case may prevent the desired data from being retrieved.
-        if !self.in_map_accessor {
-            let normalized_ident = normalize_identifier(ident, self.ctx);
-            *ident = normalized_ident;
-        }
-        Ok(VisitControl::Continue)
-    }
-
-    fn visit_map_accessor(
-        &mut self,
-        accessor: &mut MapAccessor,
-    ) -> std::result::Result<VisitControl, !> {
-        let prev = self.in_map_accessor;
-        self.in_map_accessor = true;
-
-        let result = match accessor {
-            MapAccessor::Bracket { key } => key.walk_mut(self),
-            MapAccessor::Colon { key } => key.walk_mut(self),
-            MapAccessor::DotNumber { .. } => Ok(VisitControl::Continue),
-        };
-
-        self.in_map_accessor = prev;
-        match result {
-            Ok(VisitControl::Break(v)) => Ok(VisitControl::Break(v)),
-            Ok(VisitControl::Continue) | Ok(VisitControl::SkipChildren) => {
-                Ok(VisitControl::SkipChildren)
-            }
-        }
-    }
 }
 
 impl<'a> IdentifierNormalizer<'a> {
@@ -168,17 +132,53 @@ impl<'a> IdentifierNormalizer<'a> {
             in_map_accessor: false,
         }
     }
+
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
+        // Skip normalization if inside a MapAccessor,
+        // because MapAccessor is used to extract internal fields of nested types,
+        // altering the case may prevent the desired data from being retrieved.
+        if !self.in_map_accessor {
+            let normalized_ident = normalize_identifier(ident, self.ctx);
+            *ident = normalized_ident;
+        }
+    }
+
+    fn enter_map_accessor(&mut self, _accessor: &mut MapAccessor) {
+        // Set flag to true before processing the identifier inside the accessor
+        self.in_map_accessor = true;
+    }
+
+    fn exit_map_accessor(&mut self, _accessor: &mut MapAccessor) {
+        // Reset the flag after processing
+        self.in_map_accessor = false;
+    }
 }
 
-#[derive(Clone)]
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
 pub struct VariableNormalizer<'a> {
     pub ctx: &'a NameResolutionContext,
     pub table_ctx: Arc<dyn TableContext>,
     error: Option<ErrorCode>,
 }
 
-impl<'a> VisitorMut for VariableNormalizer<'a> {
-    fn visit_identifier(&mut self, ident: &mut Identifier) -> std::result::Result<VisitControl, !> {
+impl<'a> VariableNormalizer<'a> {
+    pub fn new(ctx: &'a NameResolutionContext, table_ctx: Arc<dyn TableContext>) -> Self {
+        Self {
+            ctx,
+            table_ctx,
+            error: None,
+        }
+    }
+
+    pub fn render_error(&self) -> Result<()> {
+        match &self.error {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
+        }
+    }
+
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
         if ident.is_variable() {
             let mut normalized_ident = normalize_identifier(ident, self.ctx);
 
@@ -199,28 +199,11 @@ impl<'a> VisitorMut for VariableNormalizer<'a> {
                 ident.name, ident.name,
             )));
         }
-        Ok(VisitControl::Continue)
     }
 }
 
-impl<'a> VariableNormalizer<'a> {
-    pub fn new(ctx: &'a NameResolutionContext, table_ctx: Arc<dyn TableContext>) -> Self {
-        Self {
-            ctx,
-            table_ctx,
-            error: None,
-        }
-    }
-
-    pub fn render_error(&self) -> Result<()> {
-        match &self.error {
-            Some(e) => Err(e.clone()),
-            None => Ok(()),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
+#[derive(VisitorMut)]
+#[visitor(Identifier(enter))]
 pub struct ClusterKeyNormalizer {
     pub force_quoted_ident: bool,
     pub unquoted_ident_case_sensitive: bool,
@@ -228,8 +211,8 @@ pub struct ClusterKeyNormalizer {
     pub sql_dialect: Dialect,
 }
 
-impl VisitorMut for ClusterKeyNormalizer {
-    fn visit_identifier(&mut self, ident: &mut Identifier) -> std::result::Result<VisitControl, !> {
+impl ClusterKeyNormalizer {
+    fn enter_identifier(&mut self, ident: &mut Identifier) {
         let case_sensitive = (ident.is_quoted() && self.quoted_ident_case_sensitive)
             || (!ident.is_quoted() && self.unquoted_ident_case_sensitive);
         if !case_sensitive {
@@ -241,8 +224,5 @@ impl VisitorMut for ClusterKeyNormalizer {
             self.quoted_ident_case_sensitive,
             self.sql_dialect,
         );
-        Ok(VisitControl::Continue)
     }
 }
-
-impl ClusterKeyNormalizer {}
