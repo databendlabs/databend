@@ -717,7 +717,7 @@ impl EagerAnalysis {
         });
 
         for agg in final_eager_split.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
                 if aggregate_function.func_name != "sum" {
                     continue;
                 }
@@ -808,7 +808,7 @@ impl EagerAnalysis {
 
         let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
         for agg in final_eager_groupby_count.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
                 if aggregate_function.func_name != "sum"
                     || rewrites.source_side(agg.index) == Some(d)
                 {
@@ -908,13 +908,13 @@ impl EagerAnalysis {
         }
 
         let mut final_eager_count = self.final_agg.clone();
+        let mut eager_count_eval_scalar = input.eval_scalar.clone();
         let mut eager_count = self.pruned_aggregate_for_side(d.opposite());
         let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
 
         let mut eager_count_sum = EvalScalar { items: vec![] };
-        let mut eager_count_eval_scalar = input.eval_scalar.clone();
         for agg in final_eager_count.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
                 && aggregate_function.func_name == "sum"
             {
                 eager_count_sum
@@ -992,7 +992,7 @@ impl EagerAnalysis {
         let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
         let mut double_eager_count_sum = EvalScalar { items: vec![] };
         for agg in final_double_eager.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
                 && aggregate_function.func_name == "sum"
             {
                 double_eager_count_sum
