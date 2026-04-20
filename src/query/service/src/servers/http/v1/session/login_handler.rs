@@ -25,6 +25,7 @@ use poem::web::Query;
 use crate::auth::Credential;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::servers::http::v1::query::execute_state::SERVER_MAX_ARROW_RESULT_VERSION;
 use crate::servers::http::v1::session::client_session_manager::ClientSessionManager;
 
 #[derive(Deserialize, Clone)]
@@ -45,6 +46,7 @@ pub(crate) struct TokensInfo {
 pub struct LoginResponse {
     version: String,
     session_id: String,
+    server_max_arrow_result_version: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     tokens: Option<TokensInfo>,
 }
@@ -104,6 +106,7 @@ pub async fn login_handler(
         Ok(Json(LoginResponse {
             version: version.to_string(),
             session_id: session_id.clone(),
+            server_max_arrow_result_version: SERVER_MAX_ARROW_RESULT_VERSION,
             tokens: None,
         }))
     };
@@ -119,6 +122,7 @@ pub async fn login_handler(
             Ok(Json(LoginResponse {
                 version: version.to_string(),
                 session_id,
+                server_max_arrow_result_version: SERVER_MAX_ARROW_RESULT_VERSION,
                 tokens: Some(TokensInfo {
                     session_token_ttl_in_secs: ClientSessionManager::instance()
                         .max_idle_time

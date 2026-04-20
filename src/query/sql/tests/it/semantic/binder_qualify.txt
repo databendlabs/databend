@@ -1,0 +1,113 @@
+=== qualify_cte_then_outer_aggregate_from_sqllogictest_binds ===
+description: A sqllogictest pattern that filters with QUALIFY inside a CTE before an outer aggregate should still bind.
+sql: WITH test AS (SELECT number % 10 AS id, number AS full_matched FROM t QUALIFY row_number() OVER (PARTITION BY id ORDER BY number DESC) = 1) SELECT full_matched, count() FROM test GROUP BY full_matched HAVING full_matched = 3
+status: ok
+EvalScalar
+├── scalars: [t.number (#0) AS (#0), count() (#4) AS (#4)]
+└── Filter
+    ├── filters: [eq(t.number (#0), 3)]
+    └── Aggregate(Initial)
+        ├── group items: [t.number (#0) AS (#0)]
+        ├── aggregate functions: [count() AS (#4)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0), modulo(t.number (#0), 10) AS (#1)]
+                └── Filter
+                    ├── filters: [eq(row_number() OVER (PARTITION BY id ORDER BY number DESC) (#3), 1)]
+                    └── Window
+                        ├── aggregate function: row_number
+                        ├── partition items: [modulo(t.number (#0), 10) AS (#2)]
+                        ├── order by items: [t.number (#0) AS (#0) DESC]
+                        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                        └── Sort
+                            ├── sort keys: [row_number_part_0 (#2) ASC NULLS LAST, t.number (#0) DESC NULLS LAST]
+                            ├── limit: [NONE]
+                            ├── window top: NONE
+                            ├── window function: RowNumber
+                            └── EvalScalar
+                                ├── scalars: [t.number (#0) AS (#0), modulo(t.number (#0), 10) AS (#2)]
+                                └── Scan
+                                    ├── table: default.t (#0)
+                                    ├── filters: []
+                                    ├── order by: []
+                                    └── limit: NONE
+
+
+=== qualify_named_window_with_subquery_binds ===
+description: QUALIFY should preserve subqueries while checking named window aliases.
+sql: SELECT i, p, o, row_number() OVER w AS rn FROM qt WINDOW w AS (PARTITION BY p ORDER BY o) QUALIFY rn = (SELECT i FROM qt LIMIT 1)
+status: ok
+EvalScalar
+├── scalars: [qt.i (#0) AS (#0), qt.p (#1) AS (#1), qt.o (#2) AS (#2), row_number() OVER w (#3) AS (#3)]
+└── Filter
+    ├── filters: [eq(row_number() OVER w (#3), SUBQUERY AS (#4))]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: qt.i (#4)
+    │       └── Limit
+    │           ├── limit: [1]
+    │           ├── offset: [0]
+    │           └── EvalScalar
+    │               ├── scalars: [qt.i (#4) AS (#4)]
+    │               └── Scan
+    │                   ├── table: default.qt (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [qt.p (#1) AS (#1)]
+        ├── order by items: [qt.o (#2) AS (#2)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [qt.p (#1) ASC NULLS LAST, qt.o (#2) ASC NULLS LAST]
+            ├── limit: [NONE]
+            ├── window top: NONE
+            ├── window function: RowNumber
+            └── EvalScalar
+                ├── scalars: [qt.p (#1) AS (#1), qt.o (#2) AS (#2)]
+                └── Scan
+                    ├── table: default.qt (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== qualify_grouping_context_uses_grouping_checker ===
+description: QUALIFY in a grouped query should still accept grouped aliases while binding the window phase.
+sql: SELECT number % 2 AS a, row_number() OVER (ORDER BY a) AS rn FROM t GROUP BY a QUALIFY a = 1
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (ORDER BY a) (#3) AS (#3), a (#1) AS (#4)]
+└── Filter
+    ├── filters: [eq(a (#1), 1)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [a (#1) AS (#2)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [row_number_order_0 (#2) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [a (#1) AS (#2)]
+                └── Aggregate(Initial)
+                    ├── group items: [modulo(t.number (#0), 2) AS (#1)]
+                    ├── aggregate functions: []
+                    └── EvalScalar
+                        ├── scalars: [modulo(t.number (#0), 2) AS (#1)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== qualify_grouping_context_rejects_aggregate_alias ===
+description: QUALIFY in a grouped query must still reject aggregate aliases while using grouping-aware binding.
+sql: SELECT number % 2 AS a, sum(number) AS s, row_number() OVER (ORDER BY a) AS rn FROM t GROUP BY a QUALIFY s > 0
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+

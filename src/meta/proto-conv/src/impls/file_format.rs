@@ -20,6 +20,7 @@ use std::str::FromStr;
 use databend_common_io::GeometryDataType;
 use databend_common_meta_app as mt;
 use databend_common_meta_app::principal::BinaryFormat;
+use databend_common_meta_app::principal::CsvQuoteStyle;
 use databend_common_meta_app::principal::EmptyFieldAs;
 use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_protos::pb;
@@ -561,6 +562,12 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
                 .encoding_error_mode
                 .unwrap_or_else(|| "strict".to_string()),
             trim_space: p.trim_space,
+            quote_style: p
+                .quote_style
+                .map(|s| CsvQuoteStyle::from_str(&s))
+                .transpose()
+                .map_err(Incompatible::new)?
+                .unwrap_or_default(),
         })
     }
 
@@ -588,6 +595,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             encoding: Some(self.encoding.clone()),
             encoding_error_mode: Some(self.encoding_error_mode.clone()),
             trim_space: self.trim_space,
+            quote_style: Some(self.quote_style.to_string()),
         })
     }
 }

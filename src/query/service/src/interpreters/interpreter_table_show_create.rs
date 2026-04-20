@@ -18,7 +18,6 @@ use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::ast::quote::display_ident;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_cluster_key_exprs;
-use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
@@ -41,6 +40,7 @@ use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
 use databend_storages_common_table_meta::table::StreamMode;
 use databend_storages_common_table_meta::table::is_internal_opt_key;
+use derive_visitor::DriveMut;
 use itertools::Itertools;
 
 use crate::interpreters::Interpreter;
@@ -293,7 +293,7 @@ impl ShowCreateTableInterpreter {
                 sql_dialect,
             };
             for expr in exprs.iter_mut() {
-                let _ = expr.walk_mut(&mut normalizer);
+                expr.drive_mut(&mut normalizer);
             }
             let cluster_keys_str = format!(
                 "({})",

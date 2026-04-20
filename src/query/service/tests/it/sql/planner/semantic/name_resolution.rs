@@ -16,10 +16,10 @@ use databend_common_ast::ast::Identifier;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_ast::visit::WalkMut;
 use databend_query::sql::IdentifierNormalizer;
 use databend_query::sql::NameResolutionContext;
 use databend_query::sql::normalize_identifier;
+use derive_visitor::DriveMut;
 
 // typos:off
 #[test]
@@ -108,9 +108,7 @@ fn test_normalize_identifiers_in_expr() {
     let ctx = NameResolutionContext::default();
     let mut normalizer = IdentifierNormalizer::new(&ctx);
 
-    expr.walk_mut(&mut normalizer)
-        .map_err(|err| match err {})
-        .unwrap();
+    expr.drive_mut(&mut normalizer);
 
     assert_eq!(
         format!("{:#}", expr),

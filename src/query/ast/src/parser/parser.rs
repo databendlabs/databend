@@ -16,17 +16,7 @@ use nom::Parser;
 
 use crate::ParseError;
 use crate::Result;
-use crate::ast::DatabaseRef;
-use crate::ast::Expr;
-use crate::ast::Identifier;
-use crate::ast::Literal;
-use crate::ast::ProcedureIdentity;
-use crate::ast::Query;
-use crate::ast::SelectTarget;
-use crate::ast::SetExpr;
-use crate::ast::Statement;
-use crate::ast::StatementWithFormat;
-use crate::ast::TableRef;
+use crate::ast::*;
 use crate::parser::Backtrace;
 use crate::parser::common::IResult;
 use crate::parser::common::comma_separated_list0;
@@ -48,9 +38,6 @@ use crate::parser::statement::statement;
 use crate::parser::token::Token;
 use crate::parser::token::TokenKind;
 use crate::parser::token::Tokenizer;
-use crate::visit::VisitControl;
-use crate::visit::VisitorMut;
-use crate::visit::WalkMut;
 
 pub fn tokenize_sql(sql: &str) -> Result<Vec<Token<'_>>> {
     Tokenizer::new(sql).collect::<Result<Vec<_>>>()
@@ -242,6 +229,10 @@ fn assert_reparse(sql: &str, stmt: StatementWithFormat) -> std::result::Result<(
 
 #[cfg(debug_assertions)]
 fn reset_ast(mut stmt: StatementWithFormat) -> StatementWithFormat {
+    use crate::visit::VisitControl;
+    use crate::visit::VisitorMut;
+    use crate::visit::WalkMut;
+
     struct ResetAst;
 
     impl ResetAst {

@@ -31,14 +31,13 @@ use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::token::Token;
 use databend_common_ast::parser::token::TokenKind;
 use databend_common_ast::parser::token::Tokenizer;
-use databend_common_ast::visit::VisitControl;
-use databend_common_ast::visit::WalkMut;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use derive_visitor::DriveMut;
 use log::info;
 use log::warn;
 use parking_lot::RwLock;
@@ -353,24 +352,18 @@ impl Planner {
         let mut variable_normalizer =
             VariableNormalizer::new(&name_resolution_ctx, self.ctx.clone());
 
-        let _ = stmt.walk_mut(&mut variable_normalizer);
+        stmt.drive_mut(&mut variable_normalizer);
         variable_normalizer.render_error()?;
 
-        let _ = stmt.walk_mut(&mut DistinctToGroupBy::default());
-        let _ = stmt.walk_mut(&mut AggregateRewriter::default());
+        stmt.drive_mut(&mut DistinctToGroupBy::default());
+        stmt.drive_mut(&mut AggregateRewriter::default());
         let mut set_ops_counter = CountSetOps::default();
-        let set_ops_count = match stmt.walk_mut(&mut set_ops_counter) {
-            Ok(VisitControl::Break(_)) | Ok(VisitControl::Continue) => set_ops_counter.count,
-            Ok(VisitControl::SkipChildren) => {
-                unreachable!("root walk should not return SkipChildren")
-            }
-            Err(err) => match err {},
-        };
+        stmt.drive_mut(&mut set_ops_counter);
         let max_set_ops = self.ctx.get_settings().get_max_set_operator_count()?;
-        if max_set_ops < set_ops_count as u64 {
+        if max_set_ops < set_ops_counter.count as u64 {
             return Err(ErrorCode::SyntaxException(format!(
                 "Set operations count {} exceeds maximum limit {}",
-                set_ops_count, max_set_ops
+                set_ops_counter.count, max_set_ops
             )));
         }
 
