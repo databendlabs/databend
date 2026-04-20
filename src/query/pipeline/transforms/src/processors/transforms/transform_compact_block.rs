@@ -81,10 +81,8 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
 impl TransformCompactBlock {
     fn split_blocks(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<Vec<DataBlock>> {
         debug_assert!(!blocks.is_empty());
-        if blocks.len() == 1 {
-            return Ok(blocks[0].split_by_rows_if_needed_no_tail(rows_per_block));
-        }
-
+        // Allow the last output block to absorb in most one minimum-sized tail block.
+        // This stays aligned with BlockThresholds, where min_rows_per_block is 0.8x.
         let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
         let mut total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
         let mut blocks = blocks.into_iter();
@@ -92,10 +90,9 @@ impl TransformCompactBlock {
         let mut offset = 0;
         let mut output = Vec::new();
 
-        // Mirror split_by_rows_if_needed_no_tail, but consume a sequence of blocks
-        // while preserving their original order. Like the original helper, this
-        // treats rows_per_block as a target and allows a slightly larger block to
-        // avoid emitting a tiny tail block.
+        // Split a sequence of blocks while preserving row order. This treats
+        // rows_per_block as a target and allows a slightly larger tail block to
+        // avoid emitting a tiny final block.
         while total_rows >= max_rows_per_block {
             let mut remain_rows = rows_per_block;
             let mut pieces = vec![];
@@ -124,7 +121,10 @@ impl TransformCompactBlock {
                 }
             }
 
-            output.push(DataBlock::concat(&pieces)?);
+            output.push(match pieces.len() {
+                1 => pieces.pop().unwrap(),
+                _ => DataBlock::concat(&pieces)?,
+            });
             total_rows -= rows_per_block;
         }
 
@@ -133,7 +133,10 @@ impl TransformCompactBlock {
             let mut tail = Vec::new();
             tail.push(block.slice(offset..block.num_rows()));
             tail.extend(blocks);
-            output.push(DataBlock::concat(&tail)?);
+            output.push(match tail.len() {
+                1 => tail.pop().unwrap(),
+                _ => DataBlock::concat(&tail)?,
+            });
         }
 
         Ok(output)
@@ -163,32 +166,43 @@ mod tests {
             .collect()
     }
 
-    fn assert_split_matches_reference(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<()> {
+    fn assert_split_result(
+        blocks: Vec<DataBlock>,
+        rows_per_block: usize,
+        expected_sizes: &[usize],
+        expected_values: &[Vec<i32>],
+    ) -> Result<()> {
         let actual = TransformCompactBlock::split_blocks(blocks.clone(), rows_per_block)?;
-        let expected = DataBlock::concat(&blocks)?.split_by_rows_if_needed_no_tail(rows_per_block);
 
         assert_eq!(
             actual.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
-            expected.iter().map(DataBlock::num_rows).collect::<Vec<_>>()
+            expected_sizes
         );
         assert_eq!(
             actual.iter().map(block_values).collect::<Vec<_>>(),
-            expected.iter().map(block_values).collect::<Vec<_>>()
+            expected_values
         );
         Ok(())
     }
 
     #[test]
     fn test_split_blocks_matches_reference_across_block_boundaries() -> Result<()> {
-        assert_split_matches_reference(
+        assert_split_result(vec![block_with_range(0, 10)], 3, &[3, 3, 4], &[
+            vec![0, 1, 2],
+            vec![3, 4, 5],
+            vec![6, 7, 8, 9],
+        ])?;
+        assert_split_result(
             vec![
                 block_with_range(0, 2),
                 block_with_range(2, 6),
                 block_with_range(6, 10),
             ],
             3,
+            &[3, 3, 4],
+            &[vec![0, 1, 2], vec![3, 4, 5], vec![6, 7, 8, 9]],
         )?;
-        assert_split_matches_reference(
+        assert_split_result(
             vec![
                 block_with_range(0, 1),
                 block_with_range(1, 2),
@@ -196,8 +210,10 @@ mod tests {
                 block_with_range(3, 10),
             ],
             4,
+            &[4, 6],
+            &[vec![0, 1, 2, 3], vec![4, 5, 6, 7, 8, 9]],
         )?;
-        assert_split_matches_reference(
+        assert_split_result(
             vec![
                 block_with_range(0, 2),
                 block_with_range(2, 4),
@@ -205,6 +221,8 @@ mod tests {
                 block_with_range(6, 8),
             ],
             5,
+            &[8],
+            &[vec![0, 1, 2, 3, 4, 5, 6, 7]],
         )?;
         Ok(())
     }

@@ -276,6 +276,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         None, // TODO(Sky): sort_min_max
                         Some(block_meta_index),
                         create_on,
+                        false,
                     );
 
                     let _ = sender.send(Ok(part_info)).await;

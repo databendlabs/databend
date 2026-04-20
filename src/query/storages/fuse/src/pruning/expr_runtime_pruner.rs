@@ -388,6 +388,7 @@ mod tests {
             None,
             None,
             None,
+            false,
         )
     }
 
@@ -558,6 +559,7 @@ mod tests {
             None,
             None,
             None,
+            false,
         )
     }
 
