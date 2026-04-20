@@ -379,18 +379,7 @@ pub fn column_row(i: Input) -> IResult<ColumnID> {
 }
 
 pub fn column_ident(i: Input) -> IResult<ColumnID> {
-    map_res(rule! { #column_name }, |ident| Ok(ColumnID::Name(ident))).parse(i)
-}
-
-pub fn column_name(i: Input) -> IResult<Identifier> {
-    alt((ident, column_range_name)).parse(i)
-}
-
-fn column_range_name(i: Input) -> IResult<Identifier> {
-    map(rule! { RANGE }, |token| {
-        Identifier::from_name(transform_span(std::slice::from_ref(token)), "range")
-    })
-    .parse(i)
+    map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))).parse(i)
 }
 
 pub fn variable_ident(i: Input) -> IResult<String> {

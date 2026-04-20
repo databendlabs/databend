@@ -264,6 +264,8 @@ fn test_statement() {
         r#"DROP database if exists db1;"#,
         r#"with c as (select 1 as a) delete /*+ set_var(max_threads=1) */ from test_db.test tt where tt.a = 1;"#,
         // https://github.com/databendlabs/databend/issues/11031
+        r#"insert into issue_11031 (radio, range, samples) values ('lte', 10, 1)"#,
+        // https://github.com/databendlabs/databend/issues/11031
         r#"select range from issue_11031;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,

@@ -3595,7 +3595,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
 
     let (i, (mut def, constraints)) = map(
         rule! {
-            #column_name
+            #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
@@ -4654,7 +4654,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
 
     map_res(
         rule! {
-            #column_name
+            #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
@@ -4703,7 +4703,7 @@ pub fn modify_column_comment(i: Input) -> IResult<ColumnComment> {
     );
     map_res(
         rule! {
-            #column_name
+            #ident
             ~ #comment
             : "`<column name> COMMENT '<comment>'`"
         },
@@ -4715,7 +4715,7 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
     // Parse: <column> SET MASKING POLICY <policy_name> [USING (masked_col_name, cond_col_1, ...)]
     let set_mask_policy = map(
         rule! {
-            #column_name ~ SET ~ MASKING ~ POLICY ~ #ident ~ (USING ~ "(" ~ #comma_separated_list1(column_name) ~ ")")?
+            #ident ~ SET ~ MASKING ~ POLICY ~ #ident ~ (USING ~ "(" ~ #comma_separated_list1(ident) ~ ")")?
         },
         |(column, _, _, _, mask_name, opt_using)| {
             ModifyColumnAction::SetMaskingPolicy(
@@ -4728,14 +4728,14 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let unset_mask_policy = map(
         rule! {
-            #column_name ~ UNSET ~ MASKING ~ POLICY
+            #ident ~ UNSET ~ MASKING ~ POLICY
         },
         |(column, _, _, _)| ModifyColumnAction::UnsetMaskingPolicy(column),
     );
 
     let convert_stored_computed_column = map(
         rule! {
-            #column_name ~ DROP ~ STORED
+            #ident ~ DROP ~ STORED
         },
         |(column, _, _)| ModifyColumnAction::ConvertStoredComputedColumn(column),
     );
@@ -4791,7 +4791,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     );
     let rename_column = map(
         rule! {
-            RENAME ~ COLUMN? ~ #column_name ~ TO ~ #column_name
+            RENAME ~ COLUMN? ~ #ident ~ TO ~ #ident
         },
         |(_, _, old_column, _, new_column)| AlterTableAction::RenameColumn {
             old_column,
@@ -4838,7 +4838,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let add_row_access_policy = map(
         rule! {
-            ADD ~ ROW ~ ACCESS ~ POLICY ~ #ident ~ ON ~ "(" ~ ^#comma_separated_list1(column_name) ~ ^")"
+            ADD ~ ROW ~ ACCESS ~ POLICY ~ #ident ~ ON ~ "(" ~ ^#comma_separated_list1(ident) ~ ^")"
         },
         |(_, _, _, _, policy, _, _, columns, _)| AlterTableAction::AddRowAccessPolicy {
             columns,
@@ -4862,7 +4862,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let drop_column = map(
         rule! {
-            DROP ~ COLUMN? ~ #column_name
+            DROP ~ COLUMN? ~ #ident
         },
         |(_, _, column)| AlterTableAction::DropColumn { column },
     );

@@ -8359,6 +8359,89 @@ Delete(
 
 
 ---------- Input ----------
+insert into issue_11031 (radio, range, samples) values ('lte', 10, 1)
+---------- Output ---------
+INSERT INTO issue_11031 (radio, range, samples) VALUES ('lte', 10, 1)
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..23,
+                ),
+                name: "issue_11031",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    25..30,
+                ),
+                name: "radio",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    32..37,
+                ),
+                name: "range",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    39..46,
+                ),
+                name: "samples",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        source: Values {
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            56..61,
+                        ),
+                        value: String(
+                            "lte",
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            63..65,
+                        ),
+                        value: UInt64(
+                            10,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            67..68,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ],
+            ],
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
 select range from issue_11031;
 ---------- Output ---------
 SELECT range FROM issue_11031

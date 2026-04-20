@@ -24,6 +24,7 @@ use pratt::Precedence;
 
 use crate::Range;
 use crate::ast::*;
+use crate::parser::Error;
 use crate::parser::ErrorKind;
 use crate::parser::common::*;
 use crate::parser::expr::*;
@@ -1252,10 +1253,20 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
     .parse(i)
 }
 
+fn existing_window_name(i: Input) -> IResult<Identifier> {
+    match i.tokens.first().map(|token| token.kind) {
+        Some(ROWS | RANGE) => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::ExpectToken(Ident),
+        ))),
+        _ => ident(i),
+    }
+}
+
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            #ident?
+            #existing_window_name?
             ~ ( PARTITION ~ ^BY ~ ^#comma_separated_list1(subexpr(0)) )?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
             ~ ( (ROWS | RANGE) ~ ^#window_frame_between )?
