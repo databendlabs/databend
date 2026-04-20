@@ -1620,6 +1620,8 @@ fn test_expr() {
         r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
         r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"COUNT() OVER (RANGE UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,
