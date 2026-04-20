@@ -148,13 +148,13 @@ impl QueryResponseField {
 // settings also used by driver, may be set in query/session/global level
 // only available after binding
 #[derive(Serialize, Debug, Clone)]
-pub struct ResultFormatSettings {
+pub struct QueryResponseSettings {
     pub timezone: String,
     pub geometry_output_format: String,
     pub binary_output_format: String,
     pub http_json_result_mode: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub arrow_result_version: Option<u64>,
+    pub arrow_result_version: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -178,7 +178,7 @@ pub struct QueryResponse {
     pub result_timeout_secs: Option<u64>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub settings: Option<ResultFormatSettings>,
+    pub settings: Option<QueryResponseSettings>,
 
     pub stats: QueryStats,
 
@@ -208,12 +208,12 @@ impl QueryResponse {
                     affect,
                     error,
                     warnings,
-                    result_format_settings: driver_settings,
+                    response_settings,
+                    arrow_result_version: _,
                 },
         }: HttpQueryResponseInternal,
         is_final: bool,
-        query_result_format: QueryResultFormat,
-        arrow_result_version: Option<u64>,
+        encoding: ResponseEncoding,
     ) -> Response {
         let (data, next_uri) = if is_final {
             (Arc::new(BlocksSerializer::empty()), None)
@@ -257,10 +257,9 @@ impl QueryResponse {
         }
 
         let rows = data.num_rows();
-        let driver_settings = response_result_format_settings(
-            driver_settings,
-            query_result_format,
-            arrow_result_version,
+        debug_assert!(
+            !matches!(encoding.format, QueryResultFormat::Arrow)
+                || encoding.arrow_result_version.is_some()
         );
 
         let mut res = QueryResponse {
@@ -284,10 +283,10 @@ impl QueryResponse {
             error: error.map(QueryError::from_error_code),
             has_result_set,
             result_timeout_secs: Some(result_timeout_secs),
-            settings: driver_settings,
+            settings: response_settings,
         };
 
-        match query_result_format {
+        match encoding.format {
             QueryResultFormat::Arrow if !schema.fields.is_empty() && !data.is_empty() => {
                 let buf: Result<_, ErrorCode> = try {
                     const META_KEY: &str = "response_header";
@@ -300,7 +299,7 @@ impl QueryResponse {
                         .header(HEADER_QUERY_ID, id)
                         .header(HEADER_QUERY_STATE, state.to_string())
                         .header(HEADER_QUERY_PAGE_ROWS, rows)
-                        .content_type(query_result_format.content_type())
+                        .content_type(encoding.format.content_type())
                         .body(buf),
                     Err(err) => Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -318,20 +317,6 @@ impl QueryResponse {
             }
         }
     }
-}
-
-fn response_result_format_settings(
-    mut settings: Option<ResultFormatSettings>,
-    query_result_format: QueryResultFormat,
-    arrow_result_version: Option<u64>,
-) -> Option<ResultFormatSettings> {
-    if let Some(settings) = settings.as_mut() {
-        settings.arrow_result_version = match query_result_format {
-            QueryResultFormat::Arrow => arrow_result_version,
-            QueryResultFormat::Json => None,
-        };
-    }
-    settings
 }
 
 fn negotiate_arrow_result_version(
@@ -381,6 +366,12 @@ pub struct StateResponse {
     pub error: Option<QueryError>,
     pub warnings: Vec<String>,
     pub stats: QueryStats,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ResponseEncoding {
+    format: QueryResultFormat,
+    arrow_result_version: Option<u64>,
 }
 
 impl StateResponse {
@@ -464,20 +455,15 @@ async fn query_final_handler(
                 let mut response = query
                     .get_response_state_only()
                     .map_err(HttpErrorCode::server_error)?;
-                let arrow_result_version = response
-                    .state
-                    .result_format_settings
-                    .as_ref()
-                    .and_then(|settings| settings.arrow_result_version);
+                let encoding = ResponseEncoding {
+                    format: query_result_format,
+                    arrow_result_version: response.state.arrow_result_version,
+                };
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
                 response.state.affect = None;
                 Ok(QueryResponse::from_internal(
-                    query_id,
-                    response,
-                    true,
-                    query_result_format,
-                    arrow_result_version,
+                    query_id, response, true, encoding,
                 ))
             }
             None => Err(query_id_not_found(&query_id, &ctx.node_id)),
@@ -597,26 +583,20 @@ async fn query_page_handler(
                     );
                     poem::Error::from_string(format!("{}", err.message()), StatusCode::NOT_FOUND)
                 })?;
-                let arrow_result_version = resp
-                    .state
-                    .result_format_settings
-                    .as_ref()
-                    .and_then(|settings| settings.arrow_result_version);
-                let arrow_result_version = require_negotiated_arrow_result_version(
-                    &query_id,
-                    query_result_format,
-                    arrow_result_version,
-                )
-                .map_err(HttpErrorCode::bad_request)?;
+                let encoding = ResponseEncoding {
+                    format: query_result_format,
+                    arrow_result_version: require_negotiated_arrow_result_version(
+                        &query_id,
+                        query_result_format,
+                        resp.state.arrow_result_version,
+                    )
+                    .map_err(HttpErrorCode::bad_request)?,
+                };
                 query
                     .update_expire_time(false, resp.is_data_drained())
                     .await;
                 Ok(QueryResponse::from_internal(
-                    query_id,
-                    resp,
-                    false,
-                    query_result_format,
-                    arrow_result_version,
+                    query_id, resp, false, encoding,
                 ))
             }
         }
@@ -692,23 +672,20 @@ pub(crate) async fn query_handler(
                             StatusCode::NOT_FOUND,
                         )
                     })?;
-                    let arrow_result_version = resp
-                        .state
-                        .result_format_settings
-                        .as_ref()
-                        .and_then(|settings| settings.arrow_result_version);
-                    let arrow_result_version = require_negotiated_arrow_result_version(
-                        &ctx.query_id,
-                        query_result_format,
-                        arrow_result_version,
-                    )
-                    .map_err(HttpErrorCode::bad_request)?;
+                    let encoding = ResponseEncoding {
+                        format: query_result_format,
+                        arrow_result_version: require_negotiated_arrow_result_version(
+                            &ctx.query_id,
+                            query_result_format,
+                            resp.state.arrow_result_version,
+                        )
+                        .map_err(HttpErrorCode::bad_request)?,
+                    };
                     Ok(QueryResponse::from_internal(
                         ctx.query_id.clone(),
                         resp,
                         false,
-                        query_result_format,
-                        arrow_result_version,
+                        encoding,
                     ))
                 };
             };
@@ -775,8 +752,10 @@ pub(crate) async fn query_handler(
                     query.id.to_string(),
                     resp,
                     false,
-                    query_result_format,
-                    arrow_result_version,
+                    ResponseEncoding {
+                        format: query_result_format,
+                        arrow_result_version,
+                    },
                 )
                 .into_response())
             }

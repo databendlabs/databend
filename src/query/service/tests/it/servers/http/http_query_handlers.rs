@@ -142,7 +142,7 @@ pub struct TestQueryResponse {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestResultFormatSettings {
-    pub arrow_result_version: Option<u64>,
+    pub arrow_result_version: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -2032,7 +2032,7 @@ async fn test_arrow_query_legacy_bendsql_python_ua_fallback() -> anyhow::Result<
             .header
             .settings
             .and_then(|settings| settings.arrow_result_version),
-        Some(1)
+        Some("1".to_string())
     );
 
     Ok(())
@@ -2079,7 +2079,7 @@ async fn test_arrow_query_negotiates_result_format_version_in_metadata() -> anyh
             .header
             .settings
             .and_then(|settings| settings.arrow_result_version),
-        Some(login.server_max_arrow_result_version)
+        Some(login.server_max_arrow_result_version.to_string())
     );
 
     Ok(())
@@ -2108,7 +2108,7 @@ async fn test_arrow_query_page_keeps_negotiated_result_format_version() -> anyho
             .header
             .settings
             .and_then(|settings| settings.arrow_result_version),
-        Some(2)
+        Some("2".to_string())
     );
 
     let ep = create_endpoint()?;
@@ -2126,7 +2126,7 @@ async fn test_arrow_query_page_keeps_negotiated_result_format_version() -> anyho
             .header
             .settings
             .and_then(|settings| settings.arrow_result_version),
-        Some(2)
+        Some("2".to_string())
     );
 
     let (status, response) = get_uri_checked(&ep, &final_uri).await?;
