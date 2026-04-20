@@ -78,6 +78,7 @@ pub struct DescribeTablePlan {
     pub database: String,
     /// The table name.
     pub table: String,
+    pub branch: Option<String>,
     /// The schema description of the output.
     pub schema: DataSchemaRef,
 }
@@ -220,6 +221,7 @@ pub struct AnalyzeTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub no_scan: bool,
 }
 
@@ -272,6 +274,7 @@ pub struct ModifyTableCommentPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 impl ModifyTableCommentPlan {
@@ -302,6 +305,7 @@ pub struct SetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 impl SetOptionsPlan {
@@ -316,6 +320,7 @@ pub struct UnsetOptionsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 impl UnsetOptionsPlan {
@@ -460,6 +465,7 @@ pub struct TruncateTablePlan {
     pub database: String,
     /// The table name
     pub table: String,
+    pub branch: Option<String>,
 }
 
 impl TruncateTablePlan {
@@ -576,6 +582,7 @@ pub struct AddTableRowAccessPolicyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub columns: Vec<String>,
     pub policy: String,
 }
@@ -586,6 +593,7 @@ pub struct DropTableRowAccessPolicyPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub policy: String,
 }
 
@@ -595,6 +603,7 @@ pub struct DropAllTableRowAccessPoliciesPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -629,6 +638,16 @@ pub struct DropTableBranchPlan {
     pub database: String,
     pub table: String,
     pub branch_name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct UndropTableBranchPlan {
+    pub tenant: Tenant,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub branch_name: String,
+    pub retain: Option<Duration>,
 }
 
 #[derive(Clone, Debug)]

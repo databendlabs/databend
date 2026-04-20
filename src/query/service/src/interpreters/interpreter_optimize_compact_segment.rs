@@ -54,17 +54,18 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
-                None,
+                self.plan.branch.as_deref(),
                 &LockTableOption::LockWithRetry,
             )
             .await?;
 
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
-        let table = catalog
-            .get_table(
-                &self.ctx.get_tenant(),
+        let table = self
+            .ctx
+            .get_table_with_branch(
+                &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
+                self.plan.branch.as_deref(),
             )
             .await?;
         // check mutability

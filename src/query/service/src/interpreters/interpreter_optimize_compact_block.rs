@@ -23,6 +23,7 @@ use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::plans::OptimizeCompactBlock;
+use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::interpreter_optimize_purge::purge;
@@ -71,6 +72,7 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
             catalog,
             database,
             table,
+            branch,
             limit,
         } = self.s_expr.plan().clone().try_into()?;
 
@@ -78,7 +80,13 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(&catalog, &database, &table, None, &self.lock_opt)
+            .acquire_table_lock(
+                &catalog,
+                &database,
+                &table,
+                branch.as_deref(),
+                &self.lock_opt,
+            )
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
@@ -98,19 +106,29 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
         }
 
         if self.need_purge {
-            let ctx = self.ctx.clone();
-            let num_snapshot_limit = limit.segment_limit;
-            if build_res.main_pipeline.is_empty() {
-                purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await?;
+            if branch.is_none() {
+                let ctx = self.ctx.clone();
+                let num_snapshot_limit = limit.segment_limit;
+                if build_res.main_pipeline.is_empty() {
+                    purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await?;
+                } else {
+                    build_res.main_pipeline.set_on_finished(
+                        move |info: &ExecutionInfo| match &info.res {
+                            Ok(_) => GlobalIORuntime::instance().block_on(async move {
+                                purge(ctx, &catalog, &database, &table, num_snapshot_limit, None)
+                                    .await
+                            }),
+                            Err(error_code) => Err(error_code.clone()),
+                        },
+                    );
+                }
             } else {
-                build_res
-                    .main_pipeline
-                    .set_on_finished(move |info: &ExecutionInfo| match &info.res {
-                        Ok(_) => GlobalIORuntime::instance().block_on(async move {
-                            purge(ctx, &catalog, &database, &table, num_snapshot_limit, None).await
-                        }),
-                        Err(error_code) => Err(error_code.clone()),
-                    });
+                warn!(
+                    "Skip OPTIMIZE TABLE purge phase for branch '{}'.'{}'/'{}'",
+                    database,
+                    table,
+                    branch.as_deref().unwrap_or_default()
+                );
             }
         }
         Ok(build_res)

@@ -39,14 +39,6 @@ pub fn illegal_ident_name(ident_name: &str) -> bool {
         .any(|c| c == '\'' || c == '\"' || c == '\u{000C}' || c == '\u{0008}')
 }
 
-pub(crate) fn legacy_table_ref_removed_error(context: impl Into<String>) -> ErrorCode {
-    ErrorCode::Unimplemented(format!(
-        "Legacy experimental table refs were removed: {}. The remaining syntax is reserved for \
-         a future redesign and is intentionally rejected during binding.",
-        context.into()
-    ))
-}
-
 impl Binder {
     // Find all recursive cte scans
     #[allow(clippy::only_used_in_recursion)]

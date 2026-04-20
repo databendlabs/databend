@@ -55,6 +55,7 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowUserFunctions
                             | RewriteKind::ShowTableFunctions
                             | RewriteKind::ShowUsers
+                            | RewriteKind::ShowBranches(_, _, _)
                             // show grants will access meta, can not true in mm.
                             // | RewriteKind::ShowGrants
                             | RewriteKind::ShowStages

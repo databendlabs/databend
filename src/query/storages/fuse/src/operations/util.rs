@@ -19,14 +19,11 @@ use std::time::Duration;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableSchemaRef;
-use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ColumnMeta;
@@ -170,22 +167,4 @@ pub async fn read_block(
             ErrorCode::Internal("unexpected, failed to read block for merge into")
                 .add_message_back(e.to_string())
         })?
-}
-
-/// Check the shared access gate for table-ref operations.
-pub fn check_table_ref_access(ctx: &dyn TableContext) -> Result<()> {
-    if !ctx
-        .get_settings()
-        .get_enable_experimental_table_ref()
-        .unwrap_or_default()
-    {
-        return Err(ErrorCode::Unimplemented(
-            "Table ref is an experimental feature, `set enable_experimental_table_ref=1` to use this feature",
-        ));
-    }
-
-    LicenseManagerSwitch::instance()
-        .check_enterprise_enabled(ctx.get_license_key(), Feature::TableRef)?;
-
-    Ok(())
 }

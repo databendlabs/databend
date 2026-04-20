@@ -80,7 +80,12 @@ impl AccessLogger {
             Plan::Replace(plan) => {
                 let modified_object = AccessObject {
                     object_domain: ObjectDomain::Table,
-                    object_name: format!("{}.{}.{}", plan.catalog, plan.database, plan.table),
+                    object_name: qualified_table_name(
+                        &plan.catalog,
+                        &plan.database,
+                        &plan.table,
+                        plan.branch.as_deref(),
+                    ),
                     columns: Some(
                         plan.schema
                             .fields
@@ -116,7 +121,12 @@ impl AccessLogger {
             Plan::TruncateTable(plan) => {
                 let modified_object = AccessObject {
                     object_domain: ObjectDomain::Table,
-                    object_name: format!("{}.{}.{}", plan.catalog, plan.database, plan.table),
+                    object_name: qualified_table_name(
+                        &plan.catalog,
+                        &plan.database,
+                        &plan.table,
+                        plan.branch.as_deref(),
+                    ),
                     columns: None,
                     stage_type: None,
                 };
@@ -212,7 +222,12 @@ impl AccessLogger {
                 }
             }
             Plan::SetOptions(plan) => {
-                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let object_name = qualified_table_name(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    plan.branch.as_deref(),
+                );
                 let operation_type = DDLOperationType::Alter;
                 self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
                     object_domain: ObjectDomain::Table,
@@ -225,7 +240,12 @@ impl AccessLogger {
                 });
             }
             Plan::UnsetOptions(plan) => {
-                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let object_name = qualified_table_name(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    plan.branch.as_deref(),
+                );
                 let operation_type = DDLOperationType::Alter;
                 self.entry.object_modified_by_ddl.push(ModifyByDDLObject {
                     object_domain: ObjectDomain::Table,
@@ -272,7 +292,12 @@ impl AccessLogger {
                 });
             }
             Plan::AddTableColumn(plan) => {
-                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let object_name = qualified_table_name(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    plan.branch.as_deref(),
+                );
                 let operation_type = DDLOperationType::Alter;
                 #[derive(serde::Serialize)]
                 struct ModifiedColumn {
@@ -294,7 +319,12 @@ impl AccessLogger {
                 });
             }
             Plan::DropTableColumn(plan) => {
-                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let object_name = qualified_table_name(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    plan.branch.as_deref(),
+                );
                 let operation_type = DDLOperationType::Alter;
                 #[derive(serde::Serialize)]
                 struct ModifiedColumn {
@@ -316,7 +346,12 @@ impl AccessLogger {
                 });
             }
             Plan::RenameTableColumn(plan) => {
-                let object_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+                let object_name = qualified_table_name(
+                    &plan.catalog,
+                    &plan.database,
+                    &plan.table,
+                    plan.branch.as_deref(),
+                );
                 let operation_type = DDLOperationType::Alter;
                 #[derive(serde::Serialize)]
                 struct ModifiedColumn {
@@ -466,17 +501,14 @@ impl AccessLogger {
                 column_name: field.name.clone(),
             })
             .collect::<Vec<_>>();
-        let object_name = if let Some(branch) = &plan.branch {
-            format!(
-                "{}.{}.{}/{}",
-                plan.catalog, plan.database, plan.table, branch
-            )
-        } else {
-            format!("{}.{}.{}", plan.catalog, plan.database, plan.table)
-        };
         let modified_object = AccessObject {
             object_domain: ObjectDomain::Table,
-            object_name,
+            object_name: qualified_table_name(
+                &plan.catalog,
+                &plan.database,
+                &plan.table,
+                plan.branch.as_deref(),
+            ),
             columns: Some(columns),
             stage_type: None,
         };
@@ -496,8 +528,19 @@ impl AccessLogger {
     }
 
     fn log_insert_multi(&mut self, plan: &InsertMultiTable) {
-        let modified_objects = extract_metadata_ref(&plan.meta_data);
-        self.entry.objects_modified.extend(modified_objects);
+        for target in &plan.target_tables {
+            self.entry.objects_modified.push(AccessObject {
+                object_domain: ObjectDomain::Table,
+                object_name: qualified_table_name(
+                    &target.catalog,
+                    &target.database,
+                    &target.table,
+                    target.branch.as_deref(),
+                ),
+                columns: None,
+                stage_type: None,
+            });
+        }
         // Log the base objects accessed by the insert operation's select part
         self.log(&plan.input_source)
     }
@@ -505,9 +548,11 @@ impl AccessLogger {
     fn log_copy_into_table(&mut self, plan: &CopyIntoTablePlan) {
         let modified_object = AccessObject {
             object_domain: ObjectDomain::Table,
-            object_name: format!(
-                "{}.{}.{}",
-                plan.catalog_info.name_ident.catalog_name, plan.database_name, plan.table_name
+            object_name: qualified_table_name(
+                &plan.catalog_info.name_ident.catalog_name,
+                &plan.database_name,
+                &plan.table_name,
+                plan.branch.as_deref(),
             ),
             columns: Some(
                 plan.required_values_schema
@@ -558,6 +603,18 @@ impl AccessLogger {
     }
 }
 
+fn qualified_table_name(
+    catalog: &str,
+    database: &str,
+    table: &str,
+    branch: Option<&str>,
+) -> String {
+    match branch {
+        Some(branch) => format!("{catalog}.{database}.{table}/{branch}"),
+        None => format!("{catalog}.{database}.{table}"),
+    }
+}
+
 fn extract_metadata_ref(metadata: &MetadataRef) -> Vec<AccessObject> {
     let metadata = metadata.read().clone();
     let mut table_to_columns = HashMap::with_capacity(metadata.tables().len());
@@ -598,12 +655,7 @@ fn extract_metadata_ref(metadata: &MetadataRef) -> Vec<AccessObject> {
             DataSourceInfo::TableSource(_) => {
                 let access_object = AccessObject {
                     object_domain: ObjectDomain::Table,
-                    object_name: format!(
-                        "{}.{}.{}",
-                        table.catalog(),
-                        table.database(),
-                        table.name()
-                    ),
+                    object_name: table.qualified_name(),
                     ..Default::default()
                 };
                 table_to_columns.insert(table.index(), access_object);

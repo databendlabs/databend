@@ -27,13 +27,15 @@ use databend_common_meta_app::schema::DropTableTagReq;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_sql::binder::ConstraintExprBinder;
+use databend_common_sql::check_table_ref_access;
 use databend_common_sql::plans::CreateTableBranchPlan;
 use databend_common_sql::plans::CreateTableTagPlan;
 use databend_common_sql::plans::DropTableBranchPlan;
 use databend_common_sql::plans::DropTableTagPlan;
+use databend_common_sql::plans::UndropTableBranchPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
 use databend_meta_client::types::MatchSeq;
@@ -305,6 +307,40 @@ impl TableRefHandler for RealTableRefHandler {
                 table_id: base_table_id,
                 branch_name: plan.branch_name.clone(),
                 branch_id: branch_table_info.ident.table_id,
+            })
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn do_undrop_table_branch(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &UndropTableBranchPlan,
+    ) -> Result<()> {
+        check_table_ref_access(ctx.as_ref())?;
+
+        let table = self
+            .load_source_table(
+                ctx.clone(),
+                &plan.catalog,
+                &plan.database,
+                &plan.table,
+                None,
+            )
+            .await?;
+        let table_info = table.get_table_info();
+        let source_table_id = table_info.ident.table_id;
+
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let base_table_id = fuse_table.get_option(OPT_KEY_BASE_TABLE_ID, source_table_id);
+
+        let catalog = ctx.get_catalog(&plan.catalog).await?;
+        catalog
+            .undrop_table_branch(UndropTableBranchReq {
+                tenant: ctx.get_tenant(),
+                table_id: base_table_id,
+                branch_name: plan.branch_name.clone(),
+                new_expire_at: plan.retain.map(|v| Utc::now() + v),
             })
             .await
     }

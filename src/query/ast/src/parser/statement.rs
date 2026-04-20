@@ -253,27 +253,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let merge = map(
         rule! {
             MERGE ~ #hint?
-            ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            ~ INTO ~ #table_ref ~ #table_alias?
             ~ USING ~ #mutation_source
             ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
-        |(
-            _,
-            opt_hints,
-            _,
-            (catalog, database, table),
-            target_alias,
-            _,
-            source,
-            _,
-            join_expr,
-            merge_options,
-        )| {
+        |(_, opt_hints, _, table, target_alias, _, source, _, join_expr, merge_options)| {
             Statement::MergeInto(MergeIntoStmt {
                 hints: opt_hints,
-                catalog,
-                database,
-                table_ident: table,
+                table,
                 source,
                 target_alias,
                 join_expr,
@@ -284,13 +271,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let delete = map(
         rule! {
-            #with? ~ DELETE ~ #hint? ~ FROM ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ ( WHERE ~ ^#expr )?
+            #with? ~ DELETE ~ #hint? ~ FROM ~ #table_ref ~ #table_alias? ~ ( WHERE ~ ^#expr )?
         },
-        |(with, _, hints, _, (catalog, database, table), table_alias, opt_selection)| {
+        |(with, _, hints, _, table, table_alias, opt_selection)| {
             Statement::Delete(DeleteStmt {
                 hints,
-                catalog,
-                database,
                 table,
                 table_alias,
                 selection: opt_selection.map(|(_, selection)| selection),
@@ -301,26 +286,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let update = map(
         rule! {
-            #with? ~ UPDATE ~ #hint? ~ #dot_separated_idents_1_to_3 ~ #table_alias?
+            #with? ~ UPDATE ~ #hint? ~ #table_ref ~ #table_alias?
             ~ SET ~ ^#comma_separated_list1(mutation_update_expr)
             ~ ( FROM ~ #mutation_source )?
             ~ ( WHERE ~ ^#expr )?
         },
-        |(
-            with,
-            _,
-            hints,
-            (catalog, database, table),
-            table_alias,
-            _,
-            update_list,
-            from,
-            opt_selection,
-        )| {
+        |(with, _, hints, table, table_alias, _, update_list, from, opt_selection)| {
             Statement::Update(UpdateStmt {
                 hints,
-                catalog,
-                database,
                 table,
                 table_alias,
                 update_list,
@@ -860,6 +833,20 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
+    let show_branches = map(
+        rule! {
+            SHOW ~ BRANCHES ~ ( FROM | IN ) ~ #dot_separated_idents_1_to_3 ~ #show_options?
+        },
+        |(_, _, _, (catalog, database, table), opt_options)| {
+            Statement::ShowBranches(ShowBranchesStmt {
+                catalog,
+                database,
+                table,
+                show_options: opt_options,
+            })
+        },
+    );
+
     let show_databases = map(
         rule! {
             SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
@@ -985,20 +972,25 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
     );
 
-    fn from_tables(i: Input) -> IResult<(Option<Identifier>, Option<Identifier>, Identifier)> {
+    fn from_tables(i: Input) -> IResult<TableRef> {
         let from_dot_table = map(
             rule! {
-               ( FROM | IN ) ~ ^#dot_separated_idents_1_to_3
+               ( FROM | IN ) ~ ^#table_ref
             },
-            |(_, (catalog, database, table))| (catalog, database, table),
+            |(_, table)| table,
         );
 
         let from_table = map(
             rule! {
-                ( FROM | IN ) ~ #ident
+                ( FROM | IN ) ~ #ident ~ ( "/" ~ #ident )?
                 ~ ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2
             },
-            |(_, table, _, (catalog, database))| (catalog, Some(database), table),
+            |(_, table, branch, _, (catalog, database))| TableRef {
+                catalog,
+                database: Some(database),
+                table,
+                branch: branch.map(|(_, branch)| branch),
+            },
         );
 
         rule!(
@@ -1015,10 +1007,8 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #from_tables
             ~ #show_limit?
         },
-        |(_, opt_full, _, (catalog, database, table), limit)| {
+        |(_, opt_full, _, table, limit)| {
             Statement::ShowColumns(ShowColumnsStmt {
-                catalog,
-                database,
                 table,
                 full: opt_full.is_some(),
                 limit,
@@ -1040,29 +1030,17 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let describe_table = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ TABLE? ~ #dot_separated_idents_1_to_3
+            ( DESC | DESCRIBE ) ~ TABLE? ~ #table_ref
         },
-        |(_, _, (catalog, database, table))| {
-            Statement::DescribeTable(DescribeTableStmt {
-                catalog,
-                database,
-                table,
-            })
-        },
+        |(_, _, table)| Statement::DescribeTable(DescribeTableStmt { table }),
     );
 
     // parse `show fields from` statement
     let show_fields = map(
         rule! {
-            SHOW ~ FIELDS ~ FROM ~ #dot_separated_idents_1_to_3
+            SHOW ~ FIELDS ~ FROM ~ #table_ref
         },
-        |(_, _, _, (catalog, database, table))| {
-            Statement::DescribeTable(DescribeTableStmt {
-                catalog,
-                database,
-                table,
-            })
-        },
+        |(_, _, _, table)| Statement::DescribeTable(DescribeTableStmt { table }),
     );
 
     let show_statistics = map(
@@ -1233,25 +1211,24 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let truncate_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ #dot_separated_idents_1_to_3
+            TRUNCATE ~ TABLE ~ #table_ref
         },
-        |(_, _, (catalog, database, table))| {
+        |(_, _, table_ref)| {
             Statement::TruncateTable(TruncateTableStmt {
-                catalog,
-                database,
-                table,
+                catalog: table_ref.catalog,
+                database: table_ref.database,
+                table: table_ref.table,
+                branch: table_ref.branch,
             })
         },
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+            OPTIMIZE ~ TABLE ~ #table_ref ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, (catalog, database, table), action, opt_limit)| {
+        |(_, _, table_ref, action, opt_limit)| {
             Statement::OptimizeTable(OptimizeTableStmt {
-                catalog,
-                database,
-                table,
+                table_ref,
                 action,
                 limit: opt_limit.map(|(_, limit)| limit),
             })
@@ -1311,13 +1288,11 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ NOSCAN?
+            ANALYZE ~ TABLE ~ #table_ref ~ NOSCAN?
         },
-        |(_, _, (catalog, database, table), no_scan)| {
+        |(_, _, table_ref, no_scan)| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
-                catalog,
-                database,
-                table,
+                table_ref,
                 no_scan: no_scan.is_some(),
             })
         },
@@ -1594,7 +1569,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             ~ #index_type ~ ^INDEX
             ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
-            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ON ~ #table_ref
             ~ ^"(" ~ ^#comma_separated_list1(ident) ~ ^")"
             ~ ( #table_option )?
         },
@@ -1607,7 +1582,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             opt_if_not_exists,
             index_name,
             _,
-            (catalog, database, table),
+            table,
             _,
             columns,
             _,
@@ -1619,8 +1594,6 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 create_option,
                 index_name,
                 index_type,
-                catalog,
-                database,
                 table,
                 columns,
                 sync_creation: opt_async.is_none(),
@@ -1632,15 +1605,13 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
     let drop_table_index = map(
         rule! {
             DROP ~ #index_type ~ ^INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
-            ~ ON ~ #dot_separated_idents_1_to_3
+            ~ ON ~ #table_ref
         },
-        |(_, index_type, _, opt_if_exists, index_name, _, (catalog, database, table))| {
+        |(_, index_type, _, opt_if_exists, index_name, _, table)| {
             Statement::DropTableIndex(DropTableIndexStmt {
                 if_exists: opt_if_exists.is_some(),
                 index_name,
                 index_type,
-                catalog,
-                database,
                 table,
             })
         },
@@ -1648,14 +1619,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let refresh_table_index = map(
         rule! {
-            REFRESH ~ #index_type ~ ^INDEX ~ #ident ~ ON ~ #dot_separated_idents_1_to_3 ~ ( LIMIT ~ #literal_u64 )?
+            REFRESH ~ #index_type ~ ^INDEX ~ #ident ~ ON ~ #table_ref ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, index_type, _, index_name, _, (catalog, database, table), opt_limit)| {
+        |(_, index_type, _, index_name, _, table, opt_limit)| {
             Statement::RefreshTableIndex(RefreshTableIndexStmt {
                 index_name,
                 index_type,
-                catalog,
-                database,
                 table,
                 limit: opt_limit.map(|(_, limit)| limit),
             })
@@ -1664,13 +1633,14 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let refresh_virtual_column = map(
         rule! {
-            REFRESH ~ VIRTUAL ~ ^COLUMN ~ ^( FOR | ON ) ~ ^#dot_separated_idents_1_to_3 ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ ^#literal_u64 )? ~ OVERWRITE?
+            REFRESH ~ VIRTUAL ~ ^COLUMN ~ ^( FOR | ON ) ~ ^#table_ref ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ ^#literal_u64 )? ~ OVERWRITE?
         },
-        |(_, _, _, _, (catalog, database, table), opt_selection, opt_limit, opt_overwrite)| {
+        |(_, _, _, _, table_ref, opt_selection, opt_limit, opt_overwrite)| {
             Statement::RefreshVirtualColumn(RefreshVirtualColumnStmt {
-                catalog,
-                database,
-                table,
+                catalog: table_ref.catalog,
+                database: table_ref.database,
+                table: table_ref.table,
+                branch: table_ref.branch,
                 selection: opt_selection.map(|(_, selection)| Box::new(selection)),
                 limit: opt_limit.map(|(_, limit)| limit),
                 overwrite: opt_overwrite.is_some(),
@@ -2826,6 +2796,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             )
             | (
                 #show_tables : "`SHOW [FULL] TABLES [FROM <database>] [<show_limit>]`"
+                | #show_branches : "`SHOW BRANCHES FROM <table> [<show_options>]`"
                 | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
                 | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
                 | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
@@ -2884,7 +2855,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         BEGIN => rule!(#begin).parse(i),
         COMMIT => rule!(#commit).parse(i),
         ABORT | ROLLBACK => rule!(#abort).parse(i),
-        TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
+        TRUNCATE => rule!(#truncate_table : "`TRUNCATE TABLE [<database>.]<table>[/<branch>]`"
             ).parse(i),
         OPTIMIZE => rule!(#optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             ).parse(i),
@@ -2895,7 +2866,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
             | #vacuum_virtual_column : "`VACUUM VIRTUAL COLUMN FROM [<database>.]<table>`"
             | #vacuum_temporary_tables
         ).parse(i),
-        ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
+        ANALYZE => rule!(#analyze_table : "`ANALYZE TABLE [<database>.]<table>[/<branch>]`"
             ).parse(i),
         EXISTS => rule!(#exists_table : "`EXISTS TABLE [<database>.]<table>`"
             ).parse(i),
@@ -2908,7 +2879,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         REFRESH => rule!(
             #refresh_index: "`REFRESH <index_type> INDEX <index> [LIMIT <limit>]`"
             | #refresh_table_index: "`REFRESH <index_type> INDEX <index> ON [<database>.]<table> [LIMIT <limit>]`"
-            | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>[/<branch>]`"
         ).parse(i),
         LIST => rule!(#list_stage: "`LIST @<stage_name> [pattern = '<pattern>']`"
             ).parse(i),
@@ -3210,14 +3181,15 @@ fn into_clause(i: Input) -> IResult<IntoClause> {
     map(
         rule! {
             INTO
-            ~ #dot_separated_idents_1_to_3
+            ~ #table_ref
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ (VALUES ~ "(" ~ #comma_separated_list1(source_expr) ~ ")" )?
         },
-        |(_, (catalog, database, table), opt_target_columns, opt_source_columns)| IntoClause {
-            catalog,
-            database,
-            table,
+        |(_, table_ref, opt_target_columns, opt_source_columns)| IntoClause {
+            catalog: table_ref.catalog,
+            database: table_ref.database,
+            table: table_ref.table,
+            branch: table_ref.branch,
             target_columns: opt_target_columns
                 .map(|(_, columns, _)| columns)
                 .unwrap_or_default(),
@@ -3249,7 +3221,7 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
         map(
             rule! {
                 REPLACE ~ #hint? ~ INTO?
-                ~ #dot_separated_idents_1_to_3
+                ~ #table_ref
                 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
                 ~ ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")"
                 ~ ( DELETE ~ WHEN ~ ^#expr )?
@@ -3259,7 +3231,7 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
                 _,
                 opt_hints,
                 _,
-                (catalog, database, table),
+                table,
                 opt_columns,
                 _,
                 opt_conflict,
@@ -3271,8 +3243,6 @@ pub fn replace_stmt(allow_raw: bool) -> impl FnMut(Input) -> IResult<Statement> 
             )| {
                 Statement::Replace(ReplaceStmt {
                     hints: opt_hints,
-                    catalog,
-                    database,
                     table,
                     is_conflict: opt_conflict.is_some(),
                     on_conflict_columns,
@@ -3371,11 +3341,9 @@ pub fn mutation_source(i: Input) -> IResult<MutationSource> {
     });
 
     let source_table = map(
-        rule!(#dot_separated_idents_1_to_3 ~ #with_options? ~ #table_alias?),
-        |((catalog, database, table), with_options, alias)| MutationSource::Table {
-            catalog,
-            database,
-            table,
+        rule!(#table_ref ~ #with_options? ~ #table_alias?),
+        |(table, with_options, alias)| MutationSource::Table {
+            table: Box::new(table),
             with_options,
             alias,
         },
@@ -4966,6 +4934,16 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, branch_name)| AlterTableAction::DropTableBranch { branch_name },
     );
 
+    let undrop_table_branch = map(
+        rule! {
+            UNDROP ~ BRANCH ~ #ident ~ (RETAIN ~ #literal_duration)?
+        },
+        |(_, _, branch_name, retain)| AlterTableAction::UndropTableBranch {
+            branch_name,
+            retain: retain.map(|(_, retain)| retain),
+        },
+    );
+
     let drop_table_tag = map(
         rule! {
             DROP ~ TAG ~ #ident
@@ -4978,6 +4956,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         #create_table_branch
             | #create_table_tag
             | #drop_table_branch
+            | #undrop_table_branch
             | #drop_table_tag
             | #alter_table_cluster_key
             | #drop_table_cluster_key

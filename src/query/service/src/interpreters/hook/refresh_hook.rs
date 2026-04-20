@@ -57,6 +57,7 @@ pub struct RefreshDesc {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 /// Hook refresh action with a on-finished callback.
@@ -84,7 +85,12 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
 async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let table = ctx
-        .get_table(&desc.catalog, &desc.database, &desc.table)
+        .get_table_with_branch(
+            &desc.catalog,
+            &desc.database,
+            &desc.table,
+            desc.branch.as_deref(),
+        )
         .await?;
     let table_id = table.get_id();
 
@@ -282,6 +288,7 @@ async fn generate_refresh_table_index_plan(
             catalog: desc.catalog.clone(),
             database: desc.database.clone(),
             table: desc.table.clone(),
+            branch: desc.branch.clone(),
             index_name: index.name.clone(),
             segment_locs: Some(segment_locs.clone()),
         };

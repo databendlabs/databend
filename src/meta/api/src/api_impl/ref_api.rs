@@ -716,13 +716,13 @@ where
 
         // 3. Collect all unique branch_ids
         let mut branch_id_set: HashSet<u64> = active_map.keys().copied().collect();
-        let mut dropped_map: HashMap<u64, (String, DateTime<Utc>)> = HashMap::new();
+        let mut dropped_map: HashMap<u64, (String, DroppedBranchMeta)> = HashMap::new();
 
         for (key, seq_dropped) in &dropped_branches {
             branch_id_set.insert(key.branch_id);
             dropped_map.insert(
                 key.branch_id,
-                (key.branch_name.clone(), seq_dropped.data.drop_on),
+                (key.branch_name.clone(), seq_dropped.data.clone()),
             );
         }
 
@@ -746,8 +746,8 @@ where
 
             // Filter branches whose effective delete time is already beyond the retention window.
             if let Some(retention_boundary) = req.retention_boundary {
-                if let Some((_, drop_on)) = dropped_map.get(&branch_id.table_id) {
-                    if *drop_on < retention_boundary {
+                if let Some((_, drop_meta)) = dropped_map.get(&branch_id.table_id) {
+                    if drop_meta.drop_on < retention_boundary {
                         continue;
                     }
                 } else if let Some((_, expire_at)) = active_map.get(&branch_id.table_id) {
@@ -760,8 +760,8 @@ where
             let (branch_name, expire_at) =
                 if let Some((name, expire_at)) = active_map.get(&branch_id.table_id) {
                     (name.clone(), *expire_at)
-                } else if let Some((name, _)) = dropped_map.get(&branch_id.table_id) {
-                    (name.clone(), None)
+                } else if let Some((name, drop_meta)) = dropped_map.get(&branch_id.table_id) {
+                    (name.clone(), drop_meta.expire_at)
                 } else {
                     // unreachable.
                     warn!(

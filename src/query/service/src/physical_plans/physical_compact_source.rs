@@ -234,12 +234,14 @@ impl PhysicalPlanBuilder {
             catalog,
             database,
             table,
+            branch,
             limit,
         } = compact_block;
 
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog).await?;
-        let tbl = catalog.get_table(&tenant, database, table).await?;
+        let tbl = self
+            .ctx
+            .get_table_with_branch(catalog, database, table, branch.as_deref())
+            .await?;
         // check mutability
         tbl.check_mutable()?;
 

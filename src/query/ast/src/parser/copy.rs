@@ -63,27 +63,15 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
         rule! {
             #with? ~ COPY
             ~ #hint?
-            ~ INTO ~ #dot_separated_idents_1_to_3 ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ INTO ~ #table_ref ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ ^FROM ~ ^#copy_into_table_source
             ~ #copy_into_table_option*
         },
-        |(
-            with,
-            _copy,
-            opt_hints,
-            _into,
-            (catalog, database, table),
-            dst_columns,
-            _from,
-            src,
-            opts,
-        )| {
+        |(with, _copy, opt_hints, _into, table, dst_columns, _from, src, opts)| {
             let mut copy_stmt = CopyIntoTableStmt {
                 with,
                 hints: opt_hints,
                 src,
-                catalog,
-                database,
                 table,
                 dst_columns: dst_columns.map(|(_, columns, _)| columns),
                 files: Default::default(),

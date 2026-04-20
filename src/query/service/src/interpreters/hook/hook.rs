@@ -40,6 +40,7 @@ pub struct HookOperator {
     catalog: String,
     database: String,
     table: String,
+    branch: Option<String>,
     mutation_kind: MutationKind,
     lock_opt: LockTableOption,
 }
@@ -50,6 +51,7 @@ impl HookOperator {
         catalog: String,
         database: String,
         table: String,
+        branch: Option<String>,
         mutation_kind: MutationKind,
         lock_opt: LockTableOption,
     ) -> Self {
@@ -58,6 +60,7 @@ impl HookOperator {
             catalog,
             database,
             table,
+            branch,
             mutation_kind,
             lock_opt,
         }
@@ -102,6 +105,7 @@ impl HookOperator {
             catalog: self.catalog.to_owned(),
             database: self.database.to_owned(),
             table: self.table.to_owned(),
+            branch: self.branch.clone(),
         };
 
         let trace_ctx = CompactHookTraceCtx {
@@ -129,6 +133,7 @@ impl HookOperator {
             catalog: self.catalog.to_owned(),
             database: self.database.to_owned(),
             table: self.table.to_owned(),
+            branch: self.branch.clone(),
         };
 
         hook_refresh(self.ctx.clone(), pipeline, refresh_desc).await;
@@ -142,6 +147,7 @@ impl HookOperator {
             catalog: self.catalog.to_owned(),
             database: self.database.to_owned(),
             table: self.table.to_owned(),
+            branch: self.branch.clone(),
         };
 
         hook_analyze(self.ctx.clone(), pipeline, desc).await;

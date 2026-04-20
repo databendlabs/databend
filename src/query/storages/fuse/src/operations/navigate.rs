@@ -28,6 +28,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::check_table_ref_access;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -48,7 +49,6 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::check_table_ref_access;
 
 impl FuseTable {
     #[fastrace::trace]

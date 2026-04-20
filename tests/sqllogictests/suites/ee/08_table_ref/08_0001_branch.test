@@ -25,9 +25,6 @@ statement ok
 USE test_branch
 
 statement ok
-set data_retention_time_in_days = 0;
-
-statement ok
 CREATE OR REPLACE TABLE t1(a INT, b STRING)
 
 statement ok
@@ -42,6 +39,21 @@ SELECT * FROM t1 ORDER BY a
 
 statement ok
 ALTER TABLE t1 CREATE BRANCH dev
+
+query TBBB
+SELECT name, branch_id > 0, snapshot_location != '', expire_at IS NOT NULL FROM system.branches WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1 1 0
+
+query TITT
+SHOW BRANCHES FROM t1 LIKE 'dev'
+----
+dev <slt:ignore> <slt:ignore> NULL
+
+query TITT
+SHOW BRANCHES IN test_branch.t1 WHERE name = 'dev' LIMIT 1
+----
+dev <slt:ignore> <slt:ignore> NULL
 
 statement ok
 ALTER TABLE t1 CREATE TAG v1
@@ -119,6 +131,51 @@ ALTER TABLE t1 DROP BRANCH dev
 
 statement error 2745
 SELECT * FROM t1/dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev RETAIN 1 SECONDS
+
+statement ok
+SELECT SLEEP(1)
+
+statement error 2748
+SELECT * FROM t1/dev
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+query TB
+SELECT name, dropped_on IS NOT NULL FROM system.branches_with_history WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev RETAIN 7 DAYS
+
+query TB
+SELECT name, expire_at IS NOT NULL FROM system.branches WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
 
 statement error 2745
 ALTER TABLE t1 DROP BRANCH non_existent

@@ -109,6 +109,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
@@ -442,6 +443,11 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<()> {
         self.mutable_catalog.drop_table_branch(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn undrop_table_branch(&self, req: UndropTableBranchReq) -> Result<()> {
+        self.mutable_catalog.undrop_table_branch(req).await
     }
 
     #[async_backtrace::framed]

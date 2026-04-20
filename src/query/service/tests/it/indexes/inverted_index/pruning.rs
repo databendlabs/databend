@@ -542,6 +542,7 @@ async fn test_block_pruner() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: test_tbl_name.to_string(),
+        branch: None,
         index_name: index_name.clone(),
         segment_locs: None,
     };

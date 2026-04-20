@@ -30,8 +30,17 @@ pub struct InsertMultiTable {
     pub whens: Vec<When>,
     pub opt_else: Option<Else>,
     pub intos: Vec<Into>,
-    pub target_tables: Vec<(u64, (String, String))>, /* (table_id, (database, table)), statement returns result set in this order */
+    pub target_tables: Vec<InsertMultiTableTarget>,
     pub meta_data: MetadataRef,
+}
+
+#[derive(Clone, Debug)]
+pub struct InsertMultiTableTarget {
+    pub table_id: u64,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub branch: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -45,6 +54,7 @@ pub struct Into {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     // eval scalar and project subquery's output with VALUES ( source_col_name [ , ... ] ) (if exists)
     pub source_scalar_exprs: Option<Vec<ScalarExpr>>,
     //  cast to ( target_col_name [ , ... ] )'s schema (if exists) or target table's schema
@@ -59,8 +69,17 @@ pub struct Else {
 impl InsertMultiTable {
     pub fn schema(&self) -> DataSchemaRef {
         let mut fields = vec![];
-        for (_, (db, tbl)) in self.target_tables.iter() {
-            let field_name = format!("number of rows inserted into {}.{}", db, tbl);
+        for target in self.target_tables.iter() {
+            let field_name = match &target.branch {
+                Some(branch) => format!(
+                    "number of rows inserted into {}.{}/{}",
+                    target.database, target.table, branch
+                ),
+                None => format!(
+                    "number of rows inserted into {}.{}",
+                    target.database, target.table
+                ),
+            };
             fields.push(DataField::new(
                 &field_name,
                 DataType::Number(NumberDataType::UInt64),

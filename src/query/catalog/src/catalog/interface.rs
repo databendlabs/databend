@@ -103,6 +103,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
@@ -344,6 +345,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn drop_table_branch(&self, _req: DropTableBranchReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "'drop_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn undrop_table_branch(&self, _req: UndropTableBranchReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'undrop_table_branch' not implemented for catalog {}",
             self.name()
         )))
     }

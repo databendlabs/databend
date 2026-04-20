@@ -182,6 +182,7 @@ pub enum Statement {
 
     // Tables
     ShowTables(ShowTablesStmt),
+    ShowBranches(ShowBranchesStmt),
     ShowCreateTable(ShowCreateTableStmt),
     DescribeTable(DescribeTableStmt),
     ShowTablesStatus(ShowTablesStatusStmt),
@@ -495,6 +496,7 @@ impl Statement {
             | Statement::ShowCreateDatabase(..)
             | Statement::UseDatabase { .. }
             | Statement::ShowTables(..)
+            | Statement::ShowBranches(..)
             | Statement::ShowCreateTable(..)
             | Statement::DescribeTable(..)
             | Statement::ShowStatistics(..)
@@ -859,6 +861,7 @@ impl Display for Statement {
             Statement::AlterDatabase(stmt) => write!(f, "{stmt}")?,
             Statement::UseDatabase { database } => write!(f, "USE {database}")?,
             Statement::ShowTables(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowBranches(stmt) => write!(f, "{stmt}")?,
             Statement::ShowColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowCreateTable(stmt) => write!(f, "{stmt}")?,
             Statement::DescribeTable(stmt) => write!(f, "{stmt}")?,

@@ -26,16 +26,14 @@ use crate::ast::Identifier;
 use crate::ast::MutationSource;
 use crate::ast::MutationUpdateExpr;
 use crate::ast::TableAlias;
+use crate::ast::TableRef;
 use crate::ast::With;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UpdateStmt {
     pub hints: Option<Hint>,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
     pub table_alias: Option<TableAlias>,
     pub update_list: Vec<MutationUpdateExpr>,
     pub from: Option<MutationSource>,
@@ -53,13 +51,7 @@ impl Display for UpdateStmt {
         if let Some(hints) = &self.hints {
             write!(f, "{} ", hints)?;
         }
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, "{}", self.table)?;
         if let Some(alias) = &self.table_alias {
             write!(f, " AS {}", alias)?;
         }
