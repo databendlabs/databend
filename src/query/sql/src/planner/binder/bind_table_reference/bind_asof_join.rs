@@ -84,40 +84,32 @@ impl Binder {
             std::mem::swap(&mut condition.left, &mut condition.right)
         }
 
-        let span = right_column.span();
-        let arguments = [
-            right_column,
-            BoundColumnRef {
-                span,
-                column: ColumnBindingBuilder::new(
-                    window_func.display_name.clone(),
-                    window_info.index,
-                    Box::new(window_func.func.return_type()),
-                    Visibility::Visible,
-                )
-                .build(),
-            }
-            .into(),
-        ]
-        .to_vec();
-
         let func_name = match range_func.func_name.as_str() {
             GTE => LT,
             GT => LTE,
             LT => GTE,
             LTE => GT,
             _ => unreachable!(),
+        };
+        let span = right_column.span();
+        let lead_column = BoundColumnRef {
+            span,
+            column: ColumnBindingBuilder::new(
+                window_func.display_name.clone(),
+                window_info.index,
+                Box::new(window_func.func.return_type()),
+                Visibility::Visible,
+            )
+            .build(),
         }
-        .to_string();
-        join.non_equi_conditions.push(
-            FunctionCall {
-                span: range_func.span,
-                params: vec![],
-                arguments,
+        .into();
+        join.non_equi_conditions
+            .push(make_asof_interval_end_condition(
+                range_func.span,
+                right_column,
+                lead_column,
                 func_name,
-            }
-            .into(),
-        );
+            ));
 
         let window_plan = bind_window_function_info(&self.ctx, window_info, right)?;
         Ok(SExpr::create_binary(
@@ -158,26 +150,6 @@ impl Binder {
             _ => unreachable!(),
         };
 
-        let constant_default = {
-            let value = if asc {
-                left_column
-                    .data_type()?
-                    .remove_nullable()
-                    .infinity()
-                    .unwrap()
-            } else {
-                left_column
-                    .data_type()?
-                    .remove_nullable()
-                    .ninfinity()
-                    .unwrap()
-            };
-            ConstantExpr {
-                span: left_column.span(),
-                value,
-            }
-        };
-
         let order_items = vec![WindowOrderBy {
             expr: left_column.clone(),
             asc: Some(asc),
@@ -189,12 +161,13 @@ impl Binder {
             partition_items.push(condition.right.clone());
         }
 
+        let return_type = asof_window_result_type(&left_column.data_type()?);
         let func_type = WindowFuncType::LagLead(LagLeadFunction {
             is_lag: false,
-            return_type: Box::new(left_column.data_type()?.clone()),
+            return_type: Box::new(return_type),
             arg: Box::new(left_column),
             offset: 1,
-            default: Some(Box::new(constant_default.into())),
+            default: None,
         });
 
         let window_func = WindowFunc {
@@ -215,6 +188,45 @@ impl Binder {
         };
         Ok((window_func, right_column))
     }
+}
+
+fn asof_window_result_type(
+    data_type: &databend_common_expression::types::DataType,
+) -> databend_common_expression::types::DataType {
+    data_type.wrap_nullable()
+}
+
+fn make_asof_interval_end_condition(
+    span: databend_common_ast::Span,
+    probe_key: ScalarExpr,
+    lead_key: ScalarExpr,
+    func_name: &str,
+) -> ScalarExpr {
+    let compare = ScalarExpr::FunctionCall(FunctionCall {
+        span,
+        func_name: func_name.to_string(),
+        params: vec![],
+        arguments: vec![probe_key, lead_key.clone()],
+    });
+
+    ScalarExpr::FunctionCall(FunctionCall {
+        span,
+        func_name: "if".to_string(),
+        params: vec![],
+        arguments: vec![
+            ScalarExpr::FunctionCall(FunctionCall {
+                span,
+                func_name: "is_not_null".to_string(),
+                params: vec![],
+                arguments: vec![lead_key],
+            }),
+            compare,
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: Scalar::Boolean(true),
+            }),
+        ],
+    })
 }
 
 pub fn is_range_join_condition<'a>(
@@ -250,5 +262,72 @@ pub fn is_range_join_condition<'a>(
             Some(func)
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+    use crate::Symbol;
+
+    fn test_column(name: &str, index: usize, data_type: DataType) -> ScalarExpr {
+        BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                name.to_string(),
+                Symbol::from_field_index(index),
+                Box::new(data_type),
+                Visibility::Visible,
+            )
+            .build(),
+        }
+        .into()
+    }
+
+    #[test]
+    fn test_asof_interval_end_condition_guards_open_tail_with_null_lead() {
+        let probe = test_column("probe", 0, DataType::Number(NumberDataType::UInt8));
+        let lead = test_column(
+            "lead",
+            1,
+            DataType::Number(NumberDataType::UInt8).wrap_nullable(),
+        );
+
+        let expr = make_asof_interval_end_condition(None, probe.clone(), lead.clone(), LT);
+        let ScalarExpr::FunctionCall(func) = expr else {
+            panic!("expected function call");
+        };
+
+        assert_eq!(func.func_name, "if");
+        assert_eq!(func.arguments.len(), 3);
+
+        let ScalarExpr::FunctionCall(not_null) = &func.arguments[0] else {
+            panic!("expected is_not_null guard");
+        };
+        assert_eq!(not_null.func_name, "is_not_null");
+        assert_eq!(not_null.arguments, vec![lead.clone()]);
+
+        let ScalarExpr::FunctionCall(compare) = &func.arguments[1] else {
+            panic!("expected comparison branch");
+        };
+        assert_eq!(compare.func_name, LT);
+        assert_eq!(compare.arguments, vec![probe, lead]);
+
+        let ScalarExpr::ConstantExpr(constant) = &func.arguments[2] else {
+            panic!("expected constant true branch");
+        };
+        assert_eq!(constant.value, Scalar::Boolean(true));
+    }
+
+    #[test]
+    fn test_asof_window_result_type_is_nullable() {
+        let data_type = DataType::Number(NumberDataType::UInt8);
+        assert_eq!(
+            asof_window_result_type(&data_type),
+            data_type.wrap_nullable()
+        );
     }
 }

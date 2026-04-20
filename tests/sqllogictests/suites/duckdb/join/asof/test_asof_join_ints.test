@@ -8,6 +8,18 @@ drop table if exists events0
 statement ok
 drop table if exists probe0
 
+statement ok
+drop table if exists events_u8
+
+statement ok
+drop table if exists probe_u8
+
+statement ok
+drop table if exists events_u8_bounds
+
+statement ok
+drop table if exists probe_u8_bounds
+
 # Join on a string range
 
 statement ok
@@ -27,6 +39,41 @@ statement ok
 CREATE TABLE probe0 AS 
 	(SELECT v::INTEGER AS begin
 	FROM range(0,10) vals(v))
+;
+
+statement ok
+CREATE TABLE events_u8 (begin TINYINT UNSIGNED, value INTEGER);
+
+statement ok
+INSERT INTO events_u8 VALUES
+	(1, 10),
+	(3, 20),
+	(6, 30),
+	(8, 40)
+;
+
+statement ok
+CREATE TABLE probe_u8 AS
+	(SELECT v::TINYINT UNSIGNED AS begin
+	FROM range(0,10) vals(v))
+;
+
+statement ok
+CREATE TABLE events_u8_bounds (begin TINYINT UNSIGNED, value INTEGER);
+
+statement ok
+INSERT INTO events_u8_bounds VALUES
+	(0, 100),
+	(255, 200)
+;
+
+statement ok
+CREATE TABLE probe_u8_bounds (begin TINYINT UNSIGNED);
+
+statement ok
+INSERT INTO probe_u8_bounds VALUES
+	(0),
+	(255)
 ;
 
 # This is not implemented yet because it requires a dedicated operator 
@@ -85,3 +132,41 @@ ORDER BY p.begin ASC, e.value ASC
 9	3
 NULL	-1
 NULL	9
+
+# LEFT ON inequality only for unsigned integer keys
+query II
+SELECT p.begin, e.value
+FROM probe_u8 p ASOF LEFT JOIN events_u8 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+0	NULL
+1	10
+2	10
+3	20
+4	20
+5	20
+6	30
+7	30
+8	40
+9	40
+
+# Boundary rows at the legal unsigned maximum still belong to the terminal interval.
+query II
+SELECT p.begin, e.value
+FROM probe_u8_bounds p ASOF LEFT JOIN events_u8_bounds e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+0	100
+255	200
+
+# Boundary rows at the legal unsigned minimum still belong to the initial interval.
+query II
+SELECT p.begin, e.value
+FROM probe_u8_bounds p ASOF LEFT JOIN events_u8_bounds e
+ON p.begin <= e.begin
+ORDER BY p.begin ASC
+----
+0	100
+255	200
