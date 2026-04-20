@@ -96,13 +96,13 @@ jobs:
         run: |
           case "${{ steps.bump.outputs.type }}" in
             nightly)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --prerelease --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --prerelease --draft
               ;;
             stable)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --latest --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --latest --draft
               ;;
             patch)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --prerelease --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --prerelease --draft
               ;;
             *)
               echo "Invalid release type: ${{ steps.bump.outputs.type }}"
