@@ -258,6 +258,10 @@ impl<'a> EagerInput<'a> {
             .flat_map(|item| item.scalar.used_columns())
             .collect::<ColumnSet>();
 
+        if self.has_mixed_sum_and_count_aggregates(&eval_scalar_used_columns) {
+            return Ok(vec![]);
+        }
+
         let function_factory = AggregateFunctionFactory::instance();
         let eager_candidates = EagerCandidates::collect(
             &self.final_agg,
@@ -353,6 +357,36 @@ impl<'a> EagerInput<'a> {
                 )
             })
             .collect())
+    }
+
+    fn has_mixed_sum_and_count_aggregates(&self, eval_scalar_used_columns: &ColumnSet) -> bool {
+        let mut has_sum = false;
+        let mut has_count = false;
+
+        for aggregate in &self.final_agg.aggregate_functions {
+            if !eval_scalar_used_columns.contains(&aggregate.index) {
+                continue;
+            }
+
+            let ScalarExpr::AggregateFunction(aggregate_function) = &aggregate.scalar else {
+                continue;
+            };
+
+            match aggregate_function.func_name.as_str() {
+                "sum" => has_sum = true,
+                "count" => has_count = true,
+                _ => {}
+            }
+
+            if has_sum && has_count {
+                // Mixed sum/count outputs are used by rewrites such as AVG = SUM / COUNT.
+                // The current eager-count rewrite only preserves semantics for pure SUM or
+                // pure COUNT flows, so keep the original plan for mixed expressions.
+                return true;
+            }
+        }
+
+        false
     }
 
     fn expand_analyses(
