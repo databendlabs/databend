@@ -2683,6 +2683,73 @@ CreateTable(
 
 
 ---------- Input ----------
+create table issue_11031 (range int, samples int)
+---------- Output ---------
+CREATE TABLE issue_11031 (range Int32, samples Int32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..24,
+            ),
+            name: "issue_11031",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                26..31,
+                            ),
+                            name: "range",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                37..44,
+                            ),
+                            name: "samples",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
 create table cluster_tbl (a int, b int) cluster by (a, b)
 ---------- Output ---------
 CREATE TABLE cluster_tbl (a Int32, b Int32) CLUSTER BY LINEAR(a, b)
@@ -8287,6 +8354,90 @@ Delete(
                 ],
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+select range from issue_11031;
+---------- Output ---------
+SELECT range FROM issue_11031
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..29,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..12,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..12,
+                                        ),
+                                        name: "range",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            18..29,
+                        ),
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    18..29,
+                                ),
+                                name: "issue_11031",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

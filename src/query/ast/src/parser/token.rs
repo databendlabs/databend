@@ -1963,7 +1963,6 @@ impl TokenKind {
             | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
-            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
