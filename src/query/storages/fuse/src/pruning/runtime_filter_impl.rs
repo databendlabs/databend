@@ -330,7 +330,10 @@ pub struct BloomRowFilter {
 
 impl BloomRowFilter {
     pub fn create(column_name: String, filter: Arc<Sbbf>) -> Arc<dyn RowRuntimeFilter> {
-        Arc::new(Self { column_name, filter })
+        Arc::new(Self {
+            column_name,
+            filter,
+        })
     }
 }
 
