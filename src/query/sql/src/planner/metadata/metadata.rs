@@ -490,16 +490,6 @@ impl Metadata {
         }
     }
 
-    pub fn change_derived_column_data_type(&mut self, index: Symbol, data_type: DataType) {
-        let derived_column = self
-            .columns
-            .get_mut(index.as_usize())
-            .expect("metadata must contain column");
-        if let ColumnEntry::DerivedColumn(column) = derived_column {
-            column.data_type = data_type;
-        }
-    }
-
     pub fn set_max_column_position(&mut self, max_pos: usize) {
         self.max_column_position = max_pos
     }

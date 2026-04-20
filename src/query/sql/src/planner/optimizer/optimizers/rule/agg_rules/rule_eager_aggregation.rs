@@ -380,8 +380,8 @@ impl<'a> EagerInput<'a> {
 
             if has_sum && has_count {
                 // Mixed sum/count outputs are used by rewrites such as AVG = SUM / COUNT.
-                // The current eager-count rewrite only preserves semantics for pure SUM or
-                // pure COUNT flows, so keep the original plan for mixed expressions.
+                // The current eager-count rewrite does not preserve this shape, so keep the
+                // original aggregate plan instead of applying eager aggregation.
                 return true;
             }
         }
@@ -763,17 +763,9 @@ impl EagerAnalysis {
                     .push(Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        agg,
+                        aggregate_function,
                         eager_group_by_and_eager_count[agg_side.opposite()].1,
                     )?);
-                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
-                    Self::refresh_eval_scalar_binding_type(
-                        metadata,
-                        &mut eager_split_eval_scalar,
-                        agg.index,
-                        &aggregate_function.return_type,
-                    )?;
-                }
             }
         }
 
@@ -852,18 +844,10 @@ impl EagerAnalysis {
                     Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        agg,
+                        aggregate_function,
                         eager_count_index,
                     )?,
                 );
-                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
-                    Self::refresh_eval_scalar_binding_type(
-                        metadata,
-                        &mut eager_groupby_count_scalar,
-                        agg.index,
-                        &aggregate_function.return_type,
-                    )?;
-                }
             }
         }
 
@@ -942,7 +926,6 @@ impl EagerAnalysis {
         }
 
         let mut final_eager_count = self.final_agg.clone();
-        let mut eager_count_eval_scalar = input.eval_scalar.clone();
         let mut eager_count = self.pruned_aggregate_for_side(d.opposite());
         let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
 
@@ -956,17 +939,9 @@ impl EagerAnalysis {
                     .push(Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        agg,
+                        aggregate_function,
                         eager_count_index,
                     )?);
-                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
-                    Self::refresh_eval_scalar_binding_type(
-                        metadata,
-                        &mut eager_count_eval_scalar,
-                        agg.index,
-                        &aggregate_function.return_type,
-                    )?;
-                }
             }
         }
 
@@ -987,7 +962,7 @@ impl EagerAnalysis {
             input,
             new_join.build_unary(eager_count_sum),
             final_eager_count,
-            eager_count_eval_scalar,
+            input.eval_scalar.clone(),
         )))
     }
 
@@ -1034,17 +1009,9 @@ impl EagerAnalysis {
                     .push(Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        agg,
+                        aggregate_function,
                         eager_count_index,
                     )?);
-                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
-                    Self::refresh_eval_scalar_binding_type(
-                        metadata,
-                        &mut double_eager_eval_scalar,
-                        agg.index,
-                        &aggregate_function.return_type,
-                    )?;
-                }
             }
         }
 
@@ -1163,13 +1130,6 @@ impl EagerAnalysis {
             format!("_eager_final_{}", agg.func_name),
             *(agg.return_type).clone(),
         );
-        let rewritten_output_column = ColumnBindingBuilder::new(
-            metadata.read().column(new_index).name(),
-            new_index,
-            agg.return_type.clone(),
-            Visibility::Visible,
-        )
-        .build();
 
         Self::modify_final_aggregate_function(agg, old_index);
         aggr_function.index = new_index;
@@ -1187,9 +1147,7 @@ impl EagerAnalysis {
                     .scalar
                     .replace_column_with_scalar(old_index, count_output)?;
             } else {
-                scalar_item
-                    .scalar
-                    .replace_column_binding(old_index, &rewritten_output_column)?;
+                scalar_item.scalar.replace_column(old_index, new_index)?;
             }
             success = true;
         }
@@ -1244,12 +1202,14 @@ impl EagerAnalysis {
     fn create_eager_count_multiply_scalar_item(
         metadata: &MetadataRef,
         input: &EagerInput,
-        aggregate_item: &mut ScalarItem,
+        aggregate_function: &mut AggregateFunction,
         eager_count_index: Symbol,
     ) -> Result<ScalarItem, ErrorCode> {
-        let ScalarExpr::AggregateFunction(aggregate_function) = &mut aggregate_item.scalar else {
-            unreachable!()
-        };
+        let new_index = metadata.write().add_derived_column(
+            format!("{} * _eager_count", aggregate_function.display_name),
+            aggregate_function.args[0].data_type()?,
+        );
+
         let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
             let mut scalar_idx = input.extra_eval_scalar.items.len();
             for (idx, eval_scalar) in input.extra_eval_scalar.items.iter().enumerate() {
@@ -1266,89 +1226,37 @@ impl EagerAnalysis {
             unreachable!()
         };
 
-        let scalar = ScalarExpr::FunctionCall(FunctionCall {
-            span: None,
-            func_name: "multiply".to_string(),
-            params: vec![],
-            arguments: vec![
-                new_scalar,
-                wrap_cast(
-                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: None,
-                        column: ColumnBindingBuilder::new(
-                            "_eager_count".to_string(),
-                            eager_count_index,
-                            Box::new(DataType::Nullable(Box::new(DataType::Number(
-                                NumberDataType::UInt64,
-                            )))),
-                            Visibility::Visible,
-                        )
-                        .build(),
-                    }),
-                    &DataType::Number(NumberDataType::UInt64),
-                ),
-            ],
-        });
-        let scalar_type = scalar.data_type()?;
-        let new_index = metadata.write().add_derived_column(
-            format!("{} * _eager_count", aggregate_function.display_name),
-            scalar_type.clone(),
-        );
         let new_scalar_item = ScalarItem {
-            scalar,
+            scalar: ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "multiply".to_string(),
+                params: vec![],
+                arguments: vec![
+                    new_scalar,
+                    wrap_cast(
+                        &ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: ColumnBindingBuilder::new(
+                                "_eager_count".to_string(),
+                                eager_count_index,
+                                Box::new(DataType::Nullable(Box::new(DataType::Number(
+                                    NumberDataType::UInt64,
+                                )))),
+                                Visibility::Visible,
+                            )
+                            .build(),
+                        }),
+                        &DataType::Number(NumberDataType::UInt64),
+                    ),
+                ],
+            }),
             index: new_index,
         };
         if let ScalarExpr::BoundColumnRef(column) = &mut aggregate_function.args[0] {
             column.column.index = new_index;
-            column.column.data_type = Box::new(scalar_type);
+            column.column.data_type = Box::new(new_scalar_item.scalar.data_type()?);
         }
-        let new_return_type = Self::refresh_aggregate_return_type(aggregate_function)?;
-        metadata
-            .write()
-            .change_derived_column_data_type(aggregate_item.index, new_return_type);
         Ok(new_scalar_item)
-    }
-
-    fn refresh_aggregate_return_type(
-        aggregate_function: &mut AggregateFunction,
-    ) -> Result<DataType, ErrorCode> {
-        let arg_types = aggregate_function
-            .args
-            .iter()
-            .map(ScalarExpr::data_type)
-            .collect::<Result<Vec<_>, _>>()?;
-        let function = AggregateFunctionFactory::instance().get(
-            &aggregate_function.func_name,
-            aggregate_function.params.clone(),
-            arg_types,
-            vec![],
-        )?;
-        let return_type = function.return_type()?;
-        aggregate_function.return_type = Box::new(return_type.clone());
-        Ok(return_type)
-    }
-
-    fn refresh_eval_scalar_binding_type(
-        metadata: &MetadataRef,
-        eval_scalar: &mut EvalScalar,
-        index: Symbol,
-        data_type: &DataType,
-    ) -> Result<(), ErrorCode> {
-        let column_binding = ColumnBindingBuilder::new(
-            metadata.read().column(index).name(),
-            index,
-            Box::new(data_type.clone()),
-            Visibility::Visible,
-        )
-        .build();
-
-        for item in &mut eval_scalar.items {
-            if item.scalar.used_columns().contains(&index) {
-                item.scalar.replace_column_binding(index, &column_binding)?;
-            }
-        }
-
-        Ok(())
     }
 }
 
