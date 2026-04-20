@@ -1344,6 +1344,34 @@ fn test_file_format_trim_space_option() {
 }
 
 #[test]
+fn test_stage_local_filesystem_uri_errors() {
+    let cases = [
+        (
+            "create stage mystage url='/test/load/'",
+            "local filesystem paths must use fs:///path/ instead of /path/",
+        ),
+        (
+            "create stage mystage url='file:///tmp/00_0002/'",
+            "local filesystem paths must use fs:///path/ instead of file:///path/",
+        ),
+        (
+            "create stage mystage url='s3://bucket:abc/path/'",
+            "invalid uri invalid port number",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+        assert!(
+            err.1.contains(expected),
+            "expected error to contain `{expected}`, got:\n{}",
+            err.1
+        );
+    }
+}
+
+#[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();
