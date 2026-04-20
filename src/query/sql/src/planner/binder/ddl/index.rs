@@ -63,6 +63,7 @@ use crate::NameResolutionContext;
 use crate::RefreshAggregatingIndexRewriter;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 use crate::binder::Binder;
+use crate::binder::util::TableIdentifier;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimize;
@@ -439,18 +440,22 @@ impl Binder {
             create_option,
             index_name,
             index_type,
-            catalog,
-            database,
             table,
             columns,
             sync_creation,
             index_options,
         } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+        let catalog = table_identifier.catalog_name();
+        let database = table_identifier.database_name();
+        let table_name = table_identifier.table_name();
+        let branch = table_identifier.branch_name();
 
-        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        let table = self
+            .ctx
+            .get_table_with_branch(&catalog, &database, &table_name, branch.as_deref())
+            .await?;
 
         if table.is_read_only() {
             return Err(ErrorCode::UnsupportedIndex(format!(
@@ -901,15 +906,19 @@ impl Binder {
             if_exists,
             index_name,
             index_type,
-            catalog,
-            database,
             table,
         } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+        let catalog = table_identifier.catalog_name();
+        let database = table_identifier.database_name();
+        let table_name = table_identifier.table_name();
+        let branch = table_identifier.branch_name();
 
-        let table = self.ctx.get_table(&catalog, &database, &table).await?;
+        let table = self
+            .ctx
+            .get_table_with_branch(&catalog, &database, &table_name, branch.as_deref())
+            .await?;
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
                 "Table engine {} does not support create index",
@@ -938,8 +947,6 @@ impl Binder {
         let RefreshTableIndexStmt {
             index_name,
             index_type,
-            catalog,
-            database,
             table,
             limit: _,
         } = stmt;
@@ -957,15 +964,15 @@ impl Binder {
             )));
         }
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
         let index_name = self.normalize_object_identifier(index_name);
 
         let plan = RefreshTableIndexPlan {
             index_type: *index_type,
-            catalog,
-            database,
-            table,
+            catalog: table_identifier.catalog_name(),
+            database: table_identifier.database_name(),
+            table: table_identifier.table_name(),
+            branch: table_identifier.branch_name(),
             index_name,
             segment_locs: None,
         };

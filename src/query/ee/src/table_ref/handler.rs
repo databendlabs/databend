@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -24,16 +26,21 @@ use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableTagReq;
 use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableTagReq;
+use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::TableLvtCheck;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
+use databend_common_meta_app::schema::UndropTableBranchByIdReq;
+use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_sql::binder::ConstraintExprBinder;
+use databend_common_sql::check_table_ref_access;
 use databend_common_sql::plans::CreateTableBranchPlan;
 use databend_common_sql::plans::CreateTableTagPlan;
 use databend_common_sql::plans::DropTableBranchPlan;
 use databend_common_sql::plans::DropTableTagPlan;
+use databend_common_sql::plans::UndropBranchTarget;
+use databend_common_sql::plans::UndropTableBranchPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_enterprise_table_ref_handler::TableRefHandler;
 use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
 use databend_meta_client::types::MatchSeq;
@@ -178,8 +185,8 @@ impl TableRefHandler for RealTableRefHandler {
         };
 
         let expire_at = plan.retain.map(|v| now + v);
-        let catalog = ctx.get_catalog(&plan.catalog).await?;
-        catalog
+        let meta_api = meta_store_client();
+        meta_api
             .create_table_branch(CreateTableBranchReq {
                 tenant: ctx.get_tenant(),
                 base_table_id,
@@ -252,8 +259,8 @@ impl TableRefHandler for RealTableRefHandler {
             )));
         };
 
-        let catalog = ctx.get_catalog(&plan.catalog).await?;
-        catalog
+        let meta_api = meta_store_client();
+        meta_api
             .create_table_tag(CreateTableTagReq {
                 table_id: table_info.ident.table_id,
                 seq: MatchSeq::Exact(table_info.ident.seq),
@@ -266,6 +273,7 @@ impl TableRefHandler for RealTableRefHandler {
                 },
             })
             .await
+            .map_err(Into::into)
     }
 
     #[async_backtrace::framed]
@@ -299,7 +307,8 @@ impl TableRefHandler for RealTableRefHandler {
                 ))
             })?;
 
-        catalog
+        let meta_api = meta_store_client();
+        meta_api
             .drop_table_branch(DropTableBranchReq {
                 tenant,
                 table_id: base_table_id,
@@ -307,6 +316,53 @@ impl TableRefHandler for RealTableRefHandler {
                 branch_id: branch_table_info.ident.table_id,
             })
             .await
+            .map_err(Into::into)
+    }
+
+    #[async_backtrace::framed]
+    async fn do_undrop_table_branch(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &UndropTableBranchPlan,
+    ) -> Result<()> {
+        check_table_ref_access(ctx.as_ref())?;
+
+        let table = self
+            .load_source_table(
+                ctx.clone(),
+                &plan.catalog,
+                &plan.database,
+                &plan.table,
+                None,
+            )
+            .await?;
+        let table_info = table.get_table_info();
+        let source_table_id = table_info.ident.table_id;
+
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let base_table_id = fuse_table.get_option(OPT_KEY_BASE_TABLE_ID, source_table_id);
+
+        let meta_api = meta_store_client();
+        match &plan.target {
+            UndropBranchTarget::Id(branch_id) => meta_api
+                .undrop_table_branch_by_id(UndropTableBranchByIdReq {
+                    tenant: ctx.get_tenant(),
+                    table_id: base_table_id,
+                    branch_id: *branch_id,
+                    new_expire_at: plan.retain.map(|v| Utc::now() + v),
+                })
+                .await
+                .map_err(Into::into),
+            UndropBranchTarget::Name(branch_name) => meta_api
+                .undrop_table_branch(UndropTableBranchReq {
+                    tenant: ctx.get_tenant(),
+                    table_id: base_table_id,
+                    branch_name: branch_name.clone(),
+                    new_expire_at: plan.retain.map(|v| Utc::now() + v),
+                })
+                .await
+                .map_err(Into::into),
+        }
     }
 
     #[async_backtrace::framed]
@@ -327,8 +383,14 @@ impl TableRefHandler for RealTableRefHandler {
             )
             .await?;
         let table_id = table.get_table_info().ident.table_id;
-        let catalog = ctx.get_catalog(&plan.catalog).await?;
-        let seq_tag = catalog.get_table_tag(table_id, &plan.name, true).await?;
+        let meta_api = meta_store_client();
+        let seq_tag = meta_api
+            .get_table_tag(GetTableTagReq {
+                table_id,
+                tag_name: plan.name.clone(),
+                include_expired: true,
+            })
+            .await?;
         let Some(seq_tag) = seq_tag else {
             return Err(ErrorCode::UnknownReference(format!(
                 "Unknown tag '{}'",
@@ -336,13 +398,14 @@ impl TableRefHandler for RealTableRefHandler {
             )));
         };
 
-        catalog
+        meta_api
             .drop_table_tag(DropTableTagReq {
                 table_id,
                 tag_name: plan.name.clone(),
                 seq: MatchSeq::Exact(seq_tag.seq),
             })
             .await
+            .map_err(Into::into)
     }
 }
 

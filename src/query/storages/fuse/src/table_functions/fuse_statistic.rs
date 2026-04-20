@@ -19,6 +19,7 @@ use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_ref_arg;
 use databend_common_catalog::table_args::string_value;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -102,15 +103,15 @@ impl SimpleArgFunc for FuseStatistics {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        let tenant_id = ctx.get_tenant();
         let catalog = args.catalog_name.as_deref().unwrap_or(CATALOG_DEFAULT);
+        let (table_name, branch_name) =
+            parse_table_ref_arg(args.table_name.as_str(), ctx.get_settings().as_ref())?;
         let tbl = ctx
-            .get_catalog(catalog)
-            .await?
-            .get_table(
-                &tenant_id,
+            .get_table_with_branch(
+                catalog,
                 args.database_name.as_str(),
-                args.table_name.as_str(),
+                &table_name,
+                branch_name.as_deref(),
             )
             .await?;
 

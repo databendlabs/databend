@@ -208,7 +208,6 @@ pub struct UndropTableBranchReq {
 pub struct UndropTableBranchByIdReq {
     pub tenant: Tenant,
     pub table_id: u64,
-    pub branch_name: String,
     pub branch_id: u64,
     /// Optionally replace the restored branch expiration with a new future timestamp.
     pub new_expire_at: Option<DateTime<Utc>>,

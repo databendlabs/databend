@@ -481,22 +481,12 @@ fn merge_into_to_format_tree<I: IdHumanizer>(
     merge_into: &Mutation,
 ) -> FormatTreeNode {
     // add merge into target_table
-    let table_index = merge_into
+    let table_entry = merge_into
         .metadata
         .read()
-        .get_table_index(
-            Some(merge_into.database_name.as_str()),
-            merge_into.table_name.as_str(),
-        )
-        .unwrap();
-
-    let table_entry = merge_into.metadata.read().table(table_index).clone();
-    let target_table_format = format!(
-        "target_table: {}.{}.{}",
-        table_entry.catalog(),
-        table_entry.database(),
-        table_entry.name(),
-    );
+        .table(merge_into.target_table_index)
+        .clone();
+    let target_table_format = format!("target_table: {}", table_entry.qualified_name());
 
     let target_build_optimization = false;
     let target_build_optimization_format = FormatTreeNode::new(format!(

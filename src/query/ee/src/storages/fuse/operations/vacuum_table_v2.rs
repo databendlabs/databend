@@ -23,6 +23,8 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::TimeDelta;
 use chrono::Utc;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::plan::block_id_from_location;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
@@ -44,7 +46,6 @@ use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_common_storages_fuse::operations::ASSUMPTION_MAX_TXN_DURATION;
 use databend_common_storages_fuse::operations::SnapshotGcSelection;
-use databend_common_users::UserApiProvider;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::Location;
@@ -125,9 +126,6 @@ pub async fn do_vacuum2(
         now - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
     let fuse_table = FuseTable::try_from_table(table)?;
-    let catalog = ctx
-        .get_catalog(fuse_table.get_table_info().catalog())
-        .await?;
 
     // Set the tenant-wide vacuum watermark before deleting any S3 data.
     // This watermark records the retention decision boundary, not per-object delete progress:
@@ -135,7 +133,7 @@ pub async fn do_vacuum2(
     // particular vacuum run ends up deleting nothing for the current table.
     // The watermark is monotonically increasing, so repeated calls are idempotent.
     let tenant = ctx.get_tenant();
-    let meta_api = UserApiProvider::instance().get_meta_store_client();
+    let meta_api = meta_store_client();
     meta_api
         .fetch_set_vacuum_timestamp(&tenant, retention_time)
         .await
@@ -159,7 +157,7 @@ pub async fn do_vacuum2(
         format!("{}/", fuse_table.meta_location_generator().prefix()),
         table_id,
     )]);
-    let history_branches = catalog
+    let history_branches = meta_api
         .list_history_table_branches(ListHistoryTableBranchesReq {
             table_id,
             retention_boundary: None,
@@ -594,10 +592,8 @@ async fn vacuum_base_table(
         .cloned()
         .collect::<HashSet<_>>();
 
-    let catalog = ctx
-        .get_catalog(fuse_table.get_table_info().catalog())
-        .await?;
-    let tags = catalog
+    let meta_api = meta_store_client();
+    let tags = meta_api
         .list_table_tags(ListTableTagsReq {
             table_id: fuse_table.get_id(),
             include_expired: true,
@@ -611,7 +607,7 @@ async fn vacuum_base_table(
             .expire_at
             .is_some_and(|expire_at| expire_at <= Utc::now())
         {
-            match catalog
+            match meta_api
                 .drop_table_tag(DropTableTagReq {
                     table_id: fuse_table.get_id(),
                     tag_name,

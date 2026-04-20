@@ -101,6 +101,7 @@ use crate::interpreters::interpreter_system_action::SystemActionInterpreter;
 use crate::interpreters::interpreter_table_add_constraint::AddTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_branch_create::CreateTableBranchInterpreter;
 use crate::interpreters::interpreter_table_branch_drop::DropTableBranchInterpreter;
+use crate::interpreters::interpreter_table_branch_undrop::UndropTableBranchInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_drop_constraint::DropTableConstraintInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
@@ -491,6 +492,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::DropTableBranch(p) => Ok(Arc::new(DropTableBranchInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::UndropTableBranch(p) => Ok(Arc::new(UndropTableBranchInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

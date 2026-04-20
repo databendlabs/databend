@@ -55,6 +55,7 @@ pub struct Mutation {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
+    pub branch: Option<String>,
     pub table_name_alias: Option<String>,
     pub bind_context: Box<BindContext>,
     pub required_columns: Box<ColumnSet>,
@@ -92,6 +93,7 @@ impl std::fmt::Debug for Mutation {
             .field("catalog", &self.catalog_name)
             .field("database", &self.database_name)
             .field("table", &self.table_name)
+            .field("branch", &self.branch)
             .field("matched", &self.matched_evaluators)
             .field("unmatched", &self.unmatched_evaluators)
             .field("distributed", &self.distributed)
@@ -178,6 +180,7 @@ impl PartialEq for Mutation {
         self.catalog_name == other.catalog_name
             && self.database_name == other.database_name
             && self.table_name == other.table_name
+            && self.branch == other.branch
             && self.matched_evaluators == other.matched_evaluators
             && self.unmatched_evaluators == other.unmatched_evaluators
             && self.distributed == other.distributed

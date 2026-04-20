@@ -24,15 +24,13 @@ use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::InsertSource;
+use crate::ast::TableRef;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ReplaceStmt {
     pub hints: Option<Hint>,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
     pub is_conflict: bool,
     pub on_conflict_columns: Vec<Identifier>,
     pub columns: Vec<Identifier>,
@@ -47,13 +45,7 @@ impl Display for ReplaceStmt {
             write!(f, " {}", hints)?;
         }
         write!(f, " INTO ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, "{}", self.table)?;
 
         if !self.columns.is_empty() {
             write!(f, " (")?;

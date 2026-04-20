@@ -17,6 +17,8 @@ use databend_common_ast::ast::DescribeStreamStmt;
 use databend_common_ast::ast::DropStreamStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowStreamsStmt;
+use databend_common_catalog::table::NavigationPoint;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
@@ -25,6 +27,7 @@ use log::debug;
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
+use crate::binder::check_table_ref_access;
 use crate::normalize_identifier;
 use crate::plans::CreateStreamPlan;
 use crate::plans::DropStreamPlan;
@@ -45,6 +48,7 @@ impl Binder {
             stream,
             table_database,
             table,
+            table_branch,
             travel_point,
             append_only,
             comment,
@@ -59,12 +63,24 @@ impl Binder {
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| self.ctx.get_current_database());
         let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+        let table_branch = table_branch
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name);
 
         let navigation = if let Some(point) = travel_point {
             Some(self.resolve_data_travel_point(bind_context, point)?)
         } else {
             None
         };
+        if table_branch.is_some() {
+            check_table_ref_access(self.ctx.as_ref())?;
+            if matches!(navigation, Some(NavigationPoint::TableTag(_))) {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported TAG navigation on branch reference `{catalog}.{table_database}.{table_name}/{}`",
+                    table_branch.as_ref().unwrap()
+                )));
+            }
+        }
 
         let plan = CreateStreamPlan {
             create_option: create_option.clone().into(),
@@ -74,6 +90,7 @@ impl Binder {
             stream_name,
             table_database,
             table_name,
+            table_branch,
             navigation,
             append_only: *append_only,
             comment: comment.clone(),

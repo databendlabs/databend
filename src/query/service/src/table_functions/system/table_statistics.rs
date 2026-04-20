@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_ref_arg;
 use databend_common_catalog::table_args::string_value;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -90,11 +91,23 @@ impl SimpleTableFunc for TableStatisticsFunc {
 
         // If a specific table is specified
         if let Some(table_name) = &self.args.table_name {
+            let (base_table_name, branch_name) =
+                parse_table_ref_arg(table_name, ctx.get_settings().as_ref())?;
             // Directly get the specified table
-            if let Ok(tbl) = catalog
-                .get_table(&tenant_id, &self.args.database_name, table_name)
-                .await
-            {
+            let table_result = ctx
+                .get_table_with_branch(
+                    CATALOG_DEFAULT,
+                    &self.args.database_name,
+                    &base_table_name,
+                    branch_name.as_deref(),
+                )
+                .await;
+            let tbl = match table_result {
+                Ok(tbl) => Some(tbl),
+                Err(err) if branch_name.is_some() => return Err(err),
+                Err(_) => None,
+            };
+            if let Some(tbl) = tbl {
                 let engine = tbl.get_table_info().engine().to_string();
                 match engine.to_lowercase().as_str() {
                     "fuse" => {

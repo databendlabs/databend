@@ -5154,7 +5154,6 @@ dependencies = [
  "databend-common-storages-fuse",
  "databend-common-storages-stream",
  "databend-common-tracing",
- "databend-common-users",
  "databend-common-version",
  "databend-enterprise-attach-table",
  "databend-enterprise-data-mask-feature",
@@ -12342,9 +12341,9 @@ dependencies = [
 
 [[package]]
 name = "openraft-macros"
-version = "0.10.0-alpha.19"
+version = "0.10.0-alpha.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8755bfaeea7601f72329d386a32947cfed281272c8f8434dfdfd6d5d465eaa5"
+checksum = "880853cd85c2dd7883122134abcc5483005dd175d6027e9e00c1eede8fd2a956"
 dependencies = [
  "chrono",
  "proc-macro2",
@@ -12355,9 +12354,9 @@ dependencies = [
 
 [[package]]
 name = "openraft-rt"
-version = "0.10.0-alpha.19"
+version = "0.10.0-alpha.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82652038a6558d47b98e960fc76b9798f2fdecec01dc3d170883ee000cef4f22"
+checksum = "0ba87cea8e45601807f2537fd9e657e02c9ee2fdaa9be4ece013b296b03b2c97"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -12368,9 +12367,9 @@ dependencies = [
 
 [[package]]
 name = "openraft-rt-tokio"
-version = "0.10.0-alpha.19"
+version = "0.10.0-alpha.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3967c661dc807d63c187069e4c4532b7115f571605197bde1340c9d0d7d29ca7"
+checksum = "2a539ef5ef89d4da720c56300aeb702d6ddf2a9fa653b029b79d30e5f8cf68fa"
 dependencies = [
  "futures-util",
  "openraft-rt",

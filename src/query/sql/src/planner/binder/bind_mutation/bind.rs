@@ -137,10 +137,11 @@ impl Binder {
             unmatched_clauses,
         } = mutation;
 
-        let (catalog_name, database_name, table_name, table_name_alias) = (
+        let (catalog_name, database_name, table_name, branch_name, table_name_alias) = (
             target_table_identifier.catalog_name(),
             target_table_identifier.database_name(),
             target_table_identifier.table_name(),
+            target_table_identifier.branch_name(),
             target_table_identifier.table_name_alias(),
         );
 
@@ -152,7 +153,7 @@ impl Binder {
                     &catalog_name,
                     &database_name,
                     &table_name,
-                    None,
+                    branch_name.as_deref(),
                     &LockTableOption::LockWithRetry,
                 )
                 .await
@@ -164,7 +165,12 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
+            .get_table_with_branch(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                branch_name.as_deref(),
+            )
             .await?;
         let table_schema = table.schema();
 
@@ -263,6 +269,7 @@ impl Binder {
             catalog_name,
             database_name,
             table_name,
+            branch: branch_name,
             table_name_alias,
             bind_context: Box::new(bind_context.clone()),
             metadata: self.metadata.clone(),

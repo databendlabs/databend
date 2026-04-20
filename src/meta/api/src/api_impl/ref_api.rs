@@ -716,13 +716,13 @@ where
 
         // 3. Collect all unique branch_ids
         let mut branch_id_set: HashSet<u64> = active_map.keys().copied().collect();
-        let mut dropped_map: HashMap<u64, (String, DateTime<Utc>)> = HashMap::new();
+        let mut dropped_map: HashMap<u64, (String, DroppedBranchMeta)> = HashMap::new();
 
         for (key, seq_dropped) in &dropped_branches {
             branch_id_set.insert(key.branch_id);
             dropped_map.insert(
                 key.branch_id,
-                (key.branch_name.clone(), seq_dropped.data.drop_on),
+                (key.branch_name.clone(), seq_dropped.data.clone()),
             );
         }
 
@@ -746,8 +746,8 @@ where
 
             // Filter branches whose effective delete time is already beyond the retention window.
             if let Some(retention_boundary) = req.retention_boundary {
-                if let Some((_, drop_on)) = dropped_map.get(&branch_id.table_id) {
-                    if *drop_on < retention_boundary {
+                if let Some((_, drop_meta)) = dropped_map.get(&branch_id.table_id) {
+                    if drop_meta.drop_on < retention_boundary {
                         continue;
                     }
                 } else if let Some((_, expire_at)) = active_map.get(&branch_id.table_id) {
@@ -760,8 +760,8 @@ where
             let (branch_name, expire_at) =
                 if let Some((name, expire_at)) = active_map.get(&branch_id.table_id) {
                     (name.clone(), *expire_at)
-                } else if let Some((name, _)) = dropped_map.get(&branch_id.table_id) {
-                    (name.clone(), None)
+                } else if let Some((name, drop_meta)) = dropped_map.get(&branch_id.table_id) {
+                    (name.clone(), drop_meta.expire_at)
                 } else {
                     // unreachable.
                     warn!(
@@ -834,11 +834,12 @@ where
             let by_id_req = UndropTableBranchByIdReq {
                 tenant: req.tenant.clone(),
                 table_id,
-                branch_name: branch_name.to_string(),
                 branch_id: dropped_key.branch_id,
                 new_expire_at: req.new_expire_at,
             };
-            if append_undrop_table_branch_txn(self, &by_id_req, seq_dropped, &mut txn).await? {
+            if append_undrop_table_branch_txn(self, &by_id_req, branch_name, seq_dropped, &mut txn)
+                .await?
+            {
                 return Ok(());
             }
         }
@@ -853,7 +854,27 @@ where
     ) -> Result<(), KVAppError> {
         debug!(req :? =(&req); "RefApi: {}", func_name!());
 
-        let key_dropped = DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
+        // Dropped branch entries are keyed by base table id, branch name and branch id.
+        // Resolve the original name first so callers only need the stable branch id.
+        let key_branch_id_to_name = BranchIdToName {
+            branch_id: req.branch_id,
+        };
+        let Some(seq_branch_name) = self.get_pb(&key_branch_id_to_name).await? else {
+            return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
+                format!("Branch id {} not found", req.branch_id),
+            ))));
+        };
+        let branch_ref = seq_branch_name.data;
+        if branch_ref.table_id != req.table_id {
+            return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
+                format!(
+                    "Branch id {} does not belong to table id {}",
+                    req.branch_id, req.table_id
+                ),
+            ))));
+        }
+        let branch_name = branch_ref.branch_name;
+        let key_dropped = DroppedBranchIdent::new(req.table_id, &branch_name, req.branch_id);
         let vacuum_ident = VacuumWatermarkIdent::new_global(req.tenant.clone());
 
         let mut trials = txn_backoff(None, func_name!());
@@ -865,7 +886,7 @@ where
                 return Err(KVAppError::AppError(AppError::from(UnknownReference::new(
                     format!(
                         "Dropped branch '{}' (id={}) not found",
-                        req.branch_name, req.branch_id
+                        branch_name, req.branch_id
                     ),
                 ))));
             };
@@ -875,7 +896,7 @@ where
                 if seq_dropped.data.drop_on <= sv.data.time {
                     return Err(KVAppError::AppError(AppError::UndropTableRetentionGuard(
                         UndropTableRetentionGuard::new(
-                            format!("branch '{}'", req.branch_name),
+                            format!("branch '{}'", branch_name),
                             seq_dropped.data.drop_on,
                             sv.data.time,
                         ),
@@ -887,7 +908,9 @@ where
             let mut txn = TxnRequest::default();
             txn.condition
                 .push(txn_cond_seq(&vacuum_ident, Eq, vacuum_seq));
-            if append_undrop_table_branch_txn(self, &req, seq_dropped, &mut txn).await? {
+            if append_undrop_table_branch_txn(self, &req, &branch_name, seq_dropped, &mut txn)
+                .await?
+            {
                 return Ok(());
             }
         }
@@ -905,6 +928,26 @@ where
         let branch_name = seq_branch_name.map(|s| s.data.branch_name);
 
         Ok(branch_name)
+    }
+
+    async fn mget_branch_names_by_ids(
+        &self,
+        branch_ids: &[u64],
+    ) -> Result<Vec<Option<String>>, MetaError> {
+        debug!(req :? =(&branch_ids); "RefApi: {}", func_name!());
+
+        let id_to_name_keys = branch_ids
+            .iter()
+            .map(|branch_id| BranchIdToName {
+                branch_id: *branch_id,
+            })
+            .collect::<Vec<_>>();
+        let seq_branch_names = self.get_pb_values_vec(id_to_name_keys).await?;
+
+        Ok(seq_branch_names
+            .into_iter()
+            .map(|seq_branch_name| seq_branch_name.map(|s| s.data.branch_name))
+            .collect())
     }
 }
 
@@ -948,14 +991,15 @@ async fn build_lvt_condition(
 async fn append_undrop_table_branch_txn<KV>(
     kv_api: &KV,
     req: &UndropTableBranchByIdReq,
+    branch_name: &str,
     seq_dropped: SeqV<DroppedBranchMeta>,
     txn: &mut TxnRequest,
 ) -> Result<bool, KVAppError>
 where
     KV: kvapi::KVApi<Error = MetaError> + ?Sized,
 {
-    let key_branch = TableIdBranchName::new(req.table_id, &req.branch_name);
-    let key_dropped = DroppedBranchIdent::new(req.table_id, &req.branch_name, req.branch_id);
+    let key_branch = TableIdBranchName::new(req.table_id, branch_name);
+    let key_dropped = DroppedBranchIdent::new(req.table_id, branch_name, req.branch_id);
     let key_branch_table_id = TableId {
         table_id: req.branch_id,
     };
@@ -967,7 +1011,7 @@ where
                 return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
                     format!(
                         "Can not undrop branch '{}' with expire_at {} in the past",
-                        req.branch_name, expire_at
+                        branch_name, expire_at
                     ),
                 ))));
             }
@@ -977,7 +1021,7 @@ where
             return Err(KVAppError::AppError(AppError::from(ReferenceExpired::new(
                 format!(
                     "Dropped branch '{}' expired at {} and must be undropped with a new expiration",
-                    req.branch_name, expire_at
+                    branch_name, expire_at
                 ),
             ))));
         }
@@ -1024,7 +1068,7 @@ where
         return Err(KVAppError::AppError(AppError::from(
             ReferenceAlreadyExists::new(format!(
                 "Branch '{}' already exists, cannot undrop",
-                req.branch_name
+                branch_name
             )),
         )));
     }

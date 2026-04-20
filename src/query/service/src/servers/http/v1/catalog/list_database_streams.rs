@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_storages_stream::stream_table::StreamTable;
@@ -82,7 +83,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
     let warnings = vec![];
     let mut streams = vec![];
     let tables = db.list_tables().await?;
-    let mut source_table_id_set = HashSet::new();
+    let mut source_lookups = Vec::new();
     for table in tables {
         if !table.is_stream() {
             continue;
@@ -99,7 +100,7 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
         }
         let stream = StreamTable::try_from_table(table.as_ref())?;
         let source_table_id = stream.source_table_id()?;
-        source_table_id_set.insert(source_table_id);
+        let source_base_id = stream.source_base_table_id()?;
         streams.push(StreamInfo {
             name: table.name().to_string(),
             database: db.name().to_string(),
@@ -114,24 +115,61 @@ async fn handle(ctx: &HttpQueryContext, database: String) -> Result<ListDatabase
             table_version: stream.offset().ok(),
             snapshot_location: stream.snapshot_loc(),
         });
+        source_lookups.push((
+            source_base_id.unwrap_or(source_table_id),
+            source_base_id.map(|_| source_table_id),
+        ));
     }
 
-    let source_table_ids = source_table_id_set.into_iter().collect::<Vec<u64>>();
+    let mut source_table_ids = source_lookups
+        .iter()
+        .map(|(source_table_id, _)| *source_table_id)
+        .collect::<Vec<u64>>();
+    source_table_ids.sort_unstable();
+    source_table_ids.dedup();
     let source_table_names = catalog
         .mget_table_names_by_ids(&tenant, &source_table_ids, false)
         .await?;
     let source_table_map = source_table_ids
         .into_iter()
         .zip(source_table_names.into_iter())
-        .filter(|(_, tb_name)| tb_name.is_some())
-        .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
+        .filter_map(|(tb_id, tb_name)| tb_name.map(|tb_name| (tb_id, tb_name)))
         .collect::<HashMap<_, _>>();
 
-    streams.iter_mut().for_each(|stream| {
-        stream.table_name = stream
-            .table_id
-            .and_then(|id| source_table_map.get(&id).cloned());
-    });
+    let mut branch_ids = source_lookups
+        .iter()
+        .filter_map(|(_, branch_id)| *branch_id)
+        .collect::<Vec<u64>>();
+    branch_ids.sort_unstable();
+    branch_ids.dedup();
+    let branch_name_map = if branch_ids.is_empty() {
+        HashMap::new()
+    } else {
+        let meta_api = meta_store_client();
+        let branch_names = meta_api
+            .mget_branch_names_by_ids(&branch_ids)
+            .await
+            .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?;
+        branch_ids
+            .into_iter()
+            .zip(branch_names.into_iter())
+            .filter_map(|(branch_id, branch_name)| {
+                branch_name.map(|branch_name| (branch_id, branch_name))
+            })
+            .collect::<HashMap<_, _>>()
+    };
+
+    for (stream, (source_table_id, branch_id)) in streams.iter_mut().zip(source_lookups.into_iter())
+    {
+        stream.table_name = if let Some(branch_id) = branch_id {
+            source_table_map
+                .get(&source_table_id)
+                .zip(branch_name_map.get(&branch_id))
+                .map(|(table, branch)| format!("{}/{}", table, branch))
+        } else {
+            source_table_map.get(&source_table_id).cloned()
+        };
+    }
 
     Ok(ListDatabaseStreamsResponse { streams, warnings })
 }

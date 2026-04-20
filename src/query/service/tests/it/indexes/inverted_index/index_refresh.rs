@@ -92,6 +92,7 @@ async fn test_fuse_do_refresh_inverted_index() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        branch: None,
         index_name: index_name.clone(),
         segment_locs: None,
     };

@@ -88,6 +88,7 @@ pub struct RefreshTableIndexPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub index_name: String,
     pub segment_locs: Option<Vec<Location>>,
 }

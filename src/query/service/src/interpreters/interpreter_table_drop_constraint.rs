@@ -54,7 +54,10 @@ impl Interpreter for DropTableConstraintInterpreter {
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
 
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let tbl = self
+            .ctx
+            .get_table_with_branch(catalog_name, db_name, tbl_name, self.plan.branch.as_deref())
+            .await?;
         // check mutability
         tbl.check_mutable()?;
 

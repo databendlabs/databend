@@ -78,6 +78,14 @@ impl AnalyzeTableInterpreter {
         };
         Ok((select_plan, bind_context))
     }
+
+    fn analyze_target(&self) -> String {
+        if let Some(branch) = &self.plan.branch {
+            format!("{}.{}/{}", self.plan.database, self.plan.table, branch)
+        } else {
+            format!("{}.{}", self.plan.database, self.plan.table)
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -95,7 +103,12 @@ impl Interpreter for AnalyzeTableInterpreter {
         let plan = &self.plan;
         let table = self
             .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .get_table_with_branch(
+                &plan.catalog,
+                &plan.database,
+                &plan.table,
+                plan.branch.as_deref(),
+            )
             .await?;
 
         // check mutability
@@ -124,6 +137,7 @@ impl Interpreter for AnalyzeTableInterpreter {
         if self.ctx.get_settings().get_enable_analyze_histogram()?
             && self.ctx.get_settings().get_enable_table_snapshot_stats()?
         {
+            let analyze_target = self.analyze_target();
             let histogram_sqls = table
                     .schema()
                     .fields()
@@ -140,10 +154,10 @@ impl Interpreter for AnalyzeTableInterpreter {
                                     COUNT() as count \
                                 FROM ( \
                                     SELECT {col_name}, NTILE({}) OVER (ORDER BY {col_name}) AS quantile \
-                                    FROM {}.{} WHERE {col_name} IS DISTINCT FROM NULL \
+                                    FROM {} WHERE {col_name} IS DISTINCT FROM NULL \
                                 ) \
                                 GROUP BY quantile ORDER BY quantile",
-                                DEFAULT_HISTOGRAM_BUCKETS, plan.database, plan.table,
+                                DEFAULT_HISTOGRAM_BUCKETS, analyze_target,
                             ),
                             f.column_id(),
                         )

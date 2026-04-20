@@ -36,11 +36,13 @@ use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_enterprise_stream_handler::StreamHandler;
 use databend_enterprise_stream_handler::StreamHandlerWrapper;
 use databend_meta_client::types::MatchSeq;
+use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
 use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_BASE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
@@ -57,28 +59,38 @@ impl StreamHandler for RealStreamHandler {
     ) -> Result<CreateTableReply> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(&plan.catalog).await?;
+        let source_table_name = plan
+            .table_branch
+            .as_ref()
+            .map(|branch| format!("{}/{}", plan.table_name, branch))
+            .unwrap_or_else(|| plan.table_name.clone());
 
-        let mut table = catalog
-            .get_table(&tenant, &plan.table_database, &plan.table_name)
+        let mut table = ctx
+            .get_table_with_branch(
+                &plan.catalog,
+                &plan.table_database,
+                &plan.table_name,
+                plan.table_branch.as_deref(),
+            )
             .await?;
         let table_info = table.get_table_info();
         if table_info.options().contains_key("TRANSIENT") {
             return Err(ErrorCode::IllegalStream(format!(
                 "The table '{}.{}' is transient, can't create stream",
-                plan.table_database, plan.table_name
+                plan.table_database, source_table_name
             )));
         }
         if table.is_temp() {
             return Err(ErrorCode::IllegalStream(format!(
                 "The table '{}.{}' is temporary, can't create stream",
-                plan.table_database, plan.table_name
+                plan.table_database, source_table_name
             )));
         }
         if table_info.engine() != "FUSE" {
             return Err(ErrorCode::IllegalStream(format!(
                 "The table '{}.{}' uses engine '{}', only FUSE tables support stream creation",
                 plan.table_database,
-                plan.table_name,
+                source_table_name,
                 table_info.engine()
             )));
         }
@@ -135,6 +147,22 @@ impl StreamHandler for RealStreamHandler {
         options.insert(OPT_KEY_MODE.to_string(), change_desc.mode.to_string());
         options.insert(OPT_KEY_SOURCE_DATABASE_ID.to_owned(), db_id.to_string());
         options.insert(OPT_KEY_SOURCE_TABLE_ID.to_string(), table_id.to_string());
+        if plan.table_branch.is_some() {
+            let base_table_id = table
+                .get_table_info()
+                .options()
+                .get(OPT_KEY_BASE_TABLE_ID)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "Invalid branch table, table option {} not found when creating stream",
+                        OPT_KEY_BASE_TABLE_ID
+                    ))
+                })?;
+            options.insert(
+                OPT_KEY_SOURCE_BASE_TABLE_ID.to_string(),
+                base_table_id.to_string(),
+            );
+        }
         options.insert(OPT_KEY_TABLE_VER.to_string(), change_desc.seq.to_string());
         if let Some(snapshot_loc) = change_desc.location {
             options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc);

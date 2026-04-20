@@ -182,6 +182,7 @@ use crate::plans::SystemPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnassignWarehouseNodesPlan;
 use crate::plans::UndropDatabasePlan;
+use crate::plans::UndropTableBranchPlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetObjectTagsPlan;
 use crate::plans::UnsetOptionsPlan;
@@ -321,6 +322,7 @@ pub enum Plan {
     CreateTableBranch(Box<CreateTableBranchPlan>),
     CreateTableTag(Box<CreateTableTagPlan>),
     DropTableBranch(Box<DropTableBranchPlan>),
+    UndropTableBranch(Box<UndropTableBranchPlan>),
     DropTableTag(Box<DropTableTagPlan>),
 
     // Optimize
@@ -502,6 +504,7 @@ pub enum RewriteKind {
     ShowDatabases,
     ShowDropDatabases,
     ShowTables(String, String),
+    ShowBranches(String, String, String),
     ShowColumns(String, String, String),
     ShowTablesStatus,
     ShowVirtualColumns,

@@ -112,9 +112,10 @@ impl IdHumanizer for MetadataIdHumanizer<'_> {
 
     fn humanize_table_id(&self, id: IndexType) -> String {
         let table = self.metadata.table(id);
-        let db = table.database();
-        let table = table.name();
-        format!("{}.{} (#{})", db, table, id)
+        match table.branch().as_deref() {
+            Some(branch) => format!("{}.{}/{} (#{})", table.database(), table.name(), branch, id),
+            None => format!("{}.{} (#{})", table.database(), table.name(), id),
+        }
     }
 
     fn options(&self) -> &FormatOptions {

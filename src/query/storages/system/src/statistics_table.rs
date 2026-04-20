@@ -55,6 +55,7 @@ pub struct StatisticsTable {
 pub struct TableColumnStatistics {
     database_name: String,
     table_name: String,
+    branch_name: String,
     column_name: String,
 
     stats_row_count: Option<u64>,
@@ -96,6 +97,7 @@ impl StatisticsTable {
                 TableDataType::Number(NumberDataType::UInt64).wrap_nullable(),
             ),
             TableField::new("histogram", TableDataType::String),
+            TableField::new("branch", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -128,8 +130,18 @@ impl StatisticsTable {
         let database_and_tables = dump_tables(&ctx, push_downs, catalog).await?;
         let mut rows: Vec<TableColumnStatistics> = vec![];
         for (database, tables) in database_and_tables {
-            for table in tables {
-                rows.extend(Self::dump_table_columns(&ctx, catalog, &database, &table).await?);
+            for table_ref in tables {
+                rows.extend(
+                    Self::dump_table_columns(
+                        &ctx,
+                        catalog,
+                        &database,
+                        &table_ref.table_name,
+                        &table_ref.branch_name,
+                        &table_ref.table,
+                    )
+                    .await?,
+                );
             }
         }
         Ok(rows)
@@ -139,6 +151,8 @@ impl StatisticsTable {
         ctx: &Arc<dyn TableContext>,
         catalog: &Arc<dyn Catalog>,
         database: &str,
+        table_name: &str,
+        branch_name: &str,
         table: &Arc<dyn Table>,
     ) -> Result<Vec<TableColumnStatistics>> {
         let mut columns = vec![];
@@ -164,7 +178,8 @@ impl StatisticsTable {
                 for field in fields {
                     columns.push(TableColumnStatistics {
                         database_name: database.to_string(),
-                        table_name: table.name().into(),
+                        table_name: table_name.to_string(),
+                        branch_name: branch_name.to_string(),
                         column_name: field.name,
                         ..Default::default()
                     })
@@ -218,7 +233,8 @@ impl StatisticsTable {
                     };
                     columns.push(TableColumnStatistics {
                         database_name: database.to_string(),
-                        table_name: table.name().into(),
+                        table_name: table_name.to_string(),
+                        branch_name: branch_name.to_string(),
                         column_name: field.name().clone(),
                         stats_row_count,
                         actual_row_count,
@@ -246,7 +262,8 @@ impl StatisticsTable {
                                 format!("{}{}", source_field.name, virtual_field.name);
                             columns.push(TableColumnStatistics {
                                 database_name: database.to_string(),
-                                table_name: table.name().into(),
+                                table_name: table_name.to_string(),
+                                branch_name: branch_name.to_string(),
                                 column_name,
                                 stats_row_count,
                                 actual_row_count,
@@ -307,10 +324,12 @@ impl AsyncSystemTable for StatisticsTable {
         let mut maxes = Vec::with_capacity(rows.len());
         let mut avg_sizes = Vec::with_capacity(rows.len());
         let mut histograms = Vec::with_capacity(rows.len());
+        let mut branches = Vec::with_capacity(rows.len());
         for row in rows {
             names.push(row.column_name);
             databases.push(row.database_name);
             tables.push(row.table_name);
+            branches.push(row.branch_name);
             stats_row_counts.push(row.stats_row_count);
             actual_row_counts.push(row.actual_row_count);
             distinct_counts.push(row.distinct_count);
@@ -333,6 +352,7 @@ impl AsyncSystemTable for StatisticsTable {
             StringType::from_opt_data(maxes),
             UInt64Type::from_opt_data(avg_sizes),
             StringType::from_data(histograms),
+            StringType::from_data(branches),
         ]))
     }
 }

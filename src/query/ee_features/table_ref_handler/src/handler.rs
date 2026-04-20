@@ -21,6 +21,7 @@ use databend_common_sql::plans::CreateTableBranchPlan;
 use databend_common_sql::plans::CreateTableTagPlan;
 use databend_common_sql::plans::DropTableBranchPlan;
 use databend_common_sql::plans::DropTableTagPlan;
+use databend_common_sql::plans::UndropTableBranchPlan;
 
 #[async_trait::async_trait]
 pub trait TableRefHandler: Sync + Send {
@@ -40,6 +41,12 @@ pub trait TableRefHandler: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         plan: &DropTableBranchPlan,
+    ) -> Result<()>;
+
+    async fn do_undrop_table_branch(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &UndropTableBranchPlan,
     ) -> Result<()>;
 
     async fn do_drop_table_tag(
@@ -83,6 +90,15 @@ impl TableRefHandlerWrapper {
         plan: &DropTableBranchPlan,
     ) -> Result<()> {
         self.handler.do_drop_table_branch(ctx, plan).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_undrop_table_branch(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &UndropTableBranchPlan,
+    ) -> Result<()> {
+        self.handler.do_undrop_table_branch(ctx, plan).await
     }
 
     #[async_backtrace::framed]

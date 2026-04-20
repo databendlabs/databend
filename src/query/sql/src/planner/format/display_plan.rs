@@ -113,6 +113,7 @@ impl Plan {
             Plan::CreateTableBranch(_) => Ok("CreateTableBranch".to_string()),
             Plan::CreateTableTag(_) => Ok("CreateTableTag".to_string()),
             Plan::DropTableBranch(_) => Ok("DropTableBranch".to_string()),
+            Plan::UndropTableBranch(_) => Ok("UndropTableBranch".to_string()),
             Plan::DropTableTag(_) => Ok("DropTableTag".to_string()),
 
             // Views

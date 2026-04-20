@@ -35,6 +35,7 @@ pub struct CreateStreamStmt {
     pub stream: Identifier,
     pub table_database: Option<Identifier>,
     pub table: Identifier,
+    pub table_branch: Option<Identifier>,
     pub travel_point: Option<TimeTravelPoint>,
     pub append_only: bool,
     pub comment: Option<String>,
@@ -59,6 +60,9 @@ impl Display for CreateStreamStmt {
         )?;
         write!(f, " ON TABLE ")?;
         write_dot_separated_list(f, self.table_database.iter().chain(Some(&self.table)))?;
+        if let Some(table_branch) = &self.table_branch {
+            write!(f, "/{table_branch}")?;
+        }
         if let Some(travel_point) = &self.travel_point {
             write!(f, " AT {}", travel_point)?;
         }

@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 use chrono::Duration;
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,7 +39,6 @@ use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_sql::plans::VacuumDropTablePlan;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_users::UserApiProvider;
 use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use log::info;
 
@@ -62,11 +63,14 @@ impl VacuumDropTablesInterpreter {
 
     // Collect the storage targets for VACUUM DROP TABLE, including dropped base tables and all
     // visible branch histories under each base table.
-    async fn collect_vacuum_drop_targets(
+    async fn collect_vacuum_drop_targets<M>(
         &self,
-        catalog: &Arc<dyn Catalog>,
+        meta_api: &M,
         base_tables: &[Arc<dyn Table>],
-    ) -> Result<(Vec<Arc<dyn Table>>, HashMap<u64, u64>)> {
+    ) -> Result<(Vec<Arc<dyn Table>>, HashMap<u64, u64>)>
+    where
+        M: RefApi + ?Sized,
+    {
         let mut vacuum_targets = Vec::with_capacity(base_tables.len());
         let mut target_to_base_table = HashMap::new();
         let mut seen_target_ids = HashSet::new();
@@ -83,7 +87,7 @@ impl VacuumDropTablesInterpreter {
             };
 
             let table_id = base_fuse_table.get_id();
-            let history_branches = catalog
+            let history_branches = meta_api
                 .list_history_table_branches(ListHistoryTableBranchesReq {
                     table_id,
                     retention_boundary: None,
@@ -190,12 +194,12 @@ impl Interpreter for VacuumDropTablesInterpreter {
         let duration = Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
 
         let retention_time = chrono::Utc::now() - duration;
+        let meta_api = meta_store_client();
 
         // Set vacuum timestamp before starting the vacuum operation (only in non-dry-run mode)
         // This ensures undrop operations after this point will be blocked
         if self.plan.option.dry_run.is_none() {
             let tenant = ctx.get_tenant();
-            let meta_api = UserApiProvider::instance().get_meta_store_client();
 
             // CRITICAL: Must succeed in setting vacuum timestamp before proceeding
             // If this fails, vacuum operation should not proceed to prevent data loss
@@ -284,8 +288,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
         );
 
         let tables_count = tables.len();
-        let (vacuum_targets, target_to_base_table) =
-            self.collect_vacuum_drop_targets(&catalog, &tables).await?;
+        let (vacuum_targets, target_to_base_table) = self
+            .collect_vacuum_drop_targets(meta_api.as_ref(), &tables)
+            .await?;
 
         let handler = get_vacuum_handler();
         let threads_nums = self.ctx.get_settings().get_max_vacuum_threads()? as usize;

@@ -8009,7 +8009,6 @@ impl SchemaApiTestSuite {
             .undrop_table_branch_by_id(UndropTableBranchByIdReq {
                 tenant: tenant.clone(),
                 table_id: base_table_id,
-                branch_name: branch_name.to_string(),
                 branch_id: branch_id_1,
                 new_expire_at: None,
             })
@@ -8054,7 +8053,6 @@ impl SchemaApiTestSuite {
         mt.undrop_table_branch_by_id(UndropTableBranchByIdReq {
             tenant: tenant.clone(),
             table_id: base_table_id,
-            branch_name: branch_name.to_string(),
             branch_id: branch_id_2,
             new_expire_at: None,
         })

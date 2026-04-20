@@ -34,6 +34,7 @@ pub use binder::DefaultExprBinder;
 pub use binder::ScalarBinder;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
+pub use binder::check_table_ref_access;
 pub use binder::parse_result_scan_args;
 pub use execution::*;
 pub use expression::*;

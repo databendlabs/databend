@@ -1304,7 +1304,8 @@ impl AccessChecker for PrivilegeAccess {
                             self.get_role_names_and_ownerships(&tenant).await?;
                         check_db_tb_ownership_access(&identity, &ctl_name, database, show_db_id, &ownerships, &roles_name)?;
                     }
-                    Some(RewriteKind::ShowColumns(catalog_name, database, table)) => {
+                    Some(RewriteKind::ShowColumns(catalog_name, database, table))
+                    | Some(RewriteKind::ShowBranches(catalog_name, database, table)) => {
                         if self.ctx.is_temp_table(catalog_name, database, table) {
                             return Ok(());
                         }
@@ -1662,6 +1663,9 @@ impl AccessChecker for PrivilegeAccess {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableBranch(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
+            Plan::UndropTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
             Plan::DropTableTag(plan) => {

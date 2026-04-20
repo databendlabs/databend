@@ -66,6 +66,7 @@ c2 timestamp NO '2022-02-02 12:00:00.000000' NULL NULL NULL NULL (empty)
 query TTTT??T?T
 SHOW FULL COLUMNS IN columns from system
 ----
+branch varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 comment varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 data_type varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
 database varchar(16382) NO (empty) NULL NULL utf8mb4_general_ci NULL (empty)
@@ -85,6 +86,7 @@ type varchar(16382) NO (empty) NULL NULL
 query TTTT??
 SHOW COLUMNS IN columns from system where column_name != '%type%' and is_nullable!='YES'
 ----
+branch varchar(16382) NO (empty) NULL NULL
 comment varchar(16382) NO (empty) NULL NULL
 data_type varchar(16382) NO (empty) NULL NULL
 database varchar(16382) NO (empty) NULL NULL

@@ -161,6 +161,7 @@ impl MutationInterpreter {
             mutation.catalog_name.clone(),
             mutation.database_name.clone(),
             mutation.table_name.clone(),
+            mutation.branch.clone(),
             mutation_kind,
             hook_lock_opt,
         );
@@ -207,10 +208,11 @@ pub async fn build_mutation_info(
     dry_run: bool,
 ) -> Result<MutationBuildInfo> {
     let table = ctx
-        .get_table(
+        .get_table_with_branch(
             &mutation.catalog_name,
             &mutation.database_name,
             &mutation.table_name,
+            mutation.branch.as_deref(),
         )
         .await?;
     // Check if the table supports mutation.

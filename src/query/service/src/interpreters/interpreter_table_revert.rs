@@ -51,7 +51,12 @@ impl Interpreter for RevertTableInterpreter {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
         let table = catalog
-            .get_table(&tenant, &self.plan.database, &self.plan.table)
+            .get_table_with_branch(
+                &tenant,
+                &self.plan.database,
+                &self.plan.table,
+                self.plan.branch.as_deref(),
+            )
             .await?;
 
         // check mutability
