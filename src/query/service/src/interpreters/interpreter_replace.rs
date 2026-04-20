@@ -129,6 +129,7 @@ impl Interpreter for ReplaceInterpreter {
                 self.plan.catalog.clone(),
                 self.plan.database.clone(),
                 self.plan.table.clone(),
+                self.plan.branch.clone(),
                 MutationKind::Replace,
                 LockTableOption::NoLock,
             );
@@ -149,7 +150,12 @@ impl ReplaceInterpreter {
         let plan = &self.plan;
         let table = self
             .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .get_table_with_branch(
+                &plan.catalog,
+                &plan.database,
+                &plan.table,
+                plan.branch.as_deref(),
+            )
             .await?;
 
         // check mutability

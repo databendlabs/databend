@@ -182,7 +182,7 @@ error:
   --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                     ^ unexpected `.`, expecting `FORMAT` or `;`
+  |                     ^ unexpected `.`, expecting `/`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -207,7 +207,7 @@ error:
 1 | truncate a
   | -------- ^ unexpected `a`, expecting `TABLE`
   | |         
-  | while parsing `TRUNCATE TABLE [<database>.]<table>`
+  | while parsing `TRUNCATE TABLE [<database>.]<table>[/<branch>]`
 
 
 ---------- Input ----------
@@ -551,18 +551,6 @@ error:
   |
 1 | show columns from db1.t from ctl.db
   |                         ^^^^ unexpected `from`. Did you mean `SHOW COLUMNS`?
-
-
----------- Input ----------
-alter table t1 create branch from_dev at (branch => dev)
----------- Output ---------
-error: 
-  --> SQL:1:43
-  |
-1 | alter table t1 create branch from_dev at (branch => dev)
-  | -----                                     ^^^^^^ unexpected `branch`, expecting `STREAM`, `SNAPSHOT`, `TAG`, `TIMESTAMP`, or `OFFSET`
-  | |                                          
-  | while parsing `ALTER TABLE [<database>.]<table> <action>`
 
 
 ---------- Input ----------

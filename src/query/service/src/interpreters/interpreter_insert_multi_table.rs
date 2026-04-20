@@ -15,7 +15,6 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -108,13 +107,13 @@ impl Interpreter for InsertMultiTableInterpreter {
             .get_settings()
             .get_enable_compact_after_multi_table_insert()?
         {
-            for (_, (db, tbl)) in &self.plan.target_tables {
+            for target in &self.plan.target_tables {
                 let hook_operator = HookOperator::create(
                     self.ctx.clone(),
-                    // multi table insert only support default catalog
-                    CATALOG_DEFAULT.to_string(),
-                    db.to_string(),
-                    tbl.to_string(),
+                    target.catalog.clone(),
+                    target.database.clone(),
+                    target.table.clone(),
+                    target.branch.clone(),
                     MutationKind::Insert,
                     LockTableOption::LockNoRetry,
                 );
@@ -128,8 +127,12 @@ impl Interpreter for InsertMultiTableInterpreter {
         let mut columns = vec![];
         let status = self.ctx.mutation_state().multi_table_insert_status();
         let guard = status.lock().unwrap();
-        for (tid, _) in &self.plan.target_tables {
-            let insert_rows = guard.insert_rows.get(tid).cloned().unwrap_or_default();
+        for target in &self.plan.target_tables {
+            let insert_rows = guard
+                .insert_rows
+                .get(&target.table_id)
+                .cloned()
+                .unwrap_or_default();
             columns.push(UInt64Type::from_data(vec![insert_rows]));
         }
         let blocks = vec![DataBlock::new_from_columns(columns)];
@@ -386,10 +389,14 @@ impl InsertMultiTableInterpreter {
                 catalog,
                 database,
                 table,
+                branch,
                 casted_schema,
                 source_scalar_exprs,
             } = into;
-            let table = self.ctx.get_table(catalog, database, table).await?;
+            let table = self
+                .ctx
+                .get_table_with_branch(catalog, database, table, branch.as_deref())
+                .await?;
             branches.push(
                 table,
                 condition,

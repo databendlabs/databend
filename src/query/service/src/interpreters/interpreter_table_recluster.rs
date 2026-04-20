@@ -209,6 +209,7 @@ impl ReclusterTableInterpreter {
             catalog,
             database,
             table,
+            branch,
             limit,
             ..
         } = &self.plan;
@@ -216,10 +217,13 @@ impl ReclusterTableInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog, database, table, None, &self.lock_opt)
+            .acquire_table_lock(catalog, database, table, branch.as_deref(), &self.lock_opt)
             .await?;
 
-        let tbl = self.ctx.get_table(catalog, database, table).await?;
+        let tbl = self
+            .ctx
+            .get_table_with_branch(catalog, database, table, branch.as_deref())
+            .await?;
         // check mutability
         tbl.check_mutable()?;
         let Some(cluster_type) = tbl.cluster_type() else {
@@ -249,11 +253,12 @@ impl ReclusterTableInterpreter {
             let catalog = self.plan.catalog.clone();
             let database = self.plan.database.clone();
             let table = self.plan.table.clone();
+            let branch = self.plan.branch.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
                     ctx.written_segment_locations().clear();
                     ctx.selected_segment_locations().clear();
-                    ctx.evict_table_from_cache(&catalog, &database, &table, None)?;
+                    ctx.evict_table_from_cache(&catalog, &database, &table, branch.as_deref())?;
 
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;

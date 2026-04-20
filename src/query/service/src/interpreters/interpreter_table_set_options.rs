@@ -141,7 +141,12 @@ impl Interpreter for SetOptionsInterpreter {
         let database = self.plan.database.as_str();
         let table_name = self.plan.table.as_str();
         let table = catalog
-            .get_table(&self.ctx.get_tenant(), database, table_name)
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                database,
+                table_name,
+                self.plan.branch.as_deref(),
+            )
             .await?;
 
         for table_option in self.plan.set_options.iter() {

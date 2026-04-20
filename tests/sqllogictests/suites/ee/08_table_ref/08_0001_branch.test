@@ -25,9 +25,6 @@ statement ok
 USE test_branch
 
 statement ok
-set data_retention_time_in_days = 0;
-
-statement ok
 CREATE OR REPLACE TABLE t1(a INT, b STRING)
 
 statement ok
@@ -119,6 +116,41 @@ ALTER TABLE t1 DROP BRANCH dev
 
 statement error 2745
 SELECT * FROM t1/dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev RETAIN 1 SECONDS
+
+statement ok
+SELECT SLEEP(1)
+
+statement error 2748
+SELECT * FROM t1/dev
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev RETAIN 7 DAYS
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
 
 statement error 2745
 ALTER TABLE t1 DROP BRANCH non_existent

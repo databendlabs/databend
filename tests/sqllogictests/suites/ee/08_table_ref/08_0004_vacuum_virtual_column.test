@@ -104,6 +104,82 @@ statement ok
 drop stage vc_branch_stage;
 
 ## -------------------------------------------------------
+## Refreshing virtual columns on a branch writes branch-local
+## files and vacuum on the base table must still keep them.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE vc_branch_refresh_stage url = 'fs:///tmp/test_table_ref_virtual_column/branch_refresh/';
+
+statement ok
+remove @vc_branch_refresh_stage;
+
+statement ok
+CREATE TABLE t_branch_refresh (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_refresh/';
+
+statement ok
+ALTER TABLE t_branch_refresh SET OPTIONS(row_per_block = 2);
+
+statement ok
+INSERT INTO t_branch_refresh VALUES
+    (1, '{"k":"base_old"}'),
+    (2, '{"k":"base_old"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_refresh;
+
+statement ok
+ALTER TABLE t_branch_refresh CREATE BRANCH b1
+
+statement ok
+INSERT INTO t_branch_refresh/b1 VALUES
+    (3, '{"k":"branch_new"}'),
+    (4, '{"k":"branch_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_refresh/b1;
+
+query I
+select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
+----
+2
+
+statement ok
+DELETE FROM t_branch_refresh;
+
+statement ok
+INSERT INTO t_branch_refresh VALUES
+    (10, '{"k":"base_new"}'),
+    (11, '{"k":"base_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_refresh;
+
+query I
+select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
+----
+3
+
+statement ok
+select * from fuse_vacuum2('test_table_ref_virtual_column', 't_branch_refresh') ignore_result;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t_branch_refresh;
+----
+0
+
+query I
+select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
+----
+3
+
+statement ok
+remove @vc_branch_refresh_stage;
+
+statement ok
+drop stage vc_branch_refresh_stage;
+
+## -------------------------------------------------------
 ## Active tag keeps virtual column files referenced only by
 ## the tagged snapshot alive.
 ## -------------------------------------------------------

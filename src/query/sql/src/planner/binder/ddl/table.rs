@@ -121,7 +121,7 @@ use crate::binder::Visibility;
 use crate::binder::get_storage_params_from_options;
 use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
-use crate::binder::util::legacy_table_ref_removed_error;
+use crate::binder::util::TableIdentifier;
 use crate::optimizer::ir::SExpr;
 use crate::parse_computed_expr_to_string;
 use crate::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
@@ -166,6 +166,7 @@ use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::SwapTablePlan;
 use crate::plans::TruncateTablePlan;
+use crate::plans::UndropTableBranchPlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UnsetOptionsPlan;
 use crate::plans::VacuumDropTableOption;
@@ -302,14 +303,15 @@ impl Binder {
         &mut self,
         stmt: &DescribeTableStmt,
     ) -> Result<Plan> {
-        let DescribeTableStmt {
-            catalog,
-            database,
-            table,
-        } = stmt;
+        let DescribeTableStmt { table } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+        let (catalog, database, table, branch) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+            table_identifier.branch_name(),
+        );
         let schema = DataSchemaRefExt::create(vec![
             DataField::new("Field", DataType::String),
             DataField::new("Type", DataType::String),
@@ -322,6 +324,7 @@ impl Binder {
             catalog,
             database,
             table,
+            branch,
             schema,
         })))
     }
@@ -1090,18 +1093,11 @@ impl Binder {
             };
 
         if let Some(branch_name) = branch.as_ref() {
-            if !matches!(
-                action,
-                AlterTableAction::CreateTableBranch { .. }
-                    | AlterTableAction::RenameColumn { .. }
-                    | AlterTableAction::AddColumn { .. }
-                    | AlterTableAction::ModifyColumn { .. }
-                    | AlterTableAction::DropColumn { .. }
-                    | AlterTableAction::AlterTableClusterKey { .. }
-                    | AlterTableAction::DropTableClusterKey
-            ) {
-                return Err(legacy_table_ref_removed_error(format!(
-                    "ALTER TABLE on branch reference `{catalog}.{database}.{table}/{branch_name}`"
+            if !action.supports_branch() {
+                return Err(ErrorCode::UnsupportedBranchSyntax(format!(
+                    "ALTER TABLE action `{}` is not supported on branch \
+                     `{catalog}.{database}.{table}/{branch_name}`",
+                    action
                 )));
             }
         }
@@ -1136,6 +1132,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                 })))
             }
             AlterTableAction::ModifyConnection { new_connection } => Ok(
@@ -1206,7 +1203,7 @@ impl Binder {
             AlterTableAction::AddConstraint { constraint } => {
                 let schema = self
                     .ctx
-                    .get_table(&catalog, &database, &table)
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
                     .await?
                     .schema();
                 let (constraint_name, constraint) = self
@@ -1220,6 +1217,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     constraint_name,
                     constraint,
                 })))
@@ -1233,6 +1231,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         constraint_name,
                     },
                 )))
@@ -1381,6 +1380,7 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                branch,
                 limit: limit.map(|v| v as usize),
                 selection: selection.clone(),
                 is_final: *is_final,
@@ -1392,6 +1392,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     point,
                 })))
             }
@@ -1401,6 +1402,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                 })))
             }
             AlterTableAction::UnsetOptions { targets } => {
@@ -1409,6 +1411,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                 })))
             }
             AlterTableAction::RefreshTableCache => {
@@ -1440,6 +1443,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         columns,
                         policy,
                     },
@@ -1462,6 +1466,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         policy,
                     },
                 )))
@@ -1482,6 +1487,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                     },
                 )))
             }
@@ -1558,6 +1564,20 @@ impl Binder {
                     branch_name,
                 })))
             }
+            AlterTableAction::UndropTableBranch {
+                branch_name,
+                retain,
+            } => {
+                let branch_name = self.normalize_identifier(branch_name).name;
+                Ok(Plan::UndropTableBranch(Box::new(UndropTableBranchPlan {
+                    tenant,
+                    catalog,
+                    database,
+                    table,
+                    branch_name,
+                    retain: *retain,
+                })))
+            }
         }
     }
 
@@ -1610,15 +1630,19 @@ impl Binder {
             catalog,
             database,
             table,
+            branch,
         } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, &None);
+        let catalog = table_identifier.catalog_name();
+        let database = table_identifier.database_name();
+        let table = table_identifier.table_name();
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
             database,
             table,
+            branch: table_identifier.branch_name(),
         })))
     }
 
@@ -1629,15 +1653,18 @@ impl Binder {
         stmt: &OptimizeTableStmt,
     ) -> Result<Plan> {
         let OptimizeTableStmt {
-            catalog,
-            database,
-            table,
+            table_ref,
             action: ast_action,
             limit,
         } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new_with_ref(self, table_ref, &None);
+        let (catalog, database, table, branch) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+            table_identifier.branch_name(),
+        );
         let limit = limit.map(|v| v as usize);
         let plan = match ast_action {
             AstOptimizeTableAction::All => {
@@ -1645,6 +1672,7 @@ impl Binder {
                     catalog,
                     database,
                     table,
+                    branch,
                     limit: CompactionLimits {
                         segment_limit: limit,
                         block_limit: None,
@@ -1657,6 +1685,11 @@ impl Binder {
                 }
             }
             AstOptimizeTableAction::Purge { before } => {
+                if branch.is_some() {
+                    return Err(ErrorCode::Unimplemented(
+                        "OPTIMIZE TABLE ... PURGE is not supported on table branch".to_string(),
+                    ));
+                }
                 let instant = if let Some(point) = before {
                     let point = self.resolve_data_travel_point(bind_context, point)?;
                     Some(point)
@@ -1677,6 +1710,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         limit: CompactionLimits {
                             segment_limit: limit,
                             block_limit: None,
@@ -1693,6 +1727,7 @@ impl Binder {
                         catalog,
                         database,
                         table,
+                        branch,
                         num_segment_limit: limit,
                     }))
                 }
@@ -1782,20 +1817,14 @@ impl Binder {
         &mut self,
         stmt: &AnalyzeTableStmt,
     ) -> Result<Plan> {
-        let AnalyzeTableStmt {
-            catalog,
-            database,
-            table,
-            no_scan,
-        } = stmt;
+        let AnalyzeTableStmt { table_ref, no_scan } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
-
+        let table_identifier = TableIdentifier::new_with_ref(self, table_ref, &None);
         Ok(Plan::AnalyzeTable(Box::new(AnalyzeTablePlan {
-            catalog,
-            database,
-            table,
+            catalog: table_identifier.catalog_name(),
+            database: table_identifier.database_name(),
+            table: table_identifier.table_name(),
+            branch: table_identifier.branch_name(),
             no_scan: *no_scan,
         })))
     }

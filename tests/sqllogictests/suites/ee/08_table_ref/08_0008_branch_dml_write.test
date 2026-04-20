@@ -1,0 +1,228 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+DROP DATABASE IF EXISTS test_branch_dml_write
+
+statement ok
+CREATE DATABASE test_branch_dml_write
+
+statement ok
+USE test_branch_dml_write
+
+statement ok
+set data_retention_time_in_days = 0;
+
+statement ok
+CREATE OR REPLACE TABLE tgt(id INT, val STRING)
+
+statement ok
+INSERT INTO tgt VALUES (1, 'base_t1'), (2, 'base_t2')
+
+statement ok
+ALTER TABLE tgt CREATE BRANCH dev
+
+statement ok
+UPDATE tgt/dev SET val = 'branch_updated' WHERE id = 1
+
+statement ok
+DELETE FROM tgt/dev WHERE id = 2
+
+query IT
+SELECT * FROM tgt ORDER BY id
+----
+1 base_t1
+2 base_t2
+
+query IT
+SELECT * FROM tgt/dev ORDER BY id
+----
+1 branch_updated
+
+statement ok
+CREATE OR REPLACE TABLE src(id INT, val STRING)
+
+statement ok
+INSERT INTO src VALUES (1, 'src_base_1'), (3, 'src_base_3')
+
+statement ok
+ALTER TABLE src CREATE BRANCH dev
+
+statement ok
+INSERT INTO src/dev VALUES (4, 'src_branch_4')
+
+statement ok
+MERGE INTO tgt/dev AS t
+USING src/dev AS s
+ON t.id = s.id
+WHEN MATCHED THEN UPDATE SET val = s.val
+WHEN NOT MATCHED THEN INSERT (id, val) VALUES (s.id, s.val)
+
+query IT
+SELECT * FROM tgt ORDER BY id
+----
+1 base_t1
+2 base_t2
+
+query IT
+SELECT * FROM tgt/dev ORDER BY id
+----
+1 src_base_1
+3 src_base_3
+4 src_branch_4
+
+statement ok
+CREATE OR REPLACE TABLE replace_t(id INT, val STRING)
+
+statement ok
+INSERT INTO replace_t VALUES (1, 'replace_base_1'), (2, 'replace_base_2')
+
+statement ok
+ALTER TABLE replace_t CREATE BRANCH dev
+
+statement ok
+REPLACE INTO replace_t/dev ON(id) VALUES (1, 'replace_branch_1'), (3, 'replace_branch_3')
+
+query IT
+SELECT * FROM replace_t ORDER BY id
+----
+1 replace_base_1
+2 replace_base_2
+
+query IT
+SELECT * FROM replace_t/dev ORDER BY id
+----
+1 replace_branch_1
+2 replace_base_2
+3 replace_branch_3
+
+statement ok
+CREATE OR REPLACE TABLE copy_t(id INT, val STRING)
+
+statement ok
+ALTER TABLE copy_t CREATE BRANCH dev
+
+statement ok
+DROP STAGE IF EXISTS branch_dml_stage
+
+statement ok
+CREATE STAGE branch_dml_stage
+
+statement ok
+REMOVE @branch_dml_stage PATTERN='.*'
+
+statement ok
+COPY INTO @branch_dml_stage FROM (SELECT 10, 'copy_branch') FILE_FORMAT=(TYPE=CSV)
+
+statement ok
+COPY INTO copy_t/dev FROM @branch_dml_stage FILE_FORMAT=(TYPE=CSV) PURGE=true
+
+query I
+SELECT count() FROM copy_t
+----
+0
+
+query IT
+SELECT * FROM copy_t/dev ORDER BY id
+----
+10 copy_branch
+
+statement ok
+CREATE OR REPLACE TABLE multi_t(id INT, val STRING)
+
+statement ok
+ALTER TABLE multi_t CREATE BRANCH b1
+
+statement ok
+ALTER TABLE multi_t CREATE BRANCH b2
+
+statement ok
+CREATE OR REPLACE TABLE multi_src(id INT, val STRING)
+
+statement ok
+INSERT INTO multi_src VALUES (1, 'to_b1'), (2, 'to_base'), (3, 'to_b2')
+
+statement ok
+INSERT FIRST
+  WHEN id = 1 THEN
+    INTO multi_t/b1
+  WHEN id = 2 THEN
+    INTO multi_t
+  ELSE
+    INTO multi_t/b2
+SELECT * FROM multi_src
+
+query IT
+SELECT * FROM multi_t ORDER BY id
+----
+2 to_base
+
+query IT
+SELECT * FROM multi_t/b1 ORDER BY id
+----
+1 to_b1
+
+query IT
+SELECT * FROM multi_t/b2 ORDER BY id
+----
+3 to_b2
+
+statement ok
+INSERT ALL
+  INTO multi_t/b1
+  INTO multi_t
+SELECT 10, 'fanout'
+
+query IT
+SELECT * FROM multi_t ORDER BY id
+----
+2 to_base
+10 fanout
+
+query IT
+SELECT * FROM multi_t/b1 ORDER BY id
+----
+1 to_b1
+10 fanout
+
+statement ok
+CREATE OR REPLACE TABLE trunc_t(id INT)
+
+statement ok
+INSERT INTO trunc_t VALUES (1), (2)
+
+statement ok
+ALTER TABLE trunc_t CREATE BRANCH dev
+
+statement ok
+INSERT INTO trunc_t/dev VALUES (3), (4)
+
+statement ok
+TRUNCATE TABLE trunc_t/dev
+
+query I
+SELECT count() FROM trunc_t
+----
+2
+
+query I
+SELECT count() FROM trunc_t/dev
+----
+0
+
+statement ok
+DROP DATABASE test_branch_dml_write

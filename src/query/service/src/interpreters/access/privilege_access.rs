@@ -1664,6 +1664,9 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropTableBranch(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }
+            Plan::UndropTableBranch(plan) => {
+                self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
+            }
             Plan::DropTableTag(plan) => {
                 self.validate_table_access(&plan.catalog, &plan.database, &plan.table, UserPrivilegeType::Alter, false, false).await?
             }

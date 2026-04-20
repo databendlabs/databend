@@ -34,6 +34,7 @@ pub struct Replace {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub table_id: MetaId,
     pub on_conflict_fields: Vec<TableField>,
     pub schema: TableSchemaRef,
@@ -47,6 +48,7 @@ impl PartialEq for Replace {
         self.catalog == other.catalog
             && self.database == other.database
             && self.table == other.table
+            && self.branch == other.branch
             && self.schema == other.schema
             && self.on_conflict_fields == other.on_conflict_fields
     }
@@ -72,12 +74,17 @@ impl Replace {
             catalog,
             database,
             table,
+            branch,
             source,
             on_conflict_fields,
             ..
         } = self;
 
-        let table_name = format!("{}.{}.{}", catalog, database, table);
+        let table_name = if let Some(branch) = branch {
+            format!("{}.{}.{}/{}", catalog, database, table, branch)
+        } else {
+            format!("{}.{}.{}", catalog, database, table)
+        };
         let on_columns = on_conflict_fields
             .iter()
             .map(|field| format!("{}.{} (#{})", table, field.name, field.column_id))
@@ -103,6 +110,7 @@ impl std::fmt::Debug for Replace {
             .field("catalog", &self.catalog)
             .field("database", &self.database)
             .field("table", &self.table)
+            .field("branch", &self.branch)
             .field("table_id", &self.table_id)
             .field("schema", &self.schema)
             .field("on conflict", &self.on_conflict_fields)

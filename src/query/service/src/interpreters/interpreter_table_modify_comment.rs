@@ -56,7 +56,12 @@ impl Interpreter for ModifyTableCommentInterpreter {
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         match catalog
-            .get_table(&self.ctx.get_tenant(), db_name, tbl_name)
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                db_name,
+                tbl_name,
+                self.plan.branch.as_deref(),
+            )
             .await
         {
             Ok(table) => {

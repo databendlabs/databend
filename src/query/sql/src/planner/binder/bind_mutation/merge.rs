@@ -16,7 +16,6 @@ use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::MergeOption;
-use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
@@ -42,23 +41,12 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &MergeIntoStmt,
     ) -> Result<Plan> {
-        let target_table_identifier = TableIdentifier::new(
-            self,
-            &stmt.catalog,
-            &stmt.database,
-            &stmt.table_ident,
-            &None,
-            &stmt.target_alias,
-        );
+        let target_table_identifier =
+            TableIdentifier::new_with_ref(self, &stmt.table, &stmt.target_alias);
 
         let target_reference = TableReference::Table {
             span: None,
-            table: TableRef {
-                catalog: stmt.catalog.clone(),
-                database: stmt.database.clone(),
-                table: stmt.table_ident.clone(),
-                branch: None,
-            },
+            table: stmt.table.clone(),
             alias: stmt.target_alias.clone(),
             temporal: None,
             with_options: None,

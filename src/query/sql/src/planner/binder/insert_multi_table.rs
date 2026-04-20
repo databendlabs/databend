@@ -28,8 +28,10 @@ use databend_common_expression::types::DataType;
 use crate::BindContext;
 use crate::Binder;
 use crate::binder::ScalarBinder;
+use crate::binder::util::TableIdentifier;
 use crate::plans::Else;
 use crate::plans::InsertMultiTable;
+use crate::plans::InsertMultiTableTarget;
 use crate::plans::Into;
 use crate::plans::Plan;
 use crate::plans::When;
@@ -136,9 +138,15 @@ impl Binder {
             )
             .await?;
 
-        let mut ordered_target_tables = target_tables.into_iter().collect::<Vec<_>>();
+        let mut ordered_target_tables = target_tables.into_values().collect::<Vec<_>>();
         // convenient for testing
-        ordered_target_tables.sort_by(|(_, l), (_, r)| l.0.cmp(&r.0).then_with(|| l.1.cmp(&r.1)));
+        ordered_target_tables.sort_by(|l, r| {
+            l.catalog
+                .cmp(&r.catalog)
+                .then(l.database.cmp(&r.database))
+                .then(l.table.cmp(&r.table))
+                .then(l.branch.cmp(&r.branch))
+        });
 
         let plan = InsertMultiTable {
             input_source,
@@ -160,28 +168,41 @@ impl Binder {
         into_clauses: &[IntoClause],
         source_schema: DataSchemaRef,
         source_bind_context: &mut BindContext,
-        target_tables: &mut HashMap<u64, (String, String)>,
+        target_tables: &mut HashMap<u64, InsertMultiTableTarget>,
     ) -> Result<Vec<Into>> {
         let mut intos = vec![];
         for into_clause in into_clauses {
             let IntoClause {
                 database,
                 table,
+                branch,
                 target_columns,
                 source_columns,
                 catalog,
             } = into_clause;
-            let (catalog_name, database_name, table_name) =
-                self.normalize_object_identifier_triple(catalog, database, table);
+            let table_identifier =
+                TableIdentifier::new(self, catalog, database, table, branch, &None);
+            let catalog_name = table_identifier.catalog_name();
+            let database_name = table_identifier.database_name();
+            let table_name = table_identifier.table_name();
+            let branch_name = table_identifier.branch_name();
 
             let target_table = self
                 .ctx
-                .get_table(&catalog_name, &database_name, &table_name)
+                .get_table_with_branch(
+                    &catalog_name,
+                    &database_name,
+                    &table_name,
+                    branch_name.as_deref(),
+                )
                 .await?;
-            target_tables.insert(
-                target_table.get_id(),
-                (database_name.clone(), table_name.clone()),
-            );
+            target_tables.insert(target_table.get_id(), InsertMultiTableTarget {
+                table_id: target_table.get_id(),
+                catalog: catalog_name.clone(),
+                database: database_name.clone(),
+                table: table_name.clone(),
+                branch: branch_name.clone(),
+            });
 
             let n_target_col = if target_columns.is_empty() {
                 target_table.schema().fields().len()
@@ -203,7 +224,10 @@ impl Binder {
             let mut casted_schema = if target_columns.is_empty() {
                 target_table.schema()
             } else {
-                let dest_entity_name = format!("{database_name}.{table_name}");
+                let dest_entity_name = branch_name.as_ref().map_or_else(
+                    || format!("{database_name}.{table_name}"),
+                    |branch| format!("{database_name}.{table_name}/{branch}"),
+                );
                 self.schema_project(
                     &target_table.schema(),
                     target_columns.as_ref(),
@@ -267,6 +291,7 @@ impl Binder {
                 catalog: catalog_name,
                 database: database_name,
                 table: table_name,
+                branch: branch_name,
                 source_scalar_exprs,
                 casted_schema: Arc::new(casted_schema.into()),
             });

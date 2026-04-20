@@ -61,8 +61,20 @@ a
 statement ok
 ALTER TABLE t1/dev MODIFY COLUMN c STRING
 
+query TTTTT
+DESCRIBE t1/dev
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+
 statement ok
 ALTER TABLE t1/dev MODIFY COLUMN c COMMENT 'branch c'
+
+query TTTTTTTTT
+SHOW FULL COLUMNS FROM t1/dev
+----
+a int YES (empty) NULL NULL NULL NULL (empty)
+c varchar(16382) YES (empty) NULL NULL utf8mb4_general_ci NULL branch c
 
 query TT
 SHOW CREATE TABLE t1
@@ -103,6 +115,85 @@ ALTER TABLE t1/dev DROP CLUSTER KEY
 
 query error 1118.*Unclustered table 'test_branch_alter'.'t1'/'dev'
 SELECT cluster_key, type FROM clustering_information('test_branch_alter', 't1/dev')
+
+statement ok
+DROP TABLE IF EXISTS t_constraint
+
+statement ok
+CREATE TABLE t_constraint(a INT)
+
+statement ok
+INSERT INTO t_constraint VALUES (1)
+
+statement ok
+ALTER TABLE t_constraint CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t_constraint/dev ADD CONSTRAINT a_gt_1 CHECK (a > 1)
+
+statement error
+INSERT INTO t_constraint/dev VALUES (1)
+
+statement ok
+INSERT INTO t_constraint VALUES (1)
+
+statement ok
+ALTER TABLE t_constraint/dev DROP CONSTRAINT a_gt_1
+
+statement ok
+INSERT INTO t_constraint/dev VALUES (1)
+
+query I
+SELECT count() FROM t_constraint/dev
+----
+2
+
+statement ok
+DROP TABLE IF EXISTS t_constraint_branch_schema
+
+statement ok
+CREATE TABLE t_constraint_branch_schema(a INT, c INT)
+
+statement ok
+INSERT INTO t_constraint_branch_schema VALUES (1, 1)
+
+statement ok
+ALTER TABLE t_constraint_branch_schema CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t_constraint_branch_schema/dev ADD CONSTRAINT c_gt_0 CHECK (c > 0)
+
+statement error
+INSERT INTO t_constraint_branch_schema/dev VALUES (2, -1)
+
+statement ok
+INSERT INTO t_constraint_branch_schema/dev VALUES (2, 1)
+
+statement ok
+INSERT INTO t_constraint_branch_schema VALUES (2, -1)
+
+query II
+SELECT * FROM t_constraint_branch_schema order by a
+----
+1 1
+2 -1
+
+query II
+SELECT * FROM t_constraint_branch_schema/dev order by a
+----
+1 1
+2 1
+
+statement ok
+ALTER TABLE t_constraint_branch_schema/dev DROP CONSTRAINT c_gt_0
+
+statement ok
+INSERT INTO t_constraint_branch_schema/dev VALUES (3, -1)
+
+query I
+SELECT count() FROM t_constraint_branch_schema/dev
+----
+3
 
 statement ok
 set enable_experimental_row_access_policy=1;
@@ -161,6 +252,37 @@ SELECT * FROM t2/dev ORDER BY id
 
 statement ok
 DROP MASKING POLICY mask_branch_const
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS rap_branch_filter
+
+statement ok
+CREATE ROW ACCESS POLICY rap_branch_filter AS (sensitive INT) RETURNS BOOLEAN -> sensitive > 10
+
+statement ok
+ALTER TABLE t2/dev ADD ROW ACCESS POLICY rap_branch_filter ON (sensitive)
+
+query I
+SELECT id FROM t2/dev ORDER BY id
+----
+2
+
+query I
+SELECT id FROM t2 ORDER BY id
+----
+1
+
+statement ok
+ALTER TABLE t2/dev DROP ROW ACCESS POLICY rap_branch_filter
+
+query II
+SELECT * FROM t2/dev ORDER BY id
+----
+1 10
+2 20
+
+statement ok
+DROP ROW ACCESS POLICY rap_branch_filter
 
 statement ok
 DROP DATABASE test_branch_alter

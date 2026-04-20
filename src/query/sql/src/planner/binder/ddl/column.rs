@@ -20,7 +20,7 @@ use log::debug;
 use crate::BindContext;
 use crate::Binder;
 use crate::SelectBuilder;
-use crate::normalize_identifier;
+use crate::binder::util::TableIdentifier;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
 
@@ -31,41 +31,28 @@ impl Binder {
         bind_context: &mut BindContext,
         stmt: &ShowColumnsStmt,
     ) -> Result<Plan> {
-        let ShowColumnsStmt {
-            catalog,
-            database,
-            table,
-            full,
-            limit,
-        } = stmt;
+        let ShowColumnsStmt { table, full, limit } = stmt;
 
-        let catalog_name = match catalog {
-            None => self.ctx.get_current_catalog(),
-            Some(ident) => {
-                let catalog = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                self.ctx.get_catalog(&catalog).await?;
-                catalog
-            }
-        };
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+        let (catalog_name, database, table, branch) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+            table_identifier.branch_name(),
+        );
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        let database = match database {
-            None => self.ctx.get_current_database(),
-            Some(ident) => {
-                let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
-                catalog
-                    .get_database(&self.ctx.get_tenant(), &database)
-                    .await?;
-                database
-            }
-        };
-
-        let table = {
-            let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-            catalog
-                .get_table(&self.ctx.get_tenant(), database.as_str(), &table)
-                .await?;
-            table
-        };
+        catalog
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                database.as_str(),
+                &table,
+                branch.as_deref(),
+            )
+            .await?;
+        let table_filter_name = branch
+            .as_ref()
+            .map(|branch| format!("{table}/{branch}"))
+            .unwrap_or_else(|| table.clone());
 
         let current_catalog = catalog.name();
         let mut select_builder =
@@ -93,7 +80,7 @@ impl Binder {
 
         select_builder
             .with_filter(format!("table_schema = '{database}'"))
-            .with_filter(format!("table_name = '{table}'"));
+            .with_filter(format!("table_name = '{table_filter_name}'"));
 
         let query = match limit {
             None => select_builder.build(),

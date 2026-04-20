@@ -276,6 +276,16 @@ pub(crate) async fn dump_tables(
     let func_ctx = ctx.get_function_context()?;
     let (filtered_db_names, filtered_table_names) = extract_filters(&push_downs, &func_ctx)?;
 
+    if filtered_table_names.iter().any(|name| name.contains('/')) {
+        return dump_tables_with_branch_filters(
+            ctx,
+            &catalog,
+            &filtered_db_names,
+            &filtered_table_names,
+        )
+        .await;
+    }
+
     // Use unified visibility collection from util.rs
     let db_with_tables =
         collect_visible_tables(ctx, &catalog, &filtered_db_names, &filtered_table_names).await?;
@@ -303,4 +313,64 @@ fn extract_filters(
     }
 
     Ok((filtered_db_names, filtered_table_names))
+}
+
+async fn dump_tables_with_branch_filters(
+    ctx: &Arc<dyn TableContext>,
+    catalog: &Arc<dyn Catalog>,
+    filtered_db_names: &[String],
+    filtered_table_names: &[String],
+) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
+    let mut base_table_filters = Vec::new();
+    for table_name in filtered_table_names {
+        if let Some((base_table, _branch)) = table_name.split_once('/') {
+            base_table_filters.push(base_table.to_string());
+        } else {
+            base_table_filters.push(table_name.clone());
+        }
+    }
+    base_table_filters.sort();
+    base_table_filters.dedup();
+
+    let visible =
+        collect_visible_tables(ctx, catalog, filtered_db_names, &base_table_filters).await?;
+    let tenant = ctx.get_tenant();
+    let mut db_with_tables = Vec::new();
+
+    for db in visible {
+        let mut tables = Vec::new();
+        for filter_name in filtered_table_names {
+            if let Some((base_table, branch_name)) = filter_name.split_once('/') {
+                // Only resolve branch filters after the corresponding base table has passed
+                // the normal visibility filtering in `collect_visible_tables`.
+                if !db.tables.iter().any(|table| table.name() == base_table) {
+                    continue;
+                }
+                match catalog
+                    .get_table_branch(&tenant, &db.name, base_table, branch_name, false)
+                    .await
+                {
+                    Ok(table) => tables.push(table),
+                    Err(err) => {
+                        warn!(
+                            "failed to get branch columns for {}.{}: {}",
+                            db.name, filter_name, err
+                        );
+                    }
+                }
+            } else {
+                tables.extend(
+                    db.tables
+                        .iter()
+                        .filter(|table| table.name() == filter_name)
+                        .cloned(),
+                );
+            }
+        }
+        if !tables.is_empty() {
+            db_with_tables.push((db.name, tables));
+        }
+    }
+
+    Ok(db_with_tables)
 }
