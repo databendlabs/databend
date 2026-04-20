@@ -39,8 +39,8 @@ use tokio::sync::mpsc;
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::operations::ReclusterMutator;
+use crate::operations::SelectedReclusterSegment;
 use crate::operations::acquire_task_permit;
-use crate::operations::mutation::ReclusterMode;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 use crate::pruning::create_segment_location_vector;
@@ -90,7 +90,7 @@ impl FuseTable {
 
         let mut recluster_seg_num = 0;
         let mut recluster_blocks_count = 0;
-        let mut parts = ReclusterParts::new_recluster_parts();
+        let mut parts = ReclusterParts::default();
 
         let number_segments = segment_locations.len();
         let mut segment_idx = 0;
@@ -123,8 +123,7 @@ impl FuseTable {
             }
 
             // select the segments with the highest depth.
-            let (recluster_mode, selected_segs) =
-                mutator.select_segments(&compact_segments, max_seg_num)?;
+            let selected_segs = mutator.select_segments(&compact_segments, max_seg_num)?;
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
                 let result =
@@ -136,13 +135,7 @@ impl FuseTable {
                 }
             } else {
                 selected_seg_num = selected_segs.len() as u64;
-                let selected_segments = selected_segs
-                    .into_iter()
-                    .map(|i| compact_segments[i].clone())
-                    .collect();
-                (recluster_blocks_count, parts) = mutator
-                    .target_select(selected_segments, recluster_mode)
-                    .await?;
+                (recluster_blocks_count, parts) = mutator.target_select(selected_segs).await?;
             }
 
             if !parts.is_empty() || limit.is_some() {
@@ -179,12 +172,17 @@ impl FuseTable {
 
         let latest = compact_segments.len() - 1;
         for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
-            if !mutator.segment_can_recluster(&compact_segment.1.summary) {
+            let segment =
+                SelectedReclusterSegment::create(&mutator, compact_segment.0, compact_segment.1);
+            if !(segment.stats.level >= 0
+                || (segment.info.summary.block_count as usize)
+                    < mutator.block_thresholds.block_per_segment)
+            {
                 continue;
             }
 
-            block_count += compact_segment.1.summary.block_count as usize;
-            selected_segs.push(compact_segment);
+            block_count += segment.info.summary.block_count as usize;
+            selected_segs.push(segment);
             if block_count >= mutator.block_thresholds.block_per_segment || idx == latest {
                 let selected_segs = std::mem::take(&mut selected_segs);
                 let mutator_clone = mutator.clone();
@@ -192,9 +190,7 @@ impl FuseTable {
                 let permit = acquire_task_permit(semaphore.clone()).await?;
                 let handle = runtime.spawn(async move {
                     let seg_num = selected_segs.len() as u64;
-                    let (block_num, parts) = mutator_clone
-                        .target_select(selected_segs, ReclusterMode::Recluster)
-                        .await?;
+                    let (block_num, parts) = mutator_clone.target_select(selected_segs).await?;
                     drop(permit);
                     if !parts.is_empty() {
                         let _ = tx_clone.send((seg_num, block_num, parts)).await;

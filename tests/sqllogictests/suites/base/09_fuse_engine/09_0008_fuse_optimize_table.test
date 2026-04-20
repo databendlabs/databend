@@ -124,28 +124,7 @@ statement ok
 optimize table m purge
 
 statement ok
-optimize table m compact
-
-statement ok
 drop table m
-
-statement ok
-create table m(a uint64 not null) engine=Fuse
-
-statement ok
-insert into m values(1)
-
-statement ok
-insert into m values(2)
-
-statement ok
-optimize table m all
-
-statement ok
-optimize table m purge
-
-statement ok
-optimize table m compact
 
 
 statement ok
@@ -427,45 +406,6 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't7') limit 2
 7 7
 8 8
 
-
-
-statement ok
-create table t8(a int not null) block_per_segment=2 row_per_block=3
-
-statement ok
-insert into t8 values(1),(2),(3)
-
-statement ok
-alter table t8 add column b int not null
-
-statement ok
-insert into t8 values(4,4),(5,5),(6,6)
-
-query IIII
-select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('db_09_0008', 't8') limit 1
-----
-2 2 6 36
-
-statement ok
-optimize table t8 compact
-
-query IIII
-select segment_count, block_count, row_count, bytes_uncompressed from fuse_snapshot('db_09_0008', 't8') limit 1
-----
-1 2 6 48
-
-query II
-select * from t8 order by a
-----
-1 0
-2 0
-3 0
-4 4
-5 5
-6 6
-
-
-
 statement ok
 create table t9(a int not null) cluster by(abs(a))
 
@@ -573,24 +513,6 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t10')
 ----
 (abs(a)) linear {"average_depth":2.75,"average_overlaps":2.0,"block_depth_histogram":{"00002":1,"00003":3},"constant_block_count":1,"total_block_count":4}
 
-# recluster the unclustered block.
-statement ok
-alter table t10 recluster
-
-query T
-select info:average_depth from clustering_information('db_09_0008','t10')
-----
-2.75
-
-# compact
-statement ok
-optimize table t10 compact
-
-query TTT
-select * exclude(timestamp) from clustering_information('db_09_0008','t10')
-----
-(abs(a)) linear {"average_depth":3.0,"average_overlaps":2.0,"block_depth_histogram":{"00003":3},"constant_block_count":0,"total_block_count":3}
-
 statement ok
 alter table t10 recluster
 
@@ -602,7 +524,7 @@ select info:average_depth from clustering_information('db_09_0008','t10')
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-8
+6
 
 statement ok
 optimize table t10 purge limit 2
@@ -610,7 +532,7 @@ optimize table t10 purge limit 2
 query I
 select count() from fuse_snapshot('db_09_0008', 't10')
 ----
-6
+4
 
 
 
@@ -797,46 +719,6 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t14')
 ----
 (a, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":1},"constant_block_count":0,"total_block_count":1}
 
-
-statement ok
-create table t15(a int not null) row_per_block=3
-
-statement ok
-insert into t15 values(0),(1),(4)
-
-statement ok
-insert into t15 values(3)
-
-statement ok
-insert into t15 values(-6),(-8)
-
-statement ok
-ALTER TABLE t15 cluster by(abs(a))
-
-statement ok
-insert into t15 values(2),(5),(-7)
-
-query TTT
-select * exclude(timestamp) from clustering_information('db_09_0008','t15')
-----
-(abs(a)) linear {"average_depth":2.75,"average_overlaps":2.0,"block_depth_histogram":{"00002":1,"00003":3},"constant_block_count":1,"total_block_count":4}
-
-statement ok
-alter table t15 recluster
-
-query TTT
-select * exclude(timestamp) from clustering_information('db_09_0008','t15')
-----
-(abs(a)) linear {"average_depth":3.0,"average_overlaps":2.0,"block_depth_histogram":{"00003":3},"constant_block_count":0,"total_block_count":3}
-
-statement ok
-alter table t15 recluster
-
-query TTTT
-select cluster_key, type, info:average_overlaps, info:average_depth from clustering_information('db_09_0008','t15')
-----
-(abs(a)) linear 0.0 1.0
-
 statement ok
 create table t16(a int, b int) file_size = 100;
 
@@ -869,6 +751,41 @@ select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t1
 
 statement ok
 drop table t16 all;
+
+statement ok
+create table t17(a int not null) row_per_block=3 block_per_segment=1;
+
+statement ok
+insert into t17 values(1), (2), (3);
+
+query I
+select count() from fuse_snapshot('db_09_0008', 't17');
+----
+1
+
+statement ok
+alter table t17 add column b int not null;
+
+query I
+select count() from fuse_snapshot('db_09_0008', 't17');
+----
+2
+
+statement ok
+optimize table t17 compact;
+
+query I
+select count() from fuse_snapshot('db_09_0008', 't17');
+----
+2
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't17') limit 1;
+----
+1 1
+
+statement ok
+drop table t17 all;
 
 statement ok
 DROP DATABASE db_09_0008

@@ -31,6 +31,7 @@ use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::*;
 use databend_storages_common_table_meta::meta;
 use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_storages_common_table_meta::meta::ClusterStatistics;
 use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use futures::TryStreamExt;
@@ -121,7 +122,7 @@ fn test_to_partitions() -> anyhow::Result<()> {
     let column_nodes = ColumnNodes { column_nodes };
 
     // CASE I:  no projection
-    let (s, parts) = FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, None);
+    let (s, parts) = FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, None, None);
     assert_eq!(parts.len(), num_of_block as usize);
     let expected_block_size: u64 = cols_metas
         .values()
@@ -150,9 +151,92 @@ fn test_to_partitions() -> anyhow::Result<()> {
     });
 
     let (stats, parts) =
-        FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, push_down);
+        FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, push_down, None);
     assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
+
+    Ok(())
+}
+
+#[test]
+fn test_to_partitions_recluster_need_local_sort() -> anyhow::Result<()> {
+    let col_stats = HashMap::from([(
+        0u32,
+        ColumnStatistics::new(Scalar::from(1i64), Scalar::from(3i64), 0, 8, None),
+    )]);
+    let col_metas = HashMap::from([(
+        0u32,
+        ColumnMeta::Parquet(meta::SingleColumnMeta {
+            offset: 0,
+            len: 8,
+            num_values: 0,
+        }),
+    )]);
+    let column_nodes = ColumnNodes {
+        column_nodes: vec![{
+            let mut n = ColumnNode::new(
+                Field::new("a".to_string(), ArrowType::Int64, false),
+                false,
+                vec![],
+                vec![0],
+                None,
+            );
+            n.leaf_column_ids = vec![0];
+            n
+        }],
+    };
+
+    let mk_block = |cluster_stats| {
+        Arc::new(BlockMeta::new(
+            3,
+            8,
+            0,
+            col_stats.clone(),
+            col_metas.clone(),
+            cluster_stats,
+            ("".to_owned(), 0),
+            None,
+            0,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            meta::Compression::Lz4Raw,
+            Some(Utc::now()),
+        ))
+    };
+
+    let clustered = mk_block(Some(ClusterStatistics::new(
+        7,
+        vec![Scalar::from(1i64)],
+        vec![Scalar::from(3i64)],
+        1,
+        None,
+    )));
+    let fallback = mk_block(Some(ClusterStatistics::new(
+        8,
+        vec![Scalar::from(1i64)],
+        vec![Scalar::from(3i64)],
+        1,
+        None,
+    )));
+
+    let (_, parts) = FuseTable::to_partitions(
+        None,
+        &[(None, clustered), (None, fallback)],
+        &column_nodes,
+        None,
+        None,
+        Some(7),
+    );
+    let clustered_part = FuseBlockPartInfo::from_part(&parts.partitions[0])?;
+    let fallback_part = FuseBlockPartInfo::from_part(&parts.partitions[1])?;
+    assert!(!clustered_part.need_local_sort);
+    assert!(fallback_part.need_local_sort);
 
     Ok(())
 }

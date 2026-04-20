@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,8 +25,6 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::ColumnId;
-use databend_common_expression::is_stream_column_id;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -210,12 +207,6 @@ impl BlockCompactMutator {
             || cluster.is_empty()
             || parts.len() < cluster.nodes.len() * max_threads
         {
-            // NOTE: The snapshot schema does not contain the stream column.
-            let column_ids = self
-                .compact_params
-                .base_snapshot
-                .schema
-                .to_leaf_column_id_set();
             let lazy_parts = parts
                 .into_iter()
                 .map(|v| {
@@ -230,7 +221,6 @@ impl BlockCompactMutator {
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
                     self.operator.clone(),
-                    column_ids,
                     self.cluster_key_id,
                     self.thresholds,
                     lazy_parts,
@@ -247,7 +237,6 @@ impl BlockCompactMutator {
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
         mut lazy_parts: Vec<CompactLazyPartInfo>,
@@ -266,7 +255,6 @@ impl BlockCompactMutator {
             let batch_size = batch_size + gap_size;
             remain -= gap_size;
 
-            let column_ids = column_ids.clone();
             let semaphore = semaphore.clone();
             let dal = dal.clone();
 
@@ -274,12 +262,8 @@ impl BlockCompactMutator {
             works.push(async move {
                 let mut res = vec![];
                 for lazy_part in batch {
-                    let mut builder = CompactTaskBuilder::new(
-                        dal.clone(),
-                        column_ids.clone(),
-                        cluster_key_id,
-                        thresholds,
-                    );
+                    let mut builder =
+                        CompactTaskBuilder::new(dal.clone(), cluster_key_id, thresholds);
                     let parts = builder
                         .build_tasks(
                             lazy_part.segment_indices,
@@ -470,7 +454,6 @@ impl SegmentCompactChecker {
 
 struct CompactTaskBuilder {
     dal: Operator,
-    column_ids: HashSet<ColumnId>,
     cluster_key_id: Option<u32>,
     thresholds: BlockThresholds,
 
@@ -481,15 +464,9 @@ struct CompactTaskBuilder {
 }
 
 impl CompactTaskBuilder {
-    fn new(
-        dal: Operator,
-        column_ids: HashSet<ColumnId>,
-        cluster_key_id: Option<u32>,
-        thresholds: BlockThresholds,
-    ) -> Self {
+    fn new(dal: Operator, cluster_key_id: Option<u32>, thresholds: BlockThresholds) -> Self {
         Self {
             dal,
-            column_ids,
             cluster_key_id,
             thresholds,
             blocks: vec![],
@@ -569,25 +546,15 @@ impl CompactTaskBuilder {
     }
 
     fn check_compact(&self, block: &BlockMeta) -> bool {
-        // The snapshot schema does not contain stream columns,
-        // so the stream columns need to be filtered out.
-        let column_ids = block
-            .col_metas
-            .keys()
-            .filter(|id| !is_stream_column_id(**id))
-            .cloned()
-            .collect::<HashSet<_>>();
-        if self.column_ids == column_ids {
-            // Check if the block needs to be resort.
-            self.cluster_key_id.is_some_and(|key| {
-                block
-                    .cluster_stats
-                    .as_ref()
-                    .is_none_or(|v| v.cluster_key_id != key)
-            })
-        } else {
-            true
-        }
+        // Schema evolution should not force compaction by itself. Old blocks may legitimately
+        // miss newly added columns and continue to use schema-on-read defaults until they are
+        // rewritten for an actual compaction reason.
+        self.cluster_key_id.is_some_and(|key| {
+            block
+                .cluster_stats
+                .as_ref()
+                .is_none_or(|v| v.cluster_key_id != key)
+        })
     }
 
     // Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block

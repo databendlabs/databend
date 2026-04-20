@@ -16,12 +16,21 @@ use std::cmp::Ordering;
 
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
+use databend_common_expression::Domain;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::TableSchema;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_storages_common_index::statistics_to_domain;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
+use databend_storages_common_table_meta::meta::StatisticsOfColumns;
+use log::warn;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -189,5 +198,68 @@ pub fn sort_by_cluster_stats(
                 .cmp(b.max().iter().map(Scalar::as_ref))
         }
         _ => Ordering::Equal,
+    }
+}
+
+pub fn get_min_max_stats(
+    exprs: &[Expr<usize>],
+    col_stats: &StatisticsOfColumns,
+    cluster_stats: Option<&ClusterStatistics>,
+    default_key_id: Option<u32>,
+    schema: &TableSchema,
+) -> (Vec<Scalar>, Vec<Scalar>) {
+    if let Some(default_key_id) = default_key_id {
+        if let Some(v) = cluster_stats {
+            if v.cluster_key_id == default_key_id {
+                return (v.min().clone(), v.max().clone());
+            }
+        }
+    }
+
+    let func_ctx = FunctionContext::default();
+    let mut mins = Vec::with_capacity(exprs.len());
+    let mut maxs = Vec::with_capacity(exprs.len());
+    for expr in exprs {
+        // Since the hilbert index does not calc domain, set min max directly.
+        if expr.data_type().remove_nullable() == DataType::Binary {
+            mins.push(Scalar::Binary(vec![]));
+            maxs.push(Scalar::Binary(vec![0xFF; 40]));
+            continue;
+        }
+
+        let input_domains = expr
+            .column_refs()
+            .into_iter()
+            .map(|(index, ty)| {
+                let column_ids = schema.field(index).leaf_column_ids();
+                let stats = column_ids
+                    .iter()
+                    .filter_map(|column_id| col_stats.get(column_id))
+                    .collect();
+                let domain = statistics_to_domain(stats, &ty);
+                (index, domain)
+            })
+            .collect();
+
+        let (_, domain_opt) =
+            ConstantFolder::fold_with_domain(expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
+        let domain = domain_opt.unwrap_or_else(|| Domain::full(expr.data_type()));
+        let (min, max) = domain.to_minmax();
+        mins.push(min);
+        maxs.push(max);
+    }
+
+    match mins
+        .iter()
+        .map(Scalar::as_ref)
+        .cmp(maxs.iter().map(Scalar::as_ref))
+    {
+        Ordering::Greater => {
+            warn!(
+                "clustering_information: please check your data and perform recluster to resort."
+            );
+            (maxs, mins)
+        }
+        _ => (mins, maxs),
     }
 }

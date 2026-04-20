@@ -159,6 +159,7 @@ impl ReadBlockContext {
                     None,
                     None,
                     None,
+                    false,
                 );
                 ReadDataSource::Parquet(Box::new(ParquetDataSource::AggIndex((part, data))))
             }

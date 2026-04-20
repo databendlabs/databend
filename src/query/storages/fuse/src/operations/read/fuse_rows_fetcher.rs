@@ -65,8 +65,7 @@ pub fn row_fetch_processor(
         .iter()
         .map(|field| DataType::from(field.data_type()))
         .collect::<Vec<_>>();
-    let block_reader =
-        fuse_table.create_block_reader(ctx.clone(), projection.clone(), false, false, true)?;
+    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection.clone(), true)?;
 
     match &fuse_table.storage_format {
         FuseStorageFormat::Native => unreachable!(),

@@ -129,8 +129,7 @@ pub async fn prepare_refresh_virtual_column(
     let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 
     let projection = Projection::Columns(field_indices);
-    let block_reader =
-        fuse_table.create_block_reader(ctx.clone(), projection, false, false, false)?;
+    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
 
     let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);
 

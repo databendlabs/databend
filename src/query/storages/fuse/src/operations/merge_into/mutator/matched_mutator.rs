@@ -113,8 +113,6 @@ impl MatchedAggregator {
                 target_table_schema.clone(),
                 projection,
                 false,
-                update_stream_columns,
-                false,
             )
         }?;
 
