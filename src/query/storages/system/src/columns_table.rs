@@ -27,7 +27,6 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
@@ -35,6 +34,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
+use databend_common_sql::check_table_ref_access;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -46,7 +46,7 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::collect_visible_tables;
 use crate::util::disable_catalog_refresh;
-use crate::util::extract_leveled_strings;
+use crate::util::extract_push_down_string_filters;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -84,6 +84,7 @@ impl AsyncSystemTable for ColumnsTable {
         let mut default_exprs: Vec<String> = Vec::with_capacity(rows.len());
         let mut is_nullables: Vec<String> = Vec::with_capacity(rows.len());
         let mut comments: Vec<String> = Vec::with_capacity(rows.len());
+        let mut branches: Vec<String> = Vec::with_capacity(rows.len());
         for column_info in rows.into_iter() {
             names.push(column_info.column.name().clone());
             tables.push(column_info.table_name);
@@ -111,6 +112,7 @@ impl AsyncSystemTable for ColumnsTable {
             }
 
             comments.push(column_info.column_comment);
+            branches.push(column_info.branch_name);
         }
 
         Ok(DataBlock::new_from_columns(vec![
@@ -123,6 +125,7 @@ impl AsyncSystemTable for ColumnsTable {
             StringType::from_data(default_exprs),
             StringType::from_data(is_nullables),
             StringType::from_data(comments),
+            StringType::from_data(branches),
         ]))
     }
 }
@@ -130,9 +133,16 @@ impl AsyncSystemTable for ColumnsTable {
 struct TableColumnInfo {
     database_name: String,
     table_name: String,
+    branch_name: String,
 
     column: TableField,
     column_comment: String,
+}
+
+pub(crate) struct DumpedTable {
+    pub(crate) table_name: String,
+    pub(crate) branch_name: String,
+    pub(crate) table: Arc<dyn Table>,
 }
 
 impl ColumnsTable {
@@ -149,6 +159,7 @@ impl ColumnsTable {
             TableField::new("default_expression", TableDataType::String),
             TableField::new("is_nullable", TableDataType::String),
             TableField::new("comment", TableDataType::String),
+            TableField::new("branch", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
@@ -181,8 +192,13 @@ impl ColumnsTable {
         let database_and_tables = dump_tables(&ctx, push_downs, catalog).await?;
 
         let mut rows: Vec<TableColumnInfo> = vec![];
-        for (database, tables) in database_and_tables {
-            for table in tables {
+        for (database, table_sources) in database_and_tables {
+            for table_source in table_sources {
+                let DumpedTable {
+                    table_name,
+                    branch_name,
+                    table,
+                } = table_source;
                 match table.engine() {
                     VIEW_ENGINE => {
                         let fields = if let Some(query) = table.options().get(QUERY) {
@@ -207,7 +223,8 @@ impl ColumnsTable {
                         for field in fields {
                             rows.push(TableColumnInfo {
                                 database_name: database.clone(),
-                                table_name: table.name().into(),
+                                table_name: table_name.clone(),
+                                branch_name: branch_name.clone(),
                                 column: field.clone(),
                                 column_comment: "".to_string(),
                             })
@@ -220,7 +237,8 @@ impl ColumnsTable {
                                 for field in source_table.schema().fields() {
                                     rows.push(TableColumnInfo {
                                         database_name: database.clone(),
-                                        table_name: table.name().into(),
+                                        table_name: table_name.clone(),
+                                        branch_name: branch_name.clone(),
                                         column: field.clone(),
                                         column_comment: "".to_string(),
                                     })
@@ -250,7 +268,8 @@ impl ColumnsTable {
                             };
                             rows.push(TableColumnInfo {
                                 database_name: database.clone(),
-                                table_name: table.name().into(),
+                                table_name: table_name.clone(),
+                                branch_name: branch_name.clone(),
                                 column: field.clone(),
                                 column_comment: comment,
                             })
@@ -268,39 +287,88 @@ pub(crate) async fn dump_tables(
     ctx: &Arc<dyn TableContext>,
     push_downs: Option<PushDownInfo>,
     catalog: &Arc<dyn Catalog>,
-) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
+) -> Result<Vec<(String, Vec<DumpedTable>)>> {
     // For performance considerations, we do not require the most up-to-date table information here
     let catalog = disable_catalog_refresh(catalog.clone())?;
 
     // Extract filters from push_downs
     let func_ctx = ctx.get_function_context()?;
-    let (filtered_db_names, filtered_table_names) = extract_filters(&push_downs, &func_ctx)?;
+    let mut filters =
+        extract_push_down_string_filters(&push_downs, &["database", "table", "branch"], &func_ctx)?;
+    let filtered_db_names = filters.remove(0);
+    let filtered_table_names = filters.remove(0);
+    let filtered_branch_names = filters.remove(0);
+
+    if filtered_branch_names
+        .iter()
+        .any(|branch_name| !branch_name.is_empty())
+    {
+        check_table_ref_access(ctx.as_ref())?;
+    }
 
     // Use unified visibility collection from util.rs
     let db_with_tables =
         collect_visible_tables(ctx, &catalog, &filtered_db_names, &filtered_table_names).await?;
 
-    // Convert to the expected return format
-    Ok(db_with_tables
-        .into_iter()
-        .map(|db| (db.name, db.tables))
-        .collect())
-}
+    if filtered_branch_names.is_empty() {
+        return Ok(db_with_tables
+            .into_iter()
+            .map(|db| {
+                let tables = db
+                    .tables
+                    .into_iter()
+                    .map(|table| {
+                        let table_name = table.name().to_string();
+                        DumpedTable {
+                            table_name,
+                            branch_name: String::new(),
+                            table,
+                        }
+                    })
+                    .collect();
+                (db.name, tables)
+            })
+            .collect());
+    }
 
-fn extract_filters(
-    push_downs: &Option<PushDownInfo>,
-    func_ctx: &databend_common_expression::FunctionContext,
-) -> Result<(Vec<String>, Vec<String>)> {
-    let mut filtered_db_names = vec![];
-    let mut filtered_table_names = vec![];
+    let tenant = ctx.get_tenant();
+    let mut db_with_dumped_tables = Vec::new();
+    for db in db_with_tables {
+        let mut tables = Vec::new();
+        for table in db.tables {
+            let table_name = table.name().to_string();
+            for branch_name in &filtered_branch_names {
+                if branch_name.is_empty() {
+                    tables.push(DumpedTable {
+                        table_name: table_name.clone(),
+                        branch_name: String::new(),
+                        table: table.clone(),
+                    });
+                    continue;
+                }
 
-    if let Some(push_downs) = push_downs {
-        if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            (filtered_db_names, filtered_table_names) =
-                extract_leveled_strings(&expr, &["database", "table"], func_ctx)?;
+                match catalog
+                    .get_table_branch(&tenant, &db.name, &table_name, branch_name, false)
+                    .await
+                {
+                    Ok(branch_table) => tables.push(DumpedTable {
+                        table_name: table_name.clone(),
+                        branch_name: branch_name.clone(),
+                        table: branch_table,
+                    }),
+                    Err(err) => {
+                        warn!(
+                            "failed to get branch columns for {}.{}/{}: {}",
+                            db.name, table_name, branch_name, err
+                        );
+                    }
+                }
+            }
+        }
+        if !tables.is_empty() {
+            db_with_dumped_tables.push((db.name, tables));
         }
     }
 
-    Ok((filtered_db_names, filtered_table_names))
+    Ok(db_with_dumped_tables)
 }

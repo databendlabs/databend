@@ -24,8 +24,8 @@ use derive_visitor::DriveMut;
 use crate::ast::CreateOption;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::ast::TableRef;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
@@ -131,9 +131,7 @@ pub struct CreateTableIndexStmt {
     pub index_name: Identifier,
     pub index_type: TableIndexType,
 
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
 
     pub columns: Vec<Identifier>,
     pub sync_creation: bool,
@@ -155,14 +153,7 @@ impl Display for CreateTableIndexStmt {
         }
 
         write!(f, " {}", self.index_name)?;
-        write!(f, " ON ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, " ON {}", self.table)?;
         write!(f, " (")?;
         write_comma_separated_list(f, &self.columns)?;
         write!(f, ")")?;
@@ -181,9 +172,7 @@ pub struct DropTableIndexStmt {
     pub if_exists: bool,
     pub index_name: Identifier,
     pub index_type: TableIndexType,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
 }
 
 impl Display for DropTableIndexStmt {
@@ -194,14 +183,7 @@ impl Display for DropTableIndexStmt {
         }
 
         write!(f, " {}", self.index_name)?;
-        write!(f, " ON ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, " ON {}", self.table)?;
         Ok(())
     }
 }
@@ -210,9 +192,7 @@ impl Display for DropTableIndexStmt {
 pub struct RefreshTableIndexStmt {
     pub index_name: Identifier,
     pub index_type: TableIndexType,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
     pub limit: Option<u64>,
 }
 
@@ -220,14 +200,7 @@ impl Display for RefreshTableIndexStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "REFRESH {} INDEX", self.index_type)?;
         write!(f, " {}", self.index_name)?;
-        write!(f, " ON ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, " ON {}", self.table)?;
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
         }

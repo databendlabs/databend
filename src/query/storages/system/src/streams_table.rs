@@ -13,14 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -105,6 +107,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
         let mut table_version = vec![];
         let mut snapshot_location = vec![];
         let mut has_data = vec![];
+        let mut source_db_tb_ids = Vec::new();
 
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads));
@@ -159,9 +162,6 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             HashMap::new()
         };
 
-        let mut source_db_id_set = HashSet::new();
-        let mut source_tb_id_set = HashSet::new();
-        let mut source_db_tb_ids = vec![];
         for db in final_dbs {
             let db_id = db.get_db_info().database_id.db_id;
             let db_name = db.name();
@@ -195,26 +195,26 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     let stream_info = table.get_table_info();
                     let stream_table = StreamTable::try_from_table(table.as_ref())?;
 
-                    let source_db_id = stream_table.source_database_id(ctl.as_ref()).await.ok();
-                    if let Some(source_db_id) = source_db_id {
-                        source_db_id_set.insert(source_db_id);
-                    }
-                    let source_tb_id = stream_table.source_table_id().ok();
-                    if let Some(source_tb_id) = source_tb_id {
-                        source_tb_id_set.insert(source_tb_id);
-                    }
-                    match (source_db_id, source_tb_id) {
-                        (Some(source_db_id), Some(source_tb_id)) => {
-                            source_db_tb_ids.push(Some((source_db_id, source_tb_id)));
-                        }
-                        (_, _) => {
-                            source_db_tb_ids.push(None);
-                        }
-                    }
                     catalogs.push(ctl_name.as_str());
                     databases.push(db_name.to_owned());
                     names.push(stream_table.name().to_string());
                     mode.push(stream_table.mode().to_string());
+
+                    let source_db_tb_id = || -> Result<(u64, u64, Option<u64>)> {
+                        let source_tb_id = stream_table.source_table_id()?;
+                        let source_db_id = stream_table.source_database_id()?;
+                        let source_base_id = stream_table.source_base_table_id()?;
+                        Ok((
+                            source_db_id,
+                            source_base_id.unwrap_or(source_tb_id),
+                            source_base_id.map(|_| source_tb_id),
+                        ))
+                    };
+                    let (source_db_tb_id, source_reason) = match source_db_tb_id() {
+                        Ok(source_db_tb_id) => (Some(source_db_tb_id), None),
+                        Err(err) => (None, Some(err.display_text())),
+                    };
+                    source_db_tb_ids.push(source_db_tb_id);
 
                     if T {
                         stream_id.push(stream_info.ident.table_id);
@@ -238,7 +238,9 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
 
                         let offset = stream_table.offset().ok();
                         table_version.push(offset);
-                        table_id.push(source_tb_id);
+                        table_id.push(source_db_tb_id.map(|(_, source_table_id, branch_id)| {
+                            branch_id.unwrap_or(source_table_id)
+                        }));
                         snapshot_location.push(stream_table.snapshot_loc());
 
                         let permit = acquire_task_permit(io_request_semaphore.clone()).await?;
@@ -249,24 +251,28 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                             let mut has_data = false;
                             // safe unwrap.
                             let stream_table = StreamTable::try_from_table(table.as_ref()).unwrap();
-                            match stream_table.source_table(ctx).await {
-                                Ok(source) => {
-                                    // safe unwrap, has been checked in source_table.
-                                    let fuse_table =
-                                        FuseTable::try_from_table(source.as_ref()).unwrap();
-                                    if let Some(location) = stream_table.snapshot_loc() {
-                                        reason = fuse_table
-                                            .changes_read_offset_snapshot(&location)
-                                            .await
-                                            .err()
-                                            .map_or("".to_string(), |e| e.display_text());
+                            if let Some(source_reason) = source_reason {
+                                reason = source_reason;
+                            } else {
+                                match stream_table.source_table(ctx).await {
+                                    Ok(source) => {
+                                        // safe unwrap, has been checked in source_table.
+                                        let fuse_table =
+                                            FuseTable::try_from_table(source.as_ref()).unwrap();
+                                        if let Some(location) = stream_table.snapshot_loc() {
+                                            reason = fuse_table
+                                                .changes_read_offset_snapshot(&location)
+                                                .await
+                                                .err()
+                                                .map_or("".to_string(), |e| e.display_text());
+                                        }
+                                        if let Some(ver) = offset {
+                                            has_data = fuse_table.get_table_info().ident.seq != ver;
+                                        }
                                     }
-                                    if let Some(ver) = offset {
-                                        has_data = fuse_table.get_table_info().ident.seq != ver;
+                                    Err(e) => {
+                                        reason = e.display_text();
                                     }
-                                }
-                                Err(e) => {
-                                    reason = e.display_text();
                                 }
                             }
                             drop(permit);
@@ -285,35 +291,86 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
             has_data.append(&mut flags);
         }
 
-        let mut source_db_ids = source_db_id_set.into_iter().collect::<Vec<u64>>();
-        source_db_ids.sort();
+        let mut source_db_ids = source_db_tb_ids
+            .iter()
+            .filter_map(|source_db_tb_id| {
+                source_db_tb_id
+                    .as_ref()
+                    .map(|(source_db_id, _, _)| *source_db_id)
+            })
+            .collect::<Vec<_>>();
+        source_db_ids.sort_unstable();
+        source_db_ids.dedup();
         let source_db_names = ctl
             .mget_database_names_by_ids(&tenant, &source_db_ids)
             .await?;
         let source_db_map = source_db_ids
             .into_iter()
             .zip(source_db_names.into_iter())
-            .filter(|(_, db_name)| db_name.is_some())
-            .map(|(db_id, db_name)| (db_id, db_name.unwrap()))
+            .filter_map(|(db_id, db_name)| db_name.map(|db_name| (db_id, db_name)))
             .collect::<HashMap<_, _>>();
 
-        let mut source_tb_ids = source_tb_id_set.into_iter().collect::<Vec<u64>>();
-        source_tb_ids.sort();
+        let mut source_tb_ids = source_db_tb_ids
+            .iter()
+            .filter_map(|source_db_tb_id| {
+                source_db_tb_id
+                    .as_ref()
+                    .map(|(_, source_table_id, _)| *source_table_id)
+            })
+            .collect::<Vec<_>>();
+        source_tb_ids.sort_unstable();
+        source_tb_ids.dedup();
         let source_tb_names = ctl
             .mget_table_names_by_ids(&tenant, &source_tb_ids, false)
             .await?;
         let source_tb_map = source_tb_ids
             .into_iter()
             .zip(source_tb_names.into_iter())
-            .filter(|(_, tb_name)| tb_name.is_some())
-            .map(|(tb_id, tb_name)| (tb_id, tb_name.unwrap()))
+            .filter_map(|(tb_id, tb_name)| tb_name.map(|tb_name| (tb_id, tb_name)))
             .collect::<HashMap<_, _>>();
 
-        for source_db_tb_id in source_db_tb_ids.into_iter() {
-            if let Some((db_id, tb_id)) = source_db_tb_id {
-                if let Some(db) = source_db_map.get(&db_id) {
-                    if let Some(tb) = source_tb_map.get(&tb_id) {
-                        table_name.push(Some(format!("{db}.{tb}")));
+        let mut branch_ids = source_db_tb_ids
+            .iter()
+            .filter_map(|source_db_tb_id| {
+                source_db_tb_id
+                    .as_ref()
+                    .and_then(|(_, _, branch_id)| *branch_id)
+            })
+            .collect::<Vec<_>>();
+        branch_ids.sort_unstable();
+        branch_ids.dedup();
+        let branch_name_map = if branch_ids.is_empty() {
+            HashMap::new()
+        } else {
+            match meta_store_client()
+                .mget_branch_names_by_ids(&branch_ids)
+                .await
+            {
+                Ok(branch_names) => branch_ids
+                    .into_iter()
+                    .zip(branch_names.into_iter())
+                    .filter_map(|(branch_id, branch_name)| {
+                        branch_name.map(|branch_name| (branch_id, branch_name))
+                    })
+                    .collect::<HashMap<_, _>>(),
+                Err(err) => {
+                    return Err(ErrorCode::MetaServiceError(err.to_string()));
+                }
+            }
+        };
+
+        for source_db_tb_id in source_db_tb_ids {
+            if let Some((source_db_id, source_table_id, branch_id)) = source_db_tb_id {
+                if let Some(database) = source_db_map.get(&source_db_id) {
+                    if let Some(table) = source_tb_map.get(&source_table_id) {
+                        let source_name = if let Some(branch_id) = branch_id {
+                            branch_name_map
+                                .get(&branch_id)
+                                .map(|branch| format!("{}.{}/{}", database, table, branch))
+                        } else {
+                            Some(format!("{}.{}", database, table))
+                        };
+                        table_name.push(source_name);
                         continue;
                     }
                 }

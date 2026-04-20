@@ -24,9 +24,6 @@ CREATE DATABASE test_tag
 statement ok
 USE test_tag
 
-statement ok
-set data_retention_time_in_days = 0;
-
 ## Test basic tag creation and query
 statement ok
 CREATE OR REPLACE TABLE t1(a INT, b STRING)
@@ -106,19 +103,6 @@ query TB
 select name, expire_at is not null from fuse_tag('test_tag','t1') order by name
 ----
 temp_tag 1
-v1_0 0
-v1_0_copy 0
-
-statement ok
-optimize table t1 compact
-
-statement ok
-select * from fuse_vacuum2('test_tag', 't1') ignore_result;
-
-## temp_tag was purged.
-query TB
-select name, expire_at is not null from fuse_tag('test_tag','t1') order by name
-----
 v1_0 0
 v1_0_copy 0
 

@@ -97,8 +97,18 @@ create stage test_table_ref_insert;
 statement ok
 copy into @test_table_ref_insert from (select 99, 'from_stage') file_format=(type=csv);
 
-statement error 1002
+statement ok
 INSERT INTO t1/dev FROM @test_table_ref_insert file_format=(type='csv')
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 main1
+2 main2
+10 dev_only
+99 from_stage
+1002 main2_branch_copy
+1100 main_only_branch_copy
 
 statement ok
 DROP DATABASE test_table_ref_insert

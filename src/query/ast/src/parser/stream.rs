@@ -38,7 +38,7 @@ pub fn create_stream(i: Input) -> IResult<Statement> {
         rule! {
             CREATE ~ ( OR ~ ^REPLACE )? ~ STREAM ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
-            ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2
+            ~ ON ~ TABLE ~ #dot_separated_idents_1_to_2 ~ ( "/" ~ #ident )?
             ~ ( AT ~ ^#travel_point )?
             ~ ( APPEND_ONLY ~ "=" ~ #literal_bool )?
             ~ ( COMMENT ~ "=" ~ #literal_string )?
@@ -52,6 +52,7 @@ pub fn create_stream(i: Input) -> IResult<Statement> {
             _,
             _,
             (table_database, table),
+            opt_branch,
             opt_travel_point,
             opt_append_only,
             opt_comment,
@@ -65,6 +66,7 @@ pub fn create_stream(i: Input) -> IResult<Statement> {
                 stream,
                 table_database,
                 table,
+                table_branch: opt_branch.map(|(_, branch)| branch),
                 travel_point: opt_travel_point.map(|p| p.1),
                 append_only: opt_append_only
                     .map(|(_, _, append_only)| append_only)

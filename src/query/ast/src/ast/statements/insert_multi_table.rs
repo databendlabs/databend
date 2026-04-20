@@ -28,6 +28,7 @@ pub struct IntoClause {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub branch: Option<Identifier>,
     pub target_columns: Vec<Identifier>,
     pub source_columns: Vec<SourceExpr>,
 }
@@ -58,6 +59,9 @@ impl Display for IntoClause {
             write!(f, "{}.", database)?;
         }
         write!(f, "{}", self.table)?;
+        if let Some(branch) = &self.branch {
+            write!(f, "/{branch}")?;
+        }
         if !self.target_columns.is_empty() {
             write!(f, " (")?;
             write_comma_separated_list(f, &self.target_columns)?;

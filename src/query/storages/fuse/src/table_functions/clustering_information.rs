@@ -20,7 +20,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_args::parse_table_name;
+use databend_common_catalog::table_args::parse_table_ref_arg;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -104,7 +104,8 @@ impl SimpleArgFunc for ClusteringInformation {
         args: &Self::Args,
         _plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
-        let (table_name, branch_name) = parse_table_name(args.table_name.as_str())?;
+        let (table_name, branch_name) =
+            parse_table_ref_arg(args.table_name.as_str(), ctx.get_settings().as_ref())?;
         let current_catalog = ctx.get_current_catalog();
         let tbl = ctx
             .get_table_with_branch(

@@ -150,6 +150,7 @@ async fn test_fuse_do_refresh_spatial_index() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        branch: None,
         index_name: index_name1.clone(),
         segment_locs: None,
     };
@@ -168,6 +169,7 @@ async fn test_fuse_do_refresh_spatial_index() -> anyhow::Result<()> {
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
+        branch: None,
         index_name: index_name2.clone(),
         segment_locs: None,
     };

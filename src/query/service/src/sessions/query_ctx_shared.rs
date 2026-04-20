@@ -488,13 +488,12 @@ impl QueryContextShared {
         }
 
         let stream = StreamTable::try_from_table(table.as_ref())?;
-        let source_database_name = stream.source_database_name(catalog.as_ref()).await?;
-        let source_table_name = stream.source_table_name(catalog.as_ref()).await?;
+        let source = stream.source_table_reference(catalog.as_ref()).await?;
         let meta_key = (
             catalog.name(),
-            source_database_name.to_string(),
-            source_table_name.to_string(),
-            None,
+            source.database.clone(),
+            source.table.clone(),
+            source.branch.clone(),
         );
         let already_in_cache = { self.tables_refs.lock().contains_key(&meta_key) };
         let source_table = match already_in_cache {
@@ -508,8 +507,9 @@ impl QueryContextShared {
                                 .navigate_within_batch_limit(
                                     catalog.as_ref(),
                                     &self.get_tenant(),
-                                    &source_database_name,
-                                    &source_table_name,
+                                    &source.database,
+                                    &source.table,
+                                    source.branch.as_deref(),
                                     max_batch_size,
                                     self.get_settings().get_s3_storage_class()?,
                                 )

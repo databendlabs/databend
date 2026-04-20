@@ -12,13 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_meta_store::MetaStore;
+use databend_common_users::UserApiProvider;
+
 /// catalog_interface is the module defining `Catalog` trait
 mod interface;
 /// the catalog manager implementation
 mod manager;
 
+pub use databend_common_meta_api::RefApi;
 pub use interface::Catalog;
 pub use interface::CatalogCreator;
 pub use interface::StorageDescription;
 pub use manager::CATALOG_DEFAULT;
 pub use manager::CatalogManager;
+
+pub fn meta_store_client() -> Arc<MetaStore> {
+    UserApiProvider::instance().get_meta_store_client()
+}

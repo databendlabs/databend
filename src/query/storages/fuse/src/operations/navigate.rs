@@ -16,18 +16,22 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
+use databend_common_meta_app::schema::GetTableTagReq;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::check_table_ref_access;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -48,7 +52,6 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::check_table_ref_access;
 
 impl FuseTable {
     #[fastrace::trace]
@@ -579,9 +582,13 @@ impl FuseTable {
                 "tag navigation is not supported on table branches",
             ));
         }
-        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
-        let table_tag = catalog
-            .get_table_tag(self.table_info.ident.table_id, tag_name, false)
+        let meta_api = meta_store_client();
+        let table_tag = meta_api
+            .get_table_tag(GetTableTagReq {
+                table_id: self.table_info.ident.table_id,
+                tag_name: tag_name.to_string(),
+                include_expired: false,
+            })
             .await?
             .ok_or_else(|| {
                 ErrorCode::UnknownReference(format!(

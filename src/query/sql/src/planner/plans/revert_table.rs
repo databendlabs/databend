@@ -21,5 +21,6 @@ pub struct RevertTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub point: NavigationPoint,
 }

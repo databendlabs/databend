@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_exception::ErrorCode;
@@ -27,8 +29,8 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_sql::check_table_ref_access;
 
-use crate::operations::check_table_ref_access;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::parse_db_tb_args;
@@ -87,9 +89,8 @@ impl SimpleTableFunc for FuseTagFunc {
         }
         let table_id = tbl.get_id();
 
-        let tags = ctx
-            .get_catalog(&catalog)
-            .await?
+        let meta_api = meta_store_client();
+        let tags = meta_api
             .list_table_tags(ListTableTagsReq {
                 table_id,
                 include_expired: true,

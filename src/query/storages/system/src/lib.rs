@@ -21,6 +21,7 @@
 extern crate core;
 
 mod backtrace_table;
+mod branches_table;
 mod build_options_table;
 mod caches_table;
 mod catalogs_table;
@@ -69,6 +70,9 @@ mod virtual_columns_table;
 mod zero_table;
 
 pub use backtrace_table::BacktraceTable;
+pub use branches_table::BranchesTable;
+pub use branches_table::BranchesTableWithHistory;
+pub use branches_table::BranchesTableWithoutHistory;
 pub use build_options_table::BuildOptionsTable;
 pub use caches_table::CachesTable;
 pub use catalogs_table::CatalogsTable;

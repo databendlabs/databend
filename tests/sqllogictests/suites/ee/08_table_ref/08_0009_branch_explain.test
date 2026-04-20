@@ -1,0 +1,144 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1
+
+statement ok
+DROP DATABASE IF EXISTS test_branch_explain
+
+statement ok
+CREATE DATABASE test_branch_explain
+
+statement ok
+USE test_branch_explain
+
+statement ok
+CREATE OR REPLACE TABLE t1(a INT, b STRING)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b')
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH dev
+
+query T
+explain SELECT a FROM t1/dev
+----
+TableScan
+├── table: default.test_branch_explain.t1/dev
+├── scan id: 0
+├── output columns: [a (#0)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 2.00
+
+query T
+explain(logical) SELECT a FROM t1/dev WHERE a = 1
+----
+EvalScalar
+├── scalars: [t1.a (#0) AS (#0)]
+└── Filter
+    ├── filters: [eq(t1.a (#0), 1)]
+    └── Scan
+        ├── table: test_branch_explain.t1/dev (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+query T
+explain DELETE FROM t1/dev WHERE a > 1
+----
+CommitSink
+└── MutationSource(Delete)
+    ├── table: default.test_branch_explain.t1/dev
+    ├── output columns: [a (#0), b (#1)]
+    ├── filters: [is_true(t1.a (#0) > 1)]
+    ├── read rows: 2
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    └── partitions scanned: 1
+
+query T
+explain DELETE FROM t1/dev WHERE a IN (SELECT a FROM t1)
+----
+CommitSink
+└── DataMutation
+    ├── target table: default.test_branch_explain.t1/dev
+    └── MutationManipulate
+        ├── matched delete: [condition: None]
+        └── HashJoin
+            ├── output columns: [t1._row_id (#4)]
+            ├── join type: LEFT SEMI
+            ├── build keys: [subquery_2 (#2)]
+            ├── probe keys: [t1.a (#0)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:0, build key:subquery_2 (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
+            ├── estimated rows: 2.00
+            ├── TableScan(Build)
+            │   ├── table: default.test_branch_explain.t1
+            │   ├── scan id: 1
+            │   ├── output columns: [a (#2)]
+            │   ├── read rows: 2
+            │   ├── read size: < 1 KiB
+            │   ├── partitions total: 1
+            │   ├── partitions scanned: 1
+            │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+            │   ├── push downs: [filters: [], limit: NONE]
+            │   └── estimated rows: 2.00
+            └── TableScan(Probe)
+                ├── table: default.test_branch_explain.t1/dev
+                ├── scan id: 0
+                ├── output columns: [a (#0), _row_id (#4)]
+                ├── read rows: 2
+                ├── read size: < 1 KiB
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                ├── push downs: [filters: [], limit: NONE]
+                ├── apply join filters: [#0]
+                └── estimated rows: 2.00
+
+query T
+explain(logical) MERGE INTO t1/dev AS t USING t1 AS s ON t.a = s.a WHEN MATCHED THEN DELETE
+----
+MergeInto:
+target_table: default.test_branch_explain.t1/dev
+├── distributed: false
+├── target_build_optimization: false
+├── can_try_update_column_only: false
+├── matched delete: [condition: None]
+└── Join(Inner)
+    ├── build keys: [t1.a (#0)]
+    ├── probe keys: [t1.a (#2)]
+    ├── other filters: []
+    ├── Scan
+    │   ├── table: test_branch_explain.t1 (#0)
+    │   ├── filters: []
+    │   ├── order by: []
+    │   └── limit: NONE
+    └── Scan
+        ├── table: test_branch_explain.t1/dev (#1)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+statement ok
+DROP DATABASE IF EXISTS test_branch_explain

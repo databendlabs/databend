@@ -32,6 +32,7 @@ pub struct OptimizeCompactSegmentPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub num_segment_limit: Option<usize>,
 }
 
@@ -40,6 +41,7 @@ pub struct OptimizeCompactBlock {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub limit: CompactionLimits,
 }
 

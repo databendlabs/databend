@@ -37,6 +37,7 @@ pub struct AnalyzeDesc {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 /// Hook analyze action with a on-finished callback.
@@ -69,11 +70,21 @@ pub async fn hook_analyze(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 /// hook the analyze action with a on-finished callback.
 async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
     // evict the table from cache
-    ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table, None)?;
+    ctx.evict_table_from_cache(
+        &desc.catalog,
+        &desc.database,
+        &desc.table,
+        desc.branch.as_deref(),
+    )?;
     ctx.clear_table_meta_timestamps_cache();
 
     let table = ctx
-        .get_table(&desc.catalog, &desc.database, &desc.table)
+        .get_table_with_branch(
+            &desc.catalog,
+            &desc.database,
+            &desc.table,
+            desc.branch.as_deref(),
+        )
         .await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut pipeline = Pipeline::create();

@@ -28,6 +28,7 @@ use log::debug;
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
+use crate::binder::util::TableIdentifier;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::plans::RefreshSelection;
@@ -45,13 +46,13 @@ impl Binder {
             catalog,
             database,
             table,
+            branch,
             selection,
             limit,
             overwrite,
         } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, &None);
 
         let parsed_selection = if let Some(selection) = selection {
             Some(self.parse_refresh_virtual_column_selection(selection)?)
@@ -61,9 +62,10 @@ impl Binder {
 
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {
-                catalog,
-                database,
-                table,
+                catalog: table_identifier.catalog_name(),
+                database: table_identifier.database_name(),
+                table: table_identifier.table_name(),
+                branch: table_identifier.branch_name(),
                 limit: *limit,
                 overwrite: *overwrite,
                 selection: parsed_selection,
