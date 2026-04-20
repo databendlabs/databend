@@ -717,7 +717,7 @@ impl EagerAnalysis {
         });
 
         for agg in final_eager_split.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
                 if aggregate_function.func_name != "sum" {
                     continue;
                 }
@@ -729,9 +729,17 @@ impl EagerAnalysis {
                     .push(Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        aggregate_function,
+                        agg,
                         eager_group_by_and_eager_count[agg_side.opposite()].1,
                     )?);
+                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
+                    Self::refresh_eval_scalar_binding_type(
+                        metadata,
+                        &mut eager_split_eval_scalar,
+                        agg.index,
+                        &aggregate_function.return_type,
+                    )?;
+                }
             }
         }
 
@@ -800,7 +808,7 @@ impl EagerAnalysis {
 
         let mut eager_groupby_count_count_sum = EvalScalar { items: vec![] };
         for agg in final_eager_groupby_count.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar {
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
                 if aggregate_function.func_name != "sum"
                     || rewrites.source_side(agg.index) == Some(d)
                 {
@@ -810,10 +818,18 @@ impl EagerAnalysis {
                     Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        aggregate_function,
+                        agg,
                         eager_count_index,
                     )?,
                 );
+                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
+                    Self::refresh_eval_scalar_binding_type(
+                        metadata,
+                        &mut eager_groupby_count_scalar,
+                        agg.index,
+                        &aggregate_function.return_type,
+                    )?;
+                }
             }
         }
 
@@ -896,8 +912,9 @@ impl EagerAnalysis {
         let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
 
         let mut eager_count_sum = EvalScalar { items: vec![] };
+        let mut eager_count_eval_scalar = input.eval_scalar.clone();
         for agg in final_eager_count.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar
                 && aggregate_function.func_name == "sum"
             {
                 eager_count_sum
@@ -905,9 +922,17 @@ impl EagerAnalysis {
                     .push(Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        aggregate_function,
+                        agg,
                         eager_count_index,
                     )?);
+                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
+                    Self::refresh_eval_scalar_binding_type(
+                        metadata,
+                        &mut eager_count_eval_scalar,
+                        agg.index,
+                        &aggregate_function.return_type,
+                    )?;
+                }
             }
         }
 
@@ -928,7 +953,7 @@ impl EagerAnalysis {
             input,
             new_join.build_unary(eager_count_sum),
             final_eager_count,
-            input.eval_scalar.clone(),
+            eager_count_eval_scalar,
         )))
     }
 
@@ -967,7 +992,7 @@ impl EagerAnalysis {
         let (eager_count_index, _) = Self::add_eager_count(metadata, &mut eager_count);
         let mut double_eager_count_sum = EvalScalar { items: vec![] };
         for agg in final_double_eager.aggregate_functions.iter_mut() {
-            if let ScalarExpr::AggregateFunction(aggregate_function) = &mut agg.scalar
+            if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar
                 && aggregate_function.func_name == "sum"
             {
                 double_eager_count_sum
@@ -975,9 +1000,17 @@ impl EagerAnalysis {
                     .push(Self::create_eager_count_multiply_scalar_item(
                         metadata,
                         input,
-                        aggregate_function,
+                        agg,
                         eager_count_index,
                     )?);
+                if let ScalarExpr::AggregateFunction(aggregate_function) = &agg.scalar {
+                    Self::refresh_eval_scalar_binding_type(
+                        metadata,
+                        &mut double_eager_eval_scalar,
+                        agg.index,
+                        &aggregate_function.return_type,
+                    )?;
+                }
             }
         }
 
@@ -1096,6 +1129,13 @@ impl EagerAnalysis {
             format!("_eager_final_{}", agg.func_name),
             *(agg.return_type).clone(),
         );
+        let rewritten_output_column = ColumnBindingBuilder::new(
+            metadata.read().column(new_index).name(),
+            new_index,
+            agg.return_type.clone(),
+            Visibility::Visible,
+        )
+        .build();
 
         Self::modify_final_aggregate_function(agg, old_index);
         aggr_function.index = new_index;
@@ -1113,7 +1153,9 @@ impl EagerAnalysis {
                     .scalar
                     .replace_column_with_scalar(old_index, count_output)?;
             } else {
-                scalar_item.scalar.replace_column(old_index, new_index)?;
+                scalar_item
+                    .scalar
+                    .replace_column_binding(old_index, &rewritten_output_column)?;
             }
             success = true;
         }
@@ -1168,9 +1210,12 @@ impl EagerAnalysis {
     fn create_eager_count_multiply_scalar_item(
         metadata: &MetadataRef,
         input: &EagerInput,
-        aggregate_function: &mut AggregateFunction,
+        aggregate_item: &mut ScalarItem,
         eager_count_index: Symbol,
     ) -> Result<ScalarItem, ErrorCode> {
+        let ScalarExpr::AggregateFunction(aggregate_function) = &mut aggregate_item.scalar else {
+            unreachable!()
+        };
         let new_scalar = if let ScalarExpr::BoundColumnRef(column) = &aggregate_function.args[0] {
             let mut scalar_idx = input.extra_eval_scalar.items.len();
             for (idx, eval_scalar) in input.extra_eval_scalar.items.iter().enumerate() {
@@ -1223,7 +1268,53 @@ impl EagerAnalysis {
             column.column.index = new_index;
             column.column.data_type = Box::new(scalar_type);
         }
+        let new_return_type = Self::refresh_aggregate_return_type(aggregate_function)?;
+        metadata
+            .write()
+            .change_derived_column_data_type(aggregate_item.index, new_return_type);
         Ok(new_scalar_item)
+    }
+
+    fn refresh_aggregate_return_type(
+        aggregate_function: &mut AggregateFunction,
+    ) -> Result<DataType, ErrorCode> {
+        let arg_types = aggregate_function
+            .args
+            .iter()
+            .map(ScalarExpr::data_type)
+            .collect::<Result<Vec<_>, _>>()?;
+        let function = AggregateFunctionFactory::instance().get(
+            &aggregate_function.func_name,
+            aggregate_function.params.clone(),
+            arg_types,
+            vec![],
+        )?;
+        let return_type = function.return_type()?;
+        aggregate_function.return_type = Box::new(return_type.clone());
+        Ok(return_type)
+    }
+
+    fn refresh_eval_scalar_binding_type(
+        metadata: &MetadataRef,
+        eval_scalar: &mut EvalScalar,
+        index: Symbol,
+        data_type: &DataType,
+    ) -> Result<(), ErrorCode> {
+        let column_binding = ColumnBindingBuilder::new(
+            metadata.read().column(index).name(),
+            index,
+            Box::new(data_type.clone()),
+            Visibility::Visible,
+        )
+        .build();
+
+        for item in &mut eval_scalar.items {
+            if item.scalar.used_columns().contains(&index) {
+                item.scalar.replace_column_binding(index, &column_binding)?;
+            }
+        }
+
+        Ok(())
     }
 }
 
