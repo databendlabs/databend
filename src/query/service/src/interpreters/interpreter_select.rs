@@ -346,6 +346,7 @@ impl Interpreter for SelectInterpreter {
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
+                self.formatted_ast.as_ref().unwrap(),
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
