@@ -139,6 +139,7 @@ fn test_statement() {
         r#"create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');"#,
         r#"create or replace table a (c decimal(38))"#,
         r#"create or replace table a (c int(10) unsigned)"#,
+        // https://github.com/databendlabs/databend/issues/11031
         r#"create table issue_11031 (range int, samples int)"#,
         r#"create table cluster_tbl (a int, b int) cluster by (a, b)"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
@@ -262,6 +263,7 @@ fn test_statement() {
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true"#,
         r#"DROP database if exists db1;"#,
         r#"with c as (select 1 as a) delete /*+ set_var(max_threads=1) */ from test_db.test tt where tt.a = 1;"#,
+        // https://github.com/databendlabs/databend/issues/11031
         r#"select range from issue_11031;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
