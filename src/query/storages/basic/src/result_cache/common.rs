@@ -75,6 +75,5 @@ pub struct ResultCacheValue {
     #[serde(default)]
     pub cache_key_extras: Vec<String>,
     /// The SQL of the query (truncated to 128 chars).
-    #[serde(default)]
     pub sql: String,
 }

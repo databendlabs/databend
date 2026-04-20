@@ -76,7 +76,7 @@ impl ResultCacheReader {
         if let Some(v) = self.meta_mgr.get(self.meta_key.clone()).await? {
             // If the cached sql is empty (old data), skip sql check.
             // Otherwise verify truncated sql matches to guard against hash collisions.
-            let sql_match = v.sql.is_empty() || v.sql == self.truncated_sql;
+            let sql_match = v.sql == self.truncated_sql;
             if sql_match
                 && (self.tolerate_inconsistent || v.partitions_shas == self.partitions_shas)
             {
