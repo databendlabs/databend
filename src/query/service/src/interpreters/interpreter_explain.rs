@@ -356,6 +356,7 @@ impl ExplainInterpreter {
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
+                formatted_ast.as_ref().unwrap(),
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
@@ -364,6 +365,7 @@ impl ExplainInterpreter {
             if let Some(v) = cache_reader.check_cache().await? {
                 // Construct a format tree for result cache reading
                 let children = vec![
+                    FormatTreeNode::new(format!("SQL: {}", v.sql)),
                     FormatTreeNode::new(format!("Number of rows: {}", v.num_rows)),
                     FormatTreeNode::new(format!("Result size: {}", v.result_size)),
                 ];
