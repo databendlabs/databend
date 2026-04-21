@@ -10,6 +10,9 @@ DROP TABLE IF EXISTS t3
 statement ok
 DROP TABLE IF EXISTS t4
 
+statement ok
+DROP TABLE IF EXISTS issue_11031
+
 statement error 1302
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = iceberg
 
@@ -58,6 +61,27 @@ create table t3(`a` int) ENGINE = Null
 statement ok
 create table t4(a int) ENGINE = Null
 
+# https://github.com/databendlabs/databend/issues/11031
+statement ok
+CREATE TABLE issue_11031 (
+    radio STRING,
+    range INT32,
+    samples INT32
+)
+
+statement ok
+INSERT INTO issue_11031 (radio, range, samples) VALUES ('lte', 10, 1)
+
+query I
+SELECT range FROM issue_11031
+----
+10
+
+query TII
+SELECT radio, range, samples FROM issue_11031
+----
+lte 10 1
+
 statement ok
 DROP TABLE IF EXISTS t
 
@@ -69,6 +93,9 @@ DROP TABLE IF EXISTS t3
 
 statement ok
 DROP TABLE IF EXISTS t4
+
+statement ok
+DROP TABLE IF EXISTS issue_11031
 
 statement ok
 DROP DATABASE IF EXISTS db1
