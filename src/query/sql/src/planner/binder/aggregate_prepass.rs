@@ -126,30 +126,6 @@ struct ExprWalker<'a, T> {
     in_subquery: bool,
 }
 
-impl<T> ExprWalker<'_, T>
-where T: ExprInspection
-{
-    fn visit_query_children(&mut self, query: &Query) -> VisitResult {
-        if let Some(with) = &query.with {
-            for cte in &with.ctes {
-                try_ast_walk!(cte.walk(self));
-            }
-        }
-        try_ast_walk!(query.body.walk(self));
-        for item in &query.order_by {
-            try_ast_walk!(item.walk(self));
-        }
-        for expr in &query.limit {
-            try_ast_walk!(expr.walk(self));
-        }
-        if let Some(offset) = &query.offset {
-            try_ast_walk!(offset.walk(self));
-        }
-
-        Ok(VisitControl::Continue)
-    }
-}
-
 impl<T> Visitor for ExprWalker<'_, T>
 where T: ExprInspection
 {
@@ -163,14 +139,18 @@ where T: ExprInspection
         Ok(VisitControl::Continue)
     }
 
-    fn visit_query(&mut self, query: &Query) -> VisitResult {
+    fn visit_query(&mut self, _query: &Query) -> VisitResult {
         self.inspection.mark_contains_subquery();
-        let was_in_subquery = self.in_subquery;
+        if self.in_subquery {
+            return Ok(VisitControl::SkipChildren);
+        }
         self.in_subquery = true;
-        let result = self.visit_query_children(query);
-        self.in_subquery = was_in_subquery;
-        result?;
-        Ok(VisitControl::SkipChildren)
+        Ok(VisitControl::Continue)
+    }
+
+    fn leave_query(&mut self, _query: &Query) -> std::result::Result<(), !> {
+        self.in_subquery = false;
+        Ok(())
     }
 }
 
@@ -237,6 +217,18 @@ impl ExprInspection for FunctionNameProbe<'_> {
         self.names
             .insert(normalize_identifier(&func.name, self.name_resolution_ctx).name);
     }
+}
+
+pub(super) fn collect_function_names(
+    name_resolution_ctx: &NameResolutionContext,
+    expr: &Expr,
+) -> BTreeSet<String> {
+    let mut probe = FunctionNameProbe {
+        name_resolution_ctx,
+        names: BTreeSet::new(),
+    };
+    probe.walk_expr(expr);
+    probe.names
 }
 
 fn is_window_expr(expr: &Expr) -> bool {
@@ -431,26 +423,6 @@ impl Scanner<'_> {
         scanner.facts
     }
 
-    fn visit_query_children(&mut self, query: &Query) -> VisitResult {
-        if let Some(with) = &query.with {
-            for cte in &with.ctes {
-                try_ast_walk!(cte.walk(self));
-            }
-        }
-        try_ast_walk!(query.body.walk(self));
-        for item in &query.order_by {
-            try_ast_walk!(item.walk(self));
-        }
-        for expr in &query.limit {
-            try_ast_walk!(expr.walk(self));
-        }
-        if let Some(offset) = &query.offset {
-            try_ast_walk!(offset.walk(self));
-        }
-
-        Ok(VisitControl::Continue)
-    }
-
     fn visit_window_expr_children(&mut self, expr: &Expr) -> VisitResult {
         match expr {
             Expr::CountAll {
@@ -570,13 +542,17 @@ impl Visitor for Scanner<'_> {
         Ok(VisitControl::Continue)
     }
 
-    fn visit_query(&mut self, query: &Query) -> VisitResult {
-        let was_in_subquery = self.in_subquery;
+    fn visit_query(&mut self, _query: &Query) -> VisitResult {
+        if self.in_subquery {
+            return Ok(VisitControl::SkipChildren);
+        }
         self.in_subquery = true;
-        let result = self.visit_query_children(query);
-        self.in_subquery = was_in_subquery;
-        result?;
-        Ok(VisitControl::SkipChildren)
+        Ok(VisitControl::Continue)
+    }
+
+    fn leave_query(&mut self, _query: &Query) -> std::result::Result<(), !> {
+        self.in_subquery = false;
+        Ok(())
     }
 }
 
@@ -640,29 +616,21 @@ impl Binder {
         qualify: Option<&Expr>,
         order_by: &[OrderByExpr],
     ) -> Result<HashSet<String>> {
-        let mut probe = FunctionNameProbe {
-            name_resolution_ctx: &self.name_resolution_ctx,
-            names: BTreeSet::new(),
-        };
-
-        for expr in select_list
-            .items
-            .iter()
-            .filter_map(|item| {
-                if let SelectTarget::AliasedExpr { box expr, .. } = item.select_target {
-                    Some(expr)
-                } else {
-                    None
-                }
-            })
-            .chain(having)
-            .chain(qualify)
-            .chain(order_by.iter().map(|order| &order.expr))
-        {
-            probe.walk_expr(expr);
-        }
-
-        self.resolve_udaf_names(bind_context, probe.names)
+        let mut function_names = BTreeSet::new();
+        function_names.extend(
+            select_list
+                .items
+                .iter()
+                .flat_map(|item| item.source_function_names.iter().cloned()),
+        );
+        function_names.extend(
+            having
+                .into_iter()
+                .chain(qualify)
+                .chain(order_by.iter().map(|order| &order.expr))
+                .flat_map(|expr| collect_function_names(&self.name_resolution_ctx, expr)),
+        );
+        self.resolve_udaf_names(bind_context, function_names)
     }
 
     fn resolve_udaf_names(

@@ -87,7 +87,10 @@ pub enum ExprContext {
 
 impl ExprContext {
     pub fn prefer_resolve_alias(&self) -> bool {
-        !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
+        !matches!(
+            self,
+            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue
+        )
     }
 
     pub fn allow_resolve_alias(&self) -> bool {
@@ -361,6 +364,15 @@ impl BindContext {
 
     pub fn add_column_binding(&mut self, column_binding: ColumnBinding) {
         self.columns.push(column_binding);
+    }
+
+    pub fn named_window_spec(&self, window_name: &str) -> Result<WindowSpec> {
+        self.window_definitions
+            .get(window_name)
+            .ok_or_else(|| {
+                ErrorCode::SyntaxException(format!("Window definition {window_name} not found"))
+            })
+            .map(|entry| entry.value().clone())
     }
 
     /// Assigns 1-based column positions for the current result columns.
@@ -941,6 +953,17 @@ impl BindContext {
         let old = self.expr_context;
         self.expr_context = new;
         old
+    }
+
+    pub fn with_expr_context<R>(
+        &mut self,
+        new: ExprContext,
+        f: impl FnOnce(&mut BindContext) -> R,
+    ) -> R {
+        let old = self.replace_expr_context(new);
+        let result = f(self);
+        self.expr_context = old;
+        result
     }
 }
 

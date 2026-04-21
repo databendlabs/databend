@@ -162,15 +162,16 @@ impl Binder {
         // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
         // pre-window expressions behind aliases, but SRF aliases must already point
         // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
-        let semantic_aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        let semantic_aliases = select_list.scalar_aliases();
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
-            self.analyze_group_items(&mut from_context, &select_list, group_by)?;
+            self.analyze_group_items(
+                &mut from_context,
+                &select_list,
+                &select_list.group_by_aliases(),
+                group_by,
+            )?;
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
@@ -223,11 +224,7 @@ impl Binder {
             "SELECT projection expects aggregate/UDAF calls to be rewritten before projection analysis",
         );
 
-        let rewritten_aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        let rewritten_aliases = select_list.scalar_aliases();
 
         Ok(SelectPreparation {
             s_expr,

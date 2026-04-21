@@ -21,7 +21,6 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::SelectTarget;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -47,7 +46,6 @@ use crate::binder::Visibility;
 use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
-use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
@@ -891,21 +889,9 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
+        available_aliases: &[(String, ScalarExpr)],
         group_by: &GroupBy,
     ) -> Result<()> {
-        let mut available_aliases = vec![];
-
-        // Extract available aliases from `SELECT` clause,
-        for item in select_list.items.iter() {
-            if let SelectTarget::AliasedExpr {
-                alias: Some(alias), ..
-            } = item.select_target
-            {
-                let column = normalize_identifier(alias, &self.name_resolution_ctx);
-                available_aliases.push((column.name, item.scalar.clone()));
-            }
-        }
-
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
 
         let group_by = Self::expand_group(group_by.clone())?;
@@ -914,7 +900,7 @@ impl Binder {
                 bind_context,
                 select_list,
                 exprs,
-                &available_aliases,
+                available_aliases,
                 false,
                 &mut vec![],
             )?,
@@ -924,13 +910,13 @@ impl Binder {
                     bind_context,
                     select_list,
                     &groups,
-                    &available_aliases,
+                    available_aliases,
                     false,
                     &mut vec![],
                 )?;
             }
             GroupBy::GroupingSets(sets) => {
-                self.resolve_grouping_sets(bind_context, select_list, sets, &available_aliases)?;
+                self.resolve_grouping_sets(bind_context, select_list, sets, available_aliases)?;
             }
             _ => unreachable!(),
         }

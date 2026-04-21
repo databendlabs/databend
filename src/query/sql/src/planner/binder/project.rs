@@ -51,6 +51,7 @@ use crate::TypeChecker;
 use crate::WindowChecker;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::binder::aggregate_prepass::collect_function_names;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowInfo;
@@ -384,6 +385,8 @@ impl Binder {
                     )?;
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
+                    let source_function_names =
+                        collect_function_names(&self.name_resolution_ctx, expr.as_ref());
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
                         self.ctx.clone(),
@@ -438,6 +441,7 @@ impl Binder {
                         select_target,
                         scalar: bound_expr,
                         alias: expr_name,
+                        source_function_names,
                     });
                 }
             }
@@ -502,6 +506,7 @@ impl Binder {
             select_target,
             scalar,
             alias: column_binding.column_name.clone(),
+            source_function_names: Default::default(),
         })
     }
 

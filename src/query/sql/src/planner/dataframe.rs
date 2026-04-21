@@ -238,8 +238,12 @@ impl Dataframe {
             .map(|item| (item.alias.clone(), item.scalar.clone()))
             .collect::<Vec<_>>();
 
-        self.binder
-            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)?;
+        self.binder.analyze_group_items(
+            &mut self.bind_context,
+            &select_list,
+            &select_list.group_by_aliases(),
+            &groupby,
+        )?;
 
         if self.bind_context.aggregate_info.has_aggregate_calls()
             || self.bind_context.aggregate_info.has_group_items()

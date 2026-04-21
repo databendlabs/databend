@@ -61,11 +61,33 @@ pub struct SelectList<'a> {
     pub items: Vec<SelectItem<'a>>,
 }
 
+impl SelectList<'_> {
+    pub(crate) fn scalar_aliases(&self) -> Vec<(String, ScalarExpr)> {
+        self.items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect()
+    }
+
+    pub(crate) fn group_by_aliases(&self) -> Vec<(String, ScalarExpr)> {
+        self.items
+            .iter()
+            .filter_map(|item| match item.select_target {
+                SelectTarget::AliasedExpr { alias, .. } if alias.is_some() => {
+                    Some((item.alias.clone(), item.scalar.clone()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug)]
 pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget,
     pub scalar: ScalarExpr,
     pub alias: String,
+    pub(super) source_function_names: BTreeSet<String>,
 }
 
 impl Binder {
@@ -76,38 +98,40 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        let last_expr_context = bind_context.replace_expr_context(ExprContext::WhereClause);
+        bind_context.with_expr_context(
+            ExprContext::WhereClause,
+            |bind_context| -> Result<(SExpr, ScalarExpr)> {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    aliases,
+                );
+                let (scalar, _) = scalar_binder.bind(expr)?;
+                let f = |scalar: &ScalarExpr| {
+                    scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
+                };
 
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            aliases,
-        );
-        let (scalar, _) = scalar_binder.bind(expr)?;
-        let f = |scalar: &ScalarExpr| {
-            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
-        };
+                let mut finder = Finder::new(&f);
+                finder.visit(&scalar)?;
+                if !finder.scalars().is_empty() {
+                    return Err(ErrorCode::SemanticError(
+                        "Where clause can't contain aggregate or window functions".to_string(),
+                    )
+                    .set_span(scalar.span()));
+                }
 
-        let mut finder = Finder::new(&f);
-        finder.visit(&scalar)?;
-        if !finder.scalars().is_empty() {
-            return Err(ErrorCode::SemanticError(
-                "Where clause can't contain aggregate or window functions".to_string(),
-            )
-            .set_span(scalar.span()));
-        }
+                reject_grouping_functions(std::iter::once(&scalar), "Where clause")?;
 
-        reject_grouping_functions(std::iter::once(&scalar), "Where clause")?;
+                let filter_plan = Filter {
+                    predicates: split_conjunctions(&scalar),
+                };
+                let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
 
-        let filter_plan = Filter {
-            predicates: split_conjunctions(&scalar),
-        };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
-        bind_context.expr_context = last_expr_context;
-
-        Ok((new_expr, scalar))
+                Ok((new_expr, scalar))
+            },
+        )
     }
 
     #[recursive::recursive]
