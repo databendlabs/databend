@@ -877,7 +877,6 @@ impl HttpQuery {
                             stats: Progresses::default(),
                             schema: Default::default(),
                             response_settings: None,
-                            arrow_result_version,
                             has_result_set: None,
                             reason: Err(e.clone()),
                             session_state: ExecutorSessionState::new(

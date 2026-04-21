@@ -136,7 +136,6 @@ pub struct ExecuteRunning {
     pub(crate) ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
     response_settings: Option<QueryResponseSettings>,
-    arrow_result_version: Option<u64>,
     has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
@@ -145,7 +144,6 @@ pub struct ExecuteRunning {
 pub struct ExecuteStopped {
     pub schema: DataSchemaRef,
     pub response_settings: Option<QueryResponseSettings>,
-    pub arrow_result_version: Option<u64>,
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
@@ -215,8 +213,9 @@ impl Executor {
 
         let arrow_result_version = match &self.state {
             Starting(s) => s.arrow_result_version,
-            Running(r) => r.arrow_result_version,
-            Stopped(f) => f.arrow_result_version,
+            Running(_) | Stopped(_) => response_settings
+                .as_ref()
+                .and_then(|settings| settings.arrow_result_version),
         };
 
         ResponseState {
@@ -334,7 +333,6 @@ impl Executor {
                     stats: Default::default(),
                     schema: Default::default(),
                     response_settings: None,
-                    arrow_result_version: s.arrow_result_version,
                     has_result_set: None,
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
@@ -358,7 +356,6 @@ impl Executor {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
                     response_settings: r.response_settings.clone(),
-                    arrow_result_version: r.arrow_result_version,
                     has_result_set: Some(r.has_result_set),
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
@@ -450,7 +447,6 @@ impl ExecuteState {
             queue_guard,
             schema,
             response_settings,
-            arrow_result_version,
             has_result_set,
         };
         info!("Query state changed to Running");
