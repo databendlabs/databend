@@ -96,13 +96,13 @@ jobs:
         run: |
           case "${{ steps.bump.outputs.type }}" in
             nightly)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --prerelease --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --prerelease --draft
               ;;
             stable)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --latest --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --latest --draft
               ;;
             patch)
-              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --prerelease --draft
+              gh release create ${{ steps.bump.outputs.tag }} --target ${{ steps.bump.outputs.sha }} --notes-file /tmp/release_notes.md --title ${{ steps.bump.outputs.tag }} --prerelease --draft
               ;;
             *)
               echo "Invalid release type: ${{ steps.bump.outputs.type }}"
@@ -667,6 +667,11 @@ jobs:
           artifacts: meta,metactl,metaverifier
       - uses: ./.github/actions/io_delay_chaos
         timeout-minutes: 20
+      - name: Upload failure artifacts
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_meta_container_failure
+        with:
+          name: meta-io-delay-chaos
       - name: Notify failure
         if: failure()
         uses: actions/github-script@v7
