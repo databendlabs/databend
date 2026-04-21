@@ -9,11 +9,14 @@ edition = { workspace = true }
 
 [dependencies]
 async-trait = { workspace = true }
+dashmap = { workspace = true }
 databend-common-base = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-meta-app = { workspace = true }
 databend-common-meta-store = { workspace = true }
 databend-meta-client = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true }
 
 [build-dependencies]
 
