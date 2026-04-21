@@ -65,6 +65,22 @@ select count() from @data/parquet/no-stats.parquet (pattern => '') where line_it
 ----
 0
 
+# issue #10266: stage subdir without trailing slash should still work for select/list.
+query I
+select count() from @data/parquet/multi_page (pattern => '.*[.]parquet')
+----
+400
+
+query IIII
+select
+    count_if(name = 'parquet/multi_page/multi_page_1.parquet'),
+    count_if(name = 'parquet/multi_page/multi_page_2.parquet'),
+    count_if(name = 'parquet/multi_page/multi_page_3.parquet'),
+    count_if(name = 'parquet/multi_page/multi_page_4.parquet')
+from list_stage(location=>'@data/parquet/multi_page')
+----
+1 1 1 1
+
 query error gen
 settings (parquet_fast_read_bytes=0) select * from @data/parquet/diff_schema/ (files=>('f1.parquet', 'gen.py'));
 
