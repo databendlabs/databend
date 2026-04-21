@@ -63,6 +63,51 @@ EvalScalar
             └── limit: NONE
 
 
+=== group_by_prefers_input_column_over_aggregate_alias ===
+description: GROUP BY should keep a same-name input column ahead of an aggregate alias, because the alias itself is not a valid grouping key.
+sql: SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [x (#2) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [x (#2) AS (#2)]
+        └── UnionAll
+            ├── output: [x (#2)]
+            ├── left: [x (#0)]
+            ├── right: [x (#1)]
+            ├── cte_scan_names: []
+            ├── logical_recursive_cte_id: None
+            ├── EvalScalar
+            │   ├── scalars: [1 AS (#0)]
+            │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── EvalScalar
+                ├── scalars: [2 AS (#1)]
+                └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== group_by_prefers_input_column_over_same_name_aggregate_alias_in_subquery ===
+description: GROUP BY inside a subquery should still resolve a same-name source column before an aggregate alias.
+sql: SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#1) AS (#1)]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1)]
+    └── Aggregate(Initial)
+        ├── group items: [t.number (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === group_by_all_collects_non_aggregate_select_items ===
 description: GROUP BY ALL should expand to the non-aggregate SELECT items only.
 sql: SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL

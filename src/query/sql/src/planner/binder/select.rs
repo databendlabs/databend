@@ -73,12 +73,21 @@ impl SelectList<'_> {
         self.items
             .iter()
             .filter_map(|item| match item.select_target {
-                SelectTarget::AliasedExpr { alias, .. } if alias.is_some() => {
+                SelectTarget::AliasedExpr { alias, .. }
+                    if alias.is_some() && Self::is_group_by_compatible_alias(&item.scalar) =>
+                {
                     Some((item.alias.clone(), item.scalar.clone()))
                 }
                 _ => None,
             })
             .collect()
+    }
+
+    fn is_group_by_compatible_alias(scalar: &ScalarExpr) -> bool {
+        let mut finder = Finder::new(&|expr| {
+            expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
+        });
+        finder.visit(scalar).is_ok() && finder.scalars().is_empty()
     }
 }
 

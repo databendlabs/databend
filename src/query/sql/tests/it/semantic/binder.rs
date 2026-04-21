@@ -457,6 +457,18 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
         },
         SqlTestCase {
+            name: "group_by_prefers_input_column_over_aggregate_alias",
+            description: "GROUP BY should keep a same-name input column ahead of an aggregate alias, because the alias itself is not a valid grouping key.",
+            setup_sqls: &[],
+            sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_input_column_over_same_name_aggregate_alias_in_subquery",
+            description: "GROUP BY inside a subquery should still resolve a same-name source column before an aggregate alias.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s",
+        },
+        SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
