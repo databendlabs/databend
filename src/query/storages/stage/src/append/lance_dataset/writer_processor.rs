@@ -335,7 +335,9 @@ impl FragmentWriterParams {
             root.push(normalized);
         }
         let mut base_url = Url::parse(&format!("{scheme}:///")).map_err(|err| {
-            ErrorCode::Internal(format!("invalid lance object store scheme '{scheme}': {err}"))
+            ErrorCode::Internal(format!(
+                "invalid lance object store scheme '{scheme}': {err}"
+            ))
         })?;
         base_url.set_path(root.to_string_lossy().as_ref());
 
