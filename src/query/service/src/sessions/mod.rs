@@ -41,6 +41,7 @@ pub use queue_mgr::QueueData;
 pub use queue_mgr::QueueManager;
 pub use session::Session;
 pub use session_ctx::SessionContext;
+pub use session_ctx::SessionServices;
 pub use session_info::ProcessInfo;
 pub use session_mgr::SessionManager;
 pub use session_mgr_status::SessionManagerStatus;

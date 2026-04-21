@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -25,6 +26,7 @@ use crate::worker_client::WorkerClient;
 
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
+#[derive(Service)]
 pub struct CloudControlApiProvider {
     pub task_client: Arc<TaskClient>,
     pub notification_client: Arc<NotificationClient>,

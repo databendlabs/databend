@@ -66,6 +66,7 @@ default-members = [
 databend-common-ast = { path = "src/query/ast" }
 databend-common-ast-visit-derive = { path = "src/query/ast/visit_derive" }
 databend-common-base = { path = "src/common/base" }
+databend-common-base-macros = { path = "src/common/base/macros" }
 databend-common-binaries = { path = "src/binaries" }
 databend-common-building = { path = "src/common/building" }
 databend-common-cache = { path = "src/common/cache" }

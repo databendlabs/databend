@@ -18,6 +18,7 @@ databend_common_tracing::register_module_tag!("[REFRESH-HOOK]");
 use std::sync::Arc;
 
 use databend_common_ast::ast;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
@@ -238,7 +239,7 @@ async fn build_refresh_index_plan(
 
     let mut binder = Binder::new(
         ctx.clone(),
-        CatalogManager::instance(),
+        CatalogManager::get_service(&ctx),
         name_resolution_ctx,
         metadata.clone(),
     );

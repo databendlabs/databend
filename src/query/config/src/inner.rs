@@ -23,6 +23,7 @@ use std::time::Duration;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::OrderedFloat;
+use databend_common_base::base::Service;
 use databend_common_base::base::mask_string;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -52,7 +53,7 @@ use crate::BuiltInConfig;
 /// Inner config for query.
 ///
 /// All function should implement based on this Config.
-#[derive(Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq, Service)]
 pub struct InnerConfig {
     // Query engine config.
     pub query: QueryConfig,

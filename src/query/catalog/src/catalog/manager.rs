@@ -18,6 +18,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -46,6 +47,7 @@ use super::CatalogCreator;
 
 pub const CATALOG_DEFAULT: &str = "default";
 
+#[derive(Service)]
 pub struct CatalogManager {
     pub meta: MetaStore,
 

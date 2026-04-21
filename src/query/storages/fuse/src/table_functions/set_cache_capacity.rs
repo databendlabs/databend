@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table_context::TableContext;
@@ -72,7 +73,7 @@ impl SimpleTableFunc for SetCacheCapacity {
         ctx: &Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let cache_mgr = CacheManager::instance();
+        let cache_mgr = CacheManager::get_service(ctx);
         let op = &self.operation;
         cache_mgr.set_cache_capacity(&op.cache_name, op.capacity)?;
 

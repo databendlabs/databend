@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::Lock;
 use databend_common_catalog::table_context::TableContext;
@@ -34,6 +35,7 @@ use tokio::sync::mpsc;
 use crate::locks::lock_holder::LockHolder;
 use crate::locks::table_lock::TableLock;
 
+#[derive(Service)]
 pub struct LockManager {
     active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
     tx: mpsc::UnboundedSender<u64>,

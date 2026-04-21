@@ -21,6 +21,7 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::metrics::FamilyCounter;
 use databend_common_base::runtime::metrics::register_counter_family;
@@ -552,7 +553,7 @@ impl RetryInterceptor for DatabendRetryInterceptor {
 /// # Notes
 ///
 /// All data accessed via this operator will be persisted.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Service)]
 pub struct DataOperator {
     operator: Operator,
     spill_operator: Operator,

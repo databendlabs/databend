@@ -18,6 +18,7 @@ memory-profiling = [
 
 [dependencies]
 databend-base = { workspace = true }
+databend-common-base-macros = { workspace = true }
 databend-common-exception = { workspace = true }
 
 async-backtrace = { workspace = true }

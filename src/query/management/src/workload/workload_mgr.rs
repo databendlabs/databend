@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_base::uniq_id::GlobalUniq;
+use databend_common_base::base::Service;
 use databend_common_base::base::escape_for_key;
 use databend_common_base::runtime::workload_group::QuotaValue;
 use databend_common_base::runtime::workload_group::WorkloadGroup;
@@ -33,6 +34,7 @@ use crate::errors::meta_service_error;
 use crate::workload::workload_api::WorkloadApi;
 pub static WORKLOAD_META_KEY_PREFIX: &str = "__fd_workloads";
 
+#[derive(Service)]
 pub struct WorkloadMgr {
     metastore: MetaStore,
     workload_key_prefix: String,

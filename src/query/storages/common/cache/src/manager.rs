@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::CacheConfig;
 use databend_common_config::CacheStorageTypeInnerConfig;
 use databend_common_config::DiskCacheKeyReloadPolicy;
@@ -101,6 +102,7 @@ pub enum CacheClearanceLevel {
 }
 
 /// Where all the caches reside
+#[derive(Service)]
 pub struct CacheManager {
     table_snapshot_cache: CacheSlot<TableSnapshotCache>,
     table_statistic_cache: CacheSlot<TableSnapshotStatisticCache>,

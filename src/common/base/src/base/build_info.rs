@@ -14,6 +14,9 @@
 
 pub use semver::Version;
 
+use super::service_symbol;
+
+#[service_symbol]
 pub type BuildInfoRef = &'static BuildInfo;
 
 #[derive(Debug, Clone)]

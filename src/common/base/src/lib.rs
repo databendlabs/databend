@@ -27,6 +27,8 @@
 #![feature(slice_ptr_get)]
 #![feature(alloc_layout_extra)]
 
+extern crate self as databend_common_base;
+
 pub mod base;
 pub mod containers;
 pub mod headers;

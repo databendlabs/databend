@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -19,8 +21,14 @@ use std::sync::Weak;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::base::AnyServiceProvider;
+use databend_common_base::base::InnerConfigSymbol;
+use databend_common_base::base::Service;
+use databend_common_base::base::ServiceProvider;
+use databend_common_base::base::ServiceRegistry;
+use databend_common_base::base::SessionManagerSymbol;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_meta_app::principal::RoleInfo;
@@ -36,6 +44,23 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContextShared;
+
+#[derive(Clone, Default)]
+pub struct SessionServices {
+    items: HashMap<TypeId, Arc<dyn Any + Send + Sync>>,
+}
+
+impl AnyServiceProvider for SessionServices {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.items.get(&type_id).cloned()
+    }
+}
+
+impl ServiceRegistry for SessionServices {
+    fn insert_service_any(&mut self, type_id: TypeId, service: Arc<dyn Any + Send + Sync>) {
+        self.items.insert(type_id, service);
+    }
+}
 
 pub struct SessionContext {
     abort: AtomicBool,
@@ -85,13 +110,15 @@ pub struct SessionContext {
     client_session_id: RwLock<Option<String>>,
     current_warehouse: RwLock<Option<String>>,
     current_workload_group: RwLock<Option<String>>,
+    services: SessionServices,
 }
 
 impl SessionContext {
-    pub fn try_create(
+    pub fn new(
         settings: Arc<Settings>,
         typ: SessionType,
         current_user: Option<UserInfo>,
+        services: SessionServices,
     ) -> Result<Self> {
         Ok(SessionContext {
             settings,
@@ -114,6 +141,7 @@ impl SessionContext {
             temp_tbl_mgr: Mutex::new(TempTblMgr::init()),
             current_warehouse: Default::default(),
             current_workload_group: Default::default(),
+            services,
         })
     }
 
@@ -200,7 +228,7 @@ impl SessionContext {
     }
 
     pub fn get_current_tenant(&self) -> Tenant {
-        let conf = GlobalConfig::instance();
+        let conf = InnerConfig::get_service(&self);
 
         if conf.query.common.internal_enable_sandbox_tenant {
             let sandbox_tenant = self.settings.get_sandbox_tenant().unwrap_or_default();
@@ -414,3 +442,13 @@ impl SessionContext {
         *self.current_workload_group.write() = Some(workload_group)
     }
 }
+
+impl AnyServiceProvider for SessionContext {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.services.get_service_any(type_id)
+    }
+}
+
+impl ServiceProvider<InnerConfigSymbol> for SessionContext {}
+
+impl ServiceProvider<SessionManagerSymbol> for SessionContext {}

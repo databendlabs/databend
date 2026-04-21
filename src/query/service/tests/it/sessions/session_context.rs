@@ -17,11 +17,17 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_query::sessions::SessionContext;
+use databend_query::sessions::SessionServices;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> anyhow::Result<()> {
     let settings = Settings::create(Tenant::new_literal("default"));
-    let session_ctx = SessionContext::try_create(settings, SessionType::MySQL, None)?;
+    let session_ctx = SessionContext::new(
+        settings,
+        SessionType::MySQL,
+        None,
+        SessionServices::default(),
+    )?;
 
     // Abort status.
     {

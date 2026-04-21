@@ -19,6 +19,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
@@ -61,6 +62,7 @@ struct SessionState {
     pub temp_tbl_mgr: TempTblMgrRef,
 }
 
+#[derive(Service)]
 pub struct ClientSessionManager {
     /// cache of tokens to avoid request for MetaServer on each auth.
     ///

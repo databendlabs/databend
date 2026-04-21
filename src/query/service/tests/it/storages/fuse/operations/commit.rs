@@ -13,14 +13,21 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
 use dashmap::DashMap;
+use databend_common_base::base::AnyServiceProvider;
+use databend_common_base::base::CacheManagerSymbol;
+use databend_common_base::base::CatalogManagerSymbol;
+use databend_common_base::base::InnerConfigSymbol;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
+use databend_common_base::base::UserApiProviderSymbol;
 use databend_common_base::base::WatchNotify;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::cluster_info::Cluster;
@@ -395,6 +402,20 @@ impl CtxDelegation {
         }
     }
 }
+
+impl AnyServiceProvider for CtxDelegation {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.ctx.get_service_any(type_id)
+    }
+}
+
+impl ServiceProvider<CacheManagerSymbol> for CtxDelegation {}
+
+impl ServiceProvider<CatalogManagerSymbol> for CtxDelegation {}
+
+impl ServiceProvider<InnerConfigSymbol> for CtxDelegation {}
+
+impl ServiceProvider<UserApiProviderSymbol> for CtxDelegation {}
 
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {

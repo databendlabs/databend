@@ -142,6 +142,16 @@ impl GlobalServices {
         SessionManager::init(config)?;
         LockManager::init()?;
         AuthMgr::init(config, version)?;
+        let session_manager = SessionManager::instance();
+        session_manager.register_service(Arc::new(version));
+        session_manager.register_service(ClusterDiscovery::instance());
+        session_manager.register_service(QueriesQueueManager::instance());
+        session_manager.register_service(HttpQueryManager::instance());
+        session_manager.register_service(ClientSessionManager::instance());
+        session_manager.register_service(DataExchangeManager::instance());
+        session_manager.register_service(LockManager::instance());
+        session_manager.register_service(AuthMgr::instance());
+        session_manager.register_service(CatalogManager::instance());
 
         // Init user manager.
         // Builtin users and udfs are created here.
@@ -164,8 +174,11 @@ impl GlobalServices {
             .await?;
         }
         RoleCacheManager::init()?;
+        session_manager.register_service(UserApiProvider::instance());
+        session_manager.register_service(RoleCacheManager::instance());
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
+        session_manager.register_service(Arc::new(DataOperator::instance()));
         ShareTableConfig::init(
             &config.query.common.share_endpoint_address,
             &config.query.common.share_endpoint_auth_token_file,
@@ -177,6 +190,7 @@ impl GlobalServices {
             config.query.tenant_id.tenant_name().to_string(),
             ee_mode,
         )?;
+        session_manager.register_service(CacheManager::instance());
         TempDirManager::init(&config.spill, config.query.tenant_id.tenant_name())?;
 
         if let Some(addr) = config
@@ -187,6 +201,7 @@ impl GlobalServices {
         {
             CloudControlApiProvider::init(addr, config.query.common.cloud_control_grpc_timeout)
                 .await?;
+            session_manager.register_service(CloudControlApiProvider::instance());
         }
 
         if !ee_mode {
@@ -198,6 +213,11 @@ impl GlobalServices {
         }
 
         Self::init_workload_mgr(config).await?;
+        let workload_mgr: Arc<WorkloadMgr> = GlobalInstance::get();
+        let workload_group_resource_manager: Arc<WorkloadGroupResourceManager> =
+            GlobalInstance::get();
+        session_manager.register_service(workload_mgr);
+        session_manager.register_service(workload_group_resource_manager);
 
         if config.log.history.on {
             GlobalHistoryLog::init(config, version).await?;

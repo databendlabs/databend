@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::drop_guard;
 use databend_common_base::runtime::workload_group::CPU_QUOTA_KEY;
@@ -481,7 +482,7 @@ impl Drop for Session {
     fn drop(&mut self) {
         drop_guard(move || {
             debug!("Drop session {}", self.id.clone());
-            SessionManager::instance().destroy_session(&self.id.clone());
+            SessionManager::get_service(&self.session_ctx).destroy_session(&self.id.clone());
         })
     }
 }

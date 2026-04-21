@@ -16,6 +16,7 @@
 databend_common_tracing::register_module_tag!("[QUERY-CTX]");
 
 use std::any::Any;
+use std::any::TypeId;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -40,9 +41,15 @@ use databend_base::uniq_id::GlobalUniq;
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_ast::ast::FormatTreeNode;
 use databend_common_base::JoinHandle;
+use databend_common_base::base::AnyServiceProvider;
+use databend_common_base::base::CacheManagerSymbol;
+use databend_common_base::base::CatalogManagerSymbol;
+use databend_common_base::base::InnerConfigSymbol;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
 use databend_common_base::base::SpillProgress;
+use databend_common_base::base::UserApiProviderSymbol;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -954,6 +961,20 @@ impl QueryContext {
         receivers.pop().unwrap()
     }
 }
+
+impl AnyServiceProvider for QueryContext {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.shared.session.session_ctx.get_service_any(type_id)
+    }
+}
+
+impl ServiceProvider<CacheManagerSymbol> for QueryContext {}
+
+impl ServiceProvider<CatalogManagerSymbol> for QueryContext {}
+
+impl ServiceProvider<InnerConfigSymbol> for QueryContext {}
+
+impl ServiceProvider<UserApiProviderSymbol> for QueryContext {}
 
 #[async_trait::async_trait]
 impl TableContext for QueryContext {

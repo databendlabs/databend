@@ -28,6 +28,7 @@ use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::DummySignalStream;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_base::base::SignalStream;
 use databend_common_base::base::SignalType;
 use databend_common_cache::Cache;
@@ -78,6 +79,7 @@ use tokio::time::sleep;
 use crate::servers::flight::FlightClient;
 use crate::servers::flight::keep_alive::build_keep_alive_config;
 
+#[derive(Service)]
 pub struct ClusterDiscovery {
     local_id: String,
     local_secret: String,

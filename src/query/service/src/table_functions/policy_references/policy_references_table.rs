@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -307,7 +308,7 @@ async fn collect_policy_reference_rows(
 
     let tenant = ctx.get_tenant();
     let catalog = ctx.get_default_catalog()?;
-    let meta = UserApiProvider::instance().get_meta_store_client();
+    let meta = UserApiProvider::get_service(&ctx).get_meta_store_client();
 
     match (policy_name, ref_entity_name, ref_entity_domain) {
         (Some(name), None, None) => {

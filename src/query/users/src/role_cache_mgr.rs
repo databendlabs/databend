@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -34,6 +35,7 @@ struct CachedRoles {
     cached_at: Instant,
 }
 
+#[derive(Service)]
 pub struct RoleCacheManager {
     user_manager: Arc<UserApiProvider>,
     cache: Arc<RwLock<HashMap<Tenant, CachedRoles>>>,

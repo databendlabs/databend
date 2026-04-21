@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_config::CacheConfig;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -56,6 +57,7 @@ use tokio::sync::Mutex;
 use crate::BUILTIN_ROLE_PUBLIC;
 use crate::builtin::BuiltIn;
 
+#[derive(Service)]
 pub struct UserApiProvider {
     meta: MetaStore,
     client: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,

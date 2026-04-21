@@ -16,6 +16,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::Service;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use jwt_simple::claims::JWTClaims;
@@ -63,6 +64,7 @@ pub trait LicenseManager: Sync + Send {
     }
 }
 
+#[derive(Service)]
 pub struct LicenseManagerSwitch {
     manager: Box<dyn LicenseManager>,
 }

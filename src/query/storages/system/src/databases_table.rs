@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::base::Service;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::plan::PushDownInfo;
@@ -139,7 +140,7 @@ where DatabasesTable<WITH_HISTORY>: HistoryAware
             vec![]
         };
 
-        let user_api = UserApiProvider::instance();
+        let user_api = UserApiProvider::get_service(&ctx);
         let mut catalog_names = vec![];
         let mut db_names = vec![];
         let mut db_ids = vec![];

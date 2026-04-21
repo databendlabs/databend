@@ -20,6 +20,7 @@ use std::sync::Weak;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
+use databend_common_base::base::Service;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::workload_group::MAX_CONCURRENCY_QUOTA_KEY;
@@ -71,6 +72,7 @@ struct WorkloadGroupResourceManagerInner {
     online_workload_group: Mutex<HashMap<String, Weak<WorkloadGroupResource>>>,
 }
 
+#[derive(Service)]
 pub struct WorkloadGroupResourceManager {
     inner: Arc<WorkloadGroupResourceManagerInner>,
 }

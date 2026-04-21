@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::any::TypeId;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -24,11 +25,17 @@ use chrono::Utc;
 use dashmap::DashMap;
 use databend_common_ast::ast::CreateTableSource;
 use databend_common_ast::ast::Statement;
+use databend_common_base::base::AnyServiceProvider;
 use databend_common_base::base::BuildInfo;
 use databend_common_base::base::BuildInfoRef;
+use databend_common_base::base::CacheManagerSymbol;
+use databend_common_base::base::CatalogManagerSymbol;
 use databend_common_base::base::GlobalInstance;
+use databend_common_base::base::InnerConfigSymbol;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
+use databend_common_base::base::ServiceProvider;
+use databend_common_base::base::UserApiProviderSymbol;
 use databend_common_base::base::Version;
 use databend_common_base::base::WatchNotify;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
@@ -77,6 +84,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_license::license_manager::LicenseManager;
+use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_license::license_manager::OssLicenseManager;
 use databend_common_meta_app::principal::*;
 use databend_common_meta_app::schema::*;
@@ -110,6 +118,7 @@ use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
 use databend_meta_client::types::SeqV;
 use databend_meta_runtime::DatabendRuntime;
+use databend_storages_common_cache::CacheManager;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
@@ -1047,6 +1056,40 @@ impl LiteTableContext {
         optimize(opt_ctx, plan).await
     }
 }
+
+impl AnyServiceProvider for LiteTableContext {
+    fn get_service_any(&self, type_id: TypeId) -> Option<Arc<dyn Any + Send + Sync>> {
+        if type_id == TypeId::of::<InnerConfig>() {
+            return Some(GlobalConfig::instance());
+        }
+
+        if type_id == TypeId::of::<CatalogManager>() {
+            return Some(self.catalog_manager.clone());
+        }
+
+        if type_id == TypeId::of::<UserApiProvider>() {
+            return Some(UserApiProvider::instance());
+        }
+
+        if type_id == TypeId::of::<LicenseManagerSwitch>() {
+            return Some(LicenseManagerSwitch::instance());
+        }
+
+        if type_id == TypeId::of::<CacheManager>() {
+            return GlobalInstance::try_get::<Arc<CacheManager>>().map(|cache| cache as _);
+        }
+
+        None
+    }
+}
+
+impl ServiceProvider<CacheManagerSymbol> for LiteTableContext {}
+
+impl ServiceProvider<CatalogManagerSymbol> for LiteTableContext {}
+
+impl ServiceProvider<InnerConfigSymbol> for LiteTableContext {}
+
+impl ServiceProvider<UserApiProviderSymbol> for LiteTableContext {}
 
 #[async_trait::async_trait]
 impl TableContext for LiteTableContext {
