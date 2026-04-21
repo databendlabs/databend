@@ -28,8 +28,10 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnSet;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::ScalarExpr;
+use databend_common_sql::Symbol;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_sql::plans::Else;
 use databend_common_sql::plans::FunctionCall;
@@ -251,33 +253,44 @@ impl InsertMultiTableInterpreter {
             } => {
                 let mut builder1 =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
-                let input_source = builder1.build(s_expr, bind_context.column_set()).await?;
+                let source_required = self.source_required_columns();
+                let result_columns = bind_context.result_columns();
+                let projected_columns =
+                    ordered_source_projection_columns(&result_columns, &source_required);
+                let mut required = bind_context.column_set();
+                required.extend(source_required);
+                let input_source = builder1.build(s_expr, required).await?;
 
                 // Lazy materialization (triggered by WHERE + LIMIT) may reorder physical output
                 // columns and inject internal columns like _row_id.  Add a reorder EvalScalar
-                // that projects exactly the logical columns in bind_context order, stripping any
-                // internal columns.  This ensures ChunkCastSchema sees a clean, correctly-ordered
-                // block.
+                // that projects logical output columns first and appends any extra source-side
+                // columns needed by WHEN predicates. This keeps branch filters resolvable while
+                // preserving positional insert semantics for branches that don't define VALUES(...)
+                // expressions.
                 let physical_schema = input_source.output_schema()?;
 
-                // Build (phys_pos, symbol) pairs for each result column, in final SELECT order.
-                let result_columns = bind_context.result_columns();
-                let col_refs: Vec<(usize, databend_common_sql::Symbol)> = result_columns
+                // Build (phys_pos, symbol) pairs for projected columns in the exact schema order
+                // we need after source projection.
+                let col_refs: Vec<(usize, Symbol)> = projected_columns
                     .iter()
-                    .filter_map(|(sym, _name)| {
-                        let phys_pos = physical_schema.index_of(&sym.to_string()).ok()?;
-                        Some((phys_pos, *sym))
+                    .map(|sym| {
+                        let phys_pos =
+                            physical_schema.index_of(&sym.to_string()).map_err(|_| {
+                                ErrorCode::Internal(format!(
+                                    "Failed to map source column {sym} for multi-table insert"
+                                ))
+                            })?;
+                        Ok((phys_pos, *sym))
                     })
-                    .collect();
+                    .collect::<Result<_>>()?;
 
-                // If we can't map all result columns, or the schema already has no internal columns
-                // and is already in the right order, skip the reorder node.
-                let needs_reorder = col_refs.len() == result_columns.len()
-                    && (physical_schema.num_fields() != col_refs.len()
-                        || col_refs
-                            .iter()
-                            .enumerate()
-                            .any(|(logical_pos, &(phys_pos, _))| logical_pos != phys_pos));
+                // If the schema already matches the projected column order and contains nothing
+                // else, skip the reorder node.
+                let needs_reorder = physical_schema.num_fields() != col_refs.len()
+                    || col_refs
+                        .iter()
+                        .enumerate()
+                        .any(|(logical_pos, &(phys_pos, _))| logical_pos != phys_pos);
 
                 if !needs_reorder {
                     return Ok((input_source, metadata.clone()));
@@ -309,6 +322,14 @@ impl InsertMultiTableInterpreter {
             }
             _ => unreachable!(),
         }
+    }
+
+    fn source_required_columns(&self) -> ColumnSet {
+        let mut required = ColumnSet::new();
+        for when in &self.plan.whens {
+            required.extend(when.condition.used_columns());
+        }
+        required
     }
 
     async fn build_insert_into_branches(&self) -> Result<InsertIntoBranches> {
@@ -394,6 +415,27 @@ fn not(expr: ScalarExpr) -> ScalarExpr {
         params: vec![],
         arguments: vec![expr],
     })
+}
+
+fn ordered_source_projection_columns(
+    result_columns: &[(Symbol, String)],
+    source_required: &ColumnSet,
+) -> Vec<Symbol> {
+    let logical_output_columns = result_columns
+        .iter()
+        .map(|(sym, _)| *sym)
+        .collect::<ColumnSet>();
+    let mut projected_columns = result_columns
+        .iter()
+        .map(|(sym, _)| *sym)
+        .collect::<Vec<_>>();
+    projected_columns.extend(
+        source_required
+            .iter()
+            .copied()
+            .filter(|sym| !logical_output_columns.contains(sym)),
+    );
+    projected_columns
 }
 
 pub(crate) fn scalar_expr_to_remote_expr(

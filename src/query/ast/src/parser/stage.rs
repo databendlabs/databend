@@ -120,7 +120,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
     );
 
     let ident_options = map(
-        rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS | QUOTED_EMPTY_FIELD_AS)  ~ "=" ~ (NULL | STRING | Ident)},
+        rule! { (BINARY_FORMAT | MISSING_FIELD_AS | EMPTY_FIELD_AS | NULL_FIELD_AS | QUOTED_EMPTY_FIELD_AS | QUOTE_STYLE)  ~ "=" ~ (NULL | STRING | Ident)},
         |(k, _, v)| {
             (
                 k.text().to_string(),
@@ -137,6 +137,7 @@ pub fn format_options(i: Input) -> IResult<FileFormatOptions> {
                 | RECORD_DELIMITER
                 | FIELD_DELIMITER
                 | QUOTE
+                | QUOTE_STYLE
                 | NAN_DISPLAY
                 | NULL_DISPLAY
                 | ENCODING

@@ -2236,11 +2236,10 @@ impl<'a> TypeChecker<'a> {
         // column-first fallback so `sum(c1)` can bind a same-select alias when
         // there is no real `c1` column.
         self.in_aggregate_function = true;
-        let original_context = self.bind_context.expr_context.clone();
+        let original_context = self.bind_context.expr_context;
         let disallow_alias_resolution = original_context.prefer_resolve_alias();
         if disallow_alias_resolution {
-            self.bind_context
-                .set_expr_context(ExprContext::InAggregateFunction);
+            self.bind_context.expr_context = ExprContext::InAggregateFunction;
         }
         let arguments_result = (|| {
             let mut arguments = vec![];
@@ -2253,7 +2252,7 @@ impl<'a> TypeChecker<'a> {
             Ok::<_, ErrorCode>((arguments, arg_types))
         })();
         if disallow_alias_resolution {
-            self.bind_context.set_expr_context(original_context.clone());
+            self.bind_context.expr_context = original_context;
         }
         self.in_aggregate_function = false;
         let (mut arguments, mut arg_types) = arguments_result?;
@@ -2267,12 +2266,11 @@ impl<'a> TypeChecker<'a> {
                      nulls_first,
                  }| {
                     if disallow_alias_resolution {
-                        self.bind_context
-                            .set_expr_context(ExprContext::InAggregateFunction);
+                        self.bind_context.expr_context = ExprContext::InAggregateFunction;
                     }
                     let result = self.resolve(expr);
                     if disallow_alias_resolution {
-                        self.bind_context.set_expr_context(original_context.clone());
+                        self.bind_context.expr_context = original_context;
                     }
                     let box (scalar_expr, _) = result?;
 
@@ -3288,9 +3286,9 @@ impl<'a> TypeChecker<'a> {
             .set_span(span));
         }
 
-        let original_context = self.bind_context.expr_context.clone();
-        self.bind_context
-            .set_expr_context(ExprContext::InSetReturningFunction);
+        let original_context = self
+            .bind_context
+            .replace_expr_context(ExprContext::InSetReturningFunction);
 
         let mut arguments = Vec::with_capacity(args.len());
         for arg in args.iter() {
@@ -3299,7 +3297,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         // Restore the original context
-        self.bind_context.set_expr_context(original_context);
+        self.bind_context.expr_context = original_context;
 
         let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span,
@@ -6486,9 +6484,9 @@ impl<'a> TypeChecker<'a> {
                     .set_span(span),
             );
         }
-        let original_context = self.bind_context.expr_context.clone();
-        self.bind_context
-            .set_expr_context(ExprContext::InAsyncFunction);
+        let original_context = self
+            .bind_context
+            .replace_expr_context(ExprContext::InAsyncFunction);
         let result = match func_name {
             "nextval" => self.resolve_nextval_async_function(span, func_name, arguments)?,
             "dict_get" => self.resolve_dict_get_async_function(span, func_name, arguments)?,
@@ -6502,7 +6500,7 @@ impl<'a> TypeChecker<'a> {
             }
         };
         // Restore the original context
-        self.bind_context.set_expr_context(original_context);
+        self.bind_context.expr_context = original_context;
         self.bind_context.have_async_func = true;
         Ok(result)
     }

@@ -82,6 +82,7 @@ fn execute_query(
     mem_stat: Arc<MemStat>,
 ) -> impl Future<Output = Result<()>> {
     let id = http_query_context.query_id.clone();
+    let warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
     let fut = async move {
         let interpreter = InterpreterFactory::get(query_context.clone(), &plan).await?;
 
@@ -93,6 +94,7 @@ fn execute_query(
     };
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
 
     let root = get_http_tracing_span("http::execute_query", &http_query_context, &id);

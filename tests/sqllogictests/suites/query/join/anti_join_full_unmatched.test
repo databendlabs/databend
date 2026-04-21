@@ -1,0 +1,156 @@
+# Regression test for: anti/left/semi/right join with probe block fully unmatched
+# When probe block has more rows than max_block_size and all are unmatched,
+# the unmatched Vec fills to capacity and the assume() before the break fires -> UB/panic.
+#
+# Key: insert data with a large block_size so the parquet block exceeds max_block_size,
+# then query with a smaller max_block_size. The probe block will have more rows than
+# ProbedRows.unmatched.capacity(), triggering the bug.
+
+statement ok
+set disable_join_reorder = 1;
+
+# ── String key ──────────────────────────────────────────────────────────────
+
+statement ok
+drop table if exists t_build_str;
+
+statement ok
+drop table if exists t_probe_str;
+
+statement ok
+create table t_build_str (rid string);
+
+statement ok
+create table t_probe_str (pks string);
+
+# Insert probe data with large block_size so one parquet block has 200 rows
+statement ok
+set max_block_size = 10000;
+
+statement ok
+insert into t_probe_str select number::string from numbers(200);
+
+# Insert build data with hash collisions but no key overlap
+statement ok
+insert into t_build_str select (number + 1000000)::string from numbers(100000);
+
+# Now query with small max_block_size=100: probe block has 200 rows > capacity=100
+statement ok
+set max_block_size = 100;
+
+# LEFT ANTI JOIN (NOT EXISTS)
+query I
+select count(*) from t_probe_str as sou
+where not exists (select 1 from t_build_str as tar where tar.rid = sou.pks);
+----
+200
+
+# LEFT JOIN (unmatched rows get NULL on build side)
+query I
+select count(*) from t_probe_str as sou
+left join t_build_str as tar on tar.rid = sou.pks
+where tar.rid is null;
+----
+200
+
+# LEFT SEMI JOIN (EXISTS) - returns 0 since no overlap
+query I
+select count(*) from t_probe_str as sou
+where exists (select 1 from t_build_str as tar where tar.rid = sou.pks);
+----
+0
+
+statement ok
+drop table t_build_str;
+
+statement ok
+drop table t_probe_str;
+
+# ── Integer key ─────────────────────────────────────────────────────────────
+
+statement ok
+drop table if exists t_build_int;
+
+statement ok
+drop table if exists t_probe_int;
+
+statement ok
+create table t_build_int (rid int);
+
+statement ok
+create table t_probe_int (pks int);
+
+statement ok
+set max_block_size = 10000;
+
+statement ok
+insert into t_probe_int select number from numbers(200);
+
+statement ok
+insert into t_build_int select number + 1000000 from numbers(100000);
+
+statement ok
+set max_block_size = 100;
+
+query I
+select count(*) from t_probe_int as sou
+where not exists (select 1 from t_build_int as tar where tar.rid = sou.pks);
+----
+200
+
+query I
+select count(*) from t_probe_int as sou
+left join t_build_int as tar on tar.rid = sou.pks
+where tar.rid is null;
+----
+200
+
+statement ok
+drop table t_build_int;
+
+statement ok
+drop table t_probe_int;
+
+# ── Bigint key ──────────────────────────────────────────────────────────────
+
+statement ok
+drop table if exists t_build_bigint;
+
+statement ok
+drop table if exists t_probe_bigint;
+
+statement ok
+create table t_build_bigint (rid bigint);
+
+statement ok
+create table t_probe_bigint (pks bigint);
+
+statement ok
+set max_block_size = 10000;
+
+statement ok
+insert into t_probe_bigint select number from numbers(200);
+
+statement ok
+insert into t_build_bigint select number + 1000000 from numbers(100000);
+
+statement ok
+set max_block_size = 100;
+
+query I
+select count(*) from t_probe_bigint as sou
+where not exists (select 1 from t_build_bigint as tar where tar.rid = sou.pks);
+----
+200
+
+statement ok
+drop table t_build_bigint;
+
+statement ok
+drop table t_probe_bigint;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+unset max_block_size;

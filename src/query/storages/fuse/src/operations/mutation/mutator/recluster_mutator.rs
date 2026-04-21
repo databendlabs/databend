@@ -47,6 +47,7 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use indexmap::IndexSet;
 use log::debug;
+use log::info;
 use log::warn;
 use opendal::Operator;
 
@@ -67,6 +68,11 @@ use crate::statistics::sort_by_cluster_stats;
 /// For two-block layouts, repeated reclustering beyond this level
 /// rarely improves data locality and may cause task churn.
 const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
+
+/// Maximum number of unclustered blocks to select for compaction in a single
+/// recluster round. Keeps the compact phase bounded so recluster can make
+/// incremental progress without excessive memory/time cost per invocation.
+const MAX_UNCLUSTERED_BLOCKS_PER_RECLUSTER: u64 = 1000;
 
 pub enum ReclusterMode {
     Recluster,
@@ -425,7 +431,10 @@ impl ReclusterMutator {
         &self,
         compact_segments: Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>,
     ) -> Result<(u64, ReclusterParts)> {
-        debug!("recluster: generate compact tasks");
+        info!(
+            "recluster: found {} unclustered segments, compacting them before re-clustering",
+            compact_segments.len()
+        );
         let settings = self.ctx.get_settings();
         let num_block_limit = settings.get_compact_max_block_selection()? as usize;
         let num_segment_limit = compact_segments.len();
@@ -535,8 +544,14 @@ impl ReclusterMutator {
         let mut indices = IndexSet::new();
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
         let mut unclustered_segments = IndexSet::new();
+        let mut unclustered_block_num = 0;
         let mut small_segments = IndexSet::new();
+
         let block_per_seg = self.block_thresholds.block_per_segment;
+        let max_uncluster_blocks = std::cmp::min(
+            self.ctx.get_settings().get_compact_max_block_selection()?,
+            MAX_UNCLUSTERED_BLOCKS_PER_RECLUSTER,
+        );
 
         // Iterate over all segments
         for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
@@ -557,7 +572,11 @@ impl ReclusterMutator {
                     "recluster: segment '{}' is unclustered, needs to be compacted",
                     loc.location.0
                 );
+                unclustered_block_num += compact_segment.summary.block_count;
                 unclustered_segments.insert(i);
+                if unclustered_block_num >= max_uncluster_blocks {
+                    break;
+                }
                 continue;
             }
 
