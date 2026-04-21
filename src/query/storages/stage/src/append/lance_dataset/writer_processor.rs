@@ -326,6 +326,7 @@ impl FragmentWriterParams {
         data_accessor: Operator,
         dataset_path: &str,
     ) -> Result<ObjectStoreParams> {
+        let scheme = data_accessor.info().scheme().to_string();
         let object_store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(data_accessor));
 
         let mut root = PathBuf::from("/");
@@ -333,9 +334,10 @@ impl FragmentWriterParams {
         if !normalized.is_empty() {
             root.push(normalized);
         }
-        let base_url = Url::from_directory_path(root).map_err(|_| {
-            ErrorCode::Internal("invalid base url for lance object store".to_string())
+        let mut base_url = Url::parse(&format!("{scheme}:///")).map_err(|err| {
+            ErrorCode::Internal(format!("invalid lance object store scheme '{scheme}': {err}"))
         })?;
+        base_url.set_path(root.to_string_lossy().as_ref());
 
         #[allow(deprecated)]
         let store_params = ObjectStoreParams {
@@ -696,6 +698,11 @@ mod tests {
 
     use arrow_array::StringViewArray;
     use arrow_schema::Field;
+    use lance_io::object_store::ObjectStore as LanceObjectStore;
+    use lance_io::object_store::ObjectStoreRegistry;
+    use object_store::path::Path;
+    use opendal::Operator;
+    use opendal::services::Memory;
 
     use super::*;
 
@@ -748,5 +755,29 @@ mod tests {
         assert!(strings.is_null(1));
 
         Ok(())
+    }
+
+    #[test]
+    fn test_build_store_params_preserves_accessor_scheme() {
+        let accessor = Operator::new(Memory::default()).unwrap().finish();
+        let params = FragmentWriterParams::build_store_params(accessor, "tmp").unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        let (store, base_path) = runtime
+            .block_on(async {
+                LanceObjectStore::from_uri_and_params(
+                    Arc::new(ObjectStoreRegistry::default()),
+                    "tmp",
+                    &params,
+                )
+                .await
+            })
+            .unwrap();
+
+        assert!(!store.is_local());
+        assert_eq!(base_path, Path::parse("/tmp").unwrap());
     }
 }
