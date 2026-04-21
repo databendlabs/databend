@@ -63,6 +63,24 @@ EvalScalar
             └── limit: NONE
 
 
+=== select_scalar_wraps_builtin_aggregate ===
+description: A scalar wrapper over a builtin aggregate should bind through the select aggregate path without requiring direct aggregate support in type checking.
+sql: SELECT sum(number) + 1 FROM t
+status: ok
+EvalScalar
+├── scalars: [plus(sum(number) (#1), 1) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === grouped_select_udaf_binds ===
 description: A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.
 sql: SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g
@@ -74,6 +92,24 @@ EvalScalar
     ├── aggregate functions: [weighted_avg(a, b) AS (#5)]
     └── EvalScalar
         ├── scalars: [modulo(t.a (#0), 2) AS (#2), CAST(t.a (#0) AS Int32 NULL) AS (#3), CAST(t.b (#1) AS Int32 NULL) AS (#4)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== select_scalar_wraps_udaf ===
+description: A scalar wrapper over a UDAF should keep binding through the normal UDAF path while coexisting with builtin aggregate prebinding.
+sql: SELECT weighted_avg(a, b) + 1 FROM t
+status: ok
+EvalScalar
+├── scalars: [plus(weighted_avg(a, b) (#4), 1) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [weighted_avg(a, b) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2), CAST(t.b (#1) AS Int32 NULL) AS (#3)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []

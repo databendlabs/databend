@@ -185,6 +185,18 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
             sql: "SELECT sum(number) AS s FROM t ORDER BY s + 1",
         },
         SqlTestCase {
+            name: "distinct_order_by_reuses_same_aggregate_select_item",
+            description: "SELECT DISTINCT should still accept an ORDER BY aggregate expression when it is already present in the select list.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT DISTINCT sum(number) FROM t ORDER BY sum(number)",
+        },
+        SqlTestCase {
+            name: "distinct_order_by_reuses_same_window_select_item",
+            description: "SELECT DISTINCT should still accept an ORDER BY window expression when it is already present in the select list.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT DISTINCT row_number() OVER (ORDER BY number) FROM t ORDER BY row_number() OVER (ORDER BY number)",
+        },
+        SqlTestCase {
             name: "aggregate_argument_prefers_base_column_over_select_alias",
             description: "Inside an aggregate function, a same-name select alias should not shadow the base column.",
             setup_sqls: &["CREATE TABLE t(a UInt64, c2 UInt64)"],
@@ -339,6 +351,12 @@ async fn test_binder_named_window_paths() -> Result<()> {
             sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
         },
         SqlTestCase {
+            name: "named_window_aggregate_inside_nested_window_expression_binds",
+            description: "A named window aggregate introduced from a referenced window spec must still bind when the window expression is nested inside a larger select expression.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w + 1 FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
+        },
+        SqlTestCase {
             name: "inherited_named_window_from_sqllogictest_binds",
             description: "An inherited named WINDOW specification should bind without losing the base partition spec.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
@@ -349,6 +367,12 @@ async fn test_binder_named_window_paths() -> Result<()> {
             description: "A recursive chain of named WINDOW references should resolve inherited partition and order specs.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
             sql: "SELECT rank() OVER w3 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (w1), w3 AS (w2)",
+        },
+        SqlTestCase {
+            name: "missing_named_window_in_select_prebind_errors",
+            description: "A missing named window referenced from a select-item window expression must fail during prebinding instead of being silently ignored.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname",
         },
         SqlTestCase {
             name: "inherited_named_window_rejects_partition_override",
@@ -433,10 +457,22 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL",
         },
         SqlTestCase {
+            name: "select_scalar_wraps_builtin_aggregate",
+            description: "A scalar wrapper over a builtin aggregate should bind through the select aggregate path without requiring direct aggregate support in type checking.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) + 1 FROM t",
+        },
+        SqlTestCase {
             name: "grouped_select_udaf_binds",
             description: "A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
             sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g",
+        },
+        SqlTestCase {
+            name: "select_scalar_wraps_udaf",
+            description: "A scalar wrapper over a UDAF should keep binding through the normal UDAF path while coexisting with builtin aggregate prebinding.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) + 1 FROM t",
         },
         SqlTestCase {
             name: "group_by_all_collects_non_udaf_select_items",
