@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
@@ -1173,8 +1174,17 @@ impl Binder {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
-        // Resolve group items with `FROM` context. Since the alias item can not be resolved
-        // from the context, we can detect the failure and fallback to resolving with `available_aliases`.
+        let mut alias_candidates = HashMap::with_capacity(available_aliases.len());
+        for (index, (alias, _)) in available_aliases.iter().enumerate() {
+            alias_candidates
+                .entry(alias.clone())
+                .or_insert_with(Vec::new)
+                .push(index);
+        }
+        // Resolve group items with `FROM` context. Stand-alone alias names still need to win
+        // over same-name input columns to preserve GROUP BY alias semantics, but we only
+        // apply that preference to simple alias items rather than expanding aliases inside
+        // larger expressions.
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
@@ -1207,18 +1217,29 @@ impl Binder {
                 continue;
             }
 
-            // Resolve scalar item and alias item
-            let mut scalar_binder = ScalarBinder::new(
-                bind_context,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                self.metadata.clone(),
-                &[],
-            );
-
-            let (mut scalar_expr, _) = scalar_binder
-                .bind(expr)
-                .or_else(|e| self.resolve_alias_item(bind_context, expr, available_aliases, e))?;
+            let (mut scalar_expr, _) = if let Some(alias_item) =
+                self.resolve_alias_item(bind_context, expr, available_aliases, &alias_candidates)?
+            {
+                alias_item
+            } else {
+                // Resolve scalar item and alias item
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
+                scalar_binder.bind(expr).or_else(|e| {
+                    self.resolve_alias_item(
+                        bind_context,
+                        expr,
+                        available_aliases,
+                        &alias_candidates,
+                    )?
+                    .ok_or(e)
+                })?
+            };
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
             analyzer.visit(&mut scalar_expr)?;
@@ -1299,19 +1320,20 @@ impl Binder {
 
         // Remove dependent group items, group by a, f(a, b), f(a), b ---> group by a,b
         let mut results = vec![];
+        let mut other_group_items = bind_context
+            .aggregate_info
+            .group_items
+            .iter()
+            .map(|item| item.scalar.clone())
+            .collect::<HashSet<_>>();
         for item in bind_context.aggregate_info.group_items.iter() {
-            let columns: HashSet<ScalarExpr> = bind_context
-                .aggregate_info
-                .group_items
-                .iter()
-                .filter(|p| p.scalar != item.scalar)
-                .map(|p| p.scalar.clone())
-                .collect();
-
-            if prune_by_children(&item.scalar, &columns) {
+            other_group_items.remove(&item.scalar);
+            if prune_by_children(&item.scalar, &other_group_items) {
+                other_group_items.insert(item.scalar.clone());
                 continue;
             }
             results.push(item.clone());
+            other_group_items.insert(item.scalar.clone());
         }
 
         bind_context.aggregate_info.group_items_map.clear();
@@ -1363,30 +1385,28 @@ impl Binder {
         bind_context: &mut BindContext,
         expr: &Expr,
         available_aliases: &[(String, ScalarExpr)],
-        original_error: ErrorCode,
-    ) -> Result<(ScalarExpr, DataType)> {
-        let mut result: Vec<usize> = vec![];
-        // If cannot resolve group item, then try to find an available alias
-        for (i, (alias, _)) in available_aliases.iter().enumerate() {
-            // Alias of the select item
-            if let Expr::ColumnRef {
-                column:
-                    ColumnRef {
-                        database: None,
-                        table: None,
-                        column,
-                    },
-                ..
-            } = expr
-            {
-                if alias.eq_ignore_ascii_case(column.name()) {
-                    result.push(i);
-                }
-            }
+        alias_candidates: &HashMap<String, Vec<usize>>,
+    ) -> Result<Option<(ScalarExpr, DataType)>> {
+        let mut result: &[usize] = &[];
+        // GROUP BY aliases are only valid as stand-alone unqualified names.
+        if let Expr::ColumnRef {
+            column:
+                ColumnRef {
+                    database: None,
+                    table: None,
+                    column: ColumnID::Name(column),
+                },
+            ..
+        } = expr
+        {
+            result = alias_candidates
+                .get(&self.normalize_identifier(column).name)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
         }
 
         if result.is_empty() {
-            Err(original_error)
+            Ok(None)
         } else if result.len() > 1 {
             Err(
                 ErrorCode::SemanticError(format!("GROUP BY \"{}\" is ambiguous", expr))
@@ -1454,7 +1474,7 @@ impl Binder {
                     .insert(column_ref, scalar_column_index);
             }
 
-            Ok((scalar.clone(), scalar.data_type()?))
+            Ok(Some((scalar.clone(), scalar.data_type()?)))
         }
     }
 

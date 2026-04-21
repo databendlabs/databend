@@ -451,6 +451,12 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3",
         },
         SqlTestCase {
+            name: "group_by_prefers_select_alias_over_same_name_base_column",
+            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
+        },
+        SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],

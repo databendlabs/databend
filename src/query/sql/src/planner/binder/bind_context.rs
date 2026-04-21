@@ -87,10 +87,7 @@ pub enum ExprContext {
 
 impl ExprContext {
     pub fn prefer_resolve_alias(&self) -> bool {
-        !matches!(
-            self,
-            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue
-        )
+        !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
     }
 
     pub fn allow_resolve_alias(&self) -> bool {

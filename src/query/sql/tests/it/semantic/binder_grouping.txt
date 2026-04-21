@@ -45,6 +45,24 @@ Sort
                     └── limit: NONE
 
 
+=== group_by_prefers_select_alias_over_same_name_base_column ===
+description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.
+sql: SELECT a AS b, count(*) FROM t GROUP BY b
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), COUNT(*) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === group_by_all_collects_non_aggregate_select_items ===
 description: GROUP BY ALL should expand to the non-aggregate SELECT items only.
 sql: SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL
