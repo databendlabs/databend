@@ -58,8 +58,8 @@ use crate::plans::GroupingSets;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::UDAFCall;
-use crate::plans::Visitor as ScalarVisitor;
-use crate::plans::VisitorMut as ScalarVisitorMut;
+use crate::plans::Visitor;
+use crate::plans::VisitorMut;
 use crate::plans::walk_expr_mut;
 
 /// Information for `GROUPING SETS`.
@@ -761,7 +761,7 @@ struct ExistingAggregateRewriter<'a> {
     error_message: &'a str,
 }
 
-impl<'a> ScalarVisitorMut<'a> for ExistingAggregateRewriter<'a> {
+impl<'a> VisitorMut<'a> for ExistingAggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         match expr {
             ScalarExpr::AggregateFunction(aggregate) => {
@@ -814,7 +814,7 @@ impl<'a> ScalarVisitorMut<'a> for ExistingAggregateRewriter<'a> {
     }
 }
 
-impl<'a> ScalarVisitorMut<'a> for AggregateRewriter<'a> {
+impl<'a> VisitorMut<'a> for AggregateRewriter<'a> {
     fn visit(&mut self, expr: &'a mut ScalarExpr) -> Result<()> {
         match expr {
             ScalarExpr::AggregateFunction(aggregate) => {
