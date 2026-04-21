@@ -73,7 +73,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
-use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
+use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
 
@@ -502,7 +502,8 @@ pub struct StageAttachmentConf {
 pub struct ResponseState {
     pub has_result_set: Option<bool>,
     pub schema: DataSchemaRef,
-    pub result_format_settings: Option<ResultFormatSettings>,
+    pub response_settings: Option<QueryResponseSettings>,
+    pub arrow_result_version: Option<u64>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -875,7 +876,7 @@ impl HttpQuery {
                         let state = ExecuteStopped {
                             stats: Progresses::default(),
                             schema: Default::default(),
-                            result_format_settings: None,
+                            response_settings: None,
                             has_result_set: None,
                             reason: Err(e.clone()),
                             session_state: ExecutorSessionState::new(
