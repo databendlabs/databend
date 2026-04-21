@@ -359,6 +359,15 @@ impl HashJoinSpiller {
     }
 
     #[inline(always)]
+    #[cfg(target_feature = "sse4.2")]
+    fn get_partition_id(hash: u64, bits: u64) -> u64 {
+        // On x86 SSE4.2, _mm_crc32_u64 only sets the low 32 bits; high 32 bits are always 0.
+        // Extract partition bits from the low 32 bits to avoid all rows landing in partition 0.
+        (hash >> (32 - bits)) & ((1 << bits) - 1)
+    }
+
+    #[inline(always)]
+    #[cfg(not(target_feature = "sse4.2"))]
     fn get_partition_id(hash: u64, bits: u64) -> u64 {
         (hash >> (64 - bits)) & ((1 << bits) - 1)
     }
