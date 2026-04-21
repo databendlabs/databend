@@ -29,6 +29,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use super::require_upload_filename;
 use crate::sessions::TableContext;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -115,10 +116,7 @@ pub async fn upload_to_stage(
 
     let mut files = vec![];
     while let Ok(Some(field)) = multipart.next_field().await {
-        let name = match field.file_name() {
-            Some(name) => name.to_string(),
-            None => uuid::Uuid::new_v4().to_string(),
-        };
+        let name = require_upload_filename(field.name(), field.file_name())?;
         let file_path = format!("{}/{}", args.relative_path, name)
             .trim_start_matches('/')
             .to_string();
@@ -141,7 +139,7 @@ pub async fn upload_to_stage(
         files.push(name.clone());
     }
 
-    let mut id = uuid::Uuid::new_v4().to_string();
+    let id = uuid::Uuid::new_v4().to_string();
     Ok(Json(UploadToStageResponse {
         id,
         stage_name: args.stage_name,

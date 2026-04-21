@@ -56,6 +56,7 @@ use tokio::sync::mpsc::Sender;
 use super::HttpQueryContext;
 use super::HttpSessionConf;
 use super::HttpSessionStateInternal;
+use super::require_upload_filename;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
@@ -333,7 +334,7 @@ async fn read_multi_part(
                         StatusCode::BAD_REQUEST,
                     ));
                 }
-                let filename = field.file_name().unwrap_or("file_with_no_name").to_string();
+                let filename = require_upload_filename(name, field.file_name())?;
                 debug!("Started reading file: {}", &filename);
                 let mut reader = field.into_async_read();
                 match file_format {
