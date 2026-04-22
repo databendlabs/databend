@@ -238,8 +238,11 @@ impl IPhysicalPlan for Recluster {
                     settings.get_enable_fixed_rows_sort()?,
                 )?
                 .with_block_size_hit(sort_block_size);
-                sort_pipeline_builder
-                    .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
+                sort_pipeline_builder.build_merge_sort_pipeline(
+                    &mut builder.main_pipeline,
+                    false,
+                    false,
+                )?;
 
                 // Compact after merge sort. This ordered compactor keeps block growth bounded
                 // without requiring a hard post-sort size cap, since final serialized sizes are
