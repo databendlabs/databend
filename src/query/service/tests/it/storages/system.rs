@@ -17,8 +17,12 @@ use std::sync::Arc;
 
 use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
+use databend_common_expression::TableDataType;
+use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::block_debug::box_render;
 use databend_common_expression::block_debug::pretty_format_blocks;
+use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::AuthType;
 use databend_common_meta_app::principal::RoleInfo;
@@ -27,11 +31,15 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::schema::CreateOption::Create;
 use databend_common_meta_app::schema::CreateOption::CreateIfNotExists;
 use databend_common_meta_app::schema::CreateOption::CreateOrReplace;
+use databend_common_meta_app::schema::CreateTableReq;
+use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableNameIdent;
 use databend_common_meta_app::storage::StorageFsConfig;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_meta_app::storage::StorageS3Config;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_storages_basic::view_table::QUERY;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_information_schema::CharacterSetsTable;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
@@ -62,11 +70,16 @@ use databend_query::stream::ReadDataBlockStream;
 use databend_query::test_kits::ClusterDescriptor;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
+use databend_query::test_kits::execute_command;
+use databend_query::test_kits::execute_query;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use wiremock::Mock;
 use wiremock::MockServer;
 use wiremock::ResponseTemplate;
+use wiremock::matchers::any;
 use wiremock::matchers::method;
 use wiremock::matchers::path;
 
@@ -511,6 +524,129 @@ async fn test_caches_table() -> anyhow::Result<()> {
 
     let table = CachesTable::create(1);
     run_table_tests(file, ctx, table).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_show_tables_ignores_broken_attached_table_refresh() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let tenant = ctx.get_tenant();
+    let catalog = ctx.get_catalog("default").await?;
+    let database = catalog.get_database(&tenant, "default").await?;
+
+    execute_command(ctx.clone(), "create table default.healthy(a int)").await?;
+
+    // Simulate a broken attached-table storage: any attempt to refresh from this
+    // S3 endpoint will fail with 403, matching the original issue's behavior.
+    let mock_server = MockServer::start().await;
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&mock_server)
+        .await;
+
+    let broken_schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "a",
+        TableDataType::Number(NumberDataType::Int32),
+    )]));
+
+    // Register a FUSE attached table whose refresh path points at the failing mock
+    // endpoint above. Without disable_table_info_refresh, loading this table will
+    // try to fetch the last snapshot hint and fail.
+    catalog
+        .create_table(CreateTableReq {
+            create_option: CreateOption::Create,
+            catalog_name: None,
+            name_ident: TableNameIdent {
+                tenant: tenant.clone(),
+                db_name: "default".to_string(),
+                table_name: "broken_attached".to_string(),
+            },
+            table_meta: TableMeta {
+                schema: broken_schema,
+                engine: "FUSE".to_string(),
+                options: [
+                    (
+                        OPT_KEY_DATABASE_ID.to_string(),
+                        database.get_db_info().database_id.db_id.to_string(),
+                    ),
+                    (
+                        FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE.to_string(),
+                        "0".to_string(),
+                    ),
+                    (
+                        OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
+                        "s3://broken-bucket/broken-attached/".to_string(),
+                    ),
+                ]
+                .into(),
+                storage_params: Some(StorageParams::S3(StorageS3Config {
+                    region: "us-east-2".to_string(),
+                    endpoint_url: mock_server.uri(),
+                    bucket: "broken-bucket".to_string(),
+                    root: "/".to_string(),
+                    access_key_id: "access_key_id".to_string(),
+                    secret_access_key: "secret_access_key".to_string(),
+                    disable_credential_loader: true,
+                    ..Default::default()
+                })),
+                ..TableMeta::default()
+            },
+            as_dropped: false,
+            table_properties: None,
+            table_partition: None,
+        })
+        .await?;
+
+    let list_tables_error = catalog.list_tables(&tenant, "default").await;
+    assert!(
+        list_tables_error.is_err(),
+        "loading attached tables without disabling refresh should fail"
+    );
+
+    let disabled_catalog = catalog.clone().disable_table_info_refresh()?;
+    let disabled_list_tables = disabled_catalog.list_tables(&tenant, "default").await;
+    assert!(
+        disabled_list_tables.is_ok(),
+        "loading attached tables with disable_table_info_refresh should succeed"
+    );
+
+    mock_server.reset().await;
+    Mock::given(any())
+        .respond_with(ResponseTemplate::new(403))
+        .mount(&mock_server)
+        .await;
+
+    let result = execute_query(ctx.clone(), "show tables from default").await?;
+    let blocks = result.try_collect::<Vec<_>>().await?;
+    let output = pretty_format_blocks(&blocks)?;
+    println!("{}", output);
+
+    assert!(
+        output.contains("broken_attached"),
+        "SHOW TABLES should keep the broken attached table visible: {output}"
+    );
+    assert!(
+        output.contains("healthy"),
+        "SHOW TABLES should still return healthy tables in the same database: {output}"
+    );
+
+    let warnings = ctx.pop_warnings();
+    assert!(
+        warnings.is_empty(),
+        "SHOW TABLES should not emit storage warnings once refresh is disabled: {warnings:?}"
+    );
+
+    // The key regression check: listing system.tables must not touch table-level storage.
+    let requests = mock_server
+        .received_requests()
+        .await
+        .expect("request recording should be enabled");
+    assert!(
+        requests.is_empty(),
+        "SHOW TABLES should not touch table-level storage when listing system.tables: {requests:?}"
+    );
 
     Ok(())
 }
