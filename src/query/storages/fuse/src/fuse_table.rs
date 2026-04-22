@@ -1196,7 +1196,13 @@ impl Table for FuseTable {
         navigation: &TimeNavigation,
     ) -> Result<Arc<dyn Table>> {
         match navigation {
-            TimeNavigation::TimeTravel(point) => Ok(self.navigate_to_point(ctx, point).await?),
+            TimeNavigation::TimeTravel { point, no_check } => {
+                if *no_check {
+                    Ok(self.navigate_to_point_fast(ctx, point).await?)
+                } else {
+                    Ok(self.navigate_to_point(ctx, point).await?)
+                }
+            }
             TimeNavigation::Changes {
                 append_only,
                 at,

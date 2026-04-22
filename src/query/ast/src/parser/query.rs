@@ -600,9 +600,9 @@ pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
 pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     let time_travel = map(
         rule! {
-            AT ~ ^#travel_point
+            AT ~ ^#travel_point_with_no_check
         },
-        |(_, travel_point)| TemporalClause::TimeTravel(travel_point),
+        |(_, (point, no_check))| TemporalClause::TimeTravel { point, no_check },
     );
 
     let changes = map(
@@ -622,6 +622,56 @@ pub fn temporal_clause(i: Input) -> IResult<TemporalClause> {
     rule!(
         #time_travel
         | #changes
+    )
+    .parse(i)
+}
+
+fn no_check_option(i: Input) -> IResult<bool> {
+    map(
+        rule! { "," ~ NO_CHECK ~ "=>" ~ ( TRUE | FALSE ) },
+        |(_, _, _, val)| matches!(val.kind, TRUE),
+    )
+    .parse(i)
+}
+
+fn travel_point_with_no_check(i: Input) -> IResult<(TimeTravelPoint, bool)> {
+    let at_snapshot = map(
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ #no_check_option? ~ ")" },
+        |(_, _, _, s, no_check, _)| (TimeTravelPoint::Snapshot(s), no_check.unwrap_or(false)),
+    );
+    let at_timestamp = map(
+        rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ #no_check_option? ~ ")" },
+        |(_, _, _, e, no_check, _)| {
+            (
+                TimeTravelPoint::Timestamp(Box::new(e)),
+                no_check.unwrap_or(false),
+            )
+        },
+    );
+    let at_offset = map(
+        rule! { "(" ~ OFFSET ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| (TimeTravelPoint::Offset(Box::new(e)), false),
+    );
+    let at_tag = map(
+        rule! { "(" ~ TAG ~ "=>" ~ #ident ~ ")" },
+        |(_, _, _, name, _)| (TimeTravelPoint::TableTag(name), false),
+    );
+    let at_stream = map(
+        rule! { "(" ~ STREAM ~ "=>" ~ #dot_separated_idents_1_to_3 ~ ")" },
+        |(_, _, _, (catalog, database, name), _)| {
+            (
+                TimeTravelPoint::Stream {
+                    catalog,
+                    database,
+                    name,
+                },
+                false,
+            )
+        },
+    );
+
+    rule!(
+        #at_snapshot | #at_timestamp | #at_offset | #at_tag | #at_stream
     )
     .parse(i)
 }

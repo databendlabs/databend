@@ -736,7 +736,7 @@ impl Table for IcebergTable {
         navigation: &TimeNavigation,
     ) -> Result<Arc<dyn Table>> {
         let snapshot_id = match navigation {
-            TimeNavigation::TimeTravel(np) => match np {
+            TimeNavigation::TimeTravel { point: np, .. } => match np {
                 NavigationPoint::SnapshotID(sid) => {
                     let sid = sid.parse::<i64>()?;
                     if self.table.metadata().snapshot_by_id(sid).is_some() {

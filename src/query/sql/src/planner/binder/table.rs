@@ -667,9 +667,12 @@ impl Binder {
         temporal: &Option<TemporalClause>,
     ) -> Result<Option<TimeNavigation>> {
         match temporal {
-            Some(TemporalClause::TimeTravel(point)) => {
+            Some(TemporalClause::TimeTravel { point, no_check }) => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
-                Ok(Some(TimeNavigation::TimeTravel(point)))
+                Ok(Some(TimeNavigation::TimeTravel {
+                    point,
+                    no_check: *no_check,
+                }))
             }
             Some(TemporalClause::Changes(interval)) => {
                 let end = match &interval.end_point {

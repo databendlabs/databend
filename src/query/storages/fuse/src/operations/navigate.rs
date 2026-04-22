@@ -229,6 +229,67 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    pub async fn navigate_to_point_fast(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        point: &NavigationPoint,
+    ) -> Result<Arc<FuseTable>> {
+        match point {
+            NavigationPoint::SnapshotID(snapshot_id) => {
+                self.navigate_to_snapshot_fast(ctx, snapshot_id.as_str())
+                    .await
+            }
+            NavigationPoint::TimePoint(time_point) => {
+                let Some(location) = self.snapshot_loc() else {
+                    return Err(ErrorCode::TableHistoricalDataNotFound(
+                        "Empty Table has no historical data",
+                    ));
+                };
+                self.navigate_to_time_point(ctx, location, *time_point)
+                    .await
+            }
+            _ => self.navigate_to_point(ctx, point).await,
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn navigate_to_snapshot_fast(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        snapshot_id: &str,
+    ) -> Result<Arc<FuseTable>> {
+        let prefix = self.snapshot_prefix();
+        let op = self.get_operator();
+        let s3_storage_class = ctx.get_settings().get_s3_storage_class()?;
+
+        let vacuum_prefixes = [VACUUM2_OBJECT_KEY_PREFIX, ""];
+        let suffixes = ["_v4.mpk", "_v3.bincode", "_v2.json", "_v1.json"];
+
+        for vac_prefix in &vacuum_prefixes {
+            for suffix in &suffixes {
+                let location = format!("{}{}{}{}", prefix, vac_prefix, snapshot_id, suffix);
+                match SnapshotsIO::read_snapshot(location, op.clone(), true).await {
+                    Ok((snapshot, format_version)) => {
+                        return self.load_table_by_snapshot(
+                            snapshot.as_ref(),
+                            format_version,
+                            s3_storage_class,
+                        );
+                    }
+                    Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+
+        Err(ErrorCode::TableHistoricalDataNotFound(
+            "Snapshot not found with NO_CHECK. \
+             Ensure the snapshot ID is a complete UUID (not a prefix). \
+             Use NO_CHECK => false for prefix-based lookup.",
+        ))
+    }
+
+    #[async_backtrace::framed]
     pub async fn navigate_for_purge(
         &self,
         ctx: &Arc<dyn TableContext>,

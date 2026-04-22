@@ -743,18 +743,36 @@ impl Display for ChangesInterval {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TemporalClause {
-    TimeTravel(TimeTravelPoint),
+    TimeTravel {
+        point: TimeTravelPoint,
+        no_check: bool,
+    },
     Changes(ChangesInterval),
 }
 
 impl Display for TemporalClause {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            TemporalClause::TimeTravel(point) => {
-                write!(f, "AT {}", point)?;
+            TemporalClause::TimeTravel { point, no_check } => {
+                if *no_check {
+                    write!(f, "AT ")?;
+                    match point {
+                        TimeTravelPoint::Snapshot(sid) => {
+                            write!(f, "(SNAPSHOT => '{sid}', NO_CHECK => true)")?;
+                        }
+                        TimeTravelPoint::Timestamp(ts) => {
+                            write!(f, "(TIMESTAMP => {ts}, NO_CHECK => true)")?;
+                        }
+                        _ => {
+                            write!(f, "{point}")?;
+                        }
+                    }
+                } else {
+                    write!(f, "AT {point}")?;
+                }
             }
             TemporalClause::Changes(changes) => {
-                write!(f, "{}", changes)?;
+                write!(f, "{changes}")?;
             }
         }
         Ok(())
