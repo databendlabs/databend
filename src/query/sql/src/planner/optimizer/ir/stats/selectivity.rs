@@ -367,12 +367,10 @@ impl SelectivityVisitor<'_> {
                 Some(histogram) => {
                     let selectivity =
                         Self::compute_histogram_comparison(histogram, op, &const_datum)?;
-                    if let Selectivity::N(n) = selectivity {
-                        // Too low selectivity in an unreliable histogram.
-                        if !histogram.accuracy && n < 0.05 {
-                            return Ok(Selectivity::LowerBound);
-                        }
 
+                    let distorted = !histogram.accuracy && is_histogram_range_distorted(histogram);
+
+                    if let Selectivity::N(n) = selectivity {
                         let (new_min, new_max) = match op {
                             ComparisonOp::GT | ComparisonOp::GTE => {
                                 (const_datum.clone(), column_stat.max.clone())
@@ -382,9 +380,20 @@ impl SelectivityVisitor<'_> {
                             }
                             _ => unreachable!(),
                         };
+
                         update_statistic(column_stat, new_min, new_max, n)?;
                     }
-                    Ok(selectivity)
+
+                    // For inaccurate histograms with a distorted range (e.g. outlier
+                    // sentinel values inflating min/max), the linear interpolation above
+                    // is unreliable. We still ran update_statistic so that min/max bounds
+                    // are narrowed correctly for subsequent predicates on the same column
+                    // (e.g. the `< 200` in `col > 100 AND col < 200`), but we override
+                    // the selectivity with LowerBound.
+                    match distorted {
+                        true => Ok(Selectivity::LowerBound),
+                        false => Ok(selectivity),
+                    }
                 }
                 None => {
                     if column_is_integer {
@@ -811,4 +820,11 @@ impl Selectivity {
             }
         }
     }
+}
+
+fn is_histogram_range_distorted(histogram: &Histogram) -> bool {
+    const BUCKET_WIDTH_THRESHOLD: f64 = 1e12;
+    histogram
+        .avg_spacing
+        .map_or(false, |bw| bw > BUCKET_WIDTH_THRESHOLD)
 }
