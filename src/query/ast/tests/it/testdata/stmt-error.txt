@@ -560,7 +560,7 @@ error:
   --> SQL:1:43
   |
 1 | alter table t1 create branch from_dev at (branch => dev)
-  | -----                                     ^^^^^^ unexpected `branch`. it's reserved keyword, you may avoid using it, expecting `STREAM`, `SNAPSHOT`, `TAG`, `TIMESTAMP`, or `OFFSET`
+  | -----                                     ^^^^^^ unexpected `branch`, expecting `STREAM`, `SNAPSHOT`, `TAG`, `TIMESTAMP`, or `OFFSET`
   | |                                          
   | while parsing `ALTER TABLE [<database>.]<table> <action>`
 
@@ -618,7 +618,7 @@ error:
   --> SQL:1:35
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS a, b
-  |                                   ^^^^ unexpected `SETS`. it's reserved keyword, you may avoid using it, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
+  |                                   ^^^^ unexpected `SETS`, expecting `SELECT`, `INTERSECT`, `WITH`, `EXCEPT`, `VALUES`, `OFFSET`, `IGNORE_RESULT`, `,`, `HAVING`, `WINDOW`, `QUALIFY`, `(`, `UNION`, `FROM`, `ORDER`, `LIMIT`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -1006,7 +1006,7 @@ error:
   --> SQL:1:34
   |
 1 | GRANT OWNERSHIP ON d20_0014.* TO USER A;
-  | -----                            ^^^^ unexpected `USER`. it's reserved keyword, you may avoid using it, expecting `ROLE`
+  | -----                            ^^^^ unexpected `USER`, expecting `ROLE`
   | |                                 
   | while parsing GRANT OWNERSHIP ON <privileges_level> TO ROLE <role_name>
 
@@ -1018,7 +1018,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP, SELECT ON d20_0014.* FROM ROLE 'd20_0015_owner';
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`. it's reserved keyword, you may avoid using it, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1030,7 +1030,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM USER A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`. it's reserved keyword, you may avoid using it, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1042,7 +1042,7 @@ error:
   --> SQL:1:8
   |
 1 | REVOKE OWNERSHIP ON d20_0014.* FROM ROLE A;
-  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`. it's reserved keyword, you may avoid using it, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
+  | ------ ^^^^^^^^^ unexpected `OWNERSHIP`, expecting `INSERT`, `ALTER`, `SUPER`, `ROLE`, `ACCESS`, `WRITE`, `SET`, `SELECT`, `UPDATE`, `DELETE`, `DROP`, `READ`, `USAGE`, `GRANT`, `CREATE`, `ALL`, or `APPLY`
   | |       
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
 
@@ -1081,7 +1081,7 @@ error:
   --> SQL:1:85
   |
 1 | CREATE FUNCTION my_agg (INT) STATE { s STRING } RETURNS BOOLEAN LANGUAGE javascript HANDLER = 'my_agg' ADDRESS = 'http://0.0.0.0:8815';
-  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`. it's reserved keyword, you may avoid using it, expecting `HEADERS`, `ADDRESS`, `PACKAGES`, `AS`, or `IMPORTS`
+  | ------                 -                                                            ^^^^^^^ unexpected `HANDLER`, expecting `HEADERS`, `ADDRESS`, `PACKAGES`, `AS`, or `IMPORTS`
   | |                      |                                                             
   | |                      while parsing (<[arg_name] arg_type>, ...) STATE {<state_field>, ...} RETURNS <return_type> LANGUAGE <language> { ADDRESS=<udf_server_address> | AS <language_codes> } 
   | while parsing `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <udf_name> <udf_definition> [DESC = <description>]`
