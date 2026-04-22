@@ -5081,11 +5081,15 @@ name = "databend-enterprise-data-mask-feature"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "dashmap 6.1.0",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-meta-client 260205.6.0",
+ "log",
+ "tokio",
 ]
 
 [[package]]

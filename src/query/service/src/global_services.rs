@@ -41,6 +41,7 @@ use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
 use databend_enterprise_resources_management::DummyResourcesManagement;
+use databend_enterprise_data_mask_feature::DataMaskCacheManager;
 use databend_enterprise_row_access_policy_feature::RowAccessPolicyCacheManager;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
@@ -166,6 +167,7 @@ impl GlobalServices {
         }
         RoleCacheManager::init()?;
         RowAccessPolicyCacheManager::init()?;
+        DataMaskCacheManager::init()?;
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(

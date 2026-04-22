@@ -1943,7 +1943,7 @@ impl<'a> TypeChecker<'a> {
         use databend_common_license::license::Feature::DataMask;
         use databend_common_license::license_manager::LicenseManagerSwitch;
         use databend_common_users::UserApiProvider;
-        use databend_enterprise_data_mask_feature::get_datamask_handler;
+        use databend_enterprise_data_mask_feature::DataMaskCacheManager;
 
         // Check if this column has a masking policy
         if let Some(table_index) = column_binding.table_index {
@@ -1991,22 +1991,15 @@ impl<'a> TypeChecker<'a> {
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
                 let tenant = self.ctx.get_tenant();
                 let meta_api = UserApiProvider::instance().get_meta_store_client();
-                let handler = get_datamask_handler();
+                let cache = DataMaskCacheManager::instance();
 
-                // Get the policy (now safe to await without holding the lock)
-                match handler
-                    .get_data_mask_by_id(meta_api.clone(), &tenant, policy_id)
+                // Get the parsed policy from cache (async path)
+                match cache
+                    .get_or_load(meta_api, &tenant, policy_id)
                     .await
                 {
-                    Ok(policy) => {
-                        let policy = policy.data;
-                        let body = &policy.body;
-                        let args = &policy.args;
-
-                        // Parse the policy body
-                        let tokens = tokenize_sql(body)?;
-                        let settings = self.ctx.get_settings();
-                        let ast_expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
+                    Ok(cached) => {
+                        let args = &cached.args;
 
                         // Create arguments based on USING clause
                         let arguments: Result<Vec<Expr>> = args
@@ -2054,7 +2047,7 @@ impl<'a> TypeChecker<'a> {
                             .collect();
 
                         // Replace parameters in the expression
-                        let expr = Self::clone_expr_with_replacement(&ast_expr, |nest_expr| {
+                        let expr = Self::clone_expr_with_replacement(&cached.expr, |nest_expr| {
                             if let Expr::ColumnRef { column, .. } = nest_expr {
                                 // Parameter names are already lowercase in args_map (normalized at creation).
                                 // Lookup also needs to be lowercase for consistent matching.

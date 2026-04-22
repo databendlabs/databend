@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod data_mask_cache;
 pub mod data_mask_handler;
 
+pub use data_mask_cache::CachedDataMaskPolicy;
+pub use data_mask_cache::DataMaskCacheManager;
 pub use data_mask_handler::DatamaskHandler;
 pub use data_mask_handler::DatamaskHandlerWrapper;
 pub use data_mask_handler::get_datamask_handler;
