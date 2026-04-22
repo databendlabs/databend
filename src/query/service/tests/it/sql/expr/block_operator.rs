@@ -13,19 +13,18 @@
 // limitations under the License.
 use std::collections::BTreeSet;
 
-
-use databend_common_expression::type_check::check;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Expr;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check::check;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_sql::evaluator::apply_cse;
 use databend_common_sql::evaluator::BlockOperator;
+use databend_common_sql::evaluator::apply_cse;
 use itertools::Itertools;
 
 fn count_function_calls(expr: &Expr, fn_name: &str) -> usize {
@@ -165,27 +164,21 @@ fn test_cse_parse_json_reuse() {
             span: None,
             name: "get".to_string(),
             params: vec![],
-            args: vec![
-                parse_repo(),
-                RawExpr::Constant {
-                    span: None,
-                    scalar: Scalar::String("name".to_string()),
-                    data_type: None,
-                },
-            ],
+            args: vec![parse_repo(), RawExpr::Constant {
+                span: None,
+                scalar: Scalar::String("name".to_string()),
+                data_type: None,
+            }],
         },
         RawExpr::FunctionCall {
             span: None,
             name: "get".to_string(),
             params: vec![],
-            args: vec![
-                parse_repo(),
-                RawExpr::Constant {
-                    span: None,
-                    scalar: Scalar::String("url".to_string()),
-                    data_type: None,
-                },
-            ],
+            args: vec![parse_repo(), RawExpr::Constant {
+                span: None,
+                scalar: Scalar::String("url".to_string()),
+                data_type: None,
+            }],
         },
     ];
 
