@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
+use crate::sessions::TableContextCluster;
 
 pub static START_PREPARED_QUERY: &str = "/actions/start_prepared_query";
 

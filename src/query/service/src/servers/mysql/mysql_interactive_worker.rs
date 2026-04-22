@@ -65,6 +65,7 @@ use crate::servers::mysql::writers::ProgressReporter;
 use crate::servers::mysql::writers::QueryResult;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
+use crate::sessions::TableContextCluster;
 use crate::sessions::TableContextProgress;
 use crate::sessions::TableContextQueryInfo;
 use crate::sessions::TableContextSettings;
