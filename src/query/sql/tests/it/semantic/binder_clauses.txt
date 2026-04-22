@@ -257,3 +257,17 @@ EvalScalar
             └── limit: NONE
 
 
+=== table_function_named_arguments_require_fat_arrow ===
+description: A table function named argument written with '=' should produce a direct hint to use '=>'.
+sql: SELECT * FROM infer_schema(location = '@data/parquet/int96.parquet')
+status: error
+code: 1065
+message: Table function 'infer_schema' uses `=>` for named arguments; replace `location = ...` with `location => ...`.
+
+=== obfuscate_named_arguments_require_fat_arrow ===
+description: OBFUSCATE should surface the same '=>' hint when a named argument is written with '='.
+sql: SELECT * FROM obfuscate(t1, seed = 20)
+status: error
+code: 1065
+message: Table function 'obfuscate' uses `=>` for named arguments; replace `seed = ...` with `seed => ...`.
+
