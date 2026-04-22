@@ -826,5 +826,5 @@ fn is_histogram_range_distorted(histogram: &Histogram) -> bool {
     const BUCKET_WIDTH_THRESHOLD: f64 = 1e12;
     histogram
         .avg_spacing
-        .map_or(false, |bw| bw > BUCKET_WIDTH_THRESHOLD)
+        .is_some_and(|bw| bw > BUCKET_WIDTH_THRESHOLD)
 }
