@@ -676,7 +676,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
             let mut res = vec![];
             for name in &catalog_name {
                 if *name == ctl_name {
-                    let ctl = ctx.get_catalog(name).await?;
+                    let ctl = ctx.get_catalog(name).await?.disable_table_info_refresh()?;
                     res.push((name.to_string(), ctl));
                 }
             }
