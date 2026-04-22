@@ -54,8 +54,15 @@ impl HybridHashJoinState {
         level: usize,
         factory: Arc<HashJoinFactory>,
     ) -> Result<Arc<HybridHashJoinState>> {
+        // On SSE4.2, fast_hash (_mm_crc32_u64) only sets the low 32 bits.
+        #[cfg(target_feature = "sse4.2")]
+        const HASH_JOIN_SPILL_MAX_LEVEL: usize = 7;
+        #[cfg(not(target_feature = "sse4.2"))]
+        const HASH_JOIN_SPILL_MAX_LEVEL: usize = 15;
+
         let settings = ctx.get_settings();
-        let max_level = settings.get_max_hash_join_spill_level()? as usize;
+        let max_spill_level = settings.get_max_hash_join_spill_level()? as usize;
+        let max_level = (max_spill_level).min(HASH_JOIN_SPILL_MAX_LEVEL);
 
         Ok(Arc::new(HybridHashJoinState {
             ctx,

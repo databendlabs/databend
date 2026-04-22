@@ -38,11 +38,21 @@ pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 pub struct Histogram {
     pub accuracy: bool,
     pub buckets: Vec<HistogramBucket>,
+    /// Bucket width: (max - min) / num_buckets.
+    /// Only set when accuracy == false (generated from NDV + min/max).
+    /// Used to detect range distortion caused by outlier values inflating min/max.
+    /// A very large bucket_width means linear interpolation within buckets is unreliable.
+    #[serde(default)]
+    pub avg_spacing: Option<f64>,
 }
 
 impl Histogram {
     pub fn new(buckets: Vec<HistogramBucket>, accuracy: bool) -> Self {
-        Self { accuracy, buckets }
+        Self {
+            accuracy,
+            buckets,
+            avg_spacing: None,
+        }
     }
 
     /// Get number of buckets
