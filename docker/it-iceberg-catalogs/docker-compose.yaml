@@ -60,17 +60,17 @@ services:
     entrypoint: >
       /bin/sh -c " until (/usr/bin/mc config host add minio http://minio:9000 admin password) do echo '...waiting...' && sleep 1; done; /usr/bin/mc rm -r --force minio/warehouse; /usr/bin/mc mb minio/warehouse; /usr/bin/mc policy set public minio/warehouse; tail -f /dev/null "
 
-  hive-metastore:
-    image: iceberg-hive-metastore
-    build: ./
-    platform: ${DOCKER_DEFAULT_PLATFORM}
-    ports:
-      - "9083:9083"
-    expose:
-      - 9083
-    environment:
-      SERVICE_NAME: "metastore"
-      SERVICE_OPTS: "-Dmetastore.warehouse.dir=s3a://warehouse/hive/"
+  # hive-metastore:
+  #   image: iceberg-hive-metastore
+  #   build: ./
+  #   platform: ${DOCKER_DEFAULT_PLATFORM}
+  #   ports:
+  #     - "9083:9083"
+  #   expose:
+  #     - 9083
+  #   environment:
+  #     SERVICE_NAME: "metastore"
+  #     SERVICE_OPTS: "-Dmetastore.warehouse.dir=s3a://warehouse/hive/"
 
   moto:
     image: motoserver/moto:5.0.3

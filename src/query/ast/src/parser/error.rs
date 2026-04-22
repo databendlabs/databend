@@ -263,7 +263,6 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         let mut msg = if span_text.is_empty() {
             "unexpected end of input".to_string()
         } else if all_reserved_keywords()
-            .iter()
             .any(|keyword| keyword.to_lowercase() == span_text.to_lowercase())
             && has_suggestion.is_none()
         {

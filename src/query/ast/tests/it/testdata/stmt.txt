@@ -2683,6 +2683,73 @@ CreateTable(
 
 
 ---------- Input ----------
+create table issue_11031 (range int, samples int)
+---------- Output ---------
+CREATE TABLE issue_11031 (range Int32, samples Int32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..24,
+            ),
+            name: "issue_11031",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                26..31,
+                            ),
+                            name: "range",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                37..44,
+                            ),
+                            name: "samples",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
 create table cluster_tbl (a int, b int) cluster by (a, b)
 ---------- Output ---------
 CREATE TABLE cluster_tbl (a Int32, b Int32) CLUSTER BY LINEAR(a, b)
@@ -8287,6 +8354,173 @@ Delete(
                 ],
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+insert into issue_11031 (radio, range, samples) values ('lte', 10, 1)
+---------- Output ---------
+INSERT INTO issue_11031 (radio, range, samples) VALUES ('lte', 10, 1)
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..23,
+                ),
+                name: "issue_11031",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    25..30,
+                ),
+                name: "radio",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    32..37,
+                ),
+                name: "range",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    39..46,
+                ),
+                name: "samples",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        source: Values {
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            56..61,
+                        ),
+                        value: String(
+                            "lte",
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            63..65,
+                        ),
+                        value: UInt64(
+                            10,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            67..68,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ],
+            ],
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+select range from issue_11031;
+---------- Output ---------
+SELECT range FROM issue_11031
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..29,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..12,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..12,
+                                        ),
+                                        name: "range",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            18..29,
+                        ),
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    18..29,
+                                ),
+                                name: "issue_11031",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 
@@ -28744,6 +28978,57 @@ CreateTask(
         sql: SingleStatement(
             "COPY INTO '@my_internal_stage' FROM canadian_city_population FILE_FORMAT = (type = PARQUET)",
         ),
+    },
+)
+
+
+---------- Input ----------
+COPY INTO @my_internal_stage/minimal.csv FROM canadian_city_population FILE_FORMAT = (TYPE = CSV QUOTE_STYLE = quote_minimal OUTPUT_HEADER = true)
+---------- Output ---------
+COPY INTO '@my_internal_stage/minimal.csv' FROM canadian_city_population FILE_FORMAT = (output_header = true, quote_style = quote_minimal, type = CSV)
+---------- AST ------------
+CopyIntoLocation(
+    CopyIntoLocationStmt {
+        with: None,
+        hints: None,
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    46..70,
+                ),
+                name: "canadian_city_population",
+                quote: None,
+                ident_type: None,
+            },
+            with_options: None,
+        },
+        dst: Stage(
+            "my_internal_stage/minimal.csv",
+        ),
+        partition_by: None,
+        file_format: FileFormatOptions {
+            options: {
+                "output_header": Bool(
+                    true,
+                ),
+                "quote_style": Keyword(
+                    "quote_minimal",
+                ),
+                "type": Keyword(
+                    "CSV",
+                ),
+            },
+        },
+        options: CopyIntoLocationOptionsRaw {
+            single: None,
+            max_file_size: None,
+            detailed_output: None,
+            use_raw_path: None,
+            include_query_id: None,
+            overwrite: None,
+        },
     },
 )
 

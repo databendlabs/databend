@@ -238,7 +238,7 @@ impl IPhysicalPlan for AggregatePartial {
             };
             let shared_partition_streams = SharedPartitionStream::new(
                 builder.main_pipeline.output_len(),
-                max_block_rows,
+                0,
                 max_block_bytes,
                 bucket_num,
             );

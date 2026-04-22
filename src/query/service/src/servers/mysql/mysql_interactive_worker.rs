@@ -422,31 +422,38 @@ impl InteractiveWorkerBase {
                 info!("Normal query: {}", query);
                 let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
+                let mut tracking_payload = ThreadTracker::new_tracking_payload();
+                tracking_payload.warehouse_id = context.get_cluster().get_warehouse_id().ok();
 
-                // Use interpreter_plan_sql, we can write the query log if an error occurs.
-                let (plan, _, _guard) =
-                    interpreter_plan_sql(context.clone(), query, true, None).await?;
+                tracking_payload
+                    .tracking(async {
+                        // Use interpreter_plan_sql, we can write the query log if an error occurs.
+                        let (plan, _, _guard) =
+                            interpreter_plan_sql(context.clone(), query, true, None).await?;
 
-                let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
-                let has_result_set = plan.has_result_set();
+                        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+                        let has_result_set = plan.has_result_set();
 
-                let (blocks, extra_info) = Self::exec_query(interpreter.clone(), &context).await?;
-                let mut schema = plan.schema();
-                if let Some(real_schema) = interpreter.get_dynamic_schema().await {
-                    schema = real_schema;
-                }
+                        let (blocks, extra_info) =
+                            Self::exec_query(interpreter.clone(), &context).await?;
+                        let mut schema = plan.schema();
+                        if let Some(real_schema) = interpreter.get_dynamic_schema().await {
+                            schema = real_schema;
+                        }
 
-                let format = context.get_output_format_settings()?;
-                Ok((
-                    QueryResult::create(
-                        blocks,
-                        extra_info,
-                        has_result_set,
-                        schema,
-                        query.to_string(),
-                    ),
-                    Some(format),
-                ))
+                        let format = context.get_output_format_settings()?;
+                        Ok((
+                            QueryResult::create(
+                                blocks,
+                                extra_info,
+                                has_result_set,
+                                schema,
+                                query.to_string(),
+                            ),
+                            Some(format),
+                        ))
+                    })
+                    .await
             }
         }
     }

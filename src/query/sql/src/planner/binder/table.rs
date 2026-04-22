@@ -63,7 +63,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
-use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
+use databend_enterprise_row_access_policy_feature::RowAccessPolicyCacheManager;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
@@ -502,8 +502,6 @@ impl Binder {
     ) -> Result<SExpr> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
         // Collect arguments in policy.columns_ids order (matches the policy parameter list).
         // Previously this iterated `fields` (schema order) with a contains-filter, which
         // silently reordered arguments when USING column order differed from schema order.
@@ -521,18 +519,32 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
+        let tenant = self.ctx.get_tenant();
+        let cache = RowAccessPolicyCacheManager::instance();
         let start = std::time::Instant::now();
-        let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
-            meta_api,
-            &self.ctx.get_tenant(),
-            policy,
-        ))?;
-        let fetch_elapsed = start.elapsed();
-        info!(
-            "row_access_policy: policy_id={}, fetch_ms={:.3}",
-            policy,
-            fetch_elapsed.as_secs_f64() * 1000.0,
-        );
+        // Fast sync path: avoid block_on overhead on cache hits.
+        let res = match cache.try_get(&tenant, policy) {
+            Some(cached) => {
+                debug!(
+                    "row_access_policy: policy_id={}, cache_hit, elapsed_ms={:.3}",
+                    policy,
+                    start.elapsed().as_secs_f64() * 1000.0,
+                );
+                cached
+            }
+            None => {
+                let meta_api = UserApiProvider::instance().get_meta_store_client();
+                let loaded = databend_common_base::runtime::block_on(
+                    cache.get_or_load(meta_api, &tenant, policy),
+                )?;
+                info!(
+                    "row_access_policy: policy_id={}, cache_miss, fetch_ms={:.3}",
+                    policy,
+                    start.elapsed().as_secs_f64() * 1000.0,
+                );
+                loaded
+            }
+        };
         let body = res.data.body;
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;

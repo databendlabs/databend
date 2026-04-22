@@ -15,6 +15,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_catalog::table_args::TableArgs;
@@ -142,7 +145,39 @@ fn try_fold_to_scalar(
     }
 }
 
+pub(crate) fn malformed_named_table_arg_error(func_name: &str, expr: &Expr) -> Option<ErrorCode> {
+    let Expr::BinaryOp {
+        op: BinaryOperator::Eq,
+        left,
+        ..
+    } = expr
+    else {
+        return None;
+    };
+
+    let Expr::ColumnRef {
+        column:
+            ColumnRef {
+                database: None,
+                table: None,
+                column: ColumnID::Name(name),
+            },
+        ..
+    } = left.as_ref()
+    else {
+        return None;
+    };
+
+    ErrorCode::SemanticError(format!(
+        "Table function '{}' uses `=>` for named arguments; replace `{} = ...` with `{} => ...`.",
+        func_name, name.name, name.name
+    ))
+    .set_span(expr.span())
+    .into()
+}
+
 pub fn bind_table_args(
+    func_name: &str,
     scalar_binder: &mut ScalarBinder<'_>,
     params: &[Expr],
     named_params: &[(Identifier, Expr)],
@@ -150,7 +185,12 @@ pub fn bind_table_args(
 ) -> Result<TableArgs> {
     let mut args = Vec::with_capacity(params.len());
     for arg in params.iter() {
-        args.push((scalar_binder.bind(arg)?.0, arg));
+        if let Some(err) = malformed_named_table_arg_error(func_name, arg) {
+            return Err(err);
+        }
+
+        let scalar = scalar_binder.bind(arg)?.0;
+        args.push((scalar, arg));
     }
 
     let mut named_args = Vec::with_capacity(named_params.len());

@@ -4508,6 +4508,7 @@ dependencies = [
  "databend-meta-client 260205.5.0",
  "databend-storages-common-blocks",
  "databend-storages-common-table-meta",
+ "log",
  "opendal",
  "parking_lot 0.12.3",
  "parquet 56.2.0",
@@ -5167,11 +5168,14 @@ name = "databend-enterprise-row-access-policy-feature"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "dashmap 6.1.0",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-meta-client 260205.5.0",
+ "log",
+ "tokio",
 ]
 
 [[package]]

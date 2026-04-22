@@ -88,6 +88,8 @@ pub enum VisitControl<B = ()> {
     Break(B),
 }
 
+pub type VisitResult = Result<VisitControl, !>;
+
 /// Pre-order visitor hooks for immutable AST traversal.
 ///
 /// Returning `Continue` lets the walker descend into children automatically.
