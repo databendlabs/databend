@@ -276,6 +276,7 @@ impl SelectivityVisitor<'_> {
                 let column_stat = self
                     .ensure_column_stat(column_index)
                     .expect("checked above");
+
                 return Self::compute_comparison_with_stat(
                     column_stat,
                     constant,
@@ -367,6 +368,11 @@ impl SelectivityVisitor<'_> {
                     let selectivity =
                         Self::compute_histogram_comparison(histogram, op, &const_datum)?;
                     if let Selectivity::N(n) = selectivity {
+                        // Too low selectivity in an unreliable histogram.
+                        if !histogram.accuracy && n < 0.05 {
+                            return Ok(Selectivity::LowerBound);
+                        }
+
                         let (new_min, new_max) = match op {
                             ComparisonOp::GT | ComparisonOp::GTE => {
                                 (const_datum.clone(), column_stat.max.clone())
