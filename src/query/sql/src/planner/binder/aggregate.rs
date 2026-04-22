@@ -44,6 +44,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::binder::project_set::SetReturningAnalyzer;
 use crate::binder::scalar::ScalarBinder;
+use crate::binder::select::ClauseAliasBindings;
 use crate::binder::select::SelectList;
 use crate::optimizer::ir::SExpr;
 use crate::plans::Aggregate;
@@ -884,11 +885,11 @@ impl Binder {
     ///     `SELECT a as b, COUNT(a) FROM t GROUP BY b`.
     ///   - Scalar expressions that can be evaluated in current scope(doesn't contain aliases), e.g.
     ///     column `a` and expression `a+1` in `SELECT a as b, COUNT(a) FROM t GROUP BY a, a+1`.
-    pub fn analyze_group_items(
+    pub(crate) fn analyze_group_items(
         &mut self,
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
-        available_aliases: &[(String, ScalarExpr)],
+        group_by_aliases: &ClauseAliasBindings,
         group_by: &GroupBy,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
@@ -899,7 +900,7 @@ impl Binder {
                 bind_context,
                 select_list,
                 exprs,
-                available_aliases,
+                group_by_aliases,
                 false,
                 &mut vec![],
             )?,
@@ -909,13 +910,13 @@ impl Binder {
                     bind_context,
                     select_list,
                     &groups,
-                    available_aliases,
+                    group_by_aliases,
                     false,
                     &mut vec![],
                 )?;
             }
             GroupBy::GroupingSets(sets) => {
-                self.resolve_grouping_sets(bind_context, select_list, sets, available_aliases)?;
+                self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
             }
             _ => unreachable!(),
         }
@@ -1064,7 +1065,7 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
         sets: &[Vec<Expr>],
-        available_aliases: &[(String, ScalarExpr)],
+        group_by_aliases: &ClauseAliasBindings,
     ) -> Result<()> {
         let mut grouping_sets = Vec::with_capacity(sets.len());
         for set in sets {
@@ -1072,7 +1073,7 @@ impl Binder {
                 bind_context,
                 select_list,
                 set,
-                available_aliases,
+                group_by_aliases,
                 true,
                 &mut grouping_sets,
             )?;
@@ -1165,17 +1166,20 @@ impl Binder {
         bind_context: &mut BindContext,
         select_list: &SelectList<'_>,
         group_by: &[Expr],
-        available_aliases: &[(String, ScalarExpr)],
+        group_by_aliases: &ClauseAliasBindings,
         collect_grouping_sets: bool,
         grouping_sets: &mut Vec<Vec<ScalarExpr>>,
     ) -> Result<()> {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
-        // GROUP BY goes through the normal scalar binder with a narrowed alias
-        // set that only contains grouping-compatible SELECT aliases. This keeps
-        // alias resolution centralized while preventing aggregate/window aliases
-        // from shadowing same-name input columns.
+        let preferred_aliases = group_by_aliases.preferred_aliases();
+        let available_aliases = group_by_aliases.available_aliases();
+        // GROUP BY first uses the preferred alias set, then falls back to the
+        // full alias set only when the expression cannot be resolved. This
+        // keeps the main binding path centralized while allowing SRF and
+        // aggregate aliases to remain available without letting them shadow
+        // same-name input columns.
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
@@ -1213,9 +1217,22 @@ impl Binder {
                 self.ctx.clone(),
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
-                available_aliases,
+                preferred_aliases,
             );
-            let (mut scalar_expr, _) = scalar_binder.bind(expr)?;
+            let (mut scalar_expr, _) = if preferred_aliases == available_aliases {
+                scalar_binder.bind(expr)?
+            } else {
+                scalar_binder.bind(expr).or_else(|_| {
+                    let mut fallback_scalar_binder = ScalarBinder::new(
+                        bind_context,
+                        self.ctx.clone(),
+                        &self.name_resolution_ctx,
+                        self.metadata.clone(),
+                        available_aliases,
+                    );
+                    fallback_scalar_binder.bind(expr)
+                })?
+            };
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
             analyzer.visit(&mut scalar_expr)?;

@@ -451,6 +451,12 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3",
         },
         SqlTestCase {
+            name: "group_by_prefers_input_column_over_same_name_srf_alias",
+            description: "GROUP BY should keep a same-name input column ahead of an SRF alias, while still allowing non-conflicting SRF aliases.",
+            setup_sqls: &["CREATE TABLE t_str(col1 String, col2 String)"],
+            sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2",
+        },
+        SqlTestCase {
             name: "group_by_prefers_select_alias_over_same_name_base_column",
             description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],

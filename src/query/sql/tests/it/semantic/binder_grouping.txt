@@ -45,6 +45,28 @@ Sort
                     └── limit: NONE
 
 
+=== group_by_prefers_input_column_over_same_name_srf_alias ===
+description: GROUP BY should keep a same-name input column ahead of an SRF alias, while still allowing non-conflicting SRF aliases.
+sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2
+status: ok
+Sort
+├── sort keys: [col2 (#3) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
+        └── Aggregate(Initial)
+            ├── group items: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
+            ├── aggregate functions: []
+            └── EvalScalar
+                ├── scalars: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.t_str (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
 === group_by_prefers_select_alias_over_same_name_base_column ===
 description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.
 sql: SELECT a AS b, count(*) FROM t GROUP BY b
