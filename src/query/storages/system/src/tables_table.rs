@@ -672,18 +672,10 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
         let ctl_name = catalog_impl.name();
         let is_external_catalog = catalog_impl.is_external();
 
-        let ctls = if !catalog_name.is_empty() {
-            let mut res = vec![];
-            for name in &catalog_name {
-                if *name == ctl_name {
-                    let ctl = ctx.get_catalog(name).await?.disable_table_info_refresh()?;
-                    res.push((name.to_string(), ctl));
-                }
-            }
-            // If empty return empty result
-            res
-        } else {
+        let ctls = if catalog_name.is_empty() || catalog_name.iter().any(|name| name == &ctl_name) {
             vec![(ctl_name, catalog_impl)]
+        } else {
+            vec![]
         };
 
         let no_filters = push_downs
