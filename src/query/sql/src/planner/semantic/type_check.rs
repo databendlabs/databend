@@ -1943,7 +1943,10 @@ impl<'a> TypeChecker<'a> {
         use databend_common_license::license::Feature::DataMask;
         use databend_common_license::license_manager::LicenseManagerSwitch;
         use databend_common_users::UserApiProvider;
-        use databend_enterprise_data_mask_feature::DataMaskCacheManager;
+        use databend_enterprise_data_mask_feature::get_datamask_handler;
+        use databend_enterprise_security_policy_cache::PolicyType;
+        use databend_enterprise_security_policy_cache::RawPolicyDef;
+        use databend_enterprise_security_policy_cache::SecurityPolicyCacheManager;
 
         // Check if this column has a masking policy
         if let Some(table_index) = column_binding.table_index {
@@ -1990,19 +1993,41 @@ impl<'a> TypeChecker<'a> {
 
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
                 let tenant = self.ctx.get_tenant();
+                let cache = SecurityPolicyCacheManager::instance();
+                let sql_dialect = self.ctx.get_settings().get_sql_dialect()?;
                 let meta_api = UserApiProvider::instance().get_meta_store_client();
-                let cache = DataMaskCacheManager::instance();
+                let tenant_clone = tenant.clone();
 
-                // Get the parsed policy from cache (async path)
-                match cache
-                    .get_or_load(meta_api, &tenant, policy_id)
+                let cached = cache
+                    .get_or_load(
+                        PolicyType::DataMask,
+                        &tenant,
+                        policy_id,
+                        sql_dialect,
+                        || async move {
+                            let handler = get_datamask_handler();
+                            let seq_v = handler
+                                .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
+                                .await?;
+                            let meta = seq_v.data;
+                            Ok(RawPolicyDef {
+                                body: meta.body,
+                                args: meta.args,
+                            })
+                        },
+                    )
                     .await
-                {
-                    Ok(cached) => {
-                        let args = &cached.args;
+                    .map_err(|err| {
+                        ErrorCode::UnknownMaskPolicy(format!(
+                            "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
+                            policy_id, column_binding.column_name, err
+                        ))
+                    })?;
 
-                        // Create arguments based on USING clause
-                        let arguments: Result<Vec<Expr>> = args
+                let args = &cached.args;
+
+                // Create arguments based on USING clause
+                let arguments: Result<Vec<Expr>> = args
                             .iter()
                             .enumerate()
                             .map(|(param_idx, _)| {
@@ -2035,41 +2060,32 @@ impl<'a> TypeChecker<'a> {
                                 })
                             })
                             .collect();
-                        let arguments = arguments?;
+                let arguments = arguments?;
 
-                        // Create parameter mapping
-                        // Since parameter names are normalized to lowercase at policy creation time (see data_mask.rs),
-                        // we use them directly as keys.
-                        let args_map: HashMap<_, _> = args
-                            .iter()
-                            .map(|(param_name, _)| param_name.as_str())
-                            .zip(arguments.iter().cloned())
-                            .collect();
+                // Create parameter mapping
+                // Since parameter names are normalized to lowercase at policy creation time (see data_mask.rs),
+                // we use them directly as keys.
+                let args_map: HashMap<_, _> = args
+                    .iter()
+                    .map(|(param_name, _)| param_name.as_str())
+                    .zip(arguments.iter().cloned())
+                    .collect();
 
-                        // Replace parameters in the expression
-                        let expr = Self::clone_expr_with_replacement(&cached.expr, |nest_expr| {
-                            if let Expr::ColumnRef { column, .. } = nest_expr {
-                                // Parameter names are already lowercase in args_map (normalized at creation).
-                                // Lookup also needs to be lowercase for consistent matching.
-                                if let Some(arg) =
-                                    args_map.get(column.column.name().to_lowercase().as_str())
-                                {
-                                    return Ok(Some(arg.clone()));
-                                }
-                            }
-                            Ok(None)
-                        })?;
-
-                        return Ok(Some(expr));
+                // Replace parameters in the expression
+                let expr = Self::clone_expr_with_replacement(&cached.expr, |nest_expr| {
+                    if let Expr::ColumnRef { column, .. } = nest_expr {
+                        // Parameter names are already lowercase in args_map (normalized at creation).
+                        // Lookup also needs to be lowercase for consistent matching.
+                        if let Some(arg) =
+                            args_map.get(column.column.name().to_lowercase().as_str())
+                        {
+                            return Ok(Some(arg.clone()));
+                        }
                     }
-                    Err(err) => {
-                        // Error when masking policy cannot be loaded
-                        return Err(ErrorCode::UnknownMaskPolicy(format!(
-                            "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
-                            policy_id, column_binding.column_name, err
-                        )));
-                    }
-                }
+                    Ok(None)
+                })?;
+
+                return Ok(Some(expr));
             }
         }
         Ok(None)

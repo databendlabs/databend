@@ -41,7 +41,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
-use databend_enterprise_data_mask_feature::DataMaskCacheManager;
+use databend_enterprise_data_mask_feature::get_datamask_handler;
+use databend_enterprise_security_policy_cache::PolicyType;
+use databend_enterprise_security_policy_cache::RawPolicyDef;
+use databend_enterprise_security_policy_cache::SecurityPolicyCacheManager;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -791,25 +794,33 @@ impl Binder {
 
         // Fetch the masking policy via cache (sync fast path, async fallback)
         let tenant = self.ctx.get_tenant();
-        let cache = DataMaskCacheManager::instance();
+        let cache = SecurityPolicyCacheManager::instance();
+        let sql_dialect = self.ctx.get_settings().get_sql_dialect()?;
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let tenant_clone = tenant.clone();
 
-        let cached = match cache.try_get(&tenant, policy_id) {
-            Some(hit) => hit,
-            None => {
-                let meta_api = UserApiProvider::instance().get_meta_store_client();
-                match databend_common_base::runtime::block_on(
-                    cache.get_or_load(meta_api, &tenant, policy_id),
-                ) {
-                    Ok(loaded) => loaded,
-                    Err(err) => {
-                        return Err(ErrorCode::UnknownMaskPolicy(format!(
-                            "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
-                            policy_id, column_binding.column_name, err
-                        )));
-                    }
-                }
-            }
-        };
+        let cached = cache.get_cached_or_load_sync(
+            PolicyType::DataMask,
+            &tenant,
+            policy_id,
+            sql_dialect,
+            || async move {
+                let handler = get_datamask_handler();
+                let seq_v = handler
+                    .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
+                    .await?;
+                let meta = seq_v.data;
+                Ok(RawPolicyDef {
+                    body: meta.body,
+                    args: meta.args,
+                })
+            },
+        ).map_err(|err| {
+            ErrorCode::UnknownMaskPolicy(format!(
+                "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
+                policy_id, column_binding.column_name, err
+            ))
+        })?;
 
         // Create parameter mapping: each parameter maps to a column reference
         // The key insight: use Expr::ColumnRef with full path (database.table.column)
