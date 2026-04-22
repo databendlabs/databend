@@ -324,10 +324,7 @@ impl ReclusterMutator {
                     total_compressed as usize,
                     level,
                 ));
-                if tasks.len() >= self.max_tasks {
-                    break;
-                }
-                continue;
+                break;
             }
 
             // Select blocks for reclustering based on depth threshold and max block size
@@ -394,9 +391,7 @@ impl ReclusterMutator {
                     level,
                 ));
             }
-            if tasks.len() >= self.max_tasks {
-                break;
-            }
+            break;
         }
 
         // Determine if reclustering is needed.
