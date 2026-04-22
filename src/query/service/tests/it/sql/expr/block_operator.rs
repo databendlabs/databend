@@ -55,7 +55,7 @@ fn test_cse() {
     )]);
 
     // a + 1,  (a + 1) *2
-    let exprs = vec![
+    let exprs = [
         RawExpr::FunctionCall {
             span: None,
             name: "plus".to_string(),
@@ -159,7 +159,7 @@ fn test_cse_parse_json_reuse() {
         }],
     };
 
-    let exprs = vec![
+    let exprs = [
         RawExpr::FunctionCall {
             span: None,
             name: "get".to_string(),
