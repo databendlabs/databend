@@ -82,6 +82,7 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
+use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
@@ -688,30 +689,68 @@ impl Binder {
         }
     }
 
+    fn fold_travel_point_expr(
+        &self,
+        bind_context: &mut BindContext,
+        expr: &Expr,
+    ) -> Result<databend_common_expression::Expr<crate::ColumnBinding>> {
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let box (scalar, _) = type_checker.resolve(expr)?;
+        let scalar_expr = scalar.as_expr()?;
+        let (new_expr, _) = ConstantFolder::fold(
+            &scalar_expr,
+            &self.ctx.get_function_context()?,
+            &BUILTIN_FUNCTIONS,
+        );
+        Ok(new_expr)
+    }
+
     pub(crate) fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {
-            TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
-            TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
+            TimeTravelPoint::Snapshot(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                match new_expr {
+                    databend_common_expression::Expr::Constant(Constant {
+                        scalar: databend_common_expression::Scalar::String(s),
+                        ..
+                    }) => Ok(NavigationPoint::SnapshotID(s)),
+                    _ => {
+                        if let Some(executor) = &self.subquery_executor {
+                            let result = execute_subquery_for_scalar(executor, expr)?;
+                            match result {
+                                databend_common_expression::Scalar::String(s) => {
+                                    Ok(NavigationPoint::SnapshotID(s))
+                                }
+                                _ => Err(ErrorCode::InvalidArgument(format!(
+                                    "TimeTravelPoint for 'Snapshot' must resolve to a string value, \
+                                    got: {}",
+                                    result
+                                ))),
+                            }
+                        } else {
+                            Err(ErrorCode::InvalidArgument(format!(
+                                "TimeTravelPoint for 'Snapshot' must resolve to a constant string value. \
+                                Provided expression '{}' is not a constant string",
+                                expr
+                            )))
+                        }
+                    }
+                }
+            }
+            TimeTravelPoint::Timestamp(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 match new_expr {
                     databend_common_expression::Expr::Constant(Constant {
@@ -734,22 +773,7 @@ impl Binder {
                 }
             }
             TimeTravelPoint::Offset(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
-
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 let v: i64 = check_number(
                     None,

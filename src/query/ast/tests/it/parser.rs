@@ -1378,6 +1378,7 @@ fn test_query() {
         r#"select * from customer with consume as s"#,
         r#"select * from t12_0004 at (TIMESTAMP => 'xxxx') as t"#,
         r#"select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t"#,
+        r#"select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,

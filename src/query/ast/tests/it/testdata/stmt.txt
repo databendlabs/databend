@@ -6858,7 +6858,14 @@ CreateStream(
         },
         travel_point: Some(
             Snapshot(
-                "9828b23f74664ff3806f44bbc1925ea5",
+                Literal {
+                    span: Some(
+                        69..103,
+                    ),
+                    value: String(
+                        "9828b23f74664ff3806f44bbc1925ea5",
+                    ),
+                },
             ),
         ),
         append_only: true,
@@ -16528,7 +16535,14 @@ OptimizeTable(
         action: Purge {
             before: Some(
                 Snapshot(
-                    "9828b23f74664ff3806f44bbc1925ea5",
+                    Literal {
+                        span: Some(
+                            43..77,
+                        ),
+                        value: String(
+                            "9828b23f74664ff3806f44bbc1925ea5",
+                        ),
+                    },
                 ),
             ),
         },
@@ -18622,7 +18636,14 @@ AlterTable(
         },
         action: FlashbackTo {
             point: Snapshot(
-                "9828b23f74664ff3806f44bbc1925ea5",
+                Literal {
+                    span: Some(
+                        40..74,
+                    ),
+                    value: String(
+                        "9828b23f74664ff3806f44bbc1925ea5",
+                    ),
+                },
             ),
         },
     },
@@ -18673,7 +18694,14 @@ AlterTable(
                 },
                 travel_point: Some(
                     Snapshot(
-                        "9828b23f74664ff3806f44bbc1925ea5",
+                        Literal {
+                            span: Some(
+                                47..81,
+                            ),
+                            value: String(
+                                "9828b23f74664ff3806f44bbc1925ea5",
+                            ),
+                        },
                     ),
                 ),
                 retain: Some(
