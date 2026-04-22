@@ -27,7 +27,16 @@ use log::info;
 use serde_json;
 
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextSession;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTelemetry;
 use crate::sessions::convert_query_log_timestamp;
 
 pub struct InterpreterQueryLog;

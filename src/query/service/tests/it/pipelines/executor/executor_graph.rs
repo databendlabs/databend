@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_pipeline::core::InputPort;
@@ -34,6 +33,7 @@ use databend_query::pipelines::executor::QueryPipelineExecutor;
 use databend_query::pipelines::executor::RunningGraph;
 use databend_query::pipelines::executor::WorkersCondvar;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextProgress;
 use databend_query::test_kits::TestFixture;
 use petgraph::stable_graph::NodeIndex;
 use tokio::sync::mpsc::Receiver;

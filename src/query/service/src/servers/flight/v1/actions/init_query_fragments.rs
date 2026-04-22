@@ -14,13 +14,13 @@
 
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::QueryFragments;
+use crate::sessions::TableContextCluster;
 
 pub static INIT_QUERY_FRAGMENTS: &str = "/actions/init_query_fragments";
 

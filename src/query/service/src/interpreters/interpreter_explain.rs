@@ -22,7 +22,6 @@ use databend_common_base::runtime::profile::ProfileDesc;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_base::runtime::profile::get_statistics_desc;
 use databend_common_catalog::plan::DataSourcePlan;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -65,6 +64,12 @@ use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 use crate::sql::optimizer::ir::SExpr;
 use crate::sql::plans::Plan;
 
@@ -342,10 +347,10 @@ impl ExplainInterpreter {
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
         if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.get_cacheable()
+            && self.ctx.result_cache_state().cacheable()
             && formatted_ast.is_some()
         {
-            let extras = self.ctx.get_cache_key_extras();
+            let extras = self.ctx.result_cache_state().cache_key_extras();
             let key_source = if extras.is_empty() {
                 formatted_ast.as_ref().unwrap().clone()
             } else {

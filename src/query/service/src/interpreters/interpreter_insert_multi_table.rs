@@ -66,6 +66,9 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::storages::Table;
 use crate::stream::DataBlockStream;
@@ -123,8 +126,8 @@ impl Interpreter for InsertMultiTableInterpreter {
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
         let mut columns = vec![];
-        let status = self.ctx.get_multi_table_insert_status();
-        let guard = status.lock();
+        let status = self.ctx.mutation_state().multi_table_insert_status();
+        let guard = status.lock().unwrap();
         for (tid, _) in &self.plan.target_tables {
             let insert_rows = guard.insert_rows.get(tid).cloned().unwrap_or_default();
             columns.push(UInt64Type::from_data(vec![insert_rows]));

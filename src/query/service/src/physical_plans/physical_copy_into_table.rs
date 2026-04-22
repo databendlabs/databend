@@ -15,7 +15,6 @@
 use std::any::Any;
 
 use databend_common_catalog::plan::StageTableInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
@@ -33,6 +32,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CopyIntoTable {
@@ -164,7 +164,8 @@ impl IPhysicalPlan for CopyIntoTable {
             CopyIntoTableSource::Stage(input) => {
                 builder
                     .ctx
-                    .set_read_block_thresholds(to_table.get_block_thresholds());
+                    .read_block_thresholds()
+                    .set(to_table.get_block_thresholds());
 
                 builder.build_pipeline(input)?;
                 self.required_source_schema.clone()

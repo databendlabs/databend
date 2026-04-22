@@ -11,9 +11,9 @@ arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-dashmap = { workspace = true }
 databend-common-ast = { workspace = true }
 databend-common-base = { workspace = true }
+databend-common-component = { workspace = true }
 databend-common-config = { workspace = true }
 databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }

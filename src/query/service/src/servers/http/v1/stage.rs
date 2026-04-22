@@ -30,7 +30,8 @@ use serde::Serialize;
 
 use super::HttpQueryContext;
 use super::require_upload_filename;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct UploadToStageResponse {

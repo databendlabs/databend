@@ -67,7 +67,9 @@ use crate::servers::http::v1::http_query_handlers::get_http_tracing_span;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoadResponse {

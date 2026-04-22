@@ -315,8 +315,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_virtual_schema_mode = virtual_schema_mode;
 
         if has_hll {
-            let binding = self.ctx.get_mutation_status();
-            let status = binding.read();
+            let binding = self.ctx.mutation_state().mutation_status();
+            let status = binding.read().unwrap();
             self.insert_rows = status.insert_rows + status.update_rows;
             self.insert_hll = hll;
         }
@@ -707,7 +707,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
                         for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
-                            self.ctx.add_written_segment_location(segment_loc)?;
+                            self.ctx.written_segment_locations().add(segment_loc);
                         }
 
                         if enable_auto_analyze {

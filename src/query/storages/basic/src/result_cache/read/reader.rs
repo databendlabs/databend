@@ -55,7 +55,7 @@ impl ResultCacheReader {
     ) -> Self {
         let tenant = ctx.get_tenant();
         let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
-        let partitions_shas = ctx.get_partitions_shas();
+        let partitions_shas = ctx.result_cache_state().partitions_shas();
 
         Self {
             meta_mgr: ResultCacheMetaManager::create(kv_store, 0),

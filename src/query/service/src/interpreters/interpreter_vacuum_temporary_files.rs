@@ -29,6 +29,8 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextQueryState;
 
 pub struct VacuumTemporaryFilesInterpreter {
     ctx: Arc<QueryContext>,

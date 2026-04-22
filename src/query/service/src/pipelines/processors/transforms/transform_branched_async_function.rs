@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -30,6 +29,7 @@ use crate::pipelines::processors::transforms::SequenceCounters;
 use crate::pipelines::processors::transforms::SequenceNextValFetcher;
 use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::AsyncFunctionArgument;
 
 /// The key of branches is `SourceSchemaIndex`, see `TransformResortAddOnWithoutSourceSchema`.

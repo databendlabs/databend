@@ -14,80 +14,98 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::SystemTime;
 
-use dashmap::DashMap;
-use databend_common_base::base::BuildInfoRef;
-use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
-use databend_common_base::base::WatchNotify;
-use databend_common_base::runtime::ExecutorStatsSnapshot;
-use databend_common_base::runtime::PerfConfig;
-use databend_common_base::runtime::PerfEvent;
-use databend_common_exception::ErrorCode;
+pub use databend_common_component::BroadcastRegistry;
+pub use databend_common_component::CopyState;
+pub use databend_common_component::FragmentId;
+pub use databend_common_component::MutationState;
+pub use databend_common_component::ReadBlockThresholdsState;
+pub use databend_common_component::ResultCacheState;
+pub use databend_common_component::SegmentLocationsState;
 use databend_common_exception::Result;
-use databend_common_exception::ResultExt;
-use databend_common_expression::BlockThresholds;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::Scalar;
-use databend_common_expression::TableSchema;
-use databend_common_io::prelude::InputFormatSettings;
-use databend_common_io::prelude::OutputFormatSettings;
-use databend_common_meta_app::principal::FileFormatParams;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OnErrorMode;
-use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserPrivilegeType;
-use databend_common_meta_app::storage::StorageParams;
-use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::InputError;
-use databend_common_pipeline::core::LockGuard;
-use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
-use databend_common_storage::CopyStatus;
-use databend_common_storage::DataOperator;
-use databend_common_storage::FileStatus;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
-use databend_common_storage::StageFilesInfo;
 use databend_common_storage::StorageMetrics;
-use databend_common_users::GrantObjectVisibilityChecker;
-use databend_common_users::Object;
-use databend_storages_common_session::SessionState;
-use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::Location;
-use databend_storages_common_table_meta::meta::TableMetaTimestamps;
-use databend_storages_common_table_meta::meta::TableSnapshot;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
 
-use crate::catalog::Catalog;
-use crate::cluster_info::Cluster;
-use crate::lock::LockTableOption;
-use crate::merge_into_join::MergeIntoJoin;
-use crate::plan::DataSourcePlan;
-use crate::plan::PartInfoPtr;
-use crate::plan::PartStatistics;
-use crate::plan::Partitions;
-use crate::query_kind::QueryKind;
-use crate::runtime_filter_info::RuntimeBloomFilter;
-use crate::runtime_filter_info::RuntimeFilterEntry;
-use crate::runtime_filter_info::RuntimeFilterInfo;
-use crate::runtime_filter_info::RuntimeFilterReady;
-use crate::runtime_filter_info::RuntimeFilterReport;
-use crate::session_type::SessionType;
-use crate::statistics::data_cache_statistics::DataCacheMetrics;
-use crate::table::Table;
+mod authorization;
+mod execution;
+mod materialization;
+mod partitions;
+mod query;
+mod query_state;
+mod runtime_filter;
+mod session;
+mod table;
+mod table_access;
+mod table_management;
+
+pub use authorization::TableContextAuthorization;
+pub use databend_common_component::BroadcastChannel;
+pub use execution::TableContextPerf;
+pub use execution::TableContextProgress;
+pub use execution::TableContextSpillProgress;
+pub use execution::TableContextTelemetry;
+pub use materialization::TableContextCte;
+pub use materialization::TableContextStream;
+pub use partitions::TableContextPartitionStats;
+pub use query::TableContextLicense;
+pub use query::TableContextMergeInto;
+pub use query::TableContextQueryIdentity;
+pub use query::TableContextQueryInfo;
+pub use query::TableContextQueryProfile;
+pub use query::TableContextResultCache;
+pub use query::TableContextVariables;
+pub use query_state::TableContextQueryState;
+pub use runtime_filter::TableContextRuntimeFilter;
+pub use session::TableContextCluster;
+pub use session::TableContextSession;
+pub use session::TableContextSettings;
+pub use table::TableContextCopy;
+pub use table::TableContextStage;
+pub use table::TableContextTableFactory;
+pub use table_access::TableContextTableAccess;
+pub use table_management::TableContextTableManagement;
+
+pub mod prelude {
+    pub use super::BroadcastRegistry;
+    pub use super::CopyState;
+    pub use super::FragmentId;
+    pub use super::MutationState;
+    pub use super::ReadBlockThresholdsState;
+    pub use super::ResultCacheState;
+    pub use super::SegmentLocationsState;
+    pub use super::TableContext;
+    pub use super::TableContextAuthorization;
+    pub use super::TableContextCluster;
+    pub use super::TableContextCopy;
+    pub use super::TableContextCte;
+    pub use super::TableContextLicense;
+    pub use super::TableContextMergeInto;
+    pub use super::TableContextPartitionStats;
+    pub use super::TableContextPerf;
+    pub use super::TableContextProgress;
+    pub use super::TableContextQueryIdentity;
+    pub use super::TableContextQueryInfo;
+    pub use super::TableContextQueryProfile;
+    pub use super::TableContextQueryState;
+    pub use super::TableContextResultCache;
+    pub use super::TableContextRuntimeFilter;
+    pub use super::TableContextSession;
+    pub use super::TableContextSettings;
+    pub use super::TableContextSpillProgress;
+    pub use super::TableContextStage;
+    pub use super::TableContextStream;
+    pub use super::TableContextTableAccess;
+    pub use super::TableContextTableFactory;
+    pub use super::TableContextTableManagement;
+    pub use super::TableContextTelemetry;
+    pub use super::TableContextVariables;
+}
 
 pub struct ContextError;
 
@@ -144,389 +162,52 @@ pub struct FilteredCopyFiles {
 }
 
 #[async_trait::async_trait]
-pub trait TableContext: Send + Sync {
+pub trait TableContext:
+    TableContextAuthorization
+    + TableContextCluster
+    + TableContextCopy
+    + TableContextCte
+    + TableContextLicense
+    + TableContextMergeInto
+    + TableContextPartitionStats
+    + TableContextPerf
+    + TableContextProgress
+    + TableContextQueryIdentity
+    + TableContextQueryInfo
+    + TableContextQueryProfile
+    + TableContextQueryState
+    + TableContextResultCache
+    + TableContextRuntimeFilter
+    + TableContextSession
+    + TableContextSettings
+    + TableContextSpillProgress
+    + TableContextStage
+    + TableContextTableAccess
+    + TableContextTableFactory
+    + TableContextTableManagement
+    + TableContextTelemetry
+    + TableContextStream
+    + TableContextVariables
+    + Send
+    + Sync
+{
+    fn broadcast_registry(&self) -> &BroadcastRegistry;
+
+    fn copy_state(&self) -> &CopyState;
+
+    fn fragment_id(&self) -> &FragmentId;
+
+    fn mutation_state(&self) -> &MutationState;
+
+    fn read_block_thresholds(&self) -> &ReadBlockThresholdsState;
+
+    fn result_cache_state(&self) -> &ResultCacheState;
+
+    fn written_segment_locations(&self) -> &SegmentLocationsState;
+
+    fn selected_segment_locations(&self) -> &SegmentLocationsState;
+
     fn as_any(&self) -> &dyn Any;
-    /// Build a table instance the plan wants to operate on.
-    ///
-    /// A plan just contains raw information about a table or table function.
-    /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
-    fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>>;
-
-    fn incr_total_scan_value(&self, value: ProgressValues);
-    fn get_total_scan_value(&self) -> ProgressValues;
-
-    fn get_scan_progress(&self) -> Arc<Progress>;
-    fn get_scan_progress_value(&self) -> ProgressValues;
-    fn get_write_progress(&self) -> Arc<Progress>;
-    fn get_join_spill_progress(&self) -> Arc<Progress>;
-    fn get_group_by_spill_progress(&self) -> Arc<Progress>;
-    fn get_aggregate_spill_progress(&self) -> Arc<Progress>;
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress>;
-    fn get_write_progress_value(&self) -> ProgressValues;
-    fn get_join_spill_progress_value(&self) -> ProgressValues;
-    fn get_group_by_spill_progress_value(&self) -> ProgressValues;
-    fn get_aggregate_spill_progress_value(&self) -> ProgressValues;
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues;
-    fn get_result_progress(&self) -> Arc<Progress>;
-    fn get_result_progress_value(&self) -> ProgressValues;
-    fn get_status_info(&self) -> String;
-    fn set_status_info(&self, info: &str);
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics;
-    fn get_partition(&self) -> Option<PartInfoPtr>;
-    fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
-    fn partition_num(&self) -> usize {
-        unimplemented!()
-    }
-    fn set_partitions(&self, partitions: Partitions) -> Result<()>;
-    /// Add a cache invalidation key for query result cache.
-    ///
-    /// Historically named `partitions_sha` because most callers use a partition SHA256,
-    /// but some callers may use other stable version identifiers (e.g. Fuse snapshot_location).
-    fn add_partitions_sha(&self, key: String);
-    fn get_partitions_shas(&self) -> Vec<String>;
-    fn add_cache_key_extra(&self, extra: String);
-    fn get_cache_key_extras(&self) -> Vec<String>;
-    fn get_cacheable(&self) -> bool;
-    fn set_cacheable(&self, cacheable: bool);
-    fn get_can_scan_from_agg_index(&self) -> bool;
-    fn set_can_scan_from_agg_index(&self, enable: bool);
-    fn get_enable_sort_spill(&self) -> bool;
-    fn set_enable_sort_spill(&self, enable: bool);
-    fn set_compaction_num_block_hint(&self, _table_name: &str, _hint: u64) {
-        unimplemented!()
-    }
-    fn get_compaction_num_block_hint(&self, _table_name: &str) -> u64 {
-        unimplemented!()
-    }
-    fn get_enable_auto_analyze(&self) -> bool {
-        unimplemented!()
-    }
-    fn set_enable_auto_analyze(&self, _enable: bool) {
-        unimplemented!()
-    }
-
-    fn attach_query_str(&self, kind: QueryKind, query: String);
-    fn attach_query_hash(&self, text_hash: String, parameterized_hash: String);
-    fn get_query_str(&self) -> String;
-
-    fn get_query_parameterized_hash(&self) -> String;
-    fn get_query_text_hash(&self) -> String;
-
-    fn get_fragment_id(&self) -> usize;
-    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
-    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
-    fn get_id(&self) -> String;
-    fn get_current_catalog(&self) -> String;
-    fn check_aborting(&self) -> Result<(), ContextError>;
-    fn get_abort_notify(&self) -> Arc<WatchNotify>;
-    fn get_abort_checker(self: Arc<Self>) -> AbortChecker
-    where Self: 'static {
-        struct Checker<S> {
-            this: S,
-        }
-        impl<S: TableContext + ?Sized> CheckAbort for Checker<Arc<S>> {
-            fn try_check_aborting(&self) -> Result<()> {
-                self.this.check_aborting().with_context(|| "query aborted")
-            }
-        }
-        Arc::new(Checker { this: self })
-    }
-    fn get_error(&self) -> Option<ErrorCode<ContextError>>;
-    fn push_warning(&self, warning: String);
-    fn get_current_database(&self) -> String;
-    fn get_current_user(&self) -> Result<UserInfo>;
-    fn get_current_role(&self) -> Option<RoleInfo>;
-    fn get_secondary_roles(&self) -> Option<Vec<String>>;
-    fn get_current_session_id(&self) -> String {
-        unimplemented!()
-    }
-    fn get_current_client_session_id(&self) -> Option<String> {
-        unimplemented!()
-    }
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>>;
-
-    async fn validate_privilege(
-        &self,
-        object: &GrantObject,
-        privilege: UserPrivilegeType,
-        check_current_role_only: bool,
-    ) -> Result<()>;
-    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
-    async fn get_visibility_checker(
-        &self,
-        ignore_ownership: bool,
-        object: Object,
-    ) -> Result<GrantObjectVisibilityChecker>;
-    fn get_fuse_version(&self) -> String;
-    fn get_version(&self) -> BuildInfoRef;
-    fn get_input_format_settings(&self) -> Result<InputFormatSettings>;
-    fn get_output_format_settings(&self) -> Result<OutputFormatSettings>;
-    fn get_tenant(&self) -> Tenant;
-    /// Get the kind of session running query.
-    fn get_query_kind(&self) -> QueryKind;
-    fn get_function_context(&self) -> Result<FunctionContext>;
-    fn get_connection_id(&self) -> String;
-    fn get_settings(&self) -> Arc<Settings>;
-    fn get_session_settings(&self) -> Arc<Settings>;
-    fn get_cluster(&self) -> Arc<Cluster>;
-    fn set_cluster(&self, cluster: Arc<Cluster>);
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>>;
-    fn get_processes_info(&self) -> Vec<ProcessInfo>;
-    fn get_queued_queries(&self) -> Vec<ProcessInfo>;
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>>;
-    fn get_stage_attachment(&self) -> Option<StageAttachment>;
-    fn get_last_query_id(&self, index: i32) -> Option<String>;
-    fn get_query_id_history(&self) -> HashSet<String>;
-    fn get_result_cache_key(&self, query_id: &str) -> Option<String>;
-    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String);
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>>;
-    fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>);
-    fn get_on_error_mode(&self) -> Option<OnErrorMode>;
-    fn set_on_error_mode(&self, mode: OnErrorMode);
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>>;
-
-    /// Get the storage data accessor operator from the session manager.
-    /// Note that this is the application level data accessor, which may be different from
-    /// the table level data accessor (e.g., table with customized storage parameters).
-    fn get_application_level_data_operator(&self) -> Result<DataOperator>;
-
-    async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
-
-    async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection>;
-
-    async fn get_table(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table_with_branch(catalog, database, table, None)
-            .await
-    }
-
-    async fn get_table_with_branch(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>>;
-
-    async fn resolve_data_source(
-        &self,
-        catalog: &str,
-        database: &str,
-        table: &str,
-        branch: Option<&str>,
-        max_batch_size: Option<u64>,
-    ) -> Result<Arc<dyn Table>>;
-
-    async fn get_zero_table(&self) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog("default").await?;
-        catalog
-            .get_table(&self.get_tenant(), "system", "zero")
-            .await
-    }
-
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
-
-    async fn filter_out_copied_files(
-        &self,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-        files: &[StageFileInfo],
-        path_prefix: Option<String>,
-        max_files: Option<usize>,
-    ) -> Result<FilteredCopyFiles>;
-
-    fn add_written_segment_location(&self, segment_loc: Location) -> Result<()>;
-
-    fn clear_written_segment_locations(&self) -> Result<()>;
-
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>>;
-
-    fn add_selected_segment_location(&self, _segment_loc: Location) {
-        unimplemented!()
-    }
-
-    fn get_selected_segment_locations(&self) -> Vec<Location> {
-        unimplemented!()
-    }
-
-    fn clear_selected_segment_locations(&self) {
-        unimplemented!()
-    }
-
-    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
-
-    fn get_copy_status(&self) -> Arc<CopyStatus>;
-
-    fn add_mutation_status(&self, mutation_status: MutationStatus);
-
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>>;
-
-    fn update_multi_table_insert_status(&self, table_id: u64, num_rows: u64);
-
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>>;
-
-    /// Get license key from context, return empty if license is not found or error happened.
-    fn get_license_key(&self) -> String;
-
-    fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>);
-
-    fn get_query_profiles(&self) -> Vec<PlanProfile>;
-
-    fn set_runtime_filter(&self, _filters: HashMap<usize, RuntimeFilterInfo>) {
-        unimplemented!()
-    }
-
-    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>);
-
-    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>>;
-
-    fn clear_runtime_filter(&self);
-    fn assert_no_runtime_filter_state(&self) -> Result<()> {
-        unimplemented!()
-    }
-
-    fn set_merge_into_join(&self, join: MergeIntoJoin);
-
-    fn get_merge_into_join(&self) -> MergeIntoJoin;
-
-    fn get_runtime_filters(&self, id: usize) -> Vec<RuntimeFilterEntry>;
-
-    fn get_bloom_runtime_filter_with_id(&self, id: usize) -> Vec<(String, RuntimeBloomFilter)>;
-
-    fn get_inlist_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
-
-    fn get_min_max_runtime_filter_with_id(&self, id: usize) -> Vec<Expr<String>>;
-
-    fn runtime_filter_reports(&self) -> HashMap<usize, Vec<RuntimeFilterReport>>;
-
-    fn has_bloom_runtime_filters(&self, id: usize) -> bool;
-    fn txn_mgr(&self) -> TxnManagerRef;
-    fn get_table_meta_timestamps(
-        &self,
-        table: &dyn Table,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableMetaTimestamps>;
-
-    fn get_read_block_thresholds(&self) -> BlockThresholds;
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds);
-
-    fn get_query_queued_duration(&self) -> Duration;
-    fn set_query_queued_duration(&self, queued_duration: Duration);
-
-    fn set_variable(&self, key: String, value: Scalar);
-    fn unset_variable(&self, key: &str);
-    fn get_variable(&self, key: &str) -> Option<Scalar>;
-    fn get_all_variables(&self) -> HashMap<String, Scalar>;
-
-    async fn load_datalake_schema(
-        &self,
-        _kind: &str,
-        _sp: &StorageParams,
-    ) -> Result<(TableSchema, String)> {
-        unimplemented!()
-    }
-    async fn create_stage_table(
-        &self,
-        _stage_info: StageInfo,
-        _files_info: StageFilesInfo,
-        _files_to_copy: Option<Vec<StageFileInfo>>,
-        _max_column_position: usize,
-        _on_error_mode: Option<OnErrorMode>,
-    ) -> Result<Arc<dyn Table>> {
-        unimplemented!()
-    }
-
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        catalog_name: &str,
-        db_name: &str,
-        tbl_name: &str,
-        lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>>;
-
-    fn get_temp_table_prefix(&self) -> Result<String>;
-
-    fn session_state(&self) -> Result<SessionState>;
-
-    fn is_temp_table(&self, catalog_name: &str, database_name: &str, table_name: &str) -> bool;
-
-    fn get_shared_settings(&self) -> Arc<Settings>;
-
-    fn add_m_cte_temp_table(&self, database_name: &str, table_name: &str);
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()>;
-
-    fn add_recursive_cte_temp_table(
-        &self,
-        catalog_name: &str,
-        database_name: &str,
-        table_name: &str,
-    );
-
-    async fn drop_recursive_cte_temp_table(&self) -> Result<()>;
-
-    fn add_streams_ref(&self, _catalog: &str, _database: &str, _stream: &str, _consume: bool) {
-        unimplemented!()
-    }
-
-    fn get_consume_streams(&self, _query: bool) -> Result<Vec<Arc<dyn Table>>> {
-        unimplemented!()
-    }
-
-    fn get_pruned_partitions_stats(&self) -> HashMap<u32, PartStatistics> {
-        unimplemented!()
-    }
-
-    fn set_pruned_partitions_stats(&self, _plan_id: u32, _stats: PartStatistics) {
-        unimplemented!()
-    }
-
-    /// Calling this function will automatically create a pipeline for broadcast data in `build_distributed_pipeline()`
-    ///
-    /// The returned id can be used to get sender and receiver for broadcasting data.
-    fn get_next_broadcast_id(&self) -> u32;
-
-    fn reset_broadcast_id(&self) {
-        unimplemented!()
-    }
-    fn get_session_type(&self) -> SessionType {
-        unimplemented!()
-    }
-    fn get_perf_config(&self) -> PerfConfig {
-        unimplemented!()
-    }
-    fn set_perf_config(&self, _config: PerfConfig) {
-        unimplemented!()
-    }
-    fn get_perf_flag(&self) -> bool {
-        unimplemented!()
-    }
-    fn set_perf_flag(&self, _flag: bool) {
-        unimplemented!()
-    }
-    fn get_nodes_perf(&self) -> Arc<Mutex<HashMap<String, String>>> {
-        unimplemented!()
-    }
-    fn set_nodes_perf(&self, _node: String, _perf: String) {
-        unimplemented!()
-    }
-    fn get_perf_events(&self) -> Vec<Vec<PerfEvent>> {
-        unimplemented!()
-    }
-    fn set_perf_events(&self, _event_groups: Vec<Vec<PerfEvent>>) {
-        unimplemented!()
-    }
-    fn get_running_query_execution_stats(&self) -> Vec<(String, ExecutorStatsSnapshot)> {
-        unimplemented!()
-    }
-    fn merge_pruned_partitions_stats(&self, _other: &HashMap<u32, PartStatistics>) {
-        unimplemented!()
-    }
 }
 
 pub type AbortChecker = Arc<dyn CheckAbort + Send + Sync>;

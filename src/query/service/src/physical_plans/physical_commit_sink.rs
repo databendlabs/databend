@@ -16,7 +16,6 @@ use std::any::Any;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::ReclusterInfoSideCar;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataSchemaRef;
 use databend_common_meta_app::schema::TableInfo;
@@ -40,6 +39,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContext;
 
 // serde is required by `PhysicalPlan`
 /// The commit sink is used to commit the data to the table.
@@ -117,7 +117,7 @@ impl IPhysicalPlan for CommitSink {
                 };
                 let snapshot_gen = TruncateGenerator::new(mode.clone());
                 if matches!(mode, TruncateMode::Delete) {
-                    let mutation_status = builder.ctx.get_mutation_status();
+                    let mutation_status = builder.ctx.mutation_state().mutation_status();
                     let deleted_rows = self
                         .snapshot
                         .as_ref()
@@ -126,7 +126,7 @@ impl IPhysicalPlan for CommitSink {
                         .main_pipeline
                         .set_on_finished(move |info: &ExecutionInfo| match &info.res {
                             Ok(_) => {
-                                mutation_status.write().deleted_rows = deleted_rows;
+                                mutation_status.write().unwrap().deleted_rows = deleted_rows;
                                 Ok(())
                             }
                             Err(error_code) => Err(error_code.clone()),

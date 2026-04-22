@@ -29,7 +29,6 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -76,6 +75,7 @@ use crate::servers::http::v1::QueryStats;
 use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
+use crate::sessions::TableContextCluster;
 
 fn default_as_true() -> bool {
     true

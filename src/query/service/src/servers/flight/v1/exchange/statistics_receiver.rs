@@ -18,7 +18,6 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use futures_util::future::Either;
 use futures_util::future::select;
@@ -30,6 +29,11 @@ use crate::servers::flight::v1::packets::DataPacket;
 use crate::servers::flight::v1::packets::ProgressInfo;
 use crate::sessions::MemoryUpdater;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextQueryProfile;
+use crate::sessions::TableContextTelemetry;
 
 pub struct StatisticsReceiver {
     _runtime: Runtime,
@@ -168,13 +172,15 @@ impl StatisticsReceiver {
             }
             Ok(Some(DataPacket::CopyStatus(status))) => {
                 log::info!("Merge CopyStatus for {} files", status.files.len());
-                ctx.get_copy_status().merge(status);
+                ctx.copy_state().copy_status().merge(status);
                 Ok(false)
             }
             Ok(Some(DataPacket::MutationStatus(status))) => {
                 log::info!("Merge MutationStatus");
-                ctx.get_mutation_status()
+                ctx.mutation_state()
+                    .mutation_status()
                     .write()
+                    .unwrap()
                     .merge_mutation_status(status);
                 Ok(false)
             }

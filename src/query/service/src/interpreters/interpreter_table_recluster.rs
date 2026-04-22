@@ -82,6 +82,14 @@ use crate::schedulers::ServiceQueryExecutor;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
+use crate::sessions::TableContextTelemetry;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -243,8 +251,8 @@ impl ReclusterTableInterpreter {
             let table = self.plan.table.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
-                    ctx.clear_written_segment_locations()?;
-                    ctx.clear_selected_segment_locations();
+                    ctx.written_segment_locations().clear();
+                    ctx.selected_segment_locations().clear();
                     ctx.evict_table_from_cache(&catalog, &database, &table)?;
 
                     ctx.unload_spill_meta();

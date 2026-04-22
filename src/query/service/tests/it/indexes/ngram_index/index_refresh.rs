@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::read::bloom::block_filter_reader::load_bloom_filter_by_columns;
+use databend_query::sessions::TableContext;
 use databend_query::storages::index::filters::BlockFilter;
 use databend_query::test_kits::TestFixture;
 use databend_storages_common_io::ReadSettings;
