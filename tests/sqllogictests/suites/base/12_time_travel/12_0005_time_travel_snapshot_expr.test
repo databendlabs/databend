@@ -1,0 +1,50 @@
+statement ok
+DROP DATABASE IF EXISTS db_12_0005
+
+statement ok
+CREATE DATABASE db_12_0005
+
+statement ok
+USE db_12_0005
+
+statement ok
+CREATE TABLE t(c1 int)
+
+statement ok
+insert into t values(1)
+
+statement ok
+insert into t values(2)
+
+# literal string snapshot id still works
+query I
+select count() from fuse_snapshot('db_12_0005', 't')
+----
+2
+
+# use scalar subquery to get the first snapshot id and query at that point
+query I
+select * from t at(snapshot => (select snapshot_id from fuse_snapshot('db_12_0005', 't') order by timestamp limit 1))
+----
+1
+
+# use scalar subquery to get the latest snapshot id
+query I
+select * from t at(snapshot => (select snapshot_id from fuse_snapshot('db_12_0005', 't') order by timestamp desc limit 1)) order by c1
+----
+1
+2
+
+# error: subquery returns non-string type
+statement error
+select * from t at(snapshot => (select 123))
+
+# error: expression that cannot be folded to a constant string
+statement error
+select * from t at(snapshot => c1)
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+DROP DATABASE db_12_0005
