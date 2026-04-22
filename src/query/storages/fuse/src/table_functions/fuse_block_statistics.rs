@@ -19,14 +19,21 @@ use databend_common_catalog::table::Table;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::VariantType;
+use databend_common_expression::types::number::F64;
+use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::SpatialStatistics;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FuseTable;
@@ -45,7 +52,14 @@ impl TableMetaFunc for FuseBlockStatistics {
             TableField::new("block_location", TableDataType::String),
             TableField::new("column_id", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("column_name", TableDataType::String),
-            TableField::new("statistics", TableDataType::String),
+            TableField::new(
+                "statistics",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
+            TableField::new(
+                "spatial_statistics",
+                TableDataType::Nullable(Box::new(TableDataType::Variant)),
+            ),
         ])
     }
 
@@ -57,6 +71,7 @@ impl TableMetaFunc for FuseBlockStatistics {
     ) -> Result<DataBlock> {
         let limit = limit.unwrap_or(usize::MAX);
         let schema = tbl.schema();
+        let func_ctx = ctx.get_function_context()?;
         let estimated_rows = std::cmp::min(
             snapshot.summary.block_count as usize * schema.num_fields().max(1),
             limit,
@@ -66,6 +81,7 @@ impl TableMetaFunc for FuseBlockStatistics {
         let mut column_ids = Vec::with_capacity(estimated_rows);
         let mut column_names = Vec::with_capacity(estimated_rows);
         let mut statistics = Vec::with_capacity(estimated_rows);
+        let mut spatial_statistics = Vec::with_capacity(estimated_rows);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), schema.clone());
 
@@ -97,21 +113,13 @@ impl TableMetaFunc for FuseBlockStatistics {
                         block_locations.push(block.location.0.clone());
                         column_ids.push(*column_id as u64);
                         column_names.push(field.name().to_string());
-
-                        let distinct_count = column_stat
-                            .distinct_of_values
-                            .map(|v| v.to_string())
-                            .unwrap_or_else(|| "NULL".to_string());
-
-                        let statistic = format!(
-                            "column[min={}, max={}, null_count={}, in_memory_size={}, distinct_count={}]",
-                            column_stat.min,
-                            column_stat.max,
-                            column_stat.null_count,
-                            column_stat.in_memory_size,
-                            distinct_count
+                        let stat = build_column_statistics_variant(
+                            column_stat,
+                            field.data_type().remove_nullable(),
+                            &func_ctx,
                         );
-                        statistics.push(statistic);
+                        statistics.push(Some(stat));
+                        spatial_statistics.push(None);
 
                         num_rows += 1;
                         if num_rows >= limit {
@@ -127,19 +135,9 @@ impl TableMetaFunc for FuseBlockStatistics {
                             block_locations.push(block.location.0.clone());
                             column_ids.push(**column_id as u64);
                             column_names.push(field.name().to_string());
-
-                            let statistic = format!(
-                                "spatial[min_x={}, min_y={}, max_x={}, max_y={}, srid={}, has_null={}, has_empty_rect={}, is_valid={}]",
-                                spatial_stat.min_x.0,
-                                spatial_stat.min_y.0,
-                                spatial_stat.max_x.0,
-                                spatial_stat.max_y.0,
-                                spatial_stat.srid,
-                                spatial_stat.has_null,
-                                spatial_stat.has_empty_rect,
-                                spatial_stat.is_valid
-                            );
-                            statistics.push(statistic);
+                            statistics.push(None);
+                            let stat = build_spatial_statistics_variant(spatial_stat, &func_ctx);
+                            spatial_statistics.push(Some(stat));
 
                             num_rows += 1;
                             if num_rows >= limit {
@@ -155,7 +153,89 @@ impl TableMetaFunc for FuseBlockStatistics {
             StringType::from_data(block_locations),
             UInt64Type::from_data(column_ids),
             StringType::from_data(column_names),
-            StringType::from_data(statistics),
+            VariantType::from_opt_data(statistics),
+            VariantType::from_opt_data(spatial_statistics),
         ]))
     }
+}
+
+fn build_column_statistics_variant(
+    column_stat: &databend_storages_common_table_meta::meta::ColumnStatistics,
+    field_type: TableDataType,
+    func_ctx: &FunctionContext,
+) -> Vec<u8> {
+    let scalar = Scalar::Tuple(vec![
+        column_stat.min.clone(),
+        column_stat.max.clone(),
+        Scalar::Number(NumberScalar::UInt64(column_stat.null_count)),
+        Scalar::Number(NumberScalar::UInt64(column_stat.in_memory_size)),
+        column_stat
+            .distinct_of_values
+            .map(|value| Scalar::Number(NumberScalar::UInt64(value)))
+            .unwrap_or(Scalar::Null),
+    ]);
+    let data_type = TableDataType::Tuple {
+        fields_name: vec![
+            "min".to_string(),
+            "max".to_string(),
+            "null_count".to_string(),
+            "in_memory_size".to_string(),
+            "distinct_count".to_string(),
+        ],
+        fields_type: vec![
+            field_type.clone(),
+            field_type,
+            TableDataType::Number(NumberDataType::UInt64),
+            TableDataType::Number(NumberDataType::UInt64),
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+        ],
+    };
+
+    build_variant(scalar, &data_type, func_ctx)
+}
+
+fn build_spatial_statistics_variant(
+    spatial_stat: &SpatialStatistics,
+    func_ctx: &FunctionContext,
+) -> Vec<u8> {
+    let scalar = Scalar::Tuple(vec![
+        Scalar::Number(NumberScalar::Float64(F64::from(spatial_stat.min_x.0))),
+        Scalar::Number(NumberScalar::Float64(F64::from(spatial_stat.min_y.0))),
+        Scalar::Number(NumberScalar::Float64(F64::from(spatial_stat.max_x.0))),
+        Scalar::Number(NumberScalar::Float64(F64::from(spatial_stat.max_y.0))),
+        Scalar::Number(NumberScalar::Int32(spatial_stat.srid)),
+        Scalar::Boolean(spatial_stat.has_null),
+        Scalar::Boolean(spatial_stat.has_empty_rect),
+        Scalar::Boolean(spatial_stat.is_valid),
+    ]);
+    let data_type = TableDataType::Tuple {
+        fields_name: vec![
+            "min_x".to_string(),
+            "min_y".to_string(),
+            "max_x".to_string(),
+            "max_y".to_string(),
+            "srid".to_string(),
+            "has_null".to_string(),
+            "has_empty_rect".to_string(),
+            "is_valid".to_string(),
+        ],
+        fields_type: vec![
+            TableDataType::Number(NumberDataType::Float64),
+            TableDataType::Number(NumberDataType::Float64),
+            TableDataType::Number(NumberDataType::Float64),
+            TableDataType::Number(NumberDataType::Float64),
+            TableDataType::Number(NumberDataType::Int32),
+            TableDataType::Boolean,
+            TableDataType::Boolean,
+            TableDataType::Boolean,
+        ],
+    };
+
+    build_variant(scalar, &data_type, func_ctx)
+}
+
+fn build_variant(scalar: Scalar, data_type: &TableDataType, func_ctx: &FunctionContext) -> Vec<u8> {
+    let mut buf = Vec::new();
+    cast_scalar_to_variant(scalar.as_ref(), &func_ctx.tz, &mut buf, Some(data_type));
+    buf
 }

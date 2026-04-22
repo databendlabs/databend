@@ -70,18 +70,24 @@ REFRESH SPATIAL INDEX idx_refresh ON t
 ----
 0
 
-query ITT
-SELECT column_id, column_name, statistics FROM fuse_block_statistics('test_spatial_index', 't');
+query ITTT
+SELECT column_id, column_name, statistics, spatial_statistics FROM fuse_block_statistics('test_spatial_index', 't');
 ----
-0 id column[min=1, max=2, null_count=0, in_memory_size=9, distinct_count=2]
-1 geom spatial[min_x=10, min_y=10, max_x=11, max_y=11, srid=0, has_null=false, has_empty_rect=false, is_valid=true]
-2 geom2 spatial[min_x=100, min_y=100, max_x=101, max_y=101, srid=0, has_null=false, has_empty_rect=false, is_valid=true]
-0 id column[min=3, max=4, null_count=0, in_memory_size=9, distinct_count=2]
-1 geom spatial[min_x=20, min_y=20, max_x=21, max_y=21, srid=0, has_null=false, has_empty_rect=false, is_valid=true]
-2 geom2 spatial[min_x=200, min_y=200, max_x=201, max_y=201, srid=0, has_null=false, has_empty_rect=false, is_valid=true]
-0 id column[min=5, max=6, null_count=0, in_memory_size=9, distinct_count=2]
-1 geom spatial[min_x=30, min_y=30, max_x=40, max_y=40, srid=0, has_null=false, has_empty_rect=false, is_valid=true]
-2 geom2 spatial[min_x=300, min_y=300, max_x=400, max_y=400, srid=0, has_null=false, has_empty_rect=false, is_valid=true]
+0 id {"distinct_count":2,"in_memory_size":9,"max":2,"min":1,"null_count":0} NULL
+1 geom NULL {"has_empty_rect":false,"has_null":false,"is_valid":true,"max_x":11.0,"max_y":11.0,"min_x":10.0,"min_y":10.0,"srid":0}
+2 geom2 NULL {"has_empty_rect":false,"has_null":false,"is_valid":true,"max_x":101.0,"max_y":101.0,"min_x":100.0,"min_y":100.0,"srid":0}
+0 id {"distinct_count":2,"in_memory_size":9,"max":4,"min":3,"null_count":0} NULL
+1 geom NULL {"has_empty_rect":false,"has_null":false,"is_valid":true,"max_x":21.0,"max_y":21.0,"min_x":20.0,"min_y":20.0,"srid":0}
+2 geom2 NULL {"has_empty_rect":false,"has_null":false,"is_valid":true,"max_x":201.0,"max_y":201.0,"min_x":200.0,"min_y":200.0,"srid":0}
+0 id {"distinct_count":2,"in_memory_size":9,"max":6,"min":5,"null_count":0} NULL
+1 geom NULL {"has_empty_rect":false,"has_null":false,"is_valid":true,"max_x":40.0,"max_y":40.0,"min_x":30.0,"min_y":30.0,"srid":0}
+2 geom2 NULL {"has_empty_rect":false,"has_null":false,"is_valid":true,"max_x":400.0,"max_y":400.0,"min_x":300.0,"min_y":300.0,"srid":0}
+
+query ITTT
+SELECT column_id, column_name, statistics, spatial_statistics FROM fuse_block_statistics('test_spatial_index', 't') where statistics:max > 2;
+----
+0 id {"distinct_count":2,"in_memory_size":9,"max":4,"min":3,"null_count":0} NULL
+0 id {"distinct_count":2,"in_memory_size":9,"max":6,"min":5,"null_count":0} NULL
 
 statement ok
 CREATE TABLE spatial_stores (store_id INT, category String, store_name String, status String, location Geometry, SPATIAL INDEX idx (location)) row_per_block=2

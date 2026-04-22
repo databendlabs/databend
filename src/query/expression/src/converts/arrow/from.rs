@@ -130,8 +130,7 @@ impl TryFrom<&Field> for TableField {
 
                 ArrowDataType::FixedSizeBinary(_)
                 | ArrowDataType::Binary
-                | ArrowDataType::LargeBinary
-                | ArrowDataType::BinaryView => TableDataType::Binary,
+                | ArrowDataType::LargeBinary => TableDataType::Binary,
                 ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
                     TableDataType::String
                 }
