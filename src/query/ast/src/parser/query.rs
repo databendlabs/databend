@@ -109,7 +109,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(_from, from_block)| {
             if from_block.len() != 1 {
-                return Err(nom::Err::Failure(ErrorKind::Other(
+                return Err(nom::Err::Failure(ErrorKind::other(
                     "FROM query only support query one table",
                 )));
             }
@@ -157,7 +157,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_qualify_block,
         )| {
             if opt_from_block_first.is_some() && opt_from_block_second.is_some() {
-                return Err(nom::Err::Failure(ErrorKind::Other(
+                return Err(nom::Err::Failure(ErrorKind::other(
                     "duplicated FROM clause",
                 )));
             }
