@@ -1,0 +1,43 @@
+statement ok
+DROP DATABASE IF EXISTS db_12_0005
+
+statement ok
+CREATE DATABASE db_12_0005
+
+statement ok
+USE db_12_0005
+
+statement ok
+CREATE TABLE t(c1 int)
+
+statement ok
+insert into t values(1)
+
+statement ok
+insert into t values(2)
+
+query I
+select count() from fuse_snapshot('db_12_0005', 't')
+----
+2
+
+# string literal still works (parsed as expression now)
+query I
+select * from t at(snapshot => (select snapshot_id from fuse_snapshot('db_12_0005', 't') order by timestamp desc limit 1)) order by c1
+----
+1
+2
+
+# error: non-string result
+statement error
+select * from t at(snapshot => (select 123))
+
+# error: unresolvable expression
+statement error
+select * from t at(snapshot => c1)
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+DROP DATABASE db_12_0005

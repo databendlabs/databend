@@ -491,7 +491,7 @@ impl Display for Indirection {
 /// Time Travel specification
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub enum TimeTravelPoint {
-    Snapshot(String),
+    Snapshot(Box<Expr>),
     Timestamp(Box<Expr>),
     Offset(Box<Expr>),
     Stream {
@@ -504,8 +504,8 @@ pub enum TimeTravelPoint {
 impl Display for TimeTravelPoint {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
-            TimeTravelPoint::Snapshot(sid) => {
-                write!(f, "(SNAPSHOT => '{sid}')")?;
+            TimeTravelPoint::Snapshot(expr) => {
+                write!(f, "(SNAPSHOT => {expr})")?;
             }
             TimeTravelPoint::Timestamp(ts) => {
                 write!(f, "(TIMESTAMP => {ts})")?;
