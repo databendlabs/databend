@@ -3500,10 +3500,10 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
- "dashmap 6.1.0",
  "databend-base",
  "databend-common-ast",
  "databend-common-base",
+ "databend-common-component",
  "databend-common-config",
  "databend-common-exception",
  "databend-common-expression",
@@ -3583,6 +3583,20 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "simdutf8",
+]
+
+[[package]]
+name = "databend-common-component"
+version = "0.1.0"
+dependencies = [
+ "async-channel",
+ "dashmap 6.1.0",
+ "databend-common-exception",
+ "databend-common-expression",
+ "databend-common-meta-app",
+ "databend-common-pipeline",
+ "databend-common-storage",
+ "databend-storages-common-table-meta",
 ]
 
 [[package]]
@@ -5154,11 +5168,14 @@ name = "databend-enterprise-row-access-policy-feature"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "dashmap 6.1.0",
  "databend-common-base",
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-meta-client 260205.5.0",
+ "log",
+ "tokio",
 ]
 
 [[package]]
@@ -5919,6 +5936,7 @@ dependencies = [
  "databend-common-catalog",
  "databend-common-cloud-control",
  "databend-common-column",
+ "databend-common-component",
  "databend-common-compress",
  "databend-common-config",
  "databend-common-exception",

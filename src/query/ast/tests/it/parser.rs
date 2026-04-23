@@ -139,6 +139,8 @@ fn test_statement() {
         r#"create table a (c1 decimal(38), c2 int) partition by (c1, c2) PROPERTIES ("read.split.target-size"='134217728', "read.split.metadata-target-size"='33554432');"#,
         r#"create or replace table a (c decimal(38))"#,
         r#"create or replace table a (c int(10) unsigned)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"create table issue_11031 (range int, samples int)"#,
         r#"create table cluster_tbl (a int, b int) cluster by (a, b)"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
@@ -261,6 +263,10 @@ fn test_statement() {
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true"#,
         r#"DROP database if exists db1;"#,
         r#"with c as (select 1 as a) delete /*+ set_var(max_threads=1) */ from test_db.test tt where tt.a = 1;"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"insert into issue_11031 (radio, range, samples) values ('lte', 10, 1)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"select range from issue_11031;"#,
         r#"select distinct a, count(*) from t where a = 1 and b - 1 < a group by a having a = 1;"#,
         r#"select * from t4;"#,
         r#"select top 2 * from t4;"#,
@@ -1344,6 +1350,34 @@ fn test_file_format_trim_space_option() {
 }
 
 #[test]
+fn test_stage_local_filesystem_uri_errors() {
+    let cases = [
+        (
+            "create stage mystage url='/test/load/'",
+            "local filesystem paths must use fs:///path/ instead of /path/",
+        ),
+        (
+            "create stage mystage url='file:///tmp/00_0002/'",
+            "local filesystem paths must use fs:///path/ instead of file:///path/",
+        ),
+        (
+            "create stage mystage url='s3://bucket:abc/path/'",
+            "invalid uri invalid port number",
+        ),
+    ];
+
+    for (sql, expected) in cases {
+        let tokens = tokenize_sql(sql).unwrap();
+        let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
+        assert!(
+            err.1.contains(expected),
+            "expected error to contain `{expected}`, got:\n{}",
+            err.1
+        );
+    }
+}
+
+#[test]
 fn test_raw_insert_stmt() {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("raw-insert.txt").unwrap();
@@ -1372,6 +1406,7 @@ fn test_query() {
         r#"select * from customer with consume as s"#,
         r#"select * from t12_0004 at (TIMESTAMP => 'xxxx') as t"#,
         r#"select count(t.c) from t12_0004 at (snapshot => 'xxxx') as t"#,
+        r#"select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))"#,
         r#"select * from customer inner join orders"#,
         r#"select * from customer cross join orders"#,
         r#"select * from customer inner join orders on (a = b)"#,
@@ -1616,6 +1651,8 @@ fn test_expr() {
         r#"SUM(salary) OVER (PARTITION BY department ORDER BY salary DESC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)"#,
         r#"AVG(salary) OVER (PARTITION BY department ORDER BY hire_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date RANGE BETWEEN INTERVAL '7' DAY PRECEDING AND CURRENT ROW)"#,
+        // https://github.com/databendlabs/databend/issues/11031
+        r#"COUNT() OVER (RANGE UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS CURRENT ROW)"#,
         r#"COUNT() OVER (ORDER BY hire_date ROWS 3 PRECEDING)"#,

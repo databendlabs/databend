@@ -208,6 +208,18 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3",
         },
+        SqlTestCase {
+            name: "table_function_named_arguments_require_fat_arrow",
+            description: "A table function named argument written with '=' should produce a direct hint to use '=>'.",
+            setup_sqls: &[],
+            sql: "SELECT * FROM infer_schema(location = '@data/parquet/int96.parquet')",
+        },
+        SqlTestCase {
+            name: "obfuscate_named_arguments_require_fat_arrow",
+            description: "OBFUSCATE should surface the same '=>' hint when a named argument is written with '='.",
+            setup_sqls: &["CREATE TABLE t1(a String)"],
+            sql: "SELECT * FROM obfuscate(t1, seed = 20)",
+        },
     ];
 
     run_binder_cases("binder_clauses.txt", &cases).await

@@ -95,7 +95,7 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
             for opt in opts {
                 copy_stmt
                     .apply_option(opt)
-                    .map_err(|e| nom::Err::Failure(ErrorKind::Other(e)))?;
+                    .map_err(|e| nom::Err::Failure(ErrorKind::other(e)))?;
             }
             Ok(Statement::CopyIntoTable(copy_stmt))
         },

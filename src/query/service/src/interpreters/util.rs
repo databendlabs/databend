@@ -39,7 +39,7 @@ use itertools::Itertools;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::interpreter::auto_commit_if_not_allowed_in_transaction;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
 
 pub fn check_system_history(
     catalog: &Arc<dyn Catalog>,

@@ -60,7 +60,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                 {
                     Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("expected more tokens for expression"),
+                        ErrorKind::other("expected more tokens for expression"),
                     )))
                 }
                 _ => Ok((rest, elem)),
@@ -1822,7 +1822,7 @@ pub fn unary_op(i: Input) -> IResult<UnaryOperator> {
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other("expecting `NOT`, '!', '|/', '~', '||/', '@', or more ..."),
+        ErrorKind::other("expecting `NOT`, '!', '|/', '~', '||/', '@', or more ..."),
     )))
 }
 
@@ -1889,7 +1889,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other(
+        ErrorKind::other(
             "expecting `IS`, `IN`, `LIKE`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<=>`, `<+>`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, or more ...",
         ),
     )))
@@ -1915,7 +1915,7 @@ pub fn json_op(i: Input) -> IResult<JsonOperator> {
     }
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other(
+        ErrorKind::other(
             "expecting `->`, '->>', '#>', '#>>', '?', '?|', '?&', '@>', '<@', '@?', '@@', '#-', or more ...",
         ),
     )))
@@ -1961,7 +1961,7 @@ pub fn literal(i: Input) -> IResult<Literal> {
 
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other(
+        ErrorKind::other(
             "expecting `<LiteralString>`, '<LiteralCodeString>', '<LiteralInteger>', '<LiteralFloat>', 'TRUE', 'FALSE', or more ...",
         ),
     )))
@@ -2029,7 +2029,7 @@ pub fn literal_string(i: Input) -> IResult<String> {
             let quote::QuotedString(s, quote) = token
                 .text()
                 .parse()
-                .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid escape or unicode")))?;
+                .map_err(|_| nom::Err::Failure(ErrorKind::other("invalid escape or unicode")))?;
 
             if !i.dialect.is_string_quote(quote) {
                 return Err(nom::Err::Error(ErrorKind::ExpectToken(LiteralString)));
@@ -2057,7 +2057,7 @@ pub fn at_string(i: Input) -> IResult<String> {
         let AtString(s) = token
             .text()
             .parse()
-            .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid at string")))?;
+            .map_err(|_| nom::Err::Failure(ErrorKind::other("invalid at string")))?;
         Ok(s)
     })(i)
 }
@@ -2134,10 +2134,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
-                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("precision is too large")))?,
+                    .map_err(|_| nom::Err::Failure(ErrorKind::other("precision is too large")))?,
                 scale: scale
                     .try_into()
-                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("scale is too large")))?,
+                    .map_err(|_| nom::Err::Failure(ErrorKind::other("scale is too large")))?,
             })
         },
     );
@@ -2253,7 +2253,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             Some(true) => Ok(ty.wrap_nullable()),
             Some(false) => {
                 if matches!(ty, TypeName::Nullable(_)) {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "ambiguous NOT NULL constraint",
                     )))
                 } else {
@@ -2684,7 +2684,7 @@ pub fn function_call(i: Input) -> IResult<ExprElement> {
                         args,
                     })
                 }
-                _ => Err(nom::Err::Error(ErrorKind::Other(
+                _ => Err(nom::Err::Error(ErrorKind::other(
                     "Unsupported function format",
                 ))),
             }

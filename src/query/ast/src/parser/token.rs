@@ -1963,7 +1963,6 @@ impl TokenKind {
             | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
-            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
@@ -1996,10 +1995,24 @@ impl TokenKind {
     }
 }
 
-pub fn all_reserved_keywords() -> Vec<String> {
-    let mut result = Vec::new();
-    for token in TokenKind::iter() {
-        result.push(format!("{:?}", token));
+pub fn all_reserved_keywords() -> impl Iterator<Item = String> {
+    TokenKind::iter()
+        .filter(TokenKind::is_keyword)
+        .filter(|token| token.is_reserved_ident(false) || token.is_reserved_function_name())
+        .map(|token| format!("{:?}", token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_reserved_keywords;
+
+    #[test]
+    fn test_all_reserved_keywords_only_returns_reserved_keywords() {
+        let keywords = all_reserved_keywords().collect::<Vec<_>>();
+
+        assert!(keywords.contains(&"SELECT".to_string()));
+        assert!(keywords.contains(&"TABLE".to_string()));
+        assert!(!keywords.contains(&"DATABASE".to_string()));
+        assert!(!keywords.contains(&"Whitespace".to_string()));
     }
-    result
 }

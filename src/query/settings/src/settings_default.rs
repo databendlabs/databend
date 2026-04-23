@@ -1626,8 +1626,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_aggregate_spill_level", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into `num_cpu` smaller parts to ensure it fits in memory.",
+                    value: UserSettingValue::UInt64(3),
+                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into 4 smaller parts to ensure it fits in memory.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),

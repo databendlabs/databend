@@ -56,6 +56,11 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextResultCache;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTelemetry;
 use crate::sql::BindContext;
 use crate::sql::optimizer::ir::SExpr;
 
@@ -176,6 +181,7 @@ impl SelectInterpreter {
     fn add_result_cache(
         &self,
         key: &str,
+        sql: String,
         schema: TableSchemaRef,
         pipeline: &mut Pipeline,
         kv_store: Arc<MetaStore>,
@@ -229,6 +235,7 @@ impl SelectInterpreter {
             WriteResultCacheSink::try_create(
                 self.ctx.clone(),
                 key,
+                sql,
                 schema,
                 sink_inputs.clone(),
                 kv_store,
@@ -304,10 +311,10 @@ impl Interpreter for SelectInterpreter {
         info!("Query physical plan:\n{}", query_plan);
 
         if self.ctx.get_settings().get_enable_query_result_cache()?
-            && self.ctx.get_cacheable()
+            && self.ctx.result_cache_state().cacheable()
             && self.formatted_ast.is_some()
         {
-            let extras = self.ctx.get_cache_key_extras();
+            let extras = self.ctx.result_cache_state().cache_key_extras();
             let key_source = if extras.is_empty() {
                 self.formatted_ast.as_ref().unwrap().clone()
             } else {
@@ -344,6 +351,7 @@ impl Interpreter for SelectInterpreter {
             let cache_reader = ResultCacheReader::create(
                 self.ctx.clone(),
                 &key,
+                self.formatted_ast.as_ref().unwrap(),
                 kv_store.clone(),
                 self.ctx
                     .get_settings()
@@ -363,7 +371,13 @@ impl Interpreter for SelectInterpreter {
                     let mut build_res = self.build_pipeline(physical_plan).await?;
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
                     let schema = infer_table_schema(&self.bind_context.output_schema())?;
-                    self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
+                    self.add_result_cache(
+                        &key,
+                        self.formatted_ast.as_ref().unwrap().clone(),
+                        schema,
+                        &mut build_res.main_pipeline,
+                        kv_store,
+                    )?;
                     return Ok(build_res);
                 }
                 Err(e) => {

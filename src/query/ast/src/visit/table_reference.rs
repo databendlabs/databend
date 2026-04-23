@@ -261,8 +261,9 @@ impl Walk for TimeTravelPoint {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         match self {
-            TimeTravelPoint::Snapshot(_) => {}
-            TimeTravelPoint::Timestamp(expr) | TimeTravelPoint::Offset(expr) => {
+            TimeTravelPoint::Snapshot(expr)
+            | TimeTravelPoint::Timestamp(expr)
+            | TimeTravelPoint::Offset(expr) => {
                 try_walk!(expr.walk(visitor));
             }
             TimeTravelPoint::Stream {
@@ -293,8 +294,9 @@ impl WalkMut for TimeTravelPoint {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         match self {
-            TimeTravelPoint::Snapshot(_) => {}
-            TimeTravelPoint::Timestamp(expr) | TimeTravelPoint::Offset(expr) => {
+            TimeTravelPoint::Snapshot(expr)
+            | TimeTravelPoint::Timestamp(expr)
+            | TimeTravelPoint::Offset(expr) => {
                 try_walk!(expr.walk_mut(visitor));
             }
             TimeTravelPoint::Stream {

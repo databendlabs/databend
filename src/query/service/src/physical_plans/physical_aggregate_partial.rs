@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 #[allow(unused_imports)]
 use databend_common_expression::DataBlock;
@@ -50,6 +49,7 @@ use crate::pipelines::processors::transforms::aggregator::PartialSingleStateAggr
 use crate::pipelines::processors::transforms::aggregator::SharedPartitionStream;
 use crate::pipelines::processors::transforms::aggregator::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::aggregator::TransformPartialAggregate;
+use crate::sessions::TableContextCluster;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct AggregatePartial {
@@ -238,7 +238,7 @@ impl IPhysicalPlan for AggregatePartial {
             };
             let shared_partition_streams = SharedPartitionStream::new(
                 builder.main_pipeline.output_len(),
-                max_block_rows,
+                0,
                 max_block_bytes,
                 bucket_num,
             );

@@ -22,12 +22,13 @@ use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::plans::CreateCatalogPlan;
-use databend_common_storages_fuse::TableContext;
 use log::debug;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSession;
 
 #[derive(Debug)]
 pub struct CreateCatalogInterpreter {

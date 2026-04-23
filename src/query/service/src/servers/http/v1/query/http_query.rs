@@ -25,6 +25,8 @@ use databend_common_base::base::short_sql;
 use databend_common_base::runtime::CatchUnwindFuture;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_base::runtime::MemStat;
+use databend_common_base::runtime::ThreadTracker;
+use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::table_context::StageAttachment;
 use databend_common_config::GlobalConfig;
@@ -70,9 +72,10 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
-use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
+use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
+use crate::sessions::TableContextCluster;
 
 fn default_as_true() -> bool {
     true
@@ -499,7 +502,8 @@ pub struct StageAttachmentConf {
 pub struct ResponseState {
     pub has_result_set: Option<bool>,
     pub schema: DataSchemaRef,
-    pub result_format_settings: Option<ResultFormatSettings>,
+    pub response_settings: Option<QueryResponseSettings>,
+    pub arrow_result_version: Option<u64>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -846,48 +850,55 @@ impl HttpQuery {
         let query_session = query_context.get_current_session();
 
         let query_state = self.execute_state.clone();
+        let mut tracking_payload = ThreadTracker::new_tracking_payload();
+        tracking_payload.warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
 
         GlobalQueryRuntime::instance().runtime().spawn(
-            async move {
-                let block_sender_closer = block_sender.closer();
-                if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
-                    query_state.clone(),
-                    sql,
-                    params,
-                    query_session,
-                    query_context.clone(),
-                    arrow_result_version,
-                    block_sender,
-                ))
-                .await
-                .with_context(|| "failed to start query")
-                .flatten()
-                {
-                    crate::interpreters::hook_clear_m_cte_temp_table(&query_context)
-                        .inspect_err(|e| warn!("clear_m_cte_temp_table fail: {e}"))
-                        .ok();
-                    let state = ExecuteStopped {
-                        stats: Progresses::default(),
-                        schema: Default::default(),
-                        result_format_settings: None,
-                        has_result_set: None,
-                        reason: Err(e.clone()),
-                        session_state: ExecutorSessionState::new(
-                            query_context.get_current_session(),
-                        ),
-                        query_duration_ms: query_context.get_query_duration_ms(),
-                        affect: query_context.get_affect(),
-                        warnings: query_context.pop_warnings(),
-                    };
+            tracking_payload.tracking(
+                async move {
+                    let block_sender_closer = block_sender.closer();
+                    if let Err(e) = CatchUnwindFuture::create(ExecuteState::try_start_query(
+                        query_state.clone(),
+                        sql,
+                        params,
+                        query_session,
+                        query_context.clone(),
+                        arrow_result_version,
+                        block_sender,
+                    ))
+                    .await
+                    .with_context(|| "failed to start query")
+                    .flatten()
+                    {
+                        crate::interpreters::hook_clear_m_cte_temp_table(&query_context)
+                            .inspect_err(|e| warn!("clear_m_cte_temp_table fail: {e}"))
+                            .ok();
+                        let state = ExecuteStopped {
+                            stats: Progresses::default(),
+                            schema: Default::default(),
+                            response_settings: None,
+                            has_result_set: None,
+                            reason: Err(e.clone()),
+                            session_state: ExecutorSessionState::new(
+                                query_context.get_current_session(),
+                            ),
+                            query_duration_ms: query_context.get_query_duration_ms(),
+                            affect: query_context.get_affect(),
+                            warnings: query_context.pop_warnings(),
+                        };
 
-                    error!("Query state changed to Stopped, failed to start: {:?}", e);
-                    Executor::start_to_stop(&query_state, ExecuteState::Stopped(Box::new(state)));
-                    block_sender_closer.abort();
+                        error!("Query state changed to Stopped, failed to start: {:?}", e);
+                        Executor::start_to_stop(
+                            &query_state,
+                            ExecuteState::Stopped(Box::new(state)),
+                        );
+                        block_sender_closer.abort();
+                    }
                 }
-            }
-            .in_span(fastrace::Span::enter_with_local_parent(
-                "HttpQuery::start_query",
-            )),
+                .in_span(fastrace::Span::enter_with_local_parent(
+                    "HttpQuery::start_query",
+                )),
+            ),
         );
 
         Ok(())

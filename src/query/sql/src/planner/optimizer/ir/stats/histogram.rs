@@ -51,6 +51,7 @@ impl HistogramBuilder {
                 Ok(Histogram {
                     buckets: vec![],
                     accuracy: false,
+                    avg_spacing: None,
                 })
             };
         }
@@ -69,6 +70,19 @@ impl HistogramBuilder {
             }
         };
 
+        // Compute avg_spacing before moving min/max into UniformSampleSet.
+        // avg_spacing = (max - min) / num_buckets (bucket width); used later to detect range distortion.
+        let avg_spacing = if let (Ok(min_f), Ok(max_f)) = (min.as_double(), max.as_double()) {
+            let range = max_f - min_f;
+            if range > 0.0 && num_buckets > 0 {
+                Some(range / num_buckets as f64)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Adjust number of buckets if needed
         let adjusted_num_buckets = if num_buckets > ndv as usize {
             ndv as usize
@@ -83,6 +97,7 @@ impl HistogramBuilder {
         Ok(Histogram {
             buckets,
             accuracy: false,
+            avg_spacing,
         })
     }
 

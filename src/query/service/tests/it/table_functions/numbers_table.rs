@@ -16,7 +16,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_expression::Scalar;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextPartitionStats;
 use databend_query::stream::ReadDataBlockStream;
 use databend_query::table_functions::NumbersPartInfo;
 use databend_query::table_functions::NumbersTable;

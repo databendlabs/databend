@@ -19,7 +19,6 @@ use std::sync::PoisonError;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockPartitionStream;
 use databend_common_expression::DataBlock;
@@ -39,6 +38,7 @@ use crate::pipelines::processors::transforms::new_hash_join::grace::grace_state:
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
 use crate::spillers::SpillTarget;
@@ -303,7 +303,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         )?;
 
         for hash in hashes.iter_mut() {
-            *hash = ((*hash << self.shift_bits) >> 60) & 0b1111;
+            *hash = Self::get_partition_id(*hash, self.shift_bits);
         }
 
         Ok(self.build_partition_stream.partition(hashes, data, true))
@@ -324,7 +324,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         )?;
 
         for hash in hashes.iter_mut() {
-            *hash = ((*hash << self.shift_bits) >> 60) & 0b1111;
+            *hash = Self::get_partition_id(*hash, self.shift_bits);
         }
 
         Ok(self.probe_partition_stream.partition(hashes, data, true))
@@ -384,6 +384,20 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         }
 
         Ok(())
+    }
+
+    #[inline(always)]
+    #[cfg(target_feature = "sse4.2")]
+    fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
+        // On SSE4.2, _mm_crc32_u64 only sets the low 32 bits; high 32 bits are always 0.
+        // Extract partition bits from the low 32 bits to avoid all rows landing in partition 0.
+        (hash << shift_bits >> 28) & 0b1111
+    }
+
+    #[inline(always)]
+    #[cfg(not(target_feature = "sse4.2"))]
+    fn get_partition_id(hash: u64, shift_bits: usize) -> u64 {
+        (hash << shift_bits >> 60) & 0b1111
     }
 }
 

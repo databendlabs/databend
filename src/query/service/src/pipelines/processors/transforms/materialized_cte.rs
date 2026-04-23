@@ -26,7 +26,8 @@ use databend_common_pipeline::sinks::AsyncSink;
 use databend_common_pipeline::sinks::AsyncSinker;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
-use databend_common_storages_fuse::TableContext;
+
+use crate::sessions::TableContext;
 
 pub struct MaterializedCteSink {
     senders: Vec<Sender<DataBlock>>,
