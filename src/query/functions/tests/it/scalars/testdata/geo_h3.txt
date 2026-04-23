@@ -794,7 +794,11 @@ error:
   |              ^^^^^^^^^^^^^^^^^ invalid digit found in string while evaluating function `to_uint64('8d11aa6a38826ff')` in expr `CAST('8d11aa6a38826ff' AS UInt64)`
 
 
-hint: no function matches signature `h3_to_string(String)`, you might need to add explicit type casts. Databend tried implicit casts for signature `h3_to_string(UInt64)`, during run expr: `h3_to_string(CAST('8d11aa6a38826ff' AS UInt64))`
+hint: no function matches signature `h3_to_string(String)`, you might need to add explicit type casts.
+
+candidate functions:
+  h3_to_string(UInt64) :: String
+  h3_to_string(UInt64 NULL) :: String NULL, during run expr: `h3_to_string(CAST('8d11aa6a38826ff' AS UInt64))`
 
 
 

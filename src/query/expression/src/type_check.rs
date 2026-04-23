@@ -41,6 +41,8 @@ use crate::types::decimal::DecimalSize;
 use crate::types::i256;
 use crate::visit_expr;
 
+const MAX_FUNCTION_MISMATCH_HINT_CANDIDATES: usize = 10;
+
 #[recursive::recursive]
 pub fn check<Index: ColumnIndex>(
     expr: &RawExpr<Index>,
@@ -454,8 +456,7 @@ fn format_no_matching_function_signature<Index: ColumnIndex>(
 pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
     name: &str,
     params: &[Scalar],
-    original_args: &[Expr<Index>],
-    resolved_args: &[Expr<Index>],
+    args: &[Expr<Index>],
     fn_registry: &FunctionRegistry,
 ) -> Option<String> {
     let name = fn_registry
@@ -464,7 +465,7 @@ pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
         .map(|name| name.as_str())
         .unwrap_or(name);
 
-    let candidates = fn_registry.search_candidates(name, params, original_args);
+    let candidates = fn_registry.search_candidates(name, params, args);
     if candidates.is_empty() {
         return None;
     }
@@ -473,7 +474,7 @@ pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
     let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
     if candidates.iter().any(|(_, func)| {
         let Ok((checked_args, _, _)) = try_check_function(
-            original_args,
+            args,
             &func.signature,
             auto_cast_rules,
             &dynamic_cast_rules,
@@ -482,20 +483,30 @@ pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
             return false;
         };
 
-        checked_args == original_args
+        checked_args == args
     }) {
         return None;
     }
 
-    let mut msg = format_no_matching_function_signature(name, params, original_args);
-    let original_sig = format_function_signature(name, params, original_args);
-    let resolved_sig = format_function_signature(name, params, resolved_args);
-    if original_sig != resolved_sig {
-        write!(
-            &mut msg,
-            " Databend tried implicit casts for signature `{resolved_sig}`"
-        )
-        .unwrap();
+    let mut msg = format_no_matching_function_signature(name, params, args);
+
+    let (mut candidates_sig, nullable_candidates_sig): (Vec<_>, Vec<_>) = candidates
+        .iter()
+        .map(|(_, func)| func.signature.to_string())
+        .unique()
+        .partition(|sig| !sig.contains("NULL"));
+    candidates_sig.extend(nullable_candidates_sig);
+
+    let candidates_len = candidates_sig.len();
+    let take_len = candidates_len.min(MAX_FUNCTION_MISMATCH_HINT_CANDIDATES);
+    let candidates_sig = candidates_sig
+        .into_iter()
+        .take(take_len)
+        .map(|sig| format!("  {sig}"))
+        .join("\n");
+    write!(&mut msg, "\n\ncandidate functions:\n{candidates_sig}").unwrap();
+    if candidates_len > take_len {
+        write!(&mut msg, "\n... and {} more", candidates_len - take_len).unwrap();
     }
 
     Some(msg)
