@@ -130,7 +130,8 @@ impl TryFrom<&Field> for TableField {
 
                 ArrowDataType::FixedSizeBinary(_)
                 | ArrowDataType::Binary
-                | ArrowDataType::LargeBinary => TableDataType::Binary,
+                | ArrowDataType::LargeBinary
+                | ArrowDataType::BinaryView => TableDataType::Binary,
                 ArrowDataType::Utf8 | ArrowDataType::LargeUtf8 | ArrowDataType::Utf8View => {
                     TableDataType::String
                 }
@@ -153,16 +154,14 @@ impl TryFrom<&Field> for TableField {
                     )?))
                 }
                 ArrowDataType::Timestamp(_, _) => TableDataType::Timestamp,
-                ArrowDataType::Date32 => TableDataType::Date,
-                ArrowDataType::Date64 => TableDataType::Date,
-                ArrowDataType::List(field) => {
+                ArrowDataType::Date32 | ArrowDataType::Date64 => TableDataType::Date,
+                ArrowDataType::List(field)
+                | ArrowDataType::LargeList(field)
+                | ArrowDataType::FixedSizeList(field, _) => {
                     let inner_type = TableField::try_from(field.as_ref())?;
                     TableDataType::Array(Box::new(inner_type.data_type))
                 }
-                ArrowDataType::LargeList(field) => {
-                    let inner_type = TableField::try_from(field.as_ref())?;
-                    TableDataType::Array(Box::new(inner_type.data_type))
-                }
+
                 ArrowDataType::Map(field, _) => {
                     if let ArrowDataType::Struct(fields) = field.data_type() {
                         let fields_name: Vec<String> =
