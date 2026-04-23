@@ -69,6 +69,35 @@ call system$stream_status('default.test_stream_status.s')
 ----
 0
 
+## Test SYSTEM$STREAM_HAS_DATA as scalar function (Snowflake-compatible)
+
+query B
+select system$stream_has_data('s')
+----
+0
+
+query B
+select stream_has_data('s')
+----
+0
+
+query B
+select system$stream_has_data('test_stream_status.s')
+----
+0
+
+query B
+select system$stream_has_data('default.test_stream_status.s')
+----
+0
+
+## Test in boolean expression context (simulates task WHEN condition)
+
+query B
+select system$stream_has_data('s') OR system$stream_has_data('test_stream_status.s')
+----
+0
+
 statement ok
 insert into t values(2)
 
@@ -81,6 +110,31 @@ query B
 call system$stream_status('s')
 ----
 1
+
+query B
+select system$stream_has_data('s')
+----
+1
+
+query B
+select stream_has_data('s')
+----
+1
+
+## Verify boolean expression returns true when stream has data
+
+query B
+select system$stream_has_data('s') OR system$stream_has_data('test_stream_status.s')
+----
+1
+
+## Error cases
+
+statement error 1025
+select system$stream_has_data('not_exist')
+
+statement error 1025
+select stream_has_data('not_exist')
 
 statement ok
 DROP DATABASE IF EXISTS test_stream_status

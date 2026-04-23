@@ -4465,6 +4465,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("greatest_ignore_nulls"),
             Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
+            Ascii::new("system$stream_has_data"),
             Ascii::new("getvariable"),
             Ascii::new("equal_null"),
             Ascii::new("hex_decode_string"),
@@ -5165,6 +5166,14 @@ impl<'a> TypeChecker<'a> {
                     target_type: TypeName::String,
                     pg_style: false,
                 }))
+            }
+            ("stream_has_data" | "system$stream_has_data", &[arg]) => {
+                // Rewrite to scalar subquery: (SELECT has_data FROM stream_status({arg}))
+                // Stream name validation is handled by the stream_status table function.
+                let sql = format!("(SELECT has_data FROM stream_status({arg}))");
+                let sql_tokens = tokenize_sql(&sql).ok()?;
+                let expr = parse_expr(&sql_tokens, self.dialect).ok()?;
+                Some(self.resolve(&expr))
             }
             _ => None,
         }
