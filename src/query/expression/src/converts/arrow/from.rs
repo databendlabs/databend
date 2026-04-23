@@ -161,7 +161,6 @@ impl TryFrom<&Field> for TableField {
                     let inner_type = TableField::try_from(field.as_ref())?;
                     TableDataType::Array(Box::new(inner_type.data_type))
                 }
-
                 ArrowDataType::Map(field, _) => {
                     if let ArrowDataType::Struct(fields) = field.data_type() {
                         let fields_name: Vec<String> =
