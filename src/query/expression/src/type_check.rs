@@ -434,7 +434,16 @@ fn format_function_signature<Index: ColumnIndex>(
     let args = args
         .iter()
         .map(|arg| arg.data_type().to_string())
-        .join(", ");
+        .collect::<Vec<_>>();
+    format_function_signature_from_arg_types(name, params, &args)
+}
+
+fn format_function_signature_from_arg_types(
+    name: &str,
+    params: &[Scalar],
+    args: &[String],
+) -> String {
+    let args = args.iter().join(", ");
     if params.is_empty() {
         format!("{name}({args})")
     } else {
@@ -472,27 +481,41 @@ pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
 
     let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
     let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
-    if candidates.iter().any(|(_, func)| {
-        let Ok((checked_args, _, _)) = try_check_function(
+    let mut concrete_candidates_sig = Vec::new();
+    for (_, func) in &candidates {
+        let Ok((checked_args, return_type, _)) = try_check_function(
             args,
             &func.signature,
             auto_cast_rules,
             &dynamic_cast_rules,
             fn_registry,
         ) else {
-            return false;
+            continue;
         };
 
-        checked_args == args
-    }) {
-        return None;
+        if checked_args == args {
+            return None;
+        }
+
+        concrete_candidates_sig.push(format!(
+            "{} :: {}",
+            format_function_signature(name, params, &checked_args),
+            return_type
+        ));
     }
 
     let mut msg = format_no_matching_function_signature(name, params, args);
 
-    let (mut candidates_sig, nullable_candidates_sig): (Vec<_>, Vec<_>) = candidates
-        .iter()
-        .map(|(_, func)| func.signature.to_string())
+    let candidates_sig = if concrete_candidates_sig.is_empty() {
+        candidates
+            .iter()
+            .map(|(_, func)| func.signature.to_string())
+            .collect()
+    } else {
+        concrete_candidates_sig
+    };
+    let (mut candidates_sig, nullable_candidates_sig): (Vec<_>, Vec<_>) = candidates_sig
+        .into_iter()
         .unique()
         .partition(|sig| !sig.contains("NULL"));
     candidates_sig.extend(nullable_candidates_sig);

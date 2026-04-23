@@ -17,7 +17,7 @@ error:
 hint: no function matches signature `array(String, UInt8)`, you might need to add explicit type casts.
 
 candidate functions:
-  array(T0, T0) :: Array(T0), during run expr: `array(CAST('a' AS Decimal(38, 5)), CAST(1 AS Decimal(38, 5)))`
+  array(Decimal(38, 5), Decimal(38, 5)) :: Array(Decimal(38, 5)), during run expr: `array(CAST('a' AS Decimal(38, 5)), CAST(1 AS Decimal(38, 5)))`
 
 
 
@@ -169,17 +169,8 @@ error:
 hint: no function matches signature `get(Array(UInt8), String)`, you might need to add explicit type casts.
 
 candidate functions:
-  get(Variant, String) :: Variant NULL
-  get(Variant NULL, String NULL) :: Variant NULL
-  get(Variant, Int64) :: Variant NULL
-  get(Variant NULL, Int64 NULL) :: Variant NULL
-  get(Array(Nothing) NULL, UInt64 NULL) :: NULL
-  get(Array(NULL) NULL, UInt64 NULL) :: NULL
-  get(Array(T0 NULL), UInt64) :: T0 NULL
-  get(Array(T0 NULL) NULL, UInt64 NULL) :: T0 NULL
-  get(Map(Nothing) NULL, T0 NULL) :: NULL
-  get(Map(T0, NULL) NULL, T0 NULL) :: NULL
-... and 2 more, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
+  get(Array(UInt8 NULL), UInt64) :: UInt8 NULL
+  get(Array(UInt8 NULL) NULL, UInt64 NULL) :: UInt8 NULL, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
 
 
 
@@ -833,10 +824,8 @@ error:
 hint: no function matches signature `array_concat(Array(UInt8), Array(String NULL))`, you might need to add explicit type casts.
 
 candidate functions:
-  array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
-  array_concat(Array(T0), Array(T0)) :: Array(T0)
-  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
-  array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Decimal(38, 5) NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL)))`
+  array_concat(Array(Decimal(38, 5) NULL), Array(Decimal(38, 5) NULL)) :: Array(Decimal(38, 5) NULL)
+  array_concat(Array(Decimal(38, 5) NULL) NULL, Array(Decimal(38, 5) NULL) NULL) :: Array(Decimal(38, 5) NULL) NULL, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Decimal(38, 5) NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL)))`
 
 
 
@@ -1095,17 +1084,14 @@ error:
 hint: no function matches signature `array(UInt8, UInt8, UInt8, String)`, you might need to add explicit type casts.
 
 candidate functions:
-  array(T0, T0, T0, T0) :: Array(T0)
+  array(Decimal(38, 5), Decimal(38, 5), Decimal(38, 5), Decimal(38, 5)) :: Array(Decimal(38, 5))
 
 
 hint: no function matches signature `array_indexof(Array(Decimal(38, 5)), String)`, you might need to add explicit type casts.
 
 candidate functions:
-  array_indexof(Array(T0), T0) :: UInt64
-  array_indexof(NULL, T0) :: NULL
-  array_indexof(Variant, T0) :: UInt64 NULL
-  array_indexof(Variant NULL, T0 NULL) :: UInt64 NULL
-  array_indexof(Array(T0) NULL, T0 NULL) :: UInt64 NULL, during run expr: `array_indexof(array(CAST(1 AS Decimal(38, 5)), CAST(2 AS Decimal(38, 5)), CAST(3 AS Decimal(38, 5)), CAST('s' AS Decimal(38, 5))), CAST('s' AS Decimal(38, 5)))`
+  array_indexof(Array(Decimal(38, 5)), Decimal(38, 5)) :: UInt64
+  array_indexof(Array(Decimal(38, 5)) NULL, Decimal(38, 5) NULL) :: UInt64 NULL, during run expr: `array_indexof(array(CAST(1 AS Decimal(38, 5)), CAST(2 AS Decimal(38, 5)), CAST(3 AS Decimal(38, 5)), CAST('s' AS Decimal(38, 5))), CAST('s' AS Decimal(38, 5)))`
 
 
 
