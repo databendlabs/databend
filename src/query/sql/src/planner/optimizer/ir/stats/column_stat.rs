@@ -15,7 +15,8 @@
 use std::collections::HashMap;
 
 use databend_common_expression::Domain;
-use databend_common_expression::function_stat::ArgStat;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::BorrowedDistribution;
 use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -56,7 +57,11 @@ impl ColumnStat {
             domain,
             ndv: self.ndv,
             null_count: self.null_count,
-            histogram: self.histogram.as_ref(),
+            distribution: self
+                .histogram
+                .as_ref()
+                .map(BorrowedDistribution::Histogram)
+                .unwrap_or(BorrowedDistribution::Unknown),
         })
     }
 

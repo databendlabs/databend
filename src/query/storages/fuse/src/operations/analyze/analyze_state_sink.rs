@@ -119,7 +119,7 @@ struct SinkAnalyzeState {
     row_count: u64,
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
-    histograms: HashMap<ColumnId, Histogram>,
+    histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     step: AnalyzeStep,
 }
 
@@ -184,12 +184,16 @@ impl SinkAnalyzeState {
                     .as_u_int64()?
             };
 
-            let bucket =
-                HistogramBucket::new(lower_bound, upper_bound, count.unwrap() as f64, *ndv as f64);
-            self.histograms
-                .entry(col_id)
-                .and_modify(|histogram| histogram.add_bucket(bucket.clone()))
-                .or_insert(Histogram::new(vec![bucket], true));
+            let count =
+                count.ok_or_else(|| ErrorCode::Internal("Missing histogram bucket count"))?;
+            let bucket = HistogramBucket::try_from_bounds(
+                lower_bound,
+                upper_bound,
+                count as f64,
+                *ndv as f64,
+            )
+            .map_err(ErrorCode::Internal)?;
+            self.histograms.entry(col_id).or_default().push(bucket);
         }
         Ok(())
     }
@@ -221,9 +225,19 @@ impl SinkAnalyzeState {
         });
 
         let table_statistics = if self.ctx.get_settings().get_enable_table_snapshot_stats()? {
+            let histograms = self
+                .histograms
+                .iter()
+                .map(|(column_id, buckets)| {
+                    Ok((
+                        *column_id,
+                        Histogram::try_from_buckets(true, buckets.clone(), None)?,
+                    ))
+                })
+                .collect::<Result<_>>()?;
             let stats = TableSnapshotStatistics::new(
                 self.ndv_states.clone(),
-                self.histograms.clone(),
+                histograms,
                 self.snapshot_id,
                 self.row_count,
             );

@@ -15,9 +15,11 @@
 use std::convert::TryFrom;
 
 use databend_common_statistics::Datum;
-use databend_common_statistics::Histogram;
-pub use databend_common_statistics::Ndv;
 
+pub use super::stat_distribution::ReturnStat;
+pub use super::stat_distribution::StatArgs;
+use super::stat_distribution::StatBinaryArg;
+use super::stat_distribution::StatUnaryArg;
 use crate::Domain;
 use crate::FunctionContext;
 use crate::FunctionDomain;
@@ -80,40 +82,6 @@ impl ScalarFunctionStat for DeriveStat {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ArgStat<'a> {
-    pub domain: Domain,
-    pub ndv: Ndv,
-    pub null_count: u64,
-    pub histogram: Option<&'a Histogram>,
-}
-
-#[derive(Debug, Clone)]
-pub struct StatUnaryArg<'a> {
-    pub cardinality: f64,
-    pub args: &'a [ArgStat<'a>; 1],
-}
-
-#[derive(Debug, Clone)]
-pub struct StatBinaryArg<'a> {
-    pub cardinality: f64,
-    pub args: &'a [ArgStat<'a>; 2],
-}
-
-#[derive(Debug, Clone)]
-pub struct StatArgs<'a> {
-    pub cardinality: f64,
-    pub args: &'a [ArgStat<'a>],
-}
-
-#[derive(Debug)]
-pub struct ReturnStat {
-    pub domain: Domain,
-    pub ndv: Ndv,
-    pub null_count: u64,
-    pub histogram: Option<Histogram>,
-}
-
 impl Scalar {
     pub fn to_datum(self) -> Option<Datum> {
         match self {
@@ -143,6 +111,11 @@ impl Domain {
         max: Datum,
         has_null: bool,
     ) -> Result<Domain, String> {
+        if data_type.has_generic() {
+            return Err(format!(
+                "Statistics conversion requires concrete data type, got {data_type:?}"
+            ));
+        }
         let mut domain = Domain::full(data_type);
         match &mut domain {
             Domain::Number(domain) => match domain {

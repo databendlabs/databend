@@ -13,135 +13,364 @@
 // limitations under the License.
 
 use std::fmt;
-use std::fmt::Debug;
 
 use crate::Datum;
+use crate::F64;
+use crate::JoinEstimation;
+use crate::TypedHistogram;
+use crate::TypedHistogramBucket;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
-/// A histogram is a representation of the distribution of a column.
-///
-/// We are constructing this in an "Equi-height" fashion, which means
-/// every bucket has roughly the same number of rows.
-///
-/// Real-world data distribution is often skewed,
-/// so an equal-height histogram is better than an equal-width histogram,
-/// the former can use multiple buckets to show the skew data, but for the latter,
-/// it is difficult to give the exact frequency of the skew data
-/// when the skew data and other data fall into the same bucket
-///
-/// We choose this approach because so far the histogram is originally
-/// constructed from NDV(number of distinct values) and the total number
-/// of rows instead of maintaining a real histogram for each column,
-/// which brings the assumption that the data is uniformly distributed.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Histogram {
-    pub accuracy: bool,
-    pub buckets: Vec<HistogramBucket>,
-    /// Bucket width: (max - min) / num_buckets.
-    /// Only set when accuracy == false (generated from NDV + min/max).
-    /// Used to detect range distortion caused by outlier values inflating min/max.
-    /// A very large bucket_width means linear interpolation within buckets is unreliable.
-    #[serde(default)]
-    pub avg_spacing: Option<f64>,
+#[derive(Debug, Clone)]
+pub enum Histogram {
+    Int(TypedHistogram<i64>),
+    UInt(TypedHistogram<u64>),
+    Float(TypedHistogram<F64>),
+    Bytes(TypedHistogram<Vec<u8>>),
 }
 
 impl Histogram {
-    pub fn new(buckets: Vec<HistogramBucket>, accuracy: bool) -> Self {
-        Self {
-            accuracy,
-            buckets,
-            avg_spacing: None,
+    pub fn try_from_buckets(
+        accuracy: bool,
+        buckets: Vec<HistogramBucket>,
+        avg_spacing: Option<f64>,
+    ) -> Result<Self, &'static str> {
+        let Some(first_bucket) = buckets.first() else {
+            return Err("histogram must contain at least one bucket");
+        };
+
+        match first_bucket {
+            HistogramBucket::Int(_) => Ok(Self::Int(TypedHistogram {
+                accuracy,
+                buckets: buckets
+                    .into_iter()
+                    .map(|bucket| match bucket {
+                        HistogramBucket::Int(bucket) => Ok(bucket),
+                        _ => Err("histogram bucket types must be consistent"),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                avg_spacing,
+            })),
+            HistogramBucket::UInt(_) => Ok(Self::UInt(TypedHistogram {
+                accuracy,
+                buckets: buckets
+                    .into_iter()
+                    .map(|bucket| match bucket {
+                        HistogramBucket::UInt(bucket) => Ok(bucket),
+                        _ => Err("histogram bucket types must be consistent"),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                avg_spacing,
+            })),
+            HistogramBucket::Float(_) => Ok(Self::Float(TypedHistogram {
+                accuracy,
+                buckets: buckets
+                    .into_iter()
+                    .map(|bucket| match bucket {
+                        HistogramBucket::Float(bucket) => Ok(bucket),
+                        _ => Err("histogram bucket types must be consistent"),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                avg_spacing,
+            })),
+            HistogramBucket::Bytes(_) => Ok(Self::Bytes(TypedHistogram {
+                accuracy,
+                buckets: buckets
+                    .into_iter()
+                    .map(|bucket| match bucket {
+                        HistogramBucket::Bytes(bucket) => Ok(bucket),
+                        _ => Err("histogram bucket types must be consistent"),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?,
+                avg_spacing,
+            })),
         }
     }
 
-    /// Get number of buckets
+    pub fn accuracy(&self) -> bool {
+        match self {
+            Self::Int(histogram) => histogram.accuracy,
+            Self::UInt(histogram) => histogram.accuracy,
+            Self::Float(histogram) => histogram.accuracy,
+            Self::Bytes(histogram) => histogram.accuracy,
+        }
+    }
+
+    pub fn avg_spacing(&self) -> Option<f64> {
+        match self {
+            Self::Int(histogram) => histogram.avg_spacing,
+            Self::UInt(histogram) => histogram.avg_spacing,
+            Self::Float(histogram) => histogram.avg_spacing,
+            Self::Bytes(histogram) => histogram.avg_spacing,
+        }
+    }
+
     pub fn num_buckets(&self) -> usize {
-        self.buckets.len()
+        match self {
+            Self::Int(histogram) => histogram.num_buckets(),
+            Self::UInt(histogram) => histogram.num_buckets(),
+            Self::Float(histogram) => histogram.num_buckets(),
+            Self::Bytes(histogram) => histogram.num_buckets(),
+        }
     }
 
-    /// Get number of values
     pub fn num_values(&self) -> f64 {
-        self.buckets
-            .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_values())
+        match self {
+            Self::Int(histogram) => histogram.num_values(),
+            Self::UInt(histogram) => histogram.num_values(),
+            Self::Float(histogram) => histogram.num_values(),
+            Self::Bytes(histogram) => histogram.num_values(),
+        }
     }
 
-    /// Get number of distinct values
     pub fn num_distinct_values(&self) -> f64 {
-        self.buckets
-            .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_distinct())
+        match self {
+            Self::Int(histogram) => histogram.num_distinct_values(),
+            Self::UInt(histogram) => histogram.num_distinct_values(),
+            Self::Float(histogram) => histogram.num_distinct_values(),
+            Self::Bytes(histogram) => histogram.num_distinct_values(),
+        }
     }
 
-    /// Get iterator of buckets
-    pub fn buckets_iter(&self) -> impl DoubleEndedIterator<Item = &HistogramBucket> {
-        self.buckets.iter()
+    pub fn bucket_iter(&self) -> HistogramBucketIter<'_> {
+        match self {
+            Self::Int(histogram) => HistogramBucketIter::Int(histogram.buckets_iter()),
+            Self::UInt(histogram) => HistogramBucketIter::UInt(histogram.buckets_iter()),
+            Self::Float(histogram) => HistogramBucketIter::Float(histogram.buckets_iter()),
+            Self::Bytes(histogram) => HistogramBucketIter::Bytes(histogram.buckets_iter()),
+        }
     }
 
-    pub fn add_bucket(&mut self, bucket: HistogramBucket) {
-        self.buckets.push(bucket);
+    pub fn scale_counts(&mut self, selectivity: f64) {
+        match self {
+            Self::Int(histogram) => histogram.scale_counts(selectivity),
+            Self::UInt(histogram) => histogram.scale_counts(selectivity),
+            Self::Float(histogram) => histogram.scale_counts(selectivity),
+            Self::Bytes(histogram) => histogram.scale_counts(selectivity),
+        }
+    }
+
+    pub fn collapse_counts_to_distinct(&mut self) {
+        match self {
+            Self::Int(histogram) => histogram.collapse_counts_to_distinct(),
+            Self::UInt(histogram) => histogram.collapse_counts_to_distinct(),
+            Self::Float(histogram) => histogram.collapse_counts_to_distinct(),
+            Self::Bytes(histogram) => histogram.collapse_counts_to_distinct(),
+        }
+    }
+
+    pub fn estimate_join(&self, other: &Histogram) -> JoinEstimation {
+        match (self, other) {
+            (Self::Int(left), Self::Int(right)) => left.estimate_join(right),
+            (Self::UInt(left), Self::UInt(right)) => left.estimate_join(right),
+            (Self::Float(left), Self::Float(right)) => left.estimate_join(right),
+            (Self::Bytes(left), Self::Bytes(right)) => left.estimate_join(right),
+            _ => JoinEstimation::zero(),
+        }
+    }
+
+    pub fn is_range_distorted(&self) -> bool {
+        self.avg_spacing()
+            .is_some_and(|bucket_width| bucket_width > 1e12)
     }
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct HistogramBucket {
-    /// Lower bound value of the bucket.
-    lower_bound: Datum,
-    /// Upper bound value of the bucket.
-    upper_bound: Datum,
-    /// Estimated number of values in the bucket.
-    num_values: f64,
-    /// Estimated number of distinct values in the bucket.
-    num_distinct: f64,
+pub enum HistogramBucketIter<'a> {
+    Int(std::slice::Iter<'a, TypedHistogramBucket<i64>>),
+    UInt(std::slice::Iter<'a, TypedHistogramBucket<u64>>),
+    Float(std::slice::Iter<'a, TypedHistogramBucket<F64>>),
+    Bytes(std::slice::Iter<'a, TypedHistogramBucket<Vec<u8>>>),
+}
+
+impl<'a> Iterator for HistogramBucketIter<'a> {
+    type Item = HistogramBucketView<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            HistogramBucketIter::Int(iter) => iter.next().map(HistogramBucketView::Int),
+            HistogramBucketIter::UInt(iter) => iter.next().map(HistogramBucketView::UInt),
+            HistogramBucketIter::Float(iter) => iter.next().map(HistogramBucketView::Float),
+            HistogramBucketIter::Bytes(iter) => iter.next().map(HistogramBucketView::Bytes),
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self {
+            HistogramBucketIter::Int(iter) => iter.size_hint(),
+            HistogramBucketIter::UInt(iter) => iter.size_hint(),
+            HistogramBucketIter::Float(iter) => iter.size_hint(),
+            HistogramBucketIter::Bytes(iter) => iter.size_hint(),
+        }
+    }
+}
+
+impl ExactSizeIterator for HistogramBucketIter<'_> {}
+
+#[derive(Debug, Clone, Copy)]
+pub enum HistogramBucketView<'a> {
+    Int(&'a TypedHistogramBucket<i64>),
+    UInt(&'a TypedHistogramBucket<u64>),
+    Float(&'a TypedHistogramBucket<F64>),
+    Bytes(&'a TypedHistogramBucket<Vec<u8>>),
+}
+
+impl HistogramBucketView<'_> {
+    pub fn lower_bound(&self) -> Datum {
+        match self {
+            HistogramBucketView::Int(bucket) => Datum::Int(*bucket.lower_bound()),
+            HistogramBucketView::UInt(bucket) => Datum::UInt(*bucket.lower_bound()),
+            HistogramBucketView::Float(bucket) => Datum::Float(*bucket.lower_bound()),
+            HistogramBucketView::Bytes(bucket) => Datum::Bytes(bucket.lower_bound().clone()),
+        }
+    }
+
+    pub fn upper_bound(&self) -> Datum {
+        match self {
+            HistogramBucketView::Int(bucket) => Datum::Int(*bucket.upper_bound()),
+            HistogramBucketView::UInt(bucket) => Datum::UInt(*bucket.upper_bound()),
+            HistogramBucketView::Float(bucket) => Datum::Float(*bucket.upper_bound()),
+            HistogramBucketView::Bytes(bucket) => Datum::Bytes(bucket.upper_bound().clone()),
+        }
+    }
+
+    pub fn num_values(&self) -> f64 {
+        match self {
+            HistogramBucketView::Int(bucket) => bucket.num_values(),
+            HistogramBucketView::UInt(bucket) => bucket.num_values(),
+            HistogramBucketView::Float(bucket) => bucket.num_values(),
+            HistogramBucketView::Bytes(bucket) => bucket.num_values(),
+        }
+    }
+
+    pub fn num_distinct(&self) -> f64 {
+        match self {
+            HistogramBucketView::Int(bucket) => bucket.num_distinct(),
+            HistogramBucketView::UInt(bucket) => bucket.num_distinct(),
+            HistogramBucketView::Float(bucket) => bucket.num_distinct(),
+            HistogramBucketView::Bytes(bucket) => bucket.num_distinct(),
+        }
+    }
+
+    pub fn owned(&self) -> HistogramBucket {
+        match self {
+            HistogramBucketView::Int(bucket) => HistogramBucket::Int((*bucket).clone()),
+            HistogramBucketView::UInt(bucket) => HistogramBucket::UInt((*bucket).clone()),
+            HistogramBucketView::Float(bucket) => HistogramBucket::Float((*bucket).clone()),
+            HistogramBucketView::Bytes(bucket) => HistogramBucket::Bytes((*bucket).clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum HistogramBucket {
+    Int(TypedHistogramBucket<i64>),
+    UInt(TypedHistogramBucket<u64>),
+    Float(TypedHistogramBucket<F64>),
+    Bytes(TypedHistogramBucket<Vec<u8>>),
 }
 
 impl HistogramBucket {
-    pub fn new(lower_bound: Datum, upper_bound: Datum, num_values: f64, num_distinct: f64) -> Self {
-        Self {
-            lower_bound,
-            upper_bound,
-            num_values,
-            num_distinct,
+    pub fn try_from_bounds(
+        lower_bound: Datum,
+        upper_bound: Datum,
+        num_values: f64,
+        num_distinct: f64,
+    ) -> Result<Self, &'static str> {
+        match (lower_bound, upper_bound) {
+            (Datum::Int(lower_bound), Datum::Int(upper_bound)) => Ok(Self::Int(
+                TypedHistogramBucket::new(lower_bound, upper_bound, num_values, num_distinct),
+            )),
+            (Datum::UInt(lower_bound), Datum::UInt(upper_bound)) => Ok(Self::UInt(
+                TypedHistogramBucket::new(lower_bound, upper_bound, num_values, num_distinct),
+            )),
+            (Datum::Float(lower_bound), Datum::Float(upper_bound)) => Ok(Self::Float(
+                TypedHistogramBucket::new(lower_bound, upper_bound, num_values, num_distinct),
+            )),
+            (Datum::Bytes(lower_bound), Datum::Bytes(upper_bound)) => Ok(Self::Bytes(
+                TypedHistogramBucket::new(lower_bound, upper_bound, num_values, num_distinct),
+            )),
+            (lower_bound, upper_bound) if lower_bound.is_numeric() && upper_bound.is_numeric() => {
+                Ok(Self::Float(TypedHistogramBucket::new(
+                    F64::from(lower_bound.as_double().unwrap_or(0.0)),
+                    F64::from(upper_bound.as_double().unwrap_or(0.0)),
+                    num_values,
+                    num_distinct,
+                )))
+            }
+            _ => Err("histogram bucket bounds must have comparable types"),
         }
     }
 
-    pub fn upper_bound(&self) -> &Datum {
-        &self.upper_bound
+    pub fn upper_bound(&self) -> Datum {
+        match self {
+            Self::Int(bucket) => Datum::Int(*bucket.upper_bound()),
+            Self::UInt(bucket) => Datum::UInt(*bucket.upper_bound()),
+            Self::Float(bucket) => Datum::Float(*bucket.upper_bound()),
+            Self::Bytes(bucket) => Datum::Bytes(bucket.upper_bound().clone()),
+        }
+    }
+
+    pub fn lower_bound(&self) -> Datum {
+        match self {
+            Self::Int(bucket) => Datum::Int(*bucket.lower_bound()),
+            Self::UInt(bucket) => Datum::UInt(*bucket.lower_bound()),
+            Self::Float(bucket) => Datum::Float(*bucket.lower_bound()),
+            Self::Bytes(bucket) => Datum::Bytes(bucket.lower_bound().clone()),
+        }
+    }
+
+    pub fn num_values(&self) -> f64 {
+        match self {
+            Self::Int(bucket) => bucket.num_values(),
+            Self::UInt(bucket) => bucket.num_values(),
+            Self::Float(bucket) => bucket.num_values(),
+            Self::Bytes(bucket) => bucket.num_values(),
+        }
+    }
+
+    pub fn num_distinct(&self) -> f64 {
+        match self {
+            Self::Int(bucket) => bucket.num_distinct(),
+            Self::UInt(bucket) => bucket.num_distinct(),
+            Self::Float(bucket) => bucket.num_distinct(),
+            Self::Bytes(bucket) => bucket.num_distinct(),
+        }
+    }
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct HistogramBounds {
+    lower_bound: Datum,
+    upper_bound: Datum,
+}
+
+impl HistogramBounds {
+    pub fn new(lower_bound: Datum, upper_bound: Datum) -> Self {
+        Self {
+            lower_bound,
+            upper_bound,
+        }
     }
 
     pub fn lower_bound(&self) -> &Datum {
         &self.lower_bound
     }
 
-    pub fn num_values(&self) -> f64 {
-        self.num_values
-    }
-
-    pub fn num_distinct(&self) -> f64 {
-        self.num_distinct
-    }
-
-    pub fn aggregate_values(&mut self) {
-        self.num_values = self.num_distinct;
-    }
-
-    pub fn update(&mut self, selectivity: f64) {
-        self.num_values *= selectivity;
-        self.num_distinct *= selectivity
+    pub fn upper_bound(&self) -> &Datum {
+        &self.upper_bound
     }
 }
 
 impl fmt::Display for Histogram {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for bucket in &self.buckets {
+        for bucket in self.bucket_iter() {
             writeln!(
                 f,
-                "{} ~ {}: {} values, {} distinct values",
+                "[lower: {}, upper: {}, ndv: {}, count: {}]",
                 bucket.lower_bound(),
                 bucket.upper_bound(),
-                bucket.num_values,
-                bucket.num_distinct
+                bucket.num_distinct(),
+                bucket.num_values()
             )?;
         }
         Ok(())

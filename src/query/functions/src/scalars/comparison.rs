@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_expression::Column;
+use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
 use databend_common_expression::Function;
 use databend_common_expression::FunctionDomain;
@@ -28,8 +29,15 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
+use databend_common_expression::function_stat::ReturnStat;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::scalar_evaluator;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::BooleanDistribution;
+use databend_common_expression::stat_distribution::Ndv;
+use databend_common_expression::stat_distribution::OwnedDistribution;
+use databend_common_expression::stat_distribution::StatBinaryArg;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
@@ -51,6 +59,8 @@ use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberDomain;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringColumn;
@@ -67,6 +77,9 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_io::deserialize_bitmap;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::TypedHistogram;
+use databend_common_statistics::TypedHistogramBucket;
 use databend_functions_scalar_decimal::register_decimal_compare;
 use jsonb::RawJsonb;
 use num_traits::AsPrimitive;
@@ -161,37 +174,543 @@ fn register_variant_cmp(registry: &mut FunctionRegistry) {
 
 macro_rules! register_simple_domain_type_cmp {
     ($registry:ident, $T:ty) => {
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "eq",
+            |stat, _| derive_equality_stat(false, stat),
             |_, d1, d2| d1.domain_eq(d2),
             |lhs, rhs, _| lhs == rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "noteq",
+            |stat, _| derive_equality_stat(true, stat),
             |_, d1, d2| d1.domain_noteq(d2),
             |lhs, rhs, _| lhs != rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "gt",
+            |stat, _| derive_comparison_stat::<GtOp>(stat),
             |_, d1, d2| d1.domain_gt(d2),
             |lhs, rhs, _| lhs > rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "gte",
+            |stat, _| derive_comparison_stat::<GteOp>(stat),
             |_, d1, d2| d1.domain_gte(d2),
             |lhs, rhs, _| lhs >= rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "lt",
+            |stat, _| derive_comparison_stat::<LtOp>(stat),
             |_, d1, d2| d1.domain_lt(d2),
             |lhs, rhs, _| lhs < rhs,
         );
-        $registry.register_comparison_2_arg::<$T, $T, _, _>(
+        register_stat_comparison_2_arg::<$T>(
+            $registry,
             "lte",
+            |stat, _| derive_comparison_stat::<LteOp>(stat),
             |_, d1, d2| d1.domain_lte(d2),
             |lhs, rhs, _| lhs <= rhs,
         );
     };
+}
+
+fn register_stat_comparison_2_arg<T>(
+    registry: &mut FunctionRegistry,
+    name: &'static str,
+    derive_stat: fn(
+        StatBinaryArg,
+        &databend_common_expression::FunctionContext,
+    ) -> Result<Option<ReturnStat>, String>,
+    calc_domain: fn(
+        &databend_common_expression::FunctionContext,
+        &T::Domain,
+        &T::Domain,
+    ) -> FunctionDomain<BooleanType>,
+    func: fn(T::ScalarRef<'_>, T::ScalarRef<'_>, &mut EvalContext) -> bool,
+) where
+    T: ArgType,
+    for<'a> T::ScalarRef<'a>: Copy,
+{
+    registry
+        .scalar_builder(name)
+        .function()
+        .typed_2_arg::<T, T, BooleanType>()
+        .passthrough_nullable()
+        .calc_domain(calc_domain)
+        .derive_stat(derive_stat)
+        .vectorized(databend_common_expression::vectorize_cmp_2_arg(func))
+        .register();
+}
+
+fn derive_equality_stat(not_eq: bool, stat: StatBinaryArg) -> Result<Option<ReturnStat>, String> {
+    let cardinality = stat.cardinality;
+    let (stat, constant) = if let Some(constant) = stat.args[1].singleton() {
+        (&stat.args[0], constant)
+    } else if let Some(constant) = stat.args[0].singleton() {
+        (&stat.args[1], constant)
+    } else {
+        return Ok(None);
+    };
+
+    let Some(true_count) = equal_true_count(stat, not_eq, &constant, cardinality) else {
+        return Ok(None);
+    };
+
+    Ok(Some(boolean_return_stat(true_count)))
+}
+
+fn derive_comparison_stat<Op: StatComparisonOp>(
+    stat: StatBinaryArg,
+) -> Result<Option<ReturnStat>, String> {
+    let cardinality = stat.cardinality;
+    let true_count = if let Some(constant) = stat.args[1].singleton() {
+        Op::estimate_true_count(&stat.args[0], cardinality, &constant)?
+    } else if let Some(constant) = stat.args[0].singleton() {
+        Op::Reverse::estimate_true_count(&stat.args[1], cardinality, &constant)?
+    } else {
+        return Ok(None);
+    };
+
+    let Some(true_count) = true_count else {
+        return Ok(None);
+    };
+
+    Ok(Some(boolean_return_stat(true_count)))
+}
+
+fn boolean_return_stat(true_count: StatEstimate) -> ReturnStat {
+    ReturnStat {
+        domain: Domain::Boolean(BooleanDomain {
+            has_true: true,
+            has_false: true,
+        }),
+        ndv: databend_common_expression::stat_distribution::Ndv::Stat(2.0),
+        null_count: 0,
+        distribution: OwnedDistribution::Boolean(BooleanDistribution::new(true_count)),
+    }
+}
+
+trait StatComparisonOp {
+    type Reverse: StatComparisonOp;
+
+    const SELECT_LESS: bool;
+    const INCLUDE_EQUAL: bool;
+
+    fn estimate_true_count(
+        stat: &ArgStat,
+        cardinality: f64,
+        constant: &Scalar,
+    ) -> Result<Option<StatEstimate>, String> {
+        if let Some(histogram) = stat.histogram() {
+            let selectivity = Self::estimate_histogram_selectivity(histogram, constant)?;
+            let expected = selectivity * cardinality;
+            return Ok(Some(if histogram.is_range_distorted() {
+                StatEstimate::new(0.0, expected, cardinality)
+            } else {
+                StatEstimate::exact(expected)
+            }));
+        }
+
+        if stat_value_domain_is_integer(stat) {
+            return Self::estimate_integer_range_true_count(stat, constant, cardinality);
+        }
+
+        Ok(None)
+    }
+
+    fn estimate_histogram_selectivity(
+        histogram: &Histogram,
+        constant: &Scalar,
+    ) -> Result<f64, String> {
+        if histogram.num_values() == 0.0 {
+            return Ok(0.0);
+        }
+
+        match histogram {
+            Histogram::Int(histogram) => {
+                let constant = match constant {
+                    Scalar::Number(NumberScalar::Int8(n)) => *n as i64,
+                    Scalar::Number(NumberScalar::Int16(n)) => *n as i64,
+                    Scalar::Number(NumberScalar::Int32(n)) => *n as i64,
+                    Scalar::Number(NumberScalar::Int64(n)) => *n,
+                    Scalar::Date(v) => *v as i64,
+                    Scalar::Timestamp(v) => *v,
+                    _ => return Err(unexpected_histogram_constant("Int", constant)),
+                };
+                Ok(Self::estimate_typed_histogram_selectivity(
+                    histogram,
+                    &constant,
+                    Self::estimate_partial_number_bucket,
+                ))
+            }
+            Histogram::UInt(histogram) => {
+                let constant = match constant {
+                    Scalar::Number(NumberScalar::UInt8(n)) => *n as u64,
+                    Scalar::Number(NumberScalar::UInt16(n)) => *n as u64,
+                    Scalar::Number(NumberScalar::UInt32(n)) => *n as u64,
+                    Scalar::Number(NumberScalar::UInt64(n)) => *n,
+                    _ => return Err(unexpected_histogram_constant("UInt", constant)),
+                };
+                Ok(Self::estimate_typed_histogram_selectivity(
+                    histogram,
+                    &constant,
+                    Self::estimate_partial_number_bucket,
+                ))
+            }
+            Histogram::Float(histogram) => {
+                let constant = scalar_number_value(constant)
+                    .ok_or_else(|| unexpected_histogram_constant("Float", constant))?;
+                Ok(Self::estimate_typed_histogram_selectivity(
+                    histogram,
+                    &constant,
+                    Self::estimate_partial_number_bucket,
+                ))
+            }
+            Histogram::Bytes(histogram) => {
+                let constant = scalar_bytes_value(constant)
+                    .ok_or_else(|| unexpected_histogram_constant("Bytes", constant))?;
+                Ok(Self::estimate_typed_histogram_selectivity(
+                    histogram,
+                    &constant,
+                    Self::estimate_partial_bytes_bucket,
+                ))
+            }
+        }
+    }
+
+    fn estimate_typed_histogram_selectivity<T: Ord>(
+        histogram: &TypedHistogram<T>,
+        constant: &T,
+        estimate_partial_bucket: impl Fn(&TypedHistogramBucket<T>, &T) -> f64,
+    ) -> f64 {
+        let mut selected = 0.0;
+        for bucket in histogram.buckets_iter() {
+            let no_overlap = Self::histogram_bucket_no_overlap(constant, bucket);
+            let complete_overlap = Self::histogram_bucket_complete_overlap(constant, bucket);
+
+            if complete_overlap {
+                selected += bucket.num_values();
+            } else if !no_overlap {
+                let selectivity = estimate_partial_bucket(bucket, constant);
+                selected += bucket.num_values() * selectivity;
+            }
+        }
+
+        selected / histogram.num_values()
+    }
+
+    fn histogram_bucket_no_overlap<T: Ord>(constant: &T, bucket: &TypedHistogramBucket<T>) -> bool {
+        if Self::SELECT_LESS {
+            matches!(constant.cmp(bucket.lower_bound()), Ordering::Less)
+                || (!Self::INCLUDE_EQUAL
+                    && matches!(constant.cmp(bucket.lower_bound()), Ordering::Equal))
+        } else {
+            matches!(
+                constant.cmp(bucket.upper_bound()),
+                Ordering::Greater | Ordering::Equal
+            )
+        }
+    }
+
+    fn histogram_bucket_complete_overlap<T: Ord>(
+        constant: &T,
+        bucket: &TypedHistogramBucket<T>,
+    ) -> bool {
+        if Self::SELECT_LESS {
+            matches!(
+                constant.cmp(bucket.upper_bound()),
+                Ordering::Greater | Ordering::Equal
+            )
+        } else {
+            matches!(constant.cmp(bucket.lower_bound()), Ordering::Less)
+                || (Self::INCLUDE_EQUAL
+                    && matches!(constant.cmp(bucket.lower_bound()), Ordering::Equal))
+        }
+    }
+
+    fn estimate_partial_bytes_bucket(
+        bucket: &TypedHistogramBucket<Vec<u8>>,
+        _constant: &Vec<u8>,
+    ) -> f64 {
+        if Self::INCLUDE_EQUAL {
+            (0.5 + 1.0 / bucket.num_distinct().max(1.0)).min(1.0)
+        } else {
+            0.5
+        }
+    }
+
+    fn estimate_partial_number_bucket<T: StatNumberValue>(
+        bucket: &TypedHistogramBucket<T>,
+        constant: &T,
+    ) -> f64 {
+        let (strict_less, equality) = Self::partial_number_bucket_less_parts(bucket, constant);
+        match (Self::SELECT_LESS, Self::INCLUDE_EQUAL) {
+            (true, false) => strict_less,
+            (true, true) => (strict_less + equality).min(1.0),
+            (false, false) => (1.0 - strict_less - equality).max(0.0),
+            (false, true) => (1.0 - strict_less).min(1.0),
+        }
+    }
+
+    fn partial_number_bucket_less_parts<T: StatNumberValue>(
+        bucket: &TypedHistogramBucket<T>,
+        constant: &T,
+    ) -> (f64, f64) {
+        let ndv = bucket.num_distinct().max(1.0);
+        let lower_bound = bucket.lower_bound().to_f64();
+        let upper_bound = bucket.upper_bound().to_f64();
+        let const_value = constant.to_f64();
+
+        let bucket_range = upper_bound - lower_bound;
+        if bucket_range <= 0.0 {
+            return (0.0, 1.0 / ndv);
+        }
+
+        let strict_less = if const_value == lower_bound {
+            0.0
+        } else if const_value == upper_bound {
+            (1.0 - 1.0 / ndv).max(0.0)
+        } else {
+            ((const_value - lower_bound) / bucket_range).clamp(0.0, 1.0)
+        };
+        let equality = (1.0 / ndv).clamp(0.0, 1.0);
+
+        (strict_less, equality)
+    }
+
+    fn estimate_integer_range_true_count(
+        stat: &ArgStat,
+        constant: &Scalar,
+        cardinality: f64,
+    ) -> Result<Option<StatEstimate>, String> {
+        let Some((min, max)) = stat.value_minmax() else {
+            return Ok(Some(StatEstimate::exact(0.0)));
+        };
+        let Some(min) = scalar_number_value(&min) else {
+            return Ok(None);
+        };
+        let Some(max) = scalar_number_value(&max) else {
+            return Ok(None);
+        };
+        let Some(numeric_literal) = scalar_number_value(constant) else {
+            return Ok(None);
+        };
+
+        let cmp_min = numeric_literal.total_cmp(&min);
+        let cmp_max = numeric_literal.total_cmp(&max);
+
+        let min = min.0;
+        let max = max.0;
+        let numeric_literal = numeric_literal.0;
+
+        Ok(Some(Self::estimate_integer_bounds_count(
+            stat,
+            min,
+            max,
+            numeric_literal,
+            cmp_min,
+            cmp_max,
+            cardinality,
+        )))
+    }
+
+    fn estimate_integer_bounds_count(
+        stat: &ArgStat,
+        min: f64,
+        max: f64,
+        numeric_literal: f64,
+        cmp_min: Ordering,
+        cmp_max: Ordering,
+        cardinality: f64,
+    ) -> StatEstimate {
+        use std::cmp::Ordering::*;
+
+        if Self::SELECT_LESS {
+            if cmp_min == Less || !Self::INCLUDE_EQUAL && cmp_min == Equal {
+                return StatEstimate::exact(0.0);
+            }
+            if cmp_min == Equal {
+                return ndv_true_count(stat.ndv, false, cardinality);
+            }
+            if cmp_max == Greater {
+                return StatEstimate::exact(cardinality);
+            }
+            if !Self::INCLUDE_EQUAL && cmp_max == Equal {
+                return ndv_true_count(stat.ndv, true, cardinality);
+            }
+            return StatEstimate::exact(
+                ((numeric_literal - min + 1.0) / (max - min + 1.0)) * cardinality,
+            );
+        }
+
+        if Self::INCLUDE_EQUAL {
+            if cmp_max == Greater {
+                return StatEstimate::exact(0.0);
+            }
+            if matches!(cmp_min, Less | Equal) {
+                return StatEstimate::exact(cardinality);
+            }
+            if cmp_max == Equal {
+                return ndv_true_count(stat.ndv, false, cardinality);
+            }
+            return StatEstimate::exact(
+                ((max - numeric_literal + 1.0) / (max - min + 1.0)) * cardinality,
+            );
+        }
+
+        match (cmp_min, cmp_max) {
+            (_, Greater | Equal) => StatEstimate::exact(0.0),
+            (Less, _) => StatEstimate::exact(cardinality),
+            (Equal, _) => ndv_true_count(stat.ndv, true, cardinality),
+            _ => StatEstimate::exact(
+                ((max - numeric_literal + 1.0) / (max - min + 1.0)) * cardinality,
+            ),
+        }
+    }
+}
+
+struct LtOp;
+struct LteOp;
+struct GtOp;
+struct GteOp;
+
+impl StatComparisonOp for LtOp {
+    type Reverse = GtOp;
+
+    const SELECT_LESS: bool = true;
+    const INCLUDE_EQUAL: bool = false;
+}
+
+impl StatComparisonOp for LteOp {
+    type Reverse = GteOp;
+
+    const SELECT_LESS: bool = true;
+    const INCLUDE_EQUAL: bool = true;
+}
+
+impl StatComparisonOp for GtOp {
+    type Reverse = LtOp;
+
+    const SELECT_LESS: bool = false;
+    const INCLUDE_EQUAL: bool = false;
+}
+
+impl StatComparisonOp for GteOp {
+    type Reverse = LteOp;
+
+    const SELECT_LESS: bool = false;
+    const INCLUDE_EQUAL: bool = true;
+}
+
+trait StatNumberValue: Ord {
+    fn to_f64(&self) -> f64;
+}
+
+impl StatNumberValue for i64 {
+    fn to_f64(&self) -> f64 {
+        *self as f64
+    }
+}
+
+impl StatNumberValue for u64 {
+    fn to_f64(&self) -> f64 {
+        *self as f64
+    }
+}
+
+impl StatNumberValue for F64 {
+    fn to_f64(&self) -> f64 {
+        self.into_inner()
+    }
+}
+
+fn equal_true_count(
+    stat: &ArgStat,
+    not_eq: bool,
+    constant: &Scalar,
+    cardinality: f64,
+) -> Option<StatEstimate> {
+    let Some((min, max)) = stat.value_minmax() else {
+        return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
+    };
+    if compare_stat_scalar(constant, &min)? == Ordering::Less
+        || compare_stat_scalar(constant, &max)? == Ordering::Greater
+    {
+        return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
+    }
+
+    Some(ndv_true_count(stat.ndv, not_eq, cardinality))
+}
+
+fn compare_stat_scalar(left: &Scalar, right: &Scalar) -> Option<Ordering> {
+    if let (Some(left), Some(right)) = (scalar_number_value(left), scalar_number_value(right)) {
+        return Some(left.cmp(&right));
+    }
+    if let (Some(left), Some(right)) = (scalar_bytes_value(left), scalar_bytes_value(right)) {
+        return Some(left.cmp(&right));
+    }
+    None
+}
+
+fn scalar_number_value(scalar: &Scalar) -> Option<F64> {
+    match scalar {
+        Scalar::Number(value) => Some(F64::from(value.to_f64().into_inner())),
+        Scalar::Decimal(value) => Some(F64::from(value.to_float64())),
+        Scalar::Date(value) => Some(F64::from(*value as f64)),
+        Scalar::Timestamp(value) => Some(F64::from(*value as f64)),
+        _ => None,
+    }
+}
+
+fn scalar_bytes_value(scalar: &Scalar) -> Option<Vec<u8>> {
+    match scalar {
+        Scalar::String(value) => Some(value.as_bytes().to_vec()),
+        Scalar::Binary(value) => Some(value.clone()),
+        _ => None,
+    }
+}
+
+fn unexpected_histogram_constant(histogram_type: &'static str, constant: &Scalar) -> String {
+    format!("unexpected {histogram_type} histogram comparison constant: {constant:?}")
+}
+
+fn ndv_true_count(ndv: Ndv, not_eq: bool, cardinality: f64) -> StatEstimate {
+    let value = ndv.value();
+    let selectivity = if value == 0.0 {
+        0.0
+    } else if not_eq {
+        1.0 - 1.0 / value
+    } else {
+        1.0 / value
+    };
+    let expected = selectivity * cardinality;
+    match ndv {
+        Ndv::Stat(_) => StatEstimate::exact(expected),
+        Ndv::Max(_) => StatEstimate::new(0.0, expected, cardinality),
+    }
+}
+
+fn stat_value_domain_is_integer(stat: &ArgStat) -> bool {
+    matches!(
+        stat.value_domain(),
+        Some(
+            Domain::Number(NumberDomain::UInt8(_))
+                | Domain::Number(NumberDomain::UInt16(_))
+                | Domain::Number(NumberDomain::UInt32(_))
+                | Domain::Number(NumberDomain::UInt64(_))
+                | Domain::Number(NumberDomain::Int8(_))
+                | Domain::Number(NumberDomain::Int16(_))
+                | Domain::Number(NumberDomain::Int32(_))
+                | Domain::Number(NumberDomain::Int64(_))
+                | Domain::Date(_)
+                | Domain::Timestamp(_)
+        )
+    )
 }
 
 fn register_string_cmp(registry: &mut FunctionRegistry) {
