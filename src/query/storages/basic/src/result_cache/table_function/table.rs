@@ -44,7 +44,7 @@ use databend_common_storages_parquet::ParquetReaderBuilder;
 use databend_common_storages_parquet::ParquetSource;
 use databend_common_storages_parquet::ParquetSourceType;
 
-const RESULT_SCAN: &str = "result_scan";
+pub const RESULT_SCAN: &str = "result_scan";
 
 pub struct ResultScan {
     table_info: TableInfo,

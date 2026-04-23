@@ -37,6 +37,7 @@ use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_storages_basic::RESULT_SCAN;
 use databend_common_storages_basic::ResultCacheMetaManager;
 use databend_common_storages_basic::ResultScan;
 use databend_common_users::UserApiProvider;
@@ -301,13 +302,13 @@ impl Binder {
         let table_index = self.metadata.write().add_table(
             CATALOG_DEFAULT.to_string(),
             "system".to_string(),
+            table.name().to_string(),
             table.as_table(),
             None,
             table_alias_name,
             false,
             false,
             false,
-            None,
         );
         let (s_expr, mut bind_context) =
             self.bind_base_table(bind_context, "system", table_index, None, sample, true)?;
@@ -362,13 +363,13 @@ impl Binder {
             let table_index = self.metadata.write().add_table(
                 CATALOG_DEFAULT.to_string(),
                 "system".to_string(),
+                RESULT_SCAN.to_string(),
                 table.clone(),
                 None,
                 table_alias_name,
                 false,
                 false,
                 false,
-                None,
             );
 
             let (s_expr, mut bind_context) =

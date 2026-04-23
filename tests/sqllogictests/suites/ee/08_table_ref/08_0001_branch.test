@@ -53,6 +53,23 @@ SELECT * FROM t1/dev ORDER BY a
 2 b
 3 c
 
+query I
+SELECT t1.a FROM t1/dev ORDER BY a
+----
+1
+2
+3
+
+statement error 1065.*Duplicated table name t1 in the same FROM clause
+SELECT * FROM t1, t1/dev
+
+query IT
+SELECT l.a, r.b FROM t1 AS l JOIN t1/dev AS r ON l.a = r.a ORDER BY l.a
+----
+1 a
+2 b
+3 c
+
 statement ok
 INSERT INTO t1 VALUES (10, 'x')
 

@@ -221,7 +221,7 @@ impl ReclusterTableInterpreter {
             )));
         };
 
-        self.build_push_downs(push_downs, &tbl)?;
+        self.build_push_downs(push_downs, table.to_string(), &tbl)?;
 
         let physical_plan = match cluster_type {
             ClusterType::Hilbert => {
@@ -564,12 +564,13 @@ impl ReclusterTableInterpreter {
     fn build_push_downs(
         &self,
         push_downs: &mut Option<PushDownInfo>,
+        name: String,
         tbl: &Arc<dyn Table>,
     ) -> Result<()> {
         if push_downs.is_none() {
             if let Some(expr) = &self.plan.selection {
                 let settings = self.ctx.get_settings();
-                let (mut bind_context, metadata) = bind_table(tbl.clone())?;
+                let (mut bind_context, metadata) = bind_table(name, tbl.clone())?;
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let mut type_checker = TypeChecker::try_create(
                     &mut bind_context,

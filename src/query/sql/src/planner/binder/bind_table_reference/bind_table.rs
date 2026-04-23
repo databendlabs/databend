@@ -231,13 +231,13 @@ impl Binder {
                 let table_index = self.metadata.write().add_table(
                     catalog,
                     database.clone(),
+                    table_name.clone(),
                     table_meta.clone(),
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,
                     false,
-                    cte_suffix_name,
                 );
                 let (s_expr, mut bind_context) = self.bind_base_table(
                     bind_context,
@@ -321,13 +321,13 @@ impl Binder {
                     self.metadata.write().add_table(
                         catalog,
                         database.clone(),
+                        table_name,
                         table_meta,
                         branch_name,
                         table_name_alias,
                         false,
                         false,
                         false,
-                        None,
                     );
                     let (s_expr, mut new_bind_context) =
                         self.bind_query(&mut new_bind_context, query)?;
@@ -355,15 +355,15 @@ impl Binder {
             }
             _ => {
                 let table_index = self.metadata.write().add_table(
-                    catalog.clone(),
+                    catalog,
                     database.clone(),
-                    table_meta.clone(),
+                    table_name,
+                    table_meta,
                     branch_name,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,
                     false,
-                    cte_suffix_name,
                 );
 
                 let (s_expr, mut bind_context) = self.bind_base_table(
