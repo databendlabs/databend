@@ -23,7 +23,6 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
 use databend_common_catalog::table_args::string_value;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -61,6 +60,7 @@ use databend_meta_client::kvapi::ListOptions;
 use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
 
 use crate::meta_service_error;
+use crate::sessions::TableContext;
 
 const POLICY_REFERENCES_FUNC: &str = "policy_references";
 const POLICY_REFERENCES_ENGINE: &str = "POLICY_REFERENCES";

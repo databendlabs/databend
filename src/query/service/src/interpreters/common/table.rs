@@ -14,12 +14,13 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
 use databend_common_expression::DataSchemaRef;
 use databend_common_sql::parse_computed_expr;
+
+use crate::sessions::TableContext;
 
 pub fn check_referenced_computed_columns(
     ctx: Arc<dyn TableContext>,

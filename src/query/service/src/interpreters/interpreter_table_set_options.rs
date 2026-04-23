@@ -30,7 +30,6 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
 use databend_common_storages_fuse::segment_format_from_location;
@@ -65,6 +64,9 @@ use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct SetOptionsInterpreter {
     ctx: Arc<QueryContext>,

@@ -16,6 +16,9 @@ use sha2::Digest;
 use sha2::Sha256;
 
 const RESULT_CACHE_PREFIX: &str = "_result_cache";
+const TRUNCATED_SQL_MAX_CHARS: usize = 128;
+const TRUNCATED_SQL_HEAD_CHARS: usize = 60;
+const TRUNCATED_SQL_TAIL_CHARS: usize = 63;
 
 #[inline(always)]
 pub fn gen_result_cache_key(raw: &str) -> String {
@@ -37,6 +40,21 @@ pub(crate) fn gen_result_cache_dir(key: &str) -> String {
     format!("{RESULT_CACHE_PREFIX}/{key}")
 }
 
+/// Truncate a SQL string to at most 128 characters.
+/// If the SQL is longer than 128 characters, keep the first 60 chars, then "...", then the last 63 chars.
+pub fn truncate_sql(sql: &str) -> String {
+    let chars = sql.chars().collect::<Vec<_>>();
+    if chars.len() <= TRUNCATED_SQL_MAX_CHARS {
+        sql.to_string()
+    } else {
+        let head = chars[..TRUNCATED_SQL_HEAD_CHARS].iter().collect::<String>();
+        let tail = chars[chars.len() - TRUNCATED_SQL_TAIL_CHARS..]
+            .iter()
+            .collect::<String>();
+        format!("{head}...{tail}")
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ResultCacheValue {
     /// Associated query id
@@ -56,4 +74,6 @@ pub struct ResultCacheValue {
     /// Additional factors that participated in the cache key (e.g., row access policy predicates).
     #[serde(default)]
     pub cache_key_extras: Vec<String>,
+    /// The SQL of the query (truncated to 128 chars).
+    pub sql: String,
 }

@@ -27,7 +27,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::util::check_view_circular_dependency;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct AlterViewInterpreter {
     ctx: Arc<QueryContext>,

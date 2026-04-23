@@ -34,10 +34,12 @@ use super::writer::ResultCacheWriter;
 use crate::result_cache::common::ResultCacheValue;
 use crate::result_cache::common::gen_result_cache_dir;
 use crate::result_cache::common::gen_result_cache_meta_key;
+use crate::result_cache::common::truncate_sql;
 use crate::result_cache::meta_manager::ResultCacheMetaManager;
 
 pub struct WriteResultCacheSink {
     ctx: Arc<dyn TableContext>,
+    sql: String,
     partitions_shas: Vec<String>,
 
     meta_mgr: ResultCacheMetaManager,
@@ -116,7 +118,8 @@ impl AsyncMpscSink for WriteResultCacheSink {
             result_size: self.cache_writer.current_bytes(),
             num_rows: self.cache_writer.num_rows(),
             location,
-            cache_key_extras: self.ctx.get_cache_key_extras(),
+            cache_key_extras: self.ctx.result_cache_state().cache_key_extras(),
+            sql: truncate_sql(&self.sql),
         };
         self.meta_mgr
             .set(self.meta_key.clone(), value, MatchSeq::GE(0), ttl_interval)
@@ -136,6 +139,7 @@ impl WriteResultCacheSink {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         key: &str,
+        sql: String,
         schema: TableSchemaRef,
         inputs: Vec<Arc<InputPort>>,
         kv_store: Arc<MetaStore>,
@@ -145,7 +149,7 @@ impl WriteResultCacheSink {
         let min_execute_secs = settings.get_query_result_cache_min_execute_secs()?;
         let ttl = settings.get_query_result_cache_ttl_secs()?;
         let tenant = ctx.get_tenant();
-        let partitions_shas = ctx.get_partitions_shas();
+        let partitions_shas = ctx.result_cache_state().partitions_shas();
 
         let meta_key = gen_result_cache_meta_key(tenant.tenant_name(), key);
         let location = gen_result_cache_dir(key);
@@ -158,6 +162,7 @@ impl WriteResultCacheSink {
             inputs,
             WriteResultCacheSink {
                 ctx,
+                sql,
                 partitions_shas,
                 meta_mgr: ResultCacheMetaManager::create(kv_store, ttl),
                 meta_key,

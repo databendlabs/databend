@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use log::info;
@@ -33,6 +32,7 @@ use crate::interpreters::hook::compact_hook::hook_compact;
 use crate::interpreters::hook::refresh_hook::RefreshDesc;
 use crate::interpreters::hook::refresh_hook::hook_refresh;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 /// Hook operator.
 pub struct HookOperator {

@@ -11,11 +11,25 @@ runs:
       shell: bash
       run: |
         mkdir -p logs
+
+        echo "=== Collecting k8s diagnostics ==="
+
+        # Pod status and events
+        kubectl get pods -n databend -o wide > logs/pods-status.txt 2>&1 || true
+        kubectl describe pods -n databend > logs/pods-describe.txt 2>&1 || true
+        kubectl get events -n databend --sort-by='.lastTimestamp' > logs/events.txt 2>&1 || true
+
+        # Chaos mesh resources
+        kubectl get iochaos -n databend -o yaml > logs/iochaos.txt 2>&1 || true
+
+        # Container logs (kubectl logs) and file logs
         for name in "test-databend-meta-0" "test-databend-meta-1" "test-databend-meta-2" "databend-metaverifier"
         do
-          echo "cat logs of $name"
-          kubectl exec -i $name -n databend -- /cat-logs.sh > logs/$name.log
+          echo "collecting logs of $name"
+          kubectl logs "$name" -n databend --tail=2000 > "logs/${name}-kubectl.log" 2>&1 || true
+          kubectl exec -i "$name" -n databend -- /cat-logs.sh > "logs/${name}-file.log" 2>&1 || true
         done
+
         tar -zcf logs/failure-${{ inputs.name }}.tar.gz logs/*
     - uses: actions/upload-artifact@v4
       with:

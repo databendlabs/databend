@@ -37,6 +37,7 @@ use crate::BindContext;
 use crate::ScalarBinder;
 use crate::binder::Binder;
 use crate::binder::table_args::bind_table_args;
+use crate::binder::table_args::malformed_named_table_arg_error;
 use crate::binder::util::TableIdentifier;
 use crate::optimizer::ir::SExpr;
 
@@ -47,11 +48,22 @@ impl Binder {
         params: &[Expr],
         named_params: &[(Identifier, Expr)],
     ) -> Result<(SExpr, BindContext)> {
-        let param = match params {
-            [] => Err(None),
-            [param @ Expr::ColumnRef { .. }] => Ok(param.clone()),
-            _ => Err(params[0].span()),
+        let (param, extra_params) = match params {
+            [] => (Err(None), &[][..]),
+            [param @ Expr::ColumnRef { .. }] => (Ok(param.clone()), &[][..]),
+            [param, extra_params @ ..] => (Err(param.span()), extra_params),
         };
+
+        if let Some(extra_param) = extra_params.first() {
+            if let Some(err) = malformed_named_table_arg_error("obfuscate", extra_param) {
+                return Err(err);
+            }
+
+            return Err(ErrorCode::InvalidArgument(
+                "The `OBFUSCATE` function accepts one table_name positional argument and an optional `seed => ...` named argument.",
+            )
+            .set_span(extra_param.span()));
+        }
 
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
@@ -60,7 +72,8 @@ impl Binder {
             self.metadata.clone(),
             &[],
         );
-        let mut named_args = bind_table_args(&mut scalar_binder, &[], named_params, &None)?.named;
+        let mut named_args =
+            bind_table_args("obfuscate", &mut scalar_binder, &[], named_params, &None)?.named;
         let seed = match named_args.remove("seed") {
             Some(v) => u64_value(&v).ok_or(ErrorCode::BadArguments("invalid seed"))?,
             None => {

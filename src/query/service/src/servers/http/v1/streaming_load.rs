@@ -56,6 +56,7 @@ use tokio::sync::mpsc::Sender;
 use super::HttpQueryContext;
 use super::HttpSessionConf;
 use super::HttpSessionStateInternal;
+use super::require_upload_filename;
 use crate::interpreters::InterpreterFactory;
 use crate::servers::http::error::HttpErrorCode;
 use crate::servers::http::error::JsonErrorOnly;
@@ -66,7 +67,9 @@ use crate::servers::http::v1::http_query_handlers::get_http_tracing_span;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LoadResponse {
@@ -82,6 +85,7 @@ fn execute_query(
     mem_stat: Arc<MemStat>,
 ) -> impl Future<Output = Result<()>> {
     let id = http_query_context.query_id.clone();
+    let warehouse_id = query_context.get_cluster().get_warehouse_id().ok();
     let fut = async move {
         let interpreter = InterpreterFactory::get(query_context.clone(), &plan).await?;
 
@@ -93,6 +97,7 @@ fn execute_query(
     };
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(id.clone());
+    tracking_payload.warehouse_id = warehouse_id;
     tracking_payload.mem_stat = Some(mem_stat);
 
     let root = get_http_tracing_span("http::execute_query", &http_query_context, &id);
@@ -331,7 +336,7 @@ async fn read_multi_part(
                         StatusCode::BAD_REQUEST,
                     ));
                 }
-                let filename = field.file_name().unwrap_or("file_with_no_name").to_string();
+                let filename = require_upload_filename(name, field.file_name())?;
                 debug!("Started reading file: {}", &filename);
                 let mut reader = field.into_async_read();
                 match file_format {

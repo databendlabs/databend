@@ -297,7 +297,7 @@ pub fn file_location(i: Input) -> IResult<FileLocation> {
 pub fn stage_location(i: Input) -> IResult<String> {
     map_res(file_location, |location| match location {
         FileLocation::Stage(s) => Ok(s),
-        FileLocation::Uri(_) => Err(nom::Err::Failure(ErrorKind::Other(
+        FileLocation::Uri(_) => Err(nom::Err::Failure(ErrorKind::other(
             "expect stage location, got uri location",
         ))),
     })(i)
@@ -305,7 +305,7 @@ pub fn stage_location(i: Input) -> IResult<String> {
 
 pub fn uri_location(i: Input) -> IResult<UriLocation> {
     map_res(string_location, |location| match location {
-        FileLocation::Stage(_) => Err(nom::Err::Failure(ErrorKind::Other(
+        FileLocation::Stage(_) => Err(nom::Err::Failure(ErrorKind::other(
             "uri location should not start with '@'",
         ))),
         FileLocation::Uri(u) => Ok(u),
@@ -323,7 +323,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 if connection_opts.is_none() {
                     Ok(FileLocation::Stage(stripped.to_string()))
                 } else {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "uri location should not start with '@'",
                     )))
                 }
@@ -333,7 +333,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                 let conns = connection_opts.map(|v| v.2).unwrap_or_default();
 
                 let uri = UriLocation::from_uri(location, conns)
-                    .map_err(|_| nom::Err::Failure(ErrorKind::Other("invalid uri")))?;
+                    .map_err(|err| nom::Err::Failure(ErrorKind::other(err.1)))?;
                 Ok(FileLocation::Uri(uri))
             }
         },

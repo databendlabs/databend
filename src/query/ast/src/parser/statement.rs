@@ -498,7 +498,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         },
                     })
                 } else {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "inconsistent number of variables and values",
                     )))
                 }
@@ -3076,7 +3076,7 @@ AS
     );
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other("expecting SQL statement"),
+        ErrorKind::other("expecting SQL statement"),
     )))
 }
 
@@ -3101,7 +3101,7 @@ pub fn parse_create_option(
         (false, false) => Ok(CreateOption::Create),
         (true, false) => Ok(CreateOption::CreateOrReplace),
         (false, true) => Ok(CreateOption::CreateIfNotExists),
-        (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
+        (true, true) => Err(nom::Err::Failure(ErrorKind::other(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
         ))),
     }
@@ -3128,7 +3128,7 @@ pub fn insert_stmt(
             },
             |(with, _, opt_hints, overwrite, into, _, table, opt_columns, source)| {
                 if overwrite.is_none() && into.is_none() {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "INSERT statement must be followed by 'overwrite' or 'into'",
                     )));
                 }
@@ -3621,7 +3621,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("ambiguous NOT NULL constraint"),
+                        ErrorKind::other("ambiguous NOT NULL constraint"),
                     )));
                 }
                 if nullable {
@@ -3634,7 +3634,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other(
+                        ErrorKind::other(
                             "DEFAULT and AUTO INCREMENT cannot exist at the same time",
                         ),
                     )));
@@ -3656,7 +3656,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                        ErrorKind::other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
                     )));
                 }
                 def.expr = Some(ColumnExpr::AutoIncrement {
@@ -3728,14 +3728,14 @@ pub fn role_name(i: Input) -> IResult<String> {
                 match c {
                     '\\' => match chars.next() {
                         Some('f') | Some('b') => {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "' or \" or \\f or \\b are not allowed in role name",
                             )));
                         }
                         _ => {}
                     },
                     '\'' | '"' => {
-                        return Err(nom::Err::Failure(ErrorKind::Other(
+                        return Err(nom::Err::Failure(ErrorKind::other(
                             "' or \" or \\f or \\b are not allowed in role name",
                         )));
                     }
@@ -4674,7 +4674,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                         if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
                             || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
                         {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "ambiguous NOT NULL constraint",
                             )));
                         }
@@ -5409,7 +5409,7 @@ pub fn workload_quotas(i: Input) -> IResult<BTreeMap<String, QuotaValueStmt>> {
                     quotas.insert(name, value);
                 }
                 Err(error_desc) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(error_desc)));
+                    return Err(nom::Err::Failure(ErrorKind::other(error_desc)));
                 }
             }
         }
@@ -6029,7 +6029,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     return_type,
                 },
                 (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "ScalarUDF unsupported external Server",
                     )));
                 }
@@ -6360,7 +6360,7 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
         |(_, _, opt_options, statement)| {
             let event_groups = if let Some((_, key, _, value, _)) = opt_options {
                 if key.name.to_lowercase() != "events" {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "expected 'events' as the option key for EXPLAIN PERF",
                     )));
                 }

@@ -37,7 +37,6 @@ use databend_common_sql::plans;
 use databend_common_sql::plans::Mutation;
 use databend_common_storages_factory::Table;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use log::info;
 
@@ -52,6 +51,11 @@ use crate::physical_plans::create_push_down_filters;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 use crate::stream::DataBlockStream;
 
 pub struct MutationInterpreter {
@@ -180,8 +184,8 @@ impl MutationInterpreter {
     }
 
     fn get_mutation_table_result(&self) -> Result<Vec<DataBlock>> {
-        let binding = self.ctx.get_mutation_status();
-        let status = binding.read();
+        let binding = self.ctx.mutation_state().mutation_status();
+        let status = binding.read().unwrap();
         let mut columns = Vec::new();
         for field in self.schema.as_ref().fields() {
             match field.name().as_str() {

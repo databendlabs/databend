@@ -1,0 +1,76 @@
+# Regression test: CRC32 high-bits-zero bug in hash join spill partitioning.
+# On x86 SSE4.2, _mm_crc32_u64 high 32 bits are always 0.
+# get_partition_id() must extract from low 32 bits on SSE4.2,
+# otherwise all rows land in partition 0 and spilling is ineffective.
+
+statement ok
+set force_join_data_spill = 1;
+
+statement ok
+set disable_join_reorder = 1;
+
+# INT join key (KeysU32, 4 bytes)
+statement ok
+create or replace table t_int as select number::int as id from numbers(1000);
+
+query I
+select count(*) from t_int t1 join t_int t2 on t1.id = t2.id;
+----
+1000
+
+# BIGINT join key (KeysU64, 8 bytes)
+statement ok
+create or replace table t_bigint as select number::bigint as id from numbers(1000);
+
+query I
+select count(*) from t_bigint t1 join t_bigint t2 on t1.id = t2.id;
+----
+1000
+
+# DATE join key (KeysU32, 4 bytes)
+statement ok
+create or replace table t_date as select to_date(number) as id from numbers(1000);
+
+query I
+select count(*) from t_date t1 join t_date t2 on t1.id = t2.id;
+----
+1000
+
+# TIMESTAMP join key (KeysU64, 8 bytes)
+statement ok
+create or replace table t_ts as select to_timestamp(number) as id from numbers(1000);
+
+query I
+select count(*) from t_ts t1 join t_ts t2 on t1.id = t2.id;
+----
+1000
+
+# VARCHAR join key (Serializer)
+statement ok
+create or replace table t_str as select number::varchar as id from numbers(1000);
+
+query I
+select count(*) from t_str t1 join t_str t2 on t1.id = t2.id;
+----
+1000
+
+statement ok
+unset force_join_data_spill;
+
+statement ok
+unset disable_join_reorder;
+
+statement ok
+drop table if exists t_int;
+
+statement ok
+drop table if exists t_bigint;
+
+statement ok
+drop table if exists t_date;
+
+statement ok
+drop table if exists t_ts;
+
+statement ok
+drop table if exists t_str;

@@ -25,7 +25,7 @@ use super::Interpreter;
 use crate::interpreters::interpreter_table_add_column::commit_table_meta;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct AlterTableClusterKeyInterpreter {
     ctx: Arc<QueryContext>,

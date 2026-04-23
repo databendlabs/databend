@@ -2032,7 +2032,7 @@ async fn test_arrow_query_legacy_bendsql_python_ua_fallback() -> anyhow::Result<
             .header
             .settings
             .and_then(|settings| settings.arrow_result_version),
-        Some(1)
+        None
     );
 
     Ok(())

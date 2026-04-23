@@ -520,6 +520,7 @@ impl SpillsDataWriter {
                     .set_compression(Compression::LZ4_RAW)
                     .set_statistics_enabled(EnabledStatistics::None)
                     .set_bloom_filter_enabled(false)
+                    .set_dictionary_enabled(false)
                     .build();
 
                 let arrow_schema = Arc::new(Schema::from(table_schema.as_ref()));

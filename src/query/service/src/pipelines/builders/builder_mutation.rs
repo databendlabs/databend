@@ -36,7 +36,6 @@ use databend_common_pipeline_transforms::processors::TransformPipelineHelper;
 use databend_common_pipeline_transforms::processors::create_dummy_item;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::operations::UnMatchedExprs;
 
 use crate::pipelines::PipelineBuilder;
@@ -46,6 +45,7 @@ use crate::pipelines::processors::transforms::TransformAsyncFunction;
 use crate::pipelines::processors::transforms::TransformBranchedAsyncFunction;
 use crate::pipelines::processors::transforms::TransformResortAddOnWithoutSourceSchema;
 use crate::pipelines::processors::transforms::build_expression_transform;
+use crate::sessions::TableContextSettings;
 
 impl PipelineBuilder {
     pub fn build_fill_columns_in_merge_into(

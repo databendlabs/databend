@@ -21,7 +21,6 @@ use std::time::Instant;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::table::CompactionLimits;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
@@ -44,6 +43,12 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct CompactTargetTableDescription {
     pub catalog: String,
@@ -204,7 +209,7 @@ async fn compact_table(
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
 
             // Clears previously generated segment locations to avoid duplicate data in the refresh phase
-            ctx.clear_written_segment_locations()?;
+            ctx.written_segment_locations().clear();
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
             drop(complete_executor);

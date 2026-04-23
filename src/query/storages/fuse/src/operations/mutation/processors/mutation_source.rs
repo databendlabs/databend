@@ -423,10 +423,12 @@ impl MutationSource {
         } else {
             (0, num_rows as u64)
         };
-        self.ctx.add_mutation_status(MutationStatus {
-            insert_rows: 0,
-            update_rows,
-            deleted_rows,
-        });
+        self.ctx
+            .mutation_state()
+            .add_mutation_status(MutationStatus {
+                insert_rows: 0,
+                update_rows,
+                deleted_rows,
+            });
     }
 }

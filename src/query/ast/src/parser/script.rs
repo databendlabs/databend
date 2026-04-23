@@ -165,7 +165,7 @@ pub fn script_stmt(i: Input) -> IResult<ScriptStatement> {
         if matches!(kind, END | ELSE | ELSEIF | WHEN | UNTIL) {
             return Err(nom::Err::Error(Error::from_error_kind(
                 i,
-                ErrorKind::Other("block terminator"),
+                ErrorKind::other("block terminator"),
             )));
         }
     }

@@ -45,12 +45,16 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::interpreters::interpreter_plan_sql;
-use crate::servers::http::v1::http_query_handlers::ResultFormatSettings;
+use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryInfo;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSettings;
 use crate::spillers::LiteSpiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
@@ -135,7 +139,7 @@ pub struct ExecuteRunning {
     // mainly used to get progress for now
     pub(crate) ctx: Arc<QueryContext>,
     schema: DataSchemaRef,
-    result_format_settings: Option<ResultFormatSettings>,
+    response_settings: Option<QueryResponseSettings>,
     has_result_set: bool,
     #[allow(dead_code)]
     queue_guard: AcquireQueueGuard,
@@ -143,7 +147,7 @@ pub struct ExecuteRunning {
 
 pub struct ExecuteStopped {
     pub schema: DataSchemaRef,
-    pub result_format_settings: Option<ResultFormatSettings>,
+    pub response_settings: Option<QueryResponseSettings>,
     pub has_result_set: Option<bool>,
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
@@ -205,10 +209,17 @@ impl Executor {
             Stopped(f) => f.schema.clone(),
         };
 
-        let result_format_settings = match &self.state {
+        let response_settings = match &self.state {
             Starting(_) => None,
-            Running(r) => r.result_format_settings.clone(),
-            Stopped(f) => f.result_format_settings.clone(),
+            Running(r) => r.response_settings.clone(),
+            Stopped(f) => f.response_settings.clone(),
+        };
+
+        let arrow_result_version = match &self.state {
+            Starting(s) => s.arrow_result_version,
+            Running(_) | Stopped(_) => response_settings
+                .as_ref()
+                .and_then(|settings| settings.arrow_result_version),
         };
 
         ResponseState {
@@ -216,7 +227,8 @@ impl Executor {
             progresses: self.get_progress(),
             state: exe_state,
             error: err,
-            result_format_settings,
+            response_settings,
+            arrow_result_version,
             warnings: self.get_warnings(),
             affect: self.get_affect(),
             schema,
@@ -324,7 +336,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Default::default(),
                     schema: Default::default(),
-                    result_format_settings: None,
+                    response_settings: None,
                     has_result_set: None,
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
@@ -347,7 +359,7 @@ impl Executor {
                 ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     schema: r.schema.clone(),
-                    result_format_settings: r.result_format_settings.clone(),
+                    response_settings: r.response_settings.clone(),
                     has_result_set: Some(r.has_result_set),
                     reason: reason.clone(),
                     session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
@@ -425,7 +437,7 @@ impl ExecuteState {
             .with_context(make_error)?
             .as_str()
             .to_string();
-        let result_format_settings = Some(ResultFormatSettings {
+        let response_settings = Some(QueryResponseSettings {
             timezone,
             geometry_output_format,
             binary_output_format,
@@ -438,7 +450,7 @@ impl ExecuteState {
             ctx: ctx.clone(),
             queue_guard,
             schema,
-            result_format_settings,
+            response_settings,
             has_result_set,
         };
         info!("Query state changed to Running");

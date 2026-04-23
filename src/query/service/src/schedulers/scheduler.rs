@@ -32,7 +32,10 @@ use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 use crate::sql::ColumnBinding;
 use crate::stream::PullingExecutorStream;
 
