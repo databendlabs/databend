@@ -214,9 +214,7 @@ impl Aggregate {
             // When there is a high probability that eager aggregation
             // is better, we will update the histogram.
             if histogram.num_values() >= histogram.num_distinct_values() * 10.0 {
-                for bucket in histogram.buckets.iter_mut() {
-                    bucket.aggregate_values();
-                }
+                histogram.collapse_counts_to_distinct();
             }
         }
 

@@ -17,7 +17,7 @@ mod histogram;
 mod selectivity;
 
 pub use column_stat::*;
+pub use databend_common_statistics::UniformSampleSet;
 pub use histogram::HistogramBuilder;
-pub use histogram::UniformSampleSet;
 pub use selectivity::MAX_SELECTIVITY;
 pub use selectivity::SelectivityEstimator;

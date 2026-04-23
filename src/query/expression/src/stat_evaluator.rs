@@ -26,14 +26,16 @@ use super::FunctionDomain;
 use super::FunctionEval;
 use super::FunctionRegistry;
 use super::Scalar;
-use super::function_stat::ArgStat;
 use super::function_stat::DeriveStat;
-use super::function_stat::Ndv;
-use super::function_stat::ReturnStat;
-use super::function_stat::StatBinaryArg;
-use super::function_stat::StatUnaryArg;
+use super::stat_distribution::ArgStat;
+use super::stat_distribution::BorrowedDistribution;
+use super::stat_distribution::Ndv;
+use super::stat_distribution::OwnedDistribution;
+use super::stat_distribution::ReturnStat;
+use super::stat_distribution::StatArgs;
+use super::stat_distribution::StatBinaryArg;
+use super::stat_distribution::StatUnaryArg;
 use crate::Constant;
-use crate::function_stat::StatArgs;
 
 pub struct StatEvaluator<'a> {
     func_ctx: &'a FunctionContext,
@@ -79,7 +81,7 @@ impl<'a> StatEvaluator<'a> {
                     domain,
                     ndv,
                     null_count,
-                    histogram: None,
+                    distribution: OwnedDistribution::Unknown,
                 })
             })),
             Expr::ColumnRef(col) => Ok(input_stats
@@ -147,23 +149,23 @@ impl<'a> CowStat<'a> {
                 ref domain,
                 ndv,
                 null_count,
-                histogram,
+                distribution,
             }) => ArgStat {
                 domain: domain.clone(),
                 ndv,
                 null_count,
-                histogram,
+                distribution,
             },
             CowStat::Owned(ReturnStat {
                 ref domain,
                 ndv,
                 null_count,
-                ref histogram,
+                ref distribution,
             }) => ArgStat {
                 domain: domain.clone(),
                 ndv,
                 null_count,
-                histogram: histogram.as_ref(),
+                distribution: distribution.as_borrowed_distribution(),
             },
         }
     }
@@ -174,12 +176,20 @@ impl<'a> CowStat<'a> {
                 domain,
                 ndv,
                 null_count,
-                histogram,
+                distribution,
             }) => ReturnStat {
                 domain,
                 ndv,
                 null_count,
-                histogram: histogram.cloned(),
+                distribution: match distribution {
+                    BorrowedDistribution::Unknown => OwnedDistribution::Unknown,
+                    BorrowedDistribution::Histogram(histogram) => {
+                        OwnedDistribution::Histogram(histogram.clone())
+                    }
+                    BorrowedDistribution::Boolean(distribution) => {
+                        OwnedDistribution::Boolean(distribution)
+                    }
+                },
             },
             CowStat::Owned(owned) => owned,
         }

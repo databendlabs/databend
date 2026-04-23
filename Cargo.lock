@@ -3846,6 +3846,7 @@ dependencies = [
  "databend-common-hashtable",
  "databend-common-io",
  "databend-common-sql-test-support",
+ "databend-common-statistics",
  "databend-common-vector",
  "databend-functions-scalar-arithmetic",
  "databend-functions-scalar-datetime",
@@ -4431,6 +4432,7 @@ dependencies = [
  "num-traits",
  "opendal",
  "parking_lot 0.12.3",
+ "proptest",
  "prqlc",
  "recursive",
  "regex",
@@ -4475,6 +4477,7 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -21,8 +21,9 @@ use databend_common_base::base::OrderedFloat;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
-use databend_common_expression::function_stat::Ndv;
 use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::Ndv;
+use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
@@ -141,7 +142,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     min: OrderedFloat(PI),
                     max: OrderedFloat(PI),
                 }),
-                histogram: None,
+                distribution: OwnedDistribution::Unknown,
             }))
         })
         .vectorized(|_| Value::Scalar(OrderedFloat(PI)))
