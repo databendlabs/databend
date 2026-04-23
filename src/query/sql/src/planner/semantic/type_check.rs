@@ -1586,7 +1586,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            self.ctx.set_cacheable(false);
+            self.ctx.result_cache_state().set_cacheable(false);
         }
 
         if let Some(constant) = self.try_fold_constant(&expr, true) {
