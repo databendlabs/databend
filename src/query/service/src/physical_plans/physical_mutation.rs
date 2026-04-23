@@ -19,7 +19,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::NUM_ROW_ID_PREFIX_BITS;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ComputedExpr;
@@ -87,6 +86,7 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContext;
 
 // The predicate column symbol should not conflict with update expr column bindings.
 pub const PREDICATE_COLUMN_INDEX: Symbol = Symbol::DUMMY_COLUMN;
@@ -453,21 +453,23 @@ impl PhysicalPlanBuilder {
 
         // If the mutation type is FullOperation, we use row_id column to split a block
         // into matched and not matched parts.
+        let lazy_columns = self
+            .metadata
+            .read()
+            .get_table_lazy_columns(target_table_index)
+            .filter(|cols| !cols.is_empty());
+
         if matches!(strategy, MutationStrategy::MixedMatched) {
             plan = PhysicalPlan::new(MutationSplit {
                 input: plan,
                 split_index: row_id_offset,
+                has_row_fetch: lazy_columns.is_some(),
                 meta: PhysicalPlanMeta::new("MutationSplit"),
             });
         }
 
         // Construct row fetch plan for lazy columns.
-        if let Some(lazy_columns) = self
-            .metadata
-            .read()
-            .get_table_lazy_columns(target_table_index)
-            && !lazy_columns.is_empty()
-        {
+        if let Some(lazy_columns) = lazy_columns {
             plan = build_mutation_row_fetch(
                 plan,
                 metadata.clone(),
@@ -809,6 +811,7 @@ fn build_mutation_row_fetch(
         cols_to_fetch,
         fetched_fields,
         need_wrap_nullable,
+        enable_block_id_repartition: true,
         stat_info: None,
         meta: PhysicalPlanMeta::new("RowFetch"),
     })

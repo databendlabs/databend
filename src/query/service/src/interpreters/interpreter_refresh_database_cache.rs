@@ -20,7 +20,7 @@ use databend_common_sql::plans::RefreshDatabaseCachePlan;
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshDatabaseCacheInterpreter {
     ctx: Arc<QueryContext>,

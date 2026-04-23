@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_settings::FlightCompression;
@@ -30,6 +29,8 @@ use crate::servers::flight::v1::scatter::BroadcastFlightScatter;
 use crate::servers::flight::v1::scatter::FlightScatter;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 pub trait ExchangeInjector: Send + Sync + 'static {
     fn flight_scatter(

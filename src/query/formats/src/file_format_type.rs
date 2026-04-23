@@ -19,7 +19,6 @@ use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::StageFileFormatType;
 
-use crate::clickhouse::ClickhouseSuffix;
 use crate::field_encoder::FieldEncoderCSV;
 use crate::output_format::CSVOutputFormat;
 use crate::output_format::JSONOutputFormat;
@@ -36,13 +35,12 @@ pub fn get_output_format(
     schema: TableSchemaRef,
     params: FileFormatParams,
     settings: OutputFormatSettings,
-    clickhouse: Option<ClickhouseSuffix>,
 ) -> Result<Box<dyn OutputFormat>> {
     let output: Box<dyn OutputFormat> = match &params {
         FileFormatParams::Csv(params) => {
             let field_encoder = FieldEncoderCSV::create_csv(params, settings.clone());
-            let headers = if let Some(options) = &clickhouse {
-                options.headers
+            let headers = if settings.headers != 0 {
+                settings.headers
             } else if params.output_header {
                 1
             } else {
@@ -57,8 +55,8 @@ pub fn get_output_format(
         }
         FileFormatParams::Text(params) => {
             let field_encoder = FieldEncoderCSV::create_tsv(params, settings.clone());
-            let headers = if let Some(options) = &clickhouse {
-                options.headers
+            let headers = if settings.headers != 0 {
+                settings.headers
             } else if params.output_header {
                 1
             } else {
@@ -72,9 +70,8 @@ pub fn get_output_format(
             ))
         }
         FileFormatParams::NdJson(_params) => {
-            let options = clickhouse.clone().unwrap_or_default();
-            let headers = options.headers;
-            match (options.is_strings, options.is_compact) {
+            let headers = settings.headers;
+            match (settings.json_strings, settings.json_compact) {
                 // string, compact, name, type
                 // not compact
                 (false, false) => Box::new(NDJSONOutputFormatBase::<false, false>::create(

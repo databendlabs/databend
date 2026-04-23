@@ -323,6 +323,7 @@ jobs:
           dirs: stage
           handlers: ${{ matrix.handler }}
           dedup: ${{ matrix.dedup }}
+          size: ${{ matrix.size }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure

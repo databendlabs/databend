@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod row_access_policy_cache;
 pub mod row_access_policy_handler;
 
+pub use row_access_policy_cache::RowAccessPolicyCacheManager;
 pub use row_access_policy_handler::RowAccessPolicyHandler;
 pub use row_access_policy_handler::RowAccessPolicyHandlerWrapper;
 pub use row_access_policy_handler::get_row_access_policy_handler;

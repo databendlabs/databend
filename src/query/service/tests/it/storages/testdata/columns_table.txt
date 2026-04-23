@@ -394,7 +394,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'snapshot_location'               | 'system'             | 'streams'                 | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'source'                          | 'system'             | 'dictionaries'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'source_column'                   | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'sql'                             | 'system'             | 'query_cache'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'sql_path'                        | 'information_schema' | 'schemata'                | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'stack'                           | 'system'             | 'backtrace'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'stage_type'                      | 'system'             | 'stages'                  | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

@@ -23,6 +23,13 @@ runs:
       shell: bash
       run: |
         docker compose -f tests/sqllogictests/scripts/docker-compose-iceberg-tpch.yml up -d
+        # Wait for rustfs to be ready
+        for i in $(seq 1 30); do
+          curl -sf http://127.0.0.1:9002/health/ready && break
+          echo "Waiting for rustfs... ($i)"
+          sleep 2
+        done
+        curl -sf http://127.0.0.1:9002/health/ready || { echo "rustfs failed to start after 60s"; exit 1; }
 
         # Prepare Iceberg TPCH data
         data_dir="tests/sqllogictests/data"

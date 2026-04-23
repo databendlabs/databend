@@ -12,19 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ctor::ctor;
-use regex::Regex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
-pub struct ClickHouseFederated {}
+#[derive(Default)]
+pub struct FragmentId {
+    next_id: AtomicUsize,
+}
 
-#[ctor]
-static FORMAT_REGEX: Regex = Regex::new(r".*(?i)FORMAT\s*([[:alpha:]]*)\s*;?$").unwrap();
-
-impl ClickHouseFederated {
-    pub fn get_format(query: &str) -> Option<String> {
-        match FORMAT_REGEX.captures(query) {
-            Some(x) => x.get(1).map(|s| s.as_str().to_owned()),
-            None => None,
-        }
+impl FragmentId {
+    pub fn next_fragment_id(&self) -> usize {
+        self.next_id.fetch_add(1, Ordering::Release)
     }
 }

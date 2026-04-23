@@ -65,6 +65,23 @@ pub struct EvalScalar {
     pub stat_info: Option<PlanStatsInfo>,
 }
 
+impl EvalScalar {
+    pub fn create(
+        input: PhysicalPlan,
+        exprs: Vec<(RemoteExpr, Symbol)>,
+        projections: BTreeSet<usize>,
+        stat_info: Option<PlanStatsInfo>,
+    ) -> Self {
+        EvalScalar {
+            meta: PhysicalPlanMeta::new("EvalScalar"),
+            projections,
+            input,
+            exprs,
+            stat_info,
+        }
+    }
+}
+
 #[typetag::serde]
 impl IPhysicalPlan for EvalScalar {
     fn as_any(&self) -> &dyn Any {

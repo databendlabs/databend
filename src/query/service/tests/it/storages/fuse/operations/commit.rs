@@ -18,7 +18,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
-use dashmap::DashMap;
 use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::base::WatchNotify;
@@ -45,11 +44,10 @@ use databend_common_catalog::table_context::ContextError;
 use databend_common_catalog::table_context::FilteredCopyFiles;
 use databend_common_catalog::table_context::ProcessInfo;
 use databend_common_catalog::table_context::StageAttachment;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::prelude::*;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
@@ -58,7 +56,6 @@ use databend_common_io::prelude::InputFormatSettings;
 use databend_common_io::prelude::OutputFormatSettings;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::OnErrorMode;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UDTFServer;
 use databend_common_meta_app::principal::UserDefinedConnection;
@@ -138,15 +135,11 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::InputError;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_pipeline::core::PlanProfile;
 use databend_common_settings::Settings;
-use databend_common_storage::CopyStatus;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
-use databend_common_storage::MultiTableInsertStatus;
-use databend_common_storage::MutationStatus;
 use databend_common_storage::StageFileInfo;
 use databend_common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use databend_common_storages_fuse::FuseTable;
@@ -160,15 +153,12 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::*;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
-use databend_storages_common_table_meta::meta::Location;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::meta::Versioned;
 use futures::TryStreamExt;
-use parking_lot::Mutex;
-use parking_lot::RwLock;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -401,22 +391,111 @@ impl CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {
+    fn broadcast_registry(&self) -> &BroadcastRegistry {
+        self.ctx.broadcast_registry()
+    }
+
+    fn copy_state(&self) -> &CopyState {
+        self.ctx.copy_state()
+    }
+
+    fn fragment_id(&self) -> &FragmentId {
+        self.ctx.fragment_id()
+    }
+
+    fn mutation_state(&self) -> &MutationState {
+        self.ctx.mutation_state()
+    }
+
+    fn read_block_thresholds(&self) -> &ReadBlockThresholdsState {
+        self.ctx.read_block_thresholds()
+    }
+
+    fn result_cache_state(&self) -> &ResultCacheState {
+        self.ctx.result_cache_state()
+    }
+
+    fn written_segment_locations(&self) -> &SegmentLocationsState {
+        self.ctx.written_segment_locations()
+    }
+
+    fn selected_segment_locations(&self) -> &SegmentLocationsState {
+        self.ctx.selected_segment_locations()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }
+}
 
-    fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+impl TableContextQueryState for CtxDelegation {
+    fn check_aborting(&self) -> Result<(), ContextError> {
         todo!()
     }
 
-    fn get_next_broadcast_id(&self) -> u32 {
-        self.ctx.get_next_broadcast_id()
+    fn get_abort_notify(&self) -> Arc<WatchNotify> {
+        self.ctx.get_abort_notify()
     }
 
-    fn txn_mgr(&self) -> TxnManagerRef {
-        self.ctx.txn_mgr()
+    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
+        todo!()
     }
 
+    fn push_warning(&self, _warn: String) {
+        todo!()
+    }
+}
+
+impl TableContextTelemetry for CtxDelegation {
+    fn get_processes_info(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+
+    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
+        todo!()
+    }
+    fn get_status_info(&self) -> String {
+        "".to_string()
+    }
+
+    fn set_status_info(&self, _info: &str) {}
+
+    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
+        todo!()
+    }
+
+    fn get_query_queued_duration(&self) -> Duration {
+        todo!()
+    }
+
+    fn set_query_queued_duration(&self, _queued_duration: Duration) {
+        todo!()
+    }
+}
+
+impl TableContextQueryInfo for CtxDelegation {
+    fn get_fuse_version(&self) -> String {
+        todo!()
+    }
+
+    fn get_version(&self) -> BuildInfoRef {
+        todo!()
+    }
+
+    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+        todo!()
+    }
+
+    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+        todo!()
+    }
+
+    fn get_query_kind(&self) -> QueryKind {
+        todo!()
+    }
+}
+
+impl TableContextProgress for CtxDelegation {
     fn incr_total_scan_value(&self, _value: ProgressValues) {
         todo!()
     }
@@ -437,39 +516,7 @@ impl TableContext for CtxDelegation {
         self.ctx.get_write_progress()
     }
 
-    fn get_join_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_join_spill_progress()
-    }
-
-    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_aggregate_spill_progress()
-    }
-
-    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_group_by_spill_progress()
-    }
-
-    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_window_partition_spill_progress()
-    }
-
     fn get_write_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_join_spill_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
-        todo!()
-    }
-
-    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
@@ -480,117 +527,63 @@ impl TableContext for CtxDelegation {
     fn get_result_progress_value(&self) -> ProgressValues {
         todo!()
     }
+}
 
-    fn get_status_info(&self) -> String {
-        "".to_string()
-    }
-
-    fn set_status_info(&self, _info: &str) {}
-
-    fn get_partition(&self) -> Option<PartInfoPtr> {
+#[async_trait::async_trait]
+impl TableContextCluster for CtxDelegation {
+    fn get_cluster(&self) -> Arc<Cluster> {
         todo!()
     }
 
-    fn get_partitions(&self, _: usize) -> Vec<PartInfoPtr> {
+    fn set_cluster(&self, _: Arc<Cluster>) {
         todo!()
     }
 
-    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
+    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
+        todo!()
+    }
+}
+
+impl TableContextSession for CtxDelegation {
+    fn get_connection_id(&self) -> String {
         todo!()
     }
 
-    fn add_partitions_sha(&self, _sha: String) {
+    fn txn_mgr(&self) -> TxnManagerRef {
+        self.ctx.txn_mgr()
+    }
+
+    fn session_state(&self) -> Result<SessionState> {
+        todo!()
+    }
+}
+
+impl TableContextSettings for CtxDelegation {
+    fn get_function_context(&self) -> Result<FunctionContext> {
         todo!()
     }
 
-    fn get_partitions_shas(&self) -> Vec<String> {
+    fn get_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_settings"))
+    }
+
+    fn get_session_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
-    fn add_cache_key_extra(&self, extra: String) {
-        self.ctx.add_cache_key_extra(extra)
+    fn get_shared_settings(&self) -> Arc<Settings> {
+        Settings::create(Tenant::new_literal("fake_shared_settings"))
     }
+}
 
-    fn get_cache_key_extras(&self) -> Vec<String> {
-        self.ctx.get_cache_key_extras()
-    }
-
-    fn get_cacheable(&self) -> bool {
+impl TableContextLicense for CtxDelegation {
+    fn get_license_key(&self) -> String {
         todo!()
     }
+}
 
-    fn set_cacheable(&self, _: bool) {
-        todo!()
-    }
-
-    fn get_can_scan_from_agg_index(&self) -> bool {
-        todo!()
-    }
-    fn set_can_scan_from_agg_index(&self, _: bool) {
-        todo!()
-    }
-
-    fn get_enable_sort_spill(&self) -> bool {
-        todo!()
-    }
-    fn set_enable_sort_spill(&self, _enable: bool) {
-        todo!()
-    }
-
-    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
-
-    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
-        todo!()
-    }
-
-    fn get_query_str(&self) -> String {
-        todo!()
-    }
-
-    fn get_query_text_hash(&self) -> String {
-        todo!()
-    }
-
-    fn get_query_parameterized_hash(&self) -> String {
-        todo!()
-    }
-
-    fn get_fragment_id(&self) -> usize {
-        todo!()
-    }
-
-    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        Ok(self.catalog.clone())
-    }
-
-    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        Ok(self.catalog.clone())
-    }
-
-    fn get_id(&self) -> String {
-        self.ctx.get_id()
-    }
-
-    fn get_current_catalog(&self) -> String {
-        "default".to_owned()
-    }
-
-    fn check_aborting(&self) -> Result<(), ContextError> {
-        todo!()
-    }
-
-    fn get_error(&self) -> Option<ErrorCode<ContextError>> {
-        todo!()
-    }
-
-    fn push_warning(&self, _warn: String) {
-        todo!()
-    }
-
-    fn get_current_database(&self) -> String {
-        self.ctx.get_current_database()
-    }
-
+#[async_trait::async_trait]
+impl TableContextAuthorization for CtxDelegation {
     fn get_current_user(&self) -> Result<UserInfo> {
         todo!()
     }
@@ -598,12 +591,15 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+
     fn get_secondary_roles(&self) -> Option<Vec<String>> {
         todo!()
     }
+
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
+
     async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
@@ -624,94 +620,92 @@ impl TableContext for CtxDelegation {
     ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
+}
 
-    fn get_fuse_version(&self) -> String {
+#[async_trait::async_trait]
+impl TableContextCte for CtxDelegation {
+    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
         todo!()
     }
 
-    fn get_version(&self) -> BuildInfoRef {
+    async fn drop_m_cte_temp_table(&self) -> Result<()> {
         todo!()
     }
 
-    fn get_input_format_settings(&self) -> Result<InputFormatSettings> {
+    fn add_recursive_cte_temp_table(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+    ) {
         todo!()
     }
 
-    fn get_output_format_settings(&self) -> Result<OutputFormatSettings> {
+    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
+        todo!()
+    }
+}
+
+impl TableContextMergeInto for CtxDelegation {
+    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
         todo!()
     }
 
-    fn get_tenant(&self) -> Tenant {
-        self.ctx.get_tenant()
+    fn get_merge_into_join(&self) -> MergeIntoJoin {
+        todo!()
+    }
+}
+
+impl TableContextQueryIdentity for CtxDelegation {
+    fn get_id(&self) -> String {
+        self.ctx.get_id()
     }
 
-    fn get_query_kind(&self) -> QueryKind {
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {}
+
+    fn attach_query_hash(&self, _text_hash: String, _parameterized_hash: String) {
         todo!()
     }
 
-    fn get_function_context(&self) -> Result<FunctionContext> {
+    fn get_query_str(&self) -> String {
         todo!()
     }
 
-    fn get_connection_id(&self) -> String {
+    fn get_query_parameterized_hash(&self) -> String {
         todo!()
     }
 
-    fn get_settings(&self) -> Arc<Settings> {
-        Settings::create(Tenant::new_literal("fake_settings"))
-    }
-
-    fn get_shared_settings(&self) -> Arc<Settings> {
-        Settings::create(Tenant::new_literal("fake_shared_settings"))
-    }
-
-    fn get_session_settings(&self) -> Arc<Settings> {
-        todo!()
-    }
-
-    fn get_cluster(&self) -> Arc<Cluster> {
-        todo!()
-    }
-
-    fn get_processes_info(&self) -> Vec<ProcessInfo> {
-        todo!()
-    }
-
-    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+    fn get_query_text_hash(&self) -> String {
         todo!()
     }
 
     fn get_last_query_id(&self, _index: i32) -> Option<String> {
         todo!()
     }
+
     fn get_query_id_history(&self) -> HashSet<String> {
         todo!()
     }
-    fn get_result_cache_key(&self, _query_id: &str) -> Option<String> {
-        todo!()
-    }
-    fn set_query_id_result_cache(&self, _query_id: String, _result_cache_key: String) {
+}
+
+impl TableContextQueryProfile for CtxDelegation {
+    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
         todo!()
     }
 
-    fn get_on_error_map(&self) -> Option<Arc<DashMap<String, HashMap<u16, InputError>>>> {
-        todo!()
-    }
-    fn set_on_error_map(&self, _map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
-        todo!()
-    }
-    fn get_on_error_mode(&self) -> Option<OnErrorMode> {
-        todo!()
-    }
-    fn set_on_error_mode(&self, _mode: OnErrorMode) {
-        todo!()
-    }
-    fn get_maximum_error_per_file(&self) -> Option<HashMap<String, ErrorCode>> {
+    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
         todo!()
     }
 
-    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
-        self.ctx.get_application_level_data_operator()
+    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextStage for CtxDelegation {
+    fn get_stage_attachment(&self) -> Option<StageAttachment> {
+        todo!()
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
@@ -721,6 +715,59 @@ impl TableContext for CtxDelegation {
     async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
         todo!()
     }
+}
+
+#[async_trait::async_trait]
+impl TableContextCopy for CtxDelegation {
+    async fn filter_out_copied_files(
+        &self,
+        _catalog_name: &str,
+        _database_name: &str,
+        _table_name: &str,
+        _files: &[StageFileInfo],
+        _path_prefix: Option<String>,
+        _max_files: Option<usize>,
+    ) -> Result<FilteredCopyFiles> {
+        todo!()
+    }
+
+    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
+        todo!()
+    }
+}
+
+impl TableContextTableFactory for CtxDelegation {
+    fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableAccess for CtxDelegation {
+    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        Ok(self.catalog.clone())
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        Ok(self.catalog.clone())
+    }
+
+    fn get_current_catalog(&self) -> String {
+        "default".to_owned()
+    }
+
+    fn get_current_database(&self) -> String {
+        self.ctx.get_current_database()
+    }
+
+    fn get_tenant(&self) -> Tenant {
+        self.ctx.get_tenant()
+    }
+
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        self.ctx.get_application_level_data_operator()
+    }
+
     async fn get_table_with_branch(
         &self,
         _catalog: &str,
@@ -728,10 +775,6 @@ impl TableContext for CtxDelegation {
         _table: &str,
         _branch: Option<&str>,
     ) -> Result<Arc<dyn Table>> {
-        todo!()
-    }
-
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
         todo!()
     }
 
@@ -746,88 +789,111 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn filter_out_copied_files(
-        &self,
+    async fn acquire_table_lock(
+        self: Arc<Self>,
         _catalog_name: &str,
-        _database_name: &str,
-        _table_name: &str,
-        _files: &[StageFileInfo],
-        _path_prefix: Option<String>,
-        _max_files: Option<usize>,
-    ) -> Result<FilteredCopyFiles> {
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
     }
 
-    fn set_variable(&self, _key: String, _value: Scalar) {}
-    fn unset_variable(&self, _key: &str) {}
-    fn get_variable(&self, _key: &str) -> Option<Scalar> {
-        None
-    }
-
-    fn get_all_variables(&self) -> HashMap<String, Scalar> {
-        HashMap::new()
-    }
-
-    fn add_written_segment_location(&self, _segment_loc: Location) -> Result<()> {
+    fn get_temp_table_prefix(&self) -> Result<String> {
         todo!()
     }
 
-    fn clear_written_segment_locations(&self) -> Result<()> {
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextTableManagement for CtxDelegation {
+    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
         todo!()
     }
 
-    fn get_written_segment_locations(&self) -> Result<Vec<Location>> {
+    fn get_table_meta_timestamps(
+        &self,
+        table: &dyn Table,
+        previous_snapshot: Option<Arc<TableSnapshot>>,
+    ) -> Result<TableMetaTimestamps> {
+        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
+    }
+}
+
+impl TableContextSpillProgress for CtxDelegation {
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_join_spill_progress()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_group_by_spill_progress()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_aggregate_spill_progress()
+    }
+
+    fn get_window_partition_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_window_partition_spill_progress()
+    }
+
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
-    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
-    fn get_copy_status(&self) -> Arc<CopyStatus> {
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
-    fn get_license_key(&self) -> String {
+    fn get_window_partition_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+}
+
+impl TableContextPerf for CtxDelegation {}
+
+impl TableContextPartitionStats for CtxDelegation {
+    fn get_partition(&self) -> Option<PartInfoPtr> {
         todo!()
     }
 
-    fn get_queries_profile(&self) -> HashMap<String, Vec<PlanProfile>> {
+    fn get_partitions(&self, _num: usize) -> Vec<PartInfoPtr> {
         todo!()
     }
 
-    fn add_mutation_status(&self, _mutation_status: MutationStatus) {
+    fn partition_num(&self) -> usize {
         todo!()
     }
 
-    fn get_mutation_status(&self) -> Arc<RwLock<MutationStatus>> {
+    fn set_partitions(&self, _partitions: Partitions) -> Result<()> {
         todo!()
     }
 
-    fn update_multi_table_insert_status(&self, _table_id: u64, _num_rows: u64) {
+    fn get_can_scan_from_agg_index(&self) -> bool {
         todo!()
     }
 
-    fn get_multi_table_insert_status(&self) -> Arc<Mutex<MultiTableInsertStatus>> {
+    fn set_can_scan_from_agg_index(&self, _enable: bool) {
         todo!()
     }
 
-    fn add_query_profiles(&self, _: &HashMap<u32, PlanProfile>) {
+    fn get_enable_sort_spill(&self) -> bool {
         todo!()
     }
 
-    fn get_query_profiles(&self) -> Vec<PlanProfile> {
+    fn set_enable_sort_spill(&self, _enable: bool) {
         todo!()
     }
+}
 
-    fn set_merge_into_join(&self, _join: MergeIntoJoin) {
-        todo!()
-    }
-
-    fn get_merge_into_join(&self) -> MergeIntoJoin {
-        todo!()
-    }
-
+impl TableContextRuntimeFilter for CtxDelegation {
     fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
         todo!()
     }
@@ -882,90 +948,32 @@ impl TableContext for CtxDelegation {
     fn get_index_runtime_filters(&self, _: usize) -> IndexRuntimeFilters {
         todo!()
     }
-    fn get_data_cache_metrics(&self) -> &DataCacheMetrics {
-        todo!()
+}
+
+impl TableContextResultCache for CtxDelegation {
+    fn get_result_cache_key(&self, query_id: &str) -> Option<String> {
+        self.ctx.get_result_cache_key(query_id)
     }
 
-    fn get_queued_queries(&self) -> Vec<ProcessInfo> {
-        todo!()
+    fn set_query_id_result_cache(&self, query_id: String, result_cache_key: String) {
+        self.ctx
+            .set_query_id_result_cache(query_id, result_cache_key)
+    }
+}
+
+impl TableContextStream for CtxDelegation {}
+
+impl TableContextVariables for CtxDelegation {
+    fn set_variable(&self, _key: String, _value: Scalar) {}
+
+    fn unset_variable(&self, _key: &str) {}
+
+    fn get_variable(&self, _key: &str) -> Option<Scalar> {
+        None
     }
 
-    fn get_read_block_thresholds(&self) -> BlockThresholds {
-        todo!()
-    }
-
-    fn set_read_block_thresholds(&self, _thresholds: BlockThresholds) {
-        todo!()
-    }
-
-    fn get_query_queued_duration(&self) -> Duration {
-        todo!()
-    }
-
-    fn set_query_queued_duration(&self, _queued_duration: Duration) {
-        todo!()
-    }
-
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        _catalog_name: &str,
-        _db_name: &str,
-        _tbl_name: &str,
-        _lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>> {
-        todo!()
-    }
-
-    fn get_temp_table_prefix(&self) -> Result<String> {
-        todo!()
-    }
-
-    fn session_state(&self) -> Result<SessionState> {
-        todo!()
-    }
-
-    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
-        false
-    }
-
-    fn set_cluster(&self, _: Arc<Cluster>) {
-        todo!()
-    }
-
-    async fn get_warehouse_cluster(&self) -> Result<Arc<Cluster>> {
-        todo!()
-    }
-    fn get_table_meta_timestamps(
-        &self,
-        table: &dyn Table,
-        previous_snapshot: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableMetaTimestamps> {
-        self.ctx.get_table_meta_timestamps(table, previous_snapshot)
-    }
-
-    fn get_abort_notify(&self) -> Arc<WatchNotify> {
-        self.ctx.get_abort_notify()
-    }
-
-    fn add_m_cte_temp_table(&self, _database_name: &str, _table_name: &str) {
-        todo!()
-    }
-
-    async fn drop_m_cte_temp_table(&self) -> Result<()> {
-        todo!()
-    }
-
-    fn add_recursive_cte_temp_table(
-        &self,
-        _catalog_name: &str,
-        _database_name: &str,
-        _table_name: &str,
-    ) {
-        todo!()
-    }
-
-    async fn drop_recursive_cte_temp_table(&self) -> Result<()> {
-        todo!()
+    fn get_all_variables(&self) -> HashMap<String, Scalar> {
+        HashMap::new()
     }
 }
 

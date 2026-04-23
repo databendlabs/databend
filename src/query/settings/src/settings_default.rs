@@ -139,13 +139,6 @@ impl DefaultSettings {
             let all_timezones: Vec<String> = chrono_tz::TZ_VARIANTS.iter().map(|tz| tz.to_string()).collect();
 
             let default_settings = HashMap::from([
-                ("enable_clickhouse_handler", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables clickhouse handler.",
-                    mode: SettingMode::Both,
-                    scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=1)),
-                }),
                 ("max_block_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(65536),
                     desc: "Sets the maximum rows size of a single data block that can be read.",
@@ -521,6 +514,13 @@ impl DefaultSettings {
                 ("enable_merge_into_row_fetch", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable merge into row fetch optimization.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_mutation_block_id_repartition", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable local block_id repartition before row fetch in join-based mutations (MERGE INTO, UPDATE...FROM) to reduce duplicate block reads.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1626,8 +1626,8 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
                 ("max_aggregate_spill_level", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into `num_cpu` smaller parts to ensure it fits in memory.",
+                    value: UserSettingValue::UInt64(3),
+                    desc: "Maximum recursion depth for the aggregate spill. Each recursion level repartition data into 4 smaller parts to ensure it fits in memory.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=16)),

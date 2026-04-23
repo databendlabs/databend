@@ -63,7 +63,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
-use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
+use databend_enterprise_row_access_policy_feature::RowAccessPolicyCacheManager;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
@@ -89,7 +89,6 @@ use crate::plans::DummyTableScan;
 use crate::plans::RecursiveCteScan;
 use crate::plans::RelOperator;
 use crate::plans::Scan;
-use crate::plans::SecureFilter;
 
 impl Binder {
     pub fn bind_dummy_table(
@@ -472,7 +471,7 @@ impl Binder {
                 table, table
             )));
         }
-        // Check for row_access_policy and wrap with SecureFilter if present
+        // Check for row_access_policy and write secure predicates into Scan
         let final_s_expr = if let Some(policy) = &table
             .table()
             .get_table_info()
@@ -503,12 +502,13 @@ impl Binder {
     ) -> Result<SExpr> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
-        // Collect arguments: only include fields whose column_id is in policy.columns_ids
-        let arguments: Vec<Expr> = fields
+        // Collect arguments in policy.columns_ids order (matches the policy parameter list).
+        // Previously this iterated `fields` (schema order) with a contains-filter, which
+        // silently reordered arguments when USING column order differed from schema order.
+        let arguments: Vec<Expr> = policy
+            .columns_ids
             .iter()
-            .filter(|t| policy.columns_ids.contains(&t.column_id))
+            .filter_map(|col_id| fields.iter().find(|t| t.column_id == *col_id))
             .map(|t| Expr::ColumnRef {
                 span: None,
                 column: ColumnRef {
@@ -519,18 +519,32 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
+        let tenant = self.ctx.get_tenant();
+        let cache = RowAccessPolicyCacheManager::instance();
         let start = std::time::Instant::now();
-        let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
-            meta_api,
-            &self.ctx.get_tenant(),
-            policy,
-        ))?;
-        let fetch_elapsed = start.elapsed();
-        info!(
-            "row_access_policy: policy_id={}, fetch_ms={:.3}",
-            policy,
-            fetch_elapsed.as_secs_f64() * 1000.0,
-        );
+        // Fast sync path: avoid block_on overhead on cache hits.
+        let res = match cache.try_get(&tenant, policy) {
+            Some(cached) => {
+                debug!(
+                    "row_access_policy: policy_id={}, cache_hit, elapsed_ms={:.3}",
+                    policy,
+                    start.elapsed().as_secs_f64() * 1000.0,
+                );
+                cached
+            }
+            None => {
+                let meta_api = UserApiProvider::instance().get_meta_store_client();
+                let loaded = databend_common_base::runtime::block_on(
+                    cache.get_or_load(meta_api, &tenant, policy),
+                )?;
+                info!(
+                    "row_access_policy: policy_id={}, cache_miss, fetch_ms={:.3}",
+                    policy,
+                    start.elapsed().as_secs_f64() * 1000.0,
+                );
+                loaded
+            }
+        };
         let body = res.data.body;
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
@@ -567,6 +581,9 @@ impl Binder {
         Ok(res.0)
     }
 
+    /// Bind a Row Access Policy predicate and store it in the Scan's
+    /// `secure_predicates` field. These predicates are later enforced by a
+    /// Filter [SECURE] operator in the physical pipeline.
     pub fn bind_secure_filter(
         &mut self,
         bind_context: &mut BindContext,
@@ -584,12 +601,43 @@ impl Binder {
         );
         let (scalar, _) = scalar_binder.bind(expr)?;
 
-        let filter_plan = SecureFilter {
-            predicates: split_conjunctions(&scalar),
-            table_index,
-        };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
+        let secure_predicates = split_conjunctions(&scalar);
+
+        // Write secure predicates directly into the Scan node.
+        let new_expr =
+            Self::inject_secure_predicates_into_scan(&child, table_index, secure_predicates)?;
         Ok((new_expr, scalar))
+    }
+
+    /// Recursively find the Scan for `table_index` and inject secure predicates into it.
+    fn inject_secure_predicates_into_scan(
+        s_expr: &SExpr,
+        table_index: IndexType,
+        secure_predicates: Vec<ScalarExpr>,
+    ) -> Result<SExpr> {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) if scan.table_index == table_index => {
+                let mut scan = scan.clone();
+                match scan.secure_predicates.as_mut() {
+                    Some(existing) => existing.extend(secure_predicates),
+                    None => scan.secure_predicates = Some(secure_predicates),
+                }
+                Ok(SExpr::create_leaf(Arc::new(scan.into())))
+            }
+            _ => {
+                // The Scan should be the direct child in normal table binding.
+                // But handle the general case by recursing.
+                let mut children = Vec::with_capacity(s_expr.arity());
+                for child in s_expr.children() {
+                    children.push(Arc::new(Self::inject_secure_predicates_into_scan(
+                        child,
+                        table_index,
+                        secure_predicates.clone(),
+                    )?));
+                }
+                Ok(s_expr.replace_children(children))
+            }
+        }
     }
 
     pub fn resolve_data_source(

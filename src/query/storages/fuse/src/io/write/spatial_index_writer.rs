@@ -36,7 +36,9 @@ use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_metrics::storage::metrics_inc_block_spatial_index_generate_milliseconds;
 use databend_storages_common_blocks::blocks_to_parquet;
+use databend_storages_common_io::ReadSettings;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfSpatialColumns;
 use databend_storages_common_table_meta::table::TableCompression;
 use geo::algorithm::bounding_rect::BoundingRect;
@@ -44,8 +46,10 @@ use geo_index::rtree::RTreeBuilder;
 use geo_index::rtree::sort::HilbertSort;
 use log::debug;
 use log::info;
+use opendal::Operator;
 use parquet::file::metadata::KeyValue;
 
+use crate::io::read::load_spatial_index_files;
 use crate::statistics::SpatialStatsBuilder;
 
 #[derive(Debug, Clone)]
@@ -210,33 +214,9 @@ impl SpatialIndexBuilder {
             );
 
             if let Some(result) = self.build_spatial_index()? {
-                let SpatialIndexResult {
-                    index_fields,
-                    index_columns,
-                    metadata,
-                } = result;
-
-                let index_schema = TableSchemaRefExt::create(index_fields);
-                let index_block = DataBlock::new(index_columns, 1);
-
-                let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-                let _ = blocks_to_parquet(
-                    index_schema.as_ref(),
-                    vec![index_block],
-                    &mut data,
-                    // Zstd has the best compression ratio
-                    TableCompression::Zstd,
-                    // No dictionary page for spatial index
-                    false,
-                    Some(metadata),
-                )?;
-
-                let size = data.len() as u64;
-                index_state = Some(SpatialIndexState {
-                    location: location.clone(),
-                    size,
-                    data,
-                });
+                let state = Self::serialize_spatial_index(result, location)?;
+                let size = state.size;
+                index_state = Some(state);
 
                 // Perf.
                 let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -251,6 +231,91 @@ impl SpatialIndexBuilder {
         }
 
         let spatial_stats = self.finalize_spatial_stats();
+        Ok(SpatialIndexBuildResult {
+            index_state,
+            spatial_stats,
+        })
+    }
+
+    #[async_backtrace::framed]
+    pub async fn finalize_with_existing(
+        &mut self,
+        operator: Operator,
+        settings: &ReadSettings,
+        location: &Location,
+        existing_location: Option<&Location>,
+        existing_column_metas: Option<Vec<(String, SingleColumnMeta)>>,
+        existing_index_meta: Option<BTreeMap<String, String>>,
+    ) -> Result<SpatialIndexBuildResult> {
+        if existing_location.is_none()
+            || (existing_column_metas.is_none() && existing_index_meta.is_none())
+        {
+            return self.finalize(location);
+        }
+
+        let start = Instant::now();
+        info!(
+            "Start build merged spatial R-Tree index for location: {}",
+            location.0
+        );
+
+        let existing_location = existing_location.unwrap();
+        let existing_column_metas = existing_column_metas.unwrap_or_default();
+        let existing_column_names = existing_column_metas
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>();
+        let existing_columns = if existing_column_names.is_empty() {
+            Vec::new()
+        } else {
+            load_spatial_index_files(
+                operator,
+                settings,
+                &existing_column_names,
+                &existing_location.0,
+            )
+            .await?
+        };
+
+        let mut result = self.build_spatial_index()?.unwrap_or(SpatialIndexResult {
+            index_fields: Vec::new(),
+            index_columns: Vec::new(),
+            metadata: Vec::new(),
+        });
+
+        for (name, _) in existing_column_metas.into_iter() {
+            result
+                .index_fields
+                .push(TableField::new(&name, TableDataType::Binary));
+        }
+        for existing_column in existing_columns.into_iter() {
+            result
+                .index_columns
+                .push(BlockEntry::Column(existing_column));
+        }
+        if let Some(existing_index_meta) = existing_index_meta {
+            for (key, value) in existing_index_meta {
+                result.metadata.push(KeyValue {
+                    key,
+                    value: Some(value),
+                });
+            }
+        }
+
+        let index_state = if result.index_fields.is_empty() {
+            None
+        } else {
+            Some(Self::serialize_spatial_index(result, location)?)
+        };
+        let spatial_stats = self.finalize_spatial_stats();
+
+        let elapsed_ms = start.elapsed().as_millis() as u64;
+        metrics_inc_block_spatial_index_generate_milliseconds(elapsed_ms);
+        info!(
+            "Finish build merged spatial index: location={}, cost={} ms",
+            location.0, elapsed_ms
+        );
+
         Ok(SpatialIndexBuildResult {
             index_state,
             spatial_stats,
@@ -353,6 +418,37 @@ impl SpatialIndexBuilder {
             statistics.insert(column_id, spatial_stat);
         }
         (!statistics.is_empty()).then_some(statistics)
+    }
+
+    fn serialize_spatial_index(
+        result: SpatialIndexResult,
+        location: &Location,
+    ) -> Result<SpatialIndexState> {
+        let SpatialIndexResult {
+            index_fields,
+            index_columns,
+            metadata,
+        } = result;
+
+        let index_schema = TableSchemaRefExt::create(index_fields);
+        let index_block = DataBlock::new(index_columns, 1);
+
+        let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+        let _ = blocks_to_parquet(
+            index_schema.as_ref(),
+            vec![index_block],
+            &mut data,
+            TableCompression::Zstd,
+            false,
+            Some(metadata),
+        )?;
+
+        let size = data.len() as u64;
+        Ok(SpatialIndexState {
+            location: location.clone(),
+            size,
+            data,
+        })
     }
 }
 

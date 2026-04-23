@@ -10,10 +10,16 @@ export QUERY_DATABASE=${QUERY_DATABASE:="default"}
 export QUERY_MYSQL_HANDLER_HOST=${QUERY_MYSQL_HANDLER_HOST:="127.0.0.1"}
 export QUERY_MYSQL_HANDLER_PORT=${QUERY_MYSQL_HANDLER_PORT:="3307"}
 export QUERY_HTTP_HANDLER_PORT=${QUERY_HTTP_HANDLER_PORT:="8000"}
-export QUERY_CLICKHOUSE_HTTP_HANDLER_PORT=${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT:="8124"}
 
+bendsql_client_connect() {
+	bendsql -uroot \
+		--host "${QUERY_MYSQL_HANDLER_HOST}" \
+		--port "${QUERY_HTTP_HANDLER_PORT}" \
+		--quote-style=never \
+		"$@" 2> >(sed -E 's/ \[v[0-9][^]]*\]$//' >&2)
+}
 
-export BENDSQL_CLIENT_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never"
+export BENDSQL_CLIENT_CONNECT="bendsql_client_connect"
 export BENDSQL_CLIENT_OUTPUT_NULL="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never --output null"
 
 

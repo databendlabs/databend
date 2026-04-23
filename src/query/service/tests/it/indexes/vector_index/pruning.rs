@@ -56,6 +56,8 @@ use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_query::test_kits::*;
@@ -63,6 +65,7 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use futures_util::TryStreamExt;
 use opendal::Operator;
 
 async fn apply_block_pruning(
@@ -157,7 +160,11 @@ async fn test_block_pruner() -> anyhow::Result<()> {
     };
 
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
-    let _ = interpreter.execute(ctx.clone()).await?;
+    let _ = interpreter
+        .execute(ctx.clone())
+        .await?
+        .try_collect::<Vec<_>>()
+        .await?;
 
     // get table
     let catalog = ctx.get_catalog("default").await?;

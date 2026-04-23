@@ -296,6 +296,7 @@ impl PhysicalPlanBuilder {
                 cols_to_fetch,
                 fetched_fields,
                 need_wrap_nullable: false,
+                enable_block_id_repartition: false,
                 stat_info: Some(stat_info.clone()),
             });
         }

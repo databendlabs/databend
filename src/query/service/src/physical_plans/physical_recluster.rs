@@ -20,7 +20,6 @@ use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -57,6 +56,9 @@ use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::CompactStrategy;
 use crate::pipelines::processors::transforms::HilbertPartitionExchange;
 use crate::pipelines::processors::transforms::TransformWindowPartitionCollect;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::spillers::SpillerDiskConfig;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

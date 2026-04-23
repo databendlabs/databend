@@ -26,7 +26,7 @@ use databend_common_sql::plans::CreateIndexPlan;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct CreateIndexInterpreter {
     ctx: Arc<QueryContext>,

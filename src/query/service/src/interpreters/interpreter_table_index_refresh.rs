@@ -18,15 +18,18 @@ use databend_common_ast::ast;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::DataBlock;
+use databend_common_expression::FromData;
+use databend_common_expression::types::UInt64Type;
 use databend_common_meta_app::schema::TableIndexType;
 use databend_common_sql::plans::RefreshTableIndexPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::operations::do_refresh_table_index;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshTableIndexInterpreter {
     ctx: Arc<QueryContext>,
@@ -86,18 +89,18 @@ impl Interpreter for RefreshTableIndexInterpreter {
         let index_version = index.version.clone();
         let index_schema = table_schema.project(&field_indices);
 
-        let mut build_res = PipelineBuildResult::create();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
         let index_type = match self.plan.index_type {
             ast::TableIndexType::Inverted => TableIndexType::Inverted,
             ast::TableIndexType::Ngram => TableIndexType::Ngram,
             ast::TableIndexType::Vector => TableIndexType::Vector,
-            ast::TableIndexType::Spatial => todo!(),
+            ast::TableIndexType::Spatial => TableIndexType::Spatial,
             ast::TableIndexType::Aggregating => unreachable!(),
         };
 
-        match self.plan.index_type {
+        let mut build_res = PipelineBuildResult::create();
+        let refreshed_blocks = match self.plan.index_type {
             ast::TableIndexType::Inverted => {
                 // TODO: Refactor refresh inverted index
                 fuse_table
@@ -110,22 +113,34 @@ impl Interpreter for RefreshTableIndexInterpreter {
                         segment_locs,
                         &mut build_res.main_pipeline,
                     )
-                    .await?;
+                    .await?
             }
             _ => {
-                assert!(segment_locs.is_none());
                 do_refresh_table_index(
                     fuse_table,
                     self.ctx.clone(),
                     index_name,
                     index_type,
                     index_schema.into(),
+                    segment_locs,
                     &mut build_res.main_pipeline,
                 )
-                .await?;
+                .await?
             }
+        };
+
+        let result_block =
+            DataBlock::new_from_columns(vec![UInt64Type::from_data(vec![refreshed_blocks])]);
+
+        if build_res.main_pipeline.is_empty() {
+            return PipelineBuildResult::from_blocks(vec![result_block]);
         }
 
-        Ok(build_res)
+        let mut result_res = PipelineBuildResult::from_blocks(vec![result_block])?;
+        result_res
+            .sources_pipelines
+            .extend(build_res.sources_pipelines);
+        result_res.sources_pipelines.push(build_res.main_pipeline);
+        Ok(result_res)
     }
 }

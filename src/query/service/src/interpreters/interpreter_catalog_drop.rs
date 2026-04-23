@@ -18,12 +18,12 @@ use async_trait::async_trait;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::Result;
 use databend_common_sql::plans::DropCatalogPlan;
-use databend_common_storages_fuse::TableContext;
 use log::debug;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryIdentity;
 
 pub struct DropCatalogInterpreter {
     ctx: Arc<QueryContext>,

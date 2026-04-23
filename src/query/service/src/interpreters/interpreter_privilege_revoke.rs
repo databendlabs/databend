@@ -27,7 +27,8 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct RevokePrivilegeInterpreter {

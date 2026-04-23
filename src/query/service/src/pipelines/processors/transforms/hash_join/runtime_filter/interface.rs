@@ -16,13 +16,14 @@ use std::time::Instant;
 
 use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_exception::Result;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::pruning::BloomRowFilter;
 
 use super::convert::build_runtime_filter_infos;
 use super::global::get_global_runtime_filter_packet;
 use crate::pipelines::processors::HashJoinBuildState;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
+use crate::sessions::TableContextRuntimeFilter;
+use crate::sessions::TableContextSettings;
 
 pub async fn build_and_push_down_runtime_filter(
     mut packet: JoinRuntimeFilterPacket,

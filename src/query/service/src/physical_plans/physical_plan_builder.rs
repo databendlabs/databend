@@ -17,7 +17,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -33,6 +32,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::physical_plan::PhysicalPlan;
+use crate::sessions::TableContext;
 
 pub struct PhysicalPlanBuilder {
     pub metadata: MetadataRef,
@@ -100,10 +100,6 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Filter(filter) => {
                 self.build_filter(s_expr, filter, required, stat_info).await
-            }
-            RelOperator::SecureFilter(secure_filter) => {
-                self.build_secure_filter(s_expr, secure_filter, required, stat_info)
-                    .await
             }
             RelOperator::Aggregate(agg) => {
                 self.build_aggregate(s_expr, agg, required, stat_info).await
@@ -193,12 +189,6 @@ impl PhysicalPlanBuilder {
                 }
             }
             RelOperator::Filter(filter) => {
-                let req = &mut child_required[0];
-                for predicate in &filter.predicates {
-                    req.extend(predicate.used_columns());
-                }
-            }
-            RelOperator::SecureFilter(filter) => {
                 let req = &mut child_required[0];
                 for predicate in &filter.predicates {
                     req.extend(predicate.used_columns());

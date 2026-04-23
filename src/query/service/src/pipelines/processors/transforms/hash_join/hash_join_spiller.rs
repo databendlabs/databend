@@ -26,11 +26,11 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_sql::plans::JoinType;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 use crate::spillers::BlocksWriter;
 use crate::spillers::PartitionBuffer;
 use crate::spillers::PartitionBufferFetchOption;
@@ -359,6 +359,15 @@ impl HashJoinSpiller {
     }
 
     #[inline(always)]
+    #[cfg(target_feature = "sse4.2")]
+    fn get_partition_id(hash: u64, bits: u64) -> u64 {
+        // On x86 SSE4.2, _mm_crc32_u64 only sets the low 32 bits; high 32 bits are always 0.
+        // Extract partition bits from the low 32 bits to avoid all rows landing in partition 0.
+        (hash >> (32 - bits)) & ((1 << bits) - 1)
+    }
+
+    #[inline(always)]
+    #[cfg(not(target_feature = "sse4.2"))]
     fn get_partition_id(hash: u64, bits: u64) -> u64 {
         (hash >> (64 - bits)) & ((1 << bits) - 1)
     }
