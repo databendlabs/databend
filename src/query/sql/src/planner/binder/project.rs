@@ -385,7 +385,7 @@ impl Binder {
                     )?;
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let source_function_names =
+                    let used_functions =
                         collect_function_names(&self.name_resolution_ctx, expr.as_ref());
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
@@ -441,7 +441,7 @@ impl Binder {
                         select_target,
                         scalar: bound_expr,
                         alias: expr_name,
-                        source_function_names,
+                        used_functions,
                     });
                 }
             }
@@ -506,7 +506,7 @@ impl Binder {
             select_target,
             scalar,
             alias: column_binding.column_name.clone(),
-            source_function_names: Default::default(),
+            used_functions: Default::default(),
         })
     }
 

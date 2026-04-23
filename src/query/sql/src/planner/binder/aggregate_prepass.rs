@@ -200,7 +200,7 @@ impl ExprInspection for ReferencedAliasProbe<'_> {
 
 struct FunctionNameProbe<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
-    names: BTreeSet<String>,
+    names: HashSet<String>,
 }
 
 impl ExprInspection for FunctionNameProbe<'_> {
@@ -221,10 +221,10 @@ impl ExprInspection for FunctionNameProbe<'_> {
 pub(super) fn collect_function_names(
     name_resolution_ctx: &NameResolutionContext,
     expr: &Expr,
-) -> BTreeSet<String> {
+) -> HashSet<String> {
     let mut probe = FunctionNameProbe {
         name_resolution_ctx,
-        names: BTreeSet::new(),
+        names: HashSet::new(),
     };
     probe.walk_expr(expr);
     probe.names
@@ -522,7 +522,7 @@ impl Binder {
             select_list
                 .items
                 .iter()
-                .flat_map(|item| item.source_function_names.iter().cloned()),
+                .flat_map(|item| item.used_functions.iter().cloned()),
         );
         function_names.extend(
             having
@@ -683,7 +683,7 @@ mod tests {
                             }
                             .into(),
                             alias: alias.name.clone(),
-                            source_function_names: Default::default(),
+                            used_functions: Default::default(),
                         }
                     })
                     .collect(),

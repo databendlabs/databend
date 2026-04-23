@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -57,7 +57,7 @@ use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
-use crate::plans::Visitor as _;
+use crate::plans::Visitor;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -113,6 +113,29 @@ enum GroupByAliasPolicy {
     FallbackOnly,
 }
 
+impl GroupByAliasPolicy {
+    fn from_item(item: &SelectItem<'_>) -> Self {
+        if item.used_functions.iter().any(|name| {
+            BUILTIN_FUNCTIONS
+                .get_property(name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(false)
+        }) {
+            return Self::FallbackOnly;
+        }
+
+        let mut finder = Finder::new(&|expr| {
+            expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
+        });
+        finder.visit(&item.scalar).unwrap();
+        if finder.scalars().is_empty() {
+            Self::Preferred
+        } else {
+            Self::FallbackOnly
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct SelectAliasEntry {
     alias_index: usize,
@@ -121,10 +144,24 @@ struct SelectAliasEntry {
     aggregate_expr_info: Option<AggregateExprInfo>,
 }
 
+impl SelectAliasEntry {
+    fn new(alias_index: usize, item: &SelectItem<'_>) -> Self {
+        Self {
+            alias_index,
+            explicit_expr_alias: matches!(item.select_target, SelectTarget::AliasedExpr {
+                alias: Some(_),
+                ..
+            }),
+            group_by_policy: GroupByAliasPolicy::from_item(item),
+            aggregate_expr_info: None,
+        }
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 pub(crate) struct SelectAliasCatalog {
     aliases: Vec<(String, ScalarExpr)>,
-    by_name: BTreeMap<String, Vec<usize>>,
+    by_name: HashMap<String, Vec<usize>>,
     items: Vec<SelectAliasEntry>,
 }
 
@@ -163,52 +200,31 @@ impl SelectAliasCatalog {
 
 impl SelectList<'_> {
     pub(crate) fn alias_catalog(&self) -> SelectAliasCatalog {
-        let mut aliases = Vec::with_capacity(self.items.len());
-        let mut by_name: BTreeMap<String, Vec<usize>> = BTreeMap::new();
-        let mut items = Vec::with_capacity(self.items.len());
+        let aliases = self
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect();
 
-        for item in &self.items {
-            let alias_index = aliases.len();
-            aliases.push((item.alias.clone(), item.scalar.clone()));
-            by_name
-                .entry(item.alias.clone())
-                .or_default()
-                .push(alias_index);
-            items.push(SelectAliasEntry {
-                alias_index,
-                explicit_expr_alias: matches!(item.select_target, SelectTarget::AliasedExpr {
-                    alias: Some(_),
-                    ..
-                }),
-                group_by_policy: Self::group_by_alias_policy(item),
-                aggregate_expr_info: None,
-            });
-        }
+        let by_name = self.items.iter().enumerate().fold(
+            HashMap::<_, Vec<_>>::new(),
+            |mut by_name, (i, item)| {
+                by_name.entry(item.alias.clone()).or_default().push(i);
+                by_name
+            },
+        );
+
+        let items = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| SelectAliasEntry::new(i, item))
+            .collect();
 
         SelectAliasCatalog {
             aliases,
             by_name,
             items,
-        }
-    }
-
-    fn group_by_alias_policy(item: &SelectItem<'_>) -> GroupByAliasPolicy {
-        if item.source_function_names.iter().any(|name| {
-            BUILTIN_FUNCTIONS
-                .get_property(name)
-                .map(|property| property.kind == FunctionKind::SRF)
-                .unwrap_or(false)
-        }) {
-            return GroupByAliasPolicy::FallbackOnly;
-        }
-
-        let mut finder = Finder::new(&|expr| {
-            expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
-        });
-        if finder.visit(&item.scalar).is_ok() && finder.scalars().is_empty() {
-            GroupByAliasPolicy::Preferred
-        } else {
-            GroupByAliasPolicy::FallbackOnly
         }
     }
 }
@@ -218,7 +234,7 @@ pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget,
     pub scalar: ScalarExpr,
     pub alias: String,
-    pub(super) source_function_names: BTreeSet<String>,
+    pub used_functions: HashSet<String>,
 }
 
 impl SelectAliasCatalog {
@@ -364,7 +380,7 @@ impl Binder {
                     .set_span(scalar.span()));
                 }
 
-                reject_grouping_functions(std::iter::once(&scalar), "Where clause")?;
+                reject_grouping_functions(Some(&scalar), "Where clause")?;
 
                 let filter_plan = Filter {
                     predicates: split_conjunctions(&scalar),
