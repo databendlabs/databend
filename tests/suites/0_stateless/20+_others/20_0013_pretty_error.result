@@ -33,54 +33,15 @@ candidate functions:
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('xx')` in expr `CAST('xx' AS UInt64)`
 
 
-hint: no function matches signature `truncate(String, Int64)`, you might need to add explicit type casts.
-
-candidate functions:
-  truncate(UInt8, Int64) :: Float64
-  truncate(UInt16, Int64) :: Float64
-  truncate(UInt32, Int64) :: Float64
-  truncate(UInt64, Int64) :: Float64
-  truncate(Int8, Int64) :: Float64
-  truncate(Int16, Int64) :: Float64
-  truncate(Int32, Int64) :: Float64
-  truncate(Int64, Int64) :: Float64
-  truncate(Float32, Int64) :: Float64
-  truncate(Float64, Int64) :: Float64
-... and 10 more, during run expr: `truncate(CAST('xx' AS UInt64), -1)`
+hint: no function matches signature `truncate(String, Int64)`, you might need to add explicit type casts. Databend tried implicit casts for signature `truncate(UInt64, Int64)`, during run expr: `truncate(CAST('xx' AS UInt64), -1)`
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`
 
 
-hint: no function matches signature `plus(UInt8, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  plus(UInt8, UInt8) :: UInt16
-  plus(UInt8, UInt16) :: UInt32
-  plus(UInt8, UInt32) :: UInt64
-  plus(UInt8, UInt64) :: UInt64
-  plus(UInt8, Int8) :: Int16
-  plus(UInt8, Int16) :: Int32
-  plus(UInt8, Int32) :: Int64
-  plus(UInt8, Int64) :: Int64
-  plus(UInt16, UInt8) :: UInt32
-  plus(UInt16, UInt16) :: UInt32
-... and 208 more, during run expr: `1 + CAST('a' AS UInt64)`
+hint: no function matches signature `plus(UInt8, String)`, you might need to add explicit type casts. Databend tried implicit casts for signature `plus(UInt8, UInt64)`, during run expr: `1 + CAST('a' AS UInt64)`
 Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST((1, 'a') AS Tuple(String, Int32))`
 
 
-hint: no function matches signature `plus(String, UInt8)`, you might need to add explicit type casts.
-
-candidate functions:
-  plus(UInt8, UInt8) :: UInt16
-  plus(UInt8, UInt16) :: UInt32
-  plus(UInt8, UInt32) :: UInt64
-  plus(UInt8, UInt64) :: UInt64
-  plus(UInt8, Int8) :: Int16
-  plus(UInt8, Int16) :: Int32
-  plus(UInt8, Int32) :: Int64
-  plus(UInt8, Int64) :: Int64
-  plus(UInt16, UInt8) :: UInt32
-  plus(UInt16, UInt16) :: UInt32
-... and 208 more, during run expr: `CAST(get(1)(CAST((1, 'a') AS Tuple(String, Int32))) AS UInt64) + 3`
+hint: no function matches signature `plus(String, UInt8)`, you might need to add explicit type casts. Databend tried implicit casts for signature `plus(UInt64, UInt8)`, during run expr: `CAST(get(1)(CAST((1, 'a') AS Tuple(String, Int32))) AS UInt64) + 3`
 Error: APIError: QueryFailed: [1025]error: 
   --> SQL:1:20
   |

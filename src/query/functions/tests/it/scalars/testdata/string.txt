@@ -2201,11 +2201,7 @@ error:
   |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`
 
 
-hint: no function matches signature `bin(String)`, you might need to add explicit type casts.
-
-candidate functions:
-  bin(Int64) :: String
-  bin(Int64 NULL) :: String NULL, during run expr: `bin(CAST(e AS Int64))`
+hint: no function matches signature `bin(String)`, you might need to add explicit type casts. Databend tried implicit casts for signature `bin(Int64)`, during run expr: `bin(CAST(e AS Int64))`
 
 
 
@@ -2316,11 +2312,7 @@ error:
   |     ^ invalid digit found in string while evaluating function `to_int64('abc')` in expr `CAST(e AS Int64)`
 
 
-hint: no function matches signature `oct(String)`, you might need to add explicit type casts.
-
-candidate functions:
-  oct(Int64) :: String
-  oct(Int64 NULL) :: String NULL, during run expr: `oct(CAST(e AS Int64))`
+hint: no function matches signature `oct(String)`, you might need to add explicit type casts. Databend tried implicit casts for signature `oct(Int64)`, during run expr: `oct(CAST(e AS Int64))`
 
 
 
@@ -2517,11 +2509,7 @@ error:
   |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`
 
 
-hint: no function matches signature `lpad(String, Int8, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  lpad(String, UInt64, String) :: String
-  lpad(String NULL, UInt64 NULL, String NULL) :: String NULL, during run expr: `lpad('hi', CAST(-1 AS UInt64), '?')`
+hint: no function matches signature `lpad(String, Int8, String)`, you might need to add explicit type casts. Databend tried implicit casts for signature `lpad(String, UInt64, String)`, during run expr: `lpad('hi', CAST(-1 AS UInt64), '?')`
 
 
 
@@ -2634,11 +2622,7 @@ error:
   |            ^^ number overflowed while evaluating function `to_uint64(-1)` in expr `CAST(-1 AS UInt64)`
 
 
-hint: no function matches signature `rpad(String, Int8, String)`, you might need to add explicit type casts.
-
-candidate functions:
-  rpad(String, UInt64, String) :: String
-  rpad(String NULL, UInt64 NULL, String NULL) :: String NULL, during run expr: `rpad('hi', CAST(-1 AS UInt64), '?')`
+hint: no function matches signature `rpad(String, Int8, String)`, you might need to add explicit type casts. Databend tried implicit casts for signature `rpad(String, UInt64, String)`, during run expr: `rpad('hi', CAST(-1 AS UInt64), '?')`
 
 
 

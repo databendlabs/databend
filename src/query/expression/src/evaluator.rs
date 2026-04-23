@@ -376,9 +376,13 @@ impl<'a> Evaluator<'a> {
             return err;
         }
 
-        let Some(hint) =
-            format_function_argument_mismatch_hint(name, params, &hint_args, self.fn_registry)
-        else {
+        let Some(hint) = format_function_argument_mismatch_hint(
+            name,
+            params,
+            &hint_args,
+            args,
+            self.fn_registry,
+        ) else {
             return err;
         };
 
