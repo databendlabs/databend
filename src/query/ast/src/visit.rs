@@ -90,7 +90,7 @@ pub enum VisitControl<B = ()> {
 
 pub type VisitResult = Result<VisitControl, !>;
 
-/// Pre-order visitor hooks for immutable AST traversal.
+/// Visitor hooks for immutable AST traversal.
 ///
 /// Returning `Continue` lets the walker descend into children automatically.
 /// Returning `SkipChildren` stops descent for the current node.
@@ -111,6 +111,10 @@ pub trait Visitor {
 
     fn visit_query(&mut self, _query: &Query) -> Result<VisitControl<Self::Break>, Self::Error> {
         Ok(VisitControl::Continue)
+    }
+
+    fn leave_query(&mut self, _query: &Query) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     fn visit_set_expr(
@@ -138,6 +142,10 @@ pub trait Visitor {
         Ok(VisitControl::Continue)
     }
 
+    fn leave_expr(&mut self, _expr: &Expr) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     fn visit_function_call(
         &mut self,
         _call: &FunctionCall,
@@ -160,7 +168,7 @@ pub trait Visitor {
     }
 }
 
-/// Pre-order visitor hooks for mutable AST traversal.
+/// Visitor hooks for mutable AST traversal.
 ///
 /// Returning `Continue` lets the walker descend into children automatically.
 /// Returning `SkipChildren` stops descent for the current node.
@@ -186,6 +194,10 @@ pub trait VisitorMut {
         Ok(VisitControl::Continue)
     }
 
+    fn leave_query(&mut self, _query: &mut Query) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
     fn visit_set_expr(
         &mut self,
         _set_expr: &mut SetExpr,
@@ -209,6 +221,10 @@ pub trait VisitorMut {
 
     fn visit_expr(&mut self, _expr: &mut Expr) -> Result<VisitControl<Self::Break>, Self::Error> {
         Ok(VisitControl::Continue)
+    }
+
+    fn leave_expr(&mut self, _expr: &mut Expr) -> Result<(), Self::Error> {
+        Ok(())
     }
 
     fn visit_function_call(

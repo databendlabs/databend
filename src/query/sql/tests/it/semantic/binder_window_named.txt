@@ -53,6 +53,36 @@ EvalScalar
                         └── limit: NONE
 
 
+=== named_window_aggregate_inside_nested_window_expression_binds ===
+description: A named window aggregate introduced from a referenced window spec must still bind when the window expression is nested inside a larger select expression.
+sql: SELECT depname, sum(sum(salary)) OVER w + 1 FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))
+status: ok
+EvalScalar
+├── scalars: [empsalary.depname (#0) AS (#0), plus(sum(sum(salary)) OVER w (#4), 1) AS (#5)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [1 AS (#3)]
+    ├── order by items: [sum(salary) (#2) AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, sum(salary) (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
+        └── EvalScalar
+            ├── scalars: [sum(salary) (#2) AS (#2), sum(salary) (#2) AS (#2), 1 AS (#3)]
+            └── Aggregate(Initial)
+                ├── group items: [empsalary.depname (#0) AS (#0)]
+                ├── aggregate functions: [sum(empsalary.salary (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.empsalary (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
 === inherited_named_window_from_sqllogictest_binds ===
 description: An inherited named WINDOW specification should bind without losing the base partition spec.
 sql: SELECT rank() OVER w1, dense_rank() OVER w2 FROM empsalary WINDOW w1 AS (PARTITION BY depname), w2 AS (w1 ORDER BY salary DESC)
@@ -114,6 +144,13 @@ EvalScalar
                 ├── order by: []
                 └── limit: NONE
 
+
+=== missing_named_window_in_select_prebind_errors ===
+description: A missing named window referenced from a select-item window expression must fail during prebinding instead of being silently ignored.
+sql: SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname
+status: error
+code: 1005
+message: Window definition w not found
 
 === inherited_named_window_rejects_partition_override ===
 description: Referencing a named window must not add a new PARTITION BY clause.
