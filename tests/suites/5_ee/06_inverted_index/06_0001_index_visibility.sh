@@ -20,9 +20,9 @@ echo "grant role role1 to u1;" | $BENDSQL_CLIENT_CONNECT
 echo "grant role role2 to u2;" | $BENDSQL_CLIENT_CONNECT
 
 echo "=== test u1 with role1 ==="
-export TEST_U1_CONNECT="bendsql --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_U1_CONNECT="bendsql_query_http_user_connect u1 123"
 echo "select name, type, definition from system.indexes where database = 'db1' order by name" | $TEST_U1_CONNECT
 
 echo "=== test u2 with role2 ==="
-export TEST_U2_CONNECT="bendsql --user=u2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_U2_CONNECT="bendsql_query_http_user_connect u2 123"
 echo "select name, type, definition from system.indexes where database = 'db1' order by name" | $TEST_U2_CONNECT
