@@ -283,4 +283,32 @@ mod tests {
         };
         assert_eq!(join.join_type, JoinType::Cross);
     }
+
+    #[test]
+    fn test_analyze_common_subexpression_keeps_cross_join_operand_order() {
+        let mut metadata = Metadata::default();
+        let t1 = fake_fuse_table(1, "t1");
+        let t2 = fake_fuse_table(2, "t2");
+
+        let t1_left = add_table(&mut metadata, t1.clone());
+        let t2_left = add_table(&mut metadata, t2.clone());
+        let t1_right = add_table(&mut metadata, t1);
+        let t2_right = add_table(&mut metadata, t2);
+
+        let left = cross_join_expr(scan_expr(&metadata, t1_left), scan_expr(&metadata, t2_left));
+        let right = cross_join_expr(
+            scan_expr(&metadata, t2_right),
+            scan_expr(&metadata, t1_right),
+        );
+        let root = cross_join_expr(left, right);
+
+        let (_replacements, materialized_ctes) =
+            analyze_common_subexpression(&root, &mut metadata).unwrap();
+
+        assert_eq!(materialized_ctes.len(), 2);
+        assert!(materialized_ctes.iter().all(|cte| matches!(
+            cte.child(0).unwrap().plan(),
+            RelOperator::Scan(_)
+        )));
+    }
 }

@@ -76,7 +76,8 @@ fn collect_table_signatures_rec(
         {
             let mut tables = child_tables[0].clone().unwrap();
             tables.extend(child_tables[1].clone().unwrap());
-            tables.sort_unstable();
+            // Preserve operand order so side-swapped cross joins do not share a
+            // signature and get remapped positionally later.
             signature_to_exprs
                 .entry(TableSignature {
                     tables: tables.clone(),
