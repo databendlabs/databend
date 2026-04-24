@@ -231,6 +231,27 @@ impl BitmapAggState {
         }
     }
 
+    fn insert_many<I>(&mut self, values: I)
+    where I: IntoIterator<Item = u64> {
+        let mut values: Vec<u64> = values.into_iter().collect();
+        if values.is_empty() {
+            return;
+        }
+
+        let len = values.len();
+        values.sort_unstable();
+        values.dedup();
+        // Only use the batch path when dedup removes enough repeated values to pay for sorting.
+        if values.len() * 4 > len * 3 {
+            for value in values {
+                self.insert(value);
+            }
+            return;
+        }
+
+        self.add_bitmap::<BitmapOrOp>(HybridBitmap::from_iter(values));
+    }
+
     fn add<OP: BitmapOperate>(&mut self, other: &[u8]) -> Result<()> {
         match &mut self.rb {
             Some(v) => OP::operate_buf(v, other),
@@ -488,9 +509,7 @@ where
                 }
             }
         } else {
-            for value in view.iter() {
-                state.insert(value.as_());
-            }
+            state.insert_many(view.iter().map(|value| value.as_()));
         }
         Ok(())
     }

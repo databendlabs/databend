@@ -236,24 +236,29 @@ impl<'a> FromIterator<&'a u64> for HybridBitmap {
 
 impl std::ops::BitOrAssign for HybridBitmap {
     fn bitor_assign(&mut self, rhs: Self) {
-        match rhs {
-            HybridBitmap::Large(rhs_tree) => {
-                let lhs_tree = self.promote_to_tree();
+        match (&mut *self, rhs) {
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Large(rhs_tree)) => {
                 lhs_tree.bitor_assign(rhs_tree);
             }
-            HybridBitmap::Small(rhs_set) => match self {
-                HybridBitmap::Large(lhs_tree) => {
-                    for value in rhs_set.iter().copied() {
-                        lhs_tree.insert(value);
-                    }
+            (lhs @ HybridBitmap::Small(_), HybridBitmap::Large(mut rhs_tree)) => {
+                if let HybridBitmap::Small(lhs_set) = lhs {
+                    rhs_tree.extend(lhs_set.iter().copied());
                 }
-                HybridBitmap::Small(lhs_set) => {
+                *lhs = HybridBitmap::Large(rhs_tree);
+            }
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Small(rhs_set)) => {
+                for value in rhs_set.iter().copied() {
+                    lhs_tree.insert(value);
+                }
+            }
+            (lhs @ HybridBitmap::Small(_), HybridBitmap::Small(rhs_set)) => {
+                if let HybridBitmap::Small(lhs_set) = lhs {
                     small_union(lhs_set, rhs_set.as_slice());
-                    if self.len() >= LARGE_THRESHOLD as u64 {
-                        let _ = self.promote_to_tree();
-                    }
                 }
-            },
+                if lhs.len() >= LARGE_THRESHOLD as u64 {
+                    let _ = lhs.promote_to_tree();
+                }
+            }
         }
     }
 }
@@ -269,25 +274,32 @@ impl std::ops::BitOr for HybridBitmap {
 
 impl std::ops::BitAndAssign for HybridBitmap {
     fn bitand_assign(&mut self, rhs: Self) {
-        match rhs {
-            HybridBitmap::Large(rhs_tree) => {
-                let lhs_tree = self.promote_to_tree();
+        match (&mut *self, rhs) {
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Large(rhs_tree)) => {
                 lhs_tree.bitand_assign(rhs_tree);
-                self.try_demote();
             }
-            HybridBitmap::Small(mut rhs_set) => match self {
-                HybridBitmap::Large(lhs_tree) => {
+            (lhs @ HybridBitmap::Small(_), HybridBitmap::Large(rhs_tree)) => {
+                if let HybridBitmap::Small(lhs_set) = lhs {
+                    lhs_set.retain(|value| rhs_tree.contains(*value));
+                }
+            }
+            (lhs @ HybridBitmap::Large(_), HybridBitmap::Small(rhs_set)) => {
+                if let HybridBitmap::Large(lhs_tree) = lhs {
                     let mut result = SmallBitmap::with_capacity(rhs_set.len());
                     for value in rhs_set.iter().copied() {
                         if lhs_tree.contains(value) {
                             result.push(value);
                         }
                     }
-                    *self = HybridBitmap::Small(result);
+                    *lhs = HybridBitmap::Small(result);
                 }
-                HybridBitmap::Small(lhs_set) => small_intersection(lhs_set, &mut rhs_set),
-            },
+                return;
+            }
+            (HybridBitmap::Small(lhs_set), HybridBitmap::Small(mut rhs_set)) => {
+                small_intersection(lhs_set, &mut rhs_set)
+            }
         }
+        self.try_demote();
     }
 }
 
@@ -302,27 +314,47 @@ impl std::ops::BitAnd for HybridBitmap {
 
 impl std::ops::BitXorAssign for HybridBitmap {
     fn bitxor_assign(&mut self, rhs: Self) {
-        match rhs {
-            HybridBitmap::Large(rhs_tree) => {
-                let lhs_tree = self.promote_to_tree();
+        match (&mut *self, rhs) {
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Large(rhs_tree)) => {
                 lhs_tree.bitxor_assign(rhs_tree);
-                self.try_demote();
             }
-            HybridBitmap::Small(rhs_set) => match self {
-                // Disjoint data in the bitmap can cause lhs_tree expansion during XOR, making this path a significant performance bottleneck.
-                HybridBitmap::Large(lhs_tree) => {
-                    let rhs_tree = RoaringTreemap::from_iter(rhs_set.iter().copied());
-                    lhs_tree.bitxor_assign(rhs_tree);
-                    self.try_demote();
-                }
-                HybridBitmap::Small(lhs_set) => {
-                    small_symmetric_difference(lhs_set, rhs_set.as_slice());
-                    if self.len() >= LARGE_THRESHOLD as u64 {
-                        let _ = self.promote_to_tree();
+            (lhs @ HybridBitmap::Small(_), HybridBitmap::Large(mut rhs_tree)) => {
+                if let HybridBitmap::Small(lhs_set) = lhs {
+                    for value in lhs_set.iter().copied() {
+                        if !rhs_tree.remove(value) {
+                            rhs_tree.insert(value);
+                        }
                     }
                 }
-            },
+                *lhs = HybridBitmap::from(rhs_tree);
+                return;
+            }
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Small(rhs_set)) => {
+                let mut removed = 0;
+                let mut inserted = 0;
+                for value in rhs_set.iter().copied() {
+                    if lhs_tree.remove(value) {
+                        removed += 1;
+                    } else {
+                        lhs_tree.insert(value);
+                        inserted += 1;
+                    }
+                }
+                if removed <= inserted {
+                    return;
+                }
+            }
+            (lhs @ HybridBitmap::Small(_), HybridBitmap::Small(rhs_set)) => {
+                if let HybridBitmap::Small(lhs_set) = lhs {
+                    small_symmetric_difference(lhs_set, rhs_set.as_slice());
+                }
+                if lhs.len() >= LARGE_THRESHOLD as u64 {
+                    let _ = lhs.promote_to_tree();
+                }
+                return;
+            }
         }
+        self.try_demote();
     }
 }
 
@@ -337,24 +369,28 @@ impl std::ops::BitXor for HybridBitmap {
 
 impl std::ops::SubAssign for HybridBitmap {
     fn sub_assign(&mut self, rhs: Self) {
-        match rhs {
-            HybridBitmap::Large(rhs_tree) => {
-                let lhs_tree = self.promote_to_tree();
+        match (&mut *self, rhs) {
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Large(rhs_tree)) => {
                 lhs_tree.sub_assign(rhs_tree);
-                self.try_demote();
             }
-            HybridBitmap::Small(rhs_set) => match self {
-                HybridBitmap::Large(lhs_tree) => {
-                    let rhs_tree = RoaringTreemap::from_iter(rhs_set.iter().copied());
-                    lhs_tree.sub_assign(rhs_tree);
-                    self.try_demote();
+            (lhs @ HybridBitmap::Small(_), HybridBitmap::Large(rhs_tree)) => {
+                if let HybridBitmap::Small(lhs_set) = lhs {
+                    lhs_set.retain(|value| !rhs_tree.contains(*value));
                 }
-                HybridBitmap::Small(lhs_set) => {
-                    let result = small_difference(lhs_set.as_slice(), rhs_set.as_slice());
-                    *lhs_set = result;
+                return;
+            }
+            (HybridBitmap::Large(lhs_tree), HybridBitmap::Small(rhs_set)) => {
+                for value in rhs_set.iter().copied() {
+                    lhs_tree.remove(value);
                 }
-            },
+            }
+            (HybridBitmap::Small(lhs_set), HybridBitmap::Small(rhs_set)) => {
+                let result = small_difference(lhs_set.as_slice(), rhs_set.as_slice());
+                *lhs_set = result;
+                return;
+            }
         }
+        self.try_demote();
     }
 }
 
@@ -509,11 +545,37 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
 }
 
 pub fn intersection_with_serialized(lhs: &mut HybridBitmap, buf: &[u8]) -> Result<()> {
+    if buf.is_empty() {
+        *lhs = HybridBitmap::new();
+        return Ok(());
+    }
+
+    let is_hybrid_bitmap =
+        buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION;
+
+    if is_hybrid_bitmap && buf[3] == HYBRID_KIND_SMALL {
+        let (rhs_len, rhs_bytes) = decode_small_payload(&buf[HYBRID_HEADER_LEN..])?;
+        match lhs {
+            HybridBitmap::Small(lhs_set) => {
+                small_intersection_serialized_in_place(lhs_set, rhs_bytes)
+            }
+            HybridBitmap::Large(lhs_tree) => {
+                let mut result = SmallBitmap::with_capacity(rhs_len);
+                for chunk in rhs_bytes.chunks_exact(std::mem::size_of::<u64>()) {
+                    let value = read_u64_le(chunk);
+                    if lhs_tree.contains(value) {
+                        result.push(value);
+                    }
+                }
+                *lhs = HybridBitmap::Small(result);
+            }
+        }
+        return Ok(());
+    }
+
     if let HybridBitmap::Large(lhs) = lhs
-        && buf.len() > 3
+        && is_hybrid_bitmap
         && buf[3] == HYBRID_KIND_LARGE
-        && buf[..2] == HYBRID_MAGIC
-        && buf[2] == HYBRID_VERSION
     {
         Ok(reader::intersection_with_serialized(
             lhs,
@@ -561,6 +623,18 @@ fn try_decode_hybrid_bitmap(buf: &[u8]) -> Option<Result<HybridBitmap>> {
 }
 
 fn decode_small_bitmap(payload: &[u8]) -> Result<HybridBitmap> {
+    Ok(HybridBitmap::Small(decode_small_values(payload)?))
+}
+
+fn decode_small_values(payload: &[u8]) -> Result<SmallBitmap> {
+    let (_, bytes) = decode_small_payload(payload)?;
+    Ok(bytes
+        .chunks_exact(std::mem::size_of::<u64>())
+        .map(read_u64_le)
+        .collect())
+}
+
+fn decode_small_payload(payload: &[u8]) -> Result<(usize, &[u8])> {
     if payload.is_empty() {
         return Err(ErrorCode::BadBytes(
             "invalid hybrid bitmap payload: missing length".to_string(),
@@ -580,14 +654,13 @@ fn decode_small_bitmap(payload: &[u8]) -> Result<HybridBitmap> {
         )));
     }
 
-    let set: SmallBitmap = bytes
-        .chunks_exact(std::mem::size_of::<u64>())
-        .map(|chunk| {
-            let raw = unsafe { ptr::read_unaligned(chunk.as_ptr() as *const u64) };
-            u64::from_le(raw)
-        })
-        .collect();
-    Ok(HybridBitmap::Small(set))
+    Ok((len, bytes))
+}
+
+#[inline]
+fn read_u64_le(chunk: &[u8]) -> u64 {
+    let raw = unsafe { ptr::read_unaligned(chunk.as_ptr() as *const u64) };
+    u64::from_le(raw)
 }
 
 fn small_insert(set: &mut SmallBitmap, value: u64) -> bool {
@@ -691,6 +764,38 @@ fn small_intersection_in_place(target: &mut SmallBitmap, other: &[u64]) {
     while i < target_len && j < other.len() {
         let lv = target[i];
         let rv = other[j];
+        if lv < rv {
+            i += 1;
+        } else if rv < lv {
+            j += 1;
+        } else {
+            target[write] = lv;
+            write += 1;
+            i += 1;
+            j += 1;
+        }
+    }
+
+    target.truncate(write);
+}
+
+#[inline]
+fn small_intersection_serialized_in_place(target: &mut SmallBitmap, other: &[u8]) {
+    if other.is_empty() {
+        target.clear();
+        return;
+    }
+
+    let mut write = 0;
+    let mut i = 0;
+    let mut j = 0;
+    let target_len = target.len();
+    let other_len = other.len() / std::mem::size_of::<u64>();
+
+    while i < target_len && j < other_len {
+        let lv = target[i];
+        let offset = j * std::mem::size_of::<u64>();
+        let rv = read_u64_le(&other[offset..offset + std::mem::size_of::<u64>()]);
         if lv < rv {
             i += 1;
         } else if rv < lv {
@@ -955,6 +1060,70 @@ mod tests {
                 assert_eq!(set.as_slice(), &[1, 5, 7]);
             }
             _ => panic!("expected small hybrid bitmap after intersection"),
+        }
+    }
+
+    #[test]
+    fn bitand_small_with_large_stays_small() {
+        let mut small = HybridBitmap::from_iter([1_u64, 5, 7, 40]);
+        let large = HybridBitmap::from_iter(0_u64..64);
+        small.bitand_assign(large);
+
+        match small {
+            HybridBitmap::Small(set) => assert_eq!(set.as_slice(), &[1, 5, 7, 40]),
+            _ => panic!("expected small hybrid bitmap after intersection"),
+        }
+    }
+
+    #[test]
+    fn bitor_small_with_large_uses_large_rhs() {
+        let mut small = HybridBitmap::from_iter([100_u64, 101]);
+        let large = HybridBitmap::from_iter(0_u64..64);
+        small.bitor_assign(large);
+
+        assert!(matches!(small, HybridBitmap::Large(_)));
+        assert!(small.contains(1));
+        assert!(small.contains(100));
+        assert_eq!(small.len(), 66);
+    }
+
+    #[test]
+    fn bitxor_small_with_large_toggles_values() {
+        let mut small = HybridBitmap::from_iter([1_u64, 5, 100]);
+        let large = HybridBitmap::from_iter(0_u64..64);
+        small.bitxor_assign(large);
+
+        assert!(!small.contains(1));
+        assert!(!small.contains(5));
+        assert!(small.contains(2));
+        assert!(small.contains(100));
+        assert_eq!(small.len(), 63);
+    }
+
+    #[test]
+    fn sub_small_with_large_stays_small() {
+        let mut small = HybridBitmap::from_iter([1_u64, 5, 100]);
+        let large = HybridBitmap::from_iter(0_u64..64);
+        small.sub_assign(large);
+
+        match small {
+            HybridBitmap::Small(set) => assert_eq!(set.as_slice(), &[100]),
+            _ => panic!("expected small hybrid bitmap after difference"),
+        }
+    }
+
+    #[test]
+    fn intersection_with_serialized_small_rhs_uses_small_result() {
+        let mut lhs = HybridBitmap::from_iter(0_u64..64);
+        let rhs = HybridBitmap::from_iter([1_u64, 5, 100]);
+        let mut rhs_buf = Vec::new();
+        rhs.serialize_into(&mut rhs_buf).unwrap();
+
+        intersection_with_serialized(&mut lhs, &rhs_buf).unwrap();
+
+        match lhs {
+            HybridBitmap::Small(set) => assert_eq!(set.as_slice(), &[1, 5]),
+            _ => panic!("expected small hybrid bitmap after serialized intersection"),
         }
     }
 
