@@ -306,9 +306,10 @@ mod tests {
             analyze_common_subexpression(&root, &mut metadata).unwrap();
 
         assert_eq!(materialized_ctes.len(), 2);
-        assert!(materialized_ctes.iter().all(|cte| matches!(
-            cte.child(0).unwrap().plan(),
-            RelOperator::Scan(_)
-        )));
+        assert!(
+            materialized_ctes
+                .iter()
+                .all(|cte| matches!(cte.child(0).unwrap().plan(), RelOperator::Scan(_)))
+        );
     }
 }
