@@ -39,6 +39,7 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::VIRTUAL_COLUMN_ID_START;
 use databend_common_expression::infer_schema_type;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use enum_as_inner::EnumAsInner;
@@ -927,42 +928,48 @@ impl BindContext {
                 let table = table_entry.table();
                 let table_info = table.get_table_info();
 
-                let virtual_schema = table_info.meta.virtual_schema.as_ref()?;
-                let mut column_id = None;
-                for virtual_field in &virtual_schema.fields {
-                    if virtual_field.source_column_id == virtual_column_name.source_column_id
-                        && virtual_field.name == virtual_column_name.key_name
-                    {
-                        column_id = Some(virtual_field.column_id);
-                        break;
-                    }
-                }
-                let column_id = if let Some(column_id) = column_id {
-                    column_id
-                } else {
-                    // If the column_id does not exist, generate a temporary column_id.
-                    // This may occur in the following scenarios:
-                    // 1. The path is not an independent virtual column but is stored within shared data column.
-                    // 2. The path is an object composed of multiple virtual columns.
-                    // 3. The path is extracted from columns within a virtual column itself.
-                    let exists_virtual_columns =
-                        metadata.virtual_columns_by_table_index(table_index);
-                    let mut max_column_id = 0;
-                    for exists_virtual_column in exists_virtual_columns {
-                        if let ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) =
-                            exists_virtual_column
-                        {
-                            if column_id > max_column_id {
-                                max_column_id = column_id;
+                let virtual_schema = table_info.meta.virtual_schema.as_ref();
+                let column_id = virtual_schema
+                    .and_then(|virtual_schema| {
+                        virtual_schema
+                            .fields
+                            .iter()
+                            .find(|virtual_field| {
+                                virtual_field.source_column_id
+                                    == virtual_column_name.source_column_id
+                                    && virtual_field.name == virtual_column_name.key_name
+                            })
+                            .map(|virtual_field| virtual_field.column_id)
+                    })
+                    .unwrap_or_else(|| {
+                        // If the column_id does not exist, generate a temporary column_id.
+                        // This may occur in the following scenarios:
+                        // 1. The path is not an independent virtual column but is stored within shared data column.
+                        // 2. The path is an object composed of multiple virtual columns.
+                        // 3. The path is extracted from columns within a virtual column itself.
+                        // 4. The table option enables virtual columns, but no data has been written
+                        //    yet, so TableMeta.virtual_schema is still empty.
+                        let next_virtual_column_id = virtual_schema
+                            .map(|virtual_schema| virtual_schema.next_column_id)
+                            .unwrap_or(VIRTUAL_COLUMN_ID_START);
+                        let exists_virtual_columns =
+                            metadata.virtual_columns_by_table_index(table_index);
+                        let mut max_column_id = next_virtual_column_id.saturating_sub(1);
+                        for exists_virtual_column in exists_virtual_columns {
+                            if let ColumnEntry::VirtualColumn(VirtualColumn { column_id, .. }) =
+                                exists_virtual_column
+                            {
+                                if column_id > max_column_id {
+                                    max_column_id = column_id;
+                                }
                             }
                         }
-                    }
-                    if max_column_id >= virtual_schema.next_column_id {
-                        max_column_id + 1
-                    } else {
-                        virtual_schema.next_column_id
-                    }
-                };
+                        if max_column_id >= next_virtual_column_id {
+                            max_column_id + 1
+                        } else {
+                            next_virtual_column_id
+                        }
+                    });
 
                 let source_column_id = virtual_column_name.source_column_id;
                 let column_name = virtual_column_name.key_name.clone();
