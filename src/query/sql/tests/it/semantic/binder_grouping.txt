@@ -45,6 +45,91 @@ Sort
                     └── limit: NONE
 
 
+=== group_by_prefers_input_column_over_same_name_srf_alias ===
+description: GROUP BY should keep a same-name input column ahead of an SRF alias, while still allowing non-conflicting SRF aliases.
+sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2
+status: ok
+Sort
+├── sort keys: [col2 (#3) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t_str.col1 (#0) AS (#0), get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(23..49), func_name: "unnest", params: [], arguments: [FunctionCall(FunctionCall { span: Some(30..48), func_name: "split", params: [], arguments: [BoundColumnRef(BoundColumnRef { span: Some(36..37), column: ColumnBinding { database_name: None, table_name: Some("t"), column_position: Some(2), table_index: Some(0), column_name: "col2", column_name_lower: None, index: 1, data_type: Nullable(String), visibility: Visible, virtual_expr: None, is_srf: false } }), ConstantExpr(ConstantExpr { span: Some(44..47), value: String(",") })] })] }), index: 2 }] })
+        └── Aggregate(Initial)
+            ├── group items: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
+            ├── aggregate functions: []
+            └── EvalScalar
+                ├── scalars: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]
+                └── Scan
+                    ├── table: default.t_str (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== group_by_prefers_select_alias_over_same_name_base_column ===
+description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.
+sql: SELECT a AS b, count(*) FROM t GROUP BY b
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), COUNT(*) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_prefers_input_column_over_aggregate_alias ===
+description: GROUP BY should keep a same-name input column ahead of an aggregate alias, because the alias itself is not a valid grouping key.
+sql: SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [x (#2) AS (#2)]
+    ├── aggregate functions: [count() AS (#3)]
+    └── EvalScalar
+        ├── scalars: [x (#2) AS (#2)]
+        └── UnionAll
+            ├── output: [x (#2)]
+            ├── left: [x (#0)]
+            ├── right: [x (#1)]
+            ├── cte_scan_names: []
+            ├── logical_recursive_cte_id: None
+            ├── EvalScalar
+            │   ├── scalars: [1 AS (#0)]
+            │   └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+            └── EvalScalar
+                ├── scalars: [2 AS (#1)]
+                └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== group_by_prefers_input_column_over_same_name_aggregate_alias_in_subquery ===
+description: GROUP BY inside a subquery should still resolve a same-name source column before an aggregate alias.
+sql: SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#1) AS (#1)]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1)]
+    └── Aggregate(Initial)
+        ├── group items: [t.number (#0) AS (#0)]
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
 === group_by_all_collects_non_aggregate_select_items ===
 description: GROUP BY ALL should expand to the non-aggregate SELECT items only.
 sql: SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL
@@ -63,6 +148,24 @@ EvalScalar
             └── limit: NONE
 
 
+=== select_scalar_wraps_builtin_aggregate ===
+description: A scalar wrapper over a builtin aggregate should bind through the select aggregate path without requiring direct aggregate support in type checking.
+sql: SELECT sum(number) + 1 FROM t
+status: ok
+EvalScalar
+├── scalars: [plus(sum(number) (#1), 1) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === grouped_select_udaf_binds ===
 description: A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.
 sql: SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g
@@ -74,6 +177,24 @@ EvalScalar
     ├── aggregate functions: [weighted_avg(a, b) AS (#5)]
     └── EvalScalar
         ├── scalars: [modulo(t.a (#0), 2) AS (#2), CAST(t.a (#0) AS Int32 NULL) AS (#3), CAST(t.b (#1) AS Int32 NULL) AS (#4)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== select_scalar_wraps_udaf ===
+description: A scalar wrapper over a UDAF should keep binding through the normal UDAF path while coexisting with builtin aggregate prebinding.
+sql: SELECT weighted_avg(a, b) + 1 FROM t
+status: ok
+EvalScalar
+├── scalars: [plus(weighted_avg(a, b) (#4), 1) AS (#5)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [weighted_avg(a, b) AS (#4)]
+    └── EvalScalar
+        ├── scalars: [CAST(t.a (#0) AS Int32 NULL) AS (#2), CAST(t.b (#1) AS Int32 NULL) AS (#3)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []

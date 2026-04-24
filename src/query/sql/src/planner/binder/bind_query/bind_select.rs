@@ -56,24 +56,13 @@ use crate::planner::QueryExecutor;
 use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ExprContext;
-use crate::planner::binder::aggregate_prepass::AggregatePrepassAliasCatalog;
-use crate::planner::binder::aggregate_prepass::AggregatePrepassExprInfo;
-use crate::planner::binder::aggregate_prepass::AggregatePrepassFacts;
+use crate::planner::binder::aggregate_prepass::AggregateExprInfo;
 use crate::planner::binder::project::SelectInfo;
+use crate::planner::binder::select::SelectAliasCatalog;
+use crate::planner::binder::select::SelectClauseFact;
 use crate::planner::binder::select::SelectList;
-use crate::planner::binder::sort::OrderByRewriteFlags;
 use crate::planner::binder::sort::OrderItems;
 use crate::plans::ScalarExpr;
-
-#[derive(Clone)]
-struct SelectClauseFact {
-    ast: Expr,
-    contains_aggregate: bool,
-    contains_window: bool,
-    referenced_aliases: Vec<String>,
-    references_aggregate_aliases: bool,
-    references_window_aliases: bool,
-}
 
 #[derive(Clone, Default)]
 struct SelectClauseFacts {
@@ -83,11 +72,44 @@ struct SelectClauseFacts {
     aggregate_prepass_inputs: Vec<(Expr, ExprContext)>,
 }
 
+impl SelectClauseFacts {
+    fn merge_expr_info(
+        &mut self,
+        expr_context: ExprContext,
+        aliases: &SelectAliasCatalog,
+        expr_info: AggregateExprInfo,
+    ) {
+        let fact = SelectClauseFact {
+            alias_feature: aliases.aggregate_alias_feature(&expr_info.referenced_aliases),
+            expr_info,
+        };
+
+        match expr_context {
+            ExprContext::QualifyClause => self.qualify = Some(fact),
+            ExprContext::HavingClause => {
+                if fact.contains_or_references_aggregate() {
+                    self.aggregate_prepass_inputs
+                        .push((fact.expr_info.ast.clone(), ExprContext::HavingClause));
+                }
+                self.having = Some(fact)
+            }
+            ExprContext::OrderByClause => {
+                if fact.contains_or_references_aggregate() {
+                    self.aggregate_prepass_inputs
+                        .push((fact.expr_info.ast.clone(), ExprContext::OrderByClause));
+                }
+                self.order_by.push(fact)
+            }
+            _ => unreachable!("aggregate prepass only inspects HAVING/QUALIFY/ORDER BY"),
+        }
+    }
+}
+
 struct SelectGlobalView {
-    semantic_aliases: Vec<(String, ScalarExpr)>,
+    semantic_alias: SelectAliasCatalog,
+    rewritten_alias: SelectAliasCatalog,
     qualify: Option<SelectClauseFact>,
     order_by: Vec<SelectClauseFact>,
-    aggregate_prepass_facts: AggregatePrepassFacts,
 }
 
 struct SelectPreparation<'a> {
@@ -95,7 +117,6 @@ struct SelectPreparation<'a> {
     from_context: BindContext,
     select_list: SelectList<'a>,
     global_view: SelectGlobalView,
-    rewritten_aliases: Vec<(String, ScalarExpr)>,
 }
 
 struct AnalyzedSelect {
@@ -162,15 +183,12 @@ impl Binder {
         // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
         // pre-window expressions behind aliases, but SRF aliases must already point
         // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
-        let semantic_aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        let mut semantic_alias_catalog = select_list.alias_catalog();
+        let group_by_aliases = semantic_alias_catalog.bindings_for(ExprContext::GroupClaue);
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
-            self.analyze_group_items(&mut from_context, &select_list, group_by)?;
+            self.analyze_group_items(&mut from_context, &select_list, &group_by_aliases, group_by)?;
         }
 
         self.analyze_aggregate_select(&mut from_context, &mut select_list)?;
@@ -181,10 +199,19 @@ impl Binder {
             stmt.qualify.as_ref(),
             order_by,
         )?;
-        let prepass_aliases = self.collect_aggregate_prepass_aliases(&udaf_names, &select_list);
-        let clause_facts = self.build_select_clause_facts(
+        semantic_alias_catalog.analyze_aggregate_prepass_exprs(
+            &select_list,
+            &self.name_resolution_ctx,
             &udaf_names,
-            &prepass_aliases,
+        );
+        let SelectClauseFacts {
+            having: _,
+            qualify,
+            order_by,
+            aggregate_prepass_inputs,
+        } = self.build_select_clause_facts(
+            &udaf_names,
+            &semantic_alias_catalog,
             stmt.having.as_ref(),
             stmt.qualify.as_ref(),
             order_by,
@@ -192,23 +219,13 @@ impl Binder {
 
         let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
             &udaf_names,
-            &prepass_aliases,
-            clause_facts
-                .aggregate_prepass_inputs
-                .iter()
-                .map(|(expr, expr_context)| (expr, *expr_context)),
+            &semantic_alias_catalog,
+            aggregate_prepass_inputs.into_iter(),
         );
-        let global_view = SelectGlobalView {
-            semantic_aliases,
-            qualify: clause_facts.qualify,
-            order_by: clause_facts.order_by,
-            aggregate_prepass_facts,
-        };
-
         self.bind_aggregate_prepass_facts(
             &mut from_context,
-            &global_view.semantic_aliases,
-            &global_view.aggregate_prepass_facts,
+            semantic_alias_catalog.all_aliases(),
+            &aggregate_prepass_facts,
         )?;
 
         // `analyze_window` should behind `analyze_aggregate_select`,
@@ -223,18 +240,18 @@ impl Binder {
             "SELECT projection expects aggregate/UDAF calls to be rewritten before projection analysis",
         );
 
-        let rewritten_aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        let global_view = SelectGlobalView {
+            semantic_alias: semantic_alias_catalog,
+            rewritten_alias: select_list.alias_catalog(),
+            qualify,
+            order_by,
+        };
 
         Ok(SelectPreparation {
             s_expr,
             from_context,
             select_list,
             global_view,
-            rewritten_aliases,
         })
     }
 
@@ -250,7 +267,6 @@ impl Binder {
             mut from_context,
             select_list,
             global_view,
-            rewritten_aliases,
         } = preparation;
 
         // Rewrite Set-returning functions, if the argument contains aggregation function or group item,
@@ -269,7 +285,7 @@ impl Binder {
         let where_scalar = if let Some(expr) = &stmt.selection {
             let (new_expr, scalar) = self.bind_where(
                 &mut from_context,
-                &global_view.semantic_aliases,
+                global_view.semantic_alias.all_aliases(),
                 expr,
                 s_expr,
             )?;
@@ -283,7 +299,11 @@ impl Binder {
         let mut select_info = self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
-            Some(self.analyze_aggregate_having(&mut from_context, &rewritten_aliases, having)?)
+            Some(self.analyze_aggregate_having(
+                &mut from_context,
+                global_view.rewritten_alias.all_aliases(),
+                having,
+            )?)
         } else {
             None
         };
@@ -291,25 +311,13 @@ impl Binder {
         let qualify = if let Some(qualify) = global_view.qualify.as_ref() {
             Some(self.analyze_window_qualify(
                 &mut from_context,
-                &global_view.semantic_aliases,
-                &qualify.ast,
-                qualify.contains_window || qualify.references_window_aliases,
+                global_view.semantic_alias.all_aliases(),
+                &qualify.expr_info.ast,
+                qualify.contains_or_references_window(),
             )?)
         } else {
             None
         };
-
-        let order_by_rewrite_flags = global_view
-            .order_by
-            .iter()
-            .map(|fact| {
-                OrderByRewriteFlags::new(
-                    !fact.referenced_aliases.is_empty(),
-                    fact.contains_aggregate || fact.references_aggregate_aliases,
-                    fact.contains_window || fact.references_window_aliases,
-                )
-            })
-            .collect::<Vec<_>>();
 
         let order_items = self.analyze_order_items(
             &mut from_context,
@@ -318,8 +326,8 @@ impl Binder {
             // snapshot used by the clause prepass. This avoids binding against
             // already-rewritten select-item scalars when a later clause only
             // needs the original alias semantics.
-            &global_view.semantic_aliases,
-            &order_by_rewrite_flags,
+            global_view.semantic_alias.all_aliases(),
+            Some(&global_view.order_by),
             order_by,
             stmt.distinct,
         )?;
@@ -352,12 +360,12 @@ impl Binder {
     fn build_select_clause_facts(
         &self,
         udaf_names: &HashSet<String>,
-        aliases: &AggregatePrepassAliasCatalog,
+        aliases: &SelectAliasCatalog,
         having: Option<&Expr>,
         qualify: Option<&Expr>,
         order_by: &[OrderByExpr],
     ) -> SelectClauseFacts {
-        let alias_names = aliases.alias_names();
+        let alias_names = aliases.aggregate_prepass_alias_names();
         std::iter::chain(
             having
                 .into_iter()
@@ -374,53 +382,13 @@ impl Binder {
         .fold(
             SelectClauseFacts::default(),
             |mut facts, (expr, expr_context)| {
-                let AggregatePrepassExprInfo {
-                    ast,
-                    contains_aggregate,
-                    contains_window,
-                    referenced_aliases,
-                    ..
-                } = AggregatePrepassExprInfo::analyze(
+                let expr_info = AggregateExprInfo::analyze(
                     &self.name_resolution_ctx,
                     udaf_names,
                     &alias_names,
                     expr,
                 );
-
-                let references_aggregate_aliases = aliases
-                    .references_aliases_matching(&referenced_aliases, &|alias| {
-                        alias.contains_aggregate
-                    });
-                let references_window_aliases = aliases
-                    .references_aliases_matching(&referenced_aliases, &|alias| {
-                        alias.contains_window
-                    });
-
-                let fact = SelectClauseFact {
-                    ast,
-                    contains_aggregate,
-                    contains_window,
-                    references_aggregate_aliases,
-                    references_window_aliases,
-                    referenced_aliases,
-                };
-
-                if expr_context == ExprContext::QualifyClause {
-                    facts.qualify = Some(fact);
-                    return facts;
-                }
-
-                if contains_aggregate || references_aggregate_aliases {
-                    facts
-                        .aggregate_prepass_inputs
-                        .push((fact.ast.clone(), expr_context));
-                }
-
-                match expr_context {
-                    ExprContext::HavingClause => facts.having = Some(fact),
-                    ExprContext::OrderByClause => facts.order_by.push(fact),
-                    _ => unreachable!("aggregate prepass only inspects HAVING/QUALIFY/ORDER BY"),
-                }
+                facts.merge_expr_info(expr_context, aliases, expr_info);
                 facts
             },
         )

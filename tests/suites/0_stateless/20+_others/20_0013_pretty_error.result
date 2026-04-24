@@ -30,8 +30,54 @@ candidate functions:
   to_base64(Binary NULL) :: String NULL  : unable to unify `UInt8` with `Binary`
 
 
-Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `1 + CAST('a' AS UInt64)`
-Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST((1, 'a') AS Tuple(String, Int32))`, during run expr: `CAST(get(1)(CAST((1, 'a') AS Tuple(String, Int32))) AS UInt64) + 3`
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('xx')` in expr `CAST('xx' AS UInt64)`
+
+
+hint: no function matches signature `truncate(String, Int64)`, you might need to add explicit type casts.
+
+candidate functions:
+  truncate(UInt64, Int64) :: Float64
+  truncate(Int64, Int64) :: Float64
+  truncate(Float32, Int64) :: Float64
+  truncate(Float64, Int64) :: Float64
+  truncate(UInt64 NULL, Int64 NULL) :: Float64 NULL
+  truncate(Int64 NULL, Int64 NULL) :: Float64 NULL
+  truncate(Float32 NULL, Int64 NULL) :: Float64 NULL
+  truncate(Float64 NULL, Int64 NULL) :: Float64 NULL, during run expr: `truncate(CAST('xx' AS UInt64), -1)`
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`
+
+
+hint: no function matches signature `plus(UInt8, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  plus(UInt8, UInt64) :: UInt64
+  plus(UInt8, Int64) :: Int64
+  plus(UInt16, UInt64) :: UInt64
+  plus(UInt16, Int64) :: Int64
+  plus(UInt32, UInt64) :: UInt64
+  plus(UInt32, Int64) :: Int64
+  plus(UInt64, UInt64) :: UInt64
+  plus(UInt64, Int64) :: Int64
+  plus(Int16, UInt64) :: Int64
+  plus(Int16, Int64) :: Int64
+... and 62 more, during run expr: `1 + CAST('a' AS UInt64)`
+Error: APIError: QueryFailed: [1006]invalid digit found in string while evaluating function `to_int32('a')` in expr `CAST((1, 'a') AS Tuple(String, Int32))`
+
+
+hint: no function matches signature `plus(String, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  plus(UInt64, UInt8) :: UInt64
+  plus(UInt64, UInt16) :: UInt64
+  plus(UInt64, UInt32) :: UInt64
+  plus(UInt64, UInt64) :: UInt64
+  plus(UInt64, Int16) :: Int64
+  plus(UInt64, Int32) :: Int64
+  plus(UInt64, Int64) :: Int64
+  plus(Int64, UInt8) :: Int64
+  plus(Int64, UInt16) :: Int64
+  plus(Int64, UInt32) :: Int64
+... and 66 more, during run expr: `CAST(get(1)(CAST((1, 'a') AS Tuple(String, Int32))) AS UInt64) + 3`
 Error: APIError: QueryFailed: [1025]error: 
   --> SQL:1:20
   |

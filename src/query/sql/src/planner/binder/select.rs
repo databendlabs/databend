@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -24,6 +25,7 @@ use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::SetOperator;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::ROW_ID_COL_NAME;
 use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::type_check::common_super_type;
@@ -31,10 +33,12 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::Finder;
+use super::aggregate_prepass::AggregateExprInfo;
 use super::reject_grouping_functions;
 use super::sort::OrderItem;
 use crate::ColumnEntry;
 use crate::ColumnSet;
+use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
@@ -53,7 +57,7 @@ use crate::plans::Filter;
 use crate::plans::JoinType;
 use crate::plans::ScalarExpr;
 use crate::plans::UnionAll;
-use crate::plans::Visitor as _;
+use crate::plans::Visitor;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]
@@ -61,11 +65,287 @@ pub struct SelectList<'a> {
     pub items: Vec<SelectItem<'a>>,
 }
 
+#[derive(Debug, Default, Clone)]
+pub(crate) struct ClauseAliasBindings {
+    preferred: Vec<(String, ScalarExpr)>,
+    available: Vec<(String, ScalarExpr)>,
+}
+
+impl ClauseAliasBindings {
+    pub(crate) fn preferred_aliases(&self) -> &[(String, ScalarExpr)] {
+        &self.preferred
+    }
+
+    pub(crate) fn available_aliases(&self) -> &[(String, ScalarExpr)] {
+        &self.available
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AggregateAliasFeature {
+    pub(crate) ref_aggregate: bool,
+    pub(crate) ref_window: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct SelectClauseFact {
+    pub(crate) expr_info: AggregateExprInfo,
+    pub(crate) alias_feature: AggregateAliasFeature,
+}
+
+impl SelectClauseFact {
+    pub(crate) fn needs_order_by_select_item_replacement(&self) -> bool {
+        !self.expr_info.referenced_aliases.is_empty()
+    }
+
+    pub(crate) fn contains_or_references_aggregate(&self) -> bool {
+        self.expr_info.contains_aggregate || self.alias_feature.ref_aggregate
+    }
+
+    pub(crate) fn contains_or_references_window(&self) -> bool {
+        self.expr_info.contains_window || self.alias_feature.ref_window
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GroupByAliasPolicy {
+    Preferred,
+    FallbackOnly,
+}
+
+impl GroupByAliasPolicy {
+    fn from_item(item: &SelectItem<'_>) -> Self {
+        if item.used_functions.iter().any(|name| {
+            BUILTIN_FUNCTIONS
+                .get_property(name)
+                .map(|property| property.kind == FunctionKind::SRF)
+                .unwrap_or(false)
+        }) {
+            return Self::FallbackOnly;
+        }
+
+        let mut finder = Finder::new(&|expr| {
+            expr.is_aggregate() || matches!(expr, ScalarExpr::WindowFunction(_))
+        });
+        finder.visit(&item.scalar).unwrap();
+        if finder.scalars().is_empty() {
+            Self::Preferred
+        } else {
+            Self::FallbackOnly
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SelectAliasEntry {
+    alias_index: usize,
+    explicit_expr_alias: bool,
+    group_by_policy: GroupByAliasPolicy,
+    aggregate_expr_info: Option<AggregateExprInfo>,
+}
+
+impl SelectAliasEntry {
+    fn new(alias_index: usize, item: &SelectItem<'_>) -> Self {
+        Self {
+            alias_index,
+            explicit_expr_alias: matches!(item.select_target, SelectTarget::AliasedExpr {
+                alias: Some(_),
+                ..
+            }),
+            group_by_policy: GroupByAliasPolicy::from_item(item),
+            aggregate_expr_info: None,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub(crate) struct SelectAliasCatalog {
+    aliases: Vec<(String, ScalarExpr)>,
+    by_name: HashMap<String, Vec<usize>>,
+    items: Vec<SelectAliasEntry>,
+}
+
+impl SelectAliasCatalog {
+    pub(crate) fn all_aliases(&self) -> &[(String, ScalarExpr)] {
+        &self.aliases
+    }
+
+    pub(crate) fn bindings_for(&self, expr_context: ExprContext) -> ClauseAliasBindings {
+        match expr_context {
+            ExprContext::GroupClaue => {
+                let mut bindings = ClauseAliasBindings::default();
+                for item in &self.items {
+                    if !item.explicit_expr_alias {
+                        continue;
+                    }
+
+                    let entry = self.aliases[item.alias_index].clone();
+                    if item.group_by_policy == GroupByAliasPolicy::Preferred {
+                        bindings.preferred.push(entry.clone());
+                    }
+                    bindings.available.push(entry);
+                }
+                bindings
+            }
+            _ => {
+                let aliases = self.aliases.clone();
+                ClauseAliasBindings {
+                    preferred: aliases.clone(),
+                    available: aliases,
+                }
+            }
+        }
+    }
+}
+
+impl SelectList<'_> {
+    pub(crate) fn alias_catalog(&self) -> SelectAliasCatalog {
+        let aliases = self
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect();
+
+        let by_name = self.items.iter().enumerate().fold(
+            HashMap::<_, Vec<_>>::new(),
+            |mut by_name, (i, item)| {
+                by_name.entry(item.alias.clone()).or_default().push(i);
+                by_name
+            },
+        );
+
+        let items = self
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| SelectAliasEntry::new(i, item))
+            .collect();
+
+        SelectAliasCatalog {
+            aliases,
+            by_name,
+            items,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct SelectItem<'a> {
     pub select_target: &'a SelectTarget,
     pub scalar: ScalarExpr,
     pub alias: String,
+    pub used_functions: HashSet<String>,
+}
+
+impl SelectAliasCatalog {
+    pub(super) fn analyze_aggregate_prepass_exprs(
+        &mut self,
+        select_list: &SelectList<'_>,
+        name_resolution_ctx: &NameResolutionContext,
+        udaf_names: &HashSet<String>,
+    ) {
+        let alias_names = select_list
+            .items
+            .iter()
+            .filter_map(|item| match item.select_target {
+                SelectTarget::AliasedExpr { .. } => Some(item.alias.as_str()),
+                _ => None,
+            })
+            .collect::<HashSet<_>>();
+
+        for (item, entry) in select_list.items.iter().zip(self.items.iter_mut()) {
+            let SelectTarget::AliasedExpr { expr, .. } = item.select_target else {
+                continue;
+            };
+
+            entry.aggregate_expr_info = Some(AggregateExprInfo::analyze(
+                name_resolution_ctx,
+                udaf_names,
+                &alias_names,
+                expr,
+            ));
+        }
+    }
+
+    pub(super) fn aggregate_prepass_alias_names(&self) -> HashSet<&str> {
+        self.by_name
+            .iter()
+            .filter(|(_, indices)| {
+                indices
+                    .iter()
+                    .any(|index| self.items[*index].aggregate_expr_info.is_some())
+            })
+            .map(|(name, _)| name.as_str())
+            .collect()
+    }
+
+    pub(super) fn aggregate_alias_feature(&self, names: &[String]) -> AggregateAliasFeature {
+        let mut usage = AggregateAliasFeature::default();
+        let mut reachability = AggregateAliasReachability {
+            catalog: self,
+            visiting: BTreeSet::new(),
+        };
+
+        for name in names {
+            if reachability.alias_reaches(name, &mut usage) {
+                return usage;
+            }
+        }
+
+        usage
+    }
+
+    pub(super) fn unique_aggregate_prepass_expr_info(
+        &self,
+        name: &str,
+    ) -> Option<&AggregateExprInfo> {
+        let mut matches = self
+            .by_name
+            .get(name)?
+            .iter()
+            .filter_map(|index| self.items[*index].aggregate_expr_info.as_ref());
+        let info = matches.next()?;
+        if matches.next().is_some() {
+            return None;
+        }
+        Some(info)
+    }
+}
+
+struct AggregateAliasReachability<'a> {
+    catalog: &'a SelectAliasCatalog,
+    visiting: BTreeSet<String>,
+}
+
+impl<'a> AggregateAliasReachability<'a> {
+    fn alias_reaches(&mut self, name: &str, usage: &mut AggregateAliasFeature) -> bool {
+        let Some(alias) = self.catalog.unique_aggregate_prepass_expr_info(name) else {
+            return false;
+        };
+
+        if usage.ref_aggregate && usage.ref_window {
+            return true;
+        }
+
+        if !self.visiting.insert(name.to_string()) {
+            return false;
+        }
+
+        usage.ref_aggregate |= alias.contains_aggregate;
+        usage.ref_window |= alias.contains_window;
+        if usage.ref_aggregate && usage.ref_window {
+            self.visiting.remove(name);
+            return true;
+        }
+
+        for dep in &alias.referenced_aliases {
+            if self.alias_reaches(dep, usage) {
+                break;
+            }
+        }
+        self.visiting.remove(name);
+        usage.ref_aggregate && usage.ref_window
+    }
 }
 
 impl Binder {
@@ -76,38 +356,40 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
-        let last_expr_context = bind_context.replace_expr_context(ExprContext::WhereClause);
+        bind_context.with_expr_context(
+            ExprContext::WhereClause,
+            |bind_context| -> Result<(SExpr, ScalarExpr)> {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    aliases,
+                );
+                let (scalar, _) = scalar_binder.bind(expr)?;
+                let f = |scalar: &ScalarExpr| {
+                    scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
+                };
 
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            aliases,
-        );
-        let (scalar, _) = scalar_binder.bind(expr)?;
-        let f = |scalar: &ScalarExpr| {
-            scalar.is_aggregate() || matches!(scalar, ScalarExpr::WindowFunction(_))
-        };
+                let mut finder = Finder::new(&f);
+                finder.visit(&scalar)?;
+                if !finder.scalars().is_empty() {
+                    return Err(ErrorCode::SemanticError(
+                        "Where clause can't contain aggregate or window functions".to_string(),
+                    )
+                    .set_span(scalar.span()));
+                }
 
-        let mut finder = Finder::new(&f);
-        finder.visit(&scalar)?;
-        if !finder.scalars().is_empty() {
-            return Err(ErrorCode::SemanticError(
-                "Where clause can't contain aggregate or window functions".to_string(),
-            )
-            .set_span(scalar.span()));
-        }
+                reject_grouping_functions(Some(&scalar), "Where clause")?;
 
-        reject_grouping_functions(std::iter::once(&scalar), "Where clause")?;
+                let filter_plan = Filter {
+                    predicates: split_conjunctions(&scalar),
+                };
+                let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
 
-        let filter_plan = Filter {
-            predicates: split_conjunctions(&scalar),
-        };
-        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
-        bind_context.expr_context = last_expr_context;
-
-        Ok((new_expr, scalar))
+                Ok((new_expr, scalar))
+            },
+        )
     }
 
     #[recursive::recursive]
