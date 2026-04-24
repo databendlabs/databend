@@ -36,10 +36,12 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_storages_fuse::FUSE_OPT_KEY_FILE_SIZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::table::OPT_KEY_APPROX_DISTINCT_COLUMNS;
@@ -78,6 +80,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
+    r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
@@ -144,6 +147,7 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
     r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
@@ -290,6 +294,21 @@ pub fn is_valid_fuse_parquet_dictionary_opt(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
     is_valid_bool_opt(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, options)
+}
+
+pub fn is_valid_fuse_virtual_column_opt(
+    options: &BTreeMap<String, String>,
+    storage_format: FuseStorageFormat,
+) -> databend_common_exception::Result<()> {
+    if let Some(value) = options.get(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN) {
+        if !matches!(storage_format, FuseStorageFormat::Parquet) {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN} only support {OPT_KEY_STORAGE_FORMAT}=parquet, but got {storage_format}"
+            )));
+        }
+        value.parse::<bool>()?;
+    }
+    Ok(())
 }
 
 pub fn is_valid_data_page_rows(
