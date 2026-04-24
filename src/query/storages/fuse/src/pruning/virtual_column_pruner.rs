@@ -27,6 +27,8 @@ use databend_storages_common_index::VirtualColumnFileMeta;
 use databend_storages_common_index::VirtualColumnIdWithMeta;
 use databend_storages_common_index::VirtualColumnNameIndex;
 use databend_storages_common_index::VirtualColumnNode;
+use databend_storages_common_index::VirtualColumnSharedColumnMetaMap;
+use databend_storages_common_index::VirtualColumnSharedDataType;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::VirtualBlockMeta;
@@ -108,8 +110,6 @@ impl VirtualColumnPruner {
         // Each column can have multiple read plans due to heterogeneous JSON shapes.
         let mut virtual_column_read_plan = BTreeMap::new();
         let mut shared_virtual_column_ids = BTreeMap::new();
-        let mut need_source_column_ids = HashSet::new();
-
         let string_table_index: HashMap<String, u32> = virtual_meta
             .string_table
             .iter()
@@ -220,19 +220,21 @@ impl VirtualColumnPruner {
                     }
                 }
             } else {
-                // Fallback: read the original source column when no virtual plan matches.
-                // The virtual column does not exist and must be generated from the source column.
-                need_source_column_ids.insert(source_column_id);
+                // The virtual column file was generated from the observed paths in this block.
+                // If a requested path is absent from the trie/shared metadata, the path is absent
+                // for this block and can be materialized as NULL without reading the source column.
+                virtual_column_read_plan
+                    .entry(field.column_id)
+                    .or_insert_with(Vec::new)
+                    .push(VirtualColumnReadPlan::Missing);
             }
         }
 
-        // The remaining source column can be ignored.
-        let mut ignored_source_column_ids = HashSet::new();
-        for column_id in self.source_column_ids.difference(&need_source_column_ids) {
-            ignored_source_column_ids.insert(*column_id);
-        }
+        // All requested paths now have virtual read plans. Missing paths are materialized as
+        // NULL, so the source columns are not needed for virtual column fallback.
+        let ignored_source_column_ids = self.source_column_ids.clone();
 
-        if !virtual_column_metas.is_empty() {
+        if !virtual_column_read_plan.is_empty() {
             let virtual_block_meta = VirtualBlockMetaIndex {
                 virtual_block_location: virtual_block_meta.virtual_location.0.clone(),
                 virtual_column_metas,
@@ -285,14 +287,18 @@ fn ensure_virtual_column_id(
 
 fn ensure_shared_virtual_column_ids(
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    shared_virtual_column_ids: &mut BTreeMap<ColumnId, ColumnId>,
-    shared_column_metas: &HashMap<u32, (VirtualColumnIdWithMeta, VirtualColumnIdWithMeta)>,
+    shared_virtual_column_ids: &mut BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
+    typed_shared_column_metas: &VirtualColumnSharedColumnMetaMap,
     source_column_id: u32,
+    data_type: VirtualColumnSharedDataType,
 ) -> bool {
-    if shared_virtual_column_ids.contains_key(&source_column_id) {
+    if shared_virtual_column_ids.contains_key(&(source_column_id, data_type)) {
         return true;
     }
-    let Some((key_meta, value_meta)) = shared_column_metas.get(&source_column_id) else {
+    let Some(source_shared_metas) = typed_shared_column_metas.get(&source_column_id) else {
+        return false;
+    };
+    let Some((key_meta, value_meta)) = source_shared_metas.get(&data_type) else {
         return false;
     };
     let key_id = key_meta.column_id;
@@ -315,7 +321,7 @@ fn ensure_shared_virtual_column_ids(
             column_stat: None,
         });
     }
-    shared_virtual_column_ids.insert(source_column_id, key_id);
+    shared_virtual_column_ids.insert((source_column_id, data_type), key_id);
     true
 }
 
@@ -325,7 +331,7 @@ fn build_plans_for_node(
     segments: &[String],
     virtual_meta: &VirtualColumnFileMeta,
     virtual_column_metas: &mut BTreeMap<ColumnId, VirtualColumnMeta>,
-    shared_virtual_column_ids: &mut BTreeMap<ColumnId, ColumnId>,
+    shared_virtual_column_ids: &mut BTreeMap<(ColumnId, VirtualColumnSharedDataType), ColumnId>,
 ) -> Vec<VirtualColumnReadPlan> {
     let mut plans = Vec::new();
 
@@ -343,12 +349,30 @@ fn build_plans_for_node(
                 if ensure_shared_virtual_column_ids(
                     virtual_column_metas,
                     shared_virtual_column_ids,
-                    &virtual_meta.shared_column_metas,
+                    &virtual_meta.typed_shared_column_metas,
                     source_column_id,
+                    VirtualColumnSharedDataType::Jsonb,
                 ) {
                     // Shared: read from the shared map column by key index.
                     plans.push(VirtualColumnReadPlan::Shared {
                         source_column_id,
+                        data_type: VirtualColumnSharedDataType::Jsonb,
+                        index: *index,
+                    });
+                }
+            }
+            VirtualColumnNameIndex::TypedShared { data_type, index } => {
+                if ensure_shared_virtual_column_ids(
+                    virtual_column_metas,
+                    shared_virtual_column_ids,
+                    &virtual_meta.typed_shared_column_metas,
+                    source_column_id,
+                    *data_type,
+                ) {
+                    // Shared: read from the typed shared map column by key index.
+                    plans.push(VirtualColumnReadPlan::Shared {
+                        source_column_id,
+                        data_type: *data_type,
                         index: *index,
                     });
                 }
@@ -380,7 +404,7 @@ fn build_plans_for_node(
             virtual_column_metas,
             shared_virtual_column_ids,
         );
-        if let Some(plan) = child_plans.into_iter().next() {
+        if let Some(plan) = coalesce_read_plans(child_plans) {
             entries.push((child_key, plan));
         }
     }
@@ -390,6 +414,14 @@ fn build_plans_for_node(
     }
 
     plans
+}
+
+fn coalesce_read_plans(mut plans: Vec<VirtualColumnReadPlan>) -> Option<VirtualColumnReadPlan> {
+    match plans.len() {
+        0 => None,
+        1 => plans.pop(),
+        _ => Some(VirtualColumnReadPlan::Coalesce { plans }),
+    }
 }
 
 struct KeyPathMatchInfo {

@@ -15,33 +15,40 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::ops::BitOr;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
-use databend_common_column::bitmap::Bitmap;
-use databend_common_column::bitmap::MutableBitmap;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
+use databend_common_expression::ScalarRef;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
 use databend_common_expression::eval_function;
+use databend_common_expression::infer_schema_type;
 use databend_common_expression::types::AnyType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberColumn;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::variant::cast_scalar_to_variant;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_storages_common_index::VirtualColumnSharedDataType;
+use databend_storages_common_io::MergeIOReadResult;
 use databend_storages_common_io::MergeIOReader;
+use databend_storages_common_io::OwnerMemory;
 use databend_storages_common_io::ReadSettings;
 use databend_storages_common_pruner::VirtualBlockMetaIndex;
 use databend_storages_common_pruner::VirtualColumnReadPlan;
 use databend_storages_common_table_meta::meta::Compression;
+use jsonb::OwnedJsonb;
+use jsonb::RawJsonb;
 use parquet::arrow::arrow_reader::RowSelection;
 
 use super::VirtualColumnReader;
@@ -92,10 +99,12 @@ impl VirtualColumnReader {
         let mut schema = TableSchema::empty();
         let mut ranges = Vec::with_capacity(virtual_block_meta.virtual_column_metas.len());
         let mut shared_value_ids = HashSet::new();
-        let mut base_id_to_source = HashMap::new();
-        for (source_column_id, base_id) in &virtual_block_meta.shared_virtual_column_ids {
+        let mut base_id_to_shared = HashMap::new();
+        for ((source_column_id, data_type), base_id) in
+            &virtual_block_meta.shared_virtual_column_ids
+        {
             shared_value_ids.insert(*base_id + 1);
-            base_id_to_source.insert(*base_id, *source_column_id);
+            base_id_to_shared.insert(*base_id, (*source_column_id, *data_type));
         }
         for (column_id, virtual_column_meta) in &virtual_block_meta.virtual_column_metas {
             let (offset, len) = virtual_column_meta.offset_length();
@@ -103,13 +112,13 @@ impl VirtualColumnReader {
             if shared_value_ids.contains(column_id) {
                 continue;
             }
-            if let Some(source_column_id) = base_id_to_source.get(column_id) {
-                let name = format!("{}__shared__", source_column_id);
+            if let Some((source_column_id, shared_data_type)) = base_id_to_shared.get(column_id) {
+                let name = shared_internal_name(*source_column_id, *shared_data_type);
                 let data_type = TableDataType::Map(Box::new(TableDataType::Tuple {
                     fields_name: vec!["key".to_string(), "value".to_string()],
                     fields_type: vec![
                         TableDataType::Number(NumberDataType::UInt32),
-                        TableDataType::Variant,
+                        infer_schema_type(&shared_value_data_type(*shared_data_type)).unwrap(),
                     ],
                 }));
                 schema.add_internal_field(&name, data_type, *column_id);
@@ -121,10 +130,17 @@ impl VirtualColumnReader {
         }
 
         let virtual_loc = &virtual_block_meta.virtual_block_location;
-        let merge_io_result =
+        let merge_io_result = if ranges.is_empty() {
+            MergeIOReadResult::create(
+                OwnerMemory::create(vec![]),
+                HashMap::new(),
+                virtual_loc.clone(),
+            )
+        } else {
             MergeIOReader::merge_io_read(read_settings, self.dal.clone(), virtual_loc, &ranges)
                 .await
-                .ok()?;
+                .ok()?
+        };
 
         let block_read_res = BlockReadResult::create(merge_io_result, vec![], vec![]);
         let ignore_column_ids =
@@ -155,6 +171,7 @@ impl VirtualColumnReader {
             .map(|virtual_data| virtual_data.virtual_column_read_plan.clone())
             .unwrap_or_default();
         let record_batch = virtual_data
+            .filter(|virtual_data| !virtual_data.schema.fields().is_empty())
             .map(|virtual_data| {
                 let columns_chunks = virtual_data.data.columns_chunks()?;
                 column_chunks_to_record_batch(
@@ -171,10 +188,7 @@ impl VirtualColumnReader {
         // otherwise extract it from the source column
         let func_ctx = self.ctx.get_function_context()?;
         for virtual_column_field in self.virtual_column_info.virtual_column_fields.iter() {
-            if let (Some(plans), Some(record_batch)) = (
-                virtual_column_read_plan.get(&virtual_column_field.column_id),
-                record_batch.as_ref(),
-            ) {
+            if let Some(plans) = virtual_column_read_plan.get(&virtual_column_field.column_id) {
                 let target_type: DataType = virtual_column_field.data_type.as_ref().into();
                 let cast_func_name = format!(
                     "to_{}",
@@ -182,28 +196,40 @@ impl VirtualColumnReader {
                 );
                 let mut args = Vec::new();
                 for plan in plans {
-                    let Some((value, data_type)) = eval_read_plan(
-                        plan,
-                        record_batch,
-                        &orig_schema,
-                        &func_ctx,
-                        data_block.num_rows(),
-                    )?
-                    else {
-                        continue;
+                    let (value, data_type) = match plan {
+                        VirtualColumnReadPlan::Missing => {
+                            (Value::Scalar(Scalar::Null), target_type.wrap_nullable())
+                        }
+                        _ => {
+                            let Some(record_batch) = record_batch.as_ref() else {
+                                continue;
+                            };
+                            let Some((value, data_type)) = eval_read_plan(
+                                plan,
+                                record_batch,
+                                &orig_schema,
+                                &func_ctx,
+                                data_block.num_rows(),
+                            )?
+                            else {
+                                continue;
+                            };
+                            (value, data_type)
+                        }
                     };
-                    let (value, data_type) = if data_type != target_type {
-                        eval_function(
-                            None,
-                            &cast_func_name,
-                            [(value, data_type)],
-                            &func_ctx,
-                            data_block.num_rows(),
-                            &BUILTIN_FUNCTIONS,
-                        )?
-                    } else {
-                        (value, data_type)
-                    };
+                    let (value, data_type) =
+                        if data_type.remove_nullable() != target_type.remove_nullable() {
+                            eval_function(
+                                None,
+                                &cast_func_name,
+                                [(value, data_type)],
+                                &func_ctx,
+                                data_block.num_rows(),
+                                &BUILTIN_FUNCTIONS,
+                            )?
+                        } else {
+                            (value, data_type)
+                        };
                     args.push((value, data_type));
                 }
 
@@ -343,6 +369,7 @@ fn eval_read_plan(
     num_rows: usize,
 ) -> Result<Option<(Value<AnyType>, DataType)>> {
     match plan {
+        VirtualColumnReadPlan::Missing => Ok(Some((Value::Scalar(Scalar::Null), DataType::Null))),
         VirtualColumnReadPlan::Direct { name } => {
             let Some((column, data_type)) =
                 column_from_record_batch(record_batch, orig_schema, name)?
@@ -381,79 +408,650 @@ fn eval_read_plan(
         }
         VirtualColumnReadPlan::Shared {
             source_column_id,
+            data_type: shared_data_type,
             index,
         } => {
-            let name = format!("{}__shared__", source_column_id);
+            let name = shared_internal_name(*source_column_id, *shared_data_type);
             let Some((column, data_type)) =
                 column_from_record_batch(record_batch, orig_schema, &name)?
             else {
                 return Ok(None);
             };
-            let (value, value_type) = eval_function(
-                None,
-                "get",
-                [
-                    (Value::Column(column), data_type),
-                    (
-                        Value::Scalar(Scalar::Number(NumberScalar::UInt32(*index))),
-                        DataType::Number(NumberDataType::UInt32),
-                    ),
-                ],
-                func_ctx,
+            Ok(Some(materialize_shared_map_value(
+                column,
+                data_type,
+                *shared_data_type,
+                *index,
                 num_rows,
-                &BUILTIN_FUNCTIONS,
-            )?;
-            Ok(Some((value, value_type)))
+            )?))
+        }
+        VirtualColumnReadPlan::Coalesce { plans } => {
+            materialize_coalesce_read_plan(plans, record_batch, orig_schema, func_ctx, num_rows)
         }
         VirtualColumnReadPlan::Object { entries } => {
             if entries.is_empty() {
                 return Ok(None);
             }
-            let mut args = Vec::with_capacity(entries.len() * 2);
-            // Aggregate non-null flags via bitmap OR to check whether all columns are NULL.
-            let mut any_not_null_bitmap = MutableBitmap::from_len_zeroed(num_rows);
-            for (key, plan) in entries {
-                let Some((value, data_type)) =
-                    eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
-                else {
-                    return Ok(None);
-                };
-                let not_null_bitmap = match &value {
-                    Value::Column(Column::Nullable(box nullable)) => nullable.validity.clone(),
-                    Value::Scalar(Scalar::Null) | Value::Column(Column::Null { .. }) => {
-                        Bitmap::new_zeroed(num_rows)
-                    }
-                    _ => Bitmap::new_trued(num_rows),
-                };
-                any_not_null_bitmap = any_not_null_bitmap.bitor(&not_null_bitmap);
-                args.push((Value::Scalar(Scalar::String(key.clone())), DataType::String));
-                args.push((value, data_type));
-            }
-            let (value, value_type) = eval_function(
-                None,
-                "object_construct",
-                args,
-                func_ctx,
-                num_rows,
-                &BUILTIN_FUNCTIONS,
-            )?;
-            // If all columns in Object are NULL, return NULL instead of empty Object.
-            let has_any = Value::Column(Column::Boolean(any_not_null_bitmap.into()));
-            let has_any_type = DataType::Boolean;
-            let null_type = value_type.wrap_nullable();
-            let (value, value_type) = eval_function(
-                None,
-                "if",
-                [
-                    (has_any, has_any_type),
-                    (value, value_type),
-                    (Value::Scalar(Scalar::Null), null_type),
-                ],
-                func_ctx,
-                num_rows,
-                &BUILTIN_FUNCTIONS,
-            )?;
-            Ok(Some((value, value_type)))
+            materialize_object_read_plan(entries, record_batch, orig_schema, func_ctx, num_rows)
         }
+    }
+}
+
+fn materialize_coalesce_read_plan(
+    plans: &[VirtualColumnReadPlan],
+    record_batch: &RecordBatch,
+    orig_schema: &TableSchema,
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<Option<(Value<AnyType>, DataType)>> {
+    let mut args = Vec::with_capacity(plans.len());
+    for plan in plans {
+        let Some((value, data_type)) =
+            eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
+        else {
+            continue;
+        };
+        args.push((value, data_type));
+    }
+
+    if args.is_empty() {
+        return Ok(None);
+    }
+    if args.len() == 1 {
+        return Ok(Some(args.pop().unwrap()));
+    }
+
+    Ok(Some(materialize_coalesce_values(
+        &args, func_ctx, num_rows,
+    )?))
+}
+
+fn materialize_coalesce_values(
+    args: &[(Value<AnyType>, DataType)],
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    let output_type = DataType::Nullable(Box::new(DataType::Variant));
+    let mut builder = ColumnBuilder::with_capacity(&output_type, num_rows);
+    for row in 0..num_rows {
+        let mut pushed = false;
+        for (value, _) in args {
+            let scalar = value.index(row).unwrap_or(ScalarRef::Null);
+            if scalar == ScalarRef::Null {
+                continue;
+            }
+
+            let mut value_buf = Vec::new();
+            cast_scalar_to_variant(scalar, &func_ctx.tz, &mut value_buf, None);
+            builder.push(ScalarRef::Variant(value_buf.as_slice()));
+            pushed = true;
+            break;
+        }
+        if !pushed {
+            builder.push(ScalarRef::Null);
+        }
+    }
+
+    Ok((Value::Column(builder.build()), output_type))
+}
+
+fn materialize_object_read_plan(
+    entries: &[(String, VirtualColumnReadPlan)],
+    record_batch: &RecordBatch,
+    orig_schema: &TableSchema,
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<Option<(Value<AnyType>, DataType)>> {
+    let mut child_values = Vec::with_capacity(entries.len());
+    let mut shared_groups: BTreeMap<(ColumnId, VirtualColumnSharedDataType), Vec<(usize, u32)>> =
+        BTreeMap::new();
+
+    for (entry_idx, (_key, plan)) in entries.iter().enumerate() {
+        if let VirtualColumnReadPlan::Shared {
+            source_column_id,
+            data_type,
+            index,
+        } = plan
+        {
+            shared_groups
+                .entry((*source_column_id, *data_type))
+                .or_default()
+                .push((entry_idx, *index));
+            continue;
+        }
+
+        let Some((value, _data_type)) =
+            eval_read_plan(plan, record_batch, orig_schema, func_ctx, num_rows)?
+        else {
+            return Ok(None);
+        };
+        child_values.push((entries[entry_idx].0.as_str(), value));
+    }
+
+    let mut shared_object_groups = Vec::with_capacity(shared_groups.len());
+    for ((source_column_id, shared_data_type), requests) in shared_groups {
+        let name = shared_internal_name(source_column_id, shared_data_type);
+        let Some((column, data_type)) = column_from_record_batch(record_batch, orig_schema, &name)?
+        else {
+            return Ok(None);
+        };
+        validate_shared_map_column(&column, &data_type, num_rows)?;
+
+        let mut keys_by_index: HashMap<u32, Vec<&str>> = HashMap::with_capacity(requests.len());
+        for (entry_idx, index) in requests {
+            keys_by_index
+                .entry(index)
+                .or_default()
+                .push(entries[entry_idx].0.as_str());
+        }
+        shared_object_groups.push(SharedObjectGroup {
+            column,
+            keys_by_index,
+        });
+    }
+
+    Ok(Some(build_object_column(
+        &child_values,
+        &shared_object_groups,
+        func_ctx,
+        num_rows,
+    )?))
+}
+
+struct SharedObjectGroup<'a> {
+    column: Column,
+    keys_by_index: HashMap<u32, Vec<&'a str>>,
+}
+
+fn build_object_column(
+    child_values: &[(&str, Value<AnyType>)],
+    shared_object_groups: &[SharedObjectGroup],
+    func_ctx: &FunctionContext,
+    num_rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    let output_type = DataType::Nullable(Box::new(DataType::Variant));
+    let mut builder = ColumnBuilder::with_capacity(&output_type, num_rows);
+    let shared_entry_count = shared_object_groups
+        .iter()
+        .map(|group| group.keys_by_index.values().map(Vec::len).sum::<usize>())
+        .sum::<usize>();
+    let mut kvs: Vec<(&str, Vec<u8>)> = Vec::with_capacity(child_values.len() + shared_entry_count);
+    for row in 0..num_rows {
+        kvs.clear();
+        for (key, value) in child_values.iter() {
+            let scalar = value.index(row).unwrap_or(ScalarRef::Null);
+            if scalar == ScalarRef::Null {
+                continue;
+            }
+
+            let mut value_buf = Vec::new();
+            cast_scalar_to_variant(scalar, &func_ctx.tz, &mut value_buf, None);
+            kvs.push((*key, value_buf));
+        }
+        for group in shared_object_groups {
+            append_shared_object_group_values(group, row, &mut kvs, func_ctx)?;
+        }
+
+        if kvs.is_empty() {
+            builder.push(ScalarRef::Null);
+            continue;
+        }
+
+        let object = OwnedJsonb::build_object(
+            kvs.iter()
+                .map(|(key, value)| (*key, RawJsonb::new(value.as_slice()))),
+        )
+        .map_err(|err| {
+            ErrorCode::Internal(format!("failed to build virtual column object: {err}"))
+        })?;
+        builder.push(ScalarRef::Variant(object.as_ref()));
+    }
+
+    Ok((Value::Column(builder.build()), output_type))
+}
+
+fn append_shared_object_group_values<'a>(
+    group: &'a SharedObjectGroup<'a>,
+    row: usize,
+    kvs: &mut Vec<(&'a str, Vec<u8>)>,
+    func_ctx: &FunctionContext,
+) -> Result<()> {
+    let Column::Map(map) = &group.column else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared data should be Map",
+        ));
+    };
+    let Column::Tuple(fields) = map.values() else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared map values should be Tuple(key, value)",
+        ));
+    };
+    let Column::Number(NumberColumn::UInt32(keys)) = &fields[0] else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared map key should be UInt32",
+        ));
+    };
+    let values = &fields[1];
+    let offsets = map.offsets();
+    let start = offsets[row] as usize;
+    let end = offsets[row + 1] as usize;
+
+    for pos in start..end {
+        let Some(object_keys) = group.keys_by_index.get(&keys[pos]) else {
+            continue;
+        };
+        let value = values.index(pos).unwrap_or(ScalarRef::Null);
+        if value == ScalarRef::Null {
+            continue;
+        }
+
+        let mut value_buf = Vec::new();
+        cast_scalar_to_variant(value, &func_ctx.tz, &mut value_buf, None);
+        for object_key in object_keys {
+            kvs.push((*object_key, value_buf.clone()));
+        }
+    }
+
+    Ok(())
+}
+
+fn materialize_shared_map_value(
+    column: Column,
+    data_type: DataType,
+    shared_data_type: VirtualColumnSharedDataType,
+    index: u32,
+    num_rows: usize,
+) -> Result<(Value<AnyType>, DataType)> {
+    let mut values = materialize_shared_map_values(
+        column,
+        data_type,
+        shared_data_type,
+        &[(0, index)],
+        num_rows,
+    )?;
+    let Some((_entry_idx, value, data_type)) = values.pop() else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared value is missing",
+        ));
+    };
+    Ok((value, data_type))
+}
+
+fn materialize_shared_map_values(
+    column: Column,
+    data_type: DataType,
+    shared_data_type: VirtualColumnSharedDataType,
+    requests: &[(usize, u32)],
+    num_rows: usize,
+) -> Result<Vec<(usize, Value<AnyType>, DataType)>> {
+    let Column::Map(map) = column else {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared data should be Map, but got {:?}",
+            data_type
+        )));
+    };
+    if map.len() != num_rows {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared map row count mismatch, expected {}, got {}",
+            num_rows,
+            map.len()
+        )));
+    }
+
+    let Column::Tuple(fields) = map.values() else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared map values should be Tuple(key, value)",
+        ));
+    };
+    if fields.len() != 2 {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared map tuple should have 2 fields, but got {}",
+            fields.len()
+        )));
+    }
+    let Column::Number(NumberColumn::UInt32(keys)) = &fields[0] else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared map key should be UInt32",
+        ));
+    };
+    let values = &fields[1];
+    let offsets = map.offsets();
+    let value_type = shared_value_data_type(shared_data_type);
+    let output_type = value_type.wrap_nullable();
+    let mut request_positions: HashMap<u32, Vec<usize>> = HashMap::with_capacity(requests.len());
+    for (request_pos, (_entry_idx, index)) in requests.iter().enumerate() {
+        request_positions
+            .entry(*index)
+            .or_default()
+            .push(request_pos);
+    }
+
+    let mut builders = (0..requests.len())
+        .map(|_| ColumnBuilder::with_capacity(&output_type, num_rows))
+        .collect::<Vec<_>>();
+    let mut row_values = vec![ScalarRef::Null; requests.len()];
+
+    for row in 0..num_rows {
+        row_values.fill(ScalarRef::Null);
+        let start = offsets[row] as usize;
+        let end = offsets[row + 1] as usize;
+        for pos in start..end {
+            if let Some(positions) = request_positions.get(&keys[pos]) {
+                let value = values.index(pos).unwrap_or(ScalarRef::Null);
+                for request_pos in positions {
+                    row_values[*request_pos] = value.clone();
+                }
+            }
+        }
+        for (builder, value) in builders.iter_mut().zip(row_values.iter()) {
+            builder.push(value.clone());
+        }
+    }
+
+    Ok(requests
+        .iter()
+        .zip(builders)
+        .map(|((entry_idx, _index), builder)| {
+            (
+                *entry_idx,
+                Value::Column(builder.build()),
+                output_type.clone(),
+            )
+        })
+        .collect())
+}
+
+fn validate_shared_map_column(
+    column: &Column,
+    data_type: &DataType,
+    num_rows: usize,
+) -> Result<()> {
+    let Column::Map(map) = column else {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared data should be Map, but got {:?}",
+            data_type
+        )));
+    };
+    if map.len() != num_rows {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared map row count mismatch, expected {}, got {}",
+            num_rows,
+            map.len()
+        )));
+    }
+
+    let Column::Tuple(fields) = map.values() else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared map values should be Tuple(key, value)",
+        ));
+    };
+    if fields.len() != 2 {
+        return Err(ErrorCode::Internal(format!(
+            "Virtual column shared map tuple should have 2 fields, but got {}",
+            fields.len()
+        )));
+    }
+    let Column::Number(NumberColumn::UInt32(_keys)) = &fields[0] else {
+        return Err(ErrorCode::Internal(
+            "Virtual column shared map key should be UInt32",
+        ));
+    };
+
+    Ok(())
+}
+
+fn shared_internal_name(
+    source_column_id: ColumnId,
+    data_type: VirtualColumnSharedDataType,
+) -> String {
+    match data_type {
+        VirtualColumnSharedDataType::Jsonb => format!("{source_column_id}__shared__"),
+        VirtualColumnSharedDataType::Boolean => format!("{source_column_id}__shared_bool__"),
+        VirtualColumnSharedDataType::UInt64 => format!("{source_column_id}__shared_uint64__"),
+        VirtualColumnSharedDataType::Int64 => format!("{source_column_id}__shared_int64__"),
+        VirtualColumnSharedDataType::Float64 => format!("{source_column_id}__shared_float64__"),
+        VirtualColumnSharedDataType::String => format!("{source_column_id}__shared_string__"),
+    }
+}
+
+fn shared_value_data_type(data_type: VirtualColumnSharedDataType) -> DataType {
+    match data_type {
+        VirtualColumnSharedDataType::Boolean => DataType::Boolean,
+        VirtualColumnSharedDataType::UInt64 => DataType::Number(NumberDataType::UInt64),
+        VirtualColumnSharedDataType::Int64 => DataType::Number(NumberDataType::Int64),
+        VirtualColumnSharedDataType::Float64 => DataType::Number(NumberDataType::Float64),
+        VirtualColumnSharedDataType::String => DataType::String,
+        VirtualColumnSharedDataType::Jsonb => DataType::Variant,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_column::buffer::Buffer;
+    use databend_common_expression::ScalarRef;
+    use databend_common_expression::types::ArrayColumn;
+    use databend_common_expression::types::NumberColumn;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+
+    #[test]
+    fn test_materialize_shared_map_value() -> Result<()> {
+        let map = Column::Map(Box::new(ArrayColumn::new(
+            Column::Tuple(vec![
+                Column::Number(NumberColumn::UInt32(Buffer::from(vec![1, 2, 2]))),
+                Column::Number(NumberColumn::UInt64(Buffer::from(vec![10, 20, 30]))),
+            ]),
+            Buffer::from(vec![0, 2, 3]),
+        )));
+
+        let (value, data_type) = materialize_shared_map_value(
+            map,
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::UInt32),
+                DataType::Number(NumberDataType::UInt64),
+            ]))),
+            VirtualColumnSharedDataType::UInt64,
+            2,
+            2,
+        )?;
+        assert_eq!(
+            data_type,
+            DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)))
+        );
+        let Value::Column(column) = value else {
+            unreachable!()
+        };
+        assert_eq!(
+            column.index(0),
+            Some(ScalarRef::Number(NumberScalar::UInt64(20)))
+        );
+        assert_eq!(
+            column.index(1),
+            Some(ScalarRef::Number(NumberScalar::UInt64(30)))
+        );
+
+        let map = Column::Map(Box::new(ArrayColumn::new(
+            Column::Tuple(vec![
+                Column::Number(NumberColumn::UInt32(Buffer::from(vec![1, 2, 2]))),
+                Column::Number(NumberColumn::UInt64(Buffer::from(vec![10, 20, 30]))),
+            ]),
+            Buffer::from(vec![0, 2, 3]),
+        )));
+        let (value, _) = materialize_shared_map_value(
+            map,
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::UInt32),
+                DataType::Number(NumberDataType::UInt64),
+            ]))),
+            VirtualColumnSharedDataType::UInt64,
+            3,
+            2,
+        )?;
+        let Value::Column(column) = value else {
+            unreachable!()
+        };
+        assert_eq!(column.index(0), Some(ScalarRef::Null));
+        assert_eq!(column.index(1), Some(ScalarRef::Null));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_object_column_skips_null_values() -> Result<()> {
+        let nullable_type = DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64)));
+        let mut builder = ColumnBuilder::with_capacity(&nullable_type, 2);
+        builder.push(ScalarRef::Number(NumberScalar::UInt64(10)));
+        builder.push(ScalarRef::Null);
+
+        let (value, data_type) = build_object_column(
+            &[("a", Value::Column(builder.build()))],
+            &[],
+            &FunctionContext::default(),
+            2,
+        )?;
+        assert_eq!(data_type, DataType::Nullable(Box::new(DataType::Variant)));
+
+        let Value::Column(column) = value else {
+            unreachable!()
+        };
+        let Some(ScalarRef::Variant(bytes)) = column.index(0) else {
+            unreachable!()
+        };
+        assert_eq!(RawJsonb::new(bytes).to_string(), r#"{"a":10}"#);
+        assert_eq!(column.index(1), Some(ScalarRef::Null));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_object_column_reads_shared_group_directly() -> Result<()> {
+        let map = Column::Map(Box::new(ArrayColumn::new(
+            Column::Tuple(vec![
+                Column::Number(NumberColumn::UInt32(Buffer::from(vec![1, 2, 2, 1]))),
+                Column::Number(NumberColumn::UInt64(Buffer::from(vec![10, 20, 30, 40]))),
+            ]),
+            Buffer::from(vec![0, 2, 4]),
+        )));
+        let mut keys_by_index = HashMap::new();
+        keys_by_index.insert(1, vec!["a"]);
+        keys_by_index.insert(2, vec!["b"]);
+
+        let group = SharedObjectGroup {
+            column: map,
+            keys_by_index,
+        };
+        let (value, data_type) =
+            build_object_column(&[], &[group], &FunctionContext::default(), 2)?;
+        assert_eq!(data_type, DataType::Nullable(Box::new(DataType::Variant)));
+
+        let Value::Column(column) = value else {
+            unreachable!()
+        };
+        let Some(ScalarRef::Variant(bytes)) = column.index(0) else {
+            unreachable!()
+        };
+        assert_eq!(RawJsonb::new(bytes).to_string(), r#"{"a":10,"b":20}"#);
+        let Some(ScalarRef::Variant(bytes)) = column.index(1) else {
+            unreachable!()
+        };
+        assert_eq!(RawJsonb::new(bytes).to_string(), r#"{"a":40,"b":30}"#);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_build_object_column_keeps_coalesced_child_value() -> Result<()> {
+        let variant_type = DataType::Nullable(Box::new(DataType::Variant));
+
+        let mut missing_builder = ColumnBuilder::with_capacity(&variant_type, 1);
+        missing_builder.push(ScalarRef::Null);
+
+        let response = r#"{"msg":"ok","responseData":[2690218847],"statusCode":200}"#
+            .parse::<OwnedJsonb>()
+            .unwrap()
+            .to_vec();
+        let mut response_builder = ColumnBuilder::with_capacity(&variant_type, 1);
+        response_builder.push(ScalarRef::Variant(response.as_slice()));
+
+        let coalesced_response = materialize_coalesce_values(
+            &[
+                (Value::Column(missing_builder.build()), variant_type.clone()),
+                (Value::Column(response_builder.build()), variant_type),
+            ],
+            &FunctionContext::default(),
+            1,
+        )?;
+
+        let (value, _) = build_object_column(
+            &[("response", coalesced_response.0)],
+            &[],
+            &FunctionContext::default(),
+            1,
+        )?;
+
+        let Value::Column(column) = value else {
+            unreachable!()
+        };
+        let Some(ScalarRef::Variant(bytes)) = column.index(0) else {
+            unreachable!()
+        };
+        assert_eq!(
+            RawJsonb::new(bytes).to_string(),
+            r#"{"response":{"msg":"ok","responseData":[2690218847],"statusCode":200}}"#
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_materialize_shared_map_values() -> Result<()> {
+        let map = Column::Map(Box::new(ArrayColumn::new(
+            Column::Tuple(vec![
+                Column::Number(NumberColumn::UInt32(Buffer::from(vec![1, 2, 2, 1]))),
+                Column::Number(NumberColumn::UInt64(Buffer::from(vec![10, 20, 30, 40]))),
+            ]),
+            Buffer::from(vec![0, 2, 4]),
+        )));
+
+        let values = materialize_shared_map_values(
+            map,
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                DataType::Number(NumberDataType::UInt32),
+                DataType::Number(NumberDataType::UInt64),
+            ]))),
+            VirtualColumnSharedDataType::UInt64,
+            &[(10, 1), (11, 2)],
+            2,
+        )?;
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[0].0, 10);
+        assert_eq!(values[1].0, 11);
+
+        let Value::Column(column) = &values[0].1 else {
+            unreachable!()
+        };
+        assert_eq!(
+            column.index(0),
+            Some(ScalarRef::Number(NumberScalar::UInt64(10)))
+        );
+        assert_eq!(
+            column.index(1),
+            Some(ScalarRef::Number(NumberScalar::UInt64(40)))
+        );
+
+        let Value::Column(column) = &values[1].1 else {
+            unreachable!()
+        };
+        assert_eq!(
+            column.index(0),
+            Some(ScalarRef::Number(NumberScalar::UInt64(20)))
+        );
+        assert_eq!(
+            column.index(1),
+            Some(ScalarRef::Number(NumberScalar::UInt64(30)))
+        );
+
+        Ok(())
     }
 }
