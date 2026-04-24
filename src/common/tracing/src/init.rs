@@ -198,7 +198,6 @@ pub fn init_logging(
             let reporter = rt.block_on(async {
                 fastrace_opentelemetry::OpenTelemetryReporter::new(
                     exporter,
-                    opentelemetry::trace::SpanKind::Server,
                     Cow::Owned(resource),
                     opentelemetry::InstrumentationScope::builder(trace_name).build(),
                 )

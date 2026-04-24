@@ -152,6 +152,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::OPT_KEY_RECURSIVE_CTE;
 use databend_storages_common_table_meta::table::OPT_KEY_TEMP_PREFIX;
+use fastrace::collector::SpanContext;
 use jiff::Zoned;
 use jiff::tz::TimeZone;
 use log::debug;
@@ -502,11 +503,20 @@ impl QueryContext {
             .unload_callbacked
             .store(false, Ordering::Release);
         self.shared.cluster_spill_progress.write().clear();
+        self.shared.set_executor_tracing_context(None);
         *self.shared.init_query_id.write() = id;
     }
 
     pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
         self.shared.set_executor(weak_ptr)
+    }
+
+    pub fn set_executor_tracing_context(&self, span_context: Option<SpanContext>) {
+        self.shared.set_executor_tracing_context(span_context);
+    }
+
+    pub fn get_executor_tracing_context(&self) -> Option<SpanContext> {
+        self.shared.get_executor_tracing_context()
     }
 
     pub fn attach_stage(&self, attachment: StageAttachment) {

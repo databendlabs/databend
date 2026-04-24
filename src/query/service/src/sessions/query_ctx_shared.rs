@@ -61,6 +61,7 @@ use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use fastrace::collector::SpanContext;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
@@ -109,6 +110,7 @@ pub struct QueryContextShared {
     pub(super) session: Arc<Session>,
     runtime: Arc<RwLock<Option<Arc<Runtime>>>>,
     pub(super) init_query_id: Arc<RwLock<String>>,
+    executor_tracing_context: Arc<RwLock<Option<SpanContext>>>,
     cluster_cache: Arc<RwLock<Arc<Cluster>>>,
     warehouse_cache: Arc<RwLock<Option<Arc<Cluster>>>>,
     running_query: Arc<RwLock<Option<String>>>,
@@ -193,6 +195,7 @@ impl QueryContextShared {
             cluster_cache: Arc::new(RwLock::new(cluster_cache)),
             data_operator: DataOperator::instance(),
             init_query_id: Arc::new(RwLock::new(Uuid::new_v4().to_string())),
+            executor_tracing_context: Arc::new(RwLock::new(None)),
             total_scan_values: Arc::new(Progress::create()),
             scan_progress: Arc::new(Progress::create()),
             result_progress: Arc::new(Progress::create()),
@@ -650,6 +653,14 @@ impl QueryContextShared {
                 Err(err.with_context("failed to set executor"))
             }
         }
+    }
+
+    pub fn set_executor_tracing_context(&self, span_context: Option<SpanContext>) {
+        *self.executor_tracing_context.write() = span_context;
+    }
+
+    pub fn get_executor_tracing_context(&self) -> Option<SpanContext> {
+        *self.executor_tracing_context.read()
     }
 
     pub fn get_stage_attachment(&self) -> Option<StageAttachment> {

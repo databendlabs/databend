@@ -40,6 +40,7 @@ use databend_common_sql::plans::Plan;
 use databend_storages_common_cache::CacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
+use fastrace::collector::SpanContext;
 use md5::Digest;
 use md5::Md5;
 
@@ -168,7 +169,11 @@ pub trait Interpreter: Sync + Send {
             complete_executor.execute()?;
             self.inject_result()
         } else {
-            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+            let thread_span_parent = ctx
+                .get_executor_tracing_context()
+                .or_else(SpanContext::current_local_parent);
+            let pulling_executor =
+                PipelinePullingExecutor::from_pipelines(build_res, settings, thread_span_parent)?;
 
             ctx.set_executor(pulling_executor.get_inner())?;
             Ok(Box::pin(ProgressStream::try_create(

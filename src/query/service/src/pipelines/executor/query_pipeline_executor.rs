@@ -411,9 +411,15 @@ impl QueryPipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent("QueryPipelineExecutor::execute_threads")
-                .with_property(|| ("thread_name", name.clone()));
+            let parent = SpanContext::current_local_parent();
+            let thread_name = name.clone();
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
+                let span = if let Some(parent) = parent {
+                    Span::root("QueryPipelineExecutor::execute_threads", parent)
+                } else {
+                    Span::noop()
+                }
+                .with_property(|| ("thread_name", thread_name.clone()));
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();
                 let try_result = catch_unwind(|| this_clone.execute_single_thread(thread_num));

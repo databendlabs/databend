@@ -34,7 +34,6 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sinks::Sink;
 use databend_common_pipeline::sinks::Sinker;
-use fastrace::func_path;
 use fastrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
@@ -98,6 +97,7 @@ pub struct PipelinePullingExecutor {
     executor: Arc<PipelineExecutor>,
     receiver: Receiver<DataBlock>,
     tracking_payload: TrackingPayload,
+    thread_span_parent: Option<SpanContext>,
 }
 
 impl PipelinePullingExecutor {
@@ -122,6 +122,7 @@ impl PipelinePullingExecutor {
     pub fn try_create(
         mut pipeline: Pipeline,
         settings: ExecutorSettings,
+        thread_span_parent: Option<SpanContext>,
     ) -> Result<PipelinePullingExecutor> {
         let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
@@ -136,12 +137,14 @@ impl PipelinePullingExecutor {
             executor: Arc::new(executor),
             state: State::create(),
             tracking_payload,
+            thread_span_parent,
         })
     }
 
     pub fn from_pipelines(
         build_res: PipelineBuildResult,
         settings: ExecutorSettings,
+        thread_span_parent: Option<SpanContext>,
     ) -> Result<PipelinePullingExecutor> {
         let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
@@ -159,6 +162,7 @@ impl PipelinePullingExecutor {
             state: State::create(),
             tracking_payload,
             executor: Arc::new(executor),
+            thread_span_parent,
         })
     }
 
@@ -167,19 +171,18 @@ impl PipelinePullingExecutor {
 
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
-        let thread_function = Self::thread_function(state, threads_executor);
-        #[allow(unused_mut)]
-        let mut thread_name = Some(String::from("PullingExecutor"));
+        let thread_function =
+            Self::thread_function(state, threads_executor, self.thread_span_parent);
 
-        #[cfg(debug_assertions)]
+        let thread_name = if cfg!(debug_assertions)
+            && matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE")
+            && let Some(cur_thread_name) = std::thread::current().name()
         {
             // We need to pass the thread name in the unit test, because the thread name is the test name
-            if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
-                if let Some(cur_thread_name) = std::thread::current().name() {
-                    thread_name = Some(cur_thread_name.to_string());
-                }
-            }
-        }
+            Some(cur_thread_name.to_string())
+        } else {
+            Some(String::from("PullingExecutor"))
+        };
 
         Thread::named_spawn(thread_name, thread_function);
     }
@@ -188,9 +191,22 @@ impl PipelinePullingExecutor {
         self.executor.clone()
     }
 
-    fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
-        let span = Span::enter_with_local_parent(func_path!());
+    fn thread_function(
+        state: Arc<State>,
+        executor: Arc<PipelineExecutor>,
+        parent: Option<SpanContext>,
+    ) -> impl FnOnce() {
         move || {
+            let thread_name = std::thread::current()
+                .name()
+                .unwrap_or("unnamed")
+                .to_string();
+            let span = if let Some(parent) = parent {
+                Span::root("PipelinePullingExecutor::thread_function", parent)
+            } else {
+                Span::noop()
+            }
+            .with_property(|| ("thread_name", thread_name.clone()));
             let _g = span.set_local_parent();
             state.finished(executor.execute());
         }

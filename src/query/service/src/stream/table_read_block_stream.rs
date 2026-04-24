@@ -18,6 +18,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_exception::Result;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_pipeline::core::Pipeline;
+use fastrace::collector::SpanContext;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
@@ -51,7 +52,11 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
-        let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
+        let thread_span_parent = ctx
+            .get_executor_tracing_context()
+            .or_else(SpanContext::current_local_parent);
+        let executor =
+            PipelinePullingExecutor::try_create(pipeline, executor_settings, thread_span_parent)?;
         ctx.set_executor(executor.get_inner())?;
         Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }

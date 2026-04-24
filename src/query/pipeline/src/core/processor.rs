@@ -124,7 +124,19 @@ unsafe impl Send for ProcessorPtr {}
 
 unsafe impl Sync for ProcessorPtr {}
 
+thread_local! {
+    // Processor spans are created on the hot path, so cache the current thread name per thread.
+    static CURRENT_THREAD_NAME: String = std::thread::current()
+        .name()
+        .unwrap_or("unnamed")
+        .to_string();
+}
+
 impl ProcessorPtr {
+    fn current_thread_name() -> String {
+        CURRENT_THREAD_NAME.with(|thread_name| thread_name.clone())
+    }
+
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn create(inner: Box<dyn Processor>) -> ProcessorPtr {
         ProcessorPtr {
@@ -175,7 +187,8 @@ impl ProcessorPtr {
     pub unsafe fn process(&self) -> Result<()> {
         unsafe {
             let span = LocalSpan::enter_with_local_parent(format!("{}::process", self.name()))
-                .with_property(|| ("graph-node-id", self.id().index().to_string()));
+                .with_property(|| ("graph-node-id", self.id().index().to_string()))
+                .with_property(|| ("thread_name", Self::current_thread_name()));
 
             match (*self.inner.get()).process() {
                 Ok(_) => Ok(()),
@@ -215,8 +228,12 @@ impl ProcessorPtr {
 
             let inner = self.inner.clone();
             async move {
-                let span = Span::enter_with_local_parent(name)
-                    .with_property(|| ("graph-node-id", id.index().to_string()));
+                let span = match SpanContext::current_local_parent() {
+                    Some(parent) if parent.sampled => Span::enter_with_local_parent(name)
+                        .with_property(|| ("graph-node-id", id.index().to_string()))
+                        .with_property(|| ("thread_name", Self::current_thread_name())),
+                    _ => Span::noop(),
+                };
 
                 match task.await {
                     Ok(_) => {

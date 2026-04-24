@@ -188,6 +188,7 @@ walkdir = { workspace = true }
 arrow-cast = { workspace = true }
 databend-common-sql-test-support = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
+fastrace-opentelemetry = { workspace = true }
 geo = { workspace = true }
 goldenfile = { workspace = true }
 hex = { workspace = true }
@@ -195,6 +196,7 @@ hyper-util = { workspace = true }
 jwt-simple = { workspace = true }
 maplit = { workspace = true }
 mysql_async = { workspace = true }
+opentelemetry-proto = { workspace = true }
 p256 = { workspace = true }
 pretty_assertions = { workspace = true }
 proptest = { workspace = true }

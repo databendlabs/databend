@@ -31,6 +31,7 @@ use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use databend_storages_common_cache::TempDirManager;
 use databend_storages_common_session::TxnManagerRef;
+use fastrace::collector::SpanContext;
 use futures::StreamExt;
 use log::debug;
 use log::error;
@@ -493,6 +494,7 @@ impl ExecuteState {
         executor: Arc<Mutex<Executor>>,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to execute {}", interpreter.name());
+        ctx.set_executor_tracing_context(SpanContext::current_local_parent());
 
         let mut data_stream = interpreter
             .execute(ctx.clone())
