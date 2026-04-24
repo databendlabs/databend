@@ -195,11 +195,6 @@ pub trait Table: Sync + Send {
         false
     }
 
-    /// Whether the table engine supports virtual columns optimization.
-    fn support_virtual_columns(&self) -> bool {
-        false
-    }
-
     fn storage_format_as_parquet(&self) -> bool {
         false
     }
