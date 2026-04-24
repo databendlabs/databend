@@ -4,7 +4,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql -A --user=testuser1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql_query_http_user_connect testuser1 password -A"
 
 echo '-- reset user, roles, and tables'
 run_root_sql "
@@ -98,7 +98,7 @@ GRANT ALL ON *.* TO ROLE \`role_c\`;
 GRANT ROLE \`role_c\` to test_c;
 "
 
-export TEST_C_CONNECT="bendsql -A --user=test_c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_C_CONNECT="bendsql_query_http_user_connect test_c 123 -A"
 run_root_sql "
 drop database if exists db_c;
 drop database if exists db_d;
