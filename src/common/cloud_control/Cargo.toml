@@ -16,17 +16,21 @@ hyper-util = { workspace = true }
 prost = { workspace = true }
 serde = { workspace = true }
 tonic = { workspace = true }
+tonic-prost = { workspace = true }
 
 [build-dependencies]
 lenient_semver = { workspace = true }
 prost-build = { workspace = true }
 semver = { workspace = true }
-tonic-build = { workspace = true }
+tonic-prost-build = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["tonic-prost"]
 
 [lints]
 workspace = true

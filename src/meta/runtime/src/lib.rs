@@ -25,13 +25,11 @@ mod metrics;
 
 use std::future::Future;
 use std::net::IpAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::runtime;
-use databend_common_grpc::ConnectionFactory;
-use databend_common_grpc::GrpcConnectionError;
-use databend_common_grpc::RpcClientTlsConfig;
 use databend_meta::runtime_api::BoxFuture;
 use databend_meta::runtime_api::Channel;
 use databend_meta::runtime_api::ChannelError;
@@ -40,24 +38,13 @@ use databend_meta::runtime_api::RuntimeApi;
 use databend_meta::runtime_api::SpawnApi;
 use databend_meta::runtime_api::TlsConfig;
 use databend_meta::runtime_api::TrackingData;
+use fastrace::collector::SpanContext;
 pub use metrics::DatabendMetrics;
+use tonic_013::transport::Certificate;
+use tonic_013::transport::ClientTlsConfig;
+use tonic_013::transport::Endpoint;
 
-fn convert_grpc_error(e: GrpcConnectionError) -> ChannelError {
-    match e {
-        GrpcConnectionError::InvalidUri { uri, source } => ChannelError::InvalidUri {
-            uri,
-            message: source.to_string(),
-        },
-        GrpcConnectionError::TLSConfigError { action, source } => ChannelError::TlsConfig {
-            action,
-            message: source.to_string(),
-        },
-        GrpcConnectionError::CannotConnect { uri, source } => ChannelError::CannotConnect {
-            uri,
-            message: source.to_string(),
-        },
-    }
-}
+const HEADER_TRACE_PARENT: &str = "traceparent";
 
 /// Runtime adapter that wraps `databend_common_base::Runtime`.
 ///
@@ -130,16 +117,23 @@ impl SpawnApi for DatabendRuntime {
         Box::pin(runtime::UnlimitedFuture::create(fut))
     }
 
-    fn prepare_request<T>(request: tonic::Request<T>) -> tonic::Request<T> {
-        use std::str::FromStr;
+    fn prepare_request<T>(request: tonic_013::Request<T>) -> tonic_013::Request<T> {
+        let mut req = request;
 
-        // Inject tracing span context
-        let mut req = databend_common_tracing::inject_span_to_tonic_request(request);
+        if let Some(current) = SpanContext::current_local_parent() {
+            let key = tonic_013::metadata::MetadataKey::from_bytes(HEADER_TRACE_PARENT.as_bytes())
+                .unwrap();
+            let val = tonic_013::metadata::AsciiMetadataValue::try_from(
+                &current.encode_w3c_traceparent(),
+            )
+            .unwrap();
+            req.metadata_mut().insert(key, val);
+        }
 
         // Inject query ID if available
         if let Some(query_id) = runtime::ThreadTracker::query_id() {
-            let key = tonic::metadata::AsciiMetadataKey::from_str("QueryID");
-            let value = tonic::metadata::AsciiMetadataValue::from_str(query_id);
+            let key = tonic_013::metadata::AsciiMetadataKey::from_str("QueryID");
+            let value = tonic_013::metadata::AsciiMetadataValue::from_str(query_id);
 
             if let Some((key, value)) = key.ok().zip(value.ok()) {
                 req.metadata_mut().insert(key, value);
@@ -151,17 +145,26 @@ impl SpawnApi for DatabendRuntime {
 
     fn trace_request<'a, T, F, Fut, R>(
         name: &'static str,
-        request: tonic::Request<T>,
+        request: tonic_013::Request<T>,
         f: F,
     ) -> BoxFuture<'a, R>
     where
-        F: FnOnce(tonic::Request<T>) -> Fut,
+        F: FnOnce(tonic_013::Request<T>) -> Fut,
         Fut: Future<Output = R> + Send + 'a,
         R: Send + 'a,
     {
         use fastrace::prelude::*;
 
-        let span = databend_common_tracing::start_trace_for_remote_request(name, &request);
+        let span_context = request
+            .metadata()
+            .get(HEADER_TRACE_PARENT)
+            .and_then(|traceparent| traceparent.to_str().ok())
+            .and_then(SpanContext::decode_w3c_traceparent);
+        let span = if let Some(span_context) = span_context {
+            Span::root(name, span_context)
+        } else {
+            Span::noop()
+        };
         Box::pin(f(request).in_span(span))
     }
 
@@ -177,26 +180,64 @@ impl SpawnApi for DatabendRuntime {
         tls_config: Option<TlsConfig>,
     ) -> BoxFuture<'static, Result<Channel, ChannelError>> {
         Box::pin(async move {
-            let grpc_tls = tls_config.map(|c| RpcClientTlsConfig {
-                rpc_tls_server_root_ca_cert: c.root_ca_cert_path,
-                domain_name: c.domain_name,
-            });
+            let uri = format!(
+                "{}://{}",
+                if tls_config.is_some() {
+                    "https"
+                } else {
+                    "http"
+                },
+                addr
+            );
+            let mut endpoint =
+                Endpoint::from_shared(uri.clone()).map_err(|e| ChannelError::InvalidUri {
+                    uri: uri.clone(),
+                    message: e.to_string(),
+                })?;
 
-            ConnectionFactory::create_rpc_channel(&addr, timeout, grpc_tls, None)
+            if let Some(tls) = tls_config {
+                let cert =
+                    std::fs::read(&tls.root_ca_cert_path).map_err(|e| ChannelError::TlsConfig {
+                        action: "loading".to_string(),
+                        message: e.to_string(),
+                    })?;
+                let tls = ClientTlsConfig::new()
+                    .domain_name(tls.domain_name)
+                    .ca_certificate(Certificate::from_pem(cert));
+                endpoint = endpoint
+                    .tls_config(tls)
+                    .map_err(|e| ChannelError::TlsConfig {
+                        action: "building".to_string(),
+                        message: e.to_string(),
+                    })?;
+            }
+
+            if let Some(timeout) = timeout {
+                endpoint = endpoint.timeout(timeout);
+                endpoint = endpoint.connect_timeout(timeout);
+            }
+
+            endpoint
+                .connect()
                 .await
-                .map_err(convert_grpc_error)
+                .map_err(|e| ChannelError::CannotConnect {
+                    uri,
+                    message: e.to_string(),
+                })
         })
     }
 
     fn resolve(hostname: &str) -> BoxFuture<'static, std::io::Result<Vec<IpAddr>>> {
         let hostname = hostname.to_string();
         Box::pin(async move {
-            let resolver = databend_common_grpc::DNSResolver::instance()
-                .map_err(|e| std::io::Error::other(e.to_string()))?;
-            resolver
+            let resolver: Arc<databend_common_grpc::DNSResolver> =
+                databend_common_grpc::DNSResolver::instance()
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
+            let addrs: Vec<IpAddr> = resolver
                 .resolve(&hostname)
                 .await
-                .map_err(|e| std::io::Error::other(e.to_string()))
+                .map_err(|e| std::io::Error::other(e.to_string()))?;
+            Ok(addrs)
         })
     }
 

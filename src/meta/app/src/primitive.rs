@@ -122,6 +122,11 @@ mod prost_message_impl {
 
     use crate::primitive::Id;
 
+    #[allow(deprecated)]
+    fn decode_error(message: impl Into<String>) -> DecodeError {
+        DecodeError::new(message.into())
+    }
+
     impl<T> prost::Message for Id<T>
     where
         T: fmt::Debug + Send + Sync,
@@ -137,7 +142,7 @@ mod prost_message_impl {
             let mut b = [0; 64];
             let len = buf.remaining();
             if len > b.len() {
-                return Err(DecodeError::new(format!(
+                return Err(decode_error(format!(
                     "buffer(len={}) is too large, max={}",
                     len,
                     b.len()
@@ -146,7 +151,7 @@ mod prost_message_impl {
 
             buf.copy_to_slice(&mut b[..len]);
             let id: u64 = serde_json::from_slice(&b[..len])
-                .map_err(|e| DecodeError::new(format!("failed to decode u64 as json: {}", e)))?;
+                .map_err(|e| decode_error(format!("failed to decode u64 as json: {}", e)))?;
             Ok(Id::from(id))
         }
 

@@ -74,7 +74,7 @@ use jsonb::Value as JsonbValue;
 use jsonb::keypath::KeyPath as JsonbKeyPath;
 use jsonb::keypath::KeyPaths as JsonbKeyPaths;
 use parquet::file::metadata::KeyValue;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
@@ -797,67 +797,46 @@ impl VirtualColumnBuilder {
 
     fn file_meta_to_virtual_column_metas(
         &self,
-        file_meta: FileMetaData,
+        file_meta: ParquetMetaData,
         mut virtual_column_names: HashMap<String, (u32, String, VariantDataType)>,
         mut columns_statistics: StatisticsOfColumns,
     ) -> Result<Vec<DraftVirtualColumnMeta>> {
-        let num_row_groups = file_meta.row_groups.len();
+        let num_row_groups = file_meta.row_groups().len();
         if num_row_groups != 1 {
             return Err(ErrorCode::ParquetFileInvalid(format!(
                 "invalid parquet file, expects only one row group, but got {}",
                 num_row_groups
             )));
         }
-        let row_group = &file_meta.row_groups[0];
+        let row_group = &file_meta.row_groups()[0];
 
         let mut draft_virtual_column_metas = Vec::with_capacity(virtual_column_names.len());
-        for (i, col_chunk) in row_group.columns.iter().enumerate() {
+        for (i, chunk_meta) in row_group.columns().iter().enumerate() {
             let tmp_column_id = i as u32;
-            match &col_chunk.meta_data {
-                Some(chunk_meta) => {
-                    let Some((source_column_id, key_name, variant_type)) =
-                        virtual_column_names.remove(&chunk_meta.path_in_schema[0])
-                    else {
-                        continue;
-                    };
+            let Some((source_column_id, key_name, variant_type)) =
+                virtual_column_names.remove(&chunk_meta.column_path().parts()[0])
+            else {
+                continue;
+            };
 
-                    let col_start =
-                        if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                            dict_page_offset
-                        } else {
-                            chunk_meta.data_page_offset
-                        };
-                    let col_len = chunk_meta.total_compressed_size;
-                    assert!(
-                        col_start >= 0 && col_len >= 0,
-                        "column start and length should not be negative"
-                    );
-                    let num_values = chunk_meta.num_values as u64;
+            let (offset, len) = chunk_meta.byte_range();
+            let variant_type_code = VirtualColumnMeta::data_type_code(&variant_type);
+            let column_stat = columns_statistics.remove(&tmp_column_id);
+            let virtual_column_meta = VirtualColumnMeta {
+                offset,
+                len,
+                num_values: chunk_meta.num_values() as u64,
+                data_type: variant_type_code,
+                column_stat,
+            };
 
-                    let variant_type_code = VirtualColumnMeta::data_type_code(&variant_type);
-                    let column_stat = columns_statistics.remove(&tmp_column_id);
-                    let virtual_column_meta = VirtualColumnMeta {
-                        offset: col_start as u64,
-                        len: col_len as u64,
-                        num_values,
-                        data_type: variant_type_code,
-                        column_stat,
-                    };
-
-                    let draft_virtual_column_meta = DraftVirtualColumnMeta {
-                        source_column_id,
-                        name: key_name,
-                        data_type: variant_type,
-                        column_meta: virtual_column_meta,
-                    };
-                    draft_virtual_column_metas.push(draft_virtual_column_meta);
-                }
-                None => {
-                    return Err(ErrorCode::ParquetFileInvalid(format!(
-                        "invalid parquet file, meta data of column is empty",
-                    )));
-                }
-            }
+            let draft_virtual_column_meta = DraftVirtualColumnMeta {
+                source_column_id,
+                name: key_name,
+                data_type: variant_type,
+                column_meta: virtual_column_meta,
+            };
+            draft_virtual_column_metas.push(draft_virtual_column_meta);
         }
         Ok(draft_virtual_column_metas)
     }
