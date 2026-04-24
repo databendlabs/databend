@@ -72,12 +72,40 @@ async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     Ok(outcome)
 }
 
+async fn bind_case_with_virtual_column_license(case: &SqlTestCase) -> Result<SqlTestOutcome> {
+    let ctx = setup_context(case).await?;
+    ctx.enable_virtual_column_license_for_test();
+    let outcome = match ctx.bind_sql(case.sql).await {
+        Ok(plan) => SqlTestOutcome::Plan(plan.format_indent(Default::default())?),
+        Err(err) => SqlTestOutcome::Error {
+            code: err.code(),
+            message: err.message(),
+        },
+    };
+    Ok(outcome)
+}
+
 async fn run_binder_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> {
     let mut file = open_golden_file("semantic", file_name)?;
 
     for case in cases {
         write_case_header(&mut file, case)?;
         let outcome = bind_case(case).await?;
+        write_case_outcome(&mut file, &outcome)?;
+    }
+
+    Ok(())
+}
+
+async fn run_binder_cases_with_virtual_column_license(
+    file_name: &str,
+    cases: &[SqlTestCase],
+) -> Result<()> {
+    let mut file = open_golden_file("semantic", file_name)?;
+
+    for case in cases {
+        write_case_header(&mut file, case)?;
+        let outcome = bind_case_with_virtual_column_license(case).await?;
         write_case_outcome(&mut file, &outcome)?;
     }
 
@@ -471,4 +499,78 @@ async fn test_clause_prepass_skips_subquery_metadata_side_effects() -> Result<()
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_materialized_cte_virtual_column_rewrite() -> Result<()> {
+    const CREATE_VIRTUAL_COLUMN_TABLE: &str =
+        "CREATE TABLE t(v JSON NULL) storage_format = 'parquet' enable_virtual_column = true";
+    const CREATE_NON_VIRTUAL_COLUMN_TABLE: &str =
+        "CREATE TABLE t_no_vc(v JSON NULL) storage_format = 'parquet'";
+
+    const SQL_WITH_CTE: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t) 
+        SELECT message['attribute']['user_id'] FROM logs 
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+"#;
+
+    const SQL_WITH_CHAINED_CTE: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message FROM t), 
+        attrs AS (SELECT message['attribute'] AS attr FROM logs),
+        users AS (SELECT attr['user_id'] AS user_id, attr['name'] AS name FROM attrs)
+        SELECT user_id, name FROM users;
+"#;
+
+    const SQL_WITH_CTE_MULTI_FIELDS: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
+    WITH logs AS (SELECT v['message'] AS message, v['response'] AS response FROM t),
+        base AS (SELECT message['attribute']['user_id']::Int32 AS user_id, 
+            message['attribute']['trace_id']::Int32 AS trace_id, 
+            message['attribute']['level']::String AS level,
+            response['status_code']::Int64 AS status_code,
+            response['error_message']::String AS error_message FROM logs)
+        SELECT user_id, trace_id, level, status_code, error_message FROM base
+"#;
+
+    const SQL_WITHOUT_TABLE_VIRTUAL_COLUMNS: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t_no_vc)
+        SELECT message['attribute']['user_id'] FROM logs
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs;
+"#;
+
+    let cases = [
+        SqlTestCase {
+            name: "materialized_cte_virtual_column_rewrites",
+            description: "A materialized CTE consumer should still expose the full base-table JSON path when virtual-column rewrite is enabled.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITH_CTE,
+        },
+        SqlTestCase {
+            name: "materialized_cte_virtual_column_rewrites_chained_ctes",
+            description: "A chained materialized CTE should preserve the original base-table JSON path across multiple CTE layers.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITH_CHAINED_CTE,
+        },
+        SqlTestCase {
+            name: "materialized_cte_virtual_column_rewrites_multi_fields",
+            description: "Multiple downstream CTE fields reading the same materialized source CTE should push their JSON path requirements back to the source.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITH_CTE_MULTI_FIELDS,
+        },
+        SqlTestCase {
+            name: "materialized_cte_static_json_paths_without_table_virtual_columns",
+            description: "A materialized CTE should still precompute static JSON paths inside the producer even when the source table has no Fuse virtual columns.",
+            setup_sqls: &[CREATE_NON_VIRTUAL_COLUMN_TABLE],
+            sql: SQL_WITHOUT_TABLE_VIRTUAL_COLUMNS,
+        },
+    ];
+
+    run_binder_cases_with_virtual_column_license(
+        "binder_materialized_cte_virtual_column.txt",
+        &cases,
+    )
+    .await
 }

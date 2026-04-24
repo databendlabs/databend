@@ -4829,6 +4829,7 @@ dependencies = [
  "indexmap 2.14.0",
  "itertools 0.13.0",
  "jsonb",
+ "jwt-simple",
  "log",
  "num-derive",
  "num-traits",
