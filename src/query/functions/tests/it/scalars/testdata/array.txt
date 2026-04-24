@@ -11,7 +11,13 @@ error:
   --> SQL:1:2
   |
 1 | ['a', 1]
-  |  ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('a')` in expr `CAST('a' AS Decimal(38, 5))`, during run expr: `array(CAST('a' AS Decimal(38, 5)), CAST(1 AS Decimal(38, 5)))`
+  |  ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('a')` in expr `CAST('a' AS Decimal(38, 5))`
+
+
+hint: no function matches signature `array(String, UInt8)`, you might need to add explicit type casts.
+
+candidate functions:
+  array(Decimal(38, 5), Decimal(38, 5)) :: Array(Decimal(38, 5)), during run expr: `array(CAST('a' AS Decimal(38, 5)), CAST(1 AS Decimal(38, 5)))`
 
 
 
@@ -157,7 +163,14 @@ error:
   --> SQL:1:8
   |
 1 | [1, 2]['a']
-  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
+  |        ^^^ invalid digit found in string while evaluating function `to_uint64('a')` in expr `CAST('a' AS UInt64)`
+
+
+hint: no function matches signature `get(Array(UInt8), String)`, you might need to add explicit type casts.
+
+candidate functions:
+  get(Array(UInt8 NULL), UInt64) :: UInt8 NULL
+  get(Array(UInt8 NULL) NULL, UInt64 NULL) :: UInt8 NULL, during run expr: `get(CAST(array(1, 2) AS Array(UInt8 NULL)), CAST('a' AS UInt64))`
 
 
 
@@ -805,7 +818,14 @@ error:
   --> SQL:1:23
   |
 1 | array_concat([1,2,3], ['s', null])
-  |                       ^^^^^^^^^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('s')` in expr `CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL))`, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Decimal(38, 5) NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL)))`
+  |                       ^^^^^^^^^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('s')` in expr `CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL))`
+
+
+hint: no function matches signature `array_concat(Array(UInt8), Array(String NULL))`, you might need to add explicit type casts.
+
+candidate functions:
+  array_concat(Array(Decimal(38, 5) NULL), Array(Decimal(38, 5) NULL)) :: Array(Decimal(38, 5) NULL)
+  array_concat(Array(Decimal(38, 5) NULL) NULL, Array(Decimal(38, 5) NULL) NULL) :: Array(Decimal(38, 5) NULL) NULL, during run expr: `array_concat(CAST(array(1, 2, 3) AS Array(Decimal(38, 5) NULL)), CAST(array(CAST('s' AS String NULL), CAST(NULL AS String NULL)) AS Array(Decimal(38, 5) NULL)))`
 
 
 
@@ -1058,7 +1078,20 @@ error:
   --> SQL:1:22
   |
 1 | array_indexof([1,2,3,'s'], 's')
-  |                      ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('s')` in expr `CAST('s' AS Decimal(38, 5))`, during run expr: `array_indexof(array(CAST(1 AS Decimal(38, 5)), CAST(2 AS Decimal(38, 5)), CAST(3 AS Decimal(38, 5)), CAST('s' AS Decimal(38, 5))), CAST('s' AS Decimal(38, 5)))`
+  |                      ^^^ bad decimal literal: unexpected char while evaluating function `to_decimal(38, 5)('s')` in expr `CAST('s' AS Decimal(38, 5))`
+
+
+hint: no function matches signature `array(UInt8, UInt8, UInt8, String)`, you might need to add explicit type casts.
+
+candidate functions:
+  array(Decimal(38, 5), Decimal(38, 5), Decimal(38, 5), Decimal(38, 5)) :: Array(Decimal(38, 5))
+
+
+hint: no function matches signature `array_indexof(Array(Decimal(38, 5)), String)`, you might need to add explicit type casts.
+
+candidate functions:
+  array_indexof(Array(Decimal(38, 5)), Decimal(38, 5)) :: UInt64
+  array_indexof(Array(Decimal(38, 5)) NULL, Decimal(38, 5) NULL) :: UInt64 NULL, during run expr: `array_indexof(array(CAST(1 AS Decimal(38, 5)), CAST(2 AS Decimal(38, 5)), CAST(3 AS Decimal(38, 5)), CAST('s' AS Decimal(38, 5))), CAST('s' AS Decimal(38, 5)))`
 
 
 

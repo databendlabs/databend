@@ -12,7 +12,7 @@ echo "CREATE WORKLOAD GROUP valid_mem WITH memory_quota = '4GB';" | $BENDSQL_CLI
 echo "create user test_user_workload_group2 identified by '123' with SET WORKLOAD GROUP='valid_mem'" | $BENDSQL_CLIENT_OUTPUT_NULL
 echo "grant select on workloadgroup.t to test_user_workload_group2" | $BENDSQL_CLIENT_OUTPUT_NULL
 
-export TEST_USER_CONNECT="bendsql --user=test_user_workload_group2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql_query_http_user_connect test_user_workload_group2 123"
 
 echo "select * from workloadgroup.t" | $TEST_USER_CONNECT
 echo "drop workload group valid_mem;" | $BENDSQL_CLIENT_OUTPUT_NULL
