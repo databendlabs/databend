@@ -71,6 +71,11 @@ mod dummy {
 
 #[divan::bench_group(max_time = 2)]
 mod bitmap {
+    use std::ops::BitAndAssign;
+    use std::ops::BitOrAssign;
+    use std::ops::BitXorAssign;
+    use std::ops::SubAssign;
+
     use databend_common_expression::BlockEntry;
     use databend_common_expression::Column;
     use databend_common_expression::FromData;
@@ -141,6 +146,17 @@ mod bitmap {
     where F: FnMut(u64) -> u64 {
         let data: Vec<u64> = (0..rows as u64).map(generator).collect();
         UInt64Type::from_data(data)
+    }
+
+    fn mixed_small_large_pair() -> (HybridBitmap, HybridBitmap) {
+        let small = HybridBitmap::from_iter([1_u64, 5, 13, 100]);
+        let large = HybridBitmap::from_iter(0_u64..128);
+        (small, large)
+    }
+
+    fn mixed_large_small_pair() -> (HybridBitmap, HybridBitmap) {
+        let (small, large) = mixed_small_large_pair();
+        (large, small)
     }
 
     fn eval_bitmap_result(entry: &BlockEntry, rows: usize, agg_name: &'static str) {
@@ -229,6 +245,66 @@ mod bitmap {
         bencher.bench(|| {
             eval_bitmap_result(&entry, rows, "bitmap_construct_agg");
         });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_and_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.bitand_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_or_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.bitor_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_xor_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.bitxor_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_sub_small_large(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_small_large_pair)
+            .bench_values(|(mut small, large)| {
+                small.sub_assign(large);
+                small.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_xor_large_small(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_large_small_pair)
+            .bench_values(|(mut large, small)| {
+                large.bitxor_assign(small);
+                large.len()
+            });
+    }
+
+    #[divan::bench]
+    fn bitmap_mixed_sub_large_small(bencher: divan::Bencher) {
+        bencher
+            .with_inputs(mixed_large_small_pair)
+            .bench_values(|(mut large, small)| {
+                large.sub_assign(small);
+                large.len()
+            });
     }
 }
 
