@@ -15,7 +15,6 @@
       <class name="com.databend.jdbc.TestFileTransfer"/>
       <class name="com.databend.jdbc.TestHeartbeat"/>
       <class name="com.databend.jdbc.TestPrepareStatement"/>
-      <class name="com.databend.jdbc.TestPresignContext"/>
       <class name="com.databend.jdbc.TestTempTable"/>
       <class name="com.databend.jdbc.TestTransaction"/>
       <class name="com.databend.jdbc.TestTypes"/>

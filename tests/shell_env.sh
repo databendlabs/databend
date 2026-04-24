@@ -11,23 +11,64 @@ export QUERY_MYSQL_HANDLER_HOST=${QUERY_MYSQL_HANDLER_HOST:="127.0.0.1"}
 export QUERY_MYSQL_HANDLER_PORT=${QUERY_MYSQL_HANDLER_PORT:="3307"}
 export QUERY_HTTP_HANDLER_PORT=${QUERY_HTTP_HANDLER_PORT:="8000"}
 
-bendsql_client_connect() {
-	bendsql -uroot \
+bendsql_client() {
+	bendsql "$@" 2> >(sed -E 's/ \[v[0-9][^]]*\]$//' >&2)
+}
+
+bendsql_query_http_connect() {
+	bendsql_client \
 		--host "${QUERY_MYSQL_HANDLER_HOST}" \
 		--port "${QUERY_HTTP_HANDLER_PORT}" \
-		--quote-style=never \
-		"$@" 2> >(sed -E 's/ \[v[0-9][^]]*\]$//' >&2)
+		"$@"
+}
+
+bendsql_query_http_user_connect() {
+	local user="$1"
+	local password="$2"
+	shift 2
+
+	bendsql_query_http_connect \
+		--user "${user}" \
+		--password "${password}" \
+		"$@"
+}
+
+bendsql_client_connect() {
+	bendsql_query_http_connect -uroot --quote-style=never "$@"
+}
+
+bendsql_client_output_null() {
+	bendsql_client_connect --output null "$@"
 }
 
 export BENDSQL_CLIENT_CONNECT="bendsql_client_connect"
-export BENDSQL_CLIENT_OUTPUT_NULL="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT} --quote-style=never --output null"
+export BENDSQL_CLIENT_OUTPUT_NULL="bendsql_client_output_null"
 
 
 # share client
 export QUERY_MYSQL_HANDLER_SHARE_PROVIDER_PORT="18000"
 export QUERY_MYSQL_HANDLER_SHARE_CONSUMER_PORT="28000"
-export BENDSQL_CLIENT_PROVIDER_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_PROVIDER_PORT} --quote-style=never"
-export BENDSQL_CLIENT_CONSUMER_CONNECT="bendsql -uroot --host ${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_MYSQL_HANDLER_SHARE_CONSUMER_PORT} --quote-style=never"
+
+bendsql_client_share_provider_connect() {
+	bendsql_client \
+		-uroot \
+		--host "${QUERY_MYSQL_HANDLER_HOST}" \
+		--port "${QUERY_MYSQL_HANDLER_SHARE_PROVIDER_PORT}" \
+		--quote-style=never \
+		"$@"
+}
+
+bendsql_client_share_consumer_connect() {
+	bendsql_client \
+		-uroot \
+		--host "${QUERY_MYSQL_HANDLER_HOST}" \
+		--port "${QUERY_MYSQL_HANDLER_SHARE_CONSUMER_PORT}" \
+		--quote-style=never \
+		"$@"
+}
+
+export BENDSQL_CLIENT_PROVIDER_CONNECT="bendsql_client_share_provider_connect"
+export BENDSQL_CLIENT_CONSUMER_CONNECT="bendsql_client_share_consumer_connect"
 
 
 query() {
