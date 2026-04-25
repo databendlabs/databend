@@ -72,6 +72,10 @@ use crate::pipelines::PipelineBuilder;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;
@@ -327,7 +331,7 @@ impl CopyIntoTableInterpreter {
             .stage_table_info
             .copy_into_table_options
             .return_failed_only;
-        let cs = self.ctx.get_copy_status();
+        let cs = self.ctx.copy_state().copy_status();
 
         let mut results = cs.files.iter().collect::<Vec<_>>();
         results.sort_by(|a, b| a.key().cmp(b.key()));

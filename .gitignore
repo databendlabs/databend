@@ -26,6 +26,7 @@ target/
 # profile
 flamegraph.*
 perf.*
+!perf.rs
 
 # tests
 *.stderr

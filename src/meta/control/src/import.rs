@@ -23,6 +23,8 @@ use std::io::Lines;
 use std::path::Path;
 use std::str::FromStr;
 
+use databend_meta::openraft::storage::RaftLogStorageExt;
+use databend_meta::openraft::storage::RaftSnapshotBuilder;
 use databend_meta::raft_store::config::RaftConfig;
 use databend_meta::raft_store::ondisk::DataVersion;
 use databend_meta::raft_store::raft_log::api::raft_log_writer::RaftLogWriter;
@@ -42,8 +44,6 @@ use databend_meta::types::raft_types::NodeId;
 use databend_meta::types::raft_types::StoredMembership;
 use databend_meta::types::raft_types::new_log_id;
 use display_more::display_option::DisplayOptionExt;
-use openraft::storage::RaftLogStorageExt;
-use openraft::storage::RaftSnapshotBuilder;
 use url::Url;
 
 use crate::args::ImportArgs;

@@ -21,7 +21,6 @@ use databend_common_ast::ast;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
@@ -50,6 +49,9 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct RefreshDesc {
     pub catalog: String,
@@ -198,7 +200,7 @@ async fn generate_refresh_index_plan(
     catalog: &str,
     table_id: MetaId,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_written_segment_locations()?;
+    let segment_locs = ctx.written_segment_locations().list();
     let catalog = ctx.get_catalog(catalog).await?;
     let mut plans = vec![];
     let indexes = catalog
@@ -261,7 +263,7 @@ async fn generate_refresh_table_index_plan(
     desc: &RefreshDesc,
     table: Arc<dyn Table>,
 ) -> Result<Vec<Plan>> {
-    let segment_locs = ctx.get_written_segment_locations()?;
+    let segment_locs = ctx.written_segment_locations().list();
     let mut plans = vec![];
 
     let table_meta = &table.get_table_info().meta;

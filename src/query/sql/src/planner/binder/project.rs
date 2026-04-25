@@ -28,6 +28,9 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Column;
@@ -39,8 +42,6 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
-use derive_visitor::DriveMut;
-use derive_visitor::VisitorMut;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -50,6 +51,7 @@ use crate::TypeChecker;
 use crate::WindowChecker;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::binder::aggregate_prepass::collect_function_names;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowInfo;
@@ -70,147 +72,267 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::plans::VisitorMut as _;
 
-#[derive(VisitorMut)]
-#[visitor(Identifier(enter))]
 struct RemoveIdentifierQuote;
 
-impl RemoveIdentifierQuote {
-    fn enter_identifier(&mut self, ident: &mut Identifier) {
+impl VisitorMut for RemoveIdentifierQuote {
+    fn visit_identifier(&mut self, ident: &mut Identifier) -> std::result::Result<VisitControl, !> {
         if !ident.is_hole() && !ident.is_variable() {
             ident.quote = None;
             ident.name = ident.name.to_lowercase();
         }
+        Ok(VisitControl::Continue)
+    }
+}
+
+pub struct SelectInfo {
+    pub(super) source_scalars: HashMap<Symbol, ScalarItem>,
+    pub(super) projection_scalars: HashMap<Symbol, ScalarItem>,
+    pub(super) columns: Vec<ColumnBinding>,
+}
+
+pub(super) struct ProjectionPlanInput {
+    pub items: Vec<ScalarItem>,
+    pub output_columns: Vec<ColumnBinding>,
+}
+
+pub(super) struct DistinctPlanInput {
+    pub pre_distinct_items: Vec<ScalarItem>,
+    pub group_items: Vec<ScalarItem>,
+}
+
+impl SelectInfo {
+    pub(super) fn from_columns(columns: Vec<ColumnBinding>) -> Self {
+        Self {
+            source_scalars: HashMap::new(),
+            projection_scalars: HashMap::new(),
+            columns,
+        }
+    }
+
+    pub fn column_count(&self) -> usize {
+        self.columns.len()
+    }
+
+    pub(super) fn column_at(&self, index: usize) -> Option<&ColumnBinding> {
+        self.columns.get(index)
+    }
+
+    pub(super) fn into_projection_plan(self) -> Result<ProjectionPlanInput> {
+        let SelectInfo {
+            projection_scalars,
+            columns,
+            ..
+        } = self;
+        let mut output_columns = columns;
+        let mut items = projection_scalars.into_values().collect::<Vec<_>>();
+
+        for item in &items {
+            if let Some(column) = output_columns
+                .iter_mut()
+                .find(|column| column.index == item.index)
+            {
+                column.data_type = Box::new(item.scalar.data_type()?);
+            }
+        }
+
+        items.sort_by_key(|item| item.index);
+        Ok(ProjectionPlanInput {
+            items,
+            output_columns,
+        })
+    }
+
+    pub(super) fn take_distinct_plan(&mut self, span: Span) -> DistinctPlanInput {
+        let pre_distinct_items = self
+            .projection_scalars
+            .drain()
+            .map(|(_, item)| item)
+            .collect::<Vec<_>>();
+        let group_items = self
+            .columns
+            .iter()
+            .map(|column| ScalarItem {
+                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span,
+                    column: column.clone(),
+                }),
+                index: column.index,
+            })
+            .collect();
+
+        DistinctPlanInput {
+            pre_distinct_items,
+            group_items,
+        }
+    }
+
+    pub(super) fn source_scalar_item(&self, index: Symbol) -> Option<&ScalarItem> {
+        self.source_scalars.get(&index)
+    }
+
+    pub(super) fn insert_scalar(&mut self, source_item: ScalarItem, projection_item: ScalarItem) {
+        self.source_scalars.insert(source_item.index, source_item);
+        self.projection_scalars
+            .insert(projection_item.index, projection_item);
+    }
+
+    pub(super) fn rebuild_projection_items<F>(&mut self, mut prepare_item: F) -> Result<()>
+    where F: FnMut(&ScalarItem) -> Result<ScalarItem> {
+        self.projection_scalars.clear();
+        for source_item in self.source_scalars.values() {
+            let projection_item = prepare_item(source_item)?;
+            self.projection_scalars
+                .insert(projection_item.index, projection_item);
+        }
+        Ok(())
     }
 }
 
 impl Binder {
-    pub fn analyze_projection(
+    fn use_grouping_projection(bind_context: &BindContext) -> bool {
+        bind_context.in_grouping
+            || bind_context.aggregate_info.has_group_items()
+            || bind_context.aggregate_info.has_aggregate_calls()
+    }
+
+    pub(super) fn prepare_select_output_scalar(
+        &self,
+        bind_context: &BindContext,
+        scalar: &ScalarExpr,
+    ) -> Result<ScalarExpr> {
+        let mut scalar = scalar.clone();
+        if Self::use_grouping_projection(bind_context) {
+            let mut grouping_checker = GroupingChecker::new(bind_context, None);
+            grouping_checker.visit(&mut scalar)?;
+        } else {
+            let mut window_checker = WindowChecker::new(bind_context);
+            window_checker.visit(&mut scalar)?;
+        }
+        Ok(scalar)
+    }
+
+    pub(super) fn prepare_select_output_item(
+        &self,
+        bind_context: &BindContext,
+        item: &ScalarItem,
+    ) -> Result<ScalarItem> {
+        Ok(ScalarItem {
+            scalar: self.prepare_select_output_scalar(bind_context, &item.scalar)?,
+            index: item.index,
+        })
+    }
+
+    pub(crate) fn refresh_select_output(
+        &self,
+        bind_context: &BindContext,
+        select_info: &mut SelectInfo,
+    ) -> Result<()> {
+        select_info
+            .rebuild_projection_items(|item| self.prepare_select_output_item(bind_context, item))
+    }
+
+    /// Resolve which output slot a select item should project.
+    ///
+    /// Aggregate/UDAF/window analysis may already have registered a reusable slot for
+    /// the item. Projection only decides whether to reuse that slot or allocate a new
+    /// derived column; it does not perform aggregate/window semantic analysis.
+    fn resolve_projection_column_binding(
         &mut self,
         agg_info: &AggregateInfo,
         window_info: &WindowInfo,
-        select_list: &SelectList,
-    ) -> Result<(HashMap<Symbol, ScalarItem>, Vec<ColumnBinding>)> {
-        let mut columns = Vec::with_capacity(select_list.items.len());
-        let mut scalars = HashMap::new();
-        for item in select_list.items.iter() {
-            // This item is a grouping sets item, its data type should be nullable.
-            let is_grouping_sets_item = agg_info.is_grouping_sets_item(&item.scalar);
+        item: &SelectItem<'_>,
+    ) -> Result<ColumnBinding> {
+        // This item is a grouping sets item, its data type should be nullable.
+        let is_grouping_sets_item = agg_info.is_grouping_sets_item(&item.scalar);
 
-            let mut column_binding = match &item.scalar {
-                ScalarExpr::BoundColumnRef(column_ref) => {
-                    let mut column_binding = column_ref.column.clone();
-                    // We should apply alias for the ColumnBinding, since it comes from table
-                    column_binding.column_name = item.alias.clone();
-                    column_binding
-                }
-                ScalarExpr::AggregateFunction(agg) => {
-                    // Replace to bound column to reduce duplicate derived column bindings.
-                    debug_assert!(!is_grouping_sets_item);
-                    agg_info
-                        .lookup_aggregate_function_column(agg, &item.alias)
-                        .unwrap()
-                }
-                ScalarExpr::UDAFCall(udaf) => {
-                    debug_assert!(!is_grouping_sets_item);
-                    agg_info.lookup_udaf_call_column(udaf, &item.alias).unwrap()
-                }
-                ScalarExpr::WindowFunction(win) => {
-                    find_replaced_window_function(window_info, win, &item.alias).unwrap()
-                }
-                _ => {
-                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
-                }
-            };
-
-            if is_grouping_sets_item {
-                column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
+        let mut column_binding = match &item.scalar {
+            ScalarExpr::BoundColumnRef(column_ref) => {
+                let mut column_binding = column_ref.column.clone();
+                // We should apply alias for the ColumnBinding, since it comes from table
+                column_binding.column_name = item.alias.clone();
+                column_binding
             }
-            let scalar = if let ScalarExpr::SubqueryExpr(SubqueryExpr {
-                span,
+            ScalarExpr::AggregateFunction(agg) => {
+                debug_assert!(!is_grouping_sets_item);
+                agg_info
+                    .lookup_aggregate_function_column(agg, &item.alias)
+                    .unwrap()
+            }
+            ScalarExpr::UDAFCall(udaf) => {
+                debug_assert!(!is_grouping_sets_item);
+                agg_info.lookup_udaf_call_column(udaf, &item.alias).unwrap()
+            }
+            ScalarExpr::WindowFunction(win) => {
+                find_replaced_window_function(window_info, win, &item.alias).unwrap()
+            }
+            _ => self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?),
+        };
+
+        if is_grouping_sets_item {
+            column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
+        }
+
+        Ok(column_binding)
+    }
+
+    pub fn analyze_projection(
+        &mut self,
+        bind_context: &BindContext,
+        select_list: &SelectList,
+    ) -> Result<SelectInfo> {
+        let mut columns = Vec::with_capacity(select_list.items.len());
+        let mut source_scalars = HashMap::new();
+        let mut projection_scalars = HashMap::new();
+        for item in select_list.items.iter() {
+            let column_binding = self.resolve_projection_column_binding(
+                &bind_context.aggregate_info,
+                &bind_context.windows,
+                item,
+            )?;
+            let mut source_scalar = item.scalar.clone();
+            if let ScalarExpr::SubqueryExpr(SubqueryExpr {
                 typ,
-                subquery,
-                child_expr,
-                compare_op,
-                data_type,
-                outer_columns,
-                output_column,
+                projection_index,
+                contain_agg,
                 ..
-            }) = item.scalar.clone()
+            }) = &mut source_scalar
+                && *typ == SubqueryType::Any
             {
-                if typ == SubqueryType::Any {
-                    ScalarExpr::SubqueryExpr(SubqueryExpr {
-                        span,
-                        typ,
-                        subquery,
-                        child_expr,
-                        compare_op,
-                        output_column,
-                        projection_index: Some(column_binding.index),
-                        data_type,
-                        outer_columns,
-                        contain_agg: None,
-                    })
-                } else {
-                    item.scalar.clone()
-                }
-            } else {
-                item.scalar.clone()
-            };
-            scalars.insert(column_binding.index, ScalarItem {
-                scalar,
+                *projection_index = Some(column_binding.index);
+                *contain_agg = None;
+            }
+            let source_item = ScalarItem {
+                scalar: source_scalar,
                 index: column_binding.index,
-            });
+            };
+            let projection_item = self.prepare_select_output_item(bind_context, &source_item)?;
+            let mut column_binding = column_binding;
+            column_binding.data_type = Box::new(projection_item.scalar.data_type()?);
+            source_scalars.insert(source_item.index, source_item);
+            projection_scalars.insert(projection_item.index, projection_item);
             columns.push(column_binding);
         }
 
-        Ok((scalars, columns))
+        Ok(SelectInfo {
+            source_scalars,
+            projection_scalars,
+            columns,
+        })
     }
 
     pub fn bind_projection(
         &mut self,
         bind_context: &mut BindContext,
-        columns: &[ColumnBinding],
-        scalars: &HashMap<Symbol, ScalarItem>,
+        select_info: SelectInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        bind_context.set_expr_context(ExprContext::SelectClause);
-        let mut columns = columns.to_vec();
-        let mut scalars = scalars
-            .iter()
-            .map(|(_, item)| {
-                if bind_context.in_grouping {
-                    let mut scalar = item.scalar.clone();
-                    let mut grouping_checker = GroupingChecker::new(bind_context, None);
-                    grouping_checker.visit(&mut scalar)?;
-
-                    if let Some(x) = columns.iter_mut().find(|x| x.index == item.index) {
-                        x.data_type = Box::new(scalar.data_type()?);
-                    }
-
-                    Ok(ScalarItem {
-                        scalar,
-                        index: item.index,
-                    })
-                } else {
-                    let mut scalar = item.scalar.clone();
-                    let mut window_checker = WindowChecker::new(bind_context);
-                    window_checker.visit(&mut scalar)?;
-                    Ok(ScalarItem {
-                        scalar,
-                        index: item.index,
-                    })
-                }
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        scalars.sort_by_key(|s| s.index);
-        let eval_scalar = EvalScalar { items: scalars };
+        bind_context.expr_context = ExprContext::SelectClause;
+        let plan = select_info.into_projection_plan()?;
+        let eval_scalar = EvalScalar { items: plan.items };
         let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
-        // Set output columns
-        bind_context.columns = columns;
+        bind_context.columns = plan.output_columns;
         Ok(new_expr)
     }
-
     /// Normalize select list into a BindContext.
     /// There are three kinds of select target:
     ///
@@ -233,7 +355,7 @@ impl Binder {
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
     ) -> Result<SelectList<'a>> {
-        input_context.set_expr_context(ExprContext::SelectClause);
+        input_context.expr_context = ExprContext::SelectClause;
 
         let mut output = SelectList::default();
         let mut prev_aliases = Vec::new();
@@ -263,6 +385,8 @@ impl Binder {
                     )?;
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
+                    let used_functions =
+                        collect_function_names(&self.name_resolution_ctx, expr.as_ref());
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
                         self.ctx.clone(),
@@ -302,7 +426,7 @@ impl Binder {
                             _ => {
                                 let mut expr = expr.clone();
                                 let mut remove_quote_visitor = RemoveIdentifierQuote;
-                                expr.drive_mut(&mut remove_quote_visitor);
+                                expr.walk_mut(&mut remove_quote_visitor).unwrap();
                                 format!("{:#}", expr)
                             }
                         }
@@ -317,6 +441,7 @@ impl Binder {
                         select_target,
                         scalar: bound_expr,
                         alias: expr_name,
+                        used_functions,
                     });
                 }
             }
@@ -381,6 +506,7 @@ impl Binder {
             select_target,
             scalar,
             alias: column_binding.column_name.clone(),
+            used_functions: Default::default(),
         })
     }
 

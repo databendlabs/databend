@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_management::WarehouseInfo;
 use databend_common_meta_api::DatamaskApi;
@@ -28,6 +27,8 @@ use databend_enterprise_resources_management::ResourcesManagement;
 
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextStage;
+use crate::sessions::TableContextTableAccess;
 
 #[async_backtrace::framed]
 pub async fn validate_grant_object_exists(

@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -112,6 +111,7 @@ use crate::catalogs::InMemoryMetas;
 use crate::databases::Database;
 use crate::databases::InformationSchemaDatabase;
 use crate::databases::SystemDatabase;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 /// System Catalog contains ... all the system databases (no surprise :)

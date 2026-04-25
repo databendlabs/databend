@@ -102,7 +102,7 @@ impl ParquetVariantSource {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
-        let copy_status = ctx.get_copy_status();
+        let copy_status = ctx.copy_state().copy_status();
 
         let settings = ctx.get_settings();
         let tz_string = settings.get_timezone()?;
@@ -320,9 +320,10 @@ impl ParquetVariantSource {
         let mut start_row = 0;
         let mut readers = VecDeque::with_capacity(meta.num_row_groups());
         for (rowgroup_idx, rg) in meta.row_groups().iter().enumerate() {
-            start_row += rg.num_rows() as u64;
+            let row_group_start = start_row;
             // filter by bucket option
             if !should_read(rowgroup_idx, part.bucket_option) {
+                start_row += rg.num_rows() as u64;
                 continue;
             }
             let mut row_group =
@@ -334,7 +335,8 @@ impl ParquetVariantSource {
                 self.batch_size,
                 None,
             )?;
-            readers.push_back((reader, start_row, typ.clone(), data_schema.clone()));
+            readers.push_back((reader, row_group_start, typ.clone(), data_schema.clone()));
+            start_row += rg.num_rows() as u64;
         }
         Ok(readers)
     }

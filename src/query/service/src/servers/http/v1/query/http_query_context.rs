@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use http::StatusCode;
 use log::warn;
@@ -36,6 +35,7 @@ use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
 use crate::sessions::SessionManager;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone)]
 pub struct HttpQueryContext {

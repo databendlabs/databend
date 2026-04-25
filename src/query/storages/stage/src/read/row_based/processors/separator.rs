@@ -68,7 +68,8 @@ impl AccumulatingTransform for Separator {
             if file_status.error.is_some() {
                 self.ctx
                     .table_context
-                    .get_copy_status()
+                    .copy_state()
+                    .copy_status()
                     .add_chunk(&batch_meta.path, file_status);
             }
             self.state = None;

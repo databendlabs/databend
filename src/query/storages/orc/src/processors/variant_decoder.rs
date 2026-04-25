@@ -48,7 +48,7 @@ impl StripeDecoderForVariantTable {
         internal_columns: Vec<InternalColumnType>,
     ) -> Self {
         let copy_status = if matches!(table_ctx.get_query_kind(), QueryKind::CopyIntoTable) {
-            Some(table_ctx.get_copy_status())
+            Some(table_ctx.copy_state().copy_status())
         } else {
             None
         };

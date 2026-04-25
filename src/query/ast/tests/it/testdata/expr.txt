@@ -5442,6 +5442,54 @@ FunctionCall {
 
 
 ---------- Input ----------
+COUNT() OVER (RANGE UNBOUNDED PRECEDING)
+---------- Output ---------
+COUNT() OVER (RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..40,
+    ),
+    func: FunctionCall {
+        distinct: false,
+        name: Identifier {
+            span: Some(
+                0..5,
+            ),
+            name: "COUNT",
+            quote: None,
+            ident_type: None,
+        },
+        args: [],
+        params: [],
+        order_by: [],
+        window: Some(
+            WindowDesc {
+                ignore_nulls: None,
+                window: WindowSpec(
+                    WindowSpec {
+                        existing_window_name: None,
+                        partition_by: [],
+                        order_by: [],
+                        window_frame: Some(
+                            WindowFrame {
+                                units: Range,
+                                start_bound: Preceding(
+                                    None,
+                                ),
+                                end_bound: CurrentRow,
+                            },
+                        ),
+                    },
+                ),
+            },
+        ),
+        lambda: None,
+    },
+}
+
+
+---------- Input ----------
 COUNT() OVER (ORDER BY hire_date ROWS UNBOUNDED PRECEDING)
 ---------- Output ---------
 COUNT() OVER (ORDER BY hire_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)

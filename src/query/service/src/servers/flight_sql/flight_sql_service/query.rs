@@ -36,7 +36,6 @@ use databend_common_sql::PlanExtras;
 use databend_common_sql::Planner;
 use databend_common_sql::get_query_kind;
 use databend_common_sql::plans::Plan;
-use databend_common_storages_fuse::TableContext;
 use futures::Stream;
 use futures::StreamExt;
 use prost::bytes;
@@ -50,6 +49,8 @@ use super::status;
 use crate::interpreters::InterpreterFactory;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
 
 /// A app_metakey which indicates the data is a progress type
 static H_PROGRESS: u8 = 0x01;

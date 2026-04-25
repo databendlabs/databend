@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
@@ -29,6 +28,10 @@ use log::info;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 
 pub struct AnalyzeDesc {
     pub catalog: String,

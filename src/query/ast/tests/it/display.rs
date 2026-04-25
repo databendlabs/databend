@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_ast::ast::ExplainKind;
+use databend_common_ast::ast::ExplainOption;
+use databend_common_ast::ast::Statement;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
@@ -81,4 +84,25 @@ fn test_parse_sql_nested_join_conditions_without_panic() {
         let tokens = tokenize_sql(sql).unwrap();
         parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
     }
+}
+
+#[test]
+fn test_explain_verbose_alias_display() {
+    let tokens = tokenize_sql("EXPLAIN VERBOSE SELECT * FROM t").unwrap();
+    let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
+
+    match &stmt {
+        Statement::Explain {
+            kind,
+            options: (_, options),
+            ..
+        } => {
+            assert_eq!(kind, &ExplainKind::Plan);
+            assert_eq!(options, &vec![ExplainOption::Verbose]);
+        }
+        _ => panic!("expected EXPLAIN statement"),
+    }
+
+    assert_eq!(stmt.to_string(), "EXPLAIN(VERBOSE) SELECT * FROM t");
+    test_stmt_display("EXPLAIN VERBOSE SELECT * FROM t");
 }

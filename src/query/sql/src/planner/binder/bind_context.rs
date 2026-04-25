@@ -66,7 +66,7 @@ use crate::plans::ScalarExpr;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
-#[derive(Debug, Clone, Default, EnumAsInner)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumAsInner)]
 pub enum ExprContext {
     SelectClause,
     WhereClause,
@@ -361,6 +361,15 @@ impl BindContext {
 
     pub fn add_column_binding(&mut self, column_binding: ColumnBinding) {
         self.columns.push(column_binding);
+    }
+
+    pub fn named_window_spec(&self, window_name: &str) -> Result<WindowSpec> {
+        self.window_definitions
+            .get(window_name)
+            .ok_or_else(|| {
+                ErrorCode::SyntaxException(format!("Window definition {window_name} not found"))
+            })
+            .map(|entry| entry.value().clone())
     }
 
     /// Assigns 1-based column positions for the current result columns.
@@ -937,8 +946,21 @@ impl BindContext {
         self.columns.iter().map(|c| c.index).collect()
     }
 
-    pub fn set_expr_context(&mut self, expr_context: ExprContext) {
-        self.expr_context = expr_context;
+    pub fn replace_expr_context(&mut self, new: ExprContext) -> ExprContext {
+        let old = self.expr_context;
+        self.expr_context = new;
+        old
+    }
+
+    pub fn with_expr_context<R>(
+        &mut self,
+        new: ExprContext,
+        f: impl FnOnce(&mut BindContext) -> R,
+    ) -> R {
+        let old = self.replace_expr_context(new);
+        let result = f(self);
+        self.expr_context = old;
+        result
     }
 }
 

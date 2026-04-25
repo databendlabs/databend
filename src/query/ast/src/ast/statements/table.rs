@@ -17,6 +17,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -37,7 +39,7 @@ use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_string_map;
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowTablesStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -71,7 +73,7 @@ impl Display for ShowTablesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowCreateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -96,7 +98,7 @@ impl Display for ShowCreateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowTablesStatusStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -116,7 +118,7 @@ impl Display for ShowTablesStatusStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowDropTablesStmt {
     pub database: Option<Identifier>,
     pub limit: Option<ShowLimit>,
@@ -136,7 +138,7 @@ impl Display for ShowDropTablesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ClusterType {
     Linear,
     Hilbert,
@@ -162,7 +164,7 @@ impl std::str::FromStr for ClusterType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ClusterOption {
     pub cluster_type: ClusterType,
     pub cluster_exprs: Vec<Expr>,
@@ -347,7 +349,7 @@ impl Display for CreateTableSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DescribeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -366,7 +368,7 @@ impl Display for DescribeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DropTableStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -396,7 +398,7 @@ impl Display for DropTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct UndropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -659,7 +661,7 @@ impl Display for CreateTableRefSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AddColumnOption {
     End,
     First,
@@ -676,7 +678,7 @@ impl Display for AddColumnOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct RenameTableStmt {
     pub if_exists: bool,
     pub catalog: Option<Identifier>,
@@ -711,7 +713,7 @@ impl Display for RenameTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct TruncateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -732,7 +734,7 @@ impl Display for TruncateTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -756,7 +758,7 @@ impl Display for VacuumTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct VacuumDropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -834,7 +836,7 @@ impl Display for OptimizeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AnalyzeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -860,7 +862,7 @@ impl Display for AnalyzeTableStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ExistsTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -920,7 +922,7 @@ impl From<&str> for Engine {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub enum CompactTarget {
     Block,
     Segment,
@@ -966,7 +968,7 @@ impl Display for VacuumDropTableOption {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum OptimizeTableAction {
     All,
     Purge { before: Option<TimeTravelPoint> },
@@ -999,7 +1001,7 @@ impl Display for OptimizeTableAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum ColumnExpr {
     Default(Box<Expr>),
     Virtual(Box<Expr>),
@@ -1046,7 +1048,7 @@ pub enum NullableConstraint {
     NotNull,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
@@ -1100,7 +1102,7 @@ impl Display for TableIndexDefinition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ConstraintDefinition {
     pub name: Option<Identifier>,
     pub constraint_type: ConstraintType,
@@ -1210,14 +1212,14 @@ impl Display for ModifyColumnAction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Default)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut, Default)]
 pub struct ShowStatisticsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub target: ShowStatsTarget,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Default)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut, Default)]
 pub enum ShowStatsTarget {
     #[default]
     Database,

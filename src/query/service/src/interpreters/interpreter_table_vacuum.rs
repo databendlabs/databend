@@ -33,7 +33,8 @@ use databend_enterprise_vacuum_handler::get_vacuum_handler;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
 
 pub struct VacuumTableInterpreter {
     ctx: Arc<QueryContext>,

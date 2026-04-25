@@ -21,7 +21,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -52,6 +51,7 @@ use crate::pipelines::processors::transforms::hash_join_table::BinaryHashJoinHas
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashMap;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub type UniqueSerializerHashJoinHashTable = SerializerHashJoinHashTable<true>;
 pub type UniqueSingleBinaryHashJoinHashTable = SingleBinaryHashJoinHashTable<true>;

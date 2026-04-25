@@ -145,6 +145,12 @@ pub struct OutputFormatSettings {
     pub geometry_format: GeometryDataType,
     pub binary_format: BinaryDisplayFormat,
     pub http_json_result_mode: HttpHandlerDataFormat,
+    pub headers: u8,
+    // used only for compat with old bendSQL driver.
+    pub http_arrow_use_jsonb: bool,
+
+    pub json_compact: bool,
+    pub json_strings: bool,
 
     // used only in http handler response
     pub format_null_as_str: bool,
@@ -157,6 +163,10 @@ impl Default for OutputFormatSettings {
             geometry_format: GeometryDataType::default(),
             binary_format: BinaryDisplayFormat::Hex,
             http_json_result_mode: HttpHandlerDataFormat::Display,
+            headers: 0,
+            http_arrow_use_jsonb: false,
+            json_compact: false,
+            json_strings: false,
             format_null_as_str: false,
         }
     }

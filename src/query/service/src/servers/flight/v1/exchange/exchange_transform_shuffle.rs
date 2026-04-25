@@ -18,7 +18,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
@@ -42,6 +41,7 @@ use super::exchange_sorting::TransformExchangeSorting;
 use super::exchange_transform_scatter::ScatterTransform;
 use super::serde::ExchangeSerializeMeta;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct ExchangeShuffleMeta {
     pub blocks: Vec<DataBlock>,

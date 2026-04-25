@@ -22,7 +22,8 @@ use databend_common_pipeline::core::Pipeline;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
 use crate::storages::Table;
 use crate::stream::PullingExecutorStream;
 

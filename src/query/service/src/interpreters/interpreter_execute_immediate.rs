@@ -28,13 +28,13 @@ use databend_common_script::Executor;
 use databend_common_script::ReturnValue;
 use databend_common_script::compile;
 use databend_common_sql::plans::ExecuteImmediatePlan;
-use databend_common_storages_fuse::TableContext;
 use tokio::sync::Mutex;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::util::ScriptClient;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 #[derive(Debug)]
 pub struct ExecuteImmediateInterpreter {

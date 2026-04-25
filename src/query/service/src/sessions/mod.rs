@@ -18,6 +18,7 @@ mod query_affect;
 pub mod query_ctx;
 mod query_ctx_shared;
 mod queue_mgr;
+mod runtime_filter_state;
 mod session;
 mod session_ctx;
 mod session_info;
@@ -28,7 +29,7 @@ mod session_privilege_mgr;
 mod session_status;
 
 pub use databend_common_base::base::BuildInfoRef;
-pub use databend_common_catalog::table_context::TableContext;
+pub use databend_common_catalog::table_context::prelude::*;
 pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;
 pub use query_ctx::convert_query_log_timestamp;

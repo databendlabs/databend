@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_sql::plans::Plan;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
@@ -60,10 +61,20 @@ async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     Ok(outcome)
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_binder_with_lite_table_context() -> Result<()> {
-    let mut file = open_golden_file("semantic", "binder.txt")?;
+async fn run_binder_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> {
+    let mut file = open_golden_file("semantic", file_name)?;
 
+    for case in cases {
+        write_case_header(&mut file, case)?;
+        let outcome = bind_case(case).await?;
+        write_case_outcome(&mut file, &outcome)?;
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_clauses_and_ordering() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "simple_aggregate_query_binds",
@@ -132,6 +143,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT sum(number) AS s FROM t HAVING s > 0",
         },
         SqlTestCase {
+            name: "having_aggregate_does_not_make_scalar_projection_valid",
+            description: "Introducing an aggregate in HAVING must not make a non-aggregated SELECT list valid.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number FROM t HAVING count(*) > 0",
+        },
+        SqlTestCase {
             name: "order_by_can_introduce_aggregate_in_aggregate_query",
             description: "ORDER BY may introduce a new aggregate expression when the query is already aggregated.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -150,6 +167,36 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT number FROM t ORDER BY count(*) + 1",
         },
         SqlTestCase {
+            name: "order_by_expression_reuses_scalar_alias_semantics",
+            description: "ORDER BY expressions should still inline scalar aliases from the select semantic view when they are used inside a larger expression.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number + 1 AS s FROM t ORDER BY s + 1",
+        },
+        SqlTestCase {
+            name: "order_by_duplicate_aggregate_alias_is_ambiguous",
+            description: "ORDER BY should keep duplicate aggregate aliases ambiguous instead of pre-expanding one candidate.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) AS s, max(number) AS s FROM t ORDER BY s",
+        },
+        SqlTestCase {
+            name: "order_by_expression_reuses_aggregate_alias_semantics",
+            description: "ORDER BY expressions should keep aggregate aliases on the original semantic view instead of depending on rewritten select-item state.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) AS s FROM t ORDER BY s + 1",
+        },
+        SqlTestCase {
+            name: "distinct_order_by_reuses_same_aggregate_select_item",
+            description: "SELECT DISTINCT should still accept an ORDER BY aggregate expression when it is already present in the select list.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT DISTINCT sum(number) FROM t ORDER BY sum(number)",
+        },
+        SqlTestCase {
+            name: "distinct_order_by_reuses_same_window_select_item",
+            description: "SELECT DISTINCT should still accept an ORDER BY window expression when it is already present in the select list.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT DISTINCT row_number() OVER (ORDER BY number) FROM t ORDER BY row_number() OVER (ORDER BY number)",
+        },
+        SqlTestCase {
             name: "aggregate_argument_prefers_base_column_over_select_alias",
             description: "Inside an aggregate function, a same-name select alias should not shadow the base column.",
             setup_sqls: &["CREATE TABLE t(a UInt64, c2 UInt64)"],
@@ -161,6 +208,26 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3",
         },
+        SqlTestCase {
+            name: "table_function_named_arguments_require_fat_arrow",
+            description: "A table function named argument written with '=' should produce a direct hint to use '=>'.",
+            setup_sqls: &[],
+            sql: "SELECT * FROM infer_schema(location = '@data/parquet/int96.parquet')",
+        },
+        SqlTestCase {
+            name: "obfuscate_named_arguments_require_fat_arrow",
+            description: "OBFUSCATE should surface the same '=>' hint when a named argument is written with '='.",
+            setup_sqls: &["CREATE TABLE t1(a String)"],
+            sql: "SELECT * FROM obfuscate(t1, seed = 20)",
+        },
+    ];
+
+    run_binder_cases("binder_clauses.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_window_core_paths() -> Result<()> {
+    let cases = [
         SqlTestCase {
             name: "window_aggregate_does_not_become_group_aggregate",
             description: "An aggregate used as a window function should stay in the window phase rather than becoming a group aggregate.",
@@ -178,6 +245,66 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "A window ORDER BY clause must not introduce a new aggregate expression.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t",
+        },
+        SqlTestCase {
+            name: "order_by_window_alias_does_not_seed_window_aggregate",
+            description: "ORDER BY on a window alias must not pre-register aggregates that only appear inside that alias's window specification.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) AS rn FROM t ORDER BY rn",
+        },
+        SqlTestCase {
+            name: "order_by_expression_reuses_window_alias_semantics",
+            description: "ORDER BY expressions should keep window aliases on the original semantic view instead of depending on rewritten select-item state.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t ORDER BY rn + 1",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_having_aggregate",
+            description: "A window ORDER BY clause should be able to reuse an aggregate introduced later by HAVING.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t HAVING sum(number) > 0",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_having_aggregate_alias",
+            description: "A window ORDER BY clause should be able to reuse an aggregate reached through a HAVING alias reference.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_having_udaf",
+            description: "A window ORDER BY clause should be able to reuse a UDAF introduced later by HAVING.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT row_number() OVER (ORDER BY weighted_avg(a, b)) FROM t HAVING weighted_avg(a, b) > 0",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_having_udaf_alias",
+            description: "A window ORDER BY clause should be able to reuse a UDAF reached through a HAVING alias reference.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_order_by_aggregate",
+            description: "A window ORDER BY clause should be able to reuse an aggregate introduced later by ORDER BY.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT row_number() OVER (ORDER BY sum(number)) FROM t ORDER BY sum(number)",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_order_by_udaf",
+            description: "A window ORDER BY clause should be able to reuse a UDAF introduced later by ORDER BY.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT row_number() OVER (ORDER BY weighted_avg(a, b)) FROM t ORDER BY weighted_avg(a, b)",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_order_by_aggregate_alias",
+            description: "A window ORDER BY clause should be able to reuse an aggregate reached through an ORDER BY alias reference.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t ORDER BY s",
+        },
+        SqlTestCase {
+            name: "window_order_reuses_order_by_udaf_alias",
+            description: "A window ORDER BY clause should be able to reuse a UDAF reached through an ORDER BY alias reference.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) AS s, row_number() OVER (ORDER BY s) FROM t ORDER BY s",
         },
         SqlTestCase {
             name: "window_order_rejects_window_alias_expansion",
@@ -210,11 +337,19 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b",
         },
         SqlTestCase {
-            name: "qualify_cte_then_outer_aggregate_from_sqllogictest_binds",
-            description: "A sqllogictest pattern that filters with QUALIFY inside a CTE before an outer aggregate should still bind.",
-            setup_sqls: &["CREATE TABLE t(number UInt64)"],
-            sql: "WITH test AS (SELECT number % 10 AS id, number AS full_matched FROM t QUALIFY row_number() OVER (PARTITION BY id ORDER BY number DESC) = 1) SELECT full_matched, count() FROM test GROUP BY full_matched HAVING full_matched = 3",
+            name: "within_group_window_aggregate_binds",
+            description: "A WITHIN GROUP window aggregate should bind its sort descriptors without turning into a grouped aggregate.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, empno UInt64, salary UInt64)"],
+            sql: "SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary",
         },
+    ];
+
+    run_binder_cases("binder_window_core.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_named_window_paths() -> Result<()> {
+    let cases = [
         SqlTestCase {
             name: "named_window_from_sqllogictest_binds",
             description: "A named WINDOW clause from sqllogictests should bind as a normal window specification.",
@@ -228,6 +363,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
         },
         SqlTestCase {
+            name: "named_window_aggregate_inside_nested_window_expression_binds",
+            description: "A named window aggregate introduced from a referenced window spec must still bind when the window expression is nested inside a larger select expression.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w + 1 FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
+        },
+        SqlTestCase {
             name: "inherited_named_window_from_sqllogictest_binds",
             description: "An inherited named WINDOW specification should bind without losing the base partition spec.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
@@ -238,6 +379,12 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             description: "A recursive chain of named WINDOW references should resolve inherited partition and order specs.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
             sql: "SELECT rank() OVER w3 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (w1), w3 AS (w2)",
+        },
+        SqlTestCase {
+            name: "missing_named_window_in_select_prebind_errors",
+            description: "A missing named window referenced from a select-item window expression must fail during prebinding instead of being silently ignored.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname",
         },
         SqlTestCase {
             name: "inherited_named_window_rejects_partition_override",
@@ -257,17 +404,19 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             setup_sqls: &["CREATE TABLE empsalary(salary UInt64)"],
             sql: "SELECT sum(salary) OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary ROWS CURRENT ROW), w2 AS (w1)",
         },
+    ];
+
+    run_binder_cases("binder_window_named.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_qualify_paths() -> Result<()> {
+    let cases = [
         SqlTestCase {
-            name: "unnest_over_aggregate_is_planned_after_aggregate",
-            description: "A set-returning function over an aggregate should stay above the aggregate phase instead of rewriting the aggregate away early.",
-            setup_sqls: &[],
-            sql: "SELECT unnest(max([11, 12]))",
-        },
-        SqlTestCase {
-            name: "duplicate_srf_expression_reuses_project_set_binding",
-            description: "Repeated identical SRF expressions should reuse the registered ProjectSet binding.",
-            setup_sqls: &[],
-            sql: "SELECT unnest([1, 2, 3]), unnest([1, 2, 3])",
+            name: "qualify_cte_then_outer_aggregate_from_sqllogictest_binds",
+            description: "A sqllogictest pattern that filters with QUALIFY inside a CTE before an outer aggregate should still bind.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "WITH test AS (SELECT number % 10 AS id, number AS full_matched FROM t QUALIFY row_number() OVER (PARTITION BY id ORDER BY number DESC) = 1) SELECT full_matched, count() FROM test GROUP BY full_matched HAVING full_matched = 3",
         },
         SqlTestCase {
             name: "qualify_named_window_with_subquery_binds",
@@ -287,11 +436,55 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 2 AS a, sum(number) AS s, row_number() OVER (ORDER BY a) AS rn FROM t GROUP BY a QUALIFY s > 0",
         },
+    ];
+
+    run_binder_cases("binder_qualify.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_grouping_and_srf_paths() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "unnest_over_aggregate_is_planned_after_aggregate",
+            description: "A set-returning function over an aggregate should stay above the aggregate phase instead of rewriting the aggregate away early.",
+            setup_sqls: &[],
+            sql: "SELECT unnest(max([11, 12]))",
+        },
+        SqlTestCase {
+            name: "duplicate_srf_expression_reuses_project_set_binding",
+            description: "Repeated identical SRF expressions should reuse the registered ProjectSet binding.",
+            setup_sqls: &[],
+            sql: "SELECT unnest([1, 2, 3]), unnest([1, 2, 3])",
+        },
         SqlTestCase {
             name: "group_by_srf_alias_from_sqllogictest_binds",
             description: "A sqllogictest GROUP BY pattern that groups by an SRF select alias should bind successfully.",
             setup_sqls: &["CREATE TABLE t_str(col1 String, col2 String)"],
             sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_input_column_over_same_name_srf_alias",
+            description: "GROUP BY should keep a same-name input column ahead of an SRF alias, while still allowing non-conflicting SRF aliases.",
+            setup_sqls: &["CREATE TABLE t_str(col1 String, col2 String)"],
+            sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_select_alias_over_same_name_base_column",
+            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_input_column_over_aggregate_alias",
+            description: "GROUP BY should keep a same-name input column ahead of an aggregate alias, because the alias itself is not a valid grouping key.",
+            setup_sqls: &[],
+            sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_input_column_over_same_name_aggregate_alias_in_subquery",
+            description: "GROUP BY inside a subquery should still resolve a same-name source column before an aggregate alias.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s",
         },
         SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
@@ -300,10 +493,22 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL",
         },
         SqlTestCase {
+            name: "select_scalar_wraps_builtin_aggregate",
+            description: "A scalar wrapper over a builtin aggregate should bind through the select aggregate path without requiring direct aggregate support in type checking.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) + 1 FROM t",
+        },
+        SqlTestCase {
             name: "grouped_select_udaf_binds",
             description: "A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
             sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g",
+        },
+        SqlTestCase {
+            name: "select_scalar_wraps_udaf",
+            description: "A scalar wrapper over a UDAF should keep binding through the normal UDAF path while coexisting with builtin aggregate prebinding.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) + 1 FROM t",
         },
         SqlTestCase {
             name: "group_by_all_collects_non_udaf_select_items",
@@ -360,12 +565,6 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
             sql: "SELECT grouping(salary), grouping(depname), sum(grouping(salary)) OVER (PARTITION BY grouping(salary) + grouping(depname) ORDER BY grouping(depname) DESC) FROM empsalary GROUP BY ROLLUP(depname, salary)",
         },
         SqlTestCase {
-            name: "within_group_window_aggregate_binds",
-            description: "A WITHIN GROUP window aggregate should bind its sort descriptors without turning into a grouped aggregate.",
-            setup_sqls: &["CREATE TABLE empsalary(depname String, empno UInt64, salary UInt64)"],
-            sql: "SELECT listagg(cast(salary as varchar), '|') WITHIN GROUP (ORDER BY empno DESC) OVER (PARTITION BY depname ORDER BY empno) FROM empsalary",
-        },
-        SqlTestCase {
             name: "within_group_group_aggregate_binds",
             description: "A non-window WITHIN GROUP aggregate should register its sort descriptors in the aggregate phase.",
             setup_sqls: &["CREATE TABLE empsalary(empno UInt64, salary UInt64)"],
@@ -373,10 +572,57 @@ async fn test_binder_with_lite_table_context() -> Result<()> {
         },
     ];
 
-    for case in &cases {
-        write_case_header(&mut file, case)?;
-        let outcome = bind_case(case).await?;
-        write_case_outcome(&mut file, &outcome)?;
+    run_binder_cases("binder_grouping.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_clause_prepass_skips_subquery_metadata_side_effects() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "having_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) FROM t HAVING EXISTS (SELECT 1 FROM t AS inner_t WHERE inner_t.number > 0)",
+        },
+        SqlTestCase {
+            name: "having_alias_and_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) AS s FROM t HAVING s > 0 AND EXISTS (SELECT 1 FROM t AS inner_t WHERE inner_t.number > 0)",
+        },
+        SqlTestCase {
+            name: "having_alias_to_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT (SELECT max(number) FROM t AS inner_t) AS s FROM t HAVING s > 0",
+        },
+        SqlTestCase {
+            name: "order_by_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT number FROM t ORDER BY (SELECT max(number) FROM t AS inner_t)",
+        },
+        SqlTestCase {
+            name: "order_by_alias_to_subquery_prepass_metadata",
+            description: "",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT (SELECT max(number) FROM t AS inner_t) AS s FROM t ORDER BY s",
+        },
+    ];
+
+    for case in cases {
+        let ctx = setup_context(&case).await?;
+        let plan = ctx.bind_sql(case.sql).await?;
+        let Plan::Query { metadata, .. } = plan else {
+            panic!("expected query plan for {}", case.name);
+        };
+
+        let table_count = metadata.read().tables().len();
+        assert_eq!(
+            table_count, 2,
+            "{} should only keep metadata for the outer query and the final subquery bind",
+            case.name
+        );
     }
 
     Ok(())

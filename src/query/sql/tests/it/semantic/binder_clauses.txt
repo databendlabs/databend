@@ -1,0 +1,330 @@
+=== simple_aggregate_query_binds ===
+description: A plain aggregate query should bind successfully.
+sql: SELECT avg(number) FROM t
+status: ok
+EvalScalar
+├── scalars: [divide(sum(number) (#1), if(eq(count(number) (#2), 0), 1, count(number) (#2))) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [sum(t.number (#0)) AS (#1), count(t.number (#0)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.number (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== where_rejects_aggregate_alias ===
+description: An aggregate alias must still be rejected in WHERE.
+sql: SELECT sum(number) AS s FROM t WHERE s > 0
+status: error
+code: 1065
+message: Where clause can't contain aggregate or window functions
+
+=== where_accepts_scalar_alias ===
+description: A scalar alias should remain usable in WHERE.
+sql: SELECT number + 1 AS s FROM t WHERE s > 1
+status: ok
+EvalScalar
+├── scalars: [plus(t.number (#0), 1) AS (#1)]
+└── Filter
+    ├── filters: [gt(plus(t.number (#0), 1), 1)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== where_alias_to_srf_uses_project_set_binding ===
+description: A WHERE clause that references an SRF alias should keep the alias bound to the ProjectSet column instead of expanding back to the raw SRF.
+sql: SELECT unnest([1, 2, 3]) AS u WHERE u = 1
+status: ok
+EvalScalar
+├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1)]
+└── Filter
+    ├── filters: [eq(get(unnest([1, 2, 3]) (#0)), 1)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
+        └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== where_rejects_udaf ===
+description: A UDAF in WHERE must be rejected like any other aggregate.
+sql: SELECT a FROM t WHERE weighted_avg(a, b) > 0
+status: error
+code: 1065
+message: Where clause can't contain aggregate or window functions
+
+=== qualify_rejects_aggregate_alias ===
+description: An aggregate alias must still be rejected in QUALIFY.
+sql: SELECT sum(number) AS s FROM t QUALIFY s > 0
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+
+=== qualify_rejects_direct_aggregate ===
+description: A raw aggregate expression must be rejected directly in QUALIFY.
+sql: SELECT number FROM t QUALIFY sum(number) > 0
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+
+=== qualify_rejects_udaf_alias ===
+description: A UDAF alias must still be rejected in QUALIFY.
+sql: SELECT weighted_avg(a, b) AS s FROM t QUALIFY s > 0
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+
+=== qualify_accepts_window_alias ===
+description: A window alias should remain usable in QUALIFY.
+sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
+status: ok
+EvalScalar
+├── scalars: [t.number (#0) AS (#0), row_number() OVER (ORDER BY number) (#1) AS (#1)]
+└── Filter
+    ├── filters: [eq(row_number() OVER (ORDER BY number) (#1), 1)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [t.number (#0) AS (#0)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [t.number (#0) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== qualify_alias_to_srf_uses_project_set_binding ===
+description: A QUALIFY clause that references an SRF alias should keep the alias bound to the ProjectSet column instead of expanding back to the raw SRF.
+sql: SELECT unnest([1, 2, 3]) AS u QUALIFY u = 1
+status: ok
+EvalScalar
+├── scalars: [get(unnest([1, 2, 3]) (#0)) AS (#1)]
+└── Filter
+    ├── filters: [eq(get(unnest([1, 2, 3]) (#0)), 1)]
+    └── ProjectSet(ProjectSet { srfs: [ScalarItem { scalar: FunctionCall(FunctionCall { span: Some(7..24), func_name: "unnest", params: [], arguments: [ConstantExpr(ConstantExpr { span: Some(14..23), value: Array(UInt8([1, 2, 3])) })] }), index: 0 }] })
+        └── DummyTableScan(DummyTableScan { source_table_indexes: [] })
+
+
+=== having_accepts_aggregate_alias ===
+description: An aggregate alias should remain usable in HAVING.
+sql: SELECT sum(number) AS s FROM t HAVING s > 0
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#1) AS (#1)]
+└── Filter
+    ├── filters: [gt(sum(number) (#1), 0)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== having_aggregate_does_not_make_scalar_projection_valid ===
+description: Introducing an aggregate in HAVING must not make a non-aggregated SELECT list valid.
+sql: SELECT number FROM t HAVING count(*) > 0
+status: error
+code: 1065
+message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
+
+=== order_by_can_introduce_aggregate_in_aggregate_query ===
+description: ORDER BY may introduce a new aggregate expression when the query is already aggregated.
+sql: SELECT count(*) FROM t ORDER BY sum(number)
+status: ok
+Sort
+├── sort keys: [sum(number) (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [COUNT(*) (#1) AS (#1), sum(number) (#2) AS (#2)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [count() AS (#1), sum(t.number (#0)) AS (#2)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== order_by_aggregate_does_not_make_scalar_projection_valid ===
+description: Introducing an aggregate in ORDER BY must not make a non-aggregated SELECT list valid.
+sql: SELECT number FROM t ORDER BY sum(number)
+status: error
+code: 1065
+message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
+
+=== order_by_count_does_not_make_scalar_projection_valid ===
+description: The sqllogictest ORDER BY count(*) pattern must still reject a scalar projection.
+sql: SELECT number FROM t ORDER BY count(*) + 1
+status: error
+code: 1065
+message: column "number" must appear in the GROUP BY clause or be used in an aggregate function
+
+=== order_by_expression_reuses_scalar_alias_semantics ===
+description: ORDER BY expressions should still inline scalar aliases from the select semantic view when they are used inside a larger expression.
+sql: SELECT number + 1 AS s FROM t ORDER BY s + 1
+status: ok
+Sort
+├── sort keys: [s + 1 (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [plus(t.number (#0), 1) AS (#1), plus(plus(t.number (#0), 1), 1) AS (#2)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== order_by_duplicate_aggregate_alias_is_ambiguous ===
+description: ORDER BY should keep duplicate aggregate aliases ambiguous instead of pre-expanding one candidate.
+sql: SELECT sum(number) AS s, max(number) AS s FROM t ORDER BY s
+status: error
+code: 1065
+message: column s reference or alias is ambiguous, please use another alias name
+
+=== order_by_expression_reuses_aggregate_alias_semantics ===
+description: ORDER BY expressions should keep aggregate aliases on the original semantic view instead of depending on rewritten select-item state.
+sql: SELECT sum(number) AS s FROM t ORDER BY s + 1
+status: ok
+Sort
+├── sort keys: [s + 1 (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1), plus(sum(number) (#1), 1) AS (#2)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== distinct_order_by_reuses_same_aggregate_select_item ===
+description: SELECT DISTINCT should still accept an ORDER BY aggregate expression when it is already present in the select list.
+sql: SELECT DISTINCT sum(number) FROM t ORDER BY sum(number)
+status: ok
+Sort
+├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: []
+    └── Aggregate(Initial)
+        ├── group items: [sum(number) (#1) AS (#1)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [sum(number) (#1) AS (#1)]
+            └── Aggregate(Initial)
+                ├── group items: []
+                ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                └── EvalScalar
+                    ├── scalars: [t.number (#0) AS (#0)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== distinct_order_by_reuses_same_window_select_item ===
+description: SELECT DISTINCT should still accept an ORDER BY window expression when it is already present in the select list.
+sql: SELECT DISTINCT row_number() OVER (ORDER BY number) FROM t ORDER BY row_number() OVER (ORDER BY number)
+status: ok
+Sort
+├── sort keys: [row_number() OVER (ORDER BY number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: []
+    └── Aggregate(Initial)
+        ├── group items: [row_number() OVER (ORDER BY number) (#1) AS (#1)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [row_number() OVER (ORDER BY number) (#1) AS (#1)]
+            └── Window
+                ├── aggregate function: row_number
+                ├── partition items: []
+                ├── order by items: [t.number (#0) AS (#0)]
+                ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                └── Sort
+                    ├── sort keys: [t.number (#0) ASC NULLS LAST]
+                    ├── limit: [NONE]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== aggregate_argument_prefers_base_column_over_select_alias ===
+description: Inside an aggregate function, a same-name select alias should not shadow the base column.
+sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), sum(c2) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.c2 (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.c2 (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_can_fallback_to_select_alias_in_select_clause ===
+description: Inside the SELECT list, an aggregate argument should still fall back to a same-select alias when no base column exists.
+sql: SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3
+status: ok
+EvalScalar
+├── scalars: [sum(c1) (#2) AS (#2), number % 3 (#1) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.number (#0), 3) AS (#1)]
+    ├── aggregate functions: [sum(number % 3 (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [modulo(t.number (#0), 3) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== table_function_named_arguments_require_fat_arrow ===
+description: A table function named argument written with '=' should produce a direct hint to use '=>'.
+sql: SELECT * FROM infer_schema(location = '@data/parquet/int96.parquet')
+status: error
+code: 1065
+message: Table function 'infer_schema' uses `=>` for named arguments; replace `location = ...` with `location => ...`.
+
+=== obfuscate_named_arguments_require_fat_arrow ===
+description: OBFUSCATE should surface the same '=>' hint when a named argument is written with '='.
+sql: SELECT * FROM obfuscate(t1, seed = 20)
+status: error
+code: 1065
+message: Table function 'obfuscate' uses `=>` for named arguments; replace `seed = ...` with `seed => ...`.
+

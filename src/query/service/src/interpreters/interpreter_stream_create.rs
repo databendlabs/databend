@@ -18,12 +18,12 @@ use databend_common_exception::Result;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::CreateStreamPlan;
-use databend_common_storages_fuse::TableContext;
 use databend_enterprise_stream_handler::get_stream_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
 
 pub struct CreateStreamInterpreter {
     ctx: Arc<QueryContext>,

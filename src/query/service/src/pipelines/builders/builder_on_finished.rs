@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use databend_common_ast::ast::CopyIntoTableOptions;
 use databend_common_base::runtime::GlobalIORuntime;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::*;
@@ -30,6 +29,8 @@ use log::info;
 
 use crate::pipelines::PipelineBuilder;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextSession;
 
 impl PipelineBuilder {
     pub fn set_purge_files_on_finished(
@@ -58,7 +59,7 @@ impl PipelineBuilder {
                     GlobalIORuntime::instance().block_on(async move {
                         // 1. log on_error mode errors.
                         // todo(ariesdevil): persist errors with query_id
-                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                        if let Some(error_map) = ctx.copy_state().get_maximum_error_per_file() {
                             for (file_name, e) in error_map {
                                 error!(
                                     "copy(on_error={}): file {} encounter error {},",

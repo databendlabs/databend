@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_ast_visit_derive::Walk;
+use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
@@ -136,7 +138,7 @@ impl Display for RevokeStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowGranteesOfRoleStmt {
     pub name: String,
     pub show_option: Option<ShowOptions>,
@@ -153,13 +155,13 @@ impl Display for ShowGranteesOfRoleStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowObjectPrivilegesStmt {
     pub object: GrantObjectName,
     pub show_option: Option<ShowOptions>,
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum GrantObjectName {
     Database(String),
     Table(Option<String>, String),
@@ -209,7 +211,7 @@ impl Display for ShowObjectPrivilegesStmt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AccountMgrSource {
     Role {
         role: String,
@@ -259,7 +261,7 @@ impl Display for AccountMgrSource {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub enum AccountMgrLevel {
     Global,
     Database(Option<String>),

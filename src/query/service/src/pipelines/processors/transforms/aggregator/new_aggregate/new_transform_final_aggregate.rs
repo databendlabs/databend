@@ -21,7 +21,6 @@ use std::sync::atomic::Ordering;
 use async_channel::Receiver;
 use async_channel::Sender;
 use bumpalo::Bump;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AggregateHashTable;
@@ -46,8 +45,9 @@ use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::pipelines::processors::transforms::aggregator::statistics::AggregationStatistics;
 use crate::pipelines::processors::transforms::aggregator::transform_aggregate_partial::HashTable;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
-const SPILL_BUCKET_NUM: usize = 2;
+const SPILL_BUCKET_NUM: usize = 4;
 const SPILL_BUCKET_BITS: u64 = SPILL_BUCKET_NUM.trailing_zeros() as u64;
 
 enum Stage {
@@ -113,11 +113,7 @@ impl NewTransformFinalAggregate {
             ctx.clone(),
             SPILL_BUCKET_NUM,
             params.spill_schema(),
-            LocalPartitionStream::new(
-                params.max_block_rows,
-                params.max_block_bytes,
-                SPILL_BUCKET_NUM,
-            ),
+            LocalPartitionStream::new(0, params.max_block_bytes, SPILL_BUCKET_NUM),
         )?;
 
         Ok(Box::new(NewTransformFinalAggregate {

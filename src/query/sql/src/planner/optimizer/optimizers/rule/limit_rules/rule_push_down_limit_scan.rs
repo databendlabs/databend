@@ -35,10 +35,9 @@ use crate::plans::Scan;
 ///             \
 ///             Scan(padding limit)
 ///
-/// Note: This rule does NOT match plans with SecureFilter (from row access policy).
-/// When SecureFilter exists without user WHERE predicates, push_down_predicates is empty,
-/// and pushing limit would trigger early termination in storage layer, returning N rows
-/// before SecureFilter can filter them, causing fewer results than expected.
+/// When `secure_predicates` is present, limit is not pushed down because
+/// storage would return N rows before secure predicates filter them,
+/// causing fewer results than expected.
 pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -73,6 +72,11 @@ impl Rule for RulePushDownLimitScan {
 
         let scan_expr = s_expr.child(0)?;
         let mut scan: Scan = scan_expr.plan().clone().try_into()?;
+
+        // When row access policy is active, don't push limit to storage.
+        if scan.secure_predicates.is_some() {
+            return Ok(());
+        }
 
         scan.limit = Some(scan.limit.map_or(count, |c| cmp::max(c, count)));
         let new_scan_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(scan)));

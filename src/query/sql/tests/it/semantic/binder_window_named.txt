@@ -1,0 +1,175 @@
+=== named_window_from_sqllogictest_binds ===
+description: A named WINDOW clause from sqllogictests should bind as a normal window specification.
+sql: SELECT depname, empno, salary, sum(salary) OVER w FROM empsalary WINDOW w AS (PARTITION BY depname ORDER BY empno)
+status: ok
+EvalScalar
+├── scalars: [empsalary.depname (#0) AS (#0), empsalary.empno (#1) AS (#1), empsalary.salary (#2) AS (#2), sum(salary) OVER w (#3) AS (#3)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: [empsalary.empno (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.empno (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(31..49), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: Some(35..41), column: ColumnBinding { database_name: Some("default"), table_name: Some("empsalary"), column_position: Some(3), table_index: Some(0), column_name: "salary", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(salary) OVER w" })
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.empno (#1) AS (#1), empsalary.salary (#2) AS (#2)]
+            └── Scan
+                ├── table: default.empsalary (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== named_window_aggregate_order_by_existing_group_aggregate_binds ===
+description: A grouped query should be able to introduce an aggregate inside a named window clause and reuse it across the window aggregate and ORDER BY.
+sql: SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))
+status: ok
+EvalScalar
+├── scalars: [empsalary.depname (#0) AS (#0), sum(sum(salary)) OVER w (#4) AS (#4)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [1 AS (#3)]
+    ├── order by items: [sum(salary) (#2) AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, sum(salary) (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
+        └── EvalScalar
+            ├── scalars: [sum(salary) (#2) AS (#2), sum(salary) (#2) AS (#2), 1 AS (#3)]
+            └── Aggregate(Initial)
+                ├── group items: [empsalary.depname (#0) AS (#0)]
+                ├── aggregate functions: [sum(empsalary.salary (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.empsalary (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== named_window_aggregate_inside_nested_window_expression_binds ===
+description: A named window aggregate introduced from a referenced window spec must still bind when the window expression is nested inside a larger select expression.
+sql: SELECT depname, sum(sum(salary)) OVER w + 1 FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))
+status: ok
+EvalScalar
+├── scalars: [empsalary.depname (#0) AS (#0), plus(sum(sum(salary)) OVER w (#4), 1) AS (#5)]
+└── Window
+    ├── aggregate function: sum
+    ├── partition items: [1 AS (#3)]
+    ├── order by items: [sum(salary) (#2) AS (#2)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum_part_0 (#3) ASC NULLS LAST, sum(salary) (#2) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Aggregate(AggregateFunction { span: Some(16..39), func_name: "sum", distinct: false, params: [], args: [BoundColumnRef(BoundColumnRef { span: None, column: ColumnBinding { database_name: None, table_name: None, column_position: None, table_index: None, column_name: "sum(salary)", column_name_lower: None, index: 2, data_type: Nullable(Number(UInt64)), visibility: Visible, virtual_expr: None, is_srf: false } })], return_type: Nullable(Number(UInt64)), sort_descs: [], display_name: "sum(sum(salary)) OVER w" })
+        └── EvalScalar
+            ├── scalars: [sum(salary) (#2) AS (#2), sum(salary) (#2) AS (#2), 1 AS (#3)]
+            └── Aggregate(Initial)
+                ├── group items: [empsalary.depname (#0) AS (#0)]
+                ├── aggregate functions: [sum(empsalary.salary (#1)) AS (#2)]
+                └── EvalScalar
+                    ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                    └── Scan
+                        ├── table: default.empsalary (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== inherited_named_window_from_sqllogictest_binds ===
+description: An inherited named WINDOW specification should bind without losing the base partition spec.
+sql: SELECT rank() OVER w1, dense_rank() OVER w2 FROM empsalary WINDOW w1 AS (PARTITION BY depname), w2 AS (w1 ORDER BY salary DESC)
+status: ok
+EvalScalar
+├── scalars: [rank() OVER w1 (#2) AS (#2), dense_rank() OVER w2 (#3) AS (#3)]
+└── Window
+    ├── aggregate function: rank
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: []
+    ├── frame: [Range: Preceding(None) ~ Following(None)]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Rank
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0)]
+            └── Window
+                ├── aggregate function: dense_rank
+                ├── partition items: [empsalary.depname (#0) AS (#0)]
+                ├── order by items: [empsalary.salary (#1) AS (#1) DESC]
+                ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                └── Sort
+                    ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.salary (#1) DESC NULLS LAST]
+                    ├── limit: [NONE]
+                    ├── window top: NONE
+                    ├── window function: DenseRank
+                    └── EvalScalar
+                        ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+                        └── Scan
+                            ├── table: default.empsalary (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== recursive_named_window_chain_binds ===
+description: A recursive chain of named WINDOW references should resolve inherited partition and order specs.
+sql: SELECT rank() OVER w3 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (w1), w3 AS (w2)
+status: ok
+EvalScalar
+├── scalars: [rank() OVER w3 (#2) AS (#2)]
+└── Window
+    ├── aggregate function: rank
+    ├── partition items: [empsalary.depname (#0) AS (#0)]
+    ├── order by items: [empsalary.salary (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [empsalary.depname (#0) ASC NULLS LAST, empsalary.salary (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: Rank
+        └── EvalScalar
+            ├── scalars: [empsalary.depname (#0) AS (#0), empsalary.salary (#1) AS (#1)]
+            └── Scan
+                ├── table: default.empsalary (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== missing_named_window_in_select_prebind_errors ===
+description: A missing named window referenced from a select-item window expression must fail during prebinding instead of being silently ignored.
+sql: SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname
+status: error
+code: 1005
+message: Window definition w not found
+
+=== inherited_named_window_rejects_partition_override ===
+description: Referencing a named window must not add a new PARTITION BY clause.
+sql: SELECT rank() OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary), w2 AS (w1 PARTITION BY depname)
+status: error
+code: 1065
+message: WINDOW specification with named WINDOW reference cannot specify PARTITION BY
+
+=== inherited_named_window_rejects_duplicate_order_by ===
+description: Referencing a named window with ORDER BY must not specify another ORDER BY.
+sql: SELECT rank() OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary), w2 AS (w1 ORDER BY depname)
+status: error
+code: 1065
+message: Cannot specify ORDER BY if referenced named WINDOW specifies ORDER BY
+
+=== inherited_named_window_rejects_base_frame ===
+description: Referencing a named window that already contains a frame specification must be rejected.
+sql: SELECT sum(salary) OVER w2 FROM empsalary WINDOW w1 AS (ORDER BY salary ROWS CURRENT ROW), w2 AS (w1)
+status: error
+code: 1065
+message: Cannot reference named WINDOW containing frame specification
+
