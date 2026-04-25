@@ -20,7 +20,7 @@ use databend_meta::types::raft_types::NodeId;
 use http::StatusCode;
 use log::info;
 use log::warn;
-use openraft_rt::watch::WatchReceiver;
+use databend_meta::openraft::rt::watch::WatchReceiver;
 use poem::IntoResponse;
 use poem::Response;
 use poem::web::Json;

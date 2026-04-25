@@ -42,8 +42,8 @@ use databend_meta::types::raft_types::NodeId;
 use databend_meta::types::raft_types::StoredMembership;
 use databend_meta::types::raft_types::new_log_id;
 use display_more::display_option::DisplayOptionExt;
-use openraft::storage::RaftLogStorageExt;
-use openraft::storage::RaftSnapshotBuilder;
+use databend_meta::openraft::storage::RaftLogStorageExt;
+use databend_meta::openraft::storage::RaftSnapshotBuilder;
 use url::Url;
 
 use crate::args::ImportArgs;

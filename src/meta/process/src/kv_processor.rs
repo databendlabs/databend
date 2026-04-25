@@ -26,7 +26,7 @@ use databend_meta::types::UpsertKV;
 use databend_meta::types::raft_types::Entry;
 use databend_meta::types::txn_condition::Target;
 use databend_meta::types::txn_op::Request;
-use openraft::EntryPayload;
+use databend_meta::openraft::EntryPayload;
 
 use crate::process::Process;
 

@@ -57,7 +57,7 @@ use databend_meta_cli_config::MetaConfig;
 use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use log::info;
 use log::warn;
-use openraft::MessageSummary;
+use databend_meta::openraft::MessageSummary;
 use tokio::time::Instant;
 use tokio::time::sleep;
 

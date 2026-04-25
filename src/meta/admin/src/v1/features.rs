@@ -21,7 +21,7 @@ use databend_meta::runtime_api::SpawnApi;
 use http::StatusCode;
 use log::info;
 use log::warn;
-use openraft_rt::watch::WatchReceiver;
+use databend_meta::openraft::rt::watch::WatchReceiver;
 use poem::IntoResponse;
 use poem::Response;
 use poem::web::Json;
