@@ -21,7 +21,6 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
 log = { workspace = true }
-openraft-rt = { workspace = true }
 poem = { workspace = true }
 serde = { workspace = true }
 serde_urlencoded = { workspace = true }

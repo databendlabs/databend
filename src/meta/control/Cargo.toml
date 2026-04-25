@@ -20,7 +20,6 @@ clap = { workspace = true }
 display-more = { workspace = true }
 futures = { workspace = true }
 mlua = { workspace = true }
-openraft = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
