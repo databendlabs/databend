@@ -209,6 +209,22 @@ impl TableContextPartitionStats for QueryContext {
 }
 
 impl TableContextRuntimeFilter for QueryContext {
+    // --- New builder/source API ---
+
+    fn get_runtime_filter_builder(&self, scan_id: usize) -> RuntimeFilterBuilder {
+        self.shared
+            .runtime_filter_state
+            .get_runtime_filter_builder(scan_id)
+    }
+
+    fn get_runtime_filter_source(&self, scan_id: usize) -> Option<RuntimeFilterSource> {
+        self.shared
+            .runtime_filter_state
+            .get_runtime_filter_source(scan_id)
+    }
+
+    // --- Reporting ---
+
     fn clear_runtime_filter(&self) {
         self.shared.runtime_filter_state.clear();
     }
@@ -221,18 +237,6 @@ impl TableContextRuntimeFilter for QueryContext {
 
     fn set_runtime_filter(&self, filters: HashMap<usize, RuntimeFilterInfo>) {
         self.shared.runtime_filter_state.set_runtime_filter(filters);
-    }
-
-    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
-        self.shared
-            .runtime_filter_state
-            .set_runtime_filter_ready(table_index, ready);
-    }
-
-    fn get_runtime_filter_ready(&self, scan_id: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        self.shared
-            .runtime_filter_state
-            .get_runtime_filter_ready(scan_id)
     }
 
     fn get_runtime_filters(&self, id: IndexType) -> Vec<RuntimeFilterEntry> {

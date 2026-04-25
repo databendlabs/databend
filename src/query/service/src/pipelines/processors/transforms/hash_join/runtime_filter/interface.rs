@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Instant;
 
+use databend_common_catalog::runtime_filter_info::IndexRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
+use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_storages_fuse::pruning::BloomRowFilter;
+use databend_common_storages_fuse::pruning::InlistBloomIndexFilter;
+use databend_common_storages_fuse::pruning::MinMaxPartitionFilter;
+use databend_common_storages_fuse::pruning::SpatialIndexFilter;
+use databend_storages_common_io::ReadSettings;
 
 use super::convert::build_runtime_filter_infos;
 use super::global::get_global_runtime_filter_packet;
@@ -74,26 +82,89 @@ pub async fn build_and_push_down_runtime_filter(
         runtime_filter_infos
     );
 
-    // Extract BloomRowFilter trait objects from the entries
+    let func_ctx = join.ctx.get_function_context()?;
+    let ctx: Arc<dyn TableContext> = join.ctx.clone();
+    let read_settings = ReadSettings::from_ctx(&ctx)?;
+    let inlist_bloom_prune_threshold =
+        join.ctx
+            .get_settings()
+            .get_inlist_runtime_bloom_prune_threshold()? as usize;
+
+    // Build trait impls and push to builders
+    let build_state = unsafe { &*join.hash_join_state.build_state.get() };
     for (scan_id, info) in &runtime_filter_infos {
-        let row_filters: RowRuntimeFilters = info
-            .filters
-            .iter()
-            .filter_map(|entry| {
-                let bloom = entry.bloom.as_ref()?;
-                Some(BloomRowFilter::create(
+        let Some(builder) = build_state.runtime_filter_builders.get(scan_id) else {
+            continue;
+        };
+
+        let Some(table_schema) = builder.table_schema() else {
+            log::warn!(
+                "RUNTIME-FILTER: table_schema not set for scan_id={}, skipping trait construction",
+                scan_id
+            );
+            continue;
+        };
+        let table_schema = table_schema.clone();
+
+        let mut partition_filters: PartitionRuntimeFilters = vec![];
+        let mut index_filters: IndexRuntimeFilters = vec![];
+        let mut row_filters: RowRuntimeFilters = vec![];
+
+        for entry in &info.filters {
+            if let Some(ref expr) = entry.min_max {
+                partition_filters.push(Arc::new(MinMaxPartitionFilter::new(
+                    func_ctx.clone(),
+                    table_schema.clone(),
+                    expr.clone(),
+                )));
+            }
+
+            if let Some(ref expr) = entry.inlist {
+                partition_filters.push(Arc::new(MinMaxPartitionFilter::new(
+                    func_ctx.clone(),
+                    table_schema.clone(),
+                    expr.clone(),
+                )));
+                index_filters.push(Arc::new(InlistBloomIndexFilter::new(
+                    func_ctx.clone(),
+                    table_schema.clone(),
+                    read_settings,
+                    expr.clone(),
+                    entry.inlist_value_count,
+                    inlist_bloom_prune_threshold,
+                )));
+            }
+
+            if let Some(ref spatial) = entry.spatial {
+                if !spatial.rtrees.is_empty() {
+                    if let Ok(field) = table_schema.field_with_name(&spatial.column_name) {
+                        index_filters.push(Arc::new(SpatialIndexFilter::new(
+                            field.column_id(),
+                            spatial.srid,
+                            spatial.rtrees.clone(),
+                            spatial.rtree_bounds,
+                            read_settings,
+                        )));
+                    }
+                }
+            }
+
+            if let Some(ref bloom) = entry.bloom {
+                row_filters.push(BloomRowFilter::create(
                     bloom.column_name.clone(),
                     bloom.filter.clone(),
-                ))
-            })
-            .collect();
-
-        if !row_filters.is_empty() {
-            join.ctx.add_row_runtime_filters(*scan_id, row_filters);
+                ));
+            }
         }
+
+        builder.add_partition_filters(partition_filters);
+        builder.add_index_filters(index_filters);
+        builder.add_row_filters(row_filters);
     }
 
+    // Keep raw entries for reporting/logging
     join.ctx.set_runtime_filter(runtime_filter_infos);
+    // Drop builders to signal readiness
     join.set_bloom_filter_ready()?;
     Ok(())
 }

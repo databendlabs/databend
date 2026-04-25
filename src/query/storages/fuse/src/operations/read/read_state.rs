@@ -22,6 +22,8 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -63,9 +65,10 @@ pub struct ReadState {
 impl ReadState {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        scan_id: usize,
+        _scan_id: usize,
         prewhere_info: Option<&PrewhereInfo>,
         block_reader: Arc<BlockReader>,
+        rf_source: Option<&Arc<RuntimeFilterSource>>,
     ) -> Result<Self> {
         let prewhere_selectivity_threshold =
             ctx.get_settings().get_prewhere_selectivity_threshold()?;
@@ -73,12 +76,13 @@ impl ReadState {
             prewhere_info.is_some() && prewhere_selectivity_threshold == 0;
         let original_schema = block_reader.original_schema.as_ref();
 
-        // Extract bloom filter column names for preread projection
-        let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
-        let runtime_filter_column_names: Vec<_> = runtime_filter_entries
+        // Extract bloom filter column names from RuntimeFilterSource for preread projection
+        let row_filters: RowRuntimeFilters =
+            rf_source.map(|s| s.get_row_filters()).unwrap_or_default();
+        let runtime_filter_column_names: Vec<_> = row_filters
             .iter()
-            .filter_map(|entry| {
-                let column_name = entry.bloom.as_ref().map(|bloom| &bloom.column_name)?;
+            .filter_map(|filter| {
+                let column_name = filter.column_name();
                 if original_schema.index_of(column_name).is_ok() {
                     Some(column_name)
                 } else {
@@ -109,7 +113,6 @@ impl ReadState {
 
         let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
 
-        let row_filters = ctx.get_row_runtime_filters(scan_id);
         let resolved_row_filters: Vec<ResolvedRowFilter> = row_filters
             .into_iter()
             .filter_map(|filter| {

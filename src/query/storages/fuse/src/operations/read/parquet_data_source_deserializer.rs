@@ -23,6 +23,7 @@ use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PrewhereInfo;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
@@ -72,6 +73,7 @@ pub struct DeserializeDataTransform {
 
     prewhere_info: Option<PrewhereInfo>,
     read_state: Option<ReadState>,
+    rf_source: Option<Arc<RuntimeFilterSource>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -85,6 +87,7 @@ impl DeserializeDataTransform {
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
+        rf_source: Option<Arc<RuntimeFilterSource>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
@@ -130,6 +133,7 @@ impl DeserializeDataTransform {
             need_reserve_block_info,
             prewhere_info,
             read_state: None,
+            rf_source,
         })))
     }
 }
@@ -228,6 +232,7 @@ impl Processor for DeserializeDataTransform {
                             self.scan_id,
                             self.prewhere_info.as_ref(),
                             self.block_reader.clone(),
+                            self.rf_source.as_ref(),
                         )?);
                     }
 

@@ -62,6 +62,7 @@ impl ReadBlockContext {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub fn read_settings(&self) -> ReadSettings {
         self.read_settings
     }

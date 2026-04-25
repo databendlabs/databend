@@ -17,14 +17,12 @@ use std::sync::Arc;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::runtime_filter_info::IndexRuntimeFilter;
-use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::runtime_filter_info::IndexRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
-use databend_common_expression::FunctionContext;
-use databend_common_expression::TableSchema;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -36,90 +34,47 @@ use super::read_block_context::ReadBlockContext;
 use crate::io::BlockReader;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
-use crate::pruning::InlistBloomIndexFilter;
-use crate::pruning::SpatialIndexFilter;
 
 pub struct ReadDataTransform {
-    func_ctx: FunctionContext,
     block_reader: Arc<BlockReader>,
     read_block_context: Arc<ReadBlockContext>,
-    table_schema: Arc<TableSchema>,
-    scan_id: IndexType,
-    context: Arc<dyn TableContext>,
+    rf_source: Option<Arc<RuntimeFilterSource>>,
 }
 
 impl ReadDataTransform {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
-        scan_id: IndexType,
-        ctx: Arc<dyn TableContext>,
-        table_schema: Arc<TableSchema>,
+        _scan_id: IndexType,
+        _ctx: Arc<dyn databend_common_catalog::table_context::TableContext>,
+        _table_schema: Arc<databend_common_expression::TableSchema>,
         block_reader: Arc<BlockReader>,
         read_block_context: Arc<ReadBlockContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        rf_source: Option<Arc<RuntimeFilterSource>>,
     ) -> Result<ProcessorPtr> {
-        let func_ctx = ctx.get_function_context()?;
         Ok(ProcessorPtr::create(AsyncTransformer::create(
             input,
             output,
             ReadDataTransform {
-                func_ctx,
                 block_reader,
                 read_block_context,
-                table_schema,
-                scan_id,
-                context: ctx,
+                rf_source,
             },
         )))
-    }
-
-    fn create_index_filters(&self) -> Result<Vec<Arc<dyn IndexRuntimeFilter>>> {
-        let read_settings = self.read_block_context.read_settings();
-        let inlist_bloom_prune_threshold =
-            self.context
-                .get_settings()
-                .get_inlist_runtime_bloom_prune_threshold()? as usize;
-        let runtime_filters = self.context.get_runtime_filters(self.scan_id);
-
-        let mut index_filters: Vec<Arc<dyn IndexRuntimeFilter>> = Vec::new();
-
-        for entry in &runtime_filters {
-            if let Some(ref expr) = entry.inlist {
-                index_filters.push(Arc::new(InlistBloomIndexFilter::new(
-                    self.func_ctx.clone(),
-                    self.table_schema.clone(),
-                    read_settings,
-                    expr.clone(),
-                    entry.inlist_value_count,
-                    inlist_bloom_prune_threshold,
-                )));
-            }
-            if let Some(ref spatial) = entry.spatial {
-                if spatial.rtrees.is_empty() {
-                    continue;
-                }
-                let field = match self.table_schema.field_with_name(&spatial.column_name) {
-                    Ok(field) => field,
-                    Err(_) => continue,
-                };
-                index_filters.push(Arc::new(SpatialIndexFilter::new(
-                    field.column_id(),
-                    spatial.srid,
-                    spatial.rtrees.clone(),
-                    spatial.rtree_bounds,
-                    read_settings,
-                )));
-            }
-        }
-
-        Ok(index_filters)
     }
 
     async fn read_parts(&self, parts: Vec<PartInfoPtr>) -> Result<DataBlock> {
         let mut read_tasks = Vec::with_capacity(parts.len());
         let mut parts_to_read = Vec::with_capacity(parts.len());
-        let index_filters = self.create_index_filters()?;
+
+        // Read index filters from the runtime filter source (built by build side)
+        let index_filters: IndexRuntimeFilters = self
+            .rf_source
+            .as_ref()
+            .map(|s| s.get_index_filters())
+            .unwrap_or_default();
+
         let operator = self.block_reader.operator();
 
         'next_part: for part in parts {

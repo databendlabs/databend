@@ -35,7 +35,6 @@ use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
 use databend_common_catalog::table::Table;
@@ -894,14 +893,6 @@ impl TableContextPartitionStats for CtxDelegation {
 }
 
 impl TableContextRuntimeFilter for CtxDelegation {
-    fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
-        todo!()
-    }
-
-    fn get_runtime_filter_ready(&self, _table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        todo!()
-    }
-
     fn clear_runtime_filter(&self) {
         todo!()
     }

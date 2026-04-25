@@ -51,7 +51,6 @@ use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
@@ -650,7 +649,6 @@ pub struct LiteTableContext {
     read_block_thresholds: ReadBlockThresholdsState,
     result_cache_state: ResultCacheState,
     variables: RwLock<HashMap<String, Scalar>>,
-    runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     written_segment_locations: SegmentLocationsState,
     selected_segment_locations: SegmentLocationsState,
     queued_duration: RwLock<Duration>,
@@ -811,7 +809,6 @@ impl LiteTableContext {
             read_block_thresholds: Default::default(),
             result_cache_state: Default::default(),
             variables: RwLock::new(HashMap::new()),
-            runtime_filter_ready: RwLock::new(HashMap::new()),
             written_segment_locations: Default::default(),
             selected_segment_locations: Default::default(),
             queued_duration: RwLock::new(Duration::default()),
@@ -1610,25 +1607,7 @@ impl TableContextPartitionStats for LiteTableContext {
 }
 
 impl TableContextRuntimeFilter for LiteTableContext {
-    fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
-        self.runtime_filter_ready
-            .write()
-            .entry(table_index)
-            .or_default()
-            .push(ready);
-    }
-
-    fn get_runtime_filter_ready(&self, table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        self.runtime_filter_ready
-            .read()
-            .get(&table_index)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    fn clear_runtime_filter(&self) {
-        self.runtime_filter_ready.write().clear();
-    }
+    fn clear_runtime_filter(&self) {}
 
     fn get_runtime_filters(&self, _id: usize) -> Vec<RuntimeFilterEntry> {
         vec![]

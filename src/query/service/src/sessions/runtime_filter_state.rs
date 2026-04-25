@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -22,10 +21,14 @@ use databend_common_catalog::runtime_filter_info::IndexRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterBuilder;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterInfo;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterShared;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
+use databend_common_catalog::runtime_filter_info::runtime_filter_builder;
+use databend_common_catalog::runtime_filter_info::runtime_filter_source;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Expr;
@@ -34,11 +37,12 @@ use parking_lot::RwLock;
 #[derive(Default)]
 pub struct RuntimeFilterState {
     runtime_filters: RwLock<HashMap<usize, RuntimeFilterInfo>>,
-    runtime_filter_ready: RwLock<HashMap<usize, Vec<Arc<RuntimeFilterReady>>>>,
     runtime_filter_logged: AtomicBool,
     partition_runtime_filters: RwLock<HashMap<usize, PartitionRuntimeFilters>>,
     index_runtime_filters: RwLock<HashMap<usize, IndexRuntimeFilters>>,
     row_runtime_filters: RwLock<HashMap<usize, RowRuntimeFilters>>,
+    // New: per-scan_id shared state for builder/source channel
+    channels: RwLock<HashMap<usize, Arc<RuntimeFilterShared>>>,
 }
 
 impl RuntimeFilterState {
@@ -48,22 +52,17 @@ impl RuntimeFilterState {
 
     pub fn clear(&self) {
         self.runtime_filters.write().clear();
-        self.runtime_filter_ready.write().clear();
         self.runtime_filter_logged.store(false, Ordering::SeqCst);
         self.partition_runtime_filters.write().clear();
         self.index_runtime_filters.write().clear();
         self.row_runtime_filters.write().clear();
+        self.channels.write().clear();
     }
 
     pub fn assert_empty(&self, query_id: &str) -> Result<()> {
         if !self.runtime_filters.read().is_empty() {
             return Err(ErrorCode::Internal(format!(
                 "Runtime filters should be empty for query {query_id}"
-            )));
-        }
-        if !self.runtime_filter_ready.read().is_empty() {
-            return Err(ErrorCode::Internal(format!(
-                "Runtime filter ready set should be empty for query {query_id}"
             )));
         }
         if self.runtime_filter_logged.load(Ordering::Relaxed) {
@@ -82,26 +81,6 @@ impl RuntimeFilterState {
                 entry.filters.push(new_filter);
             }
         }
-    }
-
-    pub fn set_runtime_filter_ready(&self, table_index: usize, ready: Arc<RuntimeFilterReady>) {
-        let mut runtime_filter_ready = self.runtime_filter_ready.write();
-        match runtime_filter_ready.entry(table_index) {
-            Entry::Vacant(v) => {
-                v.insert(vec![ready]);
-            }
-            Entry::Occupied(mut v) => {
-                v.get_mut().push(ready);
-            }
-        }
-    }
-
-    pub fn get_runtime_filter_ready(&self, scan_id: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        self.runtime_filter_ready
-            .read()
-            .get(&scan_id)
-            .cloned()
-            .unwrap_or_default()
     }
 
     pub fn get_runtime_filters(&self, id: usize) -> Vec<RuntimeFilterEntry> {
@@ -204,5 +183,21 @@ impl RuntimeFilterState {
             .get(&scan_id)
             .cloned()
             .unwrap_or_default()
+    }
+
+    // --- New builder/source channel API ---
+
+    pub fn get_runtime_filter_builder(&self, scan_id: usize) -> RuntimeFilterBuilder {
+        let mut channels = self.channels.write();
+        let shared = channels
+            .entry(scan_id)
+            .or_insert_with(|| Arc::new(RuntimeFilterShared::new()))
+            .clone();
+        runtime_filter_builder(&shared)
+    }
+
+    pub fn get_runtime_filter_source(&self, scan_id: usize) -> Option<RuntimeFilterSource> {
+        let channels = self.channels.read();
+        channels.get(&scan_id).map(runtime_filter_source)
     }
 }

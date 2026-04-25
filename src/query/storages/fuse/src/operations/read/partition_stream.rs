@@ -20,7 +20,7 @@ use async_channel::Receiver;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -37,8 +37,6 @@ use databend_common_pipeline::core::SyncTaskSet;
 use databend_common_sql::IndexType;
 
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
-use crate::operations::read::runtime_filter_wait::wait_runtime_filters;
-use crate::pruning::MinMaxPartitionFilter;
 
 #[async_trait::async_trait]
 pub trait PartitionStream: Send + Sync {
@@ -96,13 +94,6 @@ impl PartitionStream for DummyPartitionStream {
     }
 }
 
-struct RuntimeFilterWaiter {
-    ctx: Arc<dyn TableContext>,
-    scan_id: IndexType,
-    table_schema: Arc<TableSchema>,
-    ready: Option<Vec<Arc<RuntimeFilterReady>>>,
-}
-
 pub struct PartitionStreamSource {
     id: NodeIndex,
     worker_id: usize,
@@ -110,7 +101,10 @@ pub struct PartitionStreamSource {
     output: Arc<OutputPort>,
     stream: Arc<dyn PartitionStream>,
     handle: Option<SyncTaskHandle<'static, Result<Option<Vec<PartInfoPtr>>>>>,
-    runtime_filter_waiter: Option<RuntimeFilterWaiter>,
+    /// Runtime filter source for waiting and reading partition filters.
+    rf_source: Option<Arc<RuntimeFilterSource>>,
+    rf_waited: bool,
+    ctx: Arc<dyn TableContext>,
     partition_filters: PartitionRuntimeFilters,
 }
 
@@ -121,8 +115,9 @@ impl PartitionStreamSource {
         output: Arc<OutputPort>,
         stream: Arc<dyn PartitionStream>,
         ctx: Arc<dyn TableContext>,
-        scan_id: IndexType,
-        table_schema: Arc<TableSchema>,
+        _scan_id: IndexType,
+        _table_schema: Arc<TableSchema>,
+        rf_source: Option<Arc<RuntimeFilterSource>>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
@@ -131,12 +126,9 @@ impl PartitionStreamSource {
             id: Default::default(),
             tasks: SyncTaskSet::new(worker_id, waker),
             handle: None,
-            runtime_filter_waiter: Some(RuntimeFilterWaiter {
-                ctx,
-                scan_id,
-                table_schema,
-                ready: None,
-            }),
+            rf_source,
+            rf_waited: false,
+            ctx,
             partition_filters: vec![],
         })))
     }
@@ -144,7 +136,7 @@ impl PartitionStreamSource {
     fn close(&mut self) {
         self.stream = Arc::new(DummyPartitionStream);
         self.handle = None;
-        self.runtime_filter_waiter = None;
+        self.rf_source = None;
     }
 
     fn filter_parts(&self, parts: Vec<PartInfoPtr>) -> Vec<PartInfoPtr> {
@@ -174,14 +166,10 @@ impl Processor for PartitionStreamSource {
             return Ok(Event::Finished);
         }
 
-        if let Some(mut waiter) = self.runtime_filter_waiter.take() {
-            if waiter.ready.is_none() {
-                let ready = waiter.ctx.get_runtime_filter_ready(waiter.scan_id);
-                if !ready.is_empty() {
-                    waiter.ready = Some(ready);
-                    self.runtime_filter_waiter = Some(waiter);
-                    return Ok(Event::Async);
-                }
+        // First time: if we have a runtime filter source, enter async to wait for it.
+        if let Some(ref rf_source) = self.rf_source {
+            if !self.rf_waited && !rf_source.is_ready() {
+                return Ok(Event::Async);
             }
         }
 
@@ -202,8 +190,8 @@ impl Processor for PartitionStreamSource {
                     let parts = self.filter_parts(parts);
 
                     if parts.is_empty() {
-                        let stream = self.stream.clone();
                         let worker_id = self.worker_id;
+                        let stream = self.stream.clone();
                         let fut = Box::pin(async move { stream.fetch(worker_id).await });
                         self.handle = Some(self.tasks.spawn(self.id, fut));
                         continue;
@@ -234,43 +222,17 @@ impl Processor for PartitionStreamSource {
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        if let Some(waiter) = self.runtime_filter_waiter.take() {
-            if let Some(ready) = &waiter.ready {
-                log::info!(
-                    "RUNTIME-FILTER: scan_id={} waiting for {} runtime filters",
-                    waiter.scan_id,
-                    ready.len()
-                );
+        if let Some(ref rf_source) = self.rf_source {
+            if !self.rf_waited {
+                self.rf_waited = true;
 
-                wait_runtime_filters(
-                    waiter.scan_id,
-                    &self.output,
-                    waiter.ctx.get_abort_notify(),
-                    ready,
-                )
-                .await?;
+                log::info!("RUNTIME-FILTER: waiting for runtime filters");
 
-                // Build partition-level filters from runtime filter entries
-                let func_ctx = waiter.ctx.get_function_context()?;
-                let entries = waiter.ctx.get_runtime_filters(waiter.scan_id);
-                for entry in &entries {
-                    if let Some(ref expr) = entry.min_max {
-                        self.partition_filters
-                            .push(Arc::new(MinMaxPartitionFilter::new(
-                                func_ctx.clone(),
-                                waiter.table_schema.clone(),
-                                expr.clone(),
-                            )));
-                    }
-                    if let Some(ref expr) = entry.inlist {
-                        self.partition_filters
-                            .push(Arc::new(MinMaxPartitionFilter::new(
-                                func_ctx.clone(),
-                                waiter.table_schema.clone(),
-                                expr.clone(),
-                            )));
-                    }
-                }
+                let abort_notify = self.ctx.get_abort_notify();
+                rf_source.wait_ready(abort_notify).await;
+
+                // Read partition filters from the source
+                self.partition_filters = rf_source.get_partition_filters();
             }
         }
         Ok(())
