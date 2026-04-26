@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::task::Poll;
 
 use async_channel::Receiver;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
@@ -145,7 +147,16 @@ impl PartitionStreamSource {
         }
         parts
             .into_iter()
-            .filter(|part| !self.partition_filters.iter().any(|f| f.prune(part)))
+            .filter(|part| {
+                let pruned = self.partition_filters.iter().any(|f| f.prune(part));
+                if pruned {
+                    Profile::record_usize_profile(
+                        ProfileStatisticsName::RuntimeFilterPruneParts,
+                        1,
+                    );
+                }
+                !pruned
+            })
             .collect()
     }
 }

@@ -15,7 +15,10 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::runtime_filter_info::IndexRuntimeFilter;
 use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilter;
@@ -73,6 +76,18 @@ impl MinMaxPartitionFilter {
 
 impl PartitionRuntimeFilter for MinMaxPartitionFilter {
     fn prune(&self, part: &PartInfoPtr) -> bool {
+        let start = Instant::now();
+        let result = self.prune_inner(part);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
+            start.elapsed().as_nanos() as usize,
+        );
+        result
+    }
+}
+
+impl MinMaxPartitionFilter {
+    fn prune_inner(&self, part: &PartInfoPtr) -> bool {
         let Ok(part) = FuseBlockPartInfo::from_part(part) else {
             return false;
         };
