@@ -135,6 +135,7 @@ Exchange
     ├── output bytes: 120.00 B
     ├── bytes scanned: 120.00 B
     ├── read from remote: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
@@ -159,6 +160,8 @@ Exchange
     ├── output bytes: 80.00 B
     ├── bytes scanned: 80.00 B
     ├── read from remote: 448.00 B
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
     ├── table: default.default.article
     ├── scan id: 0
     ├── output columns: [article_id (#0), author_id (#1), viewer_id (#2), view_date (#3)]
