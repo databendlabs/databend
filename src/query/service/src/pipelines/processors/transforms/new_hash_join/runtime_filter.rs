@@ -49,7 +49,7 @@ pub struct RuntimeFiltersDesc {
     broadcast_id: Option<u32>,
     pub filters_desc: Vec<RuntimeFilterDesc>,
     /// Per scan_id builder. Dropping all builders notifies the probe side.
-    runtime_filter_builders: HashMap<usize, RuntimeFilterBuilder>,
+    runtime_filter_builders: parking_lot::Mutex<HashMap<usize, RuntimeFilterBuilder>>,
 }
 
 impl RuntimeFiltersDesc {
@@ -85,7 +85,7 @@ impl RuntimeFiltersDesc {
             min_max_threshold,
             spatial_threshold,
             selectivity_threshold,
-            runtime_filter_builders,
+            runtime_filter_builders: parking_lot::Mutex::new(runtime_filter_builders),
             ctx: ctx.clone(),
             broadcast_id: join.broadcast_id,
         }))
@@ -98,8 +98,8 @@ impl RuntimeFiltersDesc {
         if let Some(broadcast_id) = self.broadcast_id {
             self.ctx.broadcast_source_sender(broadcast_id).close();
         }
-        // Builders will be dropped when RuntimeFiltersDesc is dropped,
-        // which will notify the probe side.
+        // Drop builders explicitly to notify the probe side immediately.
+        self.runtime_filter_builders.lock().clear();
     }
 
     pub async fn globalization(&self, mut packet: JoinRuntimeFilterPacket) -> Result<()> {
@@ -128,18 +128,20 @@ impl RuntimeFiltersDesc {
 
         // Build trait impls and push to builders
         for (scan_id, info) in &runtime_filter_infos {
-            let Some(builder) = self.runtime_filter_builders.get(scan_id) else {
-                continue;
+            let (builder, table_schema) = {
+                let guard = self.runtime_filter_builders.lock();
+                let Some(builder) = guard.get(scan_id) else {
+                    continue;
+                };
+                let Some(table_schema) = builder.table_schema() else {
+                    log::warn!(
+                        "RUNTIME-FILTER: table_schema not set for scan_id={}, skipping trait construction",
+                        scan_id
+                    );
+                    continue;
+                };
+                (builder.clone(), table_schema.clone())
             };
-
-            let Some(table_schema) = builder.table_schema() else {
-                log::warn!(
-                    "RUNTIME-FILTER: table_schema not set for scan_id={}, skipping trait construction",
-                    scan_id
-                );
-                continue;
-            };
-            let table_schema = table_schema.clone();
 
             let mut partition_filters: PartitionRuntimeFilters = vec![];
             let mut index_filters: IndexRuntimeFilters = vec![];
@@ -196,6 +198,9 @@ impl RuntimeFiltersDesc {
             builder.add_index_filters(index_filters);
             builder.add_row_filters(row_filters);
         }
+
+        // Drop all builders to signal the probe side that filters are ready.
+        self.runtime_filter_builders.lock().clear();
 
         Ok(())
     }
