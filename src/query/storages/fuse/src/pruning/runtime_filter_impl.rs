@@ -52,8 +52,6 @@ use crate::io::read::SpatialIndexReader;
 use crate::pruning::ExprBloomFilter;
 use crate::pruning::bloom_pruner::should_prune_runtime_inlist_by_bloom_index;
 
-// --- MinMaxPartitionFilter ---
-
 pub struct MinMaxPartitionFilter {
     func_ctx: FunctionContext,
     table_schema: TableSchemaRef,
@@ -91,6 +89,7 @@ impl MinMaxPartitionFilter {
         let Ok(part) = FuseBlockPartInfo::from_part(part) else {
             return false;
         };
+
         if matches!(
             &self.expr,
             Expr::Constant(Constant {
@@ -100,6 +99,7 @@ impl MinMaxPartitionFilter {
         ) {
             return true;
         }
+
         let column_refs = self.expr.column_refs();
         let ty = match column_refs.values().last() {
             Some(ty) => ty,
@@ -138,8 +138,6 @@ impl MinMaxPartitionFilter {
     }
 }
 
-// --- InlistBloomIndexFilter ---
-
 pub struct InlistBloomIndexFilter {
     func_ctx: FunctionContext,
     table_schema: TableSchemaRef,
@@ -169,8 +167,6 @@ impl InlistBloomIndexFilter {
     }
 }
 
-// PLACEHOLDER_APPEND2
-
 #[async_trait::async_trait]
 impl IndexRuntimeFilter for InlistBloomIndexFilter {
     async fn load_index(
@@ -183,7 +179,9 @@ impl IndexRuntimeFilter for InlistBloomIndexFilter {
         {
             return Ok(None);
         }
+
         let fuse_part = FuseBlockPartInfo::from_part(part)?;
+
         let pruned = should_prune_runtime_inlist_by_bloom_index(
             &self.func_ctx,
             operator,
@@ -197,14 +195,18 @@ impl IndexRuntimeFilter for InlistBloomIndexFilter {
     }
 
     fn prune(&self, _part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool> {
-        if let Some(result) = index.and_then(|i| i.downcast_ref::<bool>()) {
-            return Ok(*result);
-        }
-        Ok(false)
+        let start = Instant::now();
+        let result = index
+            .and_then(|i| i.downcast_ref::<bool>())
+            .copied()
+            .unwrap_or(false);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RuntimeFilterInlistMinMaxTime,
+            start.elapsed().as_nanos() as usize,
+        );
+        Ok(result)
     }
 }
-
-// --- SpatialIndexFilter ---
 
 pub struct SpatialIndexFilter {
     column_id: ColumnId,
@@ -233,8 +235,6 @@ impl SpatialIndexFilter {
         }
     }
 }
-
-// PLACEHOLDER_APPEND3
 
 #[async_trait::async_trait]
 impl IndexRuntimeFilter for SpatialIndexFilter {
@@ -278,6 +278,18 @@ impl IndexRuntimeFilter for SpatialIndexFilter {
     }
 
     fn prune(&self, _part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool> {
+        let start = Instant::now();
+        let result = self.prune_inner(_part, index);
+        Profile::record_usize_profile(
+            ProfileStatisticsName::RuntimeFilterSpatialTime,
+            start.elapsed().as_nanos() as usize,
+        );
+        result
+    }
+}
+
+impl SpatialIndexFilter {
+    fn prune_inner(&self, _part: &PartInfoPtr, index: Option<&dyn Any>) -> Result<bool> {
         let Some(index) = index else {
             return Ok(false);
         };
@@ -335,8 +347,6 @@ fn rtree_intersects_with_search(tree: RTreeRef<f64>, query_tree: RTreeRef<f64>) 
             .is_some())
     }
 }
-
-// --- BloomRowFilter ---
 
 pub struct BloomRowFilter {
     column_name: String,
