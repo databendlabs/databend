@@ -274,8 +274,6 @@ HashJoin
 │   ├── output bytes: <slt:ignore>
 │   ├── bytes scanned: <slt:ignore>
 │   ├── read from remote: <slt:ignore>
-│   ├── runtime filter bloom time: <slt:ignore>
-│   ├── runtime filter inlist/min-max time: <slt:ignore>
 │   ├── table: default.test_spatial_index_db.districts
 │   ├── scan id: 0
 │   ├── output columns: [district_name (#1), geom (#2)]
@@ -334,8 +332,6 @@ HashJoin
 │   ├── output bytes: <slt:ignore>
 │   ├── bytes scanned: <slt:ignore>
 │   ├── read from remote: <slt:ignore>
-│   ├── runtime filter bloom time: <slt:ignore>
-│   ├── runtime filter inlist/min-max time: <slt:ignore>
 │   ├── table: default.test_spatial_index_db.districts
 │   ├── scan id: 0
 │   ├── output columns: [district_name (#1), geom (#2)]
