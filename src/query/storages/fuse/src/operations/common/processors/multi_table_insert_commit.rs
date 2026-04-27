@@ -26,6 +26,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -106,12 +107,17 @@ impl AsyncSink for CommitMultiTableInsert {
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
             if table.is_temp() {
-                update_temp_tables.push(UpdateTempTableReq {
-                    table_id,
-                    new_table_meta: table.get_table_info().meta.clone(),
-                    copied_files: Default::default(),
-                    desc: table.get_table_info().desc.clone(),
-                });
+                update_temp_tables.push(
+                    build_update_temp_table_req(
+                        table.as_ref(),
+                        &snapshot_generator,
+                        self.ctx.txn_mgr(),
+                        *self.table_meta_timestampss.get(&table_id).unwrap(),
+                        &commit_meta.hll,
+                        insert_rows.get(&table_id).cloned().unwrap_or_default(),
+                    )
+                    .await?,
+                );
             } else {
                 update_table_metas.push((
                     build_update_table_meta_req(
@@ -262,6 +268,33 @@ impl AsyncSink for CommitMultiTableInsert {
     }
 }
 
+async fn build_update_temp_table_req(
+    table: &dyn Table,
+    snapshot_generator: &AppendGenerator,
+    txn_mgr: TxnManagerRef,
+    table_meta_timestamps: TableMetaTimestamps,
+    insert_hll: &BlockHLL,
+    insert_rows: u64,
+) -> Result<UpdateTempTableReq> {
+    let table_info = table.get_table_info();
+    let new_table_meta = build_new_table_meta(
+        table,
+        snapshot_generator,
+        txn_mgr,
+        table_meta_timestamps,
+        insert_hll,
+        insert_rows,
+    )
+    .await?;
+
+    Ok(UpdateTempTableReq {
+        table_id: table_info.ident.table_id,
+        new_table_meta,
+        copied_files: Default::default(),
+        desc: table_info.desc.clone(),
+    })
+}
+
 async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
@@ -270,6 +303,37 @@ async fn build_update_table_meta_req(
     insert_hll: &BlockHLL,
     insert_rows: u64,
 ) -> Result<UpdateTableMetaReq> {
+    let fuse_table = FuseTable::try_from_table(table)?;
+    let new_table_meta = build_new_table_meta(
+        table,
+        snapshot_generator,
+        txn_mgr,
+        table_meta_timestamps,
+        insert_hll,
+        insert_rows,
+    )
+    .await?;
+    let table_id = fuse_table.table_info.ident.table_id;
+    let table_version = fuse_table.table_info.ident.seq;
+
+    let req = UpdateTableMetaReq {
+        table_id,
+        seq: MatchSeq::Exact(table_version),
+        new_table_meta,
+        base_snapshot_location: fuse_table.snapshot_loc(),
+        lvt_check: None,
+    };
+    Ok(req)
+}
+
+async fn build_new_table_meta(
+    table: &dyn Table,
+    snapshot_generator: &AppendGenerator,
+    txn_mgr: TxnManagerRef,
+    table_meta_timestamps: TableMetaTimestamps,
+    insert_hll: &BlockHLL,
+    insert_rows: u64,
+) -> Result<TableMeta> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     let table_stats_gen = fuse_table
@@ -292,25 +356,15 @@ async fn build_update_table_meta_req(
         &snapshot.summary,
     );
 
-    // write snapshot
     let dal = fuse_table.get_operator();
     let location_generator = &fuse_table.meta_location_generator;
     let location =
         location_generator.gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     dal.write(&location, snapshot.to_bytes()?).await?;
 
-    // build new table meta
-    let new_table_meta =
-        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot);
-    let table_id = fuse_table.table_info.ident.table_id;
-    let table_version = fuse_table.table_info.ident.seq;
-
-    let req = UpdateTableMetaReq {
-        table_id,
-        seq: MatchSeq::Exact(table_version),
-        new_table_meta,
-        base_snapshot_location: fuse_table.snapshot_loc(),
-        lvt_check: None,
-    };
-    Ok(req)
+    Ok(FuseTable::build_new_table_meta(
+        &fuse_table.table_info.meta,
+        &location,
+        &snapshot,
+    ))
 }
