@@ -1268,7 +1268,10 @@ pub struct ShowStatisticsStmt {
 pub enum ShowStatsTarget {
     #[default]
     Database,
-    Table(Identifier),
+    Table {
+        table: Identifier,
+        branch: Option<Identifier>,
+    },
 }
 
 impl Display for ShowStatisticsStmt {
@@ -1284,7 +1287,7 @@ impl Display for ShowStatisticsStmt {
                     write!(f, "{database}")?;
                 }
             }
-            ShowStatsTarget::Table(table) => {
+            ShowStatsTarget::Table { table, branch } => {
                 write!(f, " FROM TABLE ")?;
                 if let Some(database) = &self.database {
                     if let Some(catalog) = &self.catalog {
@@ -1293,6 +1296,9 @@ impl Display for ShowStatisticsStmt {
                     write!(f, "{database}.")?;
                 }
                 write!(f, "{table}")?;
+                if let Some(branch) = branch {
+                    write!(f, "/{branch}")?;
+                }
             }
         }
         Ok(())

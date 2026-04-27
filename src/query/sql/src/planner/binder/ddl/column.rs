@@ -20,6 +20,7 @@ use log::debug;
 use crate::BindContext;
 use crate::Binder;
 use crate::SelectBuilder;
+use crate::binder::check_table_ref_access;
 use crate::binder::util::TableIdentifier;
 use crate::plans::Plan;
 use crate::plans::RewriteKind;
@@ -41,8 +42,16 @@ impl Binder {
             table_identifier.branch_name(),
         );
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
-        self.ctx
-            .get_table_with_branch(&catalog_name, database.as_str(), &table, branch.as_deref())
+        if branch.is_some() {
+            check_table_ref_access(self.ctx.as_ref())?;
+        }
+        catalog
+            .get_table_with_branch(
+                &self.ctx.get_tenant(),
+                database.as_str(),
+                &table,
+                branch.as_deref(),
+            )
             .await?;
         let table_filter_name = branch
             .as_ref()

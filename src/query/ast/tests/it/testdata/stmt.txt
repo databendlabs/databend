@@ -30480,8 +30480,8 @@ ShowStatistics(
                 ident_type: None,
             },
         ),
-        target: Table(
-            Identifier {
+        target: Table {
+            table: Identifier {
                 span: Some(
                     35..39,
                 ),
@@ -30489,7 +30489,8 @@ ShowStatistics(
                 quote: None,
                 ident_type: None,
             },
-        ),
+            branch: None,
+        },
     },
 )
 

@@ -2800,7 +2800,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 | #show_columns : "`SHOW [FULL] COLUMNS FROM <table> [FROM|IN <catalog>.<database>] [<show_limit>]`"
                 | #show_create_table : "`SHOW CREATE TABLE [<database>.]<table>`"
                 | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
-                | #show_statistics: "`SHOW STATISTICS [FROM DATABASE [<catalog>.]<database> | FROM TABLE [<catalog>.]<database>.<table>]`"
+                | #show_statistics: "`SHOW STATISTICS [FROM DATABASE [<catalog>.]<database> | FROM TABLE [<catalog>.]<database>.<table>[/<branch>]]`"
                 | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
                 | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
                 | #show_views : "`SHOW [FULL] VIEWS [FROM <database>] [<show_limit>]`"
@@ -5541,12 +5541,15 @@ pub fn show_stats_stmt(i: Input) -> IResult<ShowStatisticsStmt> {
         ),
         map(
             rule! {
-                TABLE ~ #dot_separated_idents_1_to_3
+                TABLE ~ #table_ref
             },
-            |(_, (catalog, database, table))| ShowStatisticsStmt {
-                catalog,
-                database,
-                target: ShowStatsTarget::Table(table),
+            |(_, table_ref)| ShowStatisticsStmt {
+                catalog: table_ref.catalog,
+                database: table_ref.database,
+                target: ShowStatsTarget::Table {
+                    table: table_ref.table,
+                    branch: table_ref.branch,
+                },
             },
         ),
     ))

@@ -48,6 +48,11 @@ OPTIMIZE TABLE t1/dev ALL
 statement ok
 ANALYZE TABLE t1/dev NOSCAN
 
+query TTTIIIITTIT
+SHOW STATISTICS FROM TABLE t1/dev
+----
+test_branch_optimize t1/dev a 4 4 4 0 1 4 5 (empty)
+
 statement error OPTIMIZE TABLE ... PURGE is not supported on table branch
 OPTIMIZE TABLE t1/dev PURGE
 

@@ -434,12 +434,27 @@ impl Binder {
         };
         select_builder.with_filter(format!("database = '{database}'"));
 
-        if let ShowStatsTarget::Table(table) = target {
+        if let ShowStatsTarget::Table { table, branch } = target {
             let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
-            catalog
-                .get_table(&self.ctx.get_tenant(), database.as_str(), &table_name)
+            let branch_name = branch
+                .as_ref()
+                .map(|branch| normalize_identifier(branch, &self.name_resolution_ctx).name);
+            self.ctx
+                .get_table_with_branch(
+                    &catalog_name,
+                    database.as_str(),
+                    &table_name,
+                    branch_name.as_deref(),
+                )
                 .await?;
-            select_builder.with_filter(format!("table = '{table_name}'"));
+            let table_filter_name = branch_name
+                .as_ref()
+                .map(|branch| format!("{table_name}/{branch}"))
+                .unwrap_or(table_name);
+            select_builder.with_filter(format!(
+                "table = {}",
+                QuotedString(table_filter_name.as_str(), '\'')
+            ));
         }
 
         select_builder
