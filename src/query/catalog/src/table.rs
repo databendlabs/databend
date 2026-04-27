@@ -542,7 +542,10 @@ impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TimeNavigation {
-    TimeTravel(NavigationPoint),
+    TimeTravel {
+        point: NavigationPoint,
+        no_check: bool,
+    },
     Changes {
         append_only: bool,
         desc: String,
