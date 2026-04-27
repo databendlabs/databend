@@ -1,0 +1,33 @@
+=== http table owner ===
+db_table_only_0018
+owned_case_0018
+404
+db_table_only_0018
+db_table_only_0018.owned_case_0018
+1
+=== http db owner ===
+db_db_owner_0018
+all_case_a_0018
+all_case_b_0018
+db_db_owner_0018
+db_db_owner_0018.all_case_a_0018
+db_db_owner_0018.all_case_b_0018
+2
+=== http grant user ===
+db_grant_0018
+grant_case_0018
+db_grant_0018
+db_grant_0018.grant_case_0018
+1
+=== http direct user grant ===
+db_direct_0018
+direct_case_0018
+db_direct_0018
+db_direct_0018.direct_case_0018
+1
+=== http inherited role grant ===
+db_inherited_0018
+inherited_case_0018
+db_inherited_0018
+db_inherited_0018.inherited_case_0018
+1
