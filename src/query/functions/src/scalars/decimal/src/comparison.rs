@@ -26,10 +26,25 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarFunction;
 use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
+use databend_common_expression::comparison::GtOp;
+use databend_common_expression::comparison::GteOp;
+use databend_common_expression::comparison::LtOp;
+use databend_common_expression::comparison::LteOp;
+use databend_common_expression::comparison::StatComparisonOp;
+use databend_common_expression::comparison::estimate_ndv_true_count;
+use databend_common_expression::function_stat::DeriveStat;
+use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::BooleanDistribution;
+use databend_common_expression::stat_distribution::OwnedDistribution;
+use databend_common_expression::stat_distribution::StatBinaryArg;
+use databend_common_expression::stat_distribution::StatEstimate;
+use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
@@ -45,8 +60,11 @@ fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u8, u8) {
     )
 }
 
-fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
-    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+fn register_decimal_compare_op<Op: CmpOp>(
+    registry: &mut FunctionRegistry,
+    derive_stat: fn(StatBinaryArg, &FunctionContext) -> Result<Option<ReturnStat>, String>,
+) {
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -76,11 +94,99 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
             signature,
             DecimalComparisonDomain::<Op>::default(),
             eval,
-            None,
+            Some(Box::new(DeriveStat::Binary(derive_stat))),
             has_nullable,
         )))
     }));
     registry.register_function_factory(Op::NAME, factory);
+}
+
+fn derive_decimal_equality_stat<Op: DecimalEqualityStatOp>(
+    stat: StatBinaryArg,
+    _: &FunctionContext,
+) -> Result<Option<ReturnStat>, String> {
+    let cardinality = stat.cardinality;
+    let true_count = if let Some(constant) = stat.args[1].singleton() {
+        decimal_equality_true_count(&stat.args[0], &constant, cardinality, Op::NOT_EQ)
+    } else if let Some(constant) = stat.args[0].singleton() {
+        decimal_equality_true_count(&stat.args[1], &constant, cardinality, Op::NOT_EQ)
+    } else {
+        return Ok(None);
+    };
+
+    Ok(true_count.map(boolean_return_stat))
+}
+
+fn decimal_equality_true_count(
+    stat: &ArgStat,
+    constant: &Scalar,
+    cardinality: f64,
+    not_eq: bool,
+) -> Option<StatEstimate> {
+    let Some((min, max)) = stat.value_minmax() else {
+        return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
+    };
+    let constant = decimal_stat_value(constant)?;
+    let min = decimal_stat_value(&min)?;
+    let max = decimal_stat_value(&max)?;
+    if constant < min || constant > max {
+        Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }))
+    } else {
+        Some(estimate_ndv_true_count(stat.ndv, not_eq, cardinality))
+    }
+}
+
+fn derive_decimal_range_stat<Op: StatComparisonOp>(
+    stat: StatBinaryArg,
+    _: &FunctionContext,
+) -> Result<Option<ReturnStat>, String> {
+    let cardinality = stat.cardinality;
+    let true_count = if let Some(constant) = stat.args[1].singleton() {
+        decimal_range_true_count::<Op>(&stat.args[0], &constant, cardinality)
+    } else if let Some(constant) = stat.args[0].singleton() {
+        decimal_range_true_count::<Op::Reverse>(&stat.args[1], &constant, cardinality)
+    } else {
+        return Ok(None);
+    };
+
+    Ok(true_count.map(boolean_return_stat))
+}
+
+fn decimal_range_true_count<Op: StatComparisonOp>(
+    stat: &ArgStat,
+    constant: &Scalar,
+    cardinality: f64,
+) -> Option<StatEstimate> {
+    let (min, max) = stat.value_minmax()?;
+    let constant = decimal_stat_value(constant)?;
+    let min = decimal_stat_value(&min)?;
+    let max = decimal_stat_value(&max)?;
+    Op::estimate_minmax_range_true_count(
+        stat.ndv,
+        cardinality,
+        constant.total_cmp(&min),
+        constant.total_cmp(&max),
+    )
+}
+
+fn decimal_stat_value(scalar: &Scalar) -> Option<f64> {
+    match scalar {
+        Scalar::Decimal(value) => Some(value.to_float64()),
+        Scalar::Number(value) => Some(value.to_f64().into_inner()),
+        _ => None,
+    }
+}
+
+fn boolean_return_stat(true_count: StatEstimate) -> ReturnStat {
+    ReturnStat {
+        domain: Domain::Boolean(BooleanDomain {
+            has_true: true,
+            has_false: true,
+        }),
+        ndv: databend_common_expression::stat_distribution::Ndv::Stat(2.0),
+        null_count: 0,
+        distribution: OwnedDistribution::Boolean(BooleanDistribution::new(true_count)),
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -205,6 +311,7 @@ where
 
 trait CmpOp: 'static + Default {
     const NAME: &str;
+
     fn is(o: Ordering) -> bool;
     fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType>;
     fn compare<D>(a: D, b: D, f_a: D, f_b: D) -> bool
@@ -239,13 +346,38 @@ trait CmpOp: 'static + Default {
     }
 }
 
+trait DecimalEqualityStatOp: CmpOp {
+    const NOT_EQ: bool;
+}
+
 macro_rules! define_cmp_op {
-    ($name:ident, $func_name:expr, $is_fn:ident, $domain_op:ident) => {
+    ($name:ident, $func_name:expr, $is_fn:ident, $domain_op:ident, $not_eq:expr) => {
         #[derive(Default)]
         struct $name;
 
         impl CmpOp for $name {
             const NAME: &str = $func_name;
+
+            fn is(o: Ordering) -> bool {
+                o.$is_fn()
+            }
+
+            fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType> {
+                a.$domain_op(b)
+            }
+        }
+
+        impl DecimalEqualityStatOp for $name {
+            const NOT_EQ: bool = $not_eq;
+        }
+    };
+}
+
+macro_rules! impl_range_cmp_op {
+    ($op:ty, $func_name:expr, $is_fn:ident, $domain_op:ident) => {
+        impl CmpOp for $op {
+            const NAME: &str = $func_name;
+
             fn is(o: Ordering) -> bool {
                 o.$is_fn()
             }
@@ -257,19 +389,19 @@ macro_rules! define_cmp_op {
     };
 }
 
+define_cmp_op!(Equal, "eq", is_eq, domain_eq, false);
+define_cmp_op!(NotEqual, "noteq", is_ne, domain_noteq, true);
+impl_range_cmp_op!(LtOp, "lt", is_lt, domain_lt);
+impl_range_cmp_op!(GtOp, "gt", is_gt, domain_gt);
+impl_range_cmp_op!(LteOp, "lte", is_le, domain_lte);
+impl_range_cmp_op!(GteOp, "gte", is_ge, domain_gte);
+
 pub fn register_decimal_compare(registry: &mut FunctionRegistry) {
-    define_cmp_op!(Equal, "eq", is_eq, domain_eq);
-    define_cmp_op!(NotEqual, "noteq", is_ne, domain_noteq);
-    define_cmp_op!(LessThan, "lt", is_lt, domain_lt);
-    define_cmp_op!(GreaterThan, "gt", is_gt, domain_gt);
-    define_cmp_op!(LessThanEqual, "lte", is_le, domain_lte);
-    define_cmp_op!(GreaterThanEqual, "gte", is_ge, domain_gte);
+    register_decimal_compare_op::<Equal>(registry, derive_decimal_equality_stat::<Equal>);
+    register_decimal_compare_op::<NotEqual>(registry, derive_decimal_equality_stat::<NotEqual>);
 
-    register_decimal_compare_op::<Equal>(registry);
-    register_decimal_compare_op::<NotEqual>(registry);
-
-    register_decimal_compare_op::<LessThan>(registry);
-    register_decimal_compare_op::<GreaterThan>(registry);
-    register_decimal_compare_op::<LessThanEqual>(registry);
-    register_decimal_compare_op::<GreaterThanEqual>(registry);
+    register_decimal_compare_op::<LtOp>(registry, derive_decimal_range_stat::<LtOp>);
+    register_decimal_compare_op::<GtOp>(registry, derive_decimal_range_stat::<GtOp>);
+    register_decimal_compare_op::<LteOp>(registry, derive_decimal_range_stat::<LteOp>);
+    register_decimal_compare_op::<GteOp>(registry, derive_decimal_range_stat::<GteOp>);
 }

@@ -59,8 +59,16 @@ impl TypedHistogramEstimate {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedHistogram<T> {
+    /// Whether buckets come from ANALYZE's observed row-order tiles.
+    ///
+    /// `false` means the histogram was synthesized from NDV and min/max bounds
+    /// under a uniform-distribution assumption.
     pub accuracy: bool,
+    /// Buckets are ordered ranges. `num_values` is the row count in the bucket
+    /// and `num_distinct` is the distinct-value count represented by it.
     pub buckets: Vec<TypedHistogramBucket<T>>,
+    /// Numeric synthetic histograms store the average bucket spacing used to
+    /// detect min/max distortion from sparse or outlier-heavy ranges.
     pub avg_spacing: Option<f64>,
 }
 
@@ -78,15 +86,11 @@ impl<T> TypedHistogram<T> {
     }
 
     pub fn num_values(&self) -> f64 {
-        self.buckets
-            .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_values)
+        self.buckets.iter().map(|bucket| bucket.num_values).sum()
     }
 
     pub fn num_distinct_values(&self) -> f64 {
-        self.buckets
-            .iter()
-            .fold(0.0, |acc, bucket| acc + bucket.num_distinct)
+        self.buckets.iter().map(|bucket| bucket.num_distinct).sum()
     }
 
     pub fn buckets_iter(&self) -> std::slice::Iter<'_, TypedHistogramBucket<T>> {
@@ -310,27 +314,44 @@ impl TypedHistogramBuilder {
                 ));
             }
         };
+        if T::compare(&min, &max) == Ordering::Greater {
+            return Err("histogram min bound must not be greater than max bound".to_string());
+        }
 
         let avg_spacing = T::avg_spacing(&min, &max, num_buckets);
-        let adjusted_num_buckets = num_buckets.min(ndv as usize);
+        let adjusted_num_buckets = T::synthetic_bucket_count_limit(&min, &max)
+            .map(|bucket_count_limit| num_buckets.min(ndv as usize).min(bucket_count_limit))
+            .unwrap_or_else(|| num_buckets.min(ndv as usize));
         let sample_set = TypedHistogramBounds::new(min, max);
-        let mut buckets: Vec<TypedHistogramBucket<T>> = Vec::with_capacity(adjusted_num_buckets);
-
-        for idx in 0..adjusted_num_buckets {
-            let lower_bound = if idx == 0 {
-                sample_set.lower_bound().clone()
-            } else {
-                buckets[idx - 1].upper_bound().clone()
-            };
-
-            let upper_bound = sample_set.get_upper_bound(adjusted_num_buckets, idx + 1)?;
-            buckets.push(TypedHistogramBucket::new(
-                lower_bound,
-                upper_bound,
-                (num_rows / adjusted_num_buckets as u64) as f64,
-                (ndv / adjusted_num_buckets as u64) as f64,
-            ));
-        }
+        let bucket_bounds = (0..adjusted_num_buckets)
+            .map(|idx| {
+                let (lower_bound, upper_bound) =
+                    T::synthetic_bucket_bounds(&sample_set, adjusted_num_buckets, idx)?;
+                let weight = T::synthetic_bucket_weight(&lower_bound, &upper_bound);
+                Ok((lower_bound, upper_bound, weight))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let total_weight = bucket_bounds
+            .iter()
+            .map(|(_, _, weight)| *weight)
+            .sum::<f64>();
+        let default_ratio = 1.0 / adjusted_num_buckets as f64;
+        let buckets = bucket_bounds
+            .into_iter()
+            .map(|(lower_bound, upper_bound, weight)| {
+                let count_ratio = if total_weight > 0.0 {
+                    weight / total_weight
+                } else {
+                    default_ratio
+                };
+                TypedHistogramBucket::new(
+                    lower_bound,
+                    upper_bound,
+                    num_rows as f64 * count_ratio,
+                    ndv as f64 * count_ratio,
+                )
+            })
+            .collect();
 
         Ok(TypedHistogram {
             accuracy: false,
@@ -353,6 +374,36 @@ pub trait Value: Clone + PartialEq {
     fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
         let _ = (min, max, num_buckets);
         None
+    }
+
+    fn synthetic_bucket_count_limit(min: &Self, max: &Self) -> Option<usize> {
+        let _ = (min, max);
+        None
+    }
+
+    fn synthetic_bucket_bounds(
+        bounds: &TypedHistogramBounds<Self>,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> Result<(Self, Self), String> {
+        let lower_bound = if bucket_index == 0 {
+            bounds.lower_bound().clone()
+        } else {
+            bounds.get_upper_bound(num_buckets, bucket_index)?
+        };
+
+        let upper_bound = if bucket_index + 1 == num_buckets {
+            bounds.upper_bound().clone()
+        } else {
+            bounds.get_upper_bound(num_buckets, bucket_index + 1)?
+        };
+
+        Ok((lower_bound, upper_bound))
+    }
+
+    fn synthetic_bucket_weight(lower_bound: &Self, upper_bound: &Self) -> f64 {
+        let _ = (lower_bound, upper_bound);
+        1.0
     }
 
     fn estimate_overlap_coverages(
@@ -398,6 +449,30 @@ trait NumericValue: Value {
     }
 }
 
+fn synthetic_bucket_count_limit(value_count: u128) -> usize {
+    value_count.min(usize::MAX as u128) as usize
+}
+
+fn discrete_synthetic_bucket_offsets(
+    value_count: u128,
+    num_buckets: usize,
+    bucket_index: usize,
+) -> Result<(u128, u128), String> {
+    let lower_offset = (bucket_index as u128)
+        .checked_mul(value_count)
+        .ok_or("overflowed")?
+        / num_buckets as u128;
+    let upper_offset_exclusive = ((bucket_index + 1) as u128)
+        .checked_mul(value_count)
+        .ok_or("overflowed")?
+        / num_buckets as u128;
+    let upper_offset = upper_offset_exclusive
+        .checked_sub(1)
+        .ok_or("empty bucket")?;
+
+    Ok((lower_offset, upper_offset))
+}
+
 impl Value for u64 {
     fn compare(left: &Self, right: &Self) -> Ordering {
         left.cmp(right)
@@ -415,6 +490,39 @@ impl Value for u64 {
 
     fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
         (max > min && num_buckets > 0).then(|| (*max - *min) as f64 / num_buckets as f64)
+    }
+
+    fn synthetic_bucket_count_limit(min: &Self, max: &Self) -> Option<usize> {
+        let value_count = (*max as u128).checked_sub(*min as u128)?.checked_add(1)?;
+        Some(synthetic_bucket_count_limit(value_count))
+    }
+
+    fn synthetic_bucket_bounds(
+        bounds: &TypedHistogramBounds<Self>,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> Result<(Self, Self), String> {
+        let min = *bounds.lower_bound() as u128;
+        let max = *bounds.upper_bound() as u128;
+        let value_count = max
+            .checked_sub(min)
+            .and_then(|range| range.checked_add(1))
+            .ok_or("overflowed")?;
+        let (lower_offset, upper_offset) =
+            discrete_synthetic_bucket_offsets(value_count, num_buckets, bucket_index)?;
+
+        let lower_bound = min.checked_add(lower_offset).ok_or("overflowed")?;
+        let upper_bound = min.checked_add(upper_offset).ok_or("overflowed")?;
+
+        Ok((lower_bound as u64, upper_bound as u64))
+    }
+
+    fn synthetic_bucket_weight(lower_bound: &Self, upper_bound: &Self) -> f64 {
+        upper_bound
+            .checked_sub(*lower_bound)
+            .and_then(|range| range.checked_add(1))
+            .map(|value_count| value_count as f64)
+            .unwrap_or(1.0)
     }
 
     fn estimate_overlap_coverages(
@@ -457,6 +565,39 @@ impl Value for i64 {
                     .map(|range| range as f64 / num_buckets as f64)
             })
             .flatten()
+    }
+
+    fn synthetic_bucket_count_limit(min: &Self, max: &Self) -> Option<usize> {
+        let value_count = (*max as i128).checked_sub(*min as i128)?.checked_add(1)? as u128;
+        Some(synthetic_bucket_count_limit(value_count))
+    }
+
+    fn synthetic_bucket_bounds(
+        bounds: &TypedHistogramBounds<Self>,
+        num_buckets: usize,
+        bucket_index: usize,
+    ) -> Result<(Self, Self), String> {
+        let min = *bounds.lower_bound() as i128;
+        let max = *bounds.upper_bound() as i128;
+        let value_count = max
+            .checked_sub(min)
+            .and_then(|range| range.checked_add(1))
+            .ok_or("overflowed")? as u128;
+        let (lower_offset, upper_offset) =
+            discrete_synthetic_bucket_offsets(value_count, num_buckets, bucket_index)?;
+
+        let lower_bound = min.checked_add(lower_offset as i128).ok_or("overflowed")?;
+        let upper_bound = min.checked_add(upper_offset as i128).ok_or("overflowed")?;
+
+        Ok((lower_bound as i64, upper_bound as i64))
+    }
+
+    fn synthetic_bucket_weight(lower_bound: &Self, upper_bound: &Self) -> f64 {
+        upper_bound
+            .checked_sub(*lower_bound)
+            .and_then(|range| range.checked_add(1))
+            .map(|value_count| value_count as f64)
+            .unwrap_or(1.0)
     }
 
     fn estimate_overlap_coverages(
@@ -694,9 +835,63 @@ mod tests {
 
         assert!(!histogram.accuracy);
         assert_eq!(histogram.num_buckets(), 4);
+        assert_eq!(histogram.num_values(), 16.0);
+        assert_eq!(histogram.num_distinct_values(), 8.0);
         assert_eq!(histogram.avg_spacing, Some(20.0));
         assert!(left.has_intersection(&right));
         assert_eq!(left.intersection(&right), (Some(5_u64), Some(10_u64)));
+    }
+
+    #[test]
+    fn test_typed_histogram_builder_preserves_max_bound_when_range_not_divisible() {
+        let histogram =
+            TypedHistogramBuilder::from_ndv(738, 738, Some((0_u64, 737_u64)), 100).unwrap();
+        let buckets = histogram.buckets_iter().collect::<Vec<_>>();
+
+        assert_eq!(buckets.last().unwrap().upper_bound(), &737);
+    }
+
+    #[test]
+    fn test_typed_histogram_builder_partitions_discrete_synthetic_bounds() {
+        let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
+        let bounds = histogram
+            .buckets_iter()
+            .map(|bucket| (*bucket.lower_bound(), *bucket.upper_bound()))
+            .collect::<Vec<_>>();
+
+        assert_eq!(bounds, vec![
+            (0, 0),
+            (1, 1),
+            (2, 2),
+            (3, 3),
+            (4, 4),
+            (5, 5),
+            (6, 6),
+            (7, 7),
+            (8, 8),
+            (9, 9),
+        ]);
+    }
+
+    #[test]
+    fn test_typed_histogram_builder_limits_discrete_synthetic_bucket_count() {
+        let histogram = TypedHistogramBuilder::from_ndv(100, 100, Some((0_i64, 9_i64)), 100)
+            .expect("bucket count should be capped to the discrete value count");
+
+        assert_eq!(histogram.num_buckets(), 10);
+        assert_eq!(histogram.num_values(), 100.0);
+        assert_eq!(histogram.num_distinct_values(), 100.0);
+        assert_eq!(histogram.buckets.last().unwrap().upper_bound(), &9);
+    }
+
+    #[test]
+    fn test_typed_histogram_synthetic_integer_self_join_does_not_overlap_bucket_edges() {
+        let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
+
+        assert_eq!(histogram.estimate_join(&histogram), JoinEstimation {
+            cardinality: TypedHistogramEstimate::exact(10.0),
+            ndv: TypedHistogramEstimate::exact(10.0),
+        });
     }
 
     #[test]

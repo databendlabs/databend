@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -20,15 +19,17 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+use databend_common_expression::type_check::common_super_type;
+use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_statistics::Datum;
+use databend_common_statistics::DatumKind;
 use databend_common_statistics::Histogram;
 
 use crate::ColumnSet;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::HistogramBuilder;
 use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
@@ -317,136 +318,19 @@ impl Join {
 
     fn inner_join_cardinality(
         &self,
-        left_cardinality: &mut f64,
-        right_cardinality: &mut f64,
+        left_cardinality: f64,
+        right_cardinality: f64,
         left_statistics: &mut Statistics,
         right_statistics: &mut Statistics,
     ) -> Result<f64> {
-        let mut join_card = *left_cardinality * *right_cardinality;
-        let mut join_card_updated = false;
-        let mut left_column_index = None;
-        let mut right_column_index = None;
-        for condition in &self.equi_conditions {
-            let left_condition = &condition.left;
-            let right_condition = &condition.right;
-            if join_card == 0.0 {
-                break;
-            }
-            // Currently don't consider the case such as: `t1.a + t1.b = t2.a`
-            if left_condition.used_columns().len() != 1 || right_condition.used_columns().len() != 1
-            {
-                continue;
-            }
-            let Some(left_col_stat) = left_statistics
-                .column_stats
-                .get(left_condition.used_columns().iter().next().unwrap())
-            else {
-                continue;
-            };
-            let Some(right_col_stat) = right_statistics
-                .column_stats
-                .get(right_condition.used_columns().iter().next().unwrap())
-            else {
-                continue;
-            };
-
-            if !left_col_stat.min.type_comparable(&right_col_stat.min) {
-                continue;
-            }
-            let left_interval =
-                UniformSampleSet::new(left_col_stat.min.clone(), left_col_stat.max.clone());
-            let right_interval =
-                UniformSampleSet::new(right_col_stat.min.clone(), right_col_stat.max.clone());
-            if !left_interval.has_intersection(&right_interval)? {
-                join_card = 0.0;
-                continue;
-            }
-
-            // Update column min and max value
-            let mut new_ndv = None;
-            let (new_min, new_max) = left_interval.intersection(&right_interval)?;
-            let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
-                (Some(left_hist), Some(right_hist))
-                    if matches!(
-                        left_col_stat.min,
-                        Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
-                    ) =>
-                {
-                    // Evaluate join cardinality by histogram.
-                    evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
-                }
-                _ => evaluate_by_ndv(
-                    left_col_stat,
-                    right_col_stat,
-                    *left_cardinality,
-                    *right_cardinality,
-                    &mut new_ndv,
-                ),
-            };
-
-            let (left_index, right_index) = update_statistic(
-                left_statistics,
-                right_statistics,
-                left_condition,
-                right_condition,
-                NewStatistic {
-                    min: new_min,
-                    max: new_max,
-                    ndv: new_ndv,
-                },
-            );
-            if card < join_card {
-                join_card = card;
-                join_card_updated = true;
-                left_column_index = Some(left_index);
-                right_column_index = Some(right_index);
-            }
-        }
-        if !join_card_updated {
-            return Ok(join_card);
-        }
-
-        let left_column_index = left_column_index.expect("join stats updated without left column");
-        let right_column_index =
-            right_column_index.expect("join stats updated without right column");
-
-        for (idx, left) in left_statistics.column_stats.iter_mut() {
-            if *idx != left_column_index || left.histogram.is_none() || left.ndv.value() as u64 <= 2
-            {
-                // Other columns' histograms are inaccurate, so make them None
-                left.histogram = None;
-                continue;
-            }
-            // Todo: find a better way to update accuracy histogram
-            left.min = left.min.clone().cast_float();
-            left.max = left.max.clone().cast_float();
-            left.histogram = Some(HistogramBuilder::from_ndv(
-                left.ndv.value() as u64,
-                max(join_card as u64, left.ndv.value() as u64),
-                Some((left.min.clone(), left.max.clone())),
-                DEFAULT_HISTOGRAM_BUCKETS,
-            )?);
-        }
-
-        for (idx, right) in right_statistics.column_stats.iter_mut() {
-            if *idx != right_column_index
-                || right.histogram.is_none()
-                || right.ndv.value() as u64 <= 2
-            {
-                right.histogram = None;
-                continue;
-            }
-            // Todo: find a better way to update accuracy histogram
-            right.min = right.min.clone().cast_float();
-            right.max = right.max.clone().cast_float();
-            right.histogram = Some(HistogramBuilder::from_ndv(
-                right.ndv.value() as u64,
-                max(join_card as u64, right.ndv.value() as u64),
-                Some((right.min.clone(), right.max.clone())),
-                DEFAULT_HISTOGRAM_BUCKETS,
-            )?);
-        }
-        Ok(join_card)
+        let mut estimator = JoinCardinalityEstimator {
+            left_cardinality,
+            right_cardinality,
+            join_card: left_cardinality * right_cardinality,
+            updated_columns: None,
+        };
+        estimator.estimate(&self.equi_conditions, left_statistics, right_statistics)?;
+        estimator.finish(left_statistics, right_statistics)
     }
 
     pub fn has_null_equi_condition(&self) -> bool {
@@ -460,19 +344,19 @@ impl Join {
         left_stat_info: Arc<StatInfo>,
         right_stat_info: Arc<StatInfo>,
     ) -> Result<Arc<StatInfo>> {
-        let (mut left_cardinality, mut left_statistics) = (
+        let (left_cardinality, mut left_statistics) = (
             left_stat_info.cardinality,
             left_stat_info.statistics.clone(),
         );
-        let (mut right_cardinality, mut right_statistics) = (
+        let (right_cardinality, mut right_statistics) = (
             right_stat_info.cardinality,
             right_stat_info.statistics.clone(),
         );
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
         let inner_join_cardinality = self.inner_join_cardinality(
-            &mut left_cardinality,
-            &mut right_cardinality,
+            left_cardinality,
+            right_cardinality,
             &mut left_statistics,
             &mut right_statistics,
         )?;
@@ -869,85 +753,494 @@ impl Operator for Join {
     }
 }
 
-fn evaluate_by_histogram(
-    left_hist: &Histogram,
-    right_hist: &Histogram,
-    new_ndv: &mut Option<f64>,
-) -> Result<f64> {
-    let estimation = left_hist.estimate_join(right_hist);
-    *new_ndv = Some(estimation.ndv.expected.ceil());
-    Ok(estimation.cardinality.expected)
+fn single_used_column(expr: &ScalarExpr) -> Option<Symbol> {
+    let columns = expr.used_columns();
+    (columns.len() == 1).then(|| columns.iter().next().copied())?
 }
 
-fn evaluate_by_ndv(
-    left_stat: &ColumnStat,
-    right_stat: &ColumnStat,
+struct JoinCardinalityEstimator {
     left_cardinality: f64,
     right_cardinality: f64,
-    new_ndv: &mut Option<f64>,
-) -> f64 {
-    let max_ndv = match (left_stat.ndv, right_stat.ndv) {
-        (Ndv::Stat(a), Ndv::Stat(b)) => {
-            *new_ndv = Some(f64::min(a, b));
-            f64::max(a, b)
+    join_card: f64,
+    updated_columns: Option<(Symbol, Symbol)>,
+}
+
+impl JoinCardinalityEstimator {
+    fn estimate(
+        &mut self,
+        conditions: &[JoinEquiCondition],
+        left_statistics: &mut Statistics,
+        right_statistics: &mut Statistics,
+    ) -> Result<()> {
+        for condition in conditions {
+            if self.join_card == 0.0 {
+                break;
+            }
+            self.apply_condition(condition, left_statistics, right_statistics)?;
         }
-        (Ndv::Stat(stat), Ndv::Max(max)) | (Ndv::Max(max), Ndv::Stat(stat)) => {
-            *new_ndv = Some(f64::min(stat, max));
-            stat
+        Ok(())
+    }
+
+    fn apply_condition(
+        &mut self,
+        condition: &JoinEquiCondition,
+        left_statistics: &mut Statistics,
+        right_statistics: &mut Statistics,
+    ) -> Result<()> {
+        // Currently don't consider the case such as: `t1.a + t1.b = t2.a`
+        let Some(left_index) = single_used_column(&condition.left) else {
+            return Ok(());
+        };
+        let Some(right_index) = single_used_column(&condition.right) else {
+            return Ok(());
+        };
+        let Some(left_col_stat) = left_statistics.column_stats.get(&left_index) else {
+            return Ok(());
+        };
+        let Some(right_col_stat) = right_statistics.column_stats.get(&right_index) else {
+            return Ok(());
+        };
+
+        match self.estimate_condition_stats(left_col_stat, right_col_stat, condition)? {
+            JoinConditionStats::Skip => {}
+            JoinConditionStats::NoOverlap => {
+                self.join_card = 0.0;
+            }
+            JoinConditionStats::Estimated { new_stat, card } => {
+                let left_col_stat = left_statistics.column_stats.get_mut(&left_index).unwrap();
+                let right_col_stat = right_statistics.column_stats.get_mut(&right_index).unwrap();
+                new_stat.apply(left_col_stat, right_col_stat);
+
+                if card < self.join_card {
+                    self.join_card = card;
+                    self.updated_columns = Some((left_index, right_index));
+                }
+            }
+        };
+        Ok(())
+    }
+
+    fn estimate_condition_stats(
+        &self,
+        left_col_stat: &ColumnStat,
+        right_col_stat: &ColumnStat,
+        condition: &JoinEquiCondition,
+    ) -> Result<JoinConditionStats> {
+        let left_input = JoinColumnInput::from_column_stat(left_col_stat);
+        let right_input = JoinColumnInput::from_column_stat(right_col_stat);
+        if left_input
+            .interval()
+            .has_same_supported_type(&right_input.interval())
+        {
+            let Some(estimation) = JoinEstimate::from_inputs(
+                &left_input,
+                &right_input,
+                self.left_cardinality,
+                self.right_cardinality,
+            )?
+            else {
+                return Ok(JoinConditionStats::NoOverlap);
+            };
+            return Ok(JoinConditionStats::Estimated {
+                new_stat: NewStatistic::same_type(estimation.min, estimation.max, estimation.ndv),
+                card: estimation.card,
+            });
         }
-        (Ndv::Max(0.0), Ndv::Max(0.0)) => {
-            *new_ndv = Some(0.0);
-            0.0
-        }
-        _ => left_cardinality * right_cardinality,
-    };
-    if max_ndv == 0.0 {
-        0.0
-    } else {
-        left_cardinality * right_cardinality / max_ndv
+
+        let Some(kind) = mixed_numeric_stat_kind(
+            left_col_stat,
+            right_col_stat,
+            &condition.left.data_type()?,
+            &condition.right.data_type()?,
+        )?
+        else {
+            return Ok(JoinConditionStats::Skip);
+        };
+        let Some(left_input) = left_input.normalize_to_kind(kind) else {
+            return Ok(JoinConditionStats::Skip);
+        };
+        let Some(right_input) = right_input.normalize_to_kind(kind) else {
+            return Ok(JoinConditionStats::Skip);
+        };
+        let Some(estimation) = JoinEstimate::from_inputs(
+            &left_input,
+            &right_input,
+            self.left_cardinality,
+            self.right_cardinality,
+        )?
+        else {
+            return Ok(JoinConditionStats::NoOverlap);
+        };
+
+        Ok(JoinConditionStats::Estimated {
+            new_stat: NewStatistic::mixed_type(
+                estimation.min,
+                estimation.max,
+                left_col_stat,
+                right_col_stat,
+                estimation.ndv,
+            ),
+            card: estimation.card,
+        })
+    }
+
+    fn finish(
+        self,
+        left_statistics: &mut Statistics,
+        right_statistics: &mut Statistics,
+    ) -> Result<f64> {
+        let Some((left_column_index, right_column_index)) = self.updated_columns else {
+            return Ok(self.join_card);
+        };
+
+        update_joined_histograms(left_statistics, left_column_index)?;
+        update_joined_histograms(right_statistics, right_column_index)?;
+        Ok(self.join_card)
     }
 }
 
-fn update_statistic(
-    left_statistics: &mut Statistics,
-    right_statistics: &mut Statistics,
-    left_condition: &ScalarExpr,
-    right_condition: &ScalarExpr,
-    new_stat: NewStatistic,
-) -> (Symbol, Symbol) {
-    let left_index = left_condition
-        .used_columns()
-        .iter()
-        .next()
-        .copied()
-        .unwrap();
-    let right_index = right_condition
-        .used_columns()
-        .iter()
-        .next()
-        .copied()
-        .unwrap();
-    let left_col_stat = left_statistics.column_stats.get_mut(&left_index).unwrap();
-    let right_col_stat = right_statistics.column_stats.get_mut(&right_index).unwrap();
+enum JoinConditionStats {
+    Skip,
+    NoOverlap,
+    Estimated { new_stat: NewStatistic, card: f64 },
+}
 
-    if let Some(new_min) = new_stat.min {
-        left_col_stat.min = new_min.clone();
-        right_col_stat.min = new_min;
+struct JoinColumnInput<'a> {
+    min: Datum,
+    max: Datum,
+    ndv: Ndv,
+    histogram: Option<&'a Histogram>,
+}
+
+impl<'a> JoinColumnInput<'a> {
+    fn from_column_stat(stat: &'a ColumnStat) -> Self {
+        Self {
+            min: stat.min.clone(),
+            max: stat.max.clone(),
+            ndv: stat.ndv,
+            histogram: stat.histogram.as_ref(),
+        }
     }
-    if let Some(new_max) = new_stat.max {
-        left_col_stat.max = new_max.clone();
-        right_col_stat.max = new_max;
+
+    fn normalize_to_kind(&self, kind: DatumKind) -> Option<Self> {
+        let min = self.min.normalize_to_kind(kind)?;
+        let max = self.max.normalize_to_kind(kind)?;
+        if min.compare(&max).ok()? == std::cmp::Ordering::Greater {
+            return None;
+        }
+
+        Some(Self {
+            min,
+            max,
+            ndv: self.ndv,
+            histogram: self.histogram,
+        })
     }
-    if let Some(new_ndv) = new_stat.ndv {
-        left_col_stat.ndv = Ndv::Stat(new_ndv);
-        right_col_stat.ndv = Ndv::Stat(new_ndv);
+
+    fn interval(&self) -> UniformSampleSet {
+        UniformSampleSet::new(self.min.clone(), self.max.clone())
     }
-    (left_index, right_index)
+}
+
+struct JoinEstimate {
+    min: Option<Datum>,
+    max: Option<Datum>,
+    card: f64,
+    ndv: Option<f64>,
+}
+
+impl JoinEstimate {
+    fn from_inputs(
+        left: &JoinColumnInput,
+        right: &JoinColumnInput,
+        left_cardinality: f64,
+        right_cardinality: f64,
+    ) -> Result<Option<Self>> {
+        let left_interval = left.interval();
+        let right_interval = right.interval();
+        if !left_interval.has_intersection(&right_interval)? {
+            return Ok(None);
+        }
+
+        if left.min.is_numeric()
+            && let (Some(left_hist), Some(right_hist)) = (left.histogram, right.histogram)
+            && let Some(estimation) = left_hist.estimate_join_numeric_compatible(right_hist)?
+        {
+            let (min, max) = left_interval.intersection(&right_interval)?;
+            return Ok(Some(Self {
+                min,
+                max,
+                card: estimation.cardinality.expected,
+                ndv: Some(estimation.ndv.expected.ceil()),
+            }));
+        }
+
+        let (max_ndv, new_ndv) = match (left.ndv, right.ndv) {
+            (Ndv::Stat(a), Ndv::Stat(b)) => {
+                let new_ndv = f64::min(a, b);
+                (f64::max(a, b), Some(new_ndv))
+            }
+            (Ndv::Stat(stat), Ndv::Max(max)) | (Ndv::Max(max), Ndv::Stat(stat)) => {
+                (stat, Some(f64::min(stat, max)))
+            }
+            (Ndv::Max(0.0), Ndv::Max(0.0)) => (0.0, Some(0.0)),
+            _ => (left_cardinality * right_cardinality, None),
+        };
+
+        let (card, ndv) = if max_ndv == 0.0 {
+            (0.0, new_ndv)
+        } else {
+            (left_cardinality * right_cardinality / max_ndv, new_ndv)
+        };
+        let (min, max) = left_interval.intersection(&right_interval)?;
+        Ok(Some(Self {
+            min,
+            max,
+            card,
+            ndv,
+        }))
+    }
+}
+
+fn mixed_numeric_stat_kind(
+    left_stat: &ColumnStat,
+    right_stat: &ColumnStat,
+    left_type: &DataType,
+    right_type: &DataType,
+) -> Result<Option<DatumKind>> {
+    let values = [
+        &left_stat.min,
+        &left_stat.max,
+        &right_stat.min,
+        &right_stat.max,
+    ];
+    if !values.iter().all(|value| value.is_numeric()) {
+        return Ok(None);
+    }
+
+    let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
+    let Some(common_type) = common_super_type(left_type.clone(), right_type.clone(), cast_rules)
+    else {
+        return Ok(None);
+    };
+    if !matches!(
+        common_type.remove_nullable(),
+        DataType::Number(_) | DataType::Decimal(_)
+    ) {
+        return Ok(None);
+    }
+
+    if values.iter().any(|value| matches!(value, Datum::Float(_))) {
+        return Ok(Some(DatumKind::Float));
+    }
+    if values.iter().all(|value| value.as_i64().is_some()) {
+        return Ok(Some(DatumKind::Int));
+    }
+    if values.iter().all(|value| value.as_u64().is_some()) {
+        return Ok(Some(DatumKind::UInt));
+    }
+    Ok(Some(DatumKind::Float))
+}
+
+fn update_joined_histograms(statistics: &mut Statistics, joined_column: Symbol) -> Result<()> {
+    for (idx, stat) in statistics.column_stats.iter_mut() {
+        stat.histogram = if let Some(histogram) = &stat.histogram
+            && *idx == joined_column
+            && stat.ndv.value() as u64 > 2
+        {
+            histogram.restrict_to_bounds(&stat.min, &stat.max)?
+        } else {
+            // Other columns' histograms are inaccurate after the join cardinality update.
+            None
+        };
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone)]
 struct NewStatistic {
-    min: Option<Datum>,
-    max: Option<Datum>,
+    left_min: Option<Datum>,
+    left_max: Option<Datum>,
+    right_min: Option<Datum>,
+    right_max: Option<Datum>,
     ndv: Option<f64>,
+}
+
+impl NewStatistic {
+    fn same_type(min: Option<Datum>, max: Option<Datum>, ndv: Option<f64>) -> Self {
+        Self {
+            left_min: min.clone(),
+            left_max: max.clone(),
+            right_min: min,
+            right_max: max,
+            ndv,
+        }
+    }
+
+    fn mixed_type(
+        min: Option<Datum>,
+        max: Option<Datum>,
+        left_stat: &ColumnStat,
+        right_stat: &ColumnStat,
+        ndv: Option<f64>,
+    ) -> Self {
+        let (left_min, left_max) =
+            Self::normalize_bounds_to_stat_type(min.as_ref(), max.as_ref(), left_stat);
+        let (right_min, right_max) =
+            Self::normalize_bounds_to_stat_type(min.as_ref(), max.as_ref(), right_stat);
+        Self {
+            left_min,
+            left_max,
+            right_min,
+            right_max,
+            ndv,
+        }
+    }
+
+    fn normalize_bounds_to_stat_type(
+        min: Option<&Datum>,
+        max: Option<&Datum>,
+        stat: &ColumnStat,
+    ) -> (Option<Datum>, Option<Datum>) {
+        let Some(kind) = stat.min.kind() else {
+            return (None, None);
+        };
+        let min = min.and_then(|value| value.lower_bound_to_kind(kind));
+        let max = max.and_then(|value| value.upper_bound_to_kind(kind));
+        if let (Some(min), Some(max)) = (&min, &max)
+            && min
+                .compare(max)
+                .is_ok_and(|ordering| ordering == std::cmp::Ordering::Greater)
+        {
+            return (None, None);
+        }
+        (min, max)
+    }
+
+    fn apply(self, left_stat: &mut ColumnStat, right_stat: &mut ColumnStat) {
+        if let Some(new_min) = self.left_min {
+            left_stat.min = new_min;
+        }
+        if let Some(new_max) = self.left_max {
+            left_stat.max = new_max;
+        }
+        if let Some(new_min) = self.right_min {
+            right_stat.min = new_min;
+        }
+        if let Some(new_max) = self.right_max {
+            right_stat.max = new_max;
+        }
+        if let Some(new_ndv) = self.ndv {
+            left_stat.ndv = Ndv::Stat(new_ndv);
+            right_stat.ndv = Ndv::Stat(new_ndv);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_statistics::F64;
+
+    use super::*;
+
+    #[test]
+    fn test_mixed_type_stat_update_uses_original_stat_types() {
+        let left_stat = ColumnStat {
+            min: Datum::Int(0),
+            max: Datum::Int(100),
+            ndv: Ndv::Stat(100.0),
+            null_count: 0,
+            histogram: None,
+        };
+        let right_stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(10),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            histogram: None,
+        };
+
+        let stat = NewStatistic::mixed_type(
+            Some(Datum::Int(1)),
+            Some(Datum::Int(2)),
+            &left_stat,
+            &right_stat,
+            Some(2.0),
+        );
+
+        assert_eq!(stat.left_min, Some(Datum::Int(1)));
+        assert_eq!(stat.left_max, Some(Datum::Int(2)));
+        assert_eq!(stat.right_min, Some(Datum::UInt(1)));
+        assert_eq!(stat.right_max, Some(Datum::UInt(2)));
+    }
+
+    #[test]
+    fn test_mixed_type_stat_update_rounds_float_bounds_for_integer_stats() {
+        let int_stat = ColumnStat {
+            min: Datum::Int(0),
+            max: Datum::Int(100),
+            ndv: Ndv::Stat(100.0),
+            null_count: 0,
+            histogram: None,
+        };
+        let float_stat = ColumnStat {
+            min: Datum::Float(F64::from(1.2)),
+            max: Datum::Float(F64::from(8.8)),
+            ndv: Ndv::Stat(8.0),
+            null_count: 0,
+            histogram: None,
+        };
+
+        let stat = NewStatistic::mixed_type(
+            Some(Datum::Float(F64::from(1.2))),
+            Some(Datum::Float(F64::from(8.8))),
+            &int_stat,
+            &float_stat,
+            Some(8.0),
+        );
+
+        assert_eq!(stat.left_min, Some(Datum::Int(2)));
+        assert_eq!(stat.left_max, Some(Datum::Int(8)));
+        assert_eq!(stat.right_min, Some(Datum::Float(F64::from(1.2))));
+        assert_eq!(stat.right_max, Some(Datum::Float(F64::from(8.8))));
+    }
+
+    #[test]
+    fn test_mixed_numeric_stats_normalize_to_smaller_common_stat_kind() -> Result<()> {
+        let left_stat = ColumnStat {
+            min: Datum::Int(0),
+            max: Datum::Int(100),
+            ndv: Ndv::Stat(100.0),
+            null_count: 0,
+            histogram: None,
+        };
+        let right_stat = ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(10),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            histogram: None,
+        };
+
+        let kind = mixed_numeric_stat_kind(
+            &left_stat,
+            &right_stat,
+            &DataType::Number(NumberDataType::Int32),
+            &DataType::Number(NumberDataType::UInt8),
+        )?
+        .expect("mixed numeric stats should be normalized");
+        let left = JoinColumnInput::from_column_stat(&left_stat)
+            .normalize_to_kind(kind)
+            .expect("left stats should normalize");
+        let right = JoinColumnInput::from_column_stat(&right_stat)
+            .normalize_to_kind(kind)
+            .expect("right stats should normalize");
+
+        assert_eq!(left.min, Datum::Int(0));
+        assert_eq!(left.max, Datum::Int(100));
+        assert_eq!(right.min, Datum::Int(0));
+        assert_eq!(right.max, Datum::Int(10));
+        Ok(())
+    }
 }

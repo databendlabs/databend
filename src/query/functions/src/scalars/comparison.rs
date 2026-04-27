@@ -29,12 +29,17 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
+use databend_common_expression::comparison::GtOp;
+use databend_common_expression::comparison::GteOp;
+use databend_common_expression::comparison::LtOp;
+use databend_common_expression::comparison::LteOp;
+use databend_common_expression::comparison::StatComparisonOp;
+use databend_common_expression::comparison::estimate_ndv_true_count;
 use databend_common_expression::function_stat::ReturnStat;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::BooleanDistribution;
-use databend_common_expression::stat_distribution::Ndv;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::StatBinaryArg;
 use databend_common_expression::stat_distribution::StatEstimate;
@@ -264,14 +269,14 @@ fn derive_equality_stat(not_eq: bool, stat: StatBinaryArg) -> Result<Option<Retu
     Ok(Some(boolean_return_stat(true_count)))
 }
 
-fn derive_comparison_stat<Op: StatComparisonOp>(
+fn derive_comparison_stat<Op: StatComparisonEstimator>(
     stat: StatBinaryArg,
 ) -> Result<Option<ReturnStat>, String> {
     let cardinality = stat.cardinality;
     let true_count = if let Some(constant) = stat.args[1].singleton() {
-        Op::estimate_true_count(&stat.args[0], cardinality, &constant)?
+        ordered_comparison_true_count::<Op>(&stat.args[0], cardinality, &constant)?
     } else if let Some(constant) = stat.args[0].singleton() {
-        Op::Reverse::estimate_true_count(&stat.args[1], cardinality, &constant)?
+        ordered_comparison_true_count::<Op::Reverse>(&stat.args[1], cardinality, &constant)?
     } else {
         return Ok(None);
     };
@@ -281,6 +286,22 @@ fn derive_comparison_stat<Op: StatComparisonOp>(
     };
 
     Ok(Some(boolean_return_stat(true_count)))
+}
+
+fn ordered_comparison_true_count<Op: StatComparisonEstimator>(
+    stat: &ArgStat,
+    cardinality: f64,
+    constant: &Scalar,
+) -> Result<Option<StatEstimate>, String> {
+    if let Some(true_count) = Op::estimate_true_count(stat, cardinality, constant)? {
+        return Ok(Some(true_count));
+    }
+
+    Ok(minmax_comparison_true_count::<Op>(
+        stat,
+        constant,
+        cardinality,
+    ))
 }
 
 fn boolean_return_stat(true_count: StatEstimate) -> ReturnStat {
@@ -295,12 +316,7 @@ fn boolean_return_stat(true_count: StatEstimate) -> ReturnStat {
     }
 }
 
-trait StatComparisonOp {
-    type Reverse: StatComparisonOp;
-
-    const SELECT_LESS: bool;
-    const INCLUDE_EQUAL: bool;
-
+trait StatComparisonEstimator: StatComparisonOp {
     fn estimate_true_count(
         stat: &ArgStat,
         cardinality: f64,
@@ -461,6 +477,14 @@ trait StatComparisonOp {
         bucket: &TypedHistogramBucket<T>,
         constant: &T,
     ) -> (f64, f64) {
+        if let Some(parts) = T::partial_discrete_bucket_less_parts(
+            bucket.lower_bound(),
+            bucket.upper_bound(),
+            constant,
+        ) {
+            return parts;
+        }
+
         let ndv = bucket.num_distinct().max(1.0);
         let lower_bound = bucket.lower_bound().to_f64();
         let upper_bound = bucket.upper_bound().to_f64();
@@ -535,13 +559,13 @@ trait StatComparisonOp {
                 return StatEstimate::exact(0.0);
             }
             if cmp_min == Equal {
-                return ndv_true_count(stat.ndv, false, cardinality);
+                return estimate_ndv_true_count(stat.ndv, false, cardinality);
             }
             if cmp_max == Greater {
                 return StatEstimate::exact(cardinality);
             }
             if !Self::INCLUDE_EQUAL && cmp_max == Equal {
-                return ndv_true_count(stat.ndv, true, cardinality);
+                return estimate_ndv_true_count(stat.ndv, true, cardinality);
             }
             return StatEstimate::exact(
                 ((numeric_literal - min + 1.0) / (max - min + 1.0)) * cardinality,
@@ -556,7 +580,7 @@ trait StatComparisonOp {
                 return StatEstimate::exact(cardinality);
             }
             if cmp_max == Equal {
-                return ndv_true_count(stat.ndv, false, cardinality);
+                return estimate_ndv_true_count(stat.ndv, false, cardinality);
             }
             return StatEstimate::exact(
                 ((max - numeric_literal + 1.0) / (max - min + 1.0)) * cardinality,
@@ -566,7 +590,7 @@ trait StatComparisonOp {
         match (cmp_min, cmp_max) {
             (_, Greater | Equal) => StatEstimate::exact(0.0),
             (Less, _) => StatEstimate::exact(cardinality),
-            (Equal, _) => ndv_true_count(stat.ndv, true, cardinality),
+            (Equal, _) => estimate_ndv_true_count(stat.ndv, true, cardinality),
             _ => StatEstimate::exact(
                 ((max - numeric_literal + 1.0) / (max - min + 1.0)) * cardinality,
             ),
@@ -574,46 +598,62 @@ trait StatComparisonOp {
     }
 }
 
-struct LtOp;
-struct LteOp;
-struct GtOp;
-struct GteOp;
+impl<Op: StatComparisonOp> StatComparisonEstimator for Op {}
 
-impl StatComparisonOp for LtOp {
-    type Reverse = GtOp;
+fn minmax_comparison_true_count<Op: StatComparisonOp>(
+    stat: &ArgStat,
+    constant: &Scalar,
+    cardinality: f64,
+) -> Option<StatEstimate> {
+    let (min, max) = stat.value_minmax()?;
+    let cmp_min = compare_stat_scalar(constant, &min)?;
+    let cmp_max = compare_stat_scalar(constant, &max)?;
 
-    const SELECT_LESS: bool = true;
-    const INCLUDE_EQUAL: bool = false;
-}
-
-impl StatComparisonOp for LteOp {
-    type Reverse = GteOp;
-
-    const SELECT_LESS: bool = true;
-    const INCLUDE_EQUAL: bool = true;
-}
-
-impl StatComparisonOp for GtOp {
-    type Reverse = LtOp;
-
-    const SELECT_LESS: bool = false;
-    const INCLUDE_EQUAL: bool = false;
-}
-
-impl StatComparisonOp for GteOp {
-    type Reverse = LteOp;
-
-    const SELECT_LESS: bool = false;
-    const INCLUDE_EQUAL: bool = true;
+    Op::estimate_minmax_range_true_count(stat.ndv, cardinality, cmp_min, cmp_max)
 }
 
 trait StatNumberValue: Ord {
     fn to_f64(&self) -> f64;
+
+    fn partial_discrete_bucket_less_parts(
+        lower_bound: &Self,
+        upper_bound: &Self,
+        constant: &Self,
+    ) -> Option<(f64, f64)> {
+        let _ = (lower_bound, upper_bound, constant);
+        None
+    }
 }
 
 impl StatNumberValue for i64 {
     fn to_f64(&self) -> f64 {
         *self as f64
+    }
+
+    fn partial_discrete_bucket_less_parts(
+        lower_bound: &Self,
+        upper_bound: &Self,
+        constant: &Self,
+    ) -> Option<(f64, f64)> {
+        let value_count = upper_bound.checked_sub(*lower_bound)?.checked_add(1)? as f64;
+        let strict_less_count = if constant <= lower_bound {
+            0.0
+        } else if constant > upper_bound {
+            value_count
+        } else {
+            constant.checked_sub(*lower_bound)? as f64
+        };
+        let equality_count = if constant >= lower_bound && constant <= upper_bound {
+            1.0
+        } else {
+            0.0
+        };
+
+        Some(discrete_bucket_less_parts(
+            strict_less_count,
+            equality_count,
+            value_count,
+        ))
     }
 }
 
@@ -621,12 +661,49 @@ impl StatNumberValue for u64 {
     fn to_f64(&self) -> f64 {
         *self as f64
     }
+
+    fn partial_discrete_bucket_less_parts(
+        lower_bound: &Self,
+        upper_bound: &Self,
+        constant: &Self,
+    ) -> Option<(f64, f64)> {
+        let value_count = upper_bound.checked_sub(*lower_bound)?.checked_add(1)? as f64;
+        let strict_less_count = if constant <= lower_bound {
+            0.0
+        } else if constant > upper_bound {
+            value_count
+        } else {
+            constant.checked_sub(*lower_bound)? as f64
+        };
+        let equality_count = if constant >= lower_bound && constant <= upper_bound {
+            1.0
+        } else {
+            0.0
+        };
+
+        Some(discrete_bucket_less_parts(
+            strict_less_count,
+            equality_count,
+            value_count,
+        ))
+    }
 }
 
 impl StatNumberValue for F64 {
     fn to_f64(&self) -> f64 {
         self.into_inner()
     }
+}
+
+fn discrete_bucket_less_parts(
+    strict_less_count: f64,
+    equality_count: f64,
+    value_count: f64,
+) -> (f64, f64) {
+    (
+        (strict_less_count / value_count).clamp(0.0, 1.0),
+        (equality_count / value_count).clamp(0.0, 1.0),
+    )
 }
 
 fn equal_true_count(
@@ -644,10 +721,13 @@ fn equal_true_count(
         return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
     }
 
-    Some(ndv_true_count(stat.ndv, not_eq, cardinality))
+    Some(estimate_ndv_true_count(stat.ndv, not_eq, cardinality))
 }
 
 fn compare_stat_scalar(left: &Scalar, right: &Scalar) -> Option<Ordering> {
+    if let (Scalar::Boolean(left), Scalar::Boolean(right)) = (left, right) {
+        return Some(left.cmp(right));
+    }
     if let (Some(left), Some(right)) = (scalar_number_value(left), scalar_number_value(right)) {
         return Some(left.cmp(&right));
     }
@@ -679,22 +759,6 @@ fn unexpected_histogram_constant(histogram_type: &'static str, constant: &Scalar
     format!("unexpected {histogram_type} histogram comparison constant: {constant:?}")
 }
 
-fn ndv_true_count(ndv: Ndv, not_eq: bool, cardinality: f64) -> StatEstimate {
-    let value = ndv.value();
-    let selectivity = if value == 0.0 {
-        0.0
-    } else if not_eq {
-        1.0 - 1.0 / value
-    } else {
-        1.0 / value
-    };
-    let expected = selectivity * cardinality;
-    match ndv {
-        Ndv::Stat(_) => StatEstimate::exact(expected),
-        Ndv::Max(_) => StatEstimate::new(0.0, expected, cardinality),
-    }
-}
-
 fn stat_value_domain_is_integer(stat: &ArgStat) -> bool {
     matches!(
         stat.value_domain(),
@@ -714,36 +778,77 @@ fn stat_value_domain_is_integer(stat: &ArgStat) -> bool {
 }
 
 fn register_string_cmp(registry: &mut FunctionRegistry) {
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "eq",
+        |stat, _| derive_equality_stat(false, stat),
         |_, d1, d2| d1.domain_eq(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Equal),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "noteq",
+        |stat, _| derive_equality_stat(true, stat),
         |_, d1, d2| d1.domain_noteq(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Equal),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "gt",
+        |stat, _| derive_comparison_stat::<GtOp>(stat),
         |_, d1, d2| d1.domain_gt(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Greater),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "gte",
+        |stat, _| derive_comparison_stat::<GteOp>(stat),
         |_, d1, d2| d1.domain_gte(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Less),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "lt",
+        |stat, _| derive_comparison_stat::<LtOp>(stat),
         |_, d1, d2| d1.domain_lt(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Less),
     );
-    registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
+    register_stat_string_comparison_2_arg(
+        registry,
         "lte",
+        |stat, _| derive_comparison_stat::<LteOp>(stat),
         |_, d1, d2| d1.domain_lte(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Greater),
     );
+}
+
+fn register_stat_string_comparison_2_arg(
+    registry: &mut FunctionRegistry,
+    name: &'static str,
+    derive_stat: fn(
+        StatBinaryArg,
+        &databend_common_expression::FunctionContext,
+    ) -> Result<Option<ReturnStat>, String>,
+    calc_domain: fn(
+        &databend_common_expression::FunctionContext,
+        &StringDomain,
+        &StringDomain,
+    ) -> FunctionDomain<BooleanType>,
+    func: impl Fn(Value<StringType>, Value<StringType>, &mut EvalContext) -> Value<BooleanType>
+    + Copy
+    + Send
+    + Sync
+    + 'static,
+) {
+    registry
+        .scalar_builder(name)
+        .function()
+        .typed_2_arg::<StringType, StringType, BooleanType>()
+        .passthrough_nullable()
+        .calc_domain(calc_domain)
+        .derive_stat(derive_stat)
+        .vectorized(func)
+        .register();
 }
 
 fn vectorize_string_cmp(
@@ -789,8 +894,10 @@ fn register_interval_cmp(registry: &mut FunctionRegistry) {
 }
 
 fn register_boolean_cmp(registry: &mut FunctionRegistry) {
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "eq",
+        |stat, _| derive_equality_stat(false, stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -800,8 +907,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs == rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "noteq",
+        |stat, _| derive_equality_stat(true, stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -811,8 +920,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs != rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "gt",
+        |stat, _| derive_comparison_stat::<GtOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, _, _) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -820,8 +931,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs & !rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "gte",
+        |stat, _| derive_comparison_stat::<GteOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -830,8 +943,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| lhs | !rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "lt",
+        |stat, _| derive_comparison_stat::<LtOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -839,8 +954,10 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
         },
         |lhs, rhs, _| !lhs & rhs,
     );
-    registry.register_comparison_2_arg::<BooleanType, BooleanType, _, _>(
+    register_stat_comparison_2_arg::<BooleanType>(
+        registry,
         "lte",
+        |stat, _| derive_comparison_stat::<LteOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),

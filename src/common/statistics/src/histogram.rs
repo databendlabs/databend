@@ -14,6 +14,9 @@
 
 use std::fmt;
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result as ExceptionResult;
+
 use crate::Datum;
 use crate::F64;
 use crate::JoinEstimation;
@@ -22,6 +25,25 @@ use crate::TypedHistogramBucket;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
+/// A column histogram used by optimizer statistics.
+///
+/// Histograms currently have two sources with different reliability:
+/// - `accuracy == true`: buckets come from `ANALYZE TABLE`. For each supported
+///   non-null column, ANALYZE runs a query equivalent to sorting rows by the
+///   column, assigning `NTILE(DEFAULT_HISTOGRAM_BUCKETS)`, then grouping by tile
+///   and collecting `MIN(col)`, `MAX(col)`, `COUNT()`, and
+///   `COUNT(DISTINCT col)`. Each bucket is therefore the closed value envelope
+///   observed in one row-order tile. The bucket list is not a value-domain
+///   partition: adjacent buckets may share boundaries or overlap when duplicate
+///   values cross tile boundaries.
+/// - `accuracy == false`: buckets are synthesized from column NDV plus
+///   min/max bounds by [`crate::HistogramBuilder::from_ndv`]. These buckets
+///   assume a uniform distribution over the recorded bounds, and numeric
+///   histograms keep `avg_spacing` so consumers can detect distorted ranges.
+///
+/// Consumers should preserve this distinction when updating or interpreting
+/// bucket counts. The type variants preserve the bucket value type for
+/// serialization, function selectivity, and type-specific join estimation.
 #[derive(Debug, Clone)]
 pub enum Histogram {
     Int(TypedHistogram<i64>),
@@ -160,20 +182,211 @@ impl Histogram {
         }
     }
 
-    pub fn estimate_join(&self, other: &Histogram) -> JoinEstimation {
+    /// Estimate a join only when both histograms use the same typed bucket representation.
+    pub fn estimate_join(&self, other: &Histogram) -> ExceptionResult<JoinEstimation> {
         match (self, other) {
-            (Self::Int(left), Self::Int(right)) => left.estimate_join(right),
-            (Self::UInt(left), Self::UInt(right)) => left.estimate_join(right),
-            (Self::Float(left), Self::Float(right)) => left.estimate_join(right),
-            (Self::Bytes(left), Self::Bytes(right)) => left.estimate_join(right),
-            _ => JoinEstimation::zero(),
+            (Self::Int(left), Self::Int(right)) => Ok(left.estimate_join(right)),
+            (Self::UInt(left), Self::UInt(right)) => Ok(left.estimate_join(right)),
+            (Self::Float(left), Self::Float(right)) => Ok(left.estimate_join(right)),
+            (Self::Bytes(left), Self::Bytes(right)) => Ok(left.estimate_join(right)),
+            _ => Err(ErrorCode::Internal(
+                "cannot estimate join for histograms with different bucket types",
+            )),
         }
+    }
+
+    /// Estimate a join for matching histogram types, or for mixed numeric histograms
+    /// through a temporary float view. Non-numeric mixed types return `None`.
+    pub fn estimate_join_numeric_compatible(
+        &self,
+        other: &Histogram,
+    ) -> ExceptionResult<Option<JoinEstimation>> {
+        match (self, other) {
+            (Self::Int(left), Self::Int(right)) => Ok(Some(left.estimate_join(right))),
+            (Self::UInt(left), Self::UInt(right)) => Ok(Some(left.estimate_join(right))),
+            (Self::Float(left), Self::Float(right)) => Ok(Some(left.estimate_join(right))),
+            (Self::Bytes(left), Self::Bytes(right)) => Ok(Some(left.estimate_join(right))),
+            (Self::Bytes(_), _) | (_, Self::Bytes(_)) => Ok(None),
+            _ => estimate_mixed_numeric_histogram_join(self, other),
+        }
+    }
+
+    pub fn restrict_to_bounds(&self, min: &Datum, max: &Datum) -> ExceptionResult<Option<Self>> {
+        let buckets = self
+            .bucket_iter()
+            .map(|bucket| {
+                let bucket_min = bucket.lower_bound();
+                let bucket_max = bucket.upper_bound();
+                if bucket_min.compare(max)? == std::cmp::Ordering::Greater
+                    || bucket_max.compare(min)? == std::cmp::Ordering::Less
+                {
+                    return Ok(None);
+                }
+
+                let Some(lower_bound) = max_datum_as_bucket_kind(&bucket_min, min) else {
+                    return Ok(None);
+                };
+                let Some(upper_bound) = min_datum_as_bucket_kind(&bucket_max, max) else {
+                    return Ok(None);
+                };
+                if lower_bound.compare(&upper_bound)? == std::cmp::Ordering::Greater {
+                    return Ok(None);
+                }
+
+                let selectivity = bucket_overlap_selectivity(
+                    &bucket_min,
+                    &bucket_max,
+                    &lower_bound,
+                    &upper_bound,
+                );
+                HistogramBucket::try_from_bounds(
+                    lower_bound,
+                    upper_bound,
+                    bucket.num_values() * selectivity,
+                    bucket.num_distinct() * selectivity,
+                )
+                .map(Some)
+                .map_err(|err| ErrorCode::Internal(err.to_string()))
+            })
+            .collect::<ExceptionResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+
+        if buckets.is_empty() {
+            return Ok(None);
+        }
+
+        Self::try_from_buckets(self.accuracy(), buckets, self.avg_spacing())
+            .map(Some)
+            .map_err(|err| ErrorCode::Internal(err.to_string()))
     }
 
     pub fn is_range_distorted(&self) -> bool {
         self.avg_spacing()
             .is_some_and(|bucket_width| bucket_width > 1e12)
     }
+}
+
+fn estimate_mixed_numeric_histogram_join(
+    left: &Histogram,
+    right: &Histogram,
+) -> ExceptionResult<Option<JoinEstimation>> {
+    let Some(left) = numeric_histogram_as_float(left)? else {
+        return Ok(None);
+    };
+    let Some(right) = numeric_histogram_as_float(right)? else {
+        return Ok(None);
+    };
+
+    Ok(Some(left.estimate_join(&right)))
+}
+
+fn numeric_histogram_as_float(
+    histogram: &Histogram,
+) -> ExceptionResult<Option<TypedHistogram<F64>>> {
+    if matches!(histogram, Histogram::Bytes(_)) {
+        return Ok(None);
+    }
+
+    let buckets = histogram
+        .bucket_iter()
+        .map(|bucket| {
+            let lower_bound = F64::from(bucket.lower_bound().as_double()?);
+            let upper_bound = F64::from(bucket.upper_bound().as_double()?);
+            Ok(TypedHistogramBucket::new(
+                lower_bound,
+                upper_bound,
+                bucket.num_values(),
+                bucket.num_distinct(),
+            ))
+        })
+        .collect::<ExceptionResult<Vec<_>>>()?;
+
+    Ok(Some(TypedHistogram {
+        accuracy: histogram.accuracy(),
+        buckets,
+        avg_spacing: histogram.avg_spacing(),
+    }))
+}
+
+fn max_datum_as_bucket_kind(bucket_value: &Datum, stat_value: &Datum) -> Option<Datum> {
+    let selected = if bucket_value.compare(stat_value).ok()? == std::cmp::Ordering::Less {
+        stat_value
+    } else {
+        bucket_value
+    };
+    selected.normalize_to_kind(bucket_value.kind()?)
+}
+
+fn min_datum_as_bucket_kind(bucket_value: &Datum, stat_value: &Datum) -> Option<Datum> {
+    let selected = if bucket_value.compare(stat_value).ok()? == std::cmp::Ordering::Greater {
+        stat_value
+    } else {
+        bucket_value
+    };
+    selected.normalize_to_kind(bucket_value.kind()?)
+}
+
+fn bucket_overlap_selectivity(
+    bucket_min: &Datum,
+    bucket_max: &Datum,
+    new_min: &Datum,
+    new_max: &Datum,
+) -> f64 {
+    match (bucket_min, bucket_max, new_min, new_max) {
+        (
+            Datum::Int(bucket_min),
+            Datum::Int(bucket_max),
+            Datum::Int(new_min),
+            Datum::Int(new_max),
+        ) => discrete_overlap_selectivity(
+            *bucket_min as i128,
+            *bucket_max as i128,
+            *new_min as i128,
+            *new_max as i128,
+        ),
+        (
+            Datum::UInt(bucket_min),
+            Datum::UInt(bucket_max),
+            Datum::UInt(new_min),
+            Datum::UInt(new_max),
+        ) => discrete_overlap_selectivity(
+            *bucket_min as i128,
+            *bucket_max as i128,
+            *new_min as i128,
+            *new_max as i128,
+        ),
+        (
+            Datum::Float(bucket_min),
+            Datum::Float(bucket_max),
+            Datum::Float(new_min),
+            Datum::Float(new_max),
+        ) => {
+            let bucket_width = bucket_max.into_inner() - bucket_min.into_inner();
+            if bucket_width <= 0.0 {
+                return 1.0;
+            }
+            let overlap_width = new_max.into_inner() - new_min.into_inner();
+            (overlap_width / bucket_width).clamp(0.0, 1.0)
+        }
+        (Datum::Bytes(_), Datum::Bytes(_), Datum::Bytes(_), Datum::Bytes(_)) => 1.0,
+        _ => 1.0,
+    }
+}
+
+fn discrete_overlap_selectivity(
+    bucket_min: i128,
+    bucket_max: i128,
+    new_min: i128,
+    new_max: i128,
+) -> f64 {
+    let bucket_count = bucket_max - bucket_min + 1;
+    if bucket_count <= 0 {
+        return 1.0;
+    }
+    let overlap_count = new_max - new_min + 1;
+    (overlap_count as f64 / bucket_count as f64).clamp(0.0, 1.0)
 }
 
 pub enum HistogramBucketIter<'a> {
@@ -290,15 +503,7 @@ impl HistogramBucket {
             (Datum::Bytes(lower_bound), Datum::Bytes(upper_bound)) => Ok(Self::Bytes(
                 TypedHistogramBucket::new(lower_bound, upper_bound, num_values, num_distinct),
             )),
-            (lower_bound, upper_bound) if lower_bound.is_numeric() && upper_bound.is_numeric() => {
-                Ok(Self::Float(TypedHistogramBucket::new(
-                    F64::from(lower_bound.as_double().unwrap_or(0.0)),
-                    F64::from(upper_bound.as_double().unwrap_or(0.0)),
-                    num_values,
-                    num_distinct,
-                )))
-            }
-            _ => Err("histogram bucket bounds must have comparable types"),
+            _ => Err("histogram bucket bounds must have the same supported type"),
         }
     }
 
@@ -373,6 +578,61 @@ impl fmt::Display for Histogram {
                 bucket.num_values()
             )?;
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_restrict_to_bounds_uses_existing_buckets() -> ExceptionResult<()> {
+        let histogram = Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            buckets: vec![
+                TypedHistogramBucket::new(0, 4, 5.0, 5.0),
+                TypedHistogramBucket::new(5, 9, 5.0, 5.0),
+            ],
+            avg_spacing: None,
+        });
+
+        let restricted = histogram
+            .restrict_to_bounds(&Datum::UInt(2), &Datum::UInt(6))?
+            .expect("histogram should keep intersecting buckets");
+        let buckets = restricted.bucket_iter().collect::<Vec<_>>();
+
+        assert_eq!(buckets.len(), 2);
+        assert_eq!(buckets[0].lower_bound(), Datum::UInt(2));
+        assert_eq!(buckets[0].upper_bound(), Datum::UInt(4));
+        assert_eq!(buckets[0].num_values(), 3.0);
+        assert_eq!(buckets[0].num_distinct(), 3.0);
+        assert_eq!(buckets[1].lower_bound(), Datum::UInt(5));
+        assert_eq!(buckets[1].upper_bound(), Datum::UInt(6));
+        assert_eq!(buckets[1].num_values(), 2.0);
+        assert_eq!(buckets[1].num_distinct(), 2.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_mixed_numeric_join_uses_float_view_of_existing_buckets() -> ExceptionResult<()> {
+        let left = Histogram::Int(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(1, 1, 3.0, 1.0)],
+            avg_spacing: None,
+        });
+        let right = Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(1, 1, 2.0, 1.0)],
+            avg_spacing: None,
+        });
+
+        let estimation = left
+            .estimate_join_numeric_compatible(&right)?
+            .expect("mixed numeric histograms should use a float view");
+
+        assert_eq!(estimation.cardinality.expected, 6.0);
+        assert_eq!(estimation.ndv.expected, 1.0);
         Ok(())
     }
 }
