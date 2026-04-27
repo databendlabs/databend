@@ -24,6 +24,7 @@ use std::ptr;
 
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use roaring::MultiOps;
 use roaring::RoaringTreemap;
 use roaring::treemap::Iter;
 use smallvec::SmallVec;
@@ -197,6 +198,47 @@ impl HybridBitmap {
             }
             *self = HybridBitmap::Small(set);
         }
+    }
+
+    /// N-way union using roaring's MultiOps (BinaryHeap-based, groups by upper-32-bit key).
+    /// Returns `None` if the input is empty.
+    pub fn fast_union(bitmaps: impl IntoIterator<Item = HybridBitmap>) -> Option<HybridBitmap> {
+        let mut small_values: Vec<u64> = Vec::new();
+        let mut treemaps: Vec<RoaringTreemap> = Vec::new();
+
+        for bm in bitmaps {
+            match bm {
+                HybridBitmap::Small(set) => {
+                    small_values.extend_from_slice(&set);
+                }
+                HybridBitmap::Large(tree) => {
+                    treemaps.push(tree);
+                }
+            }
+        }
+
+        if small_values.is_empty() && treemaps.is_empty() {
+            return None;
+        }
+
+        if treemaps.is_empty() && small_values.len() <= LARGE_THRESHOLD {
+            small_values.sort_unstable();
+            small_values.dedup();
+            if small_values.len() <= LARGE_THRESHOLD {
+                return Some(HybridBitmap::Small(SmallBitmap::from_vec(small_values)));
+            }
+        }
+
+        if !small_values.is_empty() {
+            let mut tree = RoaringTreemap::new();
+            for v in small_values {
+                tree.insert(v);
+            }
+            treemaps.push(tree);
+        }
+
+        let result = treemaps.union();
+        Some(HybridBitmap::from(result))
     }
 }
 
@@ -999,5 +1041,102 @@ mod tests {
 
         let decoded = deserialize_bitmap(&legacy).unwrap();
         assert_eq!(decoded.into_iter().collect::<Vec<_>>(), vec![1, 5, 42]);
+    }
+
+    #[test]
+    fn fast_union_empty_returns_none() {
+        let result = HybridBitmap::fast_union(std::iter::empty());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn fast_union_single_small() {
+        let bm = HybridBitmap::from_iter([1_u64, 3, 5]);
+        let result = HybridBitmap::fast_union(std::iter::once(bm)).unwrap();
+        assert!(matches!(result, HybridBitmap::Small(_)));
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn fast_union_multiple_small_stays_small() {
+        let a = HybridBitmap::from_iter([1_u64, 3]);
+        let b = HybridBitmap::from_iter([2_u64, 4]);
+        let c = HybridBitmap::from_iter([3_u64, 5]);
+        let result = HybridBitmap::fast_union(vec![a, b, c]).unwrap();
+        assert!(matches!(result, HybridBitmap::Small(_)));
+        assert_eq!(result.iter().collect::<Vec<_>>(), vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn fast_union_small_promotes_to_large() {
+        // Create enough small bitmaps to exceed LARGE_THRESHOLD when combined
+        let bitmaps: Vec<HybridBitmap> =
+            (0..40_u64).map(|i| HybridBitmap::from_iter([i])).collect();
+        let result = HybridBitmap::fast_union(bitmaps).unwrap();
+        assert!(matches!(result, HybridBitmap::Large(_)));
+        assert_eq!(result.len(), 40);
+    }
+
+    #[test]
+    fn fast_union_mixed_small_and_large() {
+        let small = HybridBitmap::from_iter([1_u64, 100, 200]);
+        let mut large_tree = RoaringTreemap::new();
+        for i in 0..50 {
+            large_tree.insert(i);
+        }
+        let large = HybridBitmap::Large(large_tree);
+        let result = HybridBitmap::fast_union(vec![small, large]).unwrap();
+        assert!(result.contains(1));
+        assert!(result.contains(100));
+        assert!(result.contains(200));
+        assert!(result.contains(0));
+        assert!(result.contains(49));
+    }
+
+    #[test]
+    fn fast_union_multiple_large() {
+        let mut t1 = RoaringTreemap::new();
+        let mut t2 = RoaringTreemap::new();
+        for i in 0..50 {
+            t1.insert(i);
+        }
+        for i in 25..75 {
+            t2.insert(i);
+        }
+        let a = HybridBitmap::Large(t1);
+        let b = HybridBitmap::Large(t2);
+        let result = HybridBitmap::fast_union(vec![a, b]).unwrap();
+        assert_eq!(result.len(), 75);
+        for i in 0..75 {
+            assert!(result.contains(i));
+        }
+    }
+
+    #[test]
+    fn fast_union_matches_pairwise_bitor() {
+        let bitmaps_for_fast: Vec<HybridBitmap> = vec![
+            HybridBitmap::from_iter([1_u64, 5, 10]),
+            HybridBitmap::from_iter([2_u64, 5, 20]),
+            HybridBitmap::from_iter([3_u64, 10, 30]),
+        ];
+        let bitmaps_for_pair: Vec<HybridBitmap> = vec![
+            HybridBitmap::from_iter([1_u64, 5, 10]),
+            HybridBitmap::from_iter([2_u64, 5, 20]),
+            HybridBitmap::from_iter([3_u64, 10, 30]),
+        ];
+
+        let fast_result = HybridBitmap::fast_union(bitmaps_for_fast).unwrap();
+
+        let pair_result = bitmaps_for_pair
+            .into_iter()
+            .reduce(|mut a, b| {
+                a.bitor_assign(b);
+                a
+            })
+            .unwrap();
+
+        let fast_vals: Vec<u64> = fast_result.iter().collect();
+        let pair_vals: Vec<u64> = pair_result.iter().collect();
+        assert_eq!(fast_vals, pair_vals);
     }
 }

@@ -31,6 +31,16 @@ pub type StateAddrs = Vec<StateAddr>;
 
 impl StateAddr {
     #[inline]
+    pub fn new(addr: usize) -> StateAddr {
+        Self(addr as *mut u8)
+    }
+
+    #[inline]
+    pub fn addr(&self) -> usize {
+        self.0 as usize
+    }
+
+    #[inline]
     pub fn null() -> StateAddr {
         Self(std::ptr::null_mut())
     }

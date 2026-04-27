@@ -422,7 +422,7 @@ reqwest = { version = "0.12", default-features = false, features = [
 reqwest-hickory-resolver = "0.2"
 ringbuffer = "0.14.2"
 rmp-serde = "1.1.1"
-roaring = { version = "^0.10", features = ["serde"] }
+roaring = { git = "https://github.com/zhang2014/roaring-rs.git", rev = "cbbea21", features = ["serde", "simd"] }
 rust_decimal = "1.26"
 rustc-hash = "2.1.0"
 rustix = { version = "0.38.37", features = ["fs"] }
