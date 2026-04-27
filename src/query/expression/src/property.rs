@@ -167,6 +167,70 @@ impl Domain {
         builder.build().domain()
     }
 
+    pub fn check_data_type(&self, data_type: &DataType) -> Result<(), String> {
+        if self.matches_data_type(data_type) {
+            Ok(())
+        } else {
+            Err(format!(
+                "domain does not match data type: domain {self:?}, data type {data_type:?}"
+            ))
+        }
+    }
+
+    pub fn matches_data_type(&self, data_type: &DataType) -> bool {
+        match data_type {
+            DataType::Nullable(inner_type) => match self {
+                Domain::Nullable(nullable_domain) => nullable_domain
+                    .value
+                    .as_deref()
+                    .is_none_or(|domain| domain.matches_data_type(inner_type)),
+                _ => false,
+            },
+            DataType::Null => matches!(self, Domain::Nullable(NullableDomain { value: None, .. })),
+            data_type => self.matches_non_nullable_data_type(data_type),
+        }
+    }
+
+    fn matches_non_nullable_data_type(&self, data_type: &DataType) -> bool {
+        match (self, data_type) {
+            (Domain::Number(domain), DataType::Number(num_type)) => {
+                with_number_type!(|TYPE| match domain {
+                    NumberDomain::TYPE(_) => NumberDataType::TYPE,
+                }) == *num_type
+            }
+            (Domain::Decimal(domain), DataType::Decimal(size)) => domain.decimal_size() == *size,
+            (Domain::Boolean(_), DataType::Boolean)
+            | (Domain::String(_), DataType::String)
+            | (Domain::Timestamp(_), DataType::Timestamp)
+            | (Domain::TimestampTz(_), DataType::TimestampTz)
+            | (Domain::Date(_), DataType::Date)
+            | (Domain::Interval(_), DataType::Interval) => true,
+            (Domain::Array(None), DataType::EmptyArray | DataType::Array(_)) => true,
+            (Domain::Array(Some(domain)), DataType::Array(data_type)) => {
+                domain.matches_data_type(data_type)
+            }
+            (Domain::Map(None), DataType::EmptyMap | DataType::Map(_)) => true,
+            (Domain::Map(Some(domain)), DataType::Map(data_type)) => {
+                domain.matches_data_type(data_type)
+            }
+            (Domain::Tuple(domains), DataType::Tuple(data_types)) => {
+                domains.len() == data_types.len()
+                    && domains
+                        .iter()
+                        .zip(data_types)
+                        .all(|(domain, data_type)| domain.matches_data_type(data_type))
+            }
+            (Domain::Undefined, DataType::Binary)
+            | (Domain::Undefined, DataType::Bitmap)
+            | (Domain::Undefined, DataType::Variant)
+            | (Domain::Undefined, DataType::Geometry)
+            | (Domain::Undefined, DataType::Geography)
+            | (Domain::Undefined, DataType::Vector(_))
+            | (Domain::Undefined, DataType::Opaque(_)) => true,
+            _ => false,
+        }
+    }
+
     pub fn full(data_type: &DataType) -> Self {
         match data_type {
             DataType::Boolean => Domain::Boolean(BooleanType::full_domain()),

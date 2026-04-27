@@ -34,14 +34,6 @@ impl Datum {
         matches!(self, Datum::Bytes(_))
     }
 
-    pub fn cast_float(self) -> Self {
-        match self {
-            Datum::Int(v) => Datum::Float(F64::from(v as f64)),
-            Datum::UInt(v) => Datum::Float(F64::from(v as f64)),
-            _ => self,
-        }
-    }
-
     pub fn as_double(&self) -> Result<f64, ErrorCode> {
         match self {
             Datum::Bool(v) => Ok(*v as u8 as f64),
