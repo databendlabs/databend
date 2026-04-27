@@ -30,6 +30,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::AutoIncrementExpr;
 use databend_common_expression::FunctionKind;
+use databend_common_expression::FunctionRegistry;
 use databend_common_expression::RemoteExpr;
 use databend_common_expression::SEARCH_MATCHED_COL_NAME;
 use databend_common_expression::SEARCH_SCORE_COL_NAME;
@@ -240,23 +241,36 @@ impl ScalarExpr {
 
     /// Returns true if the expression can be evaluated from a row of data.
     pub fn evaluable(&self) -> bool {
-        let mut visitor = EvaluableVisitor {
-            evaluable: true,
-            has_nextval: false,
-        };
-        visitor.visit(self).unwrap();
-        visitor.evaluable && !visitor.has_nextval
+        self.is_compile_time_evaluable() && !self.contains_nextval()
     }
 
-    /// Returns if the expression can be evaluated as default value
-    /// and whether contains `nextval` async function.
-    pub fn default_value_evaluable(&self) -> (bool, bool) {
-        let mut visitor = EvaluableVisitor {
-            evaluable: true,
-            has_nextval: false,
+    /// Returns true if the expression can be evaluated at compile time.
+    pub fn is_compile_time_evaluable(&self) -> bool {
+        let mut visitor = CompileTimeEvaluableVisitor { evaluable: true };
+        visitor.visit(self).unwrap();
+        visitor.evaluable
+    }
+
+    /// Returns true if the expression contains the `nextval` async function.
+    pub fn contains_nextval(&self) -> bool {
+        let mut visitor = ContainsNextvalVisitor { has_nextval: false };
+        visitor.visit(self).unwrap();
+        visitor.has_nextval
+    }
+
+    pub fn is_deterministic(&self, registry: &FunctionRegistry) -> bool {
+        let mut visitor = DeterministicVisitor {
+            non_deterministic: false,
         };
         visitor.visit(self).unwrap();
-        (visitor.evaluable, visitor.has_nextval)
+
+        if visitor.non_deterministic {
+            return false;
+        }
+
+        self.as_expr()
+            .map(|expr| expr.is_deterministic(registry))
+            .unwrap_or(false)
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
@@ -531,12 +545,15 @@ impl ScalarExpr {
     }
 }
 
-struct EvaluableVisitor {
+struct CompileTimeEvaluableVisitor {
     evaluable: bool,
+}
+
+struct ContainsNextvalVisitor {
     has_nextval: bool,
 }
 
-impl<'a> Visitor<'a> for EvaluableVisitor {
+impl<'a> Visitor<'a> for CompileTimeEvaluableVisitor {
     fn visit_function_call(&mut self, func: &'a FunctionCall) -> Result<()> {
         if BUILTIN_FUNCTIONS
             .get_property(&func.func_name)
@@ -576,11 +593,47 @@ impl<'a> Visitor<'a> for EvaluableVisitor {
         Ok(())
     }
     fn visit_async_function_call(&mut self, func: &'a AsyncFunctionCall) -> Result<()> {
+        if func.func_name != "nextval" {
+            self.evaluable = false;
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Visitor<'a> for ContainsNextvalVisitor {
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if self.has_nextval {
+            return Ok(());
+        }
+        walk_expr(self, expr)
+    }
+
+    fn visit_async_function_call(&mut self, func: &'a AsyncFunctionCall) -> Result<()> {
         if func.func_name == "nextval" {
             self.has_nextval = true;
         } else {
-            self.evaluable = false;
+            for expr in &func.arguments {
+                self.visit(expr)?;
+            }
         }
+        Ok(())
+    }
+}
+
+struct DeterministicVisitor {
+    non_deterministic: bool,
+}
+
+impl<'a> Visitor<'a> for DeterministicVisitor {
+    fn visit(&mut self, expr: &'a ScalarExpr) -> Result<()> {
+        if self.non_deterministic {
+            return Ok(());
+        }
+        walk_expr(self, expr)
+    }
+
+    fn visit_async_function_call(&mut self, _: &'a AsyncFunctionCall) -> Result<()> {
+        self.non_deterministic = true;
         Ok(())
     }
 }
@@ -1668,5 +1721,40 @@ impl<'a> Visitor<'a> for IndexPredicateChecker {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::types::number::NumberDataType;
+
+    use super::*;
+
+    fn casted_nextval_expr() -> ScalarExpr {
+        ScalarExpr::CastExpr(CastExpr {
+            span: None,
+            is_try: false,
+            argument: Box::new(ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
+                span: None,
+                func_name: "nextval".to_string(),
+                display_name: "nextval(seq_19451)".to_string(),
+                return_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                arguments: vec![],
+                func_arg: AsyncFunctionArgument::SequenceFunction("seq_19451".to_string()),
+            })),
+            target_type: Box::new(DataType::Number(NumberDataType::Int32)),
+        })
+    }
+
+    #[test]
+    fn test_scalar_expr_is_deterministic_handles_async_function_call() {
+        let expr = casted_nextval_expr();
+
+        assert!(expr.is_compile_time_evaluable());
+        assert!(expr.contains_nextval());
+        assert!(
+            !expr.is_deterministic(&BUILTIN_FUNCTIONS),
+            "AsyncFunctionCall wrapped in CastExpr should stay non-deterministic at the ScalarExpr layer"
+        );
     }
 }
