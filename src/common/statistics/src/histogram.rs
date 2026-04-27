@@ -14,6 +14,9 @@
 
 use std::fmt;
 
+use databend_common_exception::ErrorCode;
+use databend_common_exception::Result as ExceptionResult;
+
 use crate::Datum;
 use crate::F64;
 use crate::JoinEstimation;
@@ -179,24 +182,17 @@ impl Histogram {
         }
     }
 
-    pub fn estimate_join(&self, other: &Histogram) -> JoinEstimation {
+    /// Estimate a join only when both histograms use the same typed bucket representation.
+    pub fn estimate_join(&self, other: &Histogram) -> ExceptionResult<JoinEstimation> {
         match (self, other) {
-            (Self::Int(left), Self::Int(right)) => left.estimate_join(right),
-            (Self::UInt(left), Self::UInt(right)) => left.estimate_join(right),
-            (Self::Float(left), Self::Float(right)) => left.estimate_join(right),
-            (Self::Bytes(left), Self::Bytes(right)) => left.estimate_join(right),
-            _ => JoinEstimation::zero(),
+            (Self::Int(left), Self::Int(right)) => Ok(left.estimate_join(right)),
+            (Self::UInt(left), Self::UInt(right)) => Ok(left.estimate_join(right)),
+            (Self::Float(left), Self::Float(right)) => Ok(left.estimate_join(right)),
+            (Self::Bytes(left), Self::Bytes(right)) => Ok(left.estimate_join(right)),
+            _ => Err(ErrorCode::Internal(
+                "cannot estimate join for histograms with different bucket types",
+            )),
         }
-    }
-
-    pub fn can_estimate_join(&self, other: &Histogram) -> bool {
-        matches!(
-            (self, other),
-            (Self::Int(_), Self::Int(_))
-                | (Self::UInt(_), Self::UInt(_))
-                | (Self::Float(_), Self::Float(_))
-                | (Self::Bytes(_), Self::Bytes(_))
-        )
     }
 
     pub fn is_range_distorted(&self) -> bool {
@@ -319,15 +315,7 @@ impl HistogramBucket {
             (Datum::Bytes(lower_bound), Datum::Bytes(upper_bound)) => Ok(Self::Bytes(
                 TypedHistogramBucket::new(lower_bound, upper_bound, num_values, num_distinct),
             )),
-            (lower_bound, upper_bound) if lower_bound.is_numeric() && upper_bound.is_numeric() => {
-                Ok(Self::Float(TypedHistogramBucket::new(
-                    F64::from(lower_bound.as_double().unwrap_or(0.0)),
-                    F64::from(upper_bound.as_double().unwrap_or(0.0)),
-                    num_values,
-                    num_distinct,
-                )))
-            }
-            _ => Err("histogram bucket bounds must have comparable types"),
+            _ => Err("histogram bucket bounds must have the same supported type"),
         }
     }
 

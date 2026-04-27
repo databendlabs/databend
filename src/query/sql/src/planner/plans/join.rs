@@ -22,7 +22,6 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
-use databend_common_statistics::Histogram;
 
 use crate::ColumnSet;
 use crate::Symbol;
@@ -365,24 +364,13 @@ impl Join {
             // Update column min and max value
             let mut new_ndv = None;
             let (new_min, new_max) = left_interval.intersection(&right_interval)?;
-            let card = match (&left_col_stat.histogram, &right_col_stat.histogram) {
-                (Some(left_hist), Some(right_hist))
-                    if matches!(
-                        left_col_stat.min,
-                        Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
-                    ) && left_hist.can_estimate_join(right_hist) =>
-                {
-                    // Evaluate join cardinality by histogram.
-                    evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?
-                }
-                _ => evaluate_by_ndv(
-                    left_col_stat,
-                    right_col_stat,
-                    *left_cardinality,
-                    *right_cardinality,
-                    &mut new_ndv,
-                ),
-            };
+            let card = evaluate_join_cardinality(
+                left_col_stat,
+                right_col_stat,
+                *left_cardinality,
+                *right_cardinality,
+                &mut new_ndv,
+            )?;
 
             let (left_index, right_index) = update_statistic(
                 left_statistics,
@@ -418,8 +406,6 @@ impl Join {
                 continue;
             }
             // Todo: find a better way to update accuracy histogram
-            left.min = left.min.clone().cast_float();
-            left.max = left.max.clone().cast_float();
             left.histogram = Some(HistogramBuilder::from_ndv(
                 left.ndv.value() as u64,
                 max(join_card as u64, left.ndv.value() as u64),
@@ -437,8 +423,6 @@ impl Join {
                 continue;
             }
             // Todo: find a better way to update accuracy histogram
-            right.min = right.min.clone().cast_float();
-            right.max = right.max.clone().cast_float();
             right.histogram = Some(HistogramBuilder::from_ndv(
                 right.ndv.value() as u64,
                 max(join_card as u64, right.ndv.value() as u64),
@@ -869,14 +853,31 @@ impl Operator for Join {
     }
 }
 
-fn evaluate_by_histogram(
-    left_hist: &Histogram,
-    right_hist: &Histogram,
+fn evaluate_join_cardinality(
+    left_col_stat: &ColumnStat,
+    right_col_stat: &ColumnStat,
+    left_cardinality: f64,
+    right_cardinality: f64,
     new_ndv: &mut Option<f64>,
 ) -> Result<f64> {
-    let estimation = left_hist.estimate_join(right_hist);
-    *new_ndv = Some(estimation.ndv.expected.ceil());
-    Ok(estimation.cardinality.expected)
+    if matches!(
+        left_col_stat.min,
+        Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
+    ) && let (Some(left_hist), Some(right_hist)) =
+        (&left_col_stat.histogram, &right_col_stat.histogram)
+    {
+        let estimation = left_hist.estimate_join(right_hist)?;
+        *new_ndv = Some(estimation.ndv.expected.ceil());
+        return Ok(estimation.cardinality.expected);
+    }
+
+    Ok(evaluate_by_ndv(
+        left_col_stat,
+        right_col_stat,
+        left_cardinality,
+        right_cardinality,
+        new_ndv,
+    ))
 }
 
 fn evaluate_by_ndv(
