@@ -28,6 +28,11 @@ use log::debug;
 use log::info;
 use tokio::sync::OnceCell;
 
+/// All policies are parsed with PostgreSQL dialect regardless of the session's
+/// `sql_dialect` setting. This avoids per-dialect cache duplication and ensures
+/// consistent AST representation.
+const POLICY_DIALECT: Dialect = Dialect::PostgreSQL;
+
 /// Cached parsed representation of a security policy (row access policy or data mask).
 /// Stores the parsed AST expression and parameter metadata so that
 /// cache hits skip both the metastore RPC and tokenize/parse.
@@ -63,26 +68,14 @@ pub struct RawPolicyDef {
     pub args: Vec<(String, String)>,
 }
 
-/// Cache key: (tenant, policy_id, dialect).
-/// Including the dialect ensures that query nodes with different `sql_dialect`
-/// settings do not share a wrongly-parsed AST.
-type CacheKey = (Tenant, u64, Dialect);
+/// Cache key: (tenant, policy_id).
+type CacheKey = (Tenant, u64);
 
 /// Background cleanup interval for orphaned cache entries.
 /// Entries for dropped policies are never looked up again (the caller always
 /// reads the latest table meta first to obtain the current policy_id), so
 /// stale hits cannot occur. This periodic clear only reclaims memory.
 const CACHE_CLEANUP_INTERVAL: Duration = Duration::from_secs(300);
-
-/// All dialect variants, used for precise invalidation by key rather than
-/// full-table scan via `retain`.
-const ALL_DIALECTS: [Dialect; 5] = [
-    Dialect::PostgreSQL,
-    Dialect::MySQL,
-    Dialect::Hive,
-    Dialect::PRQL,
-    Dialect::Experimental,
-];
 
 /// Singleflight cache for parsed security policy expressions.
 struct PolicyCache {
@@ -96,27 +89,19 @@ impl PolicyCache {
         }
     }
 
-    fn try_get(
-        &self,
-        tenant: &Tenant,
-        policy_id: u64,
-        dialect: Dialect,
-    ) -> Option<Arc<CachedSecurityPolicy>> {
-        let key = (tenant.clone(), policy_id, dialect);
+    fn try_get(&self, tenant: &Tenant, policy_id: u64) -> Option<Arc<CachedSecurityPolicy>> {
+        let key = (tenant.clone(), policy_id);
         self.cache.get(&key).and_then(|cell| cell.get().cloned())
     }
 
     fn invalidate(&self, tenant: &Tenant, policy_id: u64) {
-        for dialect in ALL_DIALECTS {
-            self.cache.remove(&(tenant.clone(), policy_id, dialect));
-        }
+        self.cache.remove(&(tenant.clone(), policy_id));
     }
 
     async fn get_or_load<F, Fut>(
         &self,
         tenant: &Tenant,
         policy_id: u64,
-        dialect: Dialect,
         policy_type: PolicyType,
         fetcher: F,
     ) -> Result<Arc<CachedSecurityPolicy>>
@@ -124,7 +109,7 @@ impl PolicyCache {
         F: FnOnce() -> Fut,
         Fut: Future<Output = Result<RawPolicyDef>>,
     {
-        let key = (tenant.clone(), policy_id, dialect);
+        let key = (tenant.clone(), policy_id);
 
         let cell = self
             .cache
@@ -137,7 +122,7 @@ impl PolicyCache {
             .get_or_try_init(|| async {
                 let raw = fetcher().await?;
                 let tokens = tokenize_sql(&raw.body)?;
-                let expr = parse_expr(&tokens, dialect)?;
+                let expr = parse_expr(&tokens, POLICY_DIALECT)?;
                 info!(
                     "{}: loaded and parsed policy_id={} from meta store",
                     label, policy_id
@@ -223,10 +208,8 @@ impl SecurityPolicyCacheManager {
         policy_type: PolicyType,
         tenant: &Tenant,
         policy_id: u64,
-        dialect: Dialect,
     ) -> Option<Arc<CachedSecurityPolicy>> {
-        self.cache_for(policy_type)
-            .try_get(tenant, policy_id, dialect)
+        self.cache_for(policy_type).try_get(tenant, policy_id)
     }
 
     /// Invalidate one cached definition when the underlying policy is dropped.
@@ -246,7 +229,6 @@ impl SecurityPolicyCacheManager {
         policy_type: PolicyType,
         tenant: &Tenant,
         policy_id: u64,
-        dialect: Dialect,
         fetcher: F,
     ) -> Result<Arc<CachedSecurityPolicy>>
     where
@@ -254,7 +236,7 @@ impl SecurityPolicyCacheManager {
         Fut: Future<Output = Result<RawPolicyDef>>,
     {
         self.cache_for(policy_type)
-            .get_or_load(tenant, policy_id, dialect, policy_type, fetcher)
+            .get_or_load(tenant, policy_id, policy_type, fetcher)
             .await
     }
 
@@ -266,7 +248,6 @@ impl SecurityPolicyCacheManager {
         policy_type: PolicyType,
         tenant: &Tenant,
         policy_id: u64,
-        dialect: Dialect,
         fetcher: F,
     ) -> Result<Arc<CachedSecurityPolicy>>
     where
@@ -276,7 +257,7 @@ impl SecurityPolicyCacheManager {
         let start = std::time::Instant::now();
         let label = policy_type.label();
 
-        if let Some(cached) = self.try_get(policy_type, tenant, policy_id, dialect) {
+        if let Some(cached) = self.try_get(policy_type, tenant, policy_id) {
             debug!(
                 "{}: policy_id={}, cache_hit, elapsed_ms={:.3}",
                 label,
@@ -290,7 +271,6 @@ impl SecurityPolicyCacheManager {
             policy_type,
             tenant,
             policy_id,
-            dialect,
             fetcher,
         ))?;
         info!(
@@ -340,22 +320,16 @@ mod tests {
         let tenant = test_tenant();
 
         // Cold miss.
-        assert!(cache.try_get(&tenant, 1, Dialect::PostgreSQL).is_none());
+        assert!(cache.try_get(&tenant, 1).is_none());
 
         // Load.
         cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
+            .get_or_load(&tenant, 1, PolicyType::DataMask, ok_fetcher("a + 1"))
             .await
             .unwrap();
 
         // Warm hit.
-        let hit = cache.try_get(&tenant, 1, Dialect::PostgreSQL);
+        let hit = cache.try_get(&tenant, 1);
         assert!(hit.is_some());
         assert_eq!(hit.unwrap().args, vec![("a".into(), "INT".into())]);
     }
@@ -366,84 +340,19 @@ mod tests {
         let tenant = test_tenant();
 
         cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
+            .get_or_load(&tenant, 1, PolicyType::DataMask, ok_fetcher("a + 1"))
             .await
             .unwrap();
         cache
-            .get_or_load(
-                &tenant,
-                2,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 2"),
-            )
+            .get_or_load(&tenant, 2, PolicyType::DataMask, ok_fetcher("a + 2"))
             .await
             .unwrap();
 
         cache.invalidate(&tenant, 1);
 
         // policy_id=1 gone, policy_id=2 still present.
-        assert!(cache.try_get(&tenant, 1, Dialect::PostgreSQL).is_none());
-        assert!(cache.try_get(&tenant, 2, Dialect::PostgreSQL).is_some());
-    }
-
-    #[tokio::test]
-    async fn test_invalidate_removes_all_dialects() {
-        let cache = PolicyCache::new();
-        let tenant = test_tenant();
-
-        cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
-            .await
-            .unwrap();
-        cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::MySQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
-            .await
-            .unwrap();
-
-        cache.invalidate(&tenant, 1);
-
-        assert!(cache.try_get(&tenant, 1, Dialect::PostgreSQL).is_none());
-        assert!(cache.try_get(&tenant, 1, Dialect::MySQL).is_none());
-    }
-
-    #[tokio::test]
-    async fn test_dialect_isolation() {
-        let cache = PolicyCache::new();
-        let tenant = test_tenant();
-
-        cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
-            .await
-            .unwrap();
-
-        // Same policy_id but different dialect is a miss.
-        assert!(cache.try_get(&tenant, 1, Dialect::MySQL).is_none());
-        assert!(cache.try_get(&tenant, 1, Dialect::PostgreSQL).is_some());
+        assert!(cache.try_get(&tenant, 1).is_none());
+        assert!(cache.try_get(&tenant, 2).is_some());
     }
 
     #[tokio::test]
@@ -459,21 +368,15 @@ mod tests {
             let cc = call_count.clone();
             handles.push(databend_common_base::runtime::spawn(async move {
                 cache
-                    .get_or_load(
-                        &tenant,
-                        1,
-                        Dialect::PostgreSQL,
-                        PolicyType::DataMask,
-                        move || {
-                            cc.fetch_add(1, Ordering::SeqCst);
-                            Box::pin(async {
-                                Ok(RawPolicyDef {
-                                    body: "a + 1".to_string(),
-                                    args: vec![],
-                                })
+                    .get_or_load(&tenant, 1, PolicyType::DataMask, move || {
+                        cc.fetch_add(1, Ordering::SeqCst);
+                        Box::pin(async {
+                            Ok(RawPolicyDef {
+                                body: "a + 1".to_string(),
+                                args: vec![],
                             })
-                        },
-                    )
+                        })
+                    })
                     .await
                     .unwrap();
             }));
@@ -493,25 +396,13 @@ mod tests {
 
         // First call fails.
         let res = cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                err_fetcher(),
-            )
+            .get_or_load(&tenant, 1, PolicyType::DataMask, err_fetcher())
             .await;
         assert!(res.is_err());
 
         // Entry should not be cached — a retry with a good fetcher should succeed.
         let res = cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
+            .get_or_load(&tenant, 1, PolicyType::DataMask, ok_fetcher("a + 1"))
             .await;
         assert!(res.is_ok());
     }
@@ -522,42 +413,17 @@ mod tests {
         let tenant = test_tenant();
 
         cache
-            .get_or_load(
-                &tenant,
-                1,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 1"),
-            )
+            .get_or_load(&tenant, 1, PolicyType::DataMask, ok_fetcher("a + 1"))
             .await
             .unwrap();
         cache
-            .get_or_load(
-                &tenant,
-                2,
-                Dialect::PostgreSQL,
-                PolicyType::DataMask,
-                ok_fetcher("a + 2"),
-            )
+            .get_or_load(&tenant, 2, PolicyType::DataMask, ok_fetcher("a + 2"))
             .await
             .unwrap();
 
         let cleared = cache.clear();
         assert_eq!(cleared, 2);
-        assert!(cache.try_get(&tenant, 1, Dialect::PostgreSQL).is_none());
-        assert!(cache.try_get(&tenant, 2, Dialect::PostgreSQL).is_none());
-    }
-
-    #[test]
-    fn all_dialects_is_exhaustive() {
-        for d in ALL_DIALECTS {
-            match d {
-                Dialect::PostgreSQL
-                | Dialect::MySQL
-                | Dialect::Hive
-                | Dialect::PRQL
-                | Dialect::Experimental => {}
-            }
-        }
+        assert!(cache.try_get(&tenant, 1).is_none());
+        assert!(cache.try_get(&tenant, 2).is_none());
     }
 }

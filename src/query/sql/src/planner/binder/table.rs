@@ -61,10 +61,10 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
-use databend_enterprise_security_policy_cache::PolicyType;
-use databend_enterprise_security_policy_cache::RawPolicyDef;
-use databend_enterprise_security_policy_cache::SecurityPolicyCacheManager;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
@@ -522,15 +522,12 @@ impl Binder {
         let policy = policy.policy_id;
         let tenant = self.ctx.get_tenant();
         let cache = SecurityPolicyCacheManager::instance();
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant_clone = tenant.clone();
         let res = cache.get_cached_or_load_sync(
             PolicyType::RowAccessPolicy,
             &tenant,
             policy,
-            sql_dialect,
             || async move {
                 let handler = get_row_access_policy_handler();
                 let seq_v = handler

@@ -41,10 +41,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
-use databend_enterprise_security_policy_cache::PolicyType;
-use databend_enterprise_security_policy_cache::RawPolicyDef;
-use databend_enterprise_security_policy_cache::SecurityPolicyCacheManager;
 use itertools::Itertools;
 
 use super::AggregateInfo;
@@ -795,7 +795,6 @@ impl Binder {
         // Fetch the masking policy via cache (sync fast path, async fallback)
         let tenant = self.ctx.get_tenant();
         let cache = SecurityPolicyCacheManager::instance();
-        let sql_dialect = self.ctx.get_settings().get_sql_dialect()?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let tenant_clone = tenant.clone();
 
@@ -803,7 +802,6 @@ impl Binder {
             PolicyType::DataMask,
             &tenant,
             policy_id,
-            sql_dialect,
             || async move {
                 let handler = get_datamask_handler();
                 let seq_v = handler

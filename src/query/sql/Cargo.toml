@@ -34,7 +34,6 @@ databend-common-tracing = { workspace = true }
 databend-common-users = { workspace = true }
 databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
-databend-enterprise-security-policy-cache = { workspace = true }
 databend-meta-client = { workspace = true }
 databend-storages-common-cache = { workspace = true }
 databend-storages-common-stage = { workspace = true }

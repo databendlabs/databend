@@ -138,7 +138,7 @@ pub enum ParseMode {
     Template,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, EnumAsInner)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumAsInner)]
 pub enum Dialect {
     #[default]
     PostgreSQL,

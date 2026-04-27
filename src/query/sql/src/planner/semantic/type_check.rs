@@ -1943,10 +1943,10 @@ impl<'a> TypeChecker<'a> {
         use databend_common_license::license::Feature::DataMask;
         use databend_common_license::license_manager::LicenseManagerSwitch;
         use databend_common_users::UserApiProvider;
+        use databend_common_users::security_policy_cache::PolicyType;
+        use databend_common_users::security_policy_cache::RawPolicyDef;
+        use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
         use databend_enterprise_data_mask_feature::get_datamask_handler;
-        use databend_enterprise_security_policy_cache::PolicyType;
-        use databend_enterprise_security_policy_cache::RawPolicyDef;
-        use databend_enterprise_security_policy_cache::SecurityPolicyCacheManager;
 
         // Check if this column has a masking policy
         if let Some(table_index) = column_binding.table_index {
@@ -1994,7 +1994,6 @@ impl<'a> TypeChecker<'a> {
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
                 let tenant = self.ctx.get_tenant();
                 let cache = SecurityPolicyCacheManager::instance();
-                let sql_dialect = self.ctx.get_settings().get_sql_dialect()?;
                 let meta_api = UserApiProvider::instance().get_meta_store_client();
                 let tenant_clone = tenant.clone();
 
@@ -2003,7 +2002,6 @@ impl<'a> TypeChecker<'a> {
                         PolicyType::DataMask,
                         &tenant,
                         policy_id,
-                        sql_dialect,
                         || async move {
                             let handler = get_datamask_handler();
                             let seq_v = handler

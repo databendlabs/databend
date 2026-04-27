@@ -4411,7 +4411,6 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-row-access-policy-feature",
- "databend-enterprise-security-policy-cache",
  "databend-meta-client 260205.6.0",
  "databend-meta-runtime",
  "databend-storages-common-cache",
@@ -5013,6 +5012,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "cidr",
+ "dashmap 6.1.0",
  "databend-common-ast",
  "databend-common-base",
  "databend-common-config",
@@ -5199,19 +5199,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-meta-client 260205.6.0",
-]
-
-[[package]]
-name = "databend-enterprise-security-policy-cache"
-version = "0.1.0"
-dependencies = [
- "dashmap 6.1.0",
- "databend-common-ast",
- "databend-common-base",
- "databend-common-exception",
- "databend-common-meta-app",
- "log",
- "tokio",
 ]
 
 [[package]]
@@ -6015,7 +6002,6 @@ dependencies = [
  "databend-enterprise-hilbert-clustering",
  "databend-enterprise-resources-management",
  "databend-enterprise-row-access-policy-feature",
- "databend-enterprise-security-policy-cache",
  "databend-enterprise-stream-handler",
  "databend-enterprise-table-ref-handler",
  "databend-enterprise-vacuum-handler",

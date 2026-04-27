@@ -108,7 +108,6 @@ databend-enterprise-data-mask-feature = { workspace = true }
 databend-enterprise-hilbert-clustering = { workspace = true }
 databend-enterprise-resources-management = { workspace = true }
 databend-enterprise-row-access-policy-feature = { workspace = true }
-databend-enterprise-security-policy-cache = { workspace = true }
 databend-enterprise-stream-handler = { workspace = true }
 databend-enterprise-table-ref-handler = { workspace = true }
 databend-enterprise-vacuum-handler = { workspace = true }
