@@ -97,8 +97,11 @@ pub fn generate_desc_schema(
             }
 
             None => {
-                let value = Scalar::default_value(&field.data_type().into());
-                default_exprs.push(value.to_string());
+                if field.is_nullable() {
+                    default_exprs.push("NULL".to_string());
+                } else {
+                    default_exprs.push("".to_string());
+                }
             }
         }
         let extra = match field.computed_expr() {
