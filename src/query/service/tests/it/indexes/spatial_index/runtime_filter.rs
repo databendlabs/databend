@@ -179,6 +179,7 @@ async fn test_spatial_runtime_filter_pruner() -> anyhow::Result<()> {
         None,
         None,
         None,
+        false,
     );
 
     let pruned_by_stats = prune_with_bounds(schema.clone(), operator.clone(), settings, &part, [
@@ -228,6 +229,7 @@ async fn test_spatial_runtime_filter_pruner_distance_within_bounds() -> anyhow::
         None,
         None,
         None,
+        false,
     );
 
     // Equivalent to building a distance runtime filter from POINT(100 100) with threshold 10.

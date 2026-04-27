@@ -16,12 +16,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
 use databend_common_metrics::storage::metrics_inc_recluster_build_task_milliseconds;
@@ -30,17 +28,15 @@ use databend_common_sql::BloomIndexColumns;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
+use futures::stream::FuturesUnordered;
+use futures::stream::StreamExt;
 use log::warn;
 use opendal::Operator;
-use tokio::select;
-use tokio::sync::Semaphore;
-use tokio::sync::mpsc;
 
 use crate::FuseTable;
 use crate::SegmentLocation;
 use crate::operations::ReclusterMutator;
-use crate::operations::acquire_task_permit;
-use crate::operations::mutation::ReclusterMode;
+use crate::operations::SelectedReclusterSegment;
 use crate::pruning::PruningContext;
 use crate::pruning::SegmentPruner;
 use crate::pruning::create_segment_location_vector;
@@ -90,7 +86,7 @@ impl FuseTable {
 
         let mut recluster_seg_num = 0;
         let mut recluster_blocks_count = 0;
-        let mut parts = ReclusterParts::new_recluster_parts();
+        let mut parts = ReclusterParts::default();
 
         let number_segments = segment_locations.len();
         let mut segment_idx = 0;
@@ -123,8 +119,7 @@ impl FuseTable {
             }
 
             // select the segments with the highest depth.
-            let (recluster_mode, selected_segs) =
-                mutator.select_segments(&compact_segments, max_seg_num)?;
+            let selected_segs = mutator.select_segments(&compact_segments, max_seg_num)?;
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
                 let result =
@@ -136,13 +131,7 @@ impl FuseTable {
                 }
             } else {
                 selected_seg_num = selected_segs.len() as u64;
-                let selected_segments = selected_segs
-                    .into_iter()
-                    .map(|i| compact_segments[i].clone())
-                    .collect();
-                (recluster_blocks_count, parts) = mutator
-                    .target_select(selected_segments, recluster_mode)
-                    .await?;
+                (recluster_blocks_count, parts) = mutator.target_select(selected_segs).await?;
             }
 
             if !parts.is_empty() || limit.is_some() {
@@ -172,49 +161,68 @@ impl FuseTable {
         let mut block_count = 0;
 
         let max_threads = mutator.ctx.get_settings().get_max_threads()? as usize;
-        let semaphore = Arc::new(Semaphore::new(max_threads));
-        let (tx, mut rx) = mpsc::channel(1);
-        let runtime = GlobalIORuntime::instance();
-        let mut handles = Vec::new();
+        let mut segment_batches = Vec::new();
 
         let latest = compact_segments.len() - 1;
         for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
-            if !mutator.segment_can_recluster(&compact_segment.1.summary) {
+            let segment =
+                SelectedReclusterSegment::create(&mutator, compact_segment.0, compact_segment.1);
+            if !(segment.stats.level >= 0
+                || (segment.info.summary.block_count as usize)
+                    < mutator.block_thresholds.block_per_segment)
+            {
                 continue;
             }
 
-            block_count += compact_segment.1.summary.block_count as usize;
-            selected_segs.push(compact_segment);
+            block_count += segment.info.summary.block_count as usize;
+            selected_segs.push(segment);
             if block_count >= mutator.block_thresholds.block_per_segment || idx == latest {
-                let selected_segs = std::mem::take(&mut selected_segs);
-                let mutator_clone = mutator.clone();
-                let tx_clone = tx.clone();
-                let permit = acquire_task_permit(semaphore.clone()).await?;
-                let handle = runtime.spawn(async move {
-                    let seg_num = selected_segs.len() as u64;
-                    let (block_num, parts) = mutator_clone
-                        .target_select(selected_segs, ReclusterMode::Recluster)
-                        .await?;
-                    drop(permit);
-                    if !parts.is_empty() {
-                        let _ = tx_clone.send((seg_num, block_num, parts)).await;
-                    }
-                    Ok::<_, ErrorCode>(())
-                });
-                handles.push(handle);
+                segment_batches.push(std::mem::take(&mut selected_segs));
                 block_count = 0;
             }
         }
 
-        drop(tx);
-        let result = select! {
-            res = rx.recv() => res,
-            _ = async {
-                futures::future::join_all(handles).await;
-                None::<(usize, u64, ReclusterParts)>
-            } => None,
+        if segment_batches.is_empty() {
+            return Ok(None);
+        }
+
+        let evaluate_batch = |selected_segs: Vec<SelectedReclusterSegment>| {
+            let mutator = mutator.clone();
+            async move {
+                let seg_num = selected_segs.len() as u64;
+                let (block_num, parts) = mutator.target_select(selected_segs).await?;
+                Ok::<_, databend_common_exception::ErrorCode>((seg_num, block_num, parts))
+            }
         };
-        Ok(result)
+
+        if segment_batches.len() == 1 {
+            let selected_segs = segment_batches.pop().unwrap();
+            let (seg_num, block_num, parts) = evaluate_batch(selected_segs).await?;
+            return Ok((!parts.is_empty()).then_some((seg_num, block_num, parts)));
+        }
+
+        let concurrency = max_threads.min(segment_batches.len());
+        let mut batches = segment_batches.into_iter();
+        let mut pending = FuturesUnordered::new();
+
+        for _ in 0..concurrency {
+            if let Some(selected_segs) = batches.next() {
+                pending.push(evaluate_batch(selected_segs));
+            }
+        }
+
+        while let Some(result) = pending.next().await {
+            let (seg_num, block_num, parts) = result?;
+            if !parts.is_empty() {
+                return Ok(Some((seg_num, block_num, parts)));
+            }
+
+            if let Some(selected_segs) = batches.next() {
+                pending.push(evaluate_batch(selected_segs));
+            }
+        }
+
+        Ok(None)
     }
 
     pub async fn segment_pruning(

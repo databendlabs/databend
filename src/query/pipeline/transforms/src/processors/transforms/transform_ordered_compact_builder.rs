@@ -64,7 +64,7 @@ impl OrderedBlockCompactBuilder {
             if blocks.total_rows > 2 * thresholds.min_rows_per_block {
                 block_nums = block_nums.max(blocks.total_rows / thresholds.min_rows_per_block);
             }
-            if blocks.total_bytes > thresholds.max_bytes_per_block {
+            if blocks.total_bytes > 2 * thresholds.min_bytes_per_block {
                 block_nums = block_nums.max(blocks.total_bytes / thresholds.min_bytes_per_block);
             }
             // rows_per_block is a split target for the downstream no-tail splitter rather than

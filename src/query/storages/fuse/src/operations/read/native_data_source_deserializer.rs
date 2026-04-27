@@ -23,6 +23,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PushDownInfo;
@@ -65,7 +66,6 @@ use roaring::RoaringTreemap;
 use super::native_data_source::NativeDataSource;
 use super::read_data_source::ReadDataSource;
 use super::util::add_data_block_meta;
-use super::util::need_reserve_block_info;
 use crate::DEFAULT_ROW_PER_PAGE;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
@@ -232,7 +232,7 @@ pub struct NativeDeserializeDataTransform {
     skipped_pages: usize,
 
     // for merge_into target build.
-    need_reserve_block_info: bool,
+    block_meta_options: BlockMetaOptions,
 }
 
 #[derive(Clone)]
@@ -255,7 +255,6 @@ impl NativeDeserializeDataTransform {
         index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         let src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
         let mut prewhere_columns: Vec<usize> =
@@ -335,7 +334,7 @@ impl NativeDeserializeDataTransform {
                 base_block_ids: plan.base_block_ids.clone(),
                 bloom_runtime_filter: None,
                 read_state: ReadPartState::new(),
-                need_reserve_block_info,
+                block_meta_options: plan.block_meta_options.clone(),
             },
         )))
     }
@@ -448,9 +447,7 @@ impl NativeDeserializeDataTransform {
             fuse_part,
             None,
             self.base_block_ids.clone(),
-            self.block_reader.update_stream_columns(),
-            self.block_reader.query_internal_columns(),
-            self.need_reserve_block_info,
+            &self.block_meta_options,
         )?;
 
         data_block.resort(&self.src_schema, &self.output_schema)
@@ -827,7 +824,7 @@ impl NativeDeserializeDataTransform {
         // `TransformAddInternalColumns` will generate internal columns using `InternalColumnMeta` in next pipeline.
         let mut block = block.resort(&self.src_schema, &self.output_schema)?;
         let fuse_part = FuseBlockPartInfo::from_part(&self.parts[0])?;
-        let offsets = if self.block_reader.query_internal_columns() {
+        let offsets = if self.block_meta_options.query_internal_columns {
             let offset = self.read_state.offset as u64;
             let offsets = if let Some(count) = self.read_state.filtered_count {
                 let filter_executor = self.filter_executor.as_mut().unwrap();
@@ -849,9 +846,7 @@ impl NativeDeserializeDataTransform {
             fuse_part,
             offsets,
             self.base_block_ids.clone(),
-            self.block_reader.update_stream_columns(),
-            self.block_reader.query_internal_columns(),
-            self.need_reserve_block_info,
+            &self.block_meta_options,
         )?;
 
         self.read_state.offset += origin_num_rows;
@@ -955,9 +950,7 @@ impl Processor for NativeDeserializeDataTransform {
                         fuse_part,
                         None,
                         self.base_block_ids.clone(),
-                        self.block_reader.update_stream_columns(),
-                        self.block_reader.query_internal_columns(),
-                        self.need_reserve_block_info,
+                        &self.block_meta_options,
                     )?;
 
                     self.finish_partition();

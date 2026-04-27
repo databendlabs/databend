@@ -238,6 +238,7 @@ impl SendPartInfoSink {
                 &Some(block_meta_index.to_owned()),
                 &self.top_k,
                 block_meta,
+                None,
             ));
             self.statistics.read_rows += rows;
             self.statistics.read_bytes += block_meta.block_size as usize;
@@ -286,6 +287,7 @@ impl SendPartInfoSink {
                 column_nodes,
                 self.top_k.clone(),
                 projection,
+                None,
             ));
             self.statistics.read_rows += rows;
             for column in &columns {

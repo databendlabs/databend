@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp;
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,11 +24,7 @@ use databend_common_catalog::table_args::parse_table_name;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
-use databend_common_expression::ConstantFolder;
 use databend_common_expression::DataBlock;
-use databend_common_expression::Domain;
-use databend_common_expression::Expr;
-use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -41,21 +36,19 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_expression::types::VariantType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::analyze_cluster_keys;
-use databend_storages_common_index::statistics_to_domain;
-use databend_storages_common_table_meta::meta::BlockMeta;
+use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ClusterType;
 use jsonb::Value as JsonbValue;
-use log::warn;
 use serde::Serialize;
 
 use crate::FuseTable;
 use crate::Table;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::get_min_max_stats;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
 use crate::table_functions::parse_db_tb_opt_args;
@@ -171,17 +164,8 @@ impl<'a> ClusteringInformationImpl<'a> {
                 let (cluster_key, exprs) =
                     analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
                 let exprs = exprs
-                    .iter()
-                    .map(|k| {
-                        k.project_column_ref(|index| {
-                            Ok(self
-                                .table
-                                .schema()
-                                .field(index.as_usize())
-                                .name()
-                                .to_string())
-                        })
-                    })
+                    .into_iter()
+                    .map(|expr| expr.project_column_ref(|index| Ok(index.as_usize())))
                     .collect::<Result<Vec<_>>>()?;
                 if a.is_some() && a.unwrap() == cluster_key {
                     default_cluster_key_id = self.table.cluster_key_id();
@@ -189,11 +173,12 @@ impl<'a> ClusteringInformationImpl<'a> {
                 (cluster_key, exprs)
             }
             (Some(a), None) => {
-                let exprs = self.table.linear_cluster_keys(self.ctx.clone());
-                let exprs = exprs
-                    .iter()
-                    .map(|k| k.as_expr(&BUILTIN_FUNCTIONS))
-                    .collect();
+                let cluster_keys = self.table.resolve_cluster_keys().unwrap();
+                let exprs = parse_cluster_keys(
+                    self.ctx.clone(),
+                    Arc::new(self.table.clone()),
+                    cluster_keys,
+                )?;
                 default_cluster_key_id = self.table.cluster_key_id();
                 (a.to_string(), exprs)
             }
@@ -242,26 +227,17 @@ impl<'a> ClusteringInformationImpl<'a> {
 
             for segment in segments.into_iter().flatten() {
                 for block in segment.blocks {
-                    let (min, max) =
-                        get_min_max_stats(&exprs, &block, schema.clone(), default_cluster_key_id);
+                    let (min, max) = get_min_max_stats(
+                        &exprs,
+                        &block.col_stats,
+                        block.cluster_stats.as_ref(),
+                        default_cluster_key_id,
+                        schema.as_ref(),
+                    );
                     assert_eq!(min.len(), max.len());
-                    let (min, max) = match min
-                        .iter()
-                        .map(Scalar::as_ref)
-                        .cmp(max.iter().map(Scalar::as_ref))
-                    {
-                        Ordering::Equal => {
-                            constant_block_count += 1;
-                            (min, max)
-                        }
-                        Ordering::Less => (min, max),
-                        Ordering::Greater => {
-                            warn!(
-                                "clustering_information: please check your data and perform recluster to resort."
-                            );
-                            (max, min)
-                        }
-                    };
+                    if min == max {
+                        constant_block_count += 1;
+                    }
 
                     points_map
                         .entry(min)
@@ -484,56 +460,6 @@ struct HilbertClusterStatistics {
     stable_block_count: u64,
     partial_block_count: u64,
     unclustered_block_count: u64,
-}
-
-fn get_min_max_stats(
-    exprs: &[Expr<String>],
-    block: &BlockMeta,
-    schema: Arc<TableSchema>,
-    default_key_id: Option<u32>,
-) -> (Vec<Scalar>, Vec<Scalar>) {
-    if let Some(default_key_id) = default_key_id {
-        if let Some(v) = &block.cluster_stats {
-            if v.cluster_key_id == default_key_id {
-                return (v.min().clone(), v.max().clone());
-            }
-        }
-    }
-
-    let func_ctx = FunctionContext::default();
-    let mut mins = Vec::with_capacity(exprs.len());
-    let mut maxs = Vec::with_capacity(exprs.len());
-    let col_stats = &block.col_stats;
-    for expr in exprs {
-        // Since the hilbert index does not calc domain, set min max directly.
-        if expr.data_type().remove_nullable() == DataType::Binary {
-            mins.push(Scalar::Binary(vec![]));
-            maxs.push(Scalar::Binary(vec![0xFF, 40]));
-            continue;
-        }
-        let input_domains = expr
-            .column_refs()
-            .into_iter()
-            .map(|(name, ty)| {
-                let column_ids = schema.leaf_columns_of(&name);
-                let stats = column_ids
-                    .iter()
-                    .filter_map(|column_id| col_stats.get(column_id))
-                    .collect();
-
-                let domain = statistics_to_domain(stats, &ty);
-                (name, domain)
-            })
-            .collect();
-
-        let (_, domain_opt) =
-            ConstantFolder::fold_with_domain(expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
-        let domain = domain_opt.unwrap_or_else(|| Domain::full(expr.data_type()));
-        let (min, max) = domain.to_minmax();
-        mins.push(min);
-        maxs.push(max);
-    }
-    (mins, maxs)
 }
 
 /// The histogram contains buckets with widths:

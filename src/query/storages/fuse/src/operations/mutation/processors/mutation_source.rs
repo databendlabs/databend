@@ -85,6 +85,7 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
+    update_stream_columns: bool,
 
     index: BlockMetaIndex,
     stats_type: ClusterStatsGenType,
@@ -101,6 +102,7 @@ impl MutationSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
+        update_stream_columns: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -112,6 +114,7 @@ impl MutationSource {
             operators,
             storage_format,
             action,
+            update_stream_columns,
             index: BlockMetaIndex::default(),
             stats_type: ClusterStatsGenType::Generally,
         })))
@@ -224,7 +227,7 @@ impl Processor for MutationSource {
                                         DataBlock::empty_with_meta(meta),
                                     );
                                 } else {
-                                    if self.block_reader.update_stream_columns {
+                                    if self.update_stream_columns {
                                         let row_num = build_origin_block_row_num(rows);
                                         data_block.add_entry(row_num);
                                     }
@@ -316,7 +319,7 @@ impl Processor for MutationSource {
                 let inner_meta = Box::new(SerializeDataMeta::SerializeBlock(
                     SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
                 ));
-                let meta: BlockMetaInfoPtr = if self.block_reader.update_stream_columns() {
+                let meta: BlockMetaInfoPtr = if self.update_stream_columns {
                     Box::new(gen_mutation_stream_meta(Some(inner_meta), &path)?)
                 } else {
                     inner_meta
