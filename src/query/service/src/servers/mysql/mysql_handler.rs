@@ -24,6 +24,7 @@ use futures::future::AbortHandle;
 use futures::future::AbortRegistration;
 use futures::future::Abortable;
 use log::error;
+use num_cpus;
 use rustls::ServerConfig;
 use socket2::TcpKeepalive;
 use tokio::net::TcpStream;
@@ -42,6 +43,7 @@ pub struct MySQLHandler {
     join_handle: Option<JoinHandle<()>>,
     keepalive: TcpKeepalive,
     tls: Option<Arc<ServerConfig>>,
+    query_executor: Arc<Runtime>,
 }
 
 impl MySQLHandler {
@@ -53,6 +55,11 @@ impl MySQLHandler {
         let keepalive = TcpKeepalive::new()
             .with_time(std::time::Duration::from_secs(tcp_keepalive_timeout_secs));
         let tls = tls_config.setup()?.map(Arc::new);
+        let thread_num = std::cmp::max(2, num_cpus::get() / 2);
+        let query_executor = Arc::new(Runtime::with_worker_threads(
+            thread_num,
+            Some("mysql-query-executor".to_string()),
+        )?);
 
         Ok(Box::new(MySQLHandler {
             abort_handle,
@@ -60,6 +67,7 @@ impl MySQLHandler {
             join_handle: None,
             keepalive,
             tls,
+            query_executor,
         }))
     }
 
@@ -81,18 +89,25 @@ impl MySQLHandler {
     ) -> impl Future<Output = ()> + use<> {
         let keepalive = self.keepalive.clone();
         let tls = self.tls.clone();
+        let query_executor = self.query_executor.clone();
 
         stream.for_each(move |accept_socket| {
             let tls = tls.clone();
             let keepalive = keepalive.clone();
             let executor = rt.clone();
+            let query_executor = query_executor.clone();
             let sessions = SessionManager::instance();
             async move {
                 match accept_socket {
                     Err(error) => error!("Broken session connection: {}", error),
-                    Ok(socket) => {
-                        MySQLHandler::accept_socket(sessions, executor, socket, keepalive, tls)
-                    }
+                    Ok(socket) => MySQLHandler::accept_socket(
+                        sessions,
+                        executor,
+                        query_executor,
+                        socket,
+                        keepalive,
+                        tls,
+                    ),
                 };
             }
         })
@@ -101,13 +116,20 @@ impl MySQLHandler {
     fn accept_socket(
         session_manager: Arc<SessionManager>,
         executor: Arc<Runtime>,
+        query_executor: Arc<Runtime>,
         socket: TcpStream,
         keepalive: TcpKeepalive,
         tls: Option<Arc<ServerConfig>>,
     ) {
         executor.spawn(async move {
-            if let Err(error) =
-                MySQLConnection::run_on_stream(session_manager, socket, keepalive, tls).await
+            if let Err(error) = MySQLConnection::run_on_stream(
+                session_manager,
+                socket,
+                keepalive,
+                tls,
+                query_executor,
+            )
+            .await
             {
                 error!("Unexpected error occurred during query: {:?}", error);
             }
