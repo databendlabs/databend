@@ -4411,12 +4411,8 @@ dependencies = [
  "databend-common-users",
  "databend-enterprise-data-mask-feature",
  "databend-enterprise-row-access-policy-feature",
-<<<<<<< HEAD
- "databend-meta-client 260205.6.0",
-=======
  "databend-enterprise-security-policy-cache",
- "databend-meta-client 260205.5.0",
->>>>>>> 9760bbb967 (feat(query): add dialect to security policy cache key and periodic cache flush)
+ "databend-meta-client 260205.6.0",
  "databend-meta-runtime",
  "databend-storages-common-cache",
  "databend-storages-common-session",
@@ -5091,8 +5087,6 @@ dependencies = [
  "databend-common-meta-app",
  "databend-common-meta-store",
  "databend-meta-client 260205.6.0",
- "log",
- "tokio",
 ]
 
 [[package]]
@@ -5204,10 +5198,7 @@ dependencies = [
  "databend-common-exception",
  "databend-common-meta-app",
  "databend-common-meta-store",
-<<<<<<< HEAD
  "databend-meta-client 260205.6.0",
-=======
- "databend-meta-client 260205.5.0",
 ]
 
 [[package]]
@@ -5219,7 +5210,6 @@ dependencies = [
  "databend-common-base",
  "databend-common-exception",
  "databend-common-meta-app",
->>>>>>> 9760bbb967 (feat(query): add dialect to security policy cache key and periodic cache flush)
  "log",
  "tokio",
 ]
