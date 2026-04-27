@@ -148,7 +148,7 @@ def fake_expired_token(ty):
     """ 
 ---- do_login()
 200
-['server_max_arrow_result_version', 'session_id', 'tokens', 'version']
+['server_arrow_features', 'server_max_arrow_result_version', 'session_id', 'tokens', 'version']
 ---- do_query('select 1',)
 200
 [['1']]

@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use arrow_array::cast::AsArray;
 use arrow_array::*;
+use arrow_cast::cast;
 use arrow_data::ArrayData;
 use arrow_data::ArrayDataBuilder;
 use arrow_schema::DataType as ArrowDataType;
@@ -366,13 +367,13 @@ impl DataBlock {
         for (entry, arrow_field) in self.take_columns().into_iter().zip(arrow_schema.fields()) {
             let array = entry.to_column().maybe_gc().into_arrow_rs();
 
-            // Adjust struct array names
-            arrays.push(Self::adjust_nested_array(array, arrow_field.as_ref()));
+            // Align nested field names and leaf physical types with the target arrow schema.
+            arrays.push(Self::adjust_array_to_field(array, arrow_field.as_ref())?);
         }
         Ok(RecordBatch::try_new(arrow_schema, arrays)?)
     }
 
-    fn adjust_nested_array(array: Arc<dyn Array>, arrow_field: &Field) -> Arc<dyn Array> {
+    fn adjust_array_to_field(array: Arc<dyn Array>, arrow_field: &Field) -> Result<Arc<dyn Array>> {
         if let ArrowDataType::Struct(fs) = arrow_field.data_type() {
             let array = array.as_ref().as_struct();
             let inner_arrays = array
@@ -380,27 +381,37 @@ impl DataBlock {
                 .iter()
                 .zip(fs.iter())
                 .map(|(array, arrow_field)| {
-                    Self::adjust_nested_array(array.clone(), arrow_field.as_ref())
+                    Self::adjust_array_to_field(array.clone(), arrow_field.as_ref())
                 })
-                .collect();
+                .collect::<Result<Vec<_>>>()?;
 
             let array = StructArray::new(fs.clone(), inner_arrays, array.nulls().cloned());
-            Arc::new(array) as _
+            Ok(Arc::new(array) as _)
         } else if let ArrowDataType::LargeList(f) = arrow_field.data_type() {
             let array = array.as_ref().as_list::<i64>();
-            let values = Self::adjust_nested_array(array.values().clone(), f.as_ref());
+            let values = Self::adjust_array_to_field(array.values().clone(), f.as_ref())?;
             let array = LargeListArray::new(
                 f.clone(),
                 array.offsets().clone(),
                 values,
                 array.nulls().cloned(),
             );
-            Arc::new(array) as _
+            Ok(Arc::new(array) as _)
+        } else if let ArrowDataType::List(f) = arrow_field.data_type() {
+            let array = array.as_ref().as_list::<i32>();
+            let values = Self::adjust_array_to_field(array.values().clone(), f.as_ref())?;
+            let array = ListArray::new(
+                f.clone(),
+                array.offsets().clone(),
+                values,
+                array.nulls().cloned(),
+            );
+            Ok(Arc::new(array) as _)
         } else if let ArrowDataType::Map(f, ordered) = arrow_field.data_type() {
             let array = array.as_ref().as_map();
 
             let entry = Arc::new(array.entries().clone()) as Arc<dyn Array>;
-            let entry = Self::adjust_nested_array(entry, f.as_ref());
+            let entry = Self::adjust_array_to_field(entry, f.as_ref())?;
 
             let array = MapArray::new(
                 f.clone(),
@@ -409,9 +420,18 @@ impl DataBlock {
                 array.nulls().cloned(),
                 *ordered,
             );
-            Arc::new(array) as _
+            Ok(Arc::new(array) as _)
+        } else if let ArrowDataType::FixedSizeList(f, size) = arrow_field.data_type() {
+            let array = array.as_ref().as_fixed_size_list();
+            let values = Self::adjust_array_to_field(array.values().clone(), f.as_ref())?;
+            let array = FixedSizeListArray::new(f.clone(), *size, values, array.nulls().cloned());
+            Ok(Arc::new(array) as _)
         } else {
-            array
+            if array.data_type() == arrow_field.data_type() {
+                Ok(array)
+            } else {
+                cast(array.as_ref(), arrow_field.data_type()).map_err(ErrorCode::from)
+            }
         }
     }
 }

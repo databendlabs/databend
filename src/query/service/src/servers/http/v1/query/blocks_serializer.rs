@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
@@ -19,11 +20,16 @@ use arrow_ipc::CompressionType;
 use arrow_ipc::MetadataVersion;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::writer::StreamWriter;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Field as ArrowField;
+use arrow_schema::Fields as ArrowFields;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
@@ -116,13 +122,14 @@ impl BlocksSerializer {
         data_schema: &DataSchema,
         ext_meta: Vec<(String, String)>,
     ) -> Result<Vec<u8>> {
-        let mut schema = arrow_schema::Schema::from(data_schema);
+        let mut schema = build_arrow_ipc_schema(data_schema, self.format.as_ref());
         schema.metadata.extend(ext_meta);
+        let schema = Arc::new(schema);
 
         let mut buf = Vec::new();
         let opts = IpcWriteOptions::try_new(8, false, MetadataVersion::V5)?
             .try_with_compression(Some(CompressionType::LZ4_FRAME))?;
-        let mut writer = StreamWriter::try_new_with_options(&mut buf, &schema, opts)?;
+        let mut writer = StreamWriter::try_new_with_options(&mut buf, schema.as_ref(), opts)?;
 
         for (block, _) in &self.columns {
             let columns = if let Some(format) = &self.format {
@@ -131,11 +138,85 @@ impl BlocksSerializer {
                 block.clone()
             };
             let block = DataBlock::new_from_columns(columns);
-            let batch = block.to_record_batch_with_dataschema(data_schema)?;
+            let batch = block.to_record_batch_with_arrow_schema(&schema)?;
             writer.write(&batch)?;
         }
         writer.finish()?;
         Ok(buf)
+    }
+}
+
+fn build_arrow_ipc_schema(
+    data_schema: &DataSchema,
+    format: Option<&OutputFormatSettings>,
+) -> arrow_schema::Schema {
+    let schema = arrow_schema::Schema::from(data_schema);
+    rewrite_arrow_ipc_schema(&schema, format)
+}
+
+fn rewrite_arrow_ipc_schema(
+    schema: &arrow_schema::Schema,
+    format: Option<&OutputFormatSettings>,
+) -> arrow_schema::Schema {
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|field| Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+        .collect::<Vec<_>>();
+    arrow_schema::Schema::new_with_metadata(ArrowFields::from(fields), schema.metadata.clone())
+}
+
+fn rewrite_arrow_ipc_field(
+    field: &ArrowField,
+    format: Option<&OutputFormatSettings>,
+) -> ArrowField {
+    let is_variant_json_string = field
+        .metadata()
+        .get(EXTENSION_KEY)
+        .is_some_and(|ext| ext == ARROW_EXT_TYPE_VARIANT)
+        && format.is_some_and(|format| !format.http_arrow_use_jsonb);
+
+    let data_type = if is_variant_json_string {
+        ArrowDataType::LargeUtf8
+    } else {
+        rewrite_arrow_ipc_data_type(field.data_type(), format)
+    };
+
+    ArrowField::new(field.name(), data_type, field.is_nullable())
+        .with_metadata(field.metadata().clone())
+}
+
+fn rewrite_arrow_ipc_data_type(
+    data_type: &ArrowDataType,
+    format: Option<&OutputFormatSettings>,
+) -> ArrowDataType {
+    match data_type {
+        ArrowDataType::Decimal64(precision, scale)
+            if format.is_some_and(|format| !format.http_arrow_use_decimal64) =>
+        {
+            ArrowDataType::Decimal128(*precision, *scale)
+        }
+        ArrowDataType::Struct(fields) => ArrowDataType::Struct(ArrowFields::from(
+            fields
+                .iter()
+                .map(|field| Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+                .collect::<Vec<_>>(),
+        )),
+        ArrowDataType::List(field) => {
+            ArrowDataType::List(Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+        }
+        ArrowDataType::LargeList(field) => {
+            ArrowDataType::LargeList(Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+        }
+        ArrowDataType::FixedSizeList(field, size) => ArrowDataType::FixedSizeList(
+            Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)),
+            *size,
+        ),
+        ArrowDataType::Map(field, ordered) => ArrowDataType::Map(
+            Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)),
+            *ordered,
+        ),
+        other => other.clone(),
     }
 }
 
