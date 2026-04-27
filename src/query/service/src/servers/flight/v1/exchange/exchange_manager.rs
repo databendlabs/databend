@@ -58,7 +58,9 @@ use super::statistics_receiver::StatisticsReceiver;
 use super::statistics_sender::StatisticsSender;
 use crate::clusters::ClusterHelper;
 use crate::clusters::FlightParams;
+use crate::physical_plans::ExchangeSink as PhysicalExchangeSink;
 use crate::physical_plans::PhysicalPlan;
+use crate::physical_plans::PhysicalPlanCast;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::attach_runtime_filter_logger;
@@ -252,6 +254,7 @@ impl DataExchangeManager {
 
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::<String, Vec<FlightExchange>>::new();
+        let mut inbound_channel_sizes = HashMap::<String, usize>::new();
 
         for index in env.dataflow_diagram.node_indices() {
             if env.dataflow_diagram[index].id == config.query.node_id {
@@ -300,9 +303,25 @@ impl DataExchangeManager {
                                 })
                             }));
                         }
-                        Edge::ExchangeFragment { .. } => {
-                            // Skip: remote sender will call do_exchange on us,
-                            // handled by handle_do_exchange → NetworkInboundSender
+                        Edge::ExchangeFragment {
+                            exchange_id,
+                            channels,
+                        } => {
+                            // Pre-register inbound channel sets so source-only exchange
+                            // receivers can build their pipelines before the first
+                            // do_exchange connection arrives.
+                            match inbound_channel_sizes.entry(exchange_id) {
+                                Entry::Occupied(v) => {
+                                    if *v.get() != channels.len() {
+                                        return Err(ErrorCode::Internal(
+                                            "Mismatched inbound exchange parallelism",
+                                        ));
+                                    }
+                                }
+                                Entry::Vacant(v) => {
+                                    v.insert(channels.len());
+                                }
+                            }
                         }
                     }
                 }
@@ -326,11 +345,6 @@ impl DataExchangeManager {
                         let address = target.flight_address.clone();
                         let keep_alive_params = keep_alive;
                         let num_threads = channels.len();
-                        warn!(
-                            "do_exchange: node={} -> target={}, exchange_id={}, num_threads={}",
-                            config.query.node_id, target_id, exchange_id, num_threads
-                        );
-
                         flight_exchanges.push(Box::pin(async move {
                             let (send_tx, response_stream) = {
                                 let mut flight_client =
@@ -422,6 +436,7 @@ impl DataExchangeManager {
                         query_coordinator.info = query_info;
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
+                        query_coordinator.register_inbound_channel_sets(&inbound_channel_sizes)?;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
@@ -431,6 +446,7 @@ impl DataExchangeManager {
                         query_coordinator.info = query_info;
                         query_coordinator.is_request_server =
                             GlobalConfig::instance().query.node_id == env.request_server_id;
+                        query_coordinator.register_inbound_channel_sets(&inbound_channel_sizes)?;
                         query_coordinator.register_flight_channel_receiver(targets_exchanges)?;
                         query_coordinator.register_ping_pong_exchanges(ping_pong_exchanges);
                         query_coordinator.add_statistics_exchanges(request_exchanges)?;
@@ -633,10 +649,6 @@ impl DataExchangeManager {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        warn!(
-            "handle_do_exchange: query_id={}, channel_id={}, num_threads={}",
-            query_id, channel_id, num_threads
-        );
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -672,6 +684,25 @@ impl DataExchangeManager {
                 ))),
                 Some(channel_set) => Ok(channel_set.clone()),
             },
+        }
+    }
+
+    pub fn get_or_create_exchange_channel_set(
+        &self,
+        query_id: &str,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        let queries_coordinator_guard = self.queries_coordinator.lock();
+        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
+
+        match queries_coordinator.entry(query_id.to_string()) {
+            Entry::Occupied(mut v) => v
+                .get_mut()
+                .get_or_create_inbound_channel_set(channel_id, num_threads),
+            Entry::Vacant(v) => v
+                .insert(QueryCoordinator::create())
+                .get_or_create_inbound_channel_set(channel_id, num_threads),
         }
     }
 
@@ -784,26 +815,6 @@ impl DataExchangeManager {
         match queries_coordinator.get_mut(&query_id) {
             None => Err(ErrorCode::Internal("Query not exists.")),
             Some(query_coordinator) => {
-                if !query_coordinator.flight_data_senders.is_empty() {
-                    unreachable!(
-                        "query_coordinator.fragment_senders is not empty: {:?}",
-                        query_coordinator
-                            .flight_data_senders
-                            .keys()
-                            .collect::<Vec<_>>()
-                    );
-                }
-
-                if !query_coordinator.flight_data_receivers.is_empty() {
-                    unreachable!(
-                        "query_coordinator.fragment_receivers is not empty: {:?}",
-                        query_coordinator
-                            .flight_data_receivers
-                            .keys()
-                            .collect::<Vec<_>>()
-                    );
-                }
-
                 let injector = DefaultExchangeInjector::create();
                 let mut build_res = query_coordinator.subscribe_fragment(
                     &ctx,
@@ -824,6 +835,8 @@ impl DataExchangeManager {
                         .sources_pipelines
                         .extend(sub_build_res.sources_pipelines);
                 }
+
+                query_coordinator.drop_unused_flight_data_channels("building root pipeline");
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
@@ -887,7 +900,7 @@ impl DataExchangeManager {
         query_id: &str,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
-    ) -> Result<PipelineBuildResult> {
+    ) -> Result<Option<PipelineBuildResult>> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
@@ -901,7 +914,7 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+                query_coordinator.try_subscribe_fragment(&query_ctx, fragment_id, injector)
             }
         }
     }
@@ -1037,6 +1050,59 @@ impl QueryCoordinator {
         }
     }
 
+    fn drop_unused_flight_data_channels(&mut self, stage: &str) {
+        let sender_keys = self.flight_data_senders.keys().cloned().collect::<Vec<_>>();
+        let receiver_keys = self
+            .flight_data_receivers
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if !sender_keys.is_empty() || !receiver_keys.is_empty() {
+            warn!(
+                "Dropping unused legacy flight channels before {}: senders={:?}, receivers={:?}",
+                stage, sender_keys, receiver_keys
+            );
+            self.flight_data_senders.clear();
+            self.flight_data_receivers.clear();
+        }
+    }
+
+    pub fn register_inbound_channel_sets(
+        &mut self,
+        channel_sizes: &HashMap<String, usize>,
+    ) -> Result<()> {
+        for (channel_id, num_threads) in channel_sizes {
+            self.get_or_create_inbound_channel_set(channel_id, *num_threads)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn get_or_create_inbound_channel_set(
+        &mut self,
+        channel_id: &str,
+        num_threads: usize,
+    ) -> Result<Arc<NetworkInboundChannelSet>> {
+        match self.inbound_channel_sets.entry(channel_id.to_string()) {
+            Entry::Occupied(v) => {
+                if v.get().channels.len() != num_threads {
+                    return Err(ErrorCode::Internal(format!(
+                        "Mismatched inbound channel set parallelism, channel_id: {}, expected: {}, actual: {}",
+                        channel_id,
+                        num_threads,
+                        v.get().channels.len()
+                    )));
+                }
+
+                Ok(v.get().clone())
+            }
+            Entry::Vacant(v) => Ok(v
+                .insert(Arc::new(NetworkInboundChannelSet::new(num_threads)))
+                .clone()),
+        }
+    }
+
     /// Create a NetworkInboundSender for a new do_exchange connection.
     ///
     /// The `num_threads` value is provided by the coordinator via DoExchangeParams.
@@ -1045,11 +1111,7 @@ impl QueryCoordinator {
         channel_id: &str,
         num_threads: usize,
     ) -> Result<NetworkInboundSender> {
-        let channel_set = self
-            .inbound_channel_sets
-            .entry(channel_id.to_string())
-            .or_insert_with(|| Arc::new(NetworkInboundChannelSet::new(num_threads)))
-            .clone();
+        let channel_set = self.get_or_create_inbound_channel_set(channel_id, num_threads)?;
 
         // TODO: get max_bytes_per_connection from query settings
         let max_bytes_per_connection = 20 * 1024 * 1024; // 20MB
@@ -1087,6 +1149,16 @@ impl QueryCoordinator {
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
+        self.try_subscribe_fragment(ctx, fragment_id, injector)?
+            .ok_or_else(|| ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+    }
+
+    pub fn try_subscribe_fragment(
+        &mut self,
+        ctx: &Arc<QueryContext>,
+        fragment_id: usize,
+        injector: Arc<dyn ExchangeInjector>,
+    ) -> Result<Option<PipelineBuildResult>> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
@@ -1101,7 +1173,13 @@ impl QueryCoordinator {
             if fragment_coordinator.data_exchange.is_none() {
                 // When the root fragment and the data has been send to the coordination node,
                 // we do not need to wait for the data of other nodes.
-                return Ok(fragment_coordinator.pipeline_build_res.unwrap());
+                return Ok(Some(fragment_coordinator.pipeline_build_res.unwrap()));
+            }
+
+            if should_inline_locally_subscribed_fragment(&fragment_coordinator.physical_plan) {
+                // Locally subscribed source fragments are merged back into the parent pipeline
+                // through `ExchangeSource`, so their outgoing ExchangeSink should stay bypassed.
+                return Ok(Some(fragment_coordinator.pipeline_build_res.unwrap()));
             }
 
             let exchange_params = fragment_coordinator
@@ -1127,9 +1205,9 @@ impl QueryCoordinator {
                 injector,
             )?;
 
-            return Ok(build_res);
+            return Ok(Some(build_res));
         }
-        Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
+        Ok(None)
     }
 
     pub fn shutdown_query(&mut self, cause: Option<ErrorCode>) {
@@ -1229,7 +1307,7 @@ impl QueryCoordinator {
         let settings = ExecutorSettings::try_create(info.query_ctx.clone())?;
         let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
-        assert!(self.flight_data_senders.is_empty() && self.flight_data_receivers.is_empty());
+        self.drop_unused_flight_data_channels("starting partial query executor");
         let info_mut = self.info.as_mut().expect("Query info is None");
         info_mut.query_executor = Some(executor.clone());
 
@@ -1271,6 +1349,10 @@ impl QueryCoordinator {
 
         Ok(())
     }
+}
+
+fn should_inline_locally_subscribed_fragment(plan: &PhysicalPlan) -> bool {
+    PhysicalExchangeSink::from_physical_plan(plan).is_some()
 }
 
 struct FragmentCoordinator {
@@ -1376,5 +1458,137 @@ impl FragmentCoordinator {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use databend_common_exception::Result;
+    use databend_common_expression::DataSchemaRef;
+    use databend_common_sql::executor::physical_plans::FragmentKind;
+
+    use super::QueryCoordinator;
+    use super::should_inline_locally_subscribed_fragment;
+    use crate::physical_plans::ConstantTableScan;
+    use crate::physical_plans::ExchangeSink as PhysicalExchangeSink;
+    use crate::physical_plans::PhysicalPlan;
+    use crate::physical_plans::PhysicalPlanMeta;
+    use crate::servers::flight::FlightReceiver;
+
+    #[test]
+    fn test_query_coordinator_register_inbound_channel_sets() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        let channel_sizes = HashMap::from([
+            ("exchange-a".to_string(), 2_usize),
+            ("exchange-b".to_string(), 4_usize),
+        ]);
+
+        coordinator.register_inbound_channel_sets(&channel_sizes)?;
+
+        assert_eq!(
+            coordinator
+                .get_or_create_inbound_channel_set("exchange-a", 2)?
+                .channels
+                .len(),
+            2
+        );
+        assert_eq!(
+            coordinator
+                .get_or_create_inbound_channel_set("exchange-b", 4)?
+                .channels
+                .len(),
+            4
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_coordinator_detects_mismatched_inbound_parallelism() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        coordinator.get_or_create_inbound_channel_set("exchange-a", 2)?;
+
+        let err = coordinator
+            .get_or_create_inbound_channel_set("exchange-a", 1)
+            .err()
+            .expect("mismatched inbound channel set should fail");
+        assert!(
+            err.message()
+                .contains("Mismatched inbound channel set parallelism")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_coordinator_detects_mismatched_inbound_sender_parallelism() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        coordinator
+            .register_inbound_channel_sets(&HashMap::from([("exchange-a".to_string(), 2)]))?;
+
+        let err = coordinator
+            .create_inbound_sender("exchange-a", 1)
+            .err()
+            .expect("mismatched inbound sender should fail");
+        assert!(
+            err.message()
+                .contains("Mismatched inbound channel set parallelism")
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_query_coordinator_drops_unused_flight_data_channels() -> Result<()> {
+        let mut coordinator = QueryCoordinator::create();
+        let _ = coordinator.register_flight_channel_sender("sender-a".to_string())?;
+        coordinator
+            .flight_data_receivers
+            .insert("receiver-a".to_string(), vec![FlightReceiver::create(
+                async_channel::bounded(1).1,
+            )]);
+
+        coordinator.drop_unused_flight_data_channels("unit-test");
+
+        assert!(coordinator.flight_data_senders.is_empty());
+        assert!(coordinator.flight_data_receivers.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_inline_locally_subscribed_exchange_sink_fragments() {
+        let plan = PhysicalPlan::new(PhysicalExchangeSink {
+            meta: PhysicalPlanMeta::new("ExchangeSink"),
+            input: PhysicalPlan::new(ConstantTableScan {
+                meta: PhysicalPlanMeta::new("ConstantTableScan"),
+                values: vec![],
+                num_rows: 0,
+                output_schema: DataSchemaRef::default(),
+            }),
+            schema: DataSchemaRef::default(),
+            kind: FragmentKind::Merge,
+            keys: vec![],
+            destination_fragment_id: 0,
+            query_id: "test-query".to_string(),
+            ignore_exchange: false,
+            allow_adjust_parallelism: true,
+        });
+
+        assert!(should_inline_locally_subscribed_fragment(&plan));
+    }
+
+    #[test]
+    fn test_keep_non_sink_fragments_on_exchange_path() {
+        let plan = PhysicalPlan::new(ConstantTableScan {
+            meta: PhysicalPlanMeta::new("ConstantTableScan"),
+            values: vec![],
+            num_rows: 0,
+            output_schema: DataSchemaRef::default(),
+        });
+
+        assert!(!should_inline_locally_subscribed_fragment(&plan));
     }
 }

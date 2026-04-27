@@ -267,6 +267,17 @@ impl PipelineExecutor {
         }
     }
 
+    pub fn is_all_nodes_finished(&self) -> bool {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => {
+                executor.graph.is_all_nodes_finished()
+            }
+            PipelineExecutor::QueriesPipelineExecutor(query_wrapper) => {
+                query_wrapper.graph.is_all_nodes_finished()
+            }
+        }
+    }
+
     pub fn format_graph_nodes(&self) -> String {
         match self {
             PipelineExecutor::QueryPipelineExecutor(executor) => executor.format_graph_nodes(),

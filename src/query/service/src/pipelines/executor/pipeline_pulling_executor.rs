@@ -83,6 +83,16 @@ impl State {
         }
     }
 
+    pub fn wait_finish_timeout(&self, timeout: Duration) -> bool {
+        let mut mutex = self.finish_mutex.lock();
+
+        if !*mutex {
+            self.finish_condvar.wait_for(&mut mutex, timeout);
+        }
+
+        *mutex
+    }
+
     pub fn is_finished(&self) -> bool {
         self.is_finished.load(Ordering::Relaxed)
     }
@@ -226,6 +236,23 @@ impl PipelinePullingExecutor {
                             "Processor graph not completed. graph nodes state: {}",
                             self.executor.format_graph_nodes()
                         )));
+                    }
+
+                    if self.executor.is_all_nodes_finished() {
+                        if !self.executor.is_finished() {
+                            self.executor.finish::<()>(None);
+                        }
+
+                        // Once the graph itself is finished, the pulling side has already
+                        // consumed the full result. The detached executor thread may still be
+                        // draining finish hooks or joining workers; do a short best-effort wait
+                        // for background errors, but do not block EOF on it.
+                        let _ = self.state.wait_finish_timeout(Duration::from_millis(100));
+
+                        return match self.state.try_get_catch_error() {
+                            None => Ok(None),
+                            Some(error) => Err(error),
+                        };
                     }
 
                     continue;
