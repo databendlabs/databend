@@ -59,8 +59,16 @@ impl TypedHistogramEstimate {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedHistogram<T> {
+    /// Whether buckets come from ANALYZE's observed row-order tiles.
+    ///
+    /// `false` means the histogram was synthesized from NDV and min/max bounds
+    /// under a uniform-distribution assumption.
     pub accuracy: bool,
+    /// Buckets are ordered ranges. `num_values` is the row count in the bucket
+    /// and `num_distinct` is the distinct-value count represented by it.
     pub buckets: Vec<TypedHistogramBucket<T>>,
+    /// Numeric synthetic histograms store the average bucket spacing used to
+    /// detect min/max distortion from sparse or outlier-heavy ranges.
     pub avg_spacing: Option<f64>,
 }
 

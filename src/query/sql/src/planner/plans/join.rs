@@ -370,7 +370,7 @@ impl Join {
                     if matches!(
                         left_col_stat.min,
                         Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
-                    ) =>
+                    ) && left_hist.can_estimate_join(right_hist) =>
                 {
                     // Evaluate join cardinality by histogram.
                     evaluate_by_histogram(left_hist, right_hist, &mut new_ndv)?

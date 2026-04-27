@@ -22,6 +22,25 @@ use crate::TypedHistogramBucket;
 
 pub const DEFAULT_HISTOGRAM_BUCKETS: usize = 100;
 
+/// A column histogram used by optimizer statistics.
+///
+/// Histograms currently have two sources with different reliability:
+/// - `accuracy == true`: buckets come from `ANALYZE TABLE`. For each supported
+///   non-null column, ANALYZE runs a query equivalent to sorting rows by the
+///   column, assigning `NTILE(DEFAULT_HISTOGRAM_BUCKETS)`, then grouping by tile
+///   and collecting `MIN(col)`, `MAX(col)`, `COUNT()`, and
+///   `COUNT(DISTINCT col)`. Each bucket is therefore the closed value envelope
+///   observed in one row-order tile. The bucket list is not a value-domain
+///   partition: adjacent buckets may share boundaries or overlap when duplicate
+///   values cross tile boundaries.
+/// - `accuracy == false`: buckets are synthesized from column NDV plus
+///   min/max bounds by [`crate::HistogramBuilder::from_ndv`]. These buckets
+///   assume a uniform distribution over the recorded bounds, and numeric
+///   histograms keep `avg_spacing` so consumers can detect distorted ranges.
+///
+/// Consumers should preserve this distinction when updating or interpreting
+/// bucket counts. The type variants preserve the bucket value type for
+/// serialization, function selectivity, and type-specific join estimation.
 #[derive(Debug, Clone)]
 pub enum Histogram {
     Int(TypedHistogram<i64>),
@@ -168,6 +187,16 @@ impl Histogram {
             (Self::Bytes(left), Self::Bytes(right)) => left.estimate_join(right),
             _ => JoinEstimation::zero(),
         }
+    }
+
+    pub fn can_estimate_join(&self, other: &Histogram) -> bool {
+        matches!(
+            (self, other),
+            (Self::Int(_), Self::Int(_))
+                | (Self::UInt(_), Self::UInt(_))
+                | (Self::Float(_), Self::Float(_))
+                | (Self::Bytes(_), Self::Bytes(_))
+        )
     }
 
     pub fn is_range_distorted(&self) -> bool {
