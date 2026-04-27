@@ -66,6 +66,16 @@ impl HistogramBuilder {
 pub type UniformSampleSet = HistogramBounds;
 
 impl HistogramBounds {
+    pub fn has_same_supported_type(&self, other: &HistogramBounds) -> bool {
+        let Some(kind) = histogram_bound_kind(self.lower_bound()) else {
+            return false;
+        };
+
+        histogram_bound_kind(self.upper_bound()) == Some(kind)
+            && histogram_bound_kind(other.lower_bound()) == Some(kind)
+            && histogram_bound_kind(other.upper_bound()) == Some(kind)
+    }
+
     pub fn has_intersection(&self, other: &HistogramBounds) -> Result<bool> {
         match (
             self.lower_bound(),
@@ -73,21 +83,27 @@ impl HistogramBounds {
             other.lower_bound(),
             other.upper_bound(),
         ) {
-            (left_min, left_max, right_min, right_max)
-                if left_min.is_numeric()
-                    && left_max.is_numeric()
-                    && right_min.is_numeric()
-                    && right_max.is_numeric() =>
-            {
-                Ok(TypedHistogramBounds::new(
-                    F64::from(left_min.as_double()?),
-                    F64::from(left_max.as_double()?),
-                )
-                .has_intersection(&TypedHistogramBounds::new(
-                    F64::from(right_min.as_double()?),
-                    F64::from(right_max.as_double()?),
-                )))
-            }
+            (
+                Datum::Int(left_min),
+                Datum::Int(left_max),
+                Datum::Int(right_min),
+                Datum::Int(right_max),
+            ) => Ok(TypedHistogramBounds::new(*left_min, *left_max)
+                .has_intersection(&TypedHistogramBounds::new(*right_min, *right_max))),
+            (
+                Datum::UInt(left_min),
+                Datum::UInt(left_max),
+                Datum::UInt(right_min),
+                Datum::UInt(right_max),
+            ) => Ok(TypedHistogramBounds::new(*left_min, *left_max)
+                .has_intersection(&TypedHistogramBounds::new(*right_min, *right_max))),
+            (
+                Datum::Float(left_min),
+                Datum::Float(left_max),
+                Datum::Float(right_min),
+                Datum::Float(right_max),
+            ) => Ok(TypedHistogramBounds::new(*left_min, *left_max)
+                .has_intersection(&TypedHistogramBounds::new(*right_min, *right_max))),
             (
                 Datum::Bytes(left_min),
                 Datum::Bytes(left_max),
@@ -139,22 +155,6 @@ impl HistogramBounds {
                     .intersection(&TypedHistogramBounds::new(*right_min, *right_max));
                 Ok((min.map(Datum::Float), max.map(Datum::Float)))
             }
-            (left_min, left_max, right_min, right_max)
-                if left_min.is_numeric()
-                    && left_max.is_numeric()
-                    && right_min.is_numeric()
-                    && right_max.is_numeric() =>
-            {
-                let (min, max) = TypedHistogramBounds::new(
-                    F64::from(left_min.as_double()?),
-                    F64::from(left_max.as_double()?),
-                )
-                .intersection(&TypedHistogramBounds::new(
-                    F64::from(right_min.as_double()?),
-                    F64::from(right_max.as_double()?),
-                ));
-                Ok((min.map(Datum::Float), max.map(Datum::Float)))
-            }
             (
                 Datum::Bytes(left_min),
                 Datum::Bytes(left_max),
@@ -169,6 +169,24 @@ impl HistogramBounds {
             }
             _ => Ok((None, None)),
         }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HistogramBoundKind {
+    Int,
+    UInt,
+    Float,
+    Bytes,
+}
+
+fn histogram_bound_kind(datum: &Datum) -> Option<HistogramBoundKind> {
+    match datum {
+        Datum::Int(_) => Some(HistogramBoundKind::Int),
+        Datum::UInt(_) => Some(HistogramBoundKind::UInt),
+        Datum::Float(_) => Some(HistogramBoundKind::Float),
+        Datum::Bytes(_) => Some(HistogramBoundKind::Bytes),
+        Datum::Bool(_) => None,
     }
 }
 
@@ -196,11 +214,22 @@ mod tests {
         let left = UniformSampleSet::new(Datum::UInt(0), Datum::UInt(10));
         let right = UniformSampleSet::new(Datum::UInt(5), Datum::UInt(15));
 
+        assert!(left.has_same_supported_type(&right));
         assert!(left.has_intersection(&right).unwrap());
         assert_eq!(
             left.intersection(&right).unwrap(),
             (Some(Datum::UInt(5)), Some(Datum::UInt(10)))
         );
+    }
+
+    #[test]
+    fn test_uniform_sample_set_rejects_mixed_numeric_intersection() {
+        let left = UniformSampleSet::new(Datum::UInt(0), Datum::UInt(10));
+        let right = UniformSampleSet::new(Datum::Int(5), Datum::Int(15));
+
+        assert!(!left.has_same_supported_type(&right));
+        assert!(!left.has_intersection(&right).unwrap());
+        assert_eq!(left.intersection(&right).unwrap(), (None, None));
     }
 
     #[test]

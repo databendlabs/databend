@@ -349,13 +349,13 @@ impl Join {
                 continue;
             };
 
-            if !left_col_stat.min.type_comparable(&right_col_stat.min) {
-                continue;
-            }
             let left_interval =
                 UniformSampleSet::new(left_col_stat.min.clone(), left_col_stat.max.clone());
             let right_interval =
                 UniformSampleSet::new(right_col_stat.min.clone(), right_col_stat.max.clone());
+            if !left_interval.has_same_supported_type(&right_interval) {
+                continue;
+            }
             if !left_interval.has_intersection(&right_interval)? {
                 join_card = 0.0;
                 continue;

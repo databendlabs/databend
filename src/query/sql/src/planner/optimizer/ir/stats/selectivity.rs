@@ -189,7 +189,9 @@ impl SelectivityVisitor<'_> {
                 | DataType::Binary
                 | DataType::String
                 | DataType::Number(_)
-                | DataType::Decimal(_) => (),
+                | DataType::Decimal(_)
+                | DataType::Date
+                | DataType::Timestamp => (),
                 _ => return Ok(None),
             }
 
@@ -589,4 +591,121 @@ fn update_statistic(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+    use crate::ColumnBindingBuilder;
+    use crate::Visibility;
+    use crate::optimizer::ir::Ndv;
+    use crate::plans::BoundColumnRef;
+    use crate::plans::ConstantExpr;
+    use crate::plans::FunctionCall;
+
+    #[test]
+    fn test_date_comparison_uses_column_statistics() -> Result<()> {
+        let column_index = Symbol::new(0);
+        let mut column_stats = ColumnStatSet::new();
+        column_stats.insert(column_index, ColumnStat {
+            min: Datum::Int(20),
+            max: Datum::Int(30),
+            ndv: Ndv::Stat(11.0),
+            null_count: 0,
+            histogram: None,
+        });
+
+        let predicate = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "eq".to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ColumnBindingBuilder::new(
+                        "d".to_string(),
+                        column_index,
+                        Box::new(DataType::Date),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }),
+                ScalarExpr::TypedConstantExpr(
+                    ConstantExpr {
+                        span: None,
+                        value: Scalar::Date(10),
+                    },
+                    DataType::Date,
+                ),
+            ],
+        });
+
+        let mut estimator = SelectivityEstimator::new(column_stats, 100.0);
+
+        assert_eq!(estimator.apply(&[predicate])?, 0.0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_uint_histogram_comparison_keeps_tail_selectivity() -> Result<()> {
+        let column_index = Symbol::new(0);
+        let mut column_stats = ColumnStatSet::new();
+        column_stats.insert(column_index, ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(737),
+            ndv: Ndv::Stat(738.0),
+            null_count: 0,
+            histogram: Some(
+                HistogramBuilder::from_ndv(
+                    738,
+                    738,
+                    Some((Datum::UInt(0), Datum::UInt(737))),
+                    DEFAULT_HISTOGRAM_BUCKETS,
+                )
+                .unwrap(),
+            ),
+        });
+
+        let predicate = uint_comparison_predicate(column_index, ComparisonOp::GT, 700);
+        let mut estimator = SelectivityEstimator::new(column_stats.clone(), 738.0);
+
+        assert!(estimator.apply(&[predicate])? > 0.0);
+
+        let predicate = uint_comparison_predicate(column_index, ComparisonOp::GT, 737);
+        let mut estimator = SelectivityEstimator::new(column_stats, 738.0);
+
+        assert_eq!(estimator.apply(&[predicate])?, 0.0);
+        Ok(())
+    }
+
+    fn uint_comparison_predicate(column_index: Symbol, op: ComparisonOp, value: u64) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: op.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ColumnBindingBuilder::new(
+                        "number".to_string(),
+                        column_index,
+                        Box::new(DataType::Number(NumberDataType::UInt64)),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }),
+                ScalarExpr::TypedConstantExpr(
+                    ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::UInt64(value)),
+                    },
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+        })
+    }
 }
