@@ -1,0 +1,36 @@
+statement ok
+drop table if exists t_disable_parquet_prewhere
+
+statement ok
+create table t_disable_parquet_prewhere (
+    bucket_num int,
+    bucket_scores array(int)
+) storage_format = 'parquet' row_per_block = 2
+
+statement ok
+insert into t_disable_parquet_prewhere values
+    (1, [10, 11, 12]),
+    (2, [20]),
+    (2, [21, 22]),
+    (3, [30, 31, 32, 33])
+
+statement ok
+set enable_parquet_prewhere = 1
+
+statement error Parquet argument error
+select count(*), sum(array_length(coalesce(bucket_scores, [])))
+from t_disable_parquet_prewhere
+where bucket_num = 2
+
+statement ok
+set enable_parquet_prewhere = 0
+
+query II
+select count(*), sum(array_length(coalesce(bucket_scores, [])))
+from t_disable_parquet_prewhere
+where bucket_num = 2
+----
+2 3
+
+statement ok
+drop table t_disable_parquet_prewhere

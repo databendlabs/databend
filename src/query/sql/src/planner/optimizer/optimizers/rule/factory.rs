@@ -121,7 +121,12 @@ impl RuleFactory {
             RuleID::CommuteJoinBaseTable => Ok(Box::new(RuleCommuteJoinBaseTable::new())),
             RuleID::LeftExchangeJoin => Ok(Box::new(RuleLeftExchangeJoin::new())),
             RuleID::EagerAggregation => Ok(Box::new(RuleEagerAggregation::new(metadata))),
-            RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
+            RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(
+                metadata,
+                ctx.get_table_ctx()
+                    .get_settings()
+                    .get_enable_parquet_prewhere()?,
+            ))),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
             RuleID::EliminateSelfJoin => Ok(Box::new(RuleEliminateSelfJoin::new(ctx))),
             RuleID::EliminateSort => Ok(Box::new(RuleEliminateSort::new())),
