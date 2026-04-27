@@ -847,6 +847,7 @@ impl TableContextCopy for CtxDelegation {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         files: &[StageFileInfo],
         path_prefix: Option<String>,
         max_files: Option<usize>,
@@ -856,6 +857,7 @@ impl TableContextCopy for CtxDelegation {
                 catalog_name,
                 database_name,
                 table_name,
+                branch_name,
                 files,
                 path_prefix,
                 max_files,
@@ -966,6 +968,7 @@ impl TableContextTableAccess for CtxDelegation {
         _catalog_name: &str,
         _db_name: &str,
         _tbl_name: &str,
+        _branch: Option<&str>,
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         todo!()
@@ -982,7 +985,13 @@ impl TableContextTableAccess for CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContextTableManagement for CtxDelegation {
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+    fn evict_table_from_cache(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+    ) -> Result<()> {
         todo!()
     }
 

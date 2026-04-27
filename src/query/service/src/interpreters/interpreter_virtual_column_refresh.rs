@@ -60,7 +60,12 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
 
         let table = self
             .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+            .get_table_with_branch(
+                &self.plan.catalog,
+                &self.plan.database,
+                &self.plan.table,
+                self.plan.branch.as_deref(),
+            )
             .await?;
         // check mutability
         table.check_mutable()?;
@@ -97,6 +102,7 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
+                self.plan.branch.as_deref(),
                 &LockTableOption::LockWithRetry,
             )
             .await?;

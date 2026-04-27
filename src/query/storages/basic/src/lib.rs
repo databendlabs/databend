@@ -41,10 +41,7 @@ pub use null::NullTable;
 pub use random::{RandomPartInfo, RandomTable};
 pub use recursive_cte_memory_table::RecursiveCteMemoryTable;
 // Result cache storage exports
-pub use result_cache::{
-    ResultCacheMetaManager, ResultCacheReader, ResultScan, WriteResultCacheSink,
-    gen_result_cache_key, gen_result_cache_meta_key, gen_result_cache_prefix,
-};
+pub use result_cache::*;
 // View storage exports
 pub use view::view_table;
 

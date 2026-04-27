@@ -303,6 +303,7 @@ impl Binder {
             Statement::ShowColumns(stmt) => self.bind_show_columns(bind_context, stmt).await?,
             // Tables
             Statement::ShowTables(stmt) => self.bind_show_tables(bind_context, stmt).await?,
+            Statement::ShowBranches(stmt) => self.bind_show_branches(bind_context, stmt).await?,
             Statement::ShowCreateTable(stmt) => self.bind_show_create_table(stmt).await?,
             Statement::DescribeTable(stmt) => self.bind_describe_table(stmt).await?,
             Statement::ShowTablesStatus(stmt) => {

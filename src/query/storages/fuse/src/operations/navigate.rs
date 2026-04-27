@@ -28,6 +28,7 @@ use databend_common_meta_app::schema::TableStatistics;
 use databend_common_meta_app::storage::S3StorageClass;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_sql::check_table_ref_access;
 use databend_storages_common_index::BloomIndex;
 use databend_storages_common_index::RangeIndex;
 use databend_storages_common_table_meta::meta::TableSnapshot;
@@ -48,7 +49,6 @@ use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
 use crate::io::SnapshotsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::check_table_ref_access;
 
 impl FuseTable {
     #[fastrace::trace]
@@ -214,9 +214,7 @@ impl FuseTable {
             .meta_location_generator
             .gen_snapshot_location(&snapshot.snapshot_id, format_version)?;
 
-        if self.apply_snapshot_metadata_to_meta(&mut table_info.meta, snapshot)? {
-            self.apply_navigation_metadata(&mut table_info.meta)?;
-        }
+        self.apply_navigation_metadata(&mut table_info.meta, snapshot)?;
         table_info
             .meta
             .options
@@ -574,6 +572,13 @@ impl FuseTable {
         tag_name: &str,
     ) -> Result<String> {
         check_table_ref_access(ctx.as_ref())?;
+        // Tags are only stored on the base table. Reject tag navigation on branches
+        // to avoid confusing "Unknown TAG" errors.
+        if self.is_table_branch() {
+            return Err(ErrorCode::Unimplemented(
+                "tag navigation is not supported on table branches",
+            ));
+        }
         let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
         let table_tag = catalog
             .get_table_tag(self.table_info.ident.table_id, tag_name, false)
@@ -710,7 +715,15 @@ impl FuseTable {
         Ok(true)
     }
 
-    fn apply_navigation_metadata(&self, table_meta: &mut TableMeta) -> Result<()> {
+    pub fn apply_navigation_metadata(
+        &self,
+        table_meta: &mut TableMeta,
+        snapshot: &TableSnapshot,
+    ) -> Result<()> {
+        if !self.apply_snapshot_metadata_to_meta(table_meta, snapshot)? {
+            return Ok(());
+        }
+
         let column_ids = table_meta.schema.to_column_ids();
         table_meta.indexes.retain(|_, index| {
             index

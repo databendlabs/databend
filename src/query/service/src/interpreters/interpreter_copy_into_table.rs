@@ -384,10 +384,11 @@ impl CopyIntoTableInterpreter {
     ) -> Result<()> {
         let ctx = self.ctx.clone();
         let mut to_table = ctx
-            .get_table(
+            .get_table_with_branch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
+                plan.branch.as_deref(),
             )
             .await?;
 
@@ -517,10 +518,11 @@ impl Interpreter for CopyIntoTableInterpreter {
         let plan = &self.plan;
         let to_table = self
             .ctx
-            .get_table(
+            .get_table_with_branch(
                 plan.catalog_info.catalog_name(),
                 &plan.database_name,
                 &plan.table_name,
+                plan.branch.as_deref(),
             )
             .await?;
 
@@ -582,6 +584,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 self.plan.catalog_info.catalog_name().to_string(),
                 self.plan.database_name.to_string(),
                 self.plan.table_name.to_string(),
+                self.plan.branch.clone(),
                 MutationKind::Insert,
                 LockTableOption::LockNoRetry,
             );

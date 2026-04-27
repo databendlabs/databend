@@ -122,6 +122,7 @@ mod interpreter_show_workload_groups;
 mod interpreter_stream_create;
 mod interpreter_table_branch_create;
 mod interpreter_table_branch_drop;
+mod interpreter_table_branch_undrop;
 mod interpreter_worker_alter;
 mod interpreter_worker_create;
 mod interpreter_worker_drop;

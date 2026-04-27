@@ -35,6 +35,7 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -47,6 +48,7 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
@@ -71,6 +73,7 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -92,6 +95,7 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableBranchMeta;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableTag;
@@ -99,6 +103,7 @@ use databend_common_meta_app::schema::TruncateTableReply;
 use databend_common_meta_app::schema::TruncateTableReq;
 use databend_common_meta_app::schema::UndropDatabaseReply;
 use databend_common_meta_app::schema::UndropDatabaseReq;
+use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_meta_app::schema::UndropTableByIdReq;
 use databend_common_meta_app::schema::UndropTableReq;
 use databend_common_meta_app::schema::UpdateDictionaryReply;
@@ -309,7 +314,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Arc<dyn Table>> {
         match branch {
             Some(branch_name) => {
-                self.get_table_branch(tenant, db_name, table_name, branch_name)
+                self.get_table_branch(tenant, db_name, table_name, branch_name, false)
                     .await
             }
             None => self.get_table(tenant, db_name, table_name).await,
@@ -318,17 +323,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     async fn get_table_branch(
         &self,
-        tenant: &Tenant,
-        db_name: &str,
-        table_name: &str,
-        branch_name: &str,
-    ) -> Result<Arc<dyn Table>> {
-        self.get_table_branch_with_expire_ctl(tenant, db_name, table_name, branch_name, false)
-            .await
-    }
-
-    async fn get_table_branch_with_expire_ctl(
-        &self,
         _tenant: &Tenant,
         _db_name: &str,
         _table_name: &str,
@@ -336,7 +330,28 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         _include_expired: bool,
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(format!(
-            "'get_table_branch_no_expire' not implemented for catalog {}",
+            "'get_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn create_table_branch(&self, _req: CreateTableBranchReq) -> Result<u64> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'create_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn drop_table_branch(&self, _req: DropTableBranchReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'drop_table_branch' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn undrop_table_branch(&self, _req: UndropTableBranchReq) -> Result<()> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'undrop_table_branch' not implemented for catalog {}",
             self.name()
         )))
     }
@@ -373,6 +388,23 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     ) -> Result<Vec<(String, SeqV<TableTag>)>> {
         Err(ErrorCode::Unimplemented(format!(
             "'list_table_tags' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_table_branches(&self, _table_id: u64) -> Result<Vec<TableBranchMeta>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_table_branches' not implemented for catalog {}",
+            self.name()
+        )))
+    }
+
+    async fn list_history_table_branches(
+        &self,
+        _req: ListHistoryTableBranchesReq,
+    ) -> Result<Vec<TableBranchMeta>> {
+        Err(ErrorCode::Unimplemented(format!(
+            "'list_history_table_branches' not implemented for catalog {}",
             self.name()
         )))
     }

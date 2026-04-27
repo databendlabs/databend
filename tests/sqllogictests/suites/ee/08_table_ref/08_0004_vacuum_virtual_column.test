@@ -1,0 +1,391 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+set enable_experimental_virtual_column=1;
+
+statement ok
+DROP DATABASE IF EXISTS test_table_ref_virtual_column
+
+statement ok
+CREATE DATABASE test_table_ref_virtual_column
+
+statement ok
+USE test_table_ref_virtual_column
+
+statement ok
+set data_retention_time_in_days = 0;
+
+## -------------------------------------------------------
+## Active branch keeps virtual column files referenced only
+## by the branch snapshot alive.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE vc_branch_stage url = 'fs:///tmp/test_table_ref_virtual_column/branch_keep/';
+
+statement ok
+remove @vc_branch_stage;
+
+statement ok
+CREATE TABLE t_branch_keep (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_keep/';
+
+statement ok
+ALTER TABLE t_branch_keep SET OPTIONS(row_per_block = 2);
+
+statement ok
+INSERT INTO t_branch_keep VALUES
+    (1, '{"k":"branch_old"}'),
+    (2, '{"k":"branch_old"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_keep;
+
+query I
+select count() from list_stage(location=> '@vc_branch_stage') where name like '%_vb_v2%';
+----
+1
+
+statement ok
+ALTER TABLE t_branch_keep CREATE BRANCH b1
+
+statement ok
+DELETE FROM t_branch_keep;
+
+statement ok
+INSERT INTO t_branch_keep VALUES
+    (10, '{"k":"branch_new"}'),
+    (11, '{"k":"branch_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_keep;
+
+query I
+select count() from list_stage(location=> '@vc_branch_stage') where name like '%_vb_v2%';
+----
+2
+
+query I
+SELECT COUNT(*) FROM t_branch_keep/b1
+----
+2
+
+statement ok
+select * from fuse_vacuum2('test_table_ref_virtual_column', 't_branch_keep') ignore_result;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t_branch_keep;
+----
+0
+
+query I
+select count() from list_stage(location=> '@vc_branch_stage') where name like '%_vb_v2%';
+----
+2
+
+statement ok
+remove @vc_branch_stage;
+
+statement ok
+drop stage vc_branch_stage;
+
+## -------------------------------------------------------
+## Refreshing virtual columns on a branch writes branch-local
+## files and vacuum on the base table must still keep them.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE vc_branch_refresh_stage url = 'fs:///tmp/test_table_ref_virtual_column/branch_refresh/';
+
+statement ok
+remove @vc_branch_refresh_stage;
+
+statement ok
+CREATE TABLE t_branch_refresh (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_refresh/';
+
+statement ok
+ALTER TABLE t_branch_refresh SET OPTIONS(row_per_block = 2);
+
+statement ok
+INSERT INTO t_branch_refresh VALUES
+    (1, '{"k":"base_old"}'),
+    (2, '{"k":"base_old"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_refresh;
+
+statement ok
+ALTER TABLE t_branch_refresh CREATE BRANCH b1
+
+statement ok
+INSERT INTO t_branch_refresh/b1 VALUES
+    (3, '{"k":"branch_new"}'),
+    (4, '{"k":"branch_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_refresh/b1;
+
+query I
+select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
+----
+2
+
+statement ok
+DELETE FROM t_branch_refresh;
+
+statement ok
+INSERT INTO t_branch_refresh VALUES
+    (10, '{"k":"base_new"}'),
+    (11, '{"k":"base_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_refresh;
+
+query I
+select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
+----
+3
+
+statement ok
+select * from fuse_vacuum2('test_table_ref_virtual_column', 't_branch_refresh') ignore_result;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t_branch_refresh;
+----
+0
+
+query I
+select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
+----
+3
+
+statement ok
+remove @vc_branch_refresh_stage;
+
+statement ok
+drop stage vc_branch_refresh_stage;
+
+## -------------------------------------------------------
+## Active tag keeps virtual column files referenced only by
+## the tagged snapshot alive.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE vc_tag_stage url = 'fs:///tmp/test_table_ref_virtual_column/tag_keep/';
+
+statement ok
+remove @vc_tag_stage;
+
+statement ok
+CREATE TABLE t_tag_keep (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/tag_keep/';
+
+statement ok
+ALTER TABLE t_tag_keep SET OPTIONS(row_per_block = 2);
+
+statement ok
+INSERT INTO t_tag_keep VALUES
+    (1, '{"k":"tag_old"}'),
+    (2, '{"k":"tag_old"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_tag_keep;
+
+statement ok
+ALTER TABLE t_tag_keep CREATE TAG keep_v1
+
+statement ok
+DELETE FROM t_tag_keep;
+
+statement ok
+INSERT INTO t_tag_keep VALUES
+    (10, '{"k":"tag_new"}'),
+    (11, '{"k":"tag_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_tag_keep;
+
+query I
+select count() from list_stage(location=> '@vc_tag_stage') where name like '%_vb_v2%';
+----
+2
+
+query I
+SELECT COUNT(*) FROM t_tag_keep AT (TAG => "keep_v1")
+----
+2
+
+statement ok
+select * from fuse_vacuum2('test_table_ref_virtual_column', 't_tag_keep') ignore_result;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t_tag_keep;
+----
+0
+
+query I
+select count() from list_stage(location=> '@vc_tag_stage') where name like '%_vb_v2%';
+----
+2
+
+statement ok
+remove @vc_tag_stage;
+
+statement ok
+drop stage vc_tag_stage;
+
+## -------------------------------------------------------
+## Expired tag no longer protects old virtual column files.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE vc_expired_tag_stage url = 'fs:///tmp/test_table_ref_virtual_column/tag_expired/';
+
+statement ok
+remove @vc_expired_tag_stage;
+
+statement ok
+CREATE TABLE t_tag_expired (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/tag_expired/';
+
+statement ok
+ALTER TABLE t_tag_expired SET OPTIONS(row_per_block = 2);
+
+statement ok
+INSERT INTO t_tag_expired VALUES
+    (1, '{"k":"expired_old"}'),
+    (2, '{"k":"expired_old"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_tag_expired;
+
+statement ok
+ALTER TABLE t_tag_expired CREATE TAG temp_v1 RETAIN 1 SECONDS
+
+statement ok
+DELETE FROM t_tag_expired;
+
+statement ok
+INSERT INTO t_tag_expired VALUES
+    (10, '{"k":"expired_new"}'),
+    (11, '{"k":"expired_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_tag_expired;
+
+query I
+select count() from list_stage(location=> '@vc_expired_tag_stage') where name like '%_vb_v2%';
+----
+2
+
+statement ok
+SELECT SLEEP(2)
+
+statement ok
+select * from fuse_vacuum2('test_table_ref_virtual_column', 't_tag_expired') ignore_result;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t_tag_expired;
+----
+1
+
+query I
+select count() from list_stage(location=> '@vc_expired_tag_stage') where name like '%_vb_v2%';
+----
+1
+
+statement error 2745
+SELECT COUNT(*) FROM t_tag_expired AT (TAG => "temp_v1")
+
+statement ok
+remove @vc_expired_tag_stage;
+
+statement ok
+drop stage vc_expired_tag_stage;
+
+## -------------------------------------------------------
+## Dropped branch beyond retention no longer protects old
+## virtual column files.
+## -------------------------------------------------------
+
+statement ok
+CREATE OR REPLACE STAGE vc_dropped_branch_stage url = 'fs:///tmp/test_table_ref_virtual_column/branch_dropped/';
+
+statement ok
+remove @vc_dropped_branch_stage;
+
+statement ok
+CREATE TABLE t_branch_dropped (id INT, v VARIANT) 'fs:///tmp/test_table_ref_virtual_column/branch_dropped/';
+
+statement ok
+ALTER TABLE t_branch_dropped SET OPTIONS(row_per_block = 2);
+
+statement ok
+INSERT INTO t_branch_dropped VALUES
+    (1, '{"k":"drop_old"}'),
+    (2, '{"k":"drop_old"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_dropped;
+
+statement ok
+ALTER TABLE t_branch_dropped CREATE BRANCH old_b1
+
+statement ok
+DELETE FROM t_branch_dropped;
+
+statement ok
+INSERT INTO t_branch_dropped VALUES
+    (10, '{"k":"drop_new"}'),
+    (11, '{"k":"drop_new"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_dropped;
+
+query I
+select count() from list_stage(location=> '@vc_dropped_branch_stage') where name like '%_vb_v2%';
+----
+2
+
+statement ok
+ALTER TABLE t_branch_dropped DROP BRANCH old_b1
+
+statement ok
+SELECT SLEEP(1)
+
+statement ok
+select * from fuse_vacuum2('test_table_ref_virtual_column', 't_branch_dropped') ignore_result;
+
+query I
+VACUUM VIRTUAL COLUMN FROM t_branch_dropped;
+----
+1
+
+query I
+select count() from list_stage(location=> '@vc_dropped_branch_stage') where name like '%_vb_v2%';
+----
+1
+
+statement error 2745
+SELECT COUNT(*) FROM t_branch_dropped/old_b1
+
+statement ok
+remove @vc_dropped_branch_stage;
+
+statement ok
+drop stage vc_dropped_branch_stage;
+
+statement ok
+DROP DATABASE test_table_ref_virtual_column

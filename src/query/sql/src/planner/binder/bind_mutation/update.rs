@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MutationUpdateExpr;
-use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::Result;
@@ -52,8 +51,6 @@ impl Binder {
         stmt: &UpdateStmt,
     ) -> Result<Plan> {
         let UpdateStmt {
-            catalog,
-            database,
             table,
             table_alias,
             update_list,
@@ -65,17 +62,11 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let target_table_identifier =
-            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
+        let target_table_identifier = TableIdentifier::new_with_ref(self, table, table_alias);
 
         let target_table_reference = TableReference::Table {
             span: None,
-            table: TableRef {
-                catalog: catalog.clone(),
-                database: database.clone(),
-                table: table.clone(),
-                branch: None,
-            },
+            table: table.clone(),
             alias: table_alias.clone(),
             temporal: None,
             with_options: None,

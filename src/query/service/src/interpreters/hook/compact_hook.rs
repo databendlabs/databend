@@ -54,6 +54,7 @@ pub struct CompactTargetTableDescription {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 pub struct CompactHookTraceCtx {
@@ -166,6 +167,7 @@ async fn compact_table(
         &compact_target.catalog,
         &compact_target.database,
         &compact_target.table,
+        compact_target.branch.as_deref(),
     )?;
 
     ctx.clear_table_meta_timestamps_cache();
@@ -176,6 +178,7 @@ async fn compact_table(
             catalog: compact_target.catalog.clone(),
             database: compact_target.database.clone(),
             table: compact_target.table.clone(),
+            branch: compact_target.branch.clone(),
             limit: compaction_limits.clone(),
         });
         let s_expr = SExpr::create_leaf(Arc::new(compact_block));
@@ -217,10 +220,11 @@ async fn compact_table(
 
     {
         let table = ctx
-            .get_table(
+            .get_table_with_branch(
                 &compact_target.catalog,
                 &compact_target.database,
                 &compact_target.table,
+                compact_target.branch.as_deref(),
             )
             .await?;
         // do recluster.
@@ -231,12 +235,14 @@ async fn compact_table(
                     &compact_target.catalog,
                     &compact_target.database,
                     &compact_target.table,
+                    compact_target.branch.as_deref(),
                 )?;
                 ctx.set_enable_sort_spill(false);
                 let recluster = ReclusterPlan {
                     catalog: compact_target.catalog,
                     database: compact_target.database,
                     table: compact_target.table,
+                    branch: compact_target.branch,
                     limit: Some(settings.get_auto_compaction_segments_limit()? as usize),
                     selection: None,
                     is_final: false,

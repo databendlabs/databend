@@ -29,7 +29,6 @@ use crate::ast::TableRef;
 use crate::ast::TableReference;
 use crate::ast::WithOptions;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_dot_separated_list;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct MutationUpdateExpr {
@@ -85,9 +84,7 @@ pub enum MergeOption {
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct MergeIntoStmt {
     pub hints: Option<Hint>,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table_ident: Identifier,
+    pub table: TableRef,
     pub source: MutationSource,
     // target_alias is belong to target
     pub target_alias: Option<TableAlias>,
@@ -98,13 +95,7 @@ pub struct MergeIntoStmt {
 impl Display for MergeIntoStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MERGE INTO ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table_ident)),
-        )?;
+        write!(f, "{}", self.table)?;
         if let Some(alias) = &self.target_alias {
             write!(f, " AS {}", alias.name)?;
         }
@@ -175,9 +166,7 @@ pub enum MutationSource {
         source_alias: TableAlias,
     },
     Table {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
+        table: Box<TableRef>,
         alias: Option<TableAlias>,
         with_options: Option<WithOptions>,
     },
@@ -198,19 +187,12 @@ impl MutationSource {
                 unpivot: None,
             },
             Self::Table {
-                catalog,
-                database,
                 table,
                 with_options,
                 alias,
             } => TableReference::Table {
                 span: None,
-                table: TableRef {
-                    catalog: catalog.clone(),
-                    database: database.clone(),
-                    table: table.clone(),
-                    branch: None,
-                },
+                table: table.as_ref().clone(),
                 alias: alias.clone(),
                 temporal: None,
                 with_options: with_options.clone(),
@@ -231,16 +213,11 @@ impl Display for MutationSource {
             } => write!(f, "({query}) AS {source_alias}"),
 
             MutationSource::Table {
-                catalog,
-                database,
                 table,
                 with_options,
                 alias,
             } => {
-                write_dot_separated_list(
-                    f,
-                    catalog.iter().chain(database.iter()).chain(Some(table)),
-                )?;
+                write!(f, "{}", table.as_ref())?;
                 if let Some(with_options) = with_options {
                     write!(f, " {with_options}")?;
                 }

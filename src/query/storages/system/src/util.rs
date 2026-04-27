@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::database::Database;
+use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -71,6 +72,44 @@ pub fn extract_leveled_strings(
         }
     }
     Ok((res1, res2))
+}
+
+pub fn extract_push_down_string_filters(
+    push_downs: &Option<PushDownInfo>,
+    level_names: &[&str],
+    func_ctx: &FunctionContext,
+) -> Result<Vec<Vec<String>>> {
+    let mut res = vec![vec![]; level_names.len()];
+
+    if let Some(filter) = push_downs
+        .as_ref()
+        .and_then(|push_downs| push_downs.filters.as_ref())
+        .map(|filters| &filters.filter)
+    {
+        let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+        let leveled_results = FilterHelpers::find_leveled_eq_filters(
+            &expr,
+            level_names,
+            func_ctx,
+            &BUILTIN_FUNCTIONS,
+        )?;
+
+        for (i, scalars) in leveled_results.iter().enumerate() {
+            for scalar in scalars {
+                let expr = Expr::Constant(Constant {
+                    span: None,
+                    scalar: scalar.clone(),
+                    data_type: scalar.as_ref().infer_data_type(),
+                });
+                if let Ok(value) = check_string::<usize>(None, func_ctx, &expr, &BUILTIN_FUNCTIONS)
+                {
+                    res[i].push(value);
+                }
+            }
+        }
+    }
+
+    Ok(res)
 }
 
 // ============================================================================

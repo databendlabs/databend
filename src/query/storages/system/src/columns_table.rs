@@ -27,7 +27,6 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::StringType;
 use databend_common_expression::utils::FromData;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_common_meta_app::schema::CatalogNameIdent;
 use databend_common_meta_app::schema::TableIdent;
@@ -35,6 +34,7 @@ use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_sql::Planner;
+use databend_common_sql::check_table_ref_access;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
@@ -46,7 +46,7 @@ use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::collect_visible_tables;
 use crate::util::disable_catalog_refresh;
-use crate::util::extract_leveled_strings;
+use crate::util::extract_push_down_string_filters;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -274,7 +274,21 @@ pub(crate) async fn dump_tables(
 
     // Extract filters from push_downs
     let func_ctx = ctx.get_function_context()?;
-    let (filtered_db_names, filtered_table_names) = extract_filters(&push_downs, &func_ctx)?;
+    let mut filters =
+        extract_push_down_string_filters(&push_downs, &["database", "table"], &func_ctx)?;
+    let filtered_db_names = filters.remove(0);
+    let filtered_table_names = filters.remove(0);
+
+    if filtered_table_names.iter().any(|name| name.contains('/')) {
+        check_table_ref_access(ctx.as_ref())?;
+        return dump_tables_with_branch_filters(
+            ctx,
+            &catalog,
+            &filtered_db_names,
+            &filtered_table_names,
+        )
+        .await;
+    }
 
     // Use unified visibility collection from util.rs
     let db_with_tables =
@@ -287,20 +301,62 @@ pub(crate) async fn dump_tables(
         .collect())
 }
 
-fn extract_filters(
-    push_downs: &Option<PushDownInfo>,
-    func_ctx: &databend_common_expression::FunctionContext,
-) -> Result<(Vec<String>, Vec<String>)> {
-    let mut filtered_db_names = vec![];
-    let mut filtered_table_names = vec![];
+async fn dump_tables_with_branch_filters(
+    ctx: &Arc<dyn TableContext>,
+    catalog: &Arc<dyn Catalog>,
+    filtered_db_names: &[String],
+    filtered_table_names: &[String],
+) -> Result<Vec<(String, Vec<Arc<dyn Table>>)>> {
+    let mut base_table_filters = Vec::new();
+    for table_name in filtered_table_names {
+        if let Some((base_table, _branch)) = table_name.split_once('/') {
+            base_table_filters.push(base_table.to_string());
+        } else {
+            base_table_filters.push(table_name.clone());
+        }
+    }
+    base_table_filters.sort();
+    base_table_filters.dedup();
 
-    if let Some(push_downs) = push_downs {
-        if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            (filtered_db_names, filtered_table_names) =
-                extract_leveled_strings(&expr, &["database", "table"], func_ctx)?;
+    let visible =
+        collect_visible_tables(ctx, catalog, filtered_db_names, &base_table_filters).await?;
+    let tenant = ctx.get_tenant();
+    let mut db_with_tables = Vec::new();
+
+    for db in visible {
+        let mut tables = Vec::new();
+        for filter_name in filtered_table_names {
+            if let Some((base_table, branch_name)) = filter_name.split_once('/') {
+                // Only resolve branch filters after the corresponding base table has passed
+                // the normal visibility filtering in `collect_visible_tables`.
+                if !db.tables.iter().any(|table| table.name() == base_table) {
+                    continue;
+                }
+                match catalog
+                    .get_table_branch(&tenant, &db.name, base_table, branch_name, false)
+                    .await
+                {
+                    Ok(table) => tables.push(table),
+                    Err(err) => {
+                        warn!(
+                            "failed to get branch columns for {}.{}: {}",
+                            db.name, filter_name, err
+                        );
+                    }
+                }
+            } else {
+                tables.extend(
+                    db.tables
+                        .iter()
+                        .filter(|table| table.name() == filter_name)
+                        .cloned(),
+                );
+            }
+        }
+        if !tables.is_empty() {
+            db_with_tables.push((db.name, tables));
         }
     }
 
-    Ok((filtered_db_names, filtered_table_names))
+    Ok(db_with_tables)
 }

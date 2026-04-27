@@ -1377,6 +1377,7 @@ impl TableContextCopy for LiteTableContext {
         _catalog_name: &str,
         _database_name: &str,
         _table_name: &str,
+        _branch_name: Option<&str>,
         _files: &[StageFileInfo],
         _path_prefix: Option<String>,
         _max_files: Option<usize>,
@@ -1483,6 +1484,7 @@ impl TableContextTableAccess for LiteTableContext {
         _catalog_name: &str,
         _db_name: &str,
         _tbl_name: &str,
+        _branch: Option<&str>,
         _lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         Ok(None)
@@ -1499,7 +1501,13 @@ impl TableContextTableAccess for LiteTableContext {
 
 #[async_trait::async_trait]
 impl TableContextTableManagement for LiteTableContext {
-    fn evict_table_from_cache(&self, _catalog: &str, _database: &str, _table: &str) -> Result<()> {
+    fn evict_table_from_cache(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+    ) -> Result<()> {
         Ok(())
     }
 

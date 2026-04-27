@@ -209,6 +209,7 @@ impl ReclusterTableInterpreter {
             catalog,
             database,
             table,
+            branch,
             limit,
             ..
         } = &self.plan;
@@ -216,10 +217,13 @@ impl ReclusterTableInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog, database, table, &self.lock_opt)
+            .acquire_table_lock(catalog, database, table, branch.as_deref(), &self.lock_opt)
             .await?;
 
-        let tbl = self.ctx.get_table(catalog, database, table).await?;
+        let tbl = self
+            .ctx
+            .get_table_with_branch(catalog, database, table, branch.as_deref())
+            .await?;
         // check mutability
         tbl.check_mutable()?;
         let Some(cluster_type) = tbl.cluster_type() else {
@@ -229,7 +233,7 @@ impl ReclusterTableInterpreter {
             )));
         };
 
-        self.build_push_downs(push_downs, &tbl)?;
+        self.build_push_downs(push_downs, table.to_string(), &tbl)?;
 
         let physical_plan = match cluster_type {
             ClusterType::Hilbert => {
@@ -249,11 +253,12 @@ impl ReclusterTableInterpreter {
             let catalog = self.plan.catalog.clone();
             let database = self.plan.database.clone();
             let table = self.plan.table.clone();
+            let branch = self.plan.branch.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
                     ctx.written_segment_locations().clear();
                     ctx.selected_segment_locations().clear();
-                    ctx.evict_table_from_cache(&catalog, &database, &table)?;
+                    ctx.evict_table_from_cache(&catalog, &database, &table, branch.as_deref())?;
 
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
@@ -572,12 +577,13 @@ impl ReclusterTableInterpreter {
     fn build_push_downs(
         &self,
         push_downs: &mut Option<PushDownInfo>,
+        name: String,
         tbl: &Arc<dyn Table>,
     ) -> Result<()> {
         if push_downs.is_none() {
             if let Some(expr) = &self.plan.selection {
                 let settings = self.ctx.get_settings();
-                let (mut bind_context, metadata) = bind_table(tbl.clone())?;
+                let (mut bind_context, metadata) = bind_table(name, tbl.clone())?;
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let mut type_checker = TypeChecker::try_create(
                     &mut bind_context,

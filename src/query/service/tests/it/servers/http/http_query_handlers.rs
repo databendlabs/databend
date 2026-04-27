@@ -789,6 +789,8 @@ async fn test_system_tables() -> anyhow::Result<()> {
         "notification_history",
         "task_history", // same with tasks
         "tracing",      // Could be very large.
+        "branches",     // table-ref gate requires enable_experimental_table_ref
+        "branches_with_history",
     ];
     for table_name in table_names {
         if skipped.contains(&table_name) {

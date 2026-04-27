@@ -338,17 +338,20 @@ DESCRIBE "name""with""quote"
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                9..28,
-            ),
-            name: "name\"with\"quote",
-            quote: Some(
-                '"',
-            ),
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    9..28,
+                ),
+                name: "name\"with\"quote",
+                quote: Some(
+                    '"',
+                ),
+                ident_type: None,
+            },
+            branch: None,
         },
     },
 )
@@ -361,17 +364,20 @@ DESCRIBE "name""""with""""quote"
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                9..32,
-            ),
-            name: "name\"\"with\"\"quote",
-            quote: Some(
-                '"',
-            ),
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    9..32,
+                ),
+                name: "name\"\"with\"\"quote",
+                quote: Some(
+                    '"',
+                ),
+                ident_type: None,
+            },
+            branch: None,
         },
     },
 )
@@ -459,24 +465,27 @@ SHOW FULL COLUMNS FROM t FROM db
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        26..28,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    26..28,
+                    21..22,
                 ),
-                name: "db",
+                name: "t",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                21..22,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         full: true,
         limit: None,
@@ -491,33 +500,36 @@ SHOW COLUMNS FROM t FROM ctl.db
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
-        catalog: Some(
-            Identifier {
-                span: Some(
-                    23..26,
-                ),
-                name: "ctl",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        database: Some(
-            Identifier {
-                span: Some(
-                    27..29,
-                ),
-                name: "db",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        table: Identifier {
-            span: Some(
-                16..17,
+        table: TableRef {
+            catalog: Some(
+                Identifier {
+                    span: Some(
+                        23..26,
+                    ),
+                    name: "ctl",
+                    quote: None,
+                    ident_type: None,
+                },
             ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        27..29,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
+                span: Some(
+                    16..17,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         full: false,
         limit: None,
@@ -532,33 +544,36 @@ SHOW COLUMNS FROM t FROM ctl.db
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
-        catalog: Some(
-            Identifier {
-                span: Some(
-                    18..21,
-                ),
-                name: "ctl",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        database: Some(
-            Identifier {
-                span: Some(
-                    22..24,
-                ),
-                name: "db",
-                quote: None,
-                ident_type: None,
-            },
-        ),
-        table: Identifier {
-            span: Some(
-                25..26,
+        table: TableRef {
+            catalog: Some(
+                Identifier {
+                    span: Some(
+                        18..21,
+                    ),
+                    name: "ctl",
+                    quote: None,
+                    ident_type: None,
+                },
             ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        22..24,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
+                span: Some(
+                    25..26,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         full: false,
         limit: None,
@@ -573,24 +588,27 @@ SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        30..32,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    30..32,
+                    23..24,
                 ),
-                name: "db",
+                name: "t",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                23..24,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         full: true,
         limit: Some(
@@ -609,24 +627,27 @@ SHOW FULL COLUMNS FROM t FROM db LIKE 'id%'
 ---------- AST ------------
 ShowColumns(
     ShowColumnsStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        23..25,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    23..25,
+                    26..27,
                 ),
-                name: "db",
+                name: "t",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                26..27,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         full: true,
         limit: Some(
@@ -817,15 +838,18 @@ REPLACE INTO test ON (c) SELECT sum(c) AS c FROM source GROUP BY v
 Replace(
     ReplaceStmt {
         hints: None,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                13..17,
-            ),
-            name: "test",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    13..17,
+                ),
+                name: "test",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         is_conflict: false,
         on_conflict_columns: [
@@ -1081,15 +1105,18 @@ Explain {
     query: Replace(
         ReplaceStmt {
             hints: None,
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    21..25,
-                ),
-                name: "test",
-                quote: None,
-                ident_type: None,
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        21..25,
+                    ),
+                    name: "test",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             is_conflict: false,
             on_conflict_columns: [
@@ -1828,15 +1855,18 @@ DESCRIBE a
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                9..10,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    9..10,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
     },
 )
@@ -1849,15 +1879,18 @@ DESCRIBE a
 ---------- AST ------------
 DescribeTable(
     DescribeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                9..10,
-            ),
-            name: "a",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    9..10,
+                ),
+                name: "a",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
     },
 )
@@ -2282,15 +2315,18 @@ CreateTableIndex(
             ident_type: None,
         },
         index_type: Inverted,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                41..43,
-            ),
-            name: "t1",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    41..43,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         columns: [
             Identifier {
@@ -2333,15 +2369,18 @@ CreateTableIndex(
             ident_type: None,
         },
         index_type: Ngram,
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                38..40,
-            ),
-            name: "t1",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    38..40,
+                ),
+                name: "t1",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         columns: [
             Identifier {
@@ -5027,6 +5066,7 @@ TruncateTable(
             quote: None,
             ident_type: None,
         },
+        branch: None,
     },
 )
 
@@ -5059,6 +5099,7 @@ TruncateTable(
             quote: None,
             ident_type: None,
         },
+        branch: None,
     },
 )
 
@@ -7091,6 +7132,7 @@ TruncateTable(
             quote: None,
             ident_type: None,
         },
+        branch: None,
     },
 )
 
@@ -7121,6 +7163,7 @@ TruncateTable(
             quote: None,
             ident_type: None,
         },
+        branch: None,
     },
 )
 
@@ -7208,24 +7251,27 @@ ANALYZE TABLE test_db.test NOSCAN
 ---------- AST ------------
 AnalyzeTable(
     AnalyzeTableStmt {
-        catalog: None,
-        database: Some(
-            Identifier {
+        table_ref: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        14..21,
+                    ),
+                    name: "test_db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    14..21,
+                    22..26,
                 ),
-                name: "test_db",
+                name: "test",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                22..26,
-            ),
-            name: "test",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         no_scan: true,
     },
@@ -8207,24 +8253,27 @@ Delete(
                 ],
             },
         ),
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        68..75,
+                    ),
+                    name: "test_db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    68..75,
+                    76..80,
                 ),
-                name: "test_db",
+                name: "test",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                76..80,
-            ),
-            name: "test",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         table_alias: Some(
             TableAlias {
@@ -15433,6 +15482,7 @@ InsertMultiTable(
                             quote: None,
                             ident_type: None,
                         },
+                        branch: None,
                         target_columns: [],
                         source_columns: [],
                     },
@@ -15484,6 +15534,7 @@ InsertMultiTable(
                             quote: None,
                             ident_type: None,
                         },
+                        branch: None,
                         target_columns: [],
                         source_columns: [],
                     },
@@ -15620,6 +15671,7 @@ InsertMultiTable(
                             quote: None,
                             ident_type: None,
                         },
+                        branch: None,
                         target_columns: [],
                         source_columns: [],
                     },
@@ -15671,6 +15723,7 @@ InsertMultiTable(
                             quote: None,
                             ident_type: None,
                         },
+                        branch: None,
                         target_columns: [],
                         source_columns: [],
                     },
@@ -16468,15 +16521,18 @@ OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                15..16,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table_ref: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    15..16,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         action: Compact {
             target: Segment,
@@ -16495,15 +16551,18 @@ OPTIMIZE TABLE t COMPACT LIMIT 10
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                15..16,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table_ref: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    15..16,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         action: Compact {
             target: Block,
@@ -16522,15 +16581,18 @@ OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') L
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                15..16,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table_ref: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    15..16,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         action: Purge {
             before: Some(
@@ -16560,15 +16622,18 @@ OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMEST
 ---------- AST ------------
 OptimizeTable(
     OptimizeTableStmt {
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                15..16,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+        table_ref: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    15..16,
+                ),
+                name: "t",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         action: Purge {
             before: Some(
@@ -18830,6 +18895,55 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t UNDROP BRANCH b1 RETAIN 7 DAYS;
+---------- Output ---------
+ALTER TABLE t UNDROP BRANCH b1 RETAIN 7 DAYS
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        12..13,
+                    ),
+                    name: "t",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+            },
+            alias: None,
+            temporal: None,
+            with_options: None,
+            pivot: None,
+            unpivot: None,
+            sample: None,
+        },
+        action: UndropTableBranch {
+            branch_name: Identifier {
+                span: Some(
+                    28..30,
+                ),
+                name: "b1",
+                quote: None,
+                ident_type: None,
+            },
+            retain: Some(
+                604800s,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t DROP TAG tag1;
 ---------- Output ---------
 ALTER TABLE t DROP TAG tag1
@@ -18871,6 +18985,57 @@ AlterTable(
                 ident_type: None,
             },
         },
+    },
+)
+
+
+---------- Input ----------
+SHOW BRANCHES FROM ctl.db.t LIKE 'dev%' LIMIT 3;
+---------- Output ---------
+SHOW BRANCHES FROM ctl.db.t LIKE 'dev%' LIMIT 3
+---------- AST ------------
+ShowBranches(
+    ShowBranchesStmt {
+        catalog: Some(
+            Identifier {
+                span: Some(
+                    19..22,
+                ),
+                name: "ctl",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        database: Some(
+            Identifier {
+                span: Some(
+                    23..25,
+                ),
+                name: "db",
+                quote: None,
+                ident_type: None,
+            },
+        ),
+        table: Identifier {
+            span: Some(
+                26..27,
+            ),
+            name: "t",
+            quote: None,
+            ident_type: None,
+        },
+        show_options: Some(
+            ShowOptions {
+                show_limit: Some(
+                    Like {
+                        pattern: "dev%",
+                    },
+                ),
+                limit: Some(
+                    3,
+                ),
+            },
+        ),
     },
 )
 
@@ -19990,24 +20155,27 @@ RefreshTableIndex(
             ident_type: None,
         },
         index_type: Inverted,
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        31..33,
+                    ),
+                    name: "db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    31..33,
+                    34..35,
                 ),
-                name: "db",
+                name: "t",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                34..35,
-            ),
-            name: "t",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         limit: Some(
             5,
@@ -20042,6 +20210,7 @@ RefreshVirtualColumn(
             quote: None,
             ident_type: None,
         },
+        branch: None,
         selection: Some(
             BinaryOp {
                 span: Some(
@@ -21502,15 +21671,18 @@ CopyIntoTable(
                 "~/mybucket/my data.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -21788,15 +21960,18 @@ CopyIntoTable(
                 },
             ),
         },
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                75..82,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    75..82,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: Some(
             [
@@ -21908,15 +22083,18 @@ CopyIntoTable(
             ),
             alias_name: None,
         },
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -21968,15 +22146,18 @@ CopyIntoTable(
                 "~/mybucket/data.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22046,15 +22227,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22124,15 +22308,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22206,15 +22393,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22288,15 +22478,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22737,15 +22930,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22794,15 +22990,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -22851,15 +23050,18 @@ CopyIntoTable(
                 "my_stage",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23214,15 +23416,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23283,15 +23488,18 @@ CopyIntoTable(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23352,15 +23560,18 @@ CopyIntoTable(
                 "external_stage/path/to/dir/",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23421,15 +23632,18 @@ CopyIntoTable(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23499,15 +23713,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..17,
-            ),
-            name: "mytable",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..17,
+                ),
+                name: "mytable",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -23580,15 +23797,18 @@ CopyIntoTable(
                 },
             ),
         ),
-        catalog: None,
-        database: None,
-        table: Identifier {
-            span: Some(
-                10..15,
-            ),
-            name: "books",
-            quote: None,
-            ident_type: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    10..15,
+                ),
+                name: "books",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
         },
         dst_columns: None,
         hints: None,
@@ -24693,24 +24913,27 @@ UPDATE db1.tb1 SET a = a + 1, b = 2 WHERE c > 3
 Update(
     UpdateStmt {
         hints: None,
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        7..10,
+                    ),
+                    name: "db1",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    7..10,
+                    11..14,
                 ),
-                name: "db1",
+                name: "tb1",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                11..14,
-            ),
-            name: "tb1",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
         table_alias: None,
         update_list: [
@@ -27666,6 +27889,7 @@ RefreshVirtualColumn(
             quote: None,
             ident_type: None,
         },
+        branch: None,
         selection: None,
         limit: None,
         overwrite: false,
@@ -29331,26 +29555,32 @@ MergeInto(
                 ],
             },
         ),
-        catalog: None,
-        database: None,
-        table_ident: Identifier {
-            span: Some(
-                41..44,
-            ),
-            name: "tgt",
-            quote: None,
-            ident_type: None,
-        },
-        source: Table {
+        table: TableRef {
             catalog: None,
             database: None,
             table: Identifier {
                 span: Some(
-                    53..56,
+                    41..44,
                 ),
-                name: "src",
+                name: "tgt",
                 quote: None,
                 ident_type: None,
+            },
+            branch: None,
+        },
+        source: Table {
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        53..56,
+                    ),
+                    name: "src",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             alias: Some(
                 TableAlias {
@@ -30250,8 +30480,8 @@ ShowStatistics(
                 ident_type: None,
             },
         ),
-        target: Table(
-            Identifier {
+        target: Table {
+            table: Identifier {
                 span: Some(
                     35..39,
                 ),
@@ -30259,7 +30489,8 @@ ShowStatistics(
                 quote: None,
                 ident_type: None,
             },
-        ),
+            branch: None,
+        },
     },
 )
 
@@ -30327,24 +30558,27 @@ DropTableIndex(
             ident_type: None,
         },
         index_type: Inverted,
-        catalog: None,
-        database: Some(
-            Identifier {
+        table: TableRef {
+            catalog: None,
+            database: Some(
+                Identifier {
+                    span: Some(
+                        38..45,
+                    ),
+                    name: "test_db",
+                    quote: None,
+                    ident_type: None,
+                },
+            ),
+            table: Identifier {
                 span: Some(
-                    38..45,
+                    46..50,
                 ),
-                name: "test_db",
+                name: "test",
                 quote: None,
                 ident_type: None,
             },
-        ),
-        table: Identifier {
-            span: Some(
-                46..50,
-            ),
-            name: "test",
-            quote: None,
-            ident_type: None,
+            branch: None,
         },
     },
 )
@@ -30405,15 +30639,18 @@ CreatePipe(
                     "~/MyStage1",
                 ),
             ),
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    98..106,
-                ),
-                name: "MyTable1",
-                quote: None,
-                ident_type: None,
+            table: TableRef {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        98..106,
+                    ),
+                    name: "MyTable1",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
             },
             dst_columns: None,
             hints: None,
@@ -30463,24 +30700,27 @@ CreatePipe(
                     "~/mybucket/data.csv",
                 ),
             ),
-            catalog: None,
-            database: Some(
-                Identifier {
+            table: TableRef {
+                catalog: None,
+                database: Some(
+                    Identifier {
+                        span: Some(
+                            31..34,
+                        ),
+                        name: "db1",
+                        quote: None,
+                        ident_type: None,
+                    },
+                ),
+                table: Identifier {
                     span: Some(
-                        31..34,
+                        35..43,
                     ),
-                    name: "db1",
+                    name: "MyTable1",
                     quote: None,
                     ident_type: None,
                 },
-            ),
-            table: Identifier {
-                span: Some(
-                    35..43,
-                ),
-                name: "MyTable1",
-                quote: None,
-                ident_type: None,
+                branch: None,
             },
             dst_columns: None,
             hints: None,

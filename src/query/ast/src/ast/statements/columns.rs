@@ -20,14 +20,12 @@ use databend_common_ast_visit_derive::WalkMut;
 use derive_visitor::Drive;
 use derive_visitor::DriveMut;
 
-use crate::ast::Identifier;
 use crate::ast::ShowLimit;
+use crate::ast::TableRef;
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct ShowColumnsStmt {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
     pub full: bool,
     pub limit: Option<ShowLimit>,
 }
@@ -38,12 +36,15 @@ impl Display for ShowColumnsStmt {
         if self.full {
             write!(f, " FULL")?;
         }
-        write!(f, " COLUMNS FROM {}", self.table)?;
+        write!(f, " COLUMNS FROM {}", self.table.table)?;
+        if let Some(branch) = &self.table.branch {
+            write!(f, "/{branch}")?;
+        }
 
-        if let Some(database) = &self.database {
+        if let Some(database) = &self.table.database {
             write!(f, " FROM ")?;
-            if let Some(catalog) = &self.catalog {
-                write!(f, "{catalog}.",)?;
+            if let Some(catalog) = &self.table.catalog {
+                write!(f, "{catalog}.")?;
             }
             write!(f, "{database}")?;
         }

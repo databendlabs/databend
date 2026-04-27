@@ -15,7 +15,6 @@
 use databend_common_ast::ast::DeleteStmt;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
-use databend_common_ast::ast::TableRef;
 use databend_common_ast::ast::TableReference;
 use databend_common_exception::Result;
 
@@ -35,8 +34,6 @@ impl Binder {
         stamt: &DeleteStmt,
     ) -> Result<Plan> {
         let DeleteStmt {
-            catalog,
-            database,
             table,
             table_alias,
             selection,
@@ -46,17 +43,11 @@ impl Binder {
 
         self.init_cte(bind_context, with)?;
 
-        let target_table_identifier =
-            TableIdentifier::new(self, catalog, database, table, &None, table_alias);
+        let target_table_identifier = TableIdentifier::new_with_ref(self, table, table_alias);
 
         let target_table_reference = TableReference::Table {
             span: None,
-            table: TableRef {
-                catalog: catalog.clone(),
-                database: database.clone(),
-                table: table.clone(),
-                branch: None,
-            },
+            table: table.clone(),
             alias: table_alias.clone(),
             temporal: None,
             with_options: None,

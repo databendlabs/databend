@@ -250,6 +250,7 @@ impl PhysicalPlanBuilder {
             catalog_name,
             database_name,
             table_name,
+            branch,
             table_name_alias,
             matched_evaluators,
             unmatched_evaluators,
@@ -302,6 +303,7 @@ impl PhysicalPlanBuilder {
         let udf_col_num = required_udf_ids.len();
         required.extend(required_udf_ids);
 
+        let mutation_build_info = self.mutation_build_info.clone().unwrap();
         let mut plan = self.build(s_expr.child(0)?, required).await?;
         if *no_effect {
             return Ok(plan);
@@ -309,12 +311,10 @@ impl PhysicalPlanBuilder {
 
         let table = self
             .ctx
-            .get_table(catalog_name, database_name, table_name)
+            .get_table_with_branch(catalog_name, database_name, table_name, branch.as_deref())
             .await?;
-        let table_info = table.get_table_info();
+        let table_info = mutation_build_info.table_info.clone();
         let table_name = table_name.clone();
-
-        let mutation_build_info = self.mutation_build_info.clone().unwrap();
         let mutation_input_schema = plan.output_schema()?;
 
         if *truncate_table {

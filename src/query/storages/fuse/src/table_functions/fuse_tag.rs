@@ -27,8 +27,8 @@ use databend_common_expression::TableSchemaRefExt;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::TimestampType;
 use databend_common_meta_app::schema::ListTableTagsReq;
+use databend_common_sql::check_table_ref_access;
 
-use crate::operations::check_table_ref_access;
 use crate::sessions::TableContext;
 use crate::table_functions::SimpleTableFunc;
 use crate::table_functions::parse_db_tb_args;

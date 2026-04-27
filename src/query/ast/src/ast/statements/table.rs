@@ -27,6 +27,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableIndexType;
+use crate::ast::TableRef;
 use crate::ast::TableReference;
 use crate::ast::TimeTravelPoint;
 use crate::ast::TypeName;
@@ -34,6 +35,7 @@ use crate::ast::UriLocation;
 use crate::ast::quote::QuotedString;
 use crate::ast::statements::constraint::ConstraintType;
 use crate::ast::statements::show::ShowLimit;
+use crate::ast::statements::show::ShowOptions;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_comma_separated_string_map;
 use crate::ast::write_dot_separated_list;
@@ -69,6 +71,31 @@ impl Display for ShowTablesStmt {
             write!(f, " {limit}")?;
         }
 
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
+pub struct ShowBranchesStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub show_options: Option<ShowOptions>,
+}
+
+impl Display for ShowBranchesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW BRANCHES FROM ")?;
+        write_dot_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if let Some(show_options) = &self.show_options {
+            write!(f, " {show_options}")?;
+        }
         Ok(())
     }
 }
@@ -351,20 +378,13 @@ impl Display for CreateTableSource {
 
 #[derive(Debug, Clone, PartialEq, Eq, Drive, DriveMut, Walk, WalkMut)]
 pub struct DescribeTableStmt {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
 }
 
 impl Display for DescribeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(self.database.iter().chain(Some(&self.table))),
-        )
+        write!(f, "{}", self.table)
     }
 }
 
@@ -509,9 +529,30 @@ pub enum AlterTableAction {
     DropTableBranch {
         branch_name: Identifier,
     },
+    UndropTableBranch {
+        branch_name: Identifier,
+        #[drive(skip)]
+        retain: Option<Duration>,
+    },
     DropTableTag {
         tag_name: Identifier,
     },
+}
+
+impl AlterTableAction {
+    pub fn supports_branch(&self) -> bool {
+        !matches!(
+            self,
+            AlterTableAction::RenameTable { .. }
+                | AlterTableAction::SwapWith { .. }
+                | AlterTableAction::RefreshTableCache
+                | AlterTableAction::ModifyConnection { .. }
+                | AlterTableAction::CreateTableTag { .. }
+                | AlterTableAction::DropTableTag { .. }
+                | AlterTableAction::DropTableBranch { .. }
+                | AlterTableAction::UndropTableBranch { .. }
+        )
+    }
 }
 
 impl Display for AlterTableAction {
@@ -625,6 +666,22 @@ impl Display for AlterTableAction {
             AlterTableAction::DropTableBranch { branch_name } => {
                 write!(f, "DROP BRANCH {branch_name}")?;
             }
+            AlterTableAction::UndropTableBranch {
+                branch_name,
+                retain,
+            } => {
+                write!(f, "UNDROP BRANCH {branch_name}")?;
+                if let Some(retain) = retain {
+                    let days = Duration::from_secs(60 * 60 * 24);
+                    if retain >= &days {
+                        let days = retain.as_secs() / (60 * 60 * 24);
+                        write!(f, " RETAIN {days} DAYS")?;
+                    } else {
+                        let seconds = retain.as_secs();
+                        write!(f, " RETAIN {seconds} SECONDS")?;
+                    }
+                }
+            }
             AlterTableAction::DropTableTag { tag_name } => {
                 write!(f, "DROP TAG {tag_name}")?;
             }
@@ -718,6 +775,7 @@ pub struct TruncateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
+    pub branch: Option<Identifier>,
 }
 
 impl Display for TruncateTableStmt {
@@ -730,6 +788,9 @@ impl Display for TruncateTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
+        if let Some(branch) = &self.branch {
+            write!(f, "/{branch}")?;
+        }
         Ok(())
     }
 }
@@ -810,9 +871,7 @@ impl Display for crate::ast::VacuumTemporaryFiles {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
 pub struct OptimizeTableStmt {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table_ref: TableRef,
     pub action: OptimizeTableAction,
     pub limit: Option<u64>,
 }
@@ -820,13 +879,7 @@ pub struct OptimizeTableStmt {
 impl Display for OptimizeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "OPTIMIZE TABLE ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, "{}", self.table_ref)?;
         write!(f, " {}", &self.action)?;
         if let Some(limit) = self.limit {
             write!(f, " LIMIT {limit}")?;
@@ -838,22 +891,14 @@ impl Display for OptimizeTableStmt {
 
 #[derive(Debug, Clone, PartialEq, Drive, DriveMut, Walk, WalkMut)]
 pub struct AnalyzeTableStmt {
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table_ref: TableRef,
     pub no_scan: bool,
 }
 
 impl Display for AnalyzeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ANALYZE TABLE ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(&self.database)
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, "{}", self.table_ref)?;
         if self.no_scan {
             write!(f, " NOSCAN")?;
         }
@@ -1223,7 +1268,10 @@ pub struct ShowStatisticsStmt {
 pub enum ShowStatsTarget {
     #[default]
     Database,
-    Table(Identifier),
+    Table {
+        table: Identifier,
+        branch: Option<Identifier>,
+    },
 }
 
 impl Display for ShowStatisticsStmt {
@@ -1239,7 +1287,7 @@ impl Display for ShowStatisticsStmt {
                     write!(f, "{database}")?;
                 }
             }
-            ShowStatsTarget::Table(table) => {
+            ShowStatsTarget::Table { table, branch } => {
                 write!(f, " FROM TABLE ")?;
                 if let Some(database) = &self.database {
                     if let Some(catalog) = &self.catalog {
@@ -1248,6 +1296,9 @@ impl Display for ShowStatisticsStmt {
                     write!(f, "{database}.")?;
                 }
                 write!(f, "{table}")?;
+                if let Some(branch) = branch {
+                    write!(f, "/{branch}")?;
+                }
             }
         }
         Ok(())

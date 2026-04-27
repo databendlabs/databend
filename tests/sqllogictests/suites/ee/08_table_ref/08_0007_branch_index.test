@@ -1,0 +1,109 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+DROP DATABASE IF EXISTS test_table_ref_index
+
+statement ok
+CREATE DATABASE test_table_ref_index
+
+statement ok
+USE test_table_ref_index
+
+statement ok
+CREATE OR REPLACE TABLE t_agg(a INT, b INT, c INT)
+
+statement ok
+INSERT INTO t_agg VALUES (1, 1, 4), (1, 2, 1), (1, 2, 4), (2, 2, 5)
+
+statement ok
+ALTER TABLE t_agg CREATE BRANCH dev
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_branch;
+
+statement ok
+CREATE AGGREGATING INDEX idx_branch AS SELECT b, SUM(a) FROM t_agg/dev WHERE c > 1 GROUP BY b
+
+query I
+SELECT count() FROM system.indexes WHERE name = 'idx_branch' AND original LIKE '%t_agg/dev%'
+----
+1
+
+statement ok
+REFRESH AGGREGATING INDEX idx_branch
+
+statement ok
+INSERT INTO t_agg/dev VALUES (10, 1, 6), (20, 3, 7)
+
+query II
+SELECT b, SUM(a) FROM t_agg/dev WHERE c > 1 GROUP BY b ORDER BY b
+----
+1 11
+2 3
+3 20
+
+statement ok
+CREATE OR REPLACE TABLE t_inv(id INT, content STRING, INVERTED INDEX idx_inv(content))
+
+statement ok
+ALTER TABLE t_inv CREATE BRANCH dev
+
+statement ok
+INSERT INTO t_inv/dev VALUES (1, 'hello branch'), (2, 'branch index')
+
+statement ok
+REFRESH INVERTED INDEX idx_inv ON t_inv/dev
+
+statement ok
+CREATE OR REPLACE TABLE t_inv_scope(id INT, content STRING)
+
+statement ok
+INSERT INTO t_inv_scope VALUES (1, 'base row')
+
+statement ok
+ALTER TABLE t_inv_scope CREATE BRANCH dev
+
+statement ok
+INSERT INTO t_inv_scope/dev VALUES (2, 'branch row')
+
+statement ok
+CREATE INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope/dev(content)
+
+statement ok
+REFRESH INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope/dev
+
+statement error
+REFRESH INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope
+
+statement ok
+CREATE INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope(content)
+
+statement ok
+REFRESH INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope
+
+statement ok
+DROP INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope/dev
+
+statement error
+REFRESH INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope/dev
+
+statement ok
+REFRESH INVERTED INDEX idx_scope ON test_table_ref_index.t_inv_scope
+
+statement ok
+DROP DATABASE test_table_ref_index

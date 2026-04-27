@@ -335,7 +335,7 @@ build_exceptions! {
     UnsupportedEngineParams(2703),
 }
 
-// Table reference Errors [2745-2748]
+// Table reference Errors [2745-2749]
 build_exceptions! {
     /// Unknown reference
     UnknownReference(2745),
@@ -345,6 +345,8 @@ build_exceptions! {
     IllegalReference(2747),
     /// Reference expired
     ReferenceExpired(2748),
+    /// Unsupported branch syntax
+    UnsupportedBranchSyntax(2749),
 }
 
 // License Errors [1401-1404]

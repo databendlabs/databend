@@ -16,6 +16,14 @@ syntax = "proto3";
 
 package databend_proto;
 
+message TableBranch {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  optional string expire_at = 1;
+  uint64 branch_id = 2;
+}
+
 message TableTag {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
@@ -23,4 +31,22 @@ message TableTag {
   // Option<DateTime<Utc>>.
   optional string expire_at = 1;
   string snapshot_loc = 2;
+}
+
+message DroppedBranchMeta {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  // DateTime<Utc>
+  string drop_on = 1;
+  // Option<DateTime<Utc>>
+  optional string expire_at = 2;
+}
+
+message TableIdBranchName {
+  uint64 ver = 100;
+  uint64 min_reader_ver = 101;
+
+  uint64 table_id = 1;
+  string branch_name = 2;
 }

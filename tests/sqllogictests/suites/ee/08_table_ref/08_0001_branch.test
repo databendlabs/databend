@@ -1,0 +1,241 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+DROP DATABASE IF EXISTS test_branch
+
+statement ok
+CREATE DATABASE test_branch
+
+statement ok
+USE test_branch
+
+statement ok
+CREATE OR REPLACE TABLE t1(a INT, b STRING)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b'), (3, 'c')
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH dev
+
+query TBBB
+SELECT name, branch_id > 0, snapshot_location != '', expire_at IS NOT NULL FROM system.branches WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1 1 0
+
+query TITT
+SHOW BRANCHES FROM t1 LIKE 'dev'
+----
+dev <slt:ignore> <slt:ignore> NULL
+
+query TITT
+SHOW BRANCHES IN test_branch.t1 WHERE name = 'dev' LIMIT 1
+----
+dev <slt:ignore> <slt:ignore> NULL
+
+statement ok
+ALTER TABLE t1 CREATE TAG v1
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+query I
+SELECT t1.a FROM t1/dev ORDER BY a
+----
+1
+2
+3
+
+statement error 1065.*Duplicated table name t1 in the same FROM clause
+SELECT * FROM t1, t1/dev
+
+query IT
+SELECT l.a, r.b FROM t1 AS l JOIN t1/dev AS r ON l.a = r.a ORDER BY l.a
+----
+1 a
+2 b
+3 c
+
+statement ok
+INSERT INTO t1 VALUES (10, 'x')
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+3 c
+10 x
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement error 1002
+SELECT * FROM t1/dev AT (TAG => "v1")
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH from_tag AT (TAG => v1)
+
+query IT
+SELECT * FROM t1/from_tag ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+ALTER TABLE t1/dev CREATE BRANCH nested_dev
+
+query IT
+SELECT * FROM t1/nested_dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement error 2746
+ALTER TABLE t1 CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+statement error 2745
+SELECT * FROM t1/dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev RETAIN 1 SECONDS
+
+statement ok
+SELECT SLEEP(1)
+
+statement error 2748
+SELECT * FROM t1/dev
+
+statement ok
+ALTER TABLE t1 DROP BRANCH dev
+
+query TB
+SELECT name, dropped_on IS NOT NULL FROM system.branches_with_history WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1
+
+statement ok
+ALTER TABLE t1 UNDROP BRANCH dev RETAIN 7 DAYS
+
+query TB
+SELECT name, expire_at IS NOT NULL FROM system.branches WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement error 2745
+ALTER TABLE t1 DROP BRANCH non_existent
+
+statement ok
+CREATE TABLE t_memory(a INT) ENGINE = Memory
+
+statement error 2747
+ALTER TABLE t_memory CREATE BRANCH test
+
+statement ok
+CREATE TEMPORARY TABLE t_temp(a INT)
+
+statement error 2747
+ALTER TABLE t_temp CREATE BRANCH test
+
+statement ok
+CREATE OR REPLACE TABLE t_schema_guard(a INT)
+
+statement ok
+INSERT INTO t_schema_guard VALUES (1)
+
+statement ok
+ALTER TABLE t_schema_guard CREATE TAG old_schema
+
+statement ok
+ALTER TABLE t_schema_guard ADD COLUMN b STRING
+
+statement ok
+ALTER TABLE t_schema_guard CREATE BRANCH old_schema_branch AT (TAG => old_schema)
+
+query I
+SELECT * FROM t_schema_guard/old_schema_branch ORDER BY a
+----
+1
+
+query error
+WITH t AS (SELECT * FROM t1) SELECT * FROM t/dev
+
+query error
+WITH t AS (SELECT * FROM t1) SELECT * FROM (SELECT * FROM t/dev) s
+
+statement ok
+RENAME TABLE t1 to t2;
+
+query error 1025
+SELECT * FROM t1/nested_dev ORDER BY a
+
+query IT
+SELECT * FROM t2/nested_dev ORDER BY a
+----
+1 a
+2 b
+3 c
+
+statement ok
+set enable_experimental_table_ref=0;
+
+query error 1002.*Table ref is an experimental feature
+SELECT * FROM t2/nested_dev ORDER BY a
+
+statement ok
+DROP DATABASE test_branch
