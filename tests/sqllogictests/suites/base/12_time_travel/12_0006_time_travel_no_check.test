@@ -1,0 +1,54 @@
+statement ok
+DROP DATABASE IF EXISTS db_12_0006
+
+statement ok
+CREATE DATABASE db_12_0006
+
+statement ok
+USE db_12_0006
+
+statement ok
+CREATE TABLE t(c1 int)
+
+statement ok
+INSERT INTO t VALUES(1)
+
+statement ok
+INSERT INTO t VALUES(2)
+
+statement ok
+SELECT sleep(1)
+
+# Test NO_CHECK with SNAPSHOT via subquery expression
+query I
+SELECT count() FROM t AT (SNAPSHOT => (SELECT snapshot_id FROM fuse_snapshot('db_12_0006', 't') LIMIT 1), NO_CHECK => true)
+----
+2
+
+# Test NO_CHECK with SNAPSHOT: first snapshot should have 1 row
+query I
+SELECT count() FROM t AT (SNAPSHOT => (SELECT snapshot_id FROM fuse_snapshot('db_12_0006', 't') ORDER BY timestamp ASC LIMIT 1), NO_CHECK => true)
+----
+1
+
+# Test NO_CHECK with non-existent snapshot id
+statement error 2013
+SELECT * FROM t AT (SNAPSHOT => '00000000000000000000000000000000', NO_CHECK => true)
+
+# Test NO_CHECK with TIMESTAMP => now() should see all rows
+query I
+SELECT count() FROM t AT (TIMESTAMP => now()::TIMESTAMP, NO_CHECK => true)
+----
+2
+
+# Test NO_CHECK => false behaves same as default
+query I
+SELECT count() FROM t AT (TIMESTAMP => now()::TIMESTAMP, NO_CHECK => false)
+----
+2
+
+statement ok
+DROP TABLE t ALL
+
+statement ok
+DROP DATABASE db_12_0006
