@@ -31,9 +31,11 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::query_kind::QueryKind;
+use databend_common_catalog::runtime_filter_info::IndexRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::PartitionRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
 use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReport;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_catalog::statistics::data_cache_statistics::DataCacheMetrics;
@@ -1066,14 +1068,6 @@ impl TableContextPartitionStats for CtxDelegation {
 }
 
 impl TableContextRuntimeFilter for CtxDelegation {
-    fn set_runtime_filter_ready(&self, _table_index: usize, _ready: Arc<RuntimeFilterReady>) {
-        todo!()
-    }
-
-    fn get_runtime_filter_ready(&self, _table_index: usize) -> Vec<Arc<RuntimeFilterReady>> {
-        todo!()
-    }
-
     fn clear_runtime_filter(&self) {
         todo!()
     }
@@ -1103,6 +1097,25 @@ impl TableContextRuntimeFilter for CtxDelegation {
     }
 
     fn has_bloom_runtime_filters(&self, _id: usize) -> bool {
+        todo!()
+    }
+
+    fn add_partition_runtime_filters(&self, _: usize, _: PartitionRuntimeFilters) {
+        todo!()
+    }
+    fn add_index_runtime_filters(&self, _: usize, _: IndexRuntimeFilters) {
+        todo!()
+    }
+    fn add_row_runtime_filters(&self, _: usize, _: RowRuntimeFilters) {
+        todo!()
+    }
+    fn get_partition_runtime_filters(&self, _: usize) -> PartitionRuntimeFilters {
+        todo!()
+    }
+    fn get_row_runtime_filters(&self, _: usize) -> RowRuntimeFilters {
+        todo!()
+    }
+    fn get_index_runtime_filters(&self, _: usize) -> IndexRuntimeFilters {
         todo!()
     }
 }

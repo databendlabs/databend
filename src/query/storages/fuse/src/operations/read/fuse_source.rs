@@ -21,6 +21,7 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchema;
@@ -72,6 +73,14 @@ pub fn build_fuse_source_pipeline(
         max_io_requests = max_io_requests.min(16);
     }
 
+    // Get runtime filter source for this scan_id (if any build side registered a builder).
+    // Set the table_schema so the build side can use it to construct trait impls.
+    let rf_source: Option<Arc<RuntimeFilterSource>> =
+        ctx.get_runtime_filter_source(plan.scan_id).map(|source| {
+            source.set_table_schema(table_schema.clone());
+            Arc::new(source)
+        });
+
     let waker = pipeline.get_waker();
     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
     let stream: Arc<dyn PartitionStream> = match receiver {
@@ -100,6 +109,8 @@ pub fn build_fuse_source_pipeline(
                 stream.clone(),
                 ctx.clone(),
                 plan.scan_id,
+                table_schema.clone(),
+                rf_source.clone(),
             )?,
         );
     }
@@ -128,6 +139,7 @@ pub fn build_fuse_source_pipeline(
             read_block_context.clone(),
             input,
             output,
+            rf_source.clone(),
         )
     })?;
 
@@ -168,6 +180,7 @@ pub fn build_fuse_source_pipeline(
                     transform_output,
                     index_reader.clone(),
                     virtual_reader.clone(),
+                    rf_source.clone(),
                 )
             })?;
         }
