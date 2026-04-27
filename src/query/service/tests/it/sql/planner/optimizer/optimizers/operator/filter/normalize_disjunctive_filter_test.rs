@@ -48,29 +48,29 @@ fn expr_to_string(expr: &ScalarExpr) -> String {
                     }
                 }
                 "column(?)".to_string()
-            } else if func.func_name == "and" {
+            } else if matches!(func.func_name.as_str(), "and" | "and_filters") {
                 if func.arguments.is_empty() {
                     "true".to_string() // Empty AND is true
                 } else if func.arguments.len() == 1 {
                     expr_to_string(&func.arguments[0])
                 } else {
-                    format!(
-                        "({} AND {})",
-                        expr_to_string(&func.arguments[0]),
-                        expr_to_string(&func.arguments[1])
-                    )
+                    func.arguments
+                        .iter()
+                        .map(expr_to_string)
+                        .reduce(|lhs, rhs| format!("({lhs} AND {rhs})"))
+                        .expect("handled empty arguments")
                 }
-            } else if func.func_name == "or" {
+            } else if matches!(func.func_name.as_str(), "or" | "or_filters") {
                 if func.arguments.is_empty() {
                     "false".to_string() // Empty OR is false
                 } else if func.arguments.len() == 1 {
                     expr_to_string(&func.arguments[0])
                 } else {
-                    format!(
-                        "({} OR {})",
-                        expr_to_string(&func.arguments[0]),
-                        expr_to_string(&func.arguments[1])
-                    )
+                    func.arguments
+                        .iter()
+                        .map(expr_to_string)
+                        .reduce(|lhs, rhs| format!("({lhs} OR {rhs})"))
+                        .expect("handled empty arguments")
                 }
             } else if func.func_name == "=" {
                 format!(
@@ -231,7 +231,7 @@ fn test_different_table_columns() -> anyhow::Result<()> {
 
     // Check if the second expression is (t2.b OR t2.c)
     if let ScalarExpr::FunctionCall(func) = &after[1] {
-        assert_eq!(func.func_name, "or");
+        assert!(matches!(func.func_name.as_str(), "or" | "or_filters"));
         assert_eq!(func.arguments.len(), 2);
 
         // Check t2.b

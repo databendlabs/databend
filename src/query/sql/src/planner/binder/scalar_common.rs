@@ -120,15 +120,71 @@ pub fn reject_grouping_functions<'a>(
 }
 
 pub fn split_conjunctions(scalar: &ScalarExpr) -> Vec<ScalarExpr> {
-    match scalar {
-        ScalarExpr::FunctionCall(func) if func.func_name == "and" => [
-            split_conjunctions(&func.arguments[0]),
-            split_conjunctions(&func.arguments[1]),
-        ]
-        .concat(),
-        _ => {
-            vec![scalar.clone()]
+    let mut predicates = Vec::new();
+    let mut stack = vec![scalar];
+
+    while let Some(scalar) = stack.pop() {
+        match scalar {
+            ScalarExpr::FunctionCall(func)
+                if matches!(func.func_name.as_str(), "and" | "and_filters") =>
+            {
+                stack.extend(func.arguments.iter().rev());
+            }
+            _ => {
+                predicates.push(scalar.clone());
+            }
         }
+    }
+
+    predicates
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bool_constant(value: bool) -> ScalarExpr {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(value),
+        })
+    }
+
+    fn and(lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "and".to_string(),
+            params: vec![],
+            arguments: vec![lhs, rhs],
+        })
+    }
+
+    #[test]
+    fn test_split_conjunctions_handles_deep_and_chain() {
+        let mut expr = bool_constant(true);
+        for _ in 0..1024 {
+            expr = and(expr, bool_constant(true));
+        }
+
+        let predicates = split_conjunctions(&expr);
+        assert_eq!(predicates.len(), 1025);
+    }
+
+    #[test]
+    fn test_split_conjunctions_handles_and_filters() {
+        let expr = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "and_filters".to_string(),
+            params: vec![],
+            arguments: vec![
+                bool_constant(true),
+                and(bool_constant(true), bool_constant(true)),
+                bool_constant(false),
+            ],
+        });
+
+        let predicates = split_conjunctions(&expr);
+        assert_eq!(predicates.len(), 4);
     }
 }
 
