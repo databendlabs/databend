@@ -14,4 +14,5 @@
 
 mod table;
 
+pub use table::RESULT_SCAN;
 pub use table::ResultScan;

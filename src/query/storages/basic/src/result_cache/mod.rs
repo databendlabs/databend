@@ -23,5 +23,6 @@ pub use common::gen_result_cache_meta_key;
 pub use common::gen_result_cache_prefix;
 pub use meta_manager::ResultCacheMetaManager;
 pub use read::ResultCacheReader;
+pub use table_function::RESULT_SCAN;
 pub use table_function::ResultScan;
 pub use write::WriteResultCacheSink;

@@ -1736,6 +1736,26 @@ where
 
     #[logcall::logcall]
     #[fastrace::trace]
+    async fn resolve_table_id(&self, name_ident: &TableNameIdent) -> Result<u64, KVAppError> {
+        let tenant_dbname = name_ident.db_name_ident();
+        let (seq_db_id, _db_meta) = get_db_or_err(
+            self,
+            &tenant_dbname,
+            format!("resolve_table_id: {}", tenant_dbname.display()),
+        )
+        .await?;
+        let dbid_tbname = DBIdTableName::new(*seq_db_id.data, name_ident.table_name.clone());
+        let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+        if tb_id_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UnknownTable(
+                UnknownTable::new(&name_ident.table_name, "resolve_table_id"),
+            )));
+        }
+        Ok(table_id)
+    }
+
+    #[logcall::logcall]
+    #[fastrace::trace]
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,

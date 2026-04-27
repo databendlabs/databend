@@ -202,7 +202,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (170, "2026-03-25: Add: TableTag"),
     (171, "2026-04-02: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add encoding and encoding_error_mode"),
     (172, "2026-04-09: Update: user.proto/CsvFileFormatParams and TextFileFormatParams add trim_space"),
-    (173, "2026-04-16: Update: file_format.proto/CsvFileFormatParams add quote_style")
+    (173, "2026-04-16: Update: file_format.proto/CsvFileFormatParams add quote_style"),
+    (174, "2026-04-12: Add: TableBranch DroppedBranchMeta and TableIdBranchName")
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

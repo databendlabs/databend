@@ -133,6 +133,7 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storages_basic::ResultScan;
 use databend_common_storages_delta::DeltaTable;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_common_storages_iceberg::IcebergTable;
 use databend_common_storages_orc::OrcTable;
 use databend_common_storages_parquet::ParquetTable;
@@ -620,18 +621,12 @@ impl QueryContext {
         max_batch_size: Option<u64>,
     ) -> Result<Arc<dyn Table>> {
         if branch.is_some() {
-            // Legacy experimental table refs were removed. The parser still accepts
-            // `<db>.<table>/<branch>` so the upcoming redesign can reuse the syntax,
-            // but any remaining runtime entry point should still return a user-facing
-            // error instead of looking like an internal server bug.
-            return Err(ErrorCode::Unimplemented(
-                "Legacy experimental table refs were removed: table branch references are reserved for a future redesign and are intentionally rejected.",
-            ));
+            check_table_ref_access(self)?;
         }
 
         let table = self
             .shared
-            .get_table(catalog, database, table, max_batch_size)
+            .get_table(catalog, database, table, branch, max_batch_size)
             .await?;
         // the better place to do this is in the QueryContextShared::get_table() method,
         // but there is no way to access dyn TableContext.
