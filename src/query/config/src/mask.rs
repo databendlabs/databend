@@ -218,6 +218,8 @@ impl SpillConfig {
             sort_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio,
+            spill_buffer_pool_memory,
+            spill_buffer_pool_workers,
         } = *self;
 
         Self {
@@ -227,8 +229,9 @@ impl SpillConfig {
             storage: storage.as_ref().map(|storage| storage.mask_display()),
             sort_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio,
-            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
             result_set_spilling_disk_quota_ratio,
+            spill_buffer_pool_memory,
+            spill_buffer_pool_workers,
         }
     }
 }
@@ -384,8 +387,9 @@ mod tests {
             spill_local_disk_max_bytes: 10,
             sort_spilling_disk_quota_ratio: 60,
             window_partition_spilling_disk_quota_ratio: 30,
-            // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
             result_set_spilling_disk_quota_ratio: 0,
+            spill_buffer_pool_memory: 209715200,
+            spill_buffer_pool_workers: 2,
             storage: Some(StorageConfig {
                 typ: "s3".to_string(),
                 s3: S3StorageConfig {

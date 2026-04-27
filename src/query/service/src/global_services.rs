@@ -115,7 +115,7 @@ impl GlobalServices {
         // 4. cluster discovery init.
         ClusterDiscovery::init(config, version).await?;
 
-        SpillsBufferPool::init();
+        SpillsBufferPool::init(&config.spill)?;
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different
