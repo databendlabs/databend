@@ -1,0 +1,228 @@
+# Migrated from tests/suites/0_stateless/17_altertable/17_0005_alter_table_modify_column_type.sh
+#
+# Scenario A: basic type conversion (STRING->FLOAT, INT->STRING).
+# Scenario B: expected errors for invalid cast / unknown column / invalid default.
+# Scenario C: default evolution after modify/add operations.
+# Scenario D: varchar default and not-null behavior after modify.
+# Scenario E: NULL to NOT NULL conversion.
+#
+# Type changes always trigger a physical table rewrite.
+
+statement ok
+DROP DATABASE IF EXISTS db_05_0040
+
+statement ok
+CREATE DATABASE db_05_0040
+
+statement ok
+USE db_05_0040
+
+# --------------------------
+# A. Basic type conversion
+# --------------------------
+# Type change rewrites all existing data to the new column types.
+statement ok
+CREATE TABLE a(a STRING NOT NULL, b INT NOT NULL, c INT NOT NULL)
+
+statement ok
+INSERT INTO a VALUES('1', 2, 3)
+
+# STRING->FLOAT and INT->STRING: data is rewritten with new types.
+statement ok
+ALTER TABLE a MODIFY COLUMN a FLOAT NOT NULL, COLUMN b STRING NOT NULL
+
+query B
+SELECT count(*) = 1 AND min(a) = 1 AND min(b) = '2' AND min(c) = 3 FROM a
+----
+1
+
+query TT
+SELECT name, data_type FROM system.columns WHERE database = 'db_05_0040' AND table = 'a' ORDER BY name
+----
+a FLOAT
+b VARCHAR
+c INT
+
+# ----------------------------------------------
+# B. Invalid cast / unknown column / bad default
+# ----------------------------------------------
+# These ALTERs fail before any rewrite happens.
+statement ok
+CREATE TABLE b(a STRING NOT NULL)
+
+statement ok
+INSERT INTO b VALUES('a')
+
+# String 'a' cannot be cast to FLOAT; rewrite is aborted.
+statement error 1006
+ALTER TABLE b MODIFY COLUMN a FLOAT NOT NULL
+
+# Column b does not exist.
+statement error 1058
+ALTER TABLE b MODIFY COLUMN b FLOAT NOT NULL
+
+statement ok
+CREATE TABLE c(a INT NOT NULL, b INT NOT NULL)
+
+statement error 1006
+INSERT INTO c (b) VALUES(1)
+
+statement ok
+INSERT INTO c (a, b) VALUES(0, 1)
+
+# Invalid default for new type; rejected before rewrite.
+statement error 1006
+ALTER TABLE c MODIFY COLUMN a FLOAT NOT NULL DEFAULT 'a'
+
+# Valid default; type change triggers rewrite.
+statement ok
+ALTER TABLE c MODIFY COLUMN a FLOAT NOT NULL DEFAULT 1.2
+
+query B
+SELECT count(*) = 1 AND min(a) = 0 AND max(a) = 0 AND sum(b) = 1 FROM c
+----
+1
+
+# After type change, insert using the new default (1.2).
+statement ok
+INSERT INTO c (b) VALUES(2)
+
+query FI
+SELECT a, b FROM c ORDER BY a
+----
+0.0 1
+1.2 2
+
+# ----------------------------------------------
+# C. Default evolution with modify/add operations
+# ----------------------------------------------
+# b is physically written (part of original schema), so changing its
+# default does not affect existing rows. c is added via ADD COLUMN
+# (metadata-only), so changing its default is reflected on read.
+statement ok
+CREATE TABLE d(a INT NOT NULL, b INT NOT NULL DEFAULT 10)
+
+statement ok
+INSERT INTO d (a) VALUES(1)
+
+statement ok
+ALTER TABLE d MODIFY COLUMN b INT NOT NULL DEFAULT 2
+
+statement ok
+ALTER TABLE d ADD COLUMN c FLOAT NOT NULL DEFAULT 1.01
+
+statement ok
+ALTER TABLE d MODIFY COLUMN c FLOAT NOT NULL DEFAULT 2.2
+
+statement ok
+INSERT INTO d (a) VALUES(10)
+
+# Row a=1:  b=10 (physical, unchanged), c=2.2 (not physical, new default)
+# Row a=10: b=2  (new default),          c=2.2 (new default)
+query IIF
+SELECT a, b, c FROM d ORDER BY a
+----
+1 10 2.2
+10 2 2.2
+
+# ----------------------------------------------
+# D. VARCHAR default + NOT NULL behavior
+# ----------------------------------------------
+# INT->VARCHAR type change triggers rewrite.
+statement ok
+CREATE TABLE e(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO e VALUES(1, 1)
+
+statement ok
+ALTER TABLE e MODIFY COLUMN a VARCHAR(10) NOT NULL DEFAULT 'not'
+
+# Default expression should be updated after MODIFY COLUMN.
+query T
+SELECT default_expression FROM system.columns WHERE database = 'db_05_0040' AND table = 'e' AND name = 'a'
+----
+'not'
+
+statement ok
+INSERT INTO e (b) VALUES(2)
+
+query TI
+SELECT a, b FROM e ORDER BY b
+----
+1 1
+not 2
+
+statement ok
+CREATE TABLE f(a INT NOT NULL, b INT NOT NULL)
+
+statement ok
+INSERT INTO f VALUES(1, 1)
+
+# Type change and comment change as separate ALTERs.
+statement ok
+ALTER TABLE f MODIFY COLUMN a VARCHAR(10) NOT NULL
+
+statement ok
+ALTER TABLE f MODIFY COLUMN a COMMENT 'new column'
+
+statement error 1006
+INSERT INTO f (b) VALUES(2)
+
+statement ok
+INSERT INTO f (a, b) VALUES('', 2)
+
+query TI
+SELECT a, b FROM f ORDER BY b
+----
+1 1
+(empty) 2
+
+query T
+SELECT comment FROM system.columns WHERE database = 'db_05_0040' AND table = 'f' AND name = 'a'
+----
+new column
+
+# ----------------------------------------------
+# E. NULL to NOT NULL conversion
+# ----------------------------------------------
+# Columns that contain NULL values must reject NOT NULL conversion.
+# A column that is already NOT NULL (or has no NULLs) should succeed.
+
+statement ok
+CREATE TABLE g(a STRING NULL, b INT NULL, c STRING NOT NULL)
+
+statement ok
+INSERT INTO g VALUES('a',1,'c1'),('b',NULL,'c2'),(NULL,3,'c3'),('d',4,'c4')
+
+# a contains 1 NULL — reject.
+statement error 1006
+ALTER TABLE g MODIFY COLUMN a STRING NOT NULL
+
+# b contains 1 NULL — reject.
+statement error 1006
+ALTER TABLE g MODIFY COLUMN b INT NOT NULL
+
+# c is already NOT NULL and has no NULLs — no-op, should succeed.
+statement ok
+ALTER TABLE g MODIFY COLUMN c STRING NOT NULL
+
+# Data unchanged after the failed ALTERs.
+query TTT
+SELECT a, b, c FROM g ORDER BY c
+----
+a 1 c1
+b NULL c2
+NULL 3 c3
+d 4 c4
+
+# Failed ALTERs did not change nullability of a and b.
+query TTT
+SELECT name, is_nullable, data_type FROM system.columns WHERE database = 'db_05_0040' AND table = 'g' ORDER BY name
+----
+a YES VARCHAR
+b YES INT
+c NO VARCHAR
+
+statement ok
+DROP DATABASE db_05_0040
