@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use arrow_ipc::reader::StreamReader;
+use arrow_schema::DataType as ArrowDataType;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_column::types::timestamp_tz;
 use databend_common_exception::Result;
@@ -40,6 +41,8 @@ use databend_common_expression::types::VariantType;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
 use databend_common_expression::types::date::date_to_string;
+use databend_common_expression::types::decimal::Decimal64Type;
+use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::geography::GeographyColumn;
 use databend_common_expression::types::geography::GeographyRef;
 use databend_common_expression::types::geography::GeographyType;
@@ -353,6 +356,7 @@ fn test_arrow_ipc_variant_json_string_payloads() -> anyhow::Result<()> {
             .map(String::as_str),
         Some(ARROW_EXT_TYPE_VARIANT)
     );
+    assert_eq!(arrow_schema.field(0).data_type(), &ArrowDataType::LargeUtf8);
 
     match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
         Column::Variant(column) => {
@@ -424,7 +428,30 @@ fn test_arrow_ipc_nested_variant_json_string_payloads() -> anyhow::Result<()> {
     let buf = collector
         .into_serializer(OutputFormatSettings::default())
         .to_arrow_ipc(&schema, vec![])?;
-    let (_, batch) = read_first_arrow_batch(buf)?;
+    let (arrow_schema, batch) = read_first_arrow_batch(buf)?;
+
+    match arrow_schema.field(0).data_type() {
+        ArrowDataType::LargeList(field) => {
+            assert_eq!(field.data_type(), &ArrowDataType::LargeUtf8);
+        }
+        other => panic!("expected large list arrow type, got {other:?}"),
+    }
+    match arrow_schema.field(1).data_type() {
+        ArrowDataType::Struct(fields) => {
+            assert_eq!(fields[0].data_type(), &ArrowDataType::LargeUtf8);
+        }
+        other => panic!("expected struct arrow type, got {other:?}"),
+    }
+    match arrow_schema.field(2).data_type() {
+        ArrowDataType::Map(field, _) => match field.data_type() {
+            ArrowDataType::Struct(fields) => {
+                assert_eq!(fields[1].data_type(), &ArrowDataType::LargeUtf8);
+            }
+            other => panic!("expected map entry struct arrow type, got {other:?}"),
+        },
+        other => panic!("expected map arrow type, got {other:?}"),
+    }
+    assert_eq!(arrow_schema.field(3).data_type(), &ArrowDataType::LargeUtf8);
 
     match Column::from_arrow_rs(batch.column(0).clone(), schema.field(0).data_type())? {
         Column::Array(column) => match column.values() {
@@ -691,6 +718,48 @@ fn test_arrow_ipc_nested_variant_jsonb_payloads_for_legacy_bendsql_python() -> a
         },
         other => panic!("expected nullable column, got {other:?}"),
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_arrow_ipc_decimal64_feature_toggle() -> anyhow::Result<()> {
+    let decimal_size = DecimalSize::new_unchecked(10, 2);
+    let schema = DataSchema::new(vec![DataField::new("d", DataType::Decimal(decimal_size))]);
+
+    let mut collector = BlocksCollector::new();
+    collector.append_columns(
+        vec![Decimal64Type::from_data_with_size(
+            vec![123_i64],
+            Some(decimal_size),
+        )],
+        1,
+    );
+
+    let decimal64_buf = collector
+        .clone()
+        .into_serializer(OutputFormatSettings {
+            http_arrow_use_decimal64: true,
+            ..Default::default()
+        })
+        .to_arrow_ipc(&schema, vec![])?;
+    let (decimal64_schema, _) = read_first_arrow_batch(decimal64_buf)?;
+    assert_eq!(
+        decimal64_schema.field(0).data_type(),
+        &ArrowDataType::Decimal64(decimal_size.precision(), decimal_size.scale() as i8)
+    );
+
+    let decimal128_buf = collector
+        .into_serializer(OutputFormatSettings {
+            http_arrow_use_decimal64: false,
+            ..Default::default()
+        })
+        .to_arrow_ipc(&schema, vec![])?;
+    let (decimal128_schema, _) = read_first_arrow_batch(decimal128_buf)?;
+    assert_eq!(
+        decimal128_schema.field(0).data_type(),
+        &ArrowDataType::Decimal128(decimal_size.precision(), decimal_size.scale() as i8)
+    );
 
     Ok(())
 }

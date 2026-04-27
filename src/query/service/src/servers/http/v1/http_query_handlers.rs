@@ -68,6 +68,7 @@ use super::query::HttpQuery;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
 use super::query::ResponseState;
+use super::query::execute_state::ARROW_FEATURE_NEGOTIATION_VERSION;
 use super::query::execute_state::LEGACY_ARROW_RESULT_VERSION;
 use super::query::execute_state::SERVER_MAX_ARROW_RESULT_VERSION;
 use super::query::execute_state::legacy_bendsql_python_arrow_result_version;
@@ -156,6 +157,28 @@ pub struct QueryResponseSettings {
     pub http_json_result_mode: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arrow_result_version: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arrow_features: Option<ArrowFeatures>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq)]
+pub struct ArrowFeatures {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub decimal64: Option<bool>,
+}
+
+impl ArrowFeatures {
+    pub(crate) fn decimal64_enabled() -> Self {
+        Self {
+            decimal64: Some(true),
+        }
+    }
+
+    fn visible_enabled_only(&self) -> Option<Self> {
+        self.decimal64
+            .filter(|enabled| *enabled)
+            .map(|_| Self::decimal64_enabled())
+    }
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -211,6 +234,7 @@ impl QueryResponse {
                     warnings,
                     response_settings,
                     arrow_result_version: _,
+                    arrow_features: _,
                 },
         }: HttpQueryResponseInternal,
         is_final: bool,
@@ -263,7 +287,8 @@ impl QueryResponse {
                 || encoding.arrow_result_version.is_some()
         );
         let response_settings = response_settings.map(|mut settings| {
-            settings.arrow_result_version = visible_arrow_result_version(encoding);
+            settings.arrow_result_version = visible_arrow_result_version(&encoding);
+            settings.arrow_features = visible_arrow_features(&encoding);
             settings
         });
 
@@ -324,13 +349,29 @@ impl QueryResponse {
     }
 }
 
-fn visible_arrow_result_version(encoding: ResponseEncoding) -> Option<u64> {
+fn visible_arrow_result_version(encoding: &ResponseEncoding) -> Option<u64> {
     match encoding.format {
         QueryResultFormat::Json => None,
         QueryResultFormat::Arrow => encoding
             .arrow_result_version
             .filter(|version| *version != LEGACY_ARROW_RESULT_VERSION),
     }
+}
+
+fn visible_arrow_features(encoding: &ResponseEncoding) -> Option<ArrowFeatures> {
+    if matches!(encoding.format, QueryResultFormat::Json) {
+        return None;
+    }
+
+    encoding
+        .arrow_result_version
+        .filter(|version| *version >= ARROW_FEATURE_NEGOTIATION_VERSION)
+        .and_then(|_| {
+            encoding
+                .arrow_features
+                .as_ref()
+                .and_then(ArrowFeatures::visible_enabled_only)
+        })
 }
 
 fn negotiate_arrow_result_version(
@@ -360,6 +401,28 @@ fn negotiate_arrow_result_version(
     )))
 }
 
+fn negotiate_arrow_features(
+    req: &HttpQueryRequest,
+    arrow_result_version: Option<u64>,
+) -> Option<ArrowFeatures> {
+    if arrow_result_version? < ARROW_FEATURE_NEGOTIATION_VERSION {
+        return None;
+    }
+
+    Some(
+        match req
+            .arrow_features
+            .as_ref()
+            .and_then(|features| features.decimal64)
+        {
+            Some(false) => ArrowFeatures {
+                decimal64: Some(false),
+            },
+            _ => ArrowFeatures::decimal64_enabled(),
+        },
+    )
+}
+
 fn require_negotiated_arrow_result_version(
     query_id: &str,
     query_result_format: QueryResultFormat,
@@ -382,10 +445,11 @@ pub struct StateResponse {
     pub stats: QueryStats,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct ResponseEncoding {
     format: QueryResultFormat,
     arrow_result_version: Option<u64>,
+    arrow_features: Option<ArrowFeatures>,
 }
 
 impl StateResponse {
@@ -477,6 +541,7 @@ async fn query_final_handler(
                         response.state.arrow_result_version,
                     )
                     .map_err(HttpErrorCode::bad_request)?,
+                    arrow_features: response.state.arrow_features.clone(),
                 };
                 // it is safe to set these 2 fields to None, because client now check for null/None first.
                 response.session = None;
@@ -610,6 +675,7 @@ async fn query_page_handler(
                         resp.state.arrow_result_version,
                     )
                     .map_err(HttpErrorCode::bad_request)?,
+                    arrow_features: resp.state.arrow_features.clone(),
                 };
                 query
                     .update_expire_time(false, resp.is_data_drained())
@@ -699,6 +765,7 @@ pub(crate) async fn query_handler(
                             resp.state.arrow_result_version,
                         )
                         .map_err(HttpErrorCode::bad_request)?,
+                        arrow_features: resp.state.arrow_features.clone(),
                     };
                     Ok(QueryResponse::from_internal(
                         ctx.query_id.clone(),
@@ -713,8 +780,16 @@ pub(crate) async fn query_handler(
         let arrow_result_version =
             negotiate_arrow_result_version(&req, query_result_format, ctx.user_agent.as_deref())
                 .map_err(HttpErrorCode::bad_request)?;
+        let arrow_features = negotiate_arrow_features(&req, arrow_result_version);
 
-        match HttpQuery::try_create(ctx, req.clone(), arrow_result_version).await {
+        match HttpQuery::try_create(
+            ctx,
+            req.clone(),
+            arrow_result_version,
+            arrow_features.clone(),
+        )
+        .await
+        {
             Err(err) => {
                 let err = err.display_with_sql(&sql);
                 error!("Failed to start SQL query, error: {:?}", err);
@@ -774,6 +849,7 @@ pub(crate) async fn query_handler(
                     ResponseEncoding {
                         format: query_result_format,
                         arrow_result_version,
+                        arrow_features,
                     },
                 )
                 .into_response())
@@ -1198,5 +1274,53 @@ impl<'a> FromRequest<'a> for QueryResultFormat {
             .headers()
             .typed_get::<Self>()
             .unwrap_or(QueryResultFormat::Json))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::servers::http::v1::query::HttpQueryRequest;
+
+    fn dummy_request(arrow_features: Option<ArrowFeatures>) -> HttpQueryRequest {
+        HttpQueryRequest {
+            session_id: None,
+            session: None,
+            sql: "select 1".to_string(),
+            pagination: Default::default(),
+            string_fields: true,
+            stage_attachment: None,
+            params: None,
+            arrow_result_version_max: None,
+            arrow_features,
+        }
+    }
+
+    #[test]
+    fn test_negotiate_arrow_features_preserves_explicit_decimal64_disable() {
+        let features = negotiate_arrow_features(
+            &dummy_request(Some(ArrowFeatures {
+                decimal64: Some(false),
+            })),
+            Some(ARROW_FEATURE_NEGOTIATION_VERSION),
+        );
+        assert_eq!(
+            features,
+            Some(ArrowFeatures {
+                decimal64: Some(false),
+            })
+        );
+    }
+
+    #[test]
+    fn test_visible_arrow_features_hides_disabled_entries() {
+        let encoding = ResponseEncoding {
+            format: QueryResultFormat::Arrow,
+            arrow_result_version: Some(ARROW_FEATURE_NEGOTIATION_VERSION),
+            arrow_features: Some(ArrowFeatures {
+                decimal64: Some(false),
+            }),
+        };
+        assert_eq!(visible_arrow_features(&encoding), None);
     }
 }
