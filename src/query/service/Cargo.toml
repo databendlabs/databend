@@ -32,6 +32,7 @@ storage-hdfs = ["opendal/services-hdfs", "databend-common-storage/storage-hdfs"]
 anyhow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-buffer = { workspace = true }
+arrow-cast = { workspace = true }
 arrow-flight = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-json = { workspace = true }
@@ -185,7 +186,6 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
-arrow-cast = { workspace = true }
 databend-common-sql-test-support = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 geo = { workspace = true }

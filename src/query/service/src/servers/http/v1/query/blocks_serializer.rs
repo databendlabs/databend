@@ -12,18 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
 
+use arrow_array::Array;
+use arrow_array::LargeListArray;
+use arrow_array::MapArray;
+use arrow_array::RecordBatch;
+use arrow_array::StructArray;
+use arrow_array::cast::AsArray;
+use arrow_cast::cast;
 use arrow_ipc::CompressionType;
 use arrow_ipc::MetadataVersion;
 use arrow_ipc::writer::IpcWriteOptions;
 use arrow_ipc::writer::StreamWriter;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::Field as ArrowField;
+use arrow_schema::Fields as ArrowFields;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchema;
+use databend_common_expression::converts::arrow::ARROW_EXT_TYPE_VARIANT;
+use databend_common_expression::converts::arrow::EXTENSION_KEY;
 use databend_common_expression::types::array::ArrayColumn;
 use databend_common_expression::types::binary::BinaryColumn;
 use databend_common_expression::types::binary::BinaryColumnBuilder;
@@ -116,13 +130,14 @@ impl BlocksSerializer {
         data_schema: &DataSchema,
         ext_meta: Vec<(String, String)>,
     ) -> Result<Vec<u8>> {
-        let mut schema = arrow_schema::Schema::from(data_schema);
+        let mut schema = build_arrow_ipc_schema(data_schema, self.format.as_ref());
         schema.metadata.extend(ext_meta);
+        let schema = Arc::new(schema);
 
         let mut buf = Vec::new();
         let opts = IpcWriteOptions::try_new(8, false, MetadataVersion::V5)?
             .try_with_compression(Some(CompressionType::LZ4_FRAME))?;
-        let mut writer = StreamWriter::try_new_with_options(&mut buf, &schema, opts)?;
+        let mut writer = StreamWriter::try_new_with_options(&mut buf, schema.as_ref(), opts)?;
 
         for (block, _) in &self.columns {
             let columns = if let Some(format) = &self.format {
@@ -132,10 +147,143 @@ impl BlocksSerializer {
             };
             let block = DataBlock::new_from_columns(columns);
             let batch = block.to_record_batch_with_dataschema(data_schema)?;
+            let batch = rewrite_arrow_ipc_batch(batch, schema.clone())?;
             writer.write(&batch)?;
         }
         writer.finish()?;
         Ok(buf)
+    }
+}
+
+fn build_arrow_ipc_schema(
+    data_schema: &DataSchema,
+    format: Option<&OutputFormatSettings>,
+) -> arrow_schema::Schema {
+    let schema = arrow_schema::Schema::from(data_schema);
+    rewrite_arrow_ipc_schema(&schema, format)
+}
+
+fn rewrite_arrow_ipc_schema(
+    schema: &arrow_schema::Schema,
+    format: Option<&OutputFormatSettings>,
+) -> arrow_schema::Schema {
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|field| Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+        .collect::<Vec<_>>();
+    arrow_schema::Schema::new_with_metadata(ArrowFields::from(fields), schema.metadata.clone())
+}
+
+fn rewrite_arrow_ipc_field(
+    field: &ArrowField,
+    format: Option<&OutputFormatSettings>,
+) -> ArrowField {
+    let is_variant_json_string = field
+        .metadata()
+        .get(EXTENSION_KEY)
+        .is_some_and(|ext| ext == ARROW_EXT_TYPE_VARIANT)
+        && format.is_some_and(|format| !format.http_arrow_use_jsonb);
+
+    let data_type = if is_variant_json_string {
+        ArrowDataType::LargeUtf8
+    } else {
+        rewrite_arrow_ipc_data_type(field.data_type(), format)
+    };
+
+    ArrowField::new(field.name(), data_type, field.is_nullable())
+        .with_metadata(field.metadata().clone())
+}
+
+fn rewrite_arrow_ipc_data_type(
+    data_type: &ArrowDataType,
+    format: Option<&OutputFormatSettings>,
+) -> ArrowDataType {
+    match data_type {
+        ArrowDataType::Decimal64(precision, scale)
+            if format.is_some_and(|format| !format.http_arrow_use_decimal64) =>
+        {
+            ArrowDataType::Decimal128(*precision, *scale)
+        }
+        ArrowDataType::Struct(fields) => ArrowDataType::Struct(ArrowFields::from(
+            fields
+                .iter()
+                .map(|field| Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+                .collect::<Vec<_>>(),
+        )),
+        ArrowDataType::List(field) => {
+            ArrowDataType::List(Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+        }
+        ArrowDataType::LargeList(field) => {
+            ArrowDataType::LargeList(Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)))
+        }
+        ArrowDataType::FixedSizeList(field, size) => ArrowDataType::FixedSizeList(
+            Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)),
+            *size,
+        ),
+        ArrowDataType::Map(field, ordered) => ArrowDataType::Map(
+            Arc::new(rewrite_arrow_ipc_field(field.as_ref(), format)),
+            *ordered,
+        ),
+        other => other.clone(),
+    }
+}
+
+fn rewrite_arrow_ipc_batch(
+    batch: RecordBatch,
+    target_schema: Arc<arrow_schema::Schema>,
+) -> Result<RecordBatch> {
+    let arrays = batch
+        .columns()
+        .iter()
+        .zip(target_schema.fields())
+        .map(|(array, field)| rewrite_arrow_ipc_array(array.clone(), field.as_ref()))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(RecordBatch::try_new(target_schema, arrays)?)
+}
+
+fn rewrite_arrow_ipc_array(
+    array: Arc<dyn Array>,
+    target_field: &ArrowField,
+) -> Result<Arc<dyn Array>> {
+    if let ArrowDataType::Struct(fields) = target_field.data_type() {
+        let array = array.as_ref().as_struct();
+        let inner_arrays = array
+            .columns()
+            .iter()
+            .zip(fields.iter())
+            .map(|(array, field)| rewrite_arrow_ipc_array(array.clone(), field.as_ref()))
+            .collect::<Result<Vec<_>>>()?;
+
+        let array = StructArray::new(fields.clone(), inner_arrays, array.nulls().cloned());
+        Ok(Arc::new(array) as _)
+    } else if let ArrowDataType::LargeList(field) = target_field.data_type() {
+        let array = array.as_ref().as_list::<i64>();
+        let values = rewrite_arrow_ipc_array(array.values().clone(), field.as_ref())?;
+        let array = LargeListArray::new(
+            field.clone(),
+            array.offsets().clone(),
+            values,
+            array.nulls().cloned(),
+        );
+        Ok(Arc::new(array) as _)
+    } else if let ArrowDataType::Map(field, ordered) = target_field.data_type() {
+        let array = array.as_ref().as_map();
+        let entry = Arc::new(array.entries().clone()) as Arc<dyn Array>;
+        let entry = rewrite_arrow_ipc_array(entry, field.as_ref())?;
+
+        let array = MapArray::new(
+            field.clone(),
+            array.offsets().clone(),
+            entry.as_struct().clone(),
+            array.nulls().cloned(),
+            *ordered,
+        );
+        Ok(Arc::new(array) as _)
+    } else if array.data_type() == target_field.data_type() {
+        Ok(array)
+    } else {
+        cast(array.as_ref(), target_field.data_type()).map_err(ErrorCode::from)
     }
 }
 
