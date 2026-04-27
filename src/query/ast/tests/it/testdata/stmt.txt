@@ -4335,7 +4335,14 @@ CreateStream(
         },
         travel_point: Some(
             Snapshot(
-                "9828b23f74664ff3806f44bbc1925ea5",
+                Literal {
+                    span: Some(
+                        69..103,
+                    ),
+                    value: String(
+                        "9828b23f74664ff3806f44bbc1925ea5",
+                    ),
+                },
             ),
         ),
         append_only: true,
@@ -11345,7 +11352,14 @@ OptimizeTable(
         action: Purge {
             before: Some(
                 Snapshot(
-                    "9828b23f74664ff3806f44bbc1925ea5",
+                    Literal {
+                        span: Some(
+                            43..77,
+                        ),
+                        value: String(
+                            "9828b23f74664ff3806f44bbc1925ea5",
+                        ),
+                    },
                 ),
             ),
         },

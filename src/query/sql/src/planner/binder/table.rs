@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::TimeZone;
 use chrono::Utc;
 use dashmap::DashMap;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Indirection;
 use databend_common_ast::ast::Sample;
@@ -58,6 +59,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use log::info;
 use parking_lot::RwLock;
 
+use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
@@ -558,30 +560,105 @@ impl Binder {
         }
     }
 
+    fn fold_travel_point_expr(
+        &self,
+        bind_context: &mut BindContext,
+        expr: &Expr,
+    ) -> Result<databend_common_expression::Expr<crate::ColumnBinding>> {
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let box (scalar, _) = type_checker.resolve(expr)?;
+        let scalar_expr = scalar.as_expr()?;
+        let (new_expr, _) = ConstantFolder::fold(
+            &scalar_expr,
+            &self.ctx.get_function_context()?,
+            &BUILTIN_FUNCTIONS,
+        );
+        Ok(new_expr)
+    }
+
     pub(crate) fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {
-            TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
-            TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
+            TimeTravelPoint::Snapshot(expr) => {
+                if let Expr::Subquery { subquery, .. } = expr.as_ref() {
+                    if let Some(executor) = &self.subquery_executor {
+                        let sql = subquery.to_string();
+                        let data_blocks = databend_common_base::runtime::block_on(async {
+                            executor.execute_query_with_sql_string(&sql).await
+                        })?;
+                        if data_blocks.is_empty() {
+                            return Err(ErrorCode::InvalidArgument(
+                                "Subquery in AT (SNAPSHOT => ...) returned no results".to_string(),
+                            ));
+                        }
+                        let block = databend_common_expression::DataBlock::concat(&data_blocks)?;
+                        if block.num_rows() == 0 {
+                            return Err(ErrorCode::InvalidArgument(
+                                "Subquery in AT (SNAPSHOT => ...) returned no results".to_string(),
+                            ));
+                        }
+                        let col_value = &block.columns()[0].value;
+                        let scalar = col_value.index(0).unwrap().to_owned();
+                        match scalar {
+                            databend_common_expression::Scalar::String(s) => {
+                                return Ok(NavigationPoint::SnapshotID(s));
+                            }
+                            _ => {
+                                return Err(ErrorCode::InvalidArgument(format!(
+                                    "TimeTravelPoint for 'Snapshot' must resolve to a string value, \
+                                    got: {}",
+                                    scalar
+                                )));
+                            }
+                        }
+                    } else {
+                        return Err(ErrorCode::InvalidArgument(
+                            "Subquery executor is not available for evaluating snapshot expression"
+                                .to_string(),
+                        ));
+                    }
+                }
 
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                match self.fold_travel_point_expr(bind_context, expr) {
+                    Ok(databend_common_expression::Expr::Constant {
+                        scalar: databend_common_expression::Scalar::String(s),
+                        ..
+                    }) => Ok(NavigationPoint::SnapshotID(s)),
+                    _ => {
+                        if let Some(executor) = &self.subquery_executor {
+                            let result = execute_subquery_for_scalar(executor, expr)?;
+                            match result {
+                                databend_common_expression::Scalar::String(s) => {
+                                    Ok(NavigationPoint::SnapshotID(s))
+                                }
+                                _ => Err(ErrorCode::InvalidArgument(format!(
+                                    "TimeTravelPoint for 'Snapshot' must resolve to a string value, \
+                                    got: {}",
+                                    result
+                                ))),
+                            }
+                        } else {
+                            Err(ErrorCode::InvalidArgument(format!(
+                                "TimeTravelPoint for 'Snapshot' must resolve to a constant string value. \
+                                Provided expression '{}' is not a constant string",
+                                expr
+                            )))
+                        }
+                    }
+                }
+            }
+            TimeTravelPoint::Timestamp(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 match new_expr {
                     databend_common_expression::Expr::Constant {
@@ -604,22 +681,7 @@ impl Binder {
                 }
             }
             TimeTravelPoint::Offset(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
-
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 let v = check_number::<_, i64>(
                     None,
