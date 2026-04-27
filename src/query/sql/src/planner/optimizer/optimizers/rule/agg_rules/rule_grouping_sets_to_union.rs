@@ -153,6 +153,7 @@ impl Rule for RuleGroupingSetsToUnion {
                     output_columns: agg_input_columns.clone(),
                     def: agg_input.clone(),
                     column_mapping,
+                    stat_info: None,
                 });
 
                 let mask = (1 << grouping_sets.dup_group_items.len()) - 1;
