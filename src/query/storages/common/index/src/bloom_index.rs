@@ -68,6 +68,7 @@ use databend_common_expression::types::ValueType;
 use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_expression::visit_expr;
+use databend_common_expression::with_integer_mapped_type;
 use databend_common_expression::with_number_mapped_type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::scalars::CityHasher64;
@@ -916,6 +917,49 @@ impl BloomIndexBuilder {
     }
 }
 
+fn eq_bloom_scalar_for_column(
+    scalar: &Scalar,
+    scalar_type: &DataType,
+    column_type: &DataType,
+) -> Option<Scalar> {
+    if scalar_type == column_type {
+        return Some(scalar.clone());
+    }
+    if scalar.is_null() || !Xor8Filter::supported_type(column_type) {
+        return None;
+    }
+
+    // Keep the rewrite one-way: integer column = string constant. The reverse
+    // direction is not safe because string-number comparison can match strings
+    // that are not the canonical cast output, such as "0123" = 123.
+    match (scalar_type.remove_nullable(), column_type.remove_nullable()) {
+        (DataType::String, DataType::Number(num_ty)) if num_ty.is_integer() => {
+            if !string_scalar_parses_as_integer_type(scalar, &num_ty) {
+                return None;
+            }
+
+            let scalar = cast_const(&FunctionContext::default(), column_type.clone(), Constant {
+                span: None,
+                scalar: scalar.clone(),
+                data_type: scalar_type.clone(),
+            })?;
+            (!scalar.is_null()).then_some(scalar)
+        }
+        _ => None,
+    }
+}
+
+fn string_scalar_parses_as_integer_type(scalar: &Scalar, num_ty: &NumberDataType) -> bool {
+    let Some(value) = scalar.as_string() else {
+        return false;
+    };
+
+    with_integer_mapped_type!(|NUM_TYPE| match num_ty {
+        NumberDataType::NUM_TYPE => value.parse::<NUM_TYPE>().is_ok(),
+        _ => false,
+    })
+}
+
 struct Visitor<T: EqVisitor>(T);
 
 impl<T> ExprVisitor<String> for Visitor<T>
@@ -1004,17 +1048,13 @@ where T: EqVisitor
                         data_type: column_type,
                         ..
                     }),
-                ] => {
-                    // decimal don't respect datatype equal
-                    // debug_assert_eq!(scalar_type, column_type);
-                    // If the visitor returns a new expression, then replace with the current expression.
-                    if scalar_type == column_type {
+                ] => match eq_bloom_scalar_for_column(scalar, scalar_type, column_type) {
+                    Some(scalar) => {
                         self.0
-                            .enter_target(*span, id, scalar, column_type, return_type, false)?
-                    } else {
-                        ControlFlow::Continue(None)
+                            .enter_target(*span, id, &scalar, column_type, return_type, false)?
                     }
-                }
+                    None => ControlFlow::Continue(None),
+                },
                 // patterns like `MapColumn[<key>] = <constant>`, `<constant> = MapColumn[<key>]`
                 [
                     Expr::FunctionCall(FunctionCall { id, args, .. }),
