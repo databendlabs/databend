@@ -1041,6 +1041,10 @@ impl Settings {
         self.try_get_string("network_policy")
     }
 
+    pub fn get_max_public_keys_per_user(&self) -> Result<u64> {
+        self.try_get_u64("max_public_keys_per_user")
+    }
+
     pub fn get_stream_consume_batch_size_hint(&self) -> Result<Option<u64>> {
         let v = self.try_get_u64("stream_consume_batch_size_hint")?;
         Ok(if v == 0 { None } else { Some(v) })

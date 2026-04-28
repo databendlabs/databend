@@ -729,6 +729,8 @@ pub enum TokenKind {
     FILES,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
+    #[token("FINGERPRINT", ignore(ascii_case))]
+    FINGERPRINT,
     #[token("FLASHBACK", ignore(ascii_case))]
     FLASHBACK,
     #[token("FLOAT", ignore(ascii_case))]
@@ -877,8 +879,12 @@ pub enum TokenKind {
     JWT,
     #[token("KEY", ignore(ascii_case))]
     KEY,
+    #[token("KEY_PAIR", ignore(ascii_case))]
+    KEY_PAIR,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LABEL", ignore(ascii_case))]
+    LABEL,
     #[token("LAST_DAY", ignore(ascii_case))]
     LAST_DAY,
     #[token("LATERAL", ignore(ascii_case))]
@@ -1074,6 +1080,8 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("PUBLIC_KEY", ignore(ascii_case))]
+    PUBLIC_KEY,
     #[token("PARTIAL", ignore(ascii_case))]
     PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]

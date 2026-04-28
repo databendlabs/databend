@@ -40,11 +40,14 @@ use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::PrincipalIdentity;
 use databend_common_meta_app::principal::ProcedureIdentity;
 use databend_common_meta_app::principal::ProcedureNameIdent;
+use databend_common_meta_app::principal::PublicKeyEntry;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
+use databend_common_meta_app::principal::normalize_public_key;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_users::UserApiProvider;
+use databend_common_users::validate_public_key_pem;
 
 use crate::BindContext;
 use crate::Binder;
@@ -383,12 +386,22 @@ impl Binder {
         }
         let mut user_option = UserOption::default();
         for option in user_options {
-            if let UserOptionItem::SetWorkloadGroup(name) = &option {
-                let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
-                let workload_group = workload_mgr.get_id_by_name(name).await?;
-                user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
-            } else {
-                user_option.apply(option);
+            match option {
+                UserOptionItem::AddPublicKey(_, _)
+                | UserOptionItem::RemovePublicKeyByLabel(_)
+                | UserOptionItem::RemovePublicKeyByFingerprint(_) => {
+                    return Err(ErrorCode::BadArguments(
+                        "ADD/REMOVE PUBLIC_KEY is not allowed in CREATE USER, use IDENTIFIED WITH key_pair BY '<pem>' instead",
+                    ));
+                }
+                UserOptionItem::SetWorkloadGroup(name) => {
+                    let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
+                    let workload_group = workload_mgr.get_id_by_name(name).await?;
+                    user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+                }
+                _ => {
+                    user_option.apply(option);
+                }
             }
         }
         UserApiProvider::instance()
@@ -400,6 +413,18 @@ impl Binder {
                 None,
             )
             .await?;
+
+        // Validate public key PEM for key_pair auth
+        if let Some(databend_common_ast::ast::AuthType::KeyPair) = &auth_option.auth_type {
+            if user.username == "root" {
+                return Err(ErrorCode::BadArguments(
+                    "key-pair authentication is not supported for the root user",
+                ));
+            }
+            if let Some(ref pem) = auth_option.password {
+                validate_public_key_pem(pem)?;
+            }
+        }
 
         // if `must_change_password` is set, user need to change password first
         let need_change = user_option
@@ -457,11 +482,50 @@ impl Binder {
 
         // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
+        let mut key_pair_changed = false;
         for option in user_options {
             if let UserOptionItem::SetWorkloadGroup(name) = &option {
                 let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
                 let workload_group = workload_mgr.get_id_by_name(name).await?;
                 user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+            } else if let UserOptionItem::AddPublicKey(key_input, label) = &option {
+                validate_public_key_pem(key_input)?;
+                let max_keys = self.ctx.get_settings().get_max_public_keys_per_user()?;
+                let current_count = user_info.auth_info.get_public_keys().len() as u64;
+                if current_count >= max_keys {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "cannot add public key: user already has {} keys (max: {})",
+                        current_count, max_keys
+                    )));
+                }
+                let label = label.as_deref().unwrap_or("").trim().to_string();
+                if label.len() > 128 {
+                    return Err(ErrorCode::BadArguments(
+                        "public key label must be 128 characters or fewer",
+                    ));
+                }
+                if !label.is_empty() {
+                    let existing = user_info.auth_info.get_public_keys();
+                    if existing.iter().any(|k| k.label == label) {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "public key label '{}' already exists for this user",
+                            label
+                        )));
+                    }
+                }
+                let entry = PublicKeyEntry {
+                    key: normalize_public_key(key_input),
+                    label,
+                    created_at: Utc::now().to_rfc3339(),
+                };
+                user_info.auth_info.add_public_key(entry);
+                key_pair_changed = true;
+            } else if let UserOptionItem::RemovePublicKeyByLabel(label) = &option {
+                user_info.auth_info.remove_public_key_by_label(label)?;
+                key_pair_changed = true;
+            } else if let UserOptionItem::RemovePublicKeyByFingerprint(fp) = &option {
+                user_info.auth_info.remove_public_key_by_fingerprint(fp)?;
+                key_pair_changed = true;
             } else {
                 user_option.apply(option);
             }
@@ -475,6 +539,25 @@ impl Binder {
 
         // None means auth info is not changed.
         let new_auth_info = if let Some(auth_option) = &auth_option {
+            // Reject re-IDENTIFIED WITH key_pair on existing key_pair users
+            if matches!(
+                auth_option.auth_type,
+                Some(databend_common_ast::ast::AuthType::KeyPair)
+            ) && matches!(user_info.auth_info, AuthInfo::KeyPair { .. })
+            {
+                return Err(ErrorCode::BadArguments(
+                    "user already uses key-pair authentication, use ADD PUBLIC_KEY / REMOVE PUBLIC_KEY to manage keys",
+                ));
+            }
+            // Validate PEM when switching to key_pair auth
+            if matches!(
+                auth_option.auth_type,
+                Some(databend_common_ast::ast::AuthType::KeyPair)
+            ) {
+                if let Some(ref pem) = auth_option.password {
+                    validate_public_key_pem(pem)?;
+                }
+            }
             // If user is changing self password, always set `need_change` as false,
             // because after this operation, the password is changed.
             // And if user is changing other user's password,
@@ -508,7 +591,7 @@ impl Binder {
             None
         };
 
-        let change_auth = new_auth_info.is_some();
+        let change_auth = new_auth_info.is_some() || key_pair_changed;
         let change_user_option = user_option != user_info.option;
         let new_user_option = if change_user_option {
             Some(user_option)
