@@ -303,7 +303,7 @@ async fn test_billing_history_table_functions_via_mock_grpc() -> anyhow::Result<
         let daily_requests = requests.daily.lock().unwrap();
         assert_eq!(daily_requests.len(), 1);
         assert_eq!(daily_requests[0].billing_month, "2026-03");
-        assert_eq!(daily_requests[0].sql_user, "root");
+        assert_eq!(daily_requests[0].sql_user, "'root'@'%'");
         assert!(!daily_requests[0].tenant_id.is_empty());
         assert!(!daily_requests[0].query_id.is_empty());
     }
@@ -312,7 +312,7 @@ async fn test_billing_history_table_functions_via_mock_grpc() -> anyhow::Result<
         let warehouse_requests = requests.warehouse_daily.lock().unwrap();
         assert_eq!(warehouse_requests.len(), 1);
         assert_eq!(warehouse_requests[0].billing_month, "2026-03");
-        assert_eq!(warehouse_requests[0].sql_user, "root");
+        assert_eq!(warehouse_requests[0].sql_user, "'root'@'%'");
         assert!(!warehouse_requests[0].tenant_id.is_empty());
         assert!(!warehouse_requests[0].query_id.is_empty());
     }
