@@ -278,9 +278,10 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
                 self.desc.build_schema.clone(),
                 data.row_groups,
                 target,
+                self.read_settings,
             )?;
 
-            while let Some(data_block) = reader.read(self.read_settings)? {
+            while let Some(data_block) = reader.read()? {
                 self.memory_hash_join.add_block(Some(data_block))?;
             }
         }
@@ -499,6 +500,7 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
                         self.join.desc.probe_schema.clone(),
                         data.row_groups,
                         target,
+                        self.join.read_settings,
                     )?;
                     self.spills_reader = Some(reader);
                     break;
@@ -510,7 +512,7 @@ impl<'a, T: GraceMemoryJoin> RestoreProbeStream<'a, T> {
             }
 
             if let Some(mut spills_reader) = self.spills_reader.take() {
-                if let Some(v) = spills_reader.read(self.join.read_settings)? {
+                if let Some(v) = spills_reader.read()? {
                     self.spills_reader = Some(spills_reader);
                     return Ok(Some(v));
                 }

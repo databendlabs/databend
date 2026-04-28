@@ -413,10 +413,11 @@ fn restore_payload(
         data_schema.clone(),
         vec![row_group.clone()],
         target,
+        read_setting,
     )?;
 
     let instant = Instant::now();
-    let data_block = reader.read(read_setting)?;
+    let data_block = reader.read()?;
     let elapsed = instant.elapsed();
 
     let read_size = reader.read_bytes();

@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::io;
-use std::io::Error;
-use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -121,7 +119,6 @@ impl SpillsBufferPool {
 
         for _ in 0..workers {
             let working_queue: async_channel::Receiver<BufferOperator> = working_rx.clone();
-            let available_write_buffers = buffers_tx.clone();
             runtime.spawn(
                 async_backtrace::location!(String::from("async_buffer")).frame(async move {
                     let mut background = Background::create();
@@ -244,8 +241,17 @@ impl SpillsBufferPool {
         data_schema: DataSchemaRef,
         row_groups: Vec<RowGroupMetaData>,
         target: SpillTarget,
+        settings: ReadSettings,
     ) -> Result<SpillsDataReader> {
-        SpillsDataReader::create(path, op, data_schema, row_groups, self.clone(), target)
+        SpillsDataReader::create(
+            path,
+            op,
+            data_schema,
+            row_groups,
+            self.clone(),
+            target,
+            settings,
+        )
     }
 
     pub fn fetch_ranges(
@@ -469,10 +475,7 @@ impl SpillsDataWriter {
 }
 
 pub struct SpillsDataReader {
-    location: String,
-    operator: Operator,
-    row_groups: std::collections::VecDeque<RowGroupMetaData>,
-    spills_buffer_pool: Arc<SpillsBufferPool>,
+    receiver: async_channel::Receiver<Result<FetchedRowGroup>>,
     data_schema: DataSchemaRef,
     field_levels: FieldLevels,
     read_bytes: usize,
@@ -487,6 +490,7 @@ impl SpillsDataReader {
         row_groups: Vec<RowGroupMetaData>,
         spills_buffer_pool: Arc<SpillsBufferPool>,
         target: SpillTarget,
+        settings: ReadSettings,
     ) -> Result<Self> {
         if row_groups.is_empty() {
             return Err(ErrorCode::Internal(
@@ -500,13 +504,20 @@ impl SpillsDataReader {
             None,
         )?;
 
-        Ok(SpillsDataReader {
+        let (tx, rx) = async_channel::bounded(1);
+        spills_buffer_pool.operator(BufferOperator::ReaderTask(ReaderTaskOperator {
+            span: Span::enter_with_local_parent("ReaderTask"),
+            op: operator,
             location,
-            operator,
-            spills_buffer_pool,
+            row_groups,
+            settings,
+            sender: tx,
+        }));
+
+        Ok(SpillsDataReader {
+            receiver: rx,
             data_schema,
             field_levels,
-            row_groups: std::collections::VecDeque::from(row_groups),
             read_bytes: 0,
             target,
         })
@@ -516,42 +527,30 @@ impl SpillsDataReader {
         self.read_bytes
     }
 
-    pub fn read(&mut self, settings: ReadSettings) -> Result<Option<DataBlock>> {
-        let Some(row_group) = self.row_groups.pop_front() else {
-            return Ok(None);
-        };
-
+    pub fn read(&mut self) -> Result<Option<DataBlock>> {
         let start = Instant::now();
 
-        let mut row_group = RowGroupCore::new(row_group, None);
+        let fetched = match self.receiver.recv_blocking() {
+            Ok(Ok(v)) => v,
+            Ok(Err(e)) => return Err(e),
+            Err(_) => return Ok(None),
+        };
 
-        let read_bytes = std::cell::Cell::new(0usize);
+        self.read_bytes += fetched.read_bytes;
 
-        row_group.fetch(&ProjectionMask::all(), None, |fetch_ranges| {
-            let chunk_data = self.spills_buffer_pool.fetch_ranges(
-                self.operator.clone(),
-                self.location.clone(),
-                fetch_ranges,
-                settings,
-            )?;
-            let bytes_read = chunk_data.iter().map(|c| c.len()).sum::<usize>();
-            read_bytes.set(read_bytes.get() + bytes_read);
+        let mut rg_core = RowGroupCore::new(fetched.metadata, None);
+        rg_core.fetch(&ProjectionMask::all(), None, |_| Ok(fetched.chunks))?;
 
-            Ok(chunk_data)
-        })?;
-
-        self.read_bytes += read_bytes.get();
-
-        let num_rows = row_group.num_rows();
+        let num_rows = rg_core.num_rows();
         let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
             &self.field_levels,
-            &row_group,
+            &rg_core,
             num_rows,
             None,
         )?;
         let batch = reader.next().transpose()?.unwrap();
         debug_assert!(reader.next().is_none());
-        record_read_profile(self.target, &start, read_bytes.get());
+        record_read_profile(self.target, &start, fetched.read_bytes);
         Ok(Some(DataBlock::from_record_batch(
             &self.data_schema,
             &batch,
@@ -581,6 +580,21 @@ pub struct BufferWriterTaskOperator {
     buffer_rx: async_channel::Receiver<Bytes>,
     available_buffers: async_channel::Sender<BytesMut>,
     response: Arc<BufferOperatorResp<io::Result<Metadata>>>,
+}
+
+pub struct FetchedRowGroup {
+    pub metadata: RowGroupMetaData,
+    pub chunks: Vec<Bytes>,
+    pub read_bytes: usize,
+}
+
+pub struct ReaderTaskOperator {
+    span: Span,
+    op: Operator,
+    location: String,
+    row_groups: Vec<RowGroupMetaData>,
+    settings: ReadSettings,
+    sender: async_channel::Sender<Result<FetchedRowGroup>>,
 }
 
 #[derive(Default)]
@@ -619,6 +633,7 @@ pub enum BufferOperator {
     WriterTask(BufferWriterTaskOperator),
     CreateWriter(CreateWriterOperator),
     Fetch(FetchOperator),
+    ReaderTask(ReaderTaskOperator),
 }
 
 impl BufferOperator {
@@ -627,6 +642,7 @@ impl BufferOperator {
             BufferOperator::WriterTask(op) => &op.span,
             BufferOperator::CreateWriter(op) => &op.span,
             BufferOperator::Fetch(op) => &op.span,
+            BufferOperator::ReaderTask(op) => &op.span,
         }
     }
 }
@@ -653,6 +669,12 @@ impl Background {
             BufferOperator::Fetch(op) => {
                 let res = get_ranges(&op.fetch_ranges, &op.settings, &op.location, &op.op).await;
                 op.response.done(res.map(|(chunks, _)| chunks));
+            }
+            BufferOperator::ReaderTask(op) => {
+                spawn(
+                    async_backtrace::location!(String::from("reader_task"))
+                        .frame(async move { reader_task_loop(op).await }),
+                );
             }
         }
     }
@@ -689,6 +711,26 @@ async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
 
     op.response
         .done(op.writer.close().await.map_err(io::Error::from));
+}
+
+async fn reader_task_loop(op: ReaderTaskOperator) {
+    for row_group_meta in op.row_groups {
+        let result = async {
+            let rg_core = RowGroupCore::new(row_group_meta.clone(), None);
+            let ranges = rg_core.fetch_ranges(&ProjectionMask::all());
+            let (chunks, _) = get_ranges(&ranges, &op.settings, &op.location, &op.op).await?;
+            let read_bytes = chunks.iter().map(|c| c.len()).sum::<usize>();
+            Ok(FetchedRowGroup {
+                metadata: row_group_meta,
+                chunks,
+                read_bytes,
+            })
+        };
+
+        if op.sender.send(result.await).await.is_err() {
+            break;
+        }
+    }
 }
 
 #[cfg(test)]
