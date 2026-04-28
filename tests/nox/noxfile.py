@@ -1,4 +1,9 @@
+import json
 import os
+import shutil
+import tarfile
+import urllib.request
+from pathlib import Path
 
 import nox
 
@@ -23,6 +28,12 @@ def python_client(session, driver_version):
 
 
 JDBC_DRIVER = ["0.4.0", "main"]
+GO_DRIVER_PINNED = ["v0.9.1"]
+GO_DRIVER = ["main", "latest", *GO_DRIVER_PINNED]
+GO_CLIENT_CACHE_DIR = Path(__file__).resolve().parent / "cache"
+GO_CLIENT_ARCHIVE_ROOT = "https://github.com/databendlabs/databend-go/archive/refs"
+GO_CLIENT_LATEST_RELEASE_URL = "https://github.com/databendlabs/databend-go/releases/latest"
+GO_CLIENT_SKIP_UP = "DATABEND_GO_SKIP_UP"
 
 
 @nox.session
@@ -58,20 +69,102 @@ def run_jdbc_test(session, driver_version, main_version):
     )
 
 
+def resolve_go_source_ref(source_ref):
+    if source_ref != "latest":
+        return source_ref
+
+    request = urllib.request.Request(
+        GO_CLIENT_LATEST_RELEASE_URL,
+        headers={"User-Agent": "databend-nox-go-client"},
+    )
+    with urllib.request.urlopen(request) as response:
+        latest_url = response.geturl().rstrip("/")
+
+    latest_tag = latest_url.rsplit("/", 1)[-1]
+    if not latest_tag.startswith("v"):
+        raise RuntimeError(
+            f"unexpected databend-go latest release redirect: {latest_url}"
+        )
+
+    return latest_tag
+
+
+def get_go_archive_url(resolved_ref):
+    archive_type = "tags" if resolved_ref.startswith("v") else "heads"
+    return f"{GO_CLIENT_ARCHIVE_ROOT}/{archive_type}/{resolved_ref}.tar.gz"
+
+
+def get_go_driver_env(resolved_ref):
+    env = {}
+    if resolved_ref != "main":
+        env["DATABEND_GO_VERSION"] = resolved_ref
+
+    if os.environ.get(GO_CLIENT_SKIP_UP):
+        env[GO_CLIENT_SKIP_UP] = os.environ[GO_CLIENT_SKIP_UP]
+
+    return env
+
+
+def prepare_go_client_source(source_ref):
+    resolved_ref = resolve_go_source_ref(source_ref)
+    cache_key = source_ref.replace("/", "-")
+    source_dir = GO_CLIENT_CACHE_DIR / f"databend-go-{cache_key}"
+    marker_path = source_dir / ".databend-ref.json"
+    makefile_path = source_dir / "tests" / "Makefile"
+
+    if source_ref != "main" and marker_path.exists() and makefile_path.exists():
+        marker = json.loads(marker_path.read_text())
+        if marker.get("resolved_ref") == resolved_ref:
+            return source_dir, resolved_ref
+
+    shutil.rmtree(source_dir, ignore_errors=True)
+    source_dir.mkdir(parents=True, exist_ok=True)
+
+    request = urllib.request.Request(
+        get_go_archive_url(resolved_ref),
+        headers={"User-Agent": "databend-nox-go-client"},
+    )
+    with urllib.request.urlopen(request) as response:
+        with tarfile.open(fileobj=response, mode="r|gz") as archive:
+            archive.extractall(source_dir)
+
+    extracted_dirs = [path for path in source_dir.iterdir() if path.is_dir()]
+    if len(extracted_dirs) != 1:
+        raise RuntimeError(
+            f"expected one extracted databend-go root for {resolved_ref}, got {len(extracted_dirs)}"
+        )
+
+    extracted_root = extracted_dirs[0]
+    for child in extracted_root.iterdir():
+        shutil.move(str(child), source_dir / child.name)
+    extracted_root.rmdir()
+
+    if not makefile_path.exists():
+        raise RuntimeError(
+            f"missing databend-go tests/Makefile after extracting {resolved_ref}"
+        )
+
+    marker_path.write_text(json.dumps({"resolved_ref": resolved_ref}) + "\n")
+    return source_dir, resolved_ref
+
+
 
 
 @nox.session
-@nox.parametrize("driver_version", ["v100.0.0"])
-def go_client(session, driver_version):
-    env = {"DATABEND_GO_VERSION": driver_version}
-    test_dir = f"cache/databend-go/tests"
-    with session.cd(test_dir):
-        if os.path.exists("go.mod"):
-            os.remove("go.mod")
-        if driver_version == "v100.0.0":
-            session.run("make", "-o", "up", "integration", external=True, env=env)
-        else:
-            session.run("make", "-o", "up", "compat", external=True, env=env)
+@nox.parametrize("source_ref", GO_DRIVER)
+def go_client(session, source_ref):
+    source_dir, resolved_ref = prepare_go_client_source(source_ref)
+    env = get_go_driver_env(resolved_ref)
+    test_dir = source_dir / "tests"
+    skip_up = os.environ.get(GO_CLIENT_SKIP_UP)
+    make_args = ["make"]
+    if skip_up:
+        make_args.extend(["-o", "up"])
+    make_args.append("integration")
+
+    session.log(f"running databend-go integration tests from {resolved_ref}")
+    with session.chdir(str(test_dir)):
+        session.run(*make_args, external=True, env=env)
 
 # test API with requests directly.
 # some of the tests will fail with cluster behind nginx.
