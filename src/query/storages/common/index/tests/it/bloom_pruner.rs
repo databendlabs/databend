@@ -73,6 +73,157 @@ fn test_bloom_filter() {
     test_cast(file);
 }
 
+#[test]
+fn test_bloom_filter_casts_string_literal_to_integer_column_type() {
+    let column_type = DataType::Number(NumberDataType::Int32);
+    let field = TableField::new("x", TableDataType::Number(NumberDataType::Int32));
+    let expr = eq_expr_with_string_constant(column_type.clone(), "20240604");
+
+    let result = BloomIndex::filter_index_field(&expr, vec![field.clone()], vec![]).unwrap();
+
+    assert_eq!(result.bloom_fields, vec![field]);
+    assert_eq!(result.bloom_scalars, vec![(
+        0,
+        Scalar::Number(NumberScalar::Int32(20240604)),
+        column_type
+    )]);
+}
+
+#[test]
+fn test_bloom_filter_does_not_cast_number_literal_to_string_column_type() {
+    let column_type = DataType::String;
+    let field = TableField::new("x", TableDataType::String);
+    let expr = check_function(
+        None,
+        "eq",
+        &[],
+        &[
+            Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: "x".to_string(),
+                data_type: column_type,
+                display_name: "x".to_string(),
+            }),
+            Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::Number(NumberScalar::Int32(123)),
+                data_type: DataType::Number(NumberDataType::Int32),
+            }),
+        ],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap();
+
+    let result = BloomIndex::filter_index_field(&expr, vec![field], vec![]).unwrap();
+
+    assert!(result.bloom_fields.is_empty());
+    assert!(result.bloom_scalars.is_empty());
+}
+
+#[test]
+fn test_bloom_filter_does_not_cast_string_literal_to_float_column_type() {
+    let column_type = DataType::Number(NumberDataType::Float64);
+    let field = TableField::new("x", TableDataType::Number(NumberDataType::Float64));
+    let expr = eq_expr_with_string_constant(column_type, "0");
+
+    let result = BloomIndex::filter_index_field(&expr, vec![field], vec![]).unwrap();
+
+    assert!(result.bloom_fields.is_empty());
+    assert!(result.bloom_scalars.is_empty());
+}
+
+#[test]
+fn test_bloom_filter_rewrites_string_literal_integer_comparison() {
+    let func_ctx = FunctionContext::default();
+    let column_type = DataType::Number(NumberDataType::Int32);
+    let field = TableField::new("x", TableDataType::Number(NumberDataType::Int32));
+    let schema = Arc::new(TableSchema::new(vec![field.clone()]));
+    let bloom_columns = bloom_columns_map(&schema, &[0]);
+    let block = DataBlock::new_from_columns(vec![Int32Type::from_data(vec![1, 2])]);
+    let expr = eq_expr_with_string_constant(column_type, "20240604");
+
+    let result =
+        BloomIndex::filter_index_field(&expr, bloom_columns.values().cloned().collect(), vec![])
+            .unwrap();
+    let mut eq_scalar_map = HashMap::<Scalar, u64>::new();
+    for (_, scalar, ty) in result.bloom_scalars.into_iter() {
+        eq_scalar_map.entry(scalar).or_insert_with_key(|scalar| {
+            BloomIndex::calculate_scalar_digest(&func_ctx, scalar, &ty).unwrap()
+        });
+    }
+
+    let mut builder = BloomIndexBuilder::create(
+        func_ctx.clone(),
+        BloomIndexType::default(),
+        bloom_columns.clone(),
+        &[],
+    )
+    .unwrap();
+    builder.add_block(&block).unwrap();
+    let index = builder.finalize().unwrap().unwrap();
+
+    let column_stats = block
+        .columns()
+        .iter()
+        .enumerate()
+        .filter_map(|(i, entry)| {
+            let field = bloom_columns.get(&i)?;
+            let column = entry.as_column().unwrap();
+            let (min, max) = column.domain().to_minmax();
+            Some((field.column_id, ColumnStatistics {
+                min,
+                max,
+                null_count: 0,
+                in_memory_size: 0,
+                distinct_of_values: None,
+            }))
+        })
+        .collect();
+
+    let (expr, domains) = index
+        .rewrite_expr(
+            expr,
+            &eq_scalar_map,
+            &HashMap::new(),
+            &[],
+            &column_stats,
+            schema,
+        )
+        .unwrap();
+    let folded = ConstantFolder::fold_with_domain(&expr, &domains, &func_ctx, &BUILTIN_FUNCTIONS).0;
+
+    assert!(matches!(
+        folded,
+        Expr::Constant(Constant {
+            scalar: Scalar::Boolean(false),
+            ..
+        })
+    ));
+}
+
+fn eq_expr_with_string_constant(column_type: DataType, value: &str) -> Expr<String> {
+    check_function(
+        None,
+        "eq",
+        &[],
+        &[
+            Expr::ColumnRef(ColumnRef {
+                span: None,
+                id: "x".to_string(),
+                data_type: column_type,
+                display_name: "x".to_string(),
+            }),
+            Expr::Constant(Constant {
+                span: None,
+                scalar: Scalar::String(value.to_string()),
+                data_type: DataType::String,
+            }),
+        ],
+        &BUILTIN_FUNCTIONS,
+    )
+    .unwrap()
+}
+
 fn test_base(file: &mut impl Write) {
     let schema = Arc::new(TableSchema::new(vec![
         TableField::new("0", TableDataType::Number(NumberDataType::UInt8)),
