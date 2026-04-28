@@ -97,11 +97,7 @@ pub fn generate_desc_schema(
             }
 
             None => {
-                if field.is_nullable() {
-                    default_exprs.push("NULL".to_string());
-                } else {
-                    default_exprs.push("".to_string());
-                }
+                default_exprs.push("NULL".to_string());
             }
         }
         let extra = match field.computed_expr() {
