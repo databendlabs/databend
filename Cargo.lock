@@ -4056,6 +4056,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "base64 0.22.1",
  "chrono",
  "databend-base",
  "databend-common-ast",

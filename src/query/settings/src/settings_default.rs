@@ -1447,6 +1447,13 @@ impl DefaultSettings {
                     scope: SettingScope::Global,
                     range: None,
                 }),
+                ("max_public_keys_per_user", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Maximum number of public keys allowed per user for key-pair authentication",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(2..=100)),
+                }),
                 ("stream_consume_batch_size_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Hint for batch size during stream consumption. Set it to 0 to disable it. Larger values may improve throughput but could impose greater pressure on stream consumers.",

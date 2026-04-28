@@ -244,6 +244,9 @@ pub enum Statement {
     DescribeUser {
         user: UserIdentity,
     },
+    ShowPublicKeys {
+        user: UserIdentity,
+    },
     CreateUser(CreateUserStmt),
     AlterUser(AlterUserStmt),
     DropUser {
@@ -520,6 +523,7 @@ impl Statement {
             | Statement::ShowVirtualColumns(..)
             | Statement::ShowUsers { .. }
             | Statement::DescribeUser { .. }
+            | Statement::ShowPublicKeys { .. }
             | Statement::ShowRoles { .. }
             | Statement::ShowGrants { .. }
             | Statement::ShowObjectPrivileges(..)
@@ -908,6 +912,7 @@ impl Display for Statement {
                 }
             }
             Statement::DescribeUser { user } => write!(f, "DESCRIBE USER {user}")?,
+            Statement::ShowPublicKeys { user } => write!(f, "SHOW PUBLIC KEYS FOR USER {user}")?,
             Statement::ShowRoles { show_options } => {
                 write!(f, "SHOW ROLES")?;
                 if let Some(show_options) = show_options {

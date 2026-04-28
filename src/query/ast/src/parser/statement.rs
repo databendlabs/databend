@@ -1711,6 +1711,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, user)| Statement::DescribeUser { user },
     );
+    let show_public_keys = map(
+        rule! {
+            SHOW ~ PUBLIC ~ KEYS ~ FOR ~ USER ~ #user_identity
+        },
+        |(_, _, _, _, _, user)| Statement::ShowPublicKeys { user },
+    );
     let create_user = map_res(
         rule! {
             CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2839,6 +2845,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
                 | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
                 | #show_users : "`SHOW USERS`"
+                | #show_public_keys : "`SHOW PUBLIC KEYS FOR USER <user_name>`"
                 | #show_roles : "`SHOW ROLES`"
                 | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
                 | #show_connections: "`SHOW CONNECTIONS`"
@@ -5750,6 +5757,27 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
     );
+    let add_public_key = map(
+        rule! {
+            ADD ~ PUBLIC_KEY ~ ^"=" ~ ^#literal_string ~ ( LABEL ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, _, _, pem, label_opt)| {
+            let label = label_opt.map(|(_, _, l)| l);
+            UserOptionItem::AddPublicKey(pem, label)
+        },
+    );
+    let remove_public_key_by_label = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ LABEL ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, label)| UserOptionItem::RemovePublicKeyByLabel(label),
+    );
+    let remove_public_key_by_fingerprint = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ FINGERPRINT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, fingerprint)| UserOptionItem::RemovePublicKeyByFingerprint(fingerprint),
+    );
 
     rule!(
         #tenant_setting
@@ -5764,6 +5792,9 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #must_change_password
         | #set_workload_group
         | #unset_workload_group
+        | #add_public_key
+        | #remove_public_key_by_label
+        | #remove_public_key_by_fingerprint
     )
     .parse(i)
 }
@@ -5787,6 +5818,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+        value(AuthType::KeyPair, rule! { KEY_PAIR }),
     ))
     .parse(i)
 }

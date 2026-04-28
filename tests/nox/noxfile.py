@@ -178,6 +178,8 @@ def test_suites(session):
         "pyarrow",
         "databend-driver",
         "pylance",
+        "PyJWT",
+        "cryptography",
     )
     # Usage: nox -s test_suites -- suites/http_handler/test_session.py::test_session
     session.run("pytest", *session.posargs)

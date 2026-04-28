@@ -8072,6 +8072,131 @@ AlterUser(
 
 
 ---------- Input ----------
+CREATE USER u1 IDENTIFIED WITH key_pair BY '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----'
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED WITH key_pair BY '-----BEGIN PUBLIC KEY-----
+test
+-----END PUBLIC KEY-----'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: Some(
+                KeyPair,
+            ),
+            password: Some(
+                "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----",
+            ),
+        },
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH ADD PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH ADD PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----
+test
+-----END PUBLIC KEY-----'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            AddPublicKey(
+                "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----",
+                None,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH ADD PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A' LABEL = 'ci-pipeline';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH ADD PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A' LABEL = 'ci-pipeline'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            AddPublicKey(
+                "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A",
+                Some(
+                    "ci-pipeline",
+                ),
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH REMOVE PUBLIC_KEY LABEL = 'ci-pipeline';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH REMOVE PUBLIC_KEY LABEL = 'ci-pipeline'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            RemovePublicKeyByLabel(
+                "ci-pipeline",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:abc123';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:abc123'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            RemovePublicKeyByFingerprint(
+                "SHA256:abc123",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
 CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING
 ---------- Output ---------
 CREATE USER 'u1'@'%' IDENTIFIED BY '123456' WITH DEFAULT_ROLE = 'role123', TENANTSETTING

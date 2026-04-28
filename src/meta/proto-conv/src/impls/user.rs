@@ -49,6 +49,18 @@ impl FromToProto for mt::principal::AuthInfo {
             Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})) => {
                 Ok(mt::principal::AuthInfo::JWT)
             }
+            Some(pb::auth_info::Info::KeyPair(pb::auth_info::KeyPair { public_keys })) => {
+                Ok(mt::principal::AuthInfo::KeyPair {
+                    public_keys: public_keys
+                        .into_iter()
+                        .map(|e| mt::principal::PublicKeyEntry {
+                            key: e.key,
+                            label: e.label,
+                            created_at: e.created_at,
+                        })
+                        .collect(),
+                })
+            }
             Some(pb::auth_info::Info::Password(pb::auth_info::Password {
                 hash_value,
                 hash_method,
@@ -70,6 +82,18 @@ impl FromToProto for mt::principal::AuthInfo {
                 Some(pb::auth_info::Info::None(pb::auth_info::None {}))
             }
             mt::principal::AuthInfo::JWT => Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})),
+            mt::principal::AuthInfo::KeyPair { public_keys } => {
+                Some(pb::auth_info::Info::KeyPair(pb::auth_info::KeyPair {
+                    public_keys: public_keys
+                        .iter()
+                        .map(|e| pb::auth_info::PublicKeyEntry {
+                            key: e.key.clone(),
+                            label: e.label.clone(),
+                            created_at: e.created_at,
+                        })
+                        .collect(),
+                }))
+            }
             mt::principal::AuthInfo::Password {
                 hash_value,
                 hash_method,
