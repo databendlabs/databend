@@ -21,9 +21,9 @@ use chrono::Utc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
-use crate::pb::schedule_options::ScheduleType;
 use crate::pb::ScheduleOptions;
 use crate::pb::WarehouseOptions;
+use crate::pb::schedule_options::ScheduleType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Status {

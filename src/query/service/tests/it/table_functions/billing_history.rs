@@ -18,8 +18,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_base::runtime;
-use databend_common_cloud_control::pb::billing_service_server::BillingService;
-use databend_common_cloud_control::pb::billing_service_server::BillingServiceServer;
 use databend_common_cloud_control::pb::BillingError as PbBillingError;
 use databend_common_cloud_control::pb::BillingHistoryDailyCloudServiceUsage;
 use databend_common_cloud_control::pb::BillingHistoryDailyRow;
@@ -29,20 +27,22 @@ use databend_common_cloud_control::pb::GetBillingHistoryDailyRequest;
 use databend_common_cloud_control::pb::GetBillingHistoryDailyResponse;
 use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyRequest;
 use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyResponse;
+use databend_common_cloud_control::pb::billing_service_server::BillingService;
+use databend_common_cloud_control::pb::billing_service_server::BillingServiceServer;
 use databend_common_config::InnerConfig;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::NumberScalar;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::TcpListenerStream;
-use tonic::transport::Server;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
+use tonic::transport::Server;
 
 #[derive(Clone, Default)]
 struct BillingRequests {
@@ -293,9 +293,11 @@ async fn test_billing_history_table_functions_surface_task_error() -> anyhow::Re
         .try_collect::<Vec<DataBlock>>()
         .await
         .expect_err("warehouse billing task error should fail query");
-    assert!(warehouse_err
-        .message()
-        .contains("warehouse billing unavailable"));
+    assert!(
+        warehouse_err
+            .message()
+            .contains("warehouse billing unavailable")
+    );
     assert!(warehouse_err.message().contains("Internal"));
 
     let _ = shutdown_tx.send(());

@@ -14,10 +14,9 @@
 
 use std::sync::Arc;
 
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 
-use crate::pb::worker_service_client::WorkerServiceClient;
 use crate::pb::AlterWorkerRequest;
 use crate::pb::AlterWorkerResponse;
 use crate::pb::CreateWorkerRequest;
@@ -26,6 +25,7 @@ use crate::pb::DropWorkerRequest;
 use crate::pb::DropWorkerResponse;
 use crate::pb::ListWorkersRequest;
 use crate::pb::ListWorkersResponse;
+use crate::pb::worker_service_client::WorkerServiceClient;
 
 pub(crate) const WORKER_CLIENT_VERSION: &str = "v1";
 pub(crate) const WORKER_CLIENT_VERSION_NAME: &str = "WORKER_CLIENT_VERSION";

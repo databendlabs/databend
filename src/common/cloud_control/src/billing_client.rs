@@ -15,14 +15,14 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 
-use crate::pb::billing_service_client::BillingServiceClient;
 use crate::pb::GetBillingHistoryDailyRequest;
 use crate::pb::GetBillingHistoryDailyResponse;
 use crate::pb::GetBillingHistoryWarehouseDailyRequest;
 use crate::pb::GetBillingHistoryWarehouseDailyResponse;
+use crate::pb::billing_service_client::BillingServiceClient;
 use crate::task_client::MAX_DECODING_SIZE;
 use crate::task_client::MAX_ENCODING_SIZE;
 
