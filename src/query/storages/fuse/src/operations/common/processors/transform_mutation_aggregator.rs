@@ -183,9 +183,8 @@ impl TableMutationAggregator {
         kind: MutationKind,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> Self {
-        let set_hilbert_level = table
-            .cluster_type()
-            .is_some_and(|v| matches!(v, ClusterType::Hilbert))
+        let cluster_type = table.cluster_type();
+        let set_hilbert_level = cluster_type.is_some_and(|v| matches!(v, ClusterType::Hilbert))
             && matches!(
                 kind,
                 MutationKind::Delete
@@ -193,16 +192,22 @@ impl TableMutationAggregator {
                     | MutationKind::Replace
                     | MutationKind::Recluster
             );
+        let fill_missing_cluster_stats =
+            cluster_type.is_some_and(|v| matches!(v, ClusterType::Linear));
 
         let virtual_schema = table.table_info.meta.virtual_schema.clone();
-        let cluster_key_exprs = table
-            .resolve_cluster_keys()
-            .map(|cluster_keys| {
-                parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)
-            })
-            .transpose()
-            .expect("table cluster keys should be valid")
-            .unwrap_or_default();
+        let cluster_key_exprs = if fill_missing_cluster_stats {
+            table
+                .resolve_cluster_keys()
+                .map(|cluster_keys| {
+                    parse_cluster_keys(ctx.clone(), Arc::new(table.clone()), cluster_keys)
+                })
+                .transpose()
+                .expect("table cluster keys should be valid")
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
         let write_segment_ctx = WriteSegmentCtx {
             dal: table.get_operator(),
             location_gen: table.meta_location_generator().clone(),
@@ -212,6 +217,7 @@ impl TableMutationAggregator {
             schema: table.schema(),
             kind,
             table_meta_timestamps,
+            fill_missing_cluster_stats,
         };
         TableMutationAggregator {
             ctx,
@@ -817,6 +823,7 @@ struct WriteSegmentCtx {
     schema: TableSchemaRef,
     kind: MutationKind,
     table_meta_timestamps: TableMetaTimestamps,
+    fill_missing_cluster_stats: bool,
 }
 
 impl WriteSegmentCtx {
@@ -861,7 +868,7 @@ impl WriteSegmentCtx {
                 level,
                 pages: None,
             });
-        } else {
+        } else if self.fill_missing_cluster_stats {
             // Mutation paths may produce a new segment whose blocks do not all carry
             // block-level cluster_stats for the current cluster key yet. In that case
             // reduce_block_metas() leaves summary.cluster_stats empty. Reconstruct a

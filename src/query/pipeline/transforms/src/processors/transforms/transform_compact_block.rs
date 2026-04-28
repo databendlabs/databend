@@ -80,21 +80,25 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
 
 impl TransformCompactBlock {
     fn split_blocks(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<Vec<DataBlock>> {
-        debug_assert!(!blocks.is_empty());
-        // Allow the last output block to absorb in most one minimum-sized tail block.
-        // This stays aligned with BlockThresholds, where min_rows_per_block is 0.8x.
-        let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
-        let mut total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
+        let total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
+        debug_assert!(total_rows > 0);
+        debug_assert!(rows_per_block > 0);
+
+        // rows_per_block is a split target, not a hard upper bound.
+        // Use floor division to cap the output block count and absorb a small tail
+        // into previous blocks. This may produce blocks larger than rows_per_block,
+        // but avoids creating small fragments that would be compacted again.
+        let output_blocks = std::cmp::max(total_rows / rows_per_block, 1);
+        let base_rows = total_rows / output_blocks;
+        let extra_rows = total_rows % output_blocks;
         let mut blocks = blocks.into_iter();
         let mut current = blocks.next();
         let mut offset = 0;
-        let mut output = Vec::new();
+        let mut output = Vec::with_capacity(output_blocks);
 
-        // Split a sequence of blocks while preserving row order. This treats
-        // rows_per_block as a target and allows a slightly larger tail block to
-        // avoid emitting a tiny final block.
-        while total_rows >= max_rows_per_block {
-            let mut remain_rows = rows_per_block;
+        // Split a sequence of blocks while preserving row order.
+        for index in 0..output_blocks {
+            let mut remain_rows = base_rows + usize::from(index < extra_rows);
             let mut pieces = vec![];
 
             while remain_rows > 0 {
@@ -124,18 +128,6 @@ impl TransformCompactBlock {
             output.push(match pieces.len() {
                 1 => pieces.pop().unwrap(),
                 _ => DataBlock::concat(&pieces)?,
-            });
-            total_rows -= rows_per_block;
-        }
-
-        if let Some(block) = current {
-            // Emit the final tail block, which may be smaller than rows_per_block by design.
-            let mut tail = Vec::new();
-            tail.push(block.slice(offset..block.num_rows()));
-            tail.extend(blocks);
-            output.push(match tail.len() {
-                1 => tail.pop().unwrap(),
-                _ => DataBlock::concat(&tail)?,
             });
         }
 
@@ -186,11 +178,11 @@ mod tests {
     }
 
     #[test]
-    fn test_split_blocks_matches_reference_across_block_boundaries() -> Result<()> {
-        assert_split_result(vec![block_with_range(0, 10)], 3, &[3, 3, 4], &[
-            vec![0, 1, 2],
-            vec![3, 4, 5],
-            vec![6, 7, 8, 9],
+    fn test_split_blocks() -> Result<()> {
+        assert_split_result(vec![block_with_range(0, 10)], 3, &[4, 3, 3], &[
+            vec![0, 1, 2, 3],
+            vec![4, 5, 6],
+            vec![7, 8, 9],
         ])?;
         assert_split_result(
             vec![
@@ -199,8 +191,8 @@ mod tests {
                 block_with_range(6, 10),
             ],
             3,
-            &[3, 3, 4],
-            &[vec![0, 1, 2], vec![3, 4, 5], vec![6, 7, 8, 9]],
+            &[4, 3, 3],
+            &[vec![0, 1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]],
         )?;
         assert_split_result(
             vec![
@@ -210,8 +202,8 @@ mod tests {
                 block_with_range(3, 10),
             ],
             4,
-            &[4, 6],
-            &[vec![0, 1, 2, 3], vec![4, 5, 6, 7, 8, 9]],
+            &[5, 5],
+            &[vec![0, 1, 2, 3, 4], vec![5, 6, 7, 8, 9]],
         )?;
         assert_split_result(
             vec![

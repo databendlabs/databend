@@ -27,7 +27,6 @@ use roaring::RoaringTreemap;
 
 use crate::FuseBlockPartInfo;
 use crate::operations::BlockMetaIndex;
-use crate::operations::ReclusterSourceMeta;
 
 pub fn need_reserve_block_info(ctx: Arc<dyn TableContext>, table_idx: usize) -> (bool, bool) {
     let merge_into_join = ctx.get_merge_into_join();
@@ -58,11 +57,6 @@ pub(crate) fn add_data_block_meta(
         } else {
             None
         };
-
-    if block_meta_options.recluster_source_meta {
-        assert!(meta.is_none());
-        meta = Some(ReclusterSourceMeta::create(meta, fuse_part.need_local_sort));
-    }
 
     if block_meta_options.update_stream_columns {
         // Fill `BlockMetaInfoPtr` if update stream columns

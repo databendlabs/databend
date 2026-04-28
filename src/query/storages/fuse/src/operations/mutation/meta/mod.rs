@@ -15,7 +15,6 @@
 mod compact_part;
 mod mutation_meta;
 mod mutation_part;
-mod recluster_meta;
 
 pub use compact_part::CompactBlockPartInfo;
 pub use compact_part::CompactExtraInfo;
@@ -28,4 +27,3 @@ pub use mutation_meta::SerializeDataMeta;
 pub use mutation_part::DeletedSegmentInfo;
 pub use mutation_part::Mutation;
 pub use mutation_part::MutationPartInfo;
-pub use recluster_meta::ReclusterSourceMeta;
