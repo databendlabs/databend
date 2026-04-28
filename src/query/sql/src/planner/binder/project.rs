@@ -41,6 +41,9 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 use itertools::Itertools;
 
@@ -789,36 +792,38 @@ impl Binder {
             None => return Ok(None),
         };
 
-        // Fetch the masking policy asynchronously
+        // Fetch the masking policy via cache (sync fast path, async fallback)
         let tenant = self.ctx.get_tenant();
+        let cache = SecurityPolicyCacheManager::instance();
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_datamask_handler();
+        let tenant_clone = tenant.clone();
 
-        let policy = databend_common_base::runtime::block_on(async {
-            handler
-                .get_data_mask_by_id(meta_api.clone(), &tenant, policy_id)
-                .await
-        });
-
-        let policy = match policy {
-            Ok(p) => p.data,
-            Err(err) => {
-                return Err(ErrorCode::UnknownMaskPolicy(format!(
-                    "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
-                    policy_id, column_binding.column_name, err
-                )));
-            }
-        };
-
-        // Parse the policy body
-        let tokens = tokenize_sql(&policy.body)?;
-        let settings = self.ctx.get_settings();
-        let ast_expr = parse_expr(&tokens, settings.get_sql_dialect()?)?;
+        let cached = cache.get_cached_or_load_sync(
+            PolicyType::DataMask,
+            &tenant,
+            policy_id,
+            || async move {
+                let handler = get_datamask_handler();
+                let seq_v = handler
+                    .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
+                    .await?;
+                let meta = seq_v.data;
+                Ok(RawPolicyDef {
+                    body: meta.body,
+                    args: meta.args,
+                })
+            },
+        ).map_err(|err| {
+            ErrorCode::UnknownMaskPolicy(format!(
+                "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
+                policy_id, column_binding.column_name, err
+            ))
+        })?;
 
         // Create parameter mapping: each parameter maps to a column reference
         // The key insight: use Expr::ColumnRef with full path (database.table.column)
         // This ensures TypeChecker can resolve the columns even in complex queries
-        let args_map: HashMap<_, _> = policy
+        let args_map: HashMap<_, _> = cached
             .args
             .iter()
             .enumerate()
@@ -827,7 +832,7 @@ impl Binder {
                     ErrorCode::Internal(format!(
                         "Masking policy metadata is corrupted: policy requires {} parameters, \
                          but only {} columns are configured in USING clause.",
-                        policy.args.len(),
+                        cached.args.len(),
                         using_columns.len()
                     ))
                 })?;
@@ -857,7 +862,7 @@ impl Binder {
             .collect::<Result<_>>()?;
 
         // Replace parameters in the masking policy expression
-        let replaced_expr = TypeChecker::clone_expr_with_replacement(&ast_expr, |nest_expr| {
+        let replaced_expr = TypeChecker::clone_expr_with_replacement(&cached.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are already normalized to lowercase at policy creation
                 if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
