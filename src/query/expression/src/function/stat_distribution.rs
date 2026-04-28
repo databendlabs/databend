@@ -18,6 +18,7 @@ pub use databend_common_statistics::Ndv;
 use crate::Domain;
 use crate::Scalar;
 use crate::types::DataType;
+use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
 
 #[derive(Debug, Clone)]
@@ -105,6 +106,18 @@ impl<'a> ArgStat<'a> {
 }
 
 impl ReturnStat {
+    pub fn boolean(true_count: StatEstimate) -> Self {
+        Self {
+            domain: Domain::Boolean(BooleanDomain {
+                has_true: true,
+                has_false: true,
+            }),
+            ndv: Ndv::Stat(2.0),
+            null_count: 0,
+            distribution: OwnedDistribution::Boolean(BooleanDistribution { true_count }),
+        }
+    }
+
     pub fn histogram(&self) -> Option<&Histogram> {
         self.distribution.as_histogram()
     }
@@ -296,10 +309,4 @@ impl StatEstimate {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BooleanDistribution {
     pub true_count: StatEstimate,
-}
-
-impl BooleanDistribution {
-    pub fn new(true_count: StatEstimate) -> Self {
-        Self { true_count }
-    }
 }

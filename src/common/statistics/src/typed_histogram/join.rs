@@ -47,8 +47,8 @@ impl<T: Value> TypedHistogram<T> {
     pub fn estimate_join(&self, other: &TypedHistogram<T>) -> JoinEstimation {
         let mut estimation = JoinEstimation::zero();
 
-        for left_bucket in self.buckets_iter() {
-            for right_bucket in other.buckets_iter() {
+        for left_bucket in &self.buckets {
+            for right_bucket in &other.buckets {
                 estimation = estimation.add(left_bucket.estimate_join_contribution(right_bucket));
             }
         }

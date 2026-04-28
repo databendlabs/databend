@@ -93,10 +93,6 @@ impl<T> TypedHistogram<T> {
         self.buckets.iter().map(|bucket| bucket.num_distinct).sum()
     }
 
-    pub fn buckets_iter(&self) -> std::slice::Iter<'_, TypedHistogramBucket<T>> {
-        self.buckets.iter()
-    }
-
     pub fn scale_counts(&mut self, selectivity: f64) {
         for bucket in &mut self.buckets {
             bucket.num_values *= selectivity;
@@ -846,7 +842,7 @@ mod tests {
     fn test_typed_histogram_builder_preserves_max_bound_when_range_not_divisible() {
         let histogram =
             TypedHistogramBuilder::from_ndv(738, 738, Some((0_u64, 737_u64)), 100).unwrap();
-        let buckets = histogram.buckets_iter().collect::<Vec<_>>();
+        let buckets = histogram.buckets.iter().collect::<Vec<_>>();
 
         assert_eq!(buckets.last().unwrap().upper_bound(), &737);
     }
@@ -855,7 +851,8 @@ mod tests {
     fn test_typed_histogram_builder_partitions_discrete_synthetic_bounds() {
         let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
         let bounds = histogram
-            .buckets_iter()
+            .buckets
+            .iter()
             .map(|bucket| (*bucket.lower_bound(), *bucket.upper_bound()))
             .collect::<Vec<_>>();
 

@@ -40,11 +40,8 @@ use databend_common_expression::comparison::estimate_ndv_true_count;
 use databend_common_expression::function_stat::DeriveStat;
 use databend_common_expression::function_stat::ReturnStat;
 use databend_common_expression::stat_distribution::ArgStat;
-use databend_common_expression::stat_distribution::BooleanDistribution;
-use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::StatBinaryArg;
 use databend_common_expression::stat_distribution::StatEstimate;
-use databend_common_expression::types::boolean::BooleanDomain;
 use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
@@ -114,7 +111,7 @@ fn derive_decimal_equality_stat<Op: DecimalEqualityStatOp>(
         return Ok(None);
     };
 
-    Ok(true_count.map(boolean_return_stat))
+    Ok(true_count.map(ReturnStat::boolean))
 }
 
 fn decimal_equality_true_count(
@@ -149,7 +146,7 @@ fn derive_decimal_range_stat<Op: StatComparisonOp>(
         return Ok(None);
     };
 
-    Ok(true_count.map(boolean_return_stat))
+    Ok(true_count.map(ReturnStat::boolean))
 }
 
 fn decimal_range_true_count<Op: StatComparisonOp>(
@@ -174,18 +171,6 @@ fn decimal_stat_value(scalar: &Scalar) -> Option<f64> {
         Scalar::Decimal(value) => Some(value.to_float64()),
         Scalar::Number(value) => Some(value.to_f64().into_inner()),
         _ => None,
-    }
-}
-
-fn boolean_return_stat(true_count: StatEstimate) -> ReturnStat {
-    ReturnStat {
-        domain: Domain::Boolean(BooleanDomain {
-            has_true: true,
-            has_false: true,
-        }),
-        ndv: databend_common_expression::stat_distribution::Ndv::Stat(2.0),
-        null_count: 0,
-        distribution: OwnedDistribution::Boolean(BooleanDistribution::new(true_count)),
     }
 }
 

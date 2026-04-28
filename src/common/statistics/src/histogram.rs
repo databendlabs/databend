@@ -157,10 +157,10 @@ impl Histogram {
 
     pub fn bucket_iter(&self) -> HistogramBucketIter<'_> {
         match self {
-            Self::Int(histogram) => HistogramBucketIter::Int(histogram.buckets_iter()),
-            Self::UInt(histogram) => HistogramBucketIter::UInt(histogram.buckets_iter()),
-            Self::Float(histogram) => HistogramBucketIter::Float(histogram.buckets_iter()),
-            Self::Bytes(histogram) => HistogramBucketIter::Bytes(histogram.buckets_iter()),
+            Self::Int(histogram) => HistogramBucketIter::Int(histogram.buckets.iter()),
+            Self::UInt(histogram) => HistogramBucketIter::UInt(histogram.buckets.iter()),
+            Self::Float(histogram) => HistogramBucketIter::Float(histogram.buckets.iter()),
+            Self::Bytes(histogram) => HistogramBucketIter::Bytes(histogram.buckets.iter()),
         }
     }
 
