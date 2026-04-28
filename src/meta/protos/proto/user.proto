@@ -33,11 +33,15 @@ message AuthInfo {
     optional bool need_change = 3;
   }
   message JWT {}
+  message KeyPair {
+    repeated string public_keys = 1;
+  }
 
   oneof info {
     None none = 1;
     Password password = 2;
     JWT jwt = 3;
+    KeyPair key_pair = 4;
   }
 }
 

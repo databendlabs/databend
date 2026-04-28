@@ -67,6 +67,14 @@ impl BuiltinUsers {
                     }
                 }
             }
+            AuthType::KeyPair => match &auth_config.auth_string {
+                None => Err(ErrorCode::InvalidConfig(
+                    "must set auth_string (PEM public key) for key_pair auth",
+                )),
+                Some(pem) => Ok(AuthInfo::KeyPair {
+                    public_keys: vec![pem.clone()],
+                }),
+            },
         }
     }
 

@@ -29,6 +29,8 @@ use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::JwtAuthenticator;
 use databend_common_users::UserApiProvider;
+use databend_common_users::decode_jwt_subject;
+use databend_common_users::verify_key_pair_jwt;
 use fastrace::func_name;
 use log::info;
 use serde::Serialize;
@@ -130,6 +132,34 @@ impl AuthMgr {
                 token: t,
                 client_ip,
             } => {
+                // Try key-pair auth first: decode sub, look up user, check auth type
+                if let Ok(user_name) = decode_jwt_subject(t.as_str()) {
+                    let tenant = session.get_current_tenant();
+                    let identity = UserIdentity::new(&user_name, "%");
+                    if let Ok(user) = user_api
+                        .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
+                        .await
+                    {
+                        if let AuthInfo::KeyPair { ref public_keys } = user.auth_info {
+                            verify_key_pair_jwt(t.as_str(), public_keys)?;
+
+                            if !user.is_account_admin() && !global_network_policy.is_empty() {
+                                user_api
+                                    .enforce_network_policy(
+                                        &tenant,
+                                        &global_network_policy,
+                                        client_ip.as_deref(),
+                                    )
+                                    .await?;
+                            }
+
+                            session.set_authed_user(user, None).await?;
+                            return Ok((user_name, None));
+                        }
+                    }
+                }
+
+                // Fall through to existing JWKS-based JWT verification
                 let jwt_auth = self.jwt_auth.as_ref().ok_or_else(|| {
                     ErrorCode::AuthenticateFailure(
                         "JWT authentication failed: JWT auth is not configured on this server",

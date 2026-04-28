@@ -877,6 +877,8 @@ pub enum TokenKind {
     JWT,
     #[token("KEY", ignore(ascii_case))]
     KEY,
+    #[token("KEY_PAIR", ignore(ascii_case))]
+    KEY_PAIR,
     #[token("KILL", ignore(ascii_case))]
     KILL,
     #[token("LAST_DAY", ignore(ascii_case))]
@@ -1074,6 +1076,8 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("PUBLIC_KEY", ignore(ascii_case))]
+    PUBLIC_KEY,
     #[token("PARTIAL", ignore(ascii_case))]
     PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]

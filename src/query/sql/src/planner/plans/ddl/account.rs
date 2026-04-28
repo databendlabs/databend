@@ -84,6 +84,10 @@ impl DescUserPlan {
                 "workload_group",
                 DataType::Nullable(Box::new(DataType::String)),
             ),
+            DataField::new(
+                "public_keys",
+                DataType::Nullable(Box::new(DataType::String)),
+            ),
         ])
     }
 }

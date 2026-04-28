@@ -5750,6 +5750,18 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
     );
+    let add_public_key = map(
+        rule! {
+            ADD ~ PUBLIC_KEY ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, pem)| UserOptionItem::AddPublicKey(pem),
+    );
+    let remove_public_key = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, fingerprint)| UserOptionItem::RemovePublicKey(fingerprint),
+    );
 
     rule!(
         #tenant_setting
@@ -5764,6 +5776,8 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #must_change_password
         | #set_workload_group
         | #unset_workload_group
+        | #add_public_key
+        | #remove_public_key
     )
     .parse(i)
 }
@@ -5787,6 +5801,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+        value(AuthType::KeyPair, rule! { KEY_PAIR }),
     ))
     .parse(i)
 }

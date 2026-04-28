@@ -45,6 +45,7 @@ use databend_common_meta_app::principal::UserOption;
 use databend_common_meta_app::principal::UserPrivilegeSet;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyNameIdent;
 use databend_common_users::UserApiProvider;
+use databend_common_users::validate_public_key_pem;
 
 use crate::BindContext;
 use crate::Binder;
@@ -401,6 +402,13 @@ impl Binder {
             )
             .await?;
 
+        // Validate public key PEM for key_pair auth
+        if let Some(databend_common_ast::ast::AuthType::KeyPair) = &auth_option.auth_type {
+            if let Some(ref pem) = auth_option.password {
+                validate_public_key_pem(pem)?;
+            }
+        }
+
         // if `must_change_password` is set, user need to change password first
         let need_change = user_option
             .must_change_password()
@@ -457,11 +465,19 @@ impl Binder {
 
         // TODO: Only user with OWNERSHIP privilege can change user options.
         let mut user_option = user_info.option.clone();
+        let mut key_pair_changed = false;
         for option in user_options {
             if let UserOptionItem::SetWorkloadGroup(name) = &option {
                 let workload_mgr = GlobalInstance::get::<Arc<WorkloadMgr>>();
                 let workload_group = workload_mgr.get_id_by_name(name).await?;
                 user_option.apply(&UserOptionItem::SetWorkloadGroup(workload_group));
+            } else if let UserOptionItem::AddPublicKey(pem) = &option {
+                validate_public_key_pem(pem)?;
+                user_info.auth_info.add_public_key(pem.clone());
+                key_pair_changed = true;
+            } else if let UserOptionItem::RemovePublicKey(fingerprint) = &option {
+                user_info.auth_info.remove_public_key(fingerprint)?;
+                key_pair_changed = true;
             } else {
                 user_option.apply(option);
             }
@@ -508,7 +524,7 @@ impl Binder {
             None
         };
 
-        let change_auth = new_auth_info.is_some();
+        let change_auth = new_auth_info.is_some() || key_pair_changed;
         let change_user_option = user_option != user_info.option;
         let new_user_option = if change_user_option {
             Some(user_option)

@@ -23,6 +23,7 @@ const NO_PASSWORD_STR: &str = "no_password";
 const SHA256_PASSWORD_STR: &str = "sha256_password";
 const DOUBLE_SHA1_PASSWORD_STR: &str = "double_sha1_password";
 const JWT_AUTH_STR: &str = "jwt";
+const KEY_PAIR_STR: &str = "key_pair";
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum AuthType {
@@ -30,6 +31,7 @@ pub enum AuthType {
     Sha256Password,
     DoubleSha1Password,
     JWT,
+    KeyPair,
 }
 
 impl FromStr for AuthType {
@@ -41,6 +43,7 @@ impl FromStr for AuthType {
             DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleSha1Password),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
             JWT_AUTH_STR => Ok(AuthType::JWT),
+            KEY_PAIR_STR => Ok(AuthType::KeyPair),
             _ => Err(ErrorCode::AuthenticateFailure(AuthType::bad_auth_types(s))),
         }
     }
@@ -53,6 +56,7 @@ impl AuthType {
             AuthType::Sha256Password => SHA256_PASSWORD_STR,
             AuthType::DoubleSha1Password => DOUBLE_SHA1_PASSWORD_STR,
             AuthType::JWT => JWT_AUTH_STR,
+            AuthType::KeyPair => KEY_PAIR_STR,
         }
     }
 
@@ -62,6 +66,7 @@ impl AuthType {
             SHA256_PASSWORD_STR,
             DOUBLE_SHA1_PASSWORD_STR,
             JWT_AUTH_STR,
+            KEY_PAIR_STR,
         ];
         let all = all
             .iter()
@@ -87,6 +92,7 @@ impl From<databend_common_ast::ast::AuthType> for AuthType {
             databend_common_ast::ast::AuthType::Sha256Password => AuthType::Sha256Password,
             databend_common_ast::ast::AuthType::DoubleSha1Password => AuthType::DoubleSha1Password,
             databend_common_ast::ast::AuthType::JWT => AuthType::JWT,
+            databend_common_ast::ast::AuthType::KeyPair => AuthType::KeyPair,
         }
     }
 }
@@ -103,6 +109,9 @@ pub enum AuthInfo {
         need_change: bool,
     },
     JWT,
+    KeyPair {
+        public_keys: Vec<String>,
+    },
 }
 
 fn calc_sha1(v: &[u8]) -> [u8; 20] {
@@ -124,6 +133,14 @@ impl AuthInfo {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
             AuthType::JWT => Ok(AuthInfo::JWT),
+            AuthType::KeyPair => match auth_string {
+                Some(pem) => Ok(AuthInfo::KeyPair {
+                    public_keys: vec![pem.clone()],
+                }),
+                None => Err(ErrorCode::AuthenticateFailure(
+                    "need public key for key_pair authentication".to_string(),
+                )),
+            },
             AuthType::Sha256Password | AuthType::DoubleSha1Password => match auth_string {
                 Some(p) => {
                     let method = auth_type.get_password_type().unwrap();
@@ -204,6 +221,7 @@ impl AuthInfo {
         match self {
             AuthInfo::None => AuthType::NoPassword,
             AuthInfo::JWT => AuthType::JWT,
+            AuthInfo::KeyPair { .. } => AuthType::KeyPair,
             AuthInfo::Password { hash_method: t, .. } => match t {
                 PasswordHashMethod::Sha256 => AuthType::Sha256Password,
                 PasswordHashMethod::DoubleSha1 => AuthType::DoubleSha1Password,
@@ -215,6 +233,7 @@ impl AuthInfo {
         match self {
             AuthInfo::None => false,
             AuthInfo::JWT => false,
+            AuthInfo::KeyPair { .. } => false,
             AuthInfo::Password { need_change, .. } => *need_change,
         }
     }
@@ -226,7 +245,7 @@ impl AuthInfo {
                 hash_method: t,
                 ..
             } => t.to_string(p),
-            AuthInfo::None | AuthInfo::JWT => "".to_string(),
+            AuthInfo::None | AuthInfo::JWT | AuthInfo::KeyPair { .. } => "".to_string(),
         }
     }
 
@@ -285,12 +304,62 @@ impl AuthInfo {
                     "login with sha256_password user for mysql protocol not supported yet.",
                 )),
             },
+            AuthInfo::KeyPair { .. } => Err(ErrorCode::AuthenticateFailure(
+                "key-pair authentication is not supported over MySQL protocol, use HTTP or FlightSQL instead.",
+            )),
             _ => Err(ErrorCode::AuthenticateFailure(format!(
                 "user require auth type {}",
                 self.get_type().to_str()
             ))),
         }
     }
+
+    pub fn get_public_keys(&self) -> &[String] {
+        match self {
+            AuthInfo::KeyPair { public_keys } => public_keys,
+            _ => &[],
+        }
+    }
+
+    pub fn add_public_key(&mut self, pem: String) {
+        match self {
+            AuthInfo::KeyPair { public_keys } => {
+                public_keys.push(pem);
+            }
+            _ => {
+                *self = AuthInfo::KeyPair {
+                    public_keys: vec![pem],
+                };
+            }
+        }
+    }
+
+    pub fn remove_public_key(&mut self, fingerprint: &str) -> Result<()> {
+        match self {
+            AuthInfo::KeyPair { public_keys } => {
+                let before_len = public_keys.len();
+                public_keys.retain(|k| sha256_fingerprint(k) != fingerprint);
+                if public_keys.len() == before_len {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "public key with fingerprint '{}' not found",
+                        fingerprint
+                    )));
+                }
+                if public_keys.is_empty() {
+                    *self = AuthInfo::None;
+                }
+                Ok(())
+            }
+            _ => Err(ErrorCode::AuthenticateFailure(
+                "user is not configured for key-pair authentication".to_string(),
+            )),
+        }
+    }
+}
+
+pub fn sha256_fingerprint(pem: &str) -> String {
+    let digest = Sha256::digest(pem.as_bytes());
+    format!("SHA256:{}", hex::encode(digest))
 }
 
 #[derive(

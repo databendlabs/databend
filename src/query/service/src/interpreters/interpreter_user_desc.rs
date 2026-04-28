@@ -22,6 +22,7 @@ use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
 use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
+use databend_common_meta_app::principal::sha256_fingerprint;
 use databend_common_sql::plans::DescUserPlan;
 use databend_common_users::UserApiProvider;
 use itertools::Itertools;
@@ -82,6 +83,20 @@ impl Interpreter for DescUserInterpreter {
             }
         };
 
+        let public_keys = {
+            let keys = user.auth_info.get_public_keys();
+            if keys.is_empty() {
+                vec![None]
+            } else {
+                vec![Some(
+                    keys.iter()
+                        .map(|k| sha256_fingerprint(k))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                )]
+            }
+        };
+
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(hostnames),
@@ -94,6 +109,7 @@ impl Interpreter for DescUserInterpreter {
             StringType::from_opt_data(password_policies),
             BooleanType::from_opt_data(must_change_passwords),
             StringType::from_opt_data(workload_group),
+            StringType::from_opt_data(public_keys),
         ])])
     }
 }

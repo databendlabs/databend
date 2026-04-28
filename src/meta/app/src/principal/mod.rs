@@ -116,6 +116,7 @@ pub use udf_ident::UdfIdentRaw;
 pub use user_auth::AuthInfo;
 pub use user_auth::AuthType;
 pub use user_auth::PasswordHashMethod;
+pub use user_auth::sha256_fingerprint;
 pub use user_defined_file_format::UserDefinedFileFormat;
 pub use user_defined_function::LambdaUDF;
 pub use user_defined_function::ScalarUDF;
