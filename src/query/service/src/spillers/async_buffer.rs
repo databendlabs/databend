@@ -693,14 +693,15 @@ impl Background {
 }
 
 async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
+    let mut has_error = false;
     while let Ok(buf) = op.buffer_rx.recv().await {
         if let Err(e) = op.writer.write(buf.clone()).await {
+            has_error = true;
             op.buffer_rx.close();
             op.response.done(Err(io::Error::from(e)));
-            return;
         }
 
-        let buf = match buf.clone().try_into_mut() {
+        let buf = match buf.try_into_mut() {
             Ok(mut b) if b.capacity() == CHUNK_SIZE => {
                 b.clear();
                 b
@@ -712,11 +713,15 @@ async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
         };
 
         if op.available_buffers.send(buf).await.is_err() {
+            has_error = true;
             op.buffer_rx.close();
             op.response.done(Err(io::Error::new(
                 io::ErrorKind::BrokenPipe,
                 "buffer pool is closed",
             )));
+        }
+
+        if has_error {
             return;
         }
     }
