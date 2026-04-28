@@ -676,8 +676,7 @@ impl Background {
                 spawn(
                     async_backtrace::location!(String::from("fetch_task")).frame(async move {
                         let res =
-                            get_ranges(&op.fetch_ranges, &op.settings, &op.location, &op.op)
-                                .await;
+                            get_ranges(&op.fetch_ranges, &op.settings, &op.location, &op.op).await;
                         op.response.done(res.map(|(chunks, _)| chunks));
                     }),
                 );
