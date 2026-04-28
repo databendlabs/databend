@@ -102,19 +102,7 @@ pub fn verify_key_pair_jwt(token: &str, public_keys: &[String]) -> Result<String
             Err(_) => continue,
         };
         match verify_token_with_key(token, &key) {
-            Ok(claims) => {
-                if claims.issued_at.is_none() {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "key-pair authentication failed: 'iat' (issued at) claim is required",
-                    ));
-                }
-                if claims.expires_at.is_none() {
-                    return Err(ErrorCode::AuthenticateFailure(
-                        "key-pair authentication failed: 'exp' (expiration) claim is required",
-                    ));
-                }
-                return Ok(subject);
-            }
+            Ok(_) => return Ok(subject),
             Err(e) => {
                 last_err = e.to_string();
             }
