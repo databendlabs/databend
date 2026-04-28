@@ -45,6 +45,7 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::interpreters::interpreter_plan_sql;
+use crate::servers::http::v1::http_query_handlers::ArrowFeatures;
 use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueryAffect;
@@ -63,7 +64,8 @@ use crate::spillers::SpillerType;
 type Sender = SizedChannelSender<LiteSpiller>;
 
 pub(crate) const LEGACY_ARROW_RESULT_VERSION: u64 = 1;
-pub(crate) const SERVER_MAX_ARROW_RESULT_VERSION: u64 = 2;
+pub(crate) const ARROW_FEATURE_NEGOTIATION_VERSION: u64 = 3;
+pub(crate) const SERVER_MAX_ARROW_RESULT_VERSION: u64 = ARROW_FEATURE_NEGOTIATION_VERSION;
 
 pub struct ExecutionError;
 
@@ -131,6 +133,7 @@ pub struct ExecuteStarting {
     pub(crate) ctx: Arc<QueryContext>,
     pub(crate) sender: Option<Sender>,
     pub(crate) arrow_result_version: Option<u64>,
+    pub(crate) arrow_features: Option<ArrowFeatures>,
 }
 
 pub struct ExecuteRunning {
@@ -221,6 +224,12 @@ impl Executor {
                 .as_ref()
                 .and_then(|settings| settings.arrow_result_version),
         };
+        let arrow_features = match &self.state {
+            Starting(s) => s.arrow_features.clone(),
+            Running(_) | Stopped(_) => response_settings
+                .as_ref()
+                .and_then(|settings| settings.arrow_features.clone()),
+        };
 
         ResponseState {
             running_time_ms: self.get_query_duration_ms(),
@@ -229,6 +238,7 @@ impl Executor {
             error: err,
             response_settings,
             arrow_result_version,
+            arrow_features,
             warnings: self.get_warnings(),
             affect: self.get_affect(),
             schema,
@@ -394,6 +404,7 @@ impl ExecuteState {
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         arrow_result_version: Option<u64>,
+        arrow_features: Option<ArrowFeatures>,
         mut block_sender: Sender,
     ) -> Result<(), ExecutionError> {
         let make_error = || format!("failed to start query: {sql}");
@@ -406,8 +417,13 @@ impl ExecuteState {
             .map_err(|err| err.display_with_sql(&sql))
             .with_context(make_error)?;
 
-        Self::apply_settings(&ctx, arrow_result_version, &mut block_sender)
-            .with_context(make_error)?;
+        Self::apply_settings(
+            &ctx,
+            arrow_result_version,
+            arrow_features.as_ref(),
+            &mut block_sender,
+        )
+        .with_context(make_error)?;
 
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan)
             .await
@@ -443,6 +459,7 @@ impl ExecuteState {
             binary_output_format,
             http_json_result_mode,
             arrow_result_version,
+            arrow_features,
         });
 
         let running_state = ExecuteRunning {
@@ -565,6 +582,7 @@ impl ExecuteState {
     fn apply_settings(
         ctx: &Arc<QueryContext>,
         arrow_result_version: Option<u64>,
+        arrow_features: Option<&ArrowFeatures>,
         block_sender: &mut Sender,
     ) -> Result<()> {
         let settings = ctx.get_settings();
@@ -597,8 +615,23 @@ impl ExecuteState {
         let mut format_settings = ctx.get_output_format_settings()?;
         format_settings.http_arrow_use_jsonb =
             arrow_result_version == Some(LEGACY_ARROW_RESULT_VERSION);
+        format_settings.http_arrow_use_decimal64 =
+            use_decimal64_for_arrow_result(arrow_result_version, arrow_features);
         block_sender.plan_ready(format_settings, spiller);
         Ok(())
+    }
+}
+
+fn use_decimal64_for_arrow_result(
+    arrow_result_version: Option<u64>,
+    arrow_features: Option<&ArrowFeatures>,
+) -> bool {
+    match arrow_result_version {
+        Some(version) if version >= ARROW_FEATURE_NEGOTIATION_VERSION => !matches!(
+            arrow_features.and_then(|features| features.decimal64),
+            Some(false)
+        ),
+        _ => true,
     }
 }
 

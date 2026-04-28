@@ -148,7 +148,7 @@ def fake_expired_token(ty):
     """ 
 ---- do_login()
 200
-['server_max_arrow_result_version', 'session_id', 'tokens', 'version']
+['server_arrow_features', 'server_max_arrow_result_version', 'session_id', 'tokens', 'version']
 ---- do_query('select 1',)
 200
 [['1']]
@@ -228,7 +228,7 @@ False
 )
 def test_token():
     login_resp = do_login()
-    pprint(sorted(login_resp.keys()))
+    print(sorted(login_resp.keys()))
     session_token = login_resp.get("tokens").get("session_token")
     refresh_token = login_resp.get("tokens").get("refresh_token")
     # print(session_token)
@@ -264,7 +264,7 @@ def test_token():
     do_query("select 5", refresh_token)
 
     renew_resp = do_refresh(1, refresh_token, session_token)
-    pprint(sorted(renew_resp.keys()))
+    print(sorted(renew_resp.keys()))
     new_session_token = renew_resp.get("tokens").get("session_token")
     new_refresh_token = renew_resp.get("tokens").get("refresh_token")
 

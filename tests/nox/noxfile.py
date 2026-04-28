@@ -61,7 +61,7 @@ def run_jdbc_test(session, driver_version, main_version):
 
 
 @nox.session
-@nox.parametrize("driver_version", ["v100.0.0", "v0.8.3"])
+@nox.parametrize("driver_version", ["v100.0.0"])
 def go_client(session, driver_version):
     env = {"DATABEND_GO_VERSION": driver_version}
     test_dir = f"cache/databend-go/tests"

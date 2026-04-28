@@ -37,6 +37,7 @@ pub mod connection;
 pub mod file_format;
 pub mod role_cache_mgr;
 pub mod role_util;
+pub mod security_policy_cache;
 
 pub use databend_common_meta_app::principal::BUILTIN_ROLE_ACCOUNT_ADMIN;
 pub use databend_common_meta_app::principal::BUILTIN_ROLE_PUBLIC;
