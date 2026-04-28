@@ -292,7 +292,7 @@ pub struct BufferWriter {
 
 impl BufferWriter {
     pub fn close(mut self) -> io::Result<Metadata> {
-        if let Some(b) = self.current_bytes.take_if(|b| !b.is_empty()) {
+        if let Some(b) = self.current_bytes.take() {
             if self.buffer_tx.try_send(b.freeze()).is_err() {
                 return Err(io::ErrorKind::BrokenPipe.into());
             }
@@ -303,7 +303,7 @@ impl BufferWriter {
     }
 
     pub(super) fn finish(&mut self) -> std::io::Result<Metadata> {
-        if let Some(b) = self.current_bytes.take_if(|b| !b.is_empty()) {
+        if let Some(b) = self.current_bytes.take() {
             if self.buffer_tx.try_send(b.freeze()).is_err() {
                 return Err(io::ErrorKind::BrokenPipe.into());
             }
@@ -376,7 +376,7 @@ impl io::Write for BufferWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if let Some(b) = self.current_bytes.take_if(|b| !b.is_empty()) {
+        if let Some(b) = self.current_bytes.take() {
             if self.buffer_tx.try_send(b.freeze()).is_err() {
                 return Err(io::ErrorKind::BrokenPipe.into());
             }
@@ -695,7 +695,9 @@ impl Background {
 async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
     let mut has_error = false;
     while let Ok(buf) = op.buffer_rx.recv().await {
-        if let Err(e) = op.writer.write(buf.clone()).await {
+        if !buf.is_empty()
+            && let Err(e) = op.writer.write(buf.clone()).await
+        {
             has_error = true;
             op.buffer_rx.close();
             op.response.done(Err(io::Error::from(e)));
