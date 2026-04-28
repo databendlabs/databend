@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
 use std::sync::Condvar;
@@ -448,7 +449,7 @@ impl SpillsDataWriter {
             )),
             SpillsDataWriter::Initialized(writer) => {
                 writer.writer.flush()?;
-                Ok(writer.writer.inner_mut().last_error()?)
+                Ok(writer.writer.inner_mut().flush()?)
             }
         }
     }
