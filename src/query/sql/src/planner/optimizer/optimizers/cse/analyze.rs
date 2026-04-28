@@ -113,6 +113,7 @@ fn process_candidate_expressions(
     Ok(())
 }
 
+#[recursive::recursive]
 fn refresh_scan_ids(s_expr: &SExpr, metadata: &mut Metadata) -> Result<SExpr> {
     let new_children = s_expr
         .children()
