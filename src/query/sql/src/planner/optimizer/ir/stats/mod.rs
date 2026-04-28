@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod column_stat;
+mod constraint;
 mod histogram;
 mod selectivity;
 

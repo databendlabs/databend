@@ -26,14 +26,12 @@ use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_statistics::Datum;
 
+use super::constraint::ValueConstraint;
 use crate::ColumnBinding;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
-use crate::optimizer::ir::HistogramBuilder;
 use crate::plans::ComparisonOp;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
@@ -237,7 +235,8 @@ impl SelectivityVisitor<'_> {
                 let column_stat = self
                     .ensure_column_stat(column_index)
                     .expect("checked above");
-                Self::update_comparison_column_stat(column_stat, op, const_datum, selectivity)?;
+                let constraint = ValueConstraint::from_comparison(op, const_datum);
+                constraint.apply_to_column_stat(column_stat, selectivity.as_n().copied())?;
                 return Ok(selectivity);
             }
             (Expr::FunctionCall(func), Expr::Constant(val))
@@ -292,47 +291,6 @@ impl SelectivityVisitor<'_> {
             return Ok(Selectivity::Unknown);
         };
         Ok(Selectivity::N(distr.true_count.expected / self.cardinality))
-    }
-
-    fn update_comparison_column_stat(
-        column_stat: &mut ColumnStat,
-        op: ComparisonOp,
-        const_datum: Datum,
-        selectivity: Selectivity,
-    ) -> Result<()> {
-        match op {
-            ComparisonOp::Equal => {
-                *column_stat = ColumnStat::from_const(const_datum);
-                Ok(())
-            }
-            ComparisonOp::NotEqual => {
-                if let Selectivity::N(n) = selectivity {
-                    update_statistic(
-                        column_stat,
-                        column_stat.min.clone(),
-                        column_stat.max.clone(),
-                        n,
-                    )?;
-                }
-                Ok(())
-            }
-            _ => {
-                match selectivity {
-                    Selectivity::N(0.0) => {
-                        column_stat.ndv = column_stat.ndv.reduce_by_selectivity(0.0);
-                    }
-                    Selectivity::N(n) if n < 1.0 => {
-                        if let Some((new_min, new_max)) =
-                            comparison_range_bounds(column_stat, &const_datum, op)?
-                        {
-                            update_statistic(column_stat, new_min, new_max, n)?;
-                        }
-                    }
-                    _ => {}
-                }
-                Ok(())
-            }
-        }
     }
 
     // The method uses probability predication to compute like selectivity.
@@ -532,67 +490,6 @@ fn is_true_constant_predicate(constant: &Constant) -> bool {
     }
 }
 
-fn comparison_range_bounds(
-    column_stat: &ColumnStat,
-    const_datum: &Datum,
-    op: ComparisonOp,
-) -> Result<Option<(Datum, Datum)>> {
-    let (new_min, new_max) = match op {
-        ComparisonOp::GT | ComparisonOp::GTE => (
-            Datum::max(Some(column_stat.min.clone()), Some(const_datum.clone())),
-            Some(column_stat.max.clone()),
-        ),
-        ComparisonOp::LT | ComparisonOp::LTE => (
-            Some(column_stat.min.clone()),
-            Datum::min(Some(column_stat.max.clone()), Some(const_datum.clone())),
-        ),
-        _ => unreachable!(),
-    };
-    let (Some(new_min), Some(new_max)) = (new_min, new_max) else {
-        return Ok(None);
-    };
-    if new_min.compare(&new_max)? == std::cmp::Ordering::Greater {
-        return Ok(None);
-    }
-
-    Ok(Some((new_min, new_max)))
-}
-
-fn update_statistic(
-    column_stat: &mut ColumnStat,
-    new_min: Datum,
-    new_max: Datum,
-    selectivity: f64,
-) -> Result<()> {
-    column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
-    column_stat.min = new_min.clone();
-    column_stat.max = new_max.clone();
-    column_stat.null_count = (column_stat.null_count as f64 * selectivity).ceil() as u64;
-
-    if let Some(histogram) = &column_stat.histogram {
-        // If selectivity < 0.2, most buckets are invalid and
-        // the accuracy histogram can be discarded.
-        // Todo: support unfixed buckets number for histogram and prune the histogram.
-        if !histogram.accuracy() || selectivity < 0.2 {
-            let num_values = histogram.num_values();
-            let new_num_values = (num_values * selectivity).ceil() as u64;
-            let new_ndv = column_stat.ndv.value() as u64;
-            column_stat.histogram = if new_ndv <= 2 {
-                None
-            } else {
-                Some(HistogramBuilder::from_ndv(
-                    new_ndv,
-                    new_num_values.max(new_ndv),
-                    Some((new_min, new_max)),
-                    DEFAULT_HISTOGRAM_BUCKETS,
-                )?)
-            }
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
@@ -600,10 +497,13 @@ mod tests {
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::decimal::DecimalScalar;
     use databend_common_expression::types::decimal::DecimalSize;
+    use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
+    use databend_common_statistics::Datum;
 
     use super::*;
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
+    use crate::optimizer::ir::HistogramBuilder;
     use crate::optimizer::ir::Ndv;
     use crate::plans::BoundColumnRef;
     use crate::plans::ConstantExpr;
