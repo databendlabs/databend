@@ -703,24 +703,32 @@ async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
             op.response.done(Err(io::Error::from(e)));
         }
 
-        let buf = match buf.try_into_mut() {
-            Ok(mut b) if b.capacity() == CHUNK_SIZE => {
-                b.clear();
-                b
-            }
-            _ => {
-                log::warn!("Failed to recycle buffer, creating new one");
-                BytesMut::with_capacity(CHUNK_SIZE)
-            }
-        };
+        let mut release_buf = Some(buf);
 
-        if op.available_buffers.send(buf).await.is_err() {
-            has_error = true;
-            op.buffer_rx.close();
-            op.response.done(Err(io::Error::new(
-                io::ErrorKind::BrokenPipe,
-                "buffer pool is closed",
-            )));
+        while let Some(buf) = release_buf.take() {
+            let buf = match buf.try_into_mut() {
+                Ok(mut b) if b.capacity() == CHUNK_SIZE => {
+                    b.clear();
+                    b
+                }
+                _ => {
+                    log::warn!("Failed to recycle buffer, creating new one");
+                    BytesMut::with_capacity(CHUNK_SIZE)
+                }
+            };
+
+            if op.available_buffers.send(buf).await.is_err() {
+                op.buffer_rx.close();
+                op.response.done(Err(io::Error::new(
+                    io::ErrorKind::BrokenPipe,
+                    "buffer pool is closed",
+                )));
+                return;
+            }
+
+            if has_error {
+                release_buf = op.buffer_rx.try_recv().ok();
+            }
         }
 
         if has_error {
