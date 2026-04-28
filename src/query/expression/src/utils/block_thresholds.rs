@@ -17,6 +17,8 @@ use databend_common_io::constants::DEFAULT_BLOCK_COMPRESSED_SIZE;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 
+const MAX_BYTES_PER_BLOCK_FACTOR: usize = 2;
+
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct BlockThresholds {
     pub max_rows_per_block: usize,
@@ -35,11 +37,11 @@ impl Default for BlockThresholds {
     fn default() -> BlockThresholds {
         BlockThresholds {
             max_rows_per_block: DEFAULT_BLOCK_ROW_COUNT,
-            min_rows_per_block: (DEFAULT_BLOCK_ROW_COUNT * 4).div_ceil(5),
-            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE * 2,
-            min_bytes_per_block: (DEFAULT_BLOCK_BUFFER_SIZE * 4).div_ceil(5),
+            min_rows_per_block: Self::min_block_threshold(DEFAULT_BLOCK_ROW_COUNT),
+            max_bytes_per_block: DEFAULT_BLOCK_BUFFER_SIZE * MAX_BYTES_PER_BLOCK_FACTOR,
+            min_bytes_per_block: Self::min_block_threshold(DEFAULT_BLOCK_BUFFER_SIZE),
             max_compressed_per_block: DEFAULT_BLOCK_COMPRESSED_SIZE,
-            min_compressed_per_block: (DEFAULT_BLOCK_COMPRESSED_SIZE * 4).div_ceil(5),
+            min_compressed_per_block: Self::min_block_threshold(DEFAULT_BLOCK_COMPRESSED_SIZE),
             block_per_segment: DEFAULT_BLOCK_PER_SEGMENT,
         }
     }
@@ -54,13 +56,18 @@ impl BlockThresholds {
     ) -> Self {
         BlockThresholds {
             max_rows_per_block,
-            min_rows_per_block: (max_rows_per_block * 4).div_ceil(5),
-            max_bytes_per_block: bytes_per_block * 2,
-            min_bytes_per_block: (bytes_per_block * 4).div_ceil(5),
+            min_rows_per_block: Self::min_block_threshold(max_rows_per_block),
+            max_bytes_per_block: bytes_per_block * MAX_BYTES_PER_BLOCK_FACTOR,
+            min_bytes_per_block: Self::min_block_threshold(bytes_per_block),
             max_compressed_per_block,
-            min_compressed_per_block: (max_compressed_per_block * 4).div_ceil(5),
+            min_compressed_per_block: Self::min_block_threshold(max_compressed_per_block),
             block_per_segment,
         }
+    }
+
+    #[inline]
+    pub fn min_block_threshold(value: usize) -> usize {
+        (value * 4).div_ceil(5)
     }
 
     #[inline]
@@ -157,7 +164,9 @@ impl BlockThresholds {
 
         let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
         // Adjust the number of blocks based on block size thresholds.
-        let default_bytes_per_block = self.max_bytes_per_block.div_ceil(2);
+        let default_bytes_per_block = self
+            .max_bytes_per_block
+            .div_ceil(MAX_BYTES_PER_BLOCK_FACTOR);
         let max_bytes_per_block =
             default_bytes_per_block + default_bytes_per_block.min(DEFAULT_BLOCK_BUFFER_SIZE);
         let min_bytes_per_block = self.min_bytes_per_block / 2;

@@ -427,7 +427,14 @@ impl ReclusterMutator {
             let remained_blocks = blocks
                 .into_iter()
                 .enumerate()
-                .filter_map(|(idx, block)| (!selected_blocks_idx.contains(&idx)).then_some(block))
+                .filter_map(|(idx, (block_index, block_meta))| {
+                    if selected_blocks_idx.contains(&idx) {
+                        return None;
+                    }
+                    let mut block_meta = Arc::unwrap_or_clone(block_meta);
+                    block_meta.cluster_stats = Some(block_stats[idx].clone());
+                    Some((block_index, Arc::new(block_meta)))
+                })
                 .collect::<Vec<_>>();
             let hlls = self.gather_hlls(selected_seg_stats).await?;
             let remained_blocks = remained_blocks
@@ -470,14 +477,8 @@ impl ReclusterMutator {
             );
         }
 
-        let (stats, parts) = FuseTable::to_partitions(
-            Some(&self.schema),
-            block_metas,
-            column_nodes,
-            None,
-            None,
-            Some(self.cluster_key_id),
-        );
+        let (stats, parts) =
+            FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
         ReclusterTask {
             parts,
             stats,

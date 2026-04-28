@@ -280,7 +280,6 @@ impl ParquetRowsFetcher {
                 &column_nodes,
                 None,
                 &self.projection,
-                None,
             );
 
             let fuse_part = FuseBlockPartInfo::from_part(&part_info)?;

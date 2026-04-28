@@ -55,9 +55,6 @@ pub struct FuseBlockPartInfo {
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
-    /// Whether this block needs a local sort before entering the recluster merge-sort path.
-    #[serde(default)]
-    pub need_local_sort: bool,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -99,7 +96,6 @@ impl FuseBlockPartInfo {
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
         create_on: Option<DateTime<Utc>>,
-        need_local_sort: bool,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FuseBlockPartInfo {
             location,
@@ -115,7 +111,6 @@ impl FuseBlockPartInfo {
             block_meta_index,
             columns_stat,
             spatial_stats,
-            need_local_sort,
         }))
     }
 

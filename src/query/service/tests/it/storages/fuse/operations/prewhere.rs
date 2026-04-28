@@ -341,7 +341,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         compression,
         sort_min_max: None,
         block_meta_index: None,
-        need_local_sort: false,
     };
 
     let bloom_y = create_bloom_filter_for_int32(&[30]);

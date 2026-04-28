@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
@@ -44,7 +43,6 @@ use databend_common_sql::StreamContext;
 use databend_common_sql::executor::physical_plans::MutationKind;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::operations::TransformOptSortPartial;
 use databend_common_storages_fuse::operations::TransformSerializeBlock;
 use databend_common_storages_fuse::statistics::ClusterStatsGenerator;
 use databend_storages_common_cache::TempDirManager;
@@ -143,7 +141,6 @@ impl IPhysicalPlan for Recluster {
                     internal_columns: None,
                     base_block_ids: None,
                     block_meta_options: BlockMetaOptions::default()
-                        .set_recluster_source_meta(true)
                         .set_update_stream_columns(table.change_tracking_enabled()),
                     table_index: usize::MAX,
                     scan_id: usize::MAX,
@@ -214,13 +211,6 @@ impl IPhysicalPlan for Recluster {
                         nulls_first: false,
                     })
                     .collect();
-                let sort_descs: Arc<[_]> = sort_descs.into();
-
-                if !sort_descs.is_empty() {
-                    builder
-                        .main_pipeline
-                        .add_transformer(|| TransformOptSortPartial::new(sort_descs.clone()));
-                }
 
                 // merge sort
                 let sort_block_size = block_thresholds.calc_rows_for_recluster(
@@ -233,16 +223,13 @@ impl IPhysicalPlan for Recluster {
                 let sort_pipeline_builder = SortPipelineBuilder::create(
                     builder.ctx.clone(),
                     schema,
-                    sort_descs,
+                    sort_descs.into(),
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
                 .with_block_size_hit(sort_block_size);
-                sort_pipeline_builder.build_merge_sort_pipeline(
-                    &mut builder.main_pipeline,
-                    false,
-                    false,
-                )?;
+                sort_pipeline_builder
+                    .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
                 // Compact after merge sort. This ordered compactor keeps block growth bounded
                 // without requiring a hard post-sort size cap, since final serialized sizes are

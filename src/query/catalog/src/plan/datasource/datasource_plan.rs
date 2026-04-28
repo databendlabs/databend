@@ -33,8 +33,6 @@ pub struct BlockMetaOptions {
     pub update_stream_columns: bool,
     // used to query internal columns.
     pub query_internal_columns: bool,
-    // used to keep recluster source meta on parts.
-    pub recluster_source_meta: bool,
 }
 
 impl BlockMetaOptions {
@@ -50,11 +48,6 @@ impl BlockMetaOptions {
 
     pub fn set_query_internal_columns(mut self, query_internal_columns: bool) -> Self {
         self.query_internal_columns = query_internal_columns;
-        self
-    }
-
-    pub fn set_recluster_source_meta(mut self, recluster_source_meta: bool) -> Self {
-        self.recluster_source_meta = recluster_source_meta;
         self
     }
 }

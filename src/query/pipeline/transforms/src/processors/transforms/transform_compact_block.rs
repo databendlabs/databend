@@ -22,6 +22,7 @@ use std::sync::atomic::Ordering;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::BlockThresholds;
 use databend_common_expression::DataBlock;
 use databend_common_expression::local_block_meta_serde;
 
@@ -82,8 +83,8 @@ impl TransformCompactBlock {
     fn split_blocks(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<Vec<DataBlock>> {
         debug_assert!(!blocks.is_empty());
         // Allow the last output block to absorb in most one minimum-sized tail block.
-        // This stays aligned with BlockThresholds, where min_rows_per_block is 0.8x.
-        let max_rows_per_block = (rows_per_block * 9).div_ceil(5);
+        let max_rows_per_block =
+            rows_per_block + BlockThresholds::min_block_threshold(rows_per_block);
         let mut total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
         let mut blocks = blocks.into_iter();
         let mut current = blocks.next();
