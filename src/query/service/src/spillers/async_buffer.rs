@@ -663,12 +663,24 @@ impl Background {
                 );
             }
             BufferOperator::CreateWriter(op) => {
-                let writer = op.op.writer(&op.path).await;
-                op.response.done(writer);
+                spawn(
+                    async_backtrace::location!(String::from("create_writer_task")).frame(
+                        async move {
+                            let writer = op.op.writer(&op.path).await;
+                            op.response.done(writer);
+                        },
+                    ),
+                );
             }
             BufferOperator::Fetch(op) => {
-                let res = get_ranges(&op.fetch_ranges, &op.settings, &op.location, &op.op).await;
-                op.response.done(res.map(|(chunks, _)| chunks));
+                spawn(
+                    async_backtrace::location!(String::from("fetch_task")).frame(async move {
+                        let res =
+                            get_ranges(&op.fetch_ranges, &op.settings, &op.location, &op.op)
+                                .await;
+                        op.response.done(res.map(|(chunks, _)| chunks));
+                    }),
+                );
             }
             BufferOperator::ReaderTask(op) => {
                 spawn(
