@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use databend_common_base::runtime;
 use databend_common_cloud_control::pb::AlterTaskRequest;
 use databend_common_cloud_control::pb::AlterTaskResponse;
 use databend_common_cloud_control::pb::BillingHistoryDailyCloudServiceUsage;
@@ -43,6 +44,7 @@ use databend_common_cloud_control::pb::ShowTaskRunsRequest;
 use databend_common_cloud_control::pb::ShowTaskRunsResponse;
 use databend_common_cloud_control::pb::ShowTasksRequest;
 use databend_common_cloud_control::pb::ShowTasksResponse;
+use databend_common_cloud_control::pb::TaskError as PbTaskError;
 use databend_common_cloud_control::pb::task_service_server::TaskService;
 use databend_common_cloud_control::pb::task_service_server::TaskServiceServer;
 use databend_common_config::InnerConfig;
@@ -69,6 +71,8 @@ struct BillingRequests {
 #[derive(Clone, Default)]
 struct MockBillingTaskService {
     requests: BillingRequests,
+    daily_error: Option<PbTaskError>,
+    warehouse_daily_error: Option<PbTaskError>,
 }
 
 #[tonic::async_trait]
@@ -132,6 +136,13 @@ impl TaskService for MockBillingTaskService {
             .unwrap()
             .push(request.into_inner());
 
+        if let Some(error) = self.daily_error.clone() {
+            return Ok(Response::new(GetBillingHistoryDailyResponse {
+                rows: vec![],
+                error: Some(error),
+            }));
+        }
+
         Ok(Response::new(GetBillingHistoryDailyResponse {
             rows: vec![BillingHistoryDailyRow {
                 date: "2026-03-02".to_string(),
@@ -165,6 +176,13 @@ impl TaskService for MockBillingTaskService {
             .lock()
             .unwrap()
             .push(request.into_inner());
+
+        if let Some(error) = self.warehouse_daily_error.clone() {
+            return Ok(Response::new(GetBillingHistoryWarehouseDailyResponse {
+                rows: vec![],
+                error: Some(error),
+            }));
+        }
 
         Ok(Response::new(GetBillingHistoryWarehouseDailyResponse {
             rows: vec![BillingHistoryWarehouseDailyRow {
@@ -211,10 +229,12 @@ async fn test_billing_history_table_functions_via_mock_grpc() -> anyhow::Result<
     let requests = BillingRequests::default();
     let mock = MockBillingTaskService {
         requests: requests.clone(),
+        daily_error: None,
+        warehouse_daily_error: None,
     };
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-    let server_handle = tokio::spawn(async move {
+    let server_handle = runtime::spawn(async move {
         Server::builder()
             .add_service(TaskServiceServer::new(mock))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
@@ -279,21 +299,87 @@ async fn test_billing_history_table_functions_via_mock_grpc() -> anyhow::Result<
         other => panic!("unexpected scalar type for tags: {other:?}"),
     }
 
-    let daily_requests = requests.daily.lock().unwrap();
-    assert_eq!(daily_requests.len(), 1);
-    assert_eq!(daily_requests[0].billing_month, "2026-03");
-    assert_eq!(daily_requests[0].sql_user, "root");
-    assert!(!daily_requests[0].tenant_id.is_empty());
-    assert!(!daily_requests[0].query_id.is_empty());
-    drop(daily_requests);
+    {
+        let daily_requests = requests.daily.lock().unwrap();
+        assert_eq!(daily_requests.len(), 1);
+        assert_eq!(daily_requests[0].billing_month, "2026-03");
+        assert_eq!(daily_requests[0].sql_user, "root");
+        assert!(!daily_requests[0].tenant_id.is_empty());
+        assert!(!daily_requests[0].query_id.is_empty());
+    }
 
-    let warehouse_requests = requests.warehouse_daily.lock().unwrap();
-    assert_eq!(warehouse_requests.len(), 1);
-    assert_eq!(warehouse_requests[0].billing_month, "2026-03");
-    assert_eq!(warehouse_requests[0].sql_user, "root");
-    assert!(!warehouse_requests[0].tenant_id.is_empty());
-    assert!(!warehouse_requests[0].query_id.is_empty());
-    drop(warehouse_requests);
+    {
+        let warehouse_requests = requests.warehouse_daily.lock().unwrap();
+        assert_eq!(warehouse_requests.len(), 1);
+        assert_eq!(warehouse_requests[0].billing_month, "2026-03");
+        assert_eq!(warehouse_requests[0].sql_user, "root");
+        assert!(!warehouse_requests[0].tenant_id.is_empty());
+        assert!(!warehouse_requests[0].query_id.is_empty());
+    }
+
+    let _ = shutdown_tx.send(());
+    server_handle.await??;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_billing_history_table_functions_surface_task_error() -> anyhow::Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+
+    let mock = MockBillingTaskService {
+        requests: BillingRequests::default(),
+        daily_error: Some(PbTaskError {
+            kind: "AuthFailed".to_string(),
+            message: "daily billing access denied".to_string(),
+            code: 403,
+        }),
+        warehouse_daily_error: Some(PbTaskError {
+            kind: "Internal".to_string(),
+            message: "warehouse billing unavailable".to_string(),
+            code: 500,
+        }),
+    };
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = runtime::spawn(async move {
+        Server::builder()
+            .add_service(TaskServiceServer::new(mock))
+            .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
+                let _ = shutdown_rx.await;
+            })
+            .await
+    });
+
+    let mut config: InnerConfig = ConfigBuilder::create().build();
+    config.query.common.cloud_control_grpc_server_address = Some(format!("http://{addr}"));
+    config.query.common.cloud_control_grpc_timeout = 5;
+
+    let fixture = TestFixture::setup_with_config(&config).await?;
+
+    let daily_stream = fixture
+        .execute_query("select * from billing_history_daily(month => '2026-03')")
+        .await?;
+    let daily_err = daily_stream
+        .try_collect::<Vec<DataBlock>>()
+        .await
+        .expect_err("daily billing task error should fail query");
+    assert!(daily_err.message().contains("daily billing access denied"));
+    assert!(daily_err.message().contains("AuthFailed"));
+
+    let warehouse_stream = fixture
+        .execute_query("select * from billing_history_warehouse_daily(month => '2026-03')")
+        .await?;
+    let warehouse_err = warehouse_stream
+        .try_collect::<Vec<DataBlock>>()
+        .await
+        .expect_err("warehouse billing task error should fail query");
+    assert!(
+        warehouse_err
+            .message()
+            .contains("warehouse billing unavailable")
+    );
+    assert!(warehouse_err.message().contains("Internal"));
 
     let _ = shutdown_tx.send(());
     server_handle.await??;

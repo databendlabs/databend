@@ -28,6 +28,7 @@ use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::GetBillingHistoryDailyRequest;
+use databend_common_cloud_control::pb::TaskError as PbTaskError;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -194,7 +195,7 @@ impl AsyncSource for BillingHistoryDailySource {
             .get_task_client()
             .get_billing_history_daily(make_request(req, cfg))
             .await?;
-        Ok(Some(parse_billing_history_daily_to_datablock(resp)))
+        Ok(Some(parse_billing_history_daily_response(resp)?))
     }
 }
 
@@ -260,6 +261,23 @@ fn billing_history_daily_schema() -> DataSchemaRef {
         DataField::new("cloud_service_api_requests", DataType::String),
         DataField::new("cloud_service_kilo_api_requests_price", DataType::String),
     ]))
+}
+
+fn parse_billing_history_daily_response(
+    resp: databend_common_cloud_control::pb::GetBillingHistoryDailyResponse,
+) -> Result<DataBlock> {
+    if let Some(error) = resp.error.as_ref() {
+        return Err(task_error_to_error_code("get_billing_history_daily", error));
+    }
+
+    Ok(parse_billing_history_daily_to_datablock(resp))
+}
+
+fn task_error_to_error_code(operation: &str, error: &PbTaskError) -> ErrorCode {
+    ErrorCode::CloudControlConnectError(format!(
+        "cloud control {operation} failed: {} (kind: {}, code: {})",
+        error.message, error.kind, error.code
+    ))
 }
 
 fn parse_billing_history_daily_to_datablock(
@@ -406,5 +424,25 @@ mod tests {
             block.get_by_offset(11).index(0).unwrap(),
             ScalarRef::String("78")
         );
+    }
+
+    #[test]
+    fn test_parse_daily_response_surfaces_task_error() {
+        let err = parse_billing_history_daily_response(
+            databend_common_cloud_control::pb::GetBillingHistoryDailyResponse {
+                rows: vec![],
+                error: Some(PbTaskError {
+                    kind: "AuthFailed".to_string(),
+                    message: "billing access denied".to_string(),
+                    code: 403,
+                }),
+            },
+        )
+        .expect_err("task error should be returned");
+
+        assert!(err.message().contains("get_billing_history_daily"));
+        assert!(err.message().contains("billing access denied"));
+        assert!(err.message().contains("AuthFailed"));
+        assert!(err.message().contains("403"));
     }
 }

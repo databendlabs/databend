@@ -28,6 +28,7 @@ use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyRequest;
+use databend_common_cloud_control::pb::TaskError as PbTaskError;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -199,9 +200,7 @@ impl AsyncSource for BillingHistoryWarehouseDailySource {
             .get_task_client()
             .get_billing_history_warehouse_daily(make_request(req, cfg))
             .await?;
-        Ok(Some(parse_billing_history_warehouse_daily_to_datablock(
-            resp,
-        )))
+        Ok(Some(parse_billing_history_warehouse_daily_response(resp)?))
     }
 }
 
@@ -265,6 +264,26 @@ fn billing_history_warehouse_daily_schema() -> DataSchemaRef {
         DataField::new("credits", DataType::String),
         DataField::new("tags", DataType::Variant),
     ]))
+}
+
+fn parse_billing_history_warehouse_daily_response(
+    resp: databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyResponse,
+) -> Result<DataBlock> {
+    if let Some(error) = resp.error.as_ref() {
+        return Err(task_error_to_error_code(
+            "get_billing_history_warehouse_daily",
+            error,
+        ));
+    }
+
+    Ok(parse_billing_history_warehouse_daily_to_datablock(resp))
+}
+
+fn task_error_to_error_code(operation: &str, error: &PbTaskError) -> ErrorCode {
+    ErrorCode::CloudControlConnectError(format!(
+        "cloud control {operation} failed: {} (kind: {}, code: {})",
+        error.message, error.kind, error.code
+    ))
 }
 
 fn parse_billing_history_warehouse_daily_to_datablock(
@@ -390,5 +409,28 @@ mod tests {
             ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_tags.as_slice()),
             other => panic!("unexpected scalar type for tags: {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_parse_warehouse_daily_response_surfaces_task_error() {
+        let err = parse_billing_history_warehouse_daily_response(
+            databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyResponse {
+                rows: vec![],
+                error: Some(PbTaskError {
+                    kind: "Internal".to_string(),
+                    message: "warehouse billing unavailable".to_string(),
+                    code: 500,
+                }),
+            },
+        )
+        .expect_err("task error should be returned");
+
+        assert!(
+            err.message()
+                .contains("get_billing_history_warehouse_daily")
+        );
+        assert!(err.message().contains("warehouse billing unavailable"));
+        assert!(err.message().contains("Internal"));
+        assert!(err.message().contains("500"));
     }
 }
