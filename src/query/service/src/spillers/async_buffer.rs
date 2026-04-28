@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::io;
+use std::io::Error;
 use std::io::Write;
 use std::ops::Range;
 use std::sync::Arc;
@@ -123,7 +124,7 @@ impl SpillsBufferPool {
             let available_write_buffers = buffers_tx.clone();
             runtime.spawn(
                 async_backtrace::location!(String::from("async_buffer")).frame(async move {
-                    let mut background = Background::create(available_write_buffers);
+                    let mut background = Background::create();
                     while let Ok(op) = working_queue.recv().await {
                         let span = Span::enter_with_parent("Background::recv", op.span());
                         background.recv(op).in_span(span).await;
@@ -304,6 +305,16 @@ impl BufferWriter {
         self.buffer_tx.close();
         self.response.wait_and_take()
     }
+
+    fn last_error(&mut self) -> io::Result<()> {
+        let locked = self.response.mutex.lock();
+        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
+
+        match locked.take_if(|x| x.is_err()) {
+            Some(Err(err)) => Err(err),
+            _ => Ok(()),
+        }
+    }
 }
 
 impl io::Write for BufferWriter {
@@ -364,14 +375,7 @@ impl io::Write for BufferWriter {
             }
         }
 
-        let locked = self.response.mutex.lock();
-        let mut locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        if let Some(Err(cause)) = locked.take_if(|x| x.is_err()) {
-            return Err(cause);
-        }
-
-        Ok(())
+        self.last_error()
     }
 }
 
@@ -438,7 +442,7 @@ impl SpillsDataWriter {
             )),
             SpillsDataWriter::Initialized(writer) => {
                 writer.writer.flush()?;
-                Ok(writer.writer.inner_mut().flush()?)
+                Ok(writer.writer.inner_mut().last_error()?)
             }
         }
     }
@@ -630,7 +634,7 @@ impl BufferOperator {
 pub struct Background;
 
 impl Background {
-    pub fn create(_available_buffers: async_channel::Sender<BytesMut>) -> Background {
+    pub fn create() -> Background {
         Background
     }
 
@@ -659,6 +663,7 @@ async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
         if let Err(e) = op.writer.write(buf.clone()).await {
             op.buffer_rx.close();
             op.response.done(Err(io::Error::from(e)));
+            return;
         }
 
         let buf = match buf.clone().try_into_mut() {
@@ -678,6 +683,7 @@ async fn writer_task_loop(mut op: BufferWriterTaskOperator) {
                 io::ErrorKind::BrokenPipe,
                 "buffer pool is closed",
             )));
+            return;
         }
     }
 
