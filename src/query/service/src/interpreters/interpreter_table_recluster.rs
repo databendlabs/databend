@@ -339,11 +339,11 @@ impl ReclusterTableInterpreter {
         // Adjust number of partitions according to the block size thresholds
         if total_partitions < block_thresholds.block_per_segment
             && block_thresholds.check_perfect_segment(
-            block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
-            total_rows,
-            total_bytes,
-            total_compressed,
-        )
+                block_thresholds.block_per_segment, // this effectively by-pass the total_blocks criteria
+                total_rows,
+                total_bytes,
+                total_compressed,
+            )
         {
             total_partitions = block_thresholds.block_per_segment;
         }

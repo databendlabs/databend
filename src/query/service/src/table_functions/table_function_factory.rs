@@ -39,6 +39,10 @@ use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_meta_client::types::MetaId;
 #[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::BillingHistoryDailyTable;
+#[cfg(feature = "task-support")]
+use databend_query_task_support::table_functions::BillingHistoryWarehouseDailyTable;
+#[cfg(feature = "task-support")]
 use databend_query_task_support::table_functions::TaskDependentsEnableTable;
 #[cfg(feature = "task-support")]
 use databend_query_task_support::table_functions::TaskDependentsTable;
@@ -343,6 +347,19 @@ impl TableFunctionFactory {
             creators.insert(
                 "task_history".to_string(),
                 (next_id(), Arc::new(TaskHistoryTable::create)),
+            );
+
+            creators.insert(
+                "billing_history_daily".to_string(),
+                (next_id(), Arc::new(BillingHistoryDailyTable::create)),
+            );
+
+            creators.insert(
+                "billing_history_warehouse_daily".to_string(),
+                (
+                    next_id(),
+                    Arc::new(BillingHistoryWarehouseDailyTable::create),
+                ),
             );
         }
 

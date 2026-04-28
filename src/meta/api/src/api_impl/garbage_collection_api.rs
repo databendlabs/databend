@@ -139,7 +139,7 @@ where
 
                 // Check if we should update based on monotonic property
                 let should_update = match current_retention {
-                    None => true, // Never set before, always update
+                    None => true,                                    // Never set before, always update
                     Some(existing) => new_timestamp > existing.time, // Only update if new timestamp is greater
                 };
 

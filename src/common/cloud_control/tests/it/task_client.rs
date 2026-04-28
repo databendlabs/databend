@@ -25,6 +25,10 @@ use databend_common_cloud_control::pb::EnableTaskDependentsRequest;
 use databend_common_cloud_control::pb::EnableTaskDependentsResponse;
 use databend_common_cloud_control::pb::ExecuteTaskRequest;
 use databend_common_cloud_control::pb::ExecuteTaskResponse;
+use databend_common_cloud_control::pb::GetBillingHistoryDailyRequest;
+use databend_common_cloud_control::pb::GetBillingHistoryDailyResponse;
+use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyRequest;
+use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyResponse;
 use databend_common_cloud_control::pb::GetTaskDependentsRequest;
 use databend_common_cloud_control::pb::GetTaskDependentsResponse;
 use databend_common_cloud_control::pb::ShowTaskRunsRequest;
@@ -132,6 +136,26 @@ impl TaskService for MockTaskService {
             error: None,
             next_page_token: None,
             previous_page_token: None,
+        }))
+    }
+
+    async fn get_billing_history_daily(
+        &self,
+        _request: Request<GetBillingHistoryDailyRequest>,
+    ) -> std::result::Result<Response<GetBillingHistoryDailyResponse>, Status> {
+        Ok(Response::new(GetBillingHistoryDailyResponse {
+            rows: vec![],
+            error: None,
+        }))
+    }
+
+    async fn get_billing_history_warehouse_daily(
+        &self,
+        _request: Request<GetBillingHistoryWarehouseDailyRequest>,
+    ) -> std::result::Result<Response<GetBillingHistoryWarehouseDailyResponse>, Status> {
+        Ok(Response::new(GetBillingHistoryWarehouseDailyResponse {
+            rows: vec![],
+            error: None,
         }))
     }
 

@@ -153,6 +153,24 @@ impl TaskClient {
         Ok(result)
     }
 
+    pub async fn get_billing_history_daily(
+        &self,
+        req: Request<crate::pb::GetBillingHistoryDailyRequest>,
+    ) -> Result<crate::pb::GetBillingHistoryDailyResponse> {
+        let mut client = self.task_client.clone();
+        let resp = client.get_billing_history_daily(req).await?;
+        Ok(resp.into_inner())
+    }
+
+    pub async fn get_billing_history_warehouse_daily(
+        &self,
+        req: Request<crate::pb::GetBillingHistoryWarehouseDailyRequest>,
+    ) -> Result<crate::pb::GetBillingHistoryWarehouseDailyResponse> {
+        let mut client = self.task_client.clone();
+        let resp = client.get_billing_history_warehouse_daily(req).await?;
+        Ok(resp.into_inner())
+    }
+
     pub async fn get_task_dependents(
         &self,
         req: Request<crate::pb::GetTaskDependentsRequest>,

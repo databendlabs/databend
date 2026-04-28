@@ -321,7 +321,8 @@ impl DeltaTable {
             pub num_records: i64,
         }
 
-        let parts = adds.iter()
+        let parts = adds
+            .iter()
             .map(|add: &Add| {
                 let num_records = add
                     .get_stats_parsed()
@@ -333,23 +334,21 @@ impl DeltaTable {
                             Some(stats.num_records)
                         }
                         _ => None,
-                    }
-                    ).unwrap_or(1);
+                    })
+                    .unwrap_or(1);
                 read_rows += num_records as usize;
                 read_bytes += add.size as usize;
                 let partition_values = get_partition_values(add, &partition_fields)?;
                 Ok(Arc::new(Box::new(DeltaPartInfo {
-                        partition_values,
-                        data: ParquetPart::File(
-                            ParquetFilePart {
-                                file: add.path.clone(),
-                                compressed_size: add.size as u64,
-                                estimated_uncompressed_size: add.size as u64, // This field is not used here.
-                                dedup_key: format!("{}_{}", add.modification_time, add.size),
-                                bucket_option: None,
-                            },
-                        ),
-                    }) as _))
+                    partition_values,
+                    data: ParquetPart::File(ParquetFilePart {
+                        file: add.path.clone(),
+                        compressed_size: add.size as u64,
+                        estimated_uncompressed_size: add.size as u64, // This field is not used here.
+                        dedup_key: format!("{}_{}", add.modification_time, add.size),
+                        bucket_option: None,
+                    }),
+                }) as _))
             })
             .collect::<Result<Vec<_>>>()?;
 
