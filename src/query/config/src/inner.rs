@@ -433,6 +433,12 @@ pub struct SpillConfig {
     /// Maximum percentage of the global local spill quota that HTTP
     /// result-set spilling may use for one query.
     pub result_set_spilling_disk_quota_ratio: u64,
+
+    /// Total memory for the spill buffer pool in bytes.
+    pub buffer_pool_memory: u64,
+
+    /// Number of worker tasks in the spill buffer pool.
+    pub buffer_pool_workers: usize,
 }
 
 impl SpillConfig {
@@ -503,6 +509,8 @@ impl SpillConfig {
             window_partition_spilling_disk_quota_ratio: 60,
             // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
             result_set_spilling_disk_quota_ratio: 0,
+            buffer_pool_memory: 200 * 1024 * 1024,
+            buffer_pool_workers: 2,
         }
     }
 }
@@ -519,6 +527,8 @@ impl Default for SpillConfig {
             window_partition_spilling_disk_quota_ratio: 60,
             // TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
             result_set_spilling_disk_quota_ratio: 0,
+            buffer_pool_memory: 200 * 1024 * 1024,
+            buffer_pool_workers: 2,
         }
     }
 }
