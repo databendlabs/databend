@@ -27,20 +27,20 @@ use databend_common_catalog::table_function::TableFunction;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_cloud_control::pb::BillingError as PbBillingError;
 use databend_common_cloud_control::pb::GetBillingHistoryDailyRequest;
-use databend_common_cloud_control::pb::TaskError as PbTaskError;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::infer_table_schema;
+use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType::UInt64;
+use databend_common_expression::types::StringType;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchema;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::FromData;
-use databend_common_expression::infer_table_schema;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberDataType::UInt64;
-use databend_common_expression::types::StringType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -140,11 +140,15 @@ impl BillingHistoryDailySource {
         output: Arc<OutputPort>,
         args_parsed: BillingHistoryDailyArgsParsed,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.get_scan_progress(), output, Self {
-            ctx,
-            args_parsed,
-            is_finished: false,
-        })
+        AsyncSourcer::create(
+            ctx.get_scan_progress(),
+            output,
+            Self {
+                ctx,
+                args_parsed,
+                is_finished: false,
+            },
+        )
     }
 }
 
@@ -192,7 +196,7 @@ impl AsyncSource for BillingHistoryDailySource {
             query_id,
         };
         let resp = cloud_api
-            .get_task_client()
+            .get_billing_client()
             .get_billing_history_daily(make_request(req, cfg))
             .await?;
         Ok(Some(parse_billing_history_daily_response(resp)?))
@@ -205,7 +209,9 @@ impl TableFunction for BillingHistoryDailyTable {
     }
 
     fn as_table<'a>(self: Arc<Self>) -> Arc<dyn Table + 'a>
-    where Self: 'a {
+    where
+        Self: 'a,
+    {
         self
     }
 }
@@ -267,13 +273,16 @@ fn parse_billing_history_daily_response(
     resp: databend_common_cloud_control::pb::GetBillingHistoryDailyResponse,
 ) -> Result<DataBlock> {
     if let Some(error) = resp.error.as_ref() {
-        return Err(task_error_to_error_code("get_billing_history_daily", error));
+        return Err(billing_error_to_error_code(
+            "get_billing_history_daily",
+            error,
+        ));
     }
 
     Ok(parse_billing_history_daily_to_datablock(resp))
 }
 
-fn task_error_to_error_code(operation: &str, error: &PbTaskError) -> ErrorCode {
+fn billing_error_to_error_code(operation: &str, error: &PbBillingError) -> ErrorCode {
     ErrorCode::CloudControlConnectError(format!(
         "cloud control {operation} failed: {} (kind: {}, code: {})",
         error.message, error.kind, error.code
@@ -338,9 +347,9 @@ mod tests {
     use std::collections::HashMap;
 
     use databend_common_catalog::table_args::TableArgs;
+    use databend_common_expression::types::NumberScalar;
     use databend_common_expression::Scalar;
     use databend_common_expression::ScalarRef;
-    use databend_common_expression::types::NumberScalar;
 
     use super::*;
 
@@ -431,14 +440,14 @@ mod tests {
         let err = parse_billing_history_daily_response(
             databend_common_cloud_control::pb::GetBillingHistoryDailyResponse {
                 rows: vec![],
-                error: Some(PbTaskError {
+                error: Some(PbBillingError {
                     kind: "AuthFailed".to_string(),
                     message: "billing access denied".to_string(),
                     code: 403,
                 }),
             },
         )
-        .expect_err("task error should be returned");
+        .expect_err("billing error should be returned");
 
         assert!(err.message().contains("get_billing_history_daily"));
         assert!(err.message().contains("billing access denied"));

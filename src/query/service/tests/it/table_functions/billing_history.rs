@@ -18,49 +18,31 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_base::runtime;
-use databend_common_cloud_control::pb::AlterTaskRequest;
-use databend_common_cloud_control::pb::AlterTaskResponse;
+use databend_common_cloud_control::pb::billing_service_server::BillingService;
+use databend_common_cloud_control::pb::billing_service_server::BillingServiceServer;
+use databend_common_cloud_control::pb::BillingError as PbBillingError;
 use databend_common_cloud_control::pb::BillingHistoryDailyCloudServiceUsage;
 use databend_common_cloud_control::pb::BillingHistoryDailyRow;
 use databend_common_cloud_control::pb::BillingHistoryDailyStorageUsage;
 use databend_common_cloud_control::pb::BillingHistoryWarehouseDailyRow;
-use databend_common_cloud_control::pb::CreateTaskRequest;
-use databend_common_cloud_control::pb::CreateTaskResponse;
-use databend_common_cloud_control::pb::DescribeTaskRequest;
-use databend_common_cloud_control::pb::DescribeTaskResponse;
-use databend_common_cloud_control::pb::DropTaskRequest;
-use databend_common_cloud_control::pb::DropTaskResponse;
-use databend_common_cloud_control::pb::EnableTaskDependentsRequest;
-use databend_common_cloud_control::pb::EnableTaskDependentsResponse;
-use databend_common_cloud_control::pb::ExecuteTaskRequest;
-use databend_common_cloud_control::pb::ExecuteTaskResponse;
 use databend_common_cloud_control::pb::GetBillingHistoryDailyRequest;
 use databend_common_cloud_control::pb::GetBillingHistoryDailyResponse;
 use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyRequest;
 use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyResponse;
-use databend_common_cloud_control::pb::GetTaskDependentsRequest;
-use databend_common_cloud_control::pb::GetTaskDependentsResponse;
-use databend_common_cloud_control::pb::ShowTaskRunsRequest;
-use databend_common_cloud_control::pb::ShowTaskRunsResponse;
-use databend_common_cloud_control::pb::ShowTasksRequest;
-use databend_common_cloud_control::pb::ShowTasksResponse;
-use databend_common_cloud_control::pb::TaskError as PbTaskError;
-use databend_common_cloud_control::pb::task_service_server::TaskService;
-use databend_common_cloud_control::pb::task_service_server::TaskServiceServer;
 use databend_common_config::InnerConfig;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
-use databend_common_expression::types::NumberScalar;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::TcpListenerStream;
+use tonic::transport::Server;
 use tonic::Request;
 use tonic::Response;
 use tonic::Status;
-use tonic::transport::Server;
 
 #[derive(Clone, Default)]
 struct BillingRequests {
@@ -71,61 +53,12 @@ struct BillingRequests {
 #[derive(Clone, Default)]
 struct MockBillingTaskService {
     requests: BillingRequests,
-    daily_error: Option<PbTaskError>,
-    warehouse_daily_error: Option<PbTaskError>,
+    daily_error: Option<PbBillingError>,
+    warehouse_daily_error: Option<PbBillingError>,
 }
 
 #[tonic::async_trait]
-impl TaskService for MockBillingTaskService {
-    async fn create_task(
-        &self,
-        _request: Request<CreateTaskRequest>,
-    ) -> std::result::Result<Response<CreateTaskResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn describe_task(
-        &self,
-        _request: Request<DescribeTaskRequest>,
-    ) -> std::result::Result<Response<DescribeTaskResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn execute_task(
-        &self,
-        _request: Request<ExecuteTaskRequest>,
-    ) -> std::result::Result<Response<ExecuteTaskResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn drop_task(
-        &self,
-        _request: Request<DropTaskRequest>,
-    ) -> std::result::Result<Response<DropTaskResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn alter_task(
-        &self,
-        _request: Request<AlterTaskRequest>,
-    ) -> std::result::Result<Response<AlterTaskResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn show_tasks(
-        &self,
-        _request: Request<ShowTasksRequest>,
-    ) -> std::result::Result<Response<ShowTasksResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn show_task_runs(
-        &self,
-        _request: Request<ShowTaskRunsRequest>,
-    ) -> std::result::Result<Response<ShowTaskRunsResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
+impl BillingService for MockBillingTaskService {
     async fn get_billing_history_daily(
         &self,
         request: Request<GetBillingHistoryDailyRequest>,
@@ -199,20 +132,6 @@ impl TaskService for MockBillingTaskService {
             error: None,
         }))
     }
-
-    async fn get_task_dependents(
-        &self,
-        _request: Request<GetTaskDependentsRequest>,
-    ) -> std::result::Result<Response<GetTaskDependentsResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
-
-    async fn enable_task_dependents(
-        &self,
-        _request: Request<EnableTaskDependentsRequest>,
-    ) -> std::result::Result<Response<EnableTaskDependentsResponse>, Status> {
-        Err(Status::unimplemented("not used in billing tests"))
-    }
 }
 
 fn extract_single_block(blocks: Vec<DataBlock>) -> DataBlock {
@@ -236,7 +155,7 @@ async fn test_billing_history_table_functions_via_mock_grpc() -> anyhow::Result<
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let server_handle = runtime::spawn(async move {
         Server::builder()
-            .add_service(TaskServiceServer::new(mock))
+            .add_service(BillingServiceServer::new(mock))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
                 let _ = shutdown_rx.await;
             })
@@ -329,12 +248,12 @@ async fn test_billing_history_table_functions_surface_task_error() -> anyhow::Re
 
     let mock = MockBillingTaskService {
         requests: BillingRequests::default(),
-        daily_error: Some(PbTaskError {
+        daily_error: Some(PbBillingError {
             kind: "AuthFailed".to_string(),
             message: "daily billing access denied".to_string(),
             code: 403,
         }),
-        warehouse_daily_error: Some(PbTaskError {
+        warehouse_daily_error: Some(PbBillingError {
             kind: "Internal".to_string(),
             message: "warehouse billing unavailable".to_string(),
             code: 500,
@@ -344,7 +263,7 @@ async fn test_billing_history_table_functions_surface_task_error() -> anyhow::Re
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let server_handle = runtime::spawn(async move {
         Server::builder()
-            .add_service(TaskServiceServer::new(mock))
+            .add_service(BillingServiceServer::new(mock))
             .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
                 let _ = shutdown_rx.await;
             })
@@ -374,11 +293,9 @@ async fn test_billing_history_table_functions_surface_task_error() -> anyhow::Re
         .try_collect::<Vec<DataBlock>>()
         .await
         .expect_err("warehouse billing task error should fail query");
-    assert!(
-        warehouse_err
-            .message()
-            .contains("warehouse billing unavailable")
-    );
+    assert!(warehouse_err
+        .message()
+        .contains("warehouse billing unavailable"));
     assert!(warehouse_err.message().contains("Internal"));
 
     let _ = shutdown_tx.send(());

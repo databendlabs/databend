@@ -15,11 +15,12 @@
 use std::sync::Arc;
 
 use databend_common_exception::Result;
-use tonic::Request;
 use tonic::transport::Channel;
+use tonic::Request;
 
-use crate::client_config::ClientConfig;
 use crate::client_config::make_request;
+use crate::client_config::ClientConfig;
+use crate::pb::task_service_client::TaskServiceClient;
 use crate::pb::AlterTaskRequest;
 use crate::pb::AlterTaskResponse;
 use crate::pb::CreateTaskRequest;
@@ -32,7 +33,6 @@ use crate::pb::ExecuteTaskRequest;
 use crate::pb::ExecuteTaskResponse;
 use crate::pb::ShowTasksRequest;
 use crate::pb::ShowTasksResponse;
-use crate::pb::task_service_client::TaskServiceClient;
 
 pub(crate) const TASK_CLIENT_VERSION: &str = "v1";
 pub(crate) const TASK_CLIENT_VERSION_NAME: &str = "TASK_CLIENT_VERSION";
@@ -151,24 +151,6 @@ impl TaskClient {
             }
         }
         Ok(result)
-    }
-
-    pub async fn get_billing_history_daily(
-        &self,
-        req: Request<crate::pb::GetBillingHistoryDailyRequest>,
-    ) -> Result<crate::pb::GetBillingHistoryDailyResponse> {
-        let mut client = self.task_client.clone();
-        let resp = client.get_billing_history_daily(req).await?;
-        Ok(resp.into_inner())
-    }
-
-    pub async fn get_billing_history_warehouse_daily(
-        &self,
-        req: Request<crate::pb::GetBillingHistoryWarehouseDailyRequest>,
-    ) -> Result<crate::pb::GetBillingHistoryWarehouseDailyResponse> {
-        let mut client = self.task_client.clone();
-        let resp = client.get_billing_history_warehouse_daily(req).await?;
-        Ok(resp.into_inner())
     }
 
     pub async fn get_task_dependents(

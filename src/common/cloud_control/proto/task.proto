@@ -78,66 +78,6 @@ message ExecuteTaskResponse {
   optional TaskError error = 2;
 }
 
-message GetBillingHistoryDailyRequest {
-  string tenant_id = 1;
-  string billing_month = 2; // YYYY-MM
-  string sql_user = 3; // audit only, empty means absent
-  string query_id = 4; // audit only, empty means absent
-}
-
-message BillingHistoryDailyStorageUsage {
-  string total_bytes = 1;
-  string day_price_per_tb = 2;
-  uint64 read_requests = 3;
-  string kilo_read_request_price = 4;
-  uint64 write_requests = 5;
-  string kilo_write_request_price = 6;
-}
-
-message BillingHistoryDailyCloudServiceUsage {
-  string api_requests = 1;
-  string kilo_api_requests_price = 2;
-}
-
-message BillingHistoryDailyRow {
-  string date = 1;
-  string total_amount = 2;
-  string warehouse_amount = 3;
-  string storage_amount = 4;
-  string cloud_service_amount = 5;
-  BillingHistoryDailyStorageUsage storage_usage = 6;
-  BillingHistoryDailyCloudServiceUsage cloud_service_usage = 7;
-}
-
-message GetBillingHistoryDailyResponse {
-  repeated BillingHistoryDailyRow rows = 1;
-  optional TaskError error = 2;
-}
-
-message GetBillingHistoryWarehouseDailyRequest {
-  string tenant_id = 1;
-  string billing_month = 2; // YYYY-MM
-  string sql_user = 3; // audit only, empty means absent
-  string query_id = 4; // audit only, empty means absent
-}
-
-message BillingHistoryWarehouseDailyRow {
-  string date = 1;
-  string warehouse_name = 2;
-  string cluster_name = 3;
-  uint64 max_clusters = 4;
-  string size = 5;
-  uint64 seconds = 6;
-  string price_per_second = 7;
-  string credits = 8;
-  map<string, string> tags = 9;
-}
-
-message GetBillingHistoryWarehouseDailyResponse {
-  repeated BillingHistoryWarehouseDailyRow rows = 1;
-  optional TaskError error = 2;
-}
-
 message DescribeTaskRequest {
   string tenant_id = 1;
   string task_name = 2;
@@ -306,6 +246,4 @@ service TaskService {
   rpc ShowTaskRuns(ShowTaskRunsRequest) returns (ShowTaskRunsResponse);
   rpc GetTaskDependents(GetTaskDependentsRequest) returns (GetTaskDependentsResponse);
   rpc EnableTaskDependents(EnableTaskDependentsRequest) returns (EnableTaskDependentsResponse);
-  rpc GetBillingHistoryDaily(GetBillingHistoryDailyRequest) returns (GetBillingHistoryDailyResponse);
-  rpc GetBillingHistoryWarehouseDaily(GetBillingHistoryWarehouseDailyRequest) returns (GetBillingHistoryWarehouseDailyResponse);
 }
