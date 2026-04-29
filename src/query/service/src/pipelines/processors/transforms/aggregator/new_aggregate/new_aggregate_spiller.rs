@@ -54,11 +54,10 @@ struct PayloadWriter {
 impl PayloadWriter {
     fn try_create(prefix: &str) -> Result<Self> {
         let data_operator = DataOperator::instance();
-        let target = SpillTarget::from_storage_params(data_operator.spill_params());
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone(), target)?;
+        let spills_data_writer = buffer_pool.writer(operator, file_path.clone())?;
 
         Ok(PayloadWriter {
             path: file_path,
@@ -414,10 +413,11 @@ fn restore_payload(
         data_schema.clone(),
         vec![row_group.clone()],
         target,
+        read_setting,
     )?;
 
     let instant = Instant::now();
-    let data_block = reader.read(read_setting)?;
+    let data_block = reader.read()?;
     let elapsed = instant.elapsed();
 
     let read_size = reader.read_bytes();
