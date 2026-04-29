@@ -59,14 +59,20 @@ pub fn validate_public_key_pem(input: &str) -> Result<()> {
 }
 
 /// Reconstruct PEM from any input format (full PEM or bare base64).
+/// Wraps base64 body at 64 characters per line as required by PEM format.
 fn to_pem(input: &str) -> String {
     let trimmed = input.trim();
     if trimmed.starts_with("-----BEGIN") {
         trimmed.to_string()
     } else {
+        let wrapped: Vec<&str> = trimmed
+            .as_bytes()
+            .chunks(64)
+            .map(|c| std::str::from_utf8(c).unwrap_or(""))
+            .collect();
         format!(
             "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
-            trimmed
+            wrapped.join("\n")
         )
     }
 }

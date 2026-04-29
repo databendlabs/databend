@@ -40,11 +40,18 @@ impl PublicKeyEntry {
         sha256_fingerprint(&self.key)
     }
 
-    /// Reconstruct full PEM from stored base64 body
+    /// Reconstruct full PEM from stored base64 body.
+    /// Wraps at 64 characters per line as required by PEM format.
     pub fn to_pem(&self) -> String {
+        let wrapped: Vec<&str> = self
+            .key
+            .as_bytes()
+            .chunks(64)
+            .map(|c| std::str::from_utf8(c).unwrap_or(""))
+            .collect();
         format!(
             "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
-            self.key
+            wrapped.join("\n")
         )
     }
 }
