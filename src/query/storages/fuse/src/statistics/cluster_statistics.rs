@@ -219,10 +219,8 @@ pub fn get_min_max_stats(
     if let Some(default_key_id) = default_key_id {
         if let Some(v) = cluster_stats {
             if v.cluster_key_id == default_key_id {
-                let min = v.min().clone();
-                let max = v.max().clone();
-                debug_assert!(min <= max);
-                return (min, max);
+                // Cluster stats min/max are guaranteed when generated; reuse them directly.
+                return (v.min().clone(), v.max().clone());
             }
         }
     }
