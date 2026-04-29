@@ -171,6 +171,7 @@ impl Binder {
                 output_columns,
                 def: s_expr,
                 column_mapping,
+                stat_info: None,
             },
         )));
         Ok((s_expr, new_bind_context))
