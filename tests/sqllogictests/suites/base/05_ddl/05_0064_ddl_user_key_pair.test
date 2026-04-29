@@ -1,0 +1,75 @@
+statement ok
+DROP USER IF EXISTS 'kp_user'
+
+statement ok
+DROP USER IF EXISTS 'kp_pwd_user'
+
+-- CREATE USER with key_pair auth (bare base64 body)
+statement ok
+CREATE USER 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+-- Duplicate user
+statement error 2202
+CREATE USER 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+-- IF NOT EXISTS is a no-op
+statement ok
+CREATE USER IF NOT EXISTS 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+-- Invalid key (bad base64)
+statement error 5100
+CREATE USER 'kp_bad' IDENTIFIED WITH key_pair BY 'not-a-valid-key!!!'
+
+-- ADD PUBLIC_KEY with label
+statement ok
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'backup'
+
+-- Duplicate label
+statement error 5100
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'backup'
+
+-- Duplicate fingerprint (same key, different label)
+statement error 5100
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==' LABEL = 'other'
+
+-- ADD PUBLIC_KEY on a password user (not key_pair)
+statement ok
+CREATE USER 'kp_pwd_user' IDENTIFIED BY 'password123'
+
+statement error 5100
+ALTER USER 'kp_pwd_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
+
+-- REMOVE PUBLIC_KEY by label
+statement ok
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY LABEL = 'backup'
+
+-- REMOVE nonexistent label
+statement error 5100
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY LABEL = 'nonexistent'
+
+-- Add back for fingerprint removal test
+statement ok
+ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'to-remove'
+
+-- REMOVE PUBLIC_KEY by fingerprint
+statement ok
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:sBDVc5gUgq6zgTWMt9K3XDEs6paj3ZDjblsFCb96048'
+
+-- REMOVE last key (should fail)
+statement error 5100
+ALTER USER 'kp_user' WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:ygGD6DgPtF3I3Jvytfc3RExRaX1cTQjlBxpFmgXmE+E'
+
+-- ALTER USER IDENTIFIED BY on key_pair user (blocked)
+statement error 1006
+ALTER USER 'kp_user' IDENTIFIED BY 'password'
+
+-- ALTER USER IDENTIFIED WITH key_pair on existing key_pair user (blocked)
+statement error 1006
+ALTER USER 'kp_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ=='
+
+-- Cleanup
+statement ok
+DROP USER IF EXISTS 'kp_user'
+
+statement ok
+DROP USER IF EXISTS 'kp_pwd_user'
