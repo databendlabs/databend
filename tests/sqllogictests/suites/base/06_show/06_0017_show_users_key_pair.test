@@ -4,22 +4,18 @@ DROP USER IF EXISTS 'kp_show_user'
 statement ok
 CREATE USER 'kp_show_user' IDENTIFIED WITH key_pair BY 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0apWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w=='
 
--- DESC USER shows key_pair auth type and fingerprint in public_keys column
 query TTTTTTBTTBTT
 DESC USER 'kp_show_user'
 ----
 kp_show_user % key_pair (empty) (empty) (empty) 0 NULL NULL NULL NULL SHA256:ygGD6DgPtF3I3Jvytfc3RExRaX1cTQjlBxpFmgXmE+E
 
--- Add a second key with label
 statement ok
 ALTER USER 'kp_show_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'ci-key'
 
--- DESC USER shows both keys, labeled key shows fingerprint(label)
 query TTTTTTBTTBTT
 DESC USER 'kp_show_user'
 ----
 kp_show_user % key_pair (empty) (empty) (empty) 0 NULL NULL NULL NULL SHA256:ygGD6DgPtF3I3Jvytfc3RExRaX1cTQjlBxpFmgXmE+E, SHA256:sBDVc5gUgq6zgTWMt9K3XDEs6paj3ZDjblsFCb96048(ci-key)
 
--- Cleanup
 statement ok
 DROP USER IF EXISTS 'kp_show_user'
