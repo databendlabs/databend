@@ -18,10 +18,8 @@ use databend_common_exception::Result;
 use tonic::Request;
 use tonic::transport::Channel;
 
-use crate::pb::GetBillingHistoryDailyRequest;
-use crate::pb::GetBillingHistoryDailyResponse;
-use crate::pb::GetBillingHistoryWarehouseDailyRequest;
-use crate::pb::GetBillingHistoryWarehouseDailyResponse;
+use crate::pb::GetBillingUsageDailyRequest;
+use crate::pb::GetBillingUsageDailyResponse;
 use crate::pb::billing_service_client::BillingServiceClient;
 use crate::task_client::MAX_DECODING_SIZE;
 use crate::task_client::MAX_ENCODING_SIZE;
@@ -38,21 +36,12 @@ impl BillingClient {
         Ok(Arc::new(BillingClient { client }))
     }
 
-    pub async fn get_billing_history_daily(
+    pub async fn get_billing_usage_daily(
         &self,
-        req: Request<GetBillingHistoryDailyRequest>,
-    ) -> Result<GetBillingHistoryDailyResponse> {
+        req: Request<GetBillingUsageDailyRequest>,
+    ) -> Result<GetBillingUsageDailyResponse> {
         let mut client = self.client.clone();
-        let resp = client.get_billing_history_daily(req).await?;
-        Ok(resp.into_inner())
-    }
-
-    pub async fn get_billing_history_warehouse_daily(
-        &self,
-        req: Request<GetBillingHistoryWarehouseDailyRequest>,
-    ) -> Result<GetBillingHistoryWarehouseDailyResponse> {
-        let mut client = self.client.clone();
-        let resp = client.get_billing_history_warehouse_daily(req).await?;
+        let resp = client.get_billing_usage_daily(req).await?;
         Ok(resp.into_inner())
     }
 }

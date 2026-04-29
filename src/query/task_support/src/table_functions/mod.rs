@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod billing_history_daily;
-mod billing_history_warehouse_daily;
+mod billing_usage_daily;
 mod task_dependents;
 mod task_dependents_enable;
 mod task_history;
 
-pub use billing_history_daily::BillingHistoryDailyTable;
-pub use billing_history_warehouse_daily::BillingHistoryWarehouseDailyTable;
+pub use billing_usage_daily::BillingUsageDailyTable;
 pub use task_dependents::TaskDependentsTable;
 pub use task_dependents_enable::TaskDependentsEnableTable;
 pub use task_history::TaskHistoryTable;

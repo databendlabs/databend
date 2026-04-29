@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use databend_common_base::runtime;
 use databend_common_cloud_control::billing_client::BillingClient;
-use databend_common_cloud_control::pb::BillingHistoryDailyRow;
-use databend_common_cloud_control::pb::BillingHistoryWarehouseDailyRow;
-use databend_common_cloud_control::pb::GetBillingHistoryDailyRequest;
-use databend_common_cloud_control::pb::GetBillingHistoryDailyResponse;
-use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyRequest;
-use databend_common_cloud_control::pb::GetBillingHistoryWarehouseDailyResponse;
+use databend_common_cloud_control::pb::BillingUsageDailyRow;
+use databend_common_cloud_control::pb::GetBillingUsageDailyRequest;
+use databend_common_cloud_control::pb::GetBillingUsageDailyResponse;
 use databend_common_cloud_control::pb::billing_service_server::BillingService;
 use databend_common_cloud_control::pb::billing_service_server::BillingServiceServer;
 use hyper_util::rt::TokioIo;
@@ -37,27 +36,24 @@ pub struct MockBillingService {}
 
 #[tonic::async_trait]
 impl BillingService for MockBillingService {
-    async fn get_billing_history_daily(
+    async fn get_billing_usage_daily(
         &self,
-        request: Request<GetBillingHistoryDailyRequest>,
-    ) -> std::result::Result<Response<GetBillingHistoryDailyResponse>, Status> {
-        Ok(Response::new(GetBillingHistoryDailyResponse {
-            rows: vec![BillingHistoryDailyRow {
-                date: request.into_inner().billing_month,
-                ..Default::default()
-            }],
-            error: None,
-        }))
-    }
-
-    async fn get_billing_history_warehouse_daily(
-        &self,
-        request: Request<GetBillingHistoryWarehouseDailyRequest>,
-    ) -> std::result::Result<Response<GetBillingHistoryWarehouseDailyResponse>, Status> {
-        Ok(Response::new(GetBillingHistoryWarehouseDailyResponse {
-            rows: vec![BillingHistoryWarehouseDailyRow {
-                warehouse_name: request.into_inner().billing_month,
-                ..Default::default()
+        request: Request<GetBillingUsageDailyRequest>,
+    ) -> std::result::Result<Response<GetBillingUsageDailyResponse>, Status> {
+        Ok(Response::new(GetBillingUsageDailyResponse {
+            rows: vec![BillingUsageDailyRow {
+                usage_date: request.into_inner().billing_month,
+                usage_type: "compute".to_string(),
+                service_type: "WAREHOUSE_METERING".to_string(),
+                resource_name: "default".to_string(),
+                usage: "2653".to_string(),
+                usage_unit: "second".to_string(),
+                rate: "0.0002777777777778".to_string(),
+                rate_unit: "second".to_string(),
+                usage_in_currency: "0.737".to_string(),
+                currency: "USD".to_string(),
+                tags: BTreeMap::from([("env".to_string(), "test".to_string())]),
+                details: "{\"cluster_name\":\"cl-00000\"}".to_string(),
             }],
             error: None,
         }))
@@ -95,27 +91,18 @@ async fn test_billing_client_success_cases() -> anyhow::Result<()> {
 
     let client = BillingClient::new(channel).await?;
 
-    let daily_resp = client
-        .get_billing_history_daily(Request::new(GetBillingHistoryDailyRequest {
+    let resp = client
+        .get_billing_usage_daily(Request::new(GetBillingUsageDailyRequest {
             tenant_id: "tenant".to_string(),
             billing_month: "2026-03".to_string(),
             sql_user: "root".to_string(),
             query_id: "query-1".to_string(),
         }))
         .await?;
-    assert_eq!(daily_resp.rows.len(), 1);
-    assert_eq!(daily_resp.rows[0].date, "2026-03");
-
-    let warehouse_resp = client
-        .get_billing_history_warehouse_daily(Request::new(GetBillingHistoryWarehouseDailyRequest {
-            tenant_id: "tenant".to_string(),
-            billing_month: "2026-04".to_string(),
-            sql_user: "root".to_string(),
-            query_id: "query-2".to_string(),
-        }))
-        .await?;
-    assert_eq!(warehouse_resp.rows.len(), 1);
-    assert_eq!(warehouse_resp.rows[0].warehouse_name, "2026-04");
+    assert_eq!(resp.rows.len(), 1);
+    assert_eq!(resp.rows[0].usage_date, "2026-03");
+    assert_eq!(resp.rows[0].usage_type, "compute");
+    assert_eq!(resp.rows[0].resource_name, "default");
 
     Ok(())
 }
