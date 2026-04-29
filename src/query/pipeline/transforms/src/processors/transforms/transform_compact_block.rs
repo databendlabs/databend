@@ -78,10 +78,9 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
 impl TransformCompactBlock {
     fn split_blocks(blocks: Vec<DataBlock>, block_num: usize) -> Result<Vec<DataBlock>> {
         let total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
-        debug_assert!(total_rows > 0);
+        let block_num = block_num.min(total_rows);
         debug_assert!(block_num > 0);
 
-        let block_num = block_num.min(total_rows);
         let base_rows = total_rows / block_num;
         let extra_rows = total_rows % block_num;
         let mut blocks = blocks.into_iter();
