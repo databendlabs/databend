@@ -88,9 +88,15 @@ pub struct DatabaseWithTables {
 /// Example: 4 dbs * 5 tables = 20 (OK), 5 dbs * 5 tables = 25 (too many)
 pub const MAX_OPTIMIZED_PATH_CHECKS: usize = 20;
 
+/// Maximum number of databases for db-only filter optimized path.
+/// When only database filter is specified (no table filter), each db requires
+/// listing all its tables + per-db ownership check. Keep this small.
+pub const MAX_OPTIMIZED_PATH_DB_ONLY: usize = 5;
+
 /// Returns whether the filtered query should use the optimized visibility path.
 ///
 /// Optimized path is only used when the ownership check count is bounded:
+/// - db only (no table filter): db_count <= MAX_OPTIMIZED_PATH_DB_ONLY
 /// - tables only (no db filter): table_count <= MAX_OPTIMIZED_PATH_CHECKS
 /// - tables + dbs: db_count * table_count <= MAX_OPTIMIZED_PATH_CHECKS
 ///
@@ -99,7 +105,10 @@ pub const MAX_OPTIMIZED_PATH_CHECKS: usize = 20;
 #[inline]
 pub fn should_use_optimized_visibility_path(db_count: usize, table_count: usize) -> bool {
     if table_count == 0 {
-        return false;
+        // db-only filter: e.g. WHERE database = 'db1'
+        // Each db needs listing all tables + per-db ownership check,
+        // so limit to a small number of dbs.
+        return db_count > 0 && db_count <= MAX_OPTIMIZED_PATH_DB_ONLY;
     }
 
     if db_count == 0 {
