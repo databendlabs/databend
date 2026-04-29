@@ -76,7 +76,7 @@ impl BillingService for MockBillingServiceImpl {
                 resource_name: "default".to_string(),
                 usage: "2653".to_string(),
                 usage_unit: "second".to_string(),
-                rate: "0.0002777777777778".to_string(),
+                rate: "".to_string(),
                 rate_unit: "second".to_string(),
                 usage_in_currency: "0.737".to_string(),
                 currency: "¥".to_string(),

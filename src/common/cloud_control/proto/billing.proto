@@ -38,12 +38,13 @@ message BillingUsageDailyRow {
   // Examples: second, byte, request.
   string usage_unit = 6;
 
-  // Unit price encoded as a decimal string. Empty string means absent.
+  // Reserved billing unit price field.
+  // Empty string means the rate is intentionally undisclosed.
   string rate = 7;
 
-  // Unit for rate.
+  // Billing dimension unit for the reserved rate field.
   // Examples: second, tb_day, k_request.
-  // Empty string means absent.
+  // Returned when the billing dimension is known.
   string rate_unit = 8;
 
   // Final billed amount encoded as a decimal string.
