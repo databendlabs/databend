@@ -108,7 +108,7 @@ fn test_calc_rows_for_recluster() {
     assert_eq!(result, (267, 2_000_000));
 
     // Case 2: If the block size is too smaller.
-    let result = t.calc_rows_for_recluster(4_000, 2_000_000, 600_000);
+    let result = t.calc_rows_for_recluster(4_000, 1_600_000, 600_000);
     assert_eq!(result, (2000, 800_000));
 
     // Case 3: use the compressed-based block count.
