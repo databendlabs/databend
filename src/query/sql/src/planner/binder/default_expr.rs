@@ -236,9 +236,17 @@ impl DefaultExprBinder {
         }
     }
 
-    pub fn get_scalar(&mut self, field: &TableField) -> Result<Scalar> {
-        let data_field: DataField = field.into();
-        let mut scalar_expr = self.parse_and_bind(&data_field)?;
+    /// Validate an already-bound `ScalarExpr`: apply the rewriter (e.g. replace
+    /// `nextval` with a constant), evaluate the expression, and return the
+    /// resulting scalar.  This is the rewrite+eval portion of [`get_scalar`]
+    /// extracted so callers that already hold a `ScalarExpr` (from
+    /// `parse_and_bind`) can validate without re-parsing.
+    pub fn validate_scalar(
+        &mut self,
+        scalar_expr: &ScalarExpr,
+        field_name: &str,
+    ) -> Result<Scalar> {
+        let mut scalar_expr = scalar_expr.clone();
         self.rewriter.visit(&mut scalar_expr)?;
         let expr = scalar_expr.as_field_index_expr()?;
         let result = self.evaluator().run(&expr)?;
@@ -250,10 +258,15 @@ impl DefaultExprBinder {
             }
             _ => Err(ErrorCode::BadDataValueType(format!(
                 "Invalid default value for column: {}, must be constant, but got: {}",
-                field.name(),
-                result
+                field_name, result
             ))),
         }
+    }
+
+    pub fn get_scalar(&mut self, field: &TableField) -> Result<Scalar> {
+        let data_field: DataField = field.into();
+        let scalar_expr = self.parse_and_bind(&data_field)?;
+        self.validate_scalar(&scalar_expr, field.name())
     }
 
     pub fn get_expr(
