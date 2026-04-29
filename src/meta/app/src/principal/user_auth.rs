@@ -50,18 +50,30 @@ impl PublicKeyEntry {
 }
 
 /// Normalize a public key input: accept full PEM or bare base64, return base64 body only.
-pub fn normalize_public_key(input: &str) -> String {
+/// Validates that the result is valid base64 that decodes to non-empty bytes.
+pub fn normalize_public_key(input: &str) -> Result<String> {
+    use base64::Engine;
     let trimmed = input.trim();
-    if trimmed.starts_with("-----BEGIN") {
+    let body = if trimmed.starts_with("-----BEGIN") {
         trimmed
             .lines()
             .filter(|line| !line.starts_with("-----"))
             .collect::<Vec<_>>()
             .join("")
     } else {
-        // Already bare base64, strip any whitespace
         trimmed.chars().filter(|c| !c.is_whitespace()).collect()
+    };
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(&body)
+        .map_err(|e| {
+            ErrorCode::AuthenticateFailure(format!("invalid public key: bad base64 encoding: {e}"))
+        })?;
+    if decoded.is_empty() {
+        return Err(ErrorCode::AuthenticateFailure(
+            "invalid public key: empty key data",
+        ));
     }
+    Ok(body)
 }
 
 /// Compute fingerprint compatible with OpenSSH: SHA-256 of DER bytes, base64-encoded.
@@ -185,7 +197,7 @@ impl AuthInfo {
             AuthType::JWT => Ok(AuthInfo::JWT),
             AuthType::KeyPair => match auth_string {
                 Some(key_input) => {
-                    let key = normalize_public_key(key_input);
+                    let key = normalize_public_key(key_input)?;
                     Ok(AuthInfo::KeyPair {
                         public_keys: vec![PublicKeyEntry {
                             key,

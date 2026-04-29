@@ -404,15 +404,24 @@ impl Binder {
                 }
             }
         }
-        UserApiProvider::instance()
-            .verify_password(
-                &self.ctx.get_tenant(),
-                &user_option,
-                auth_option,
-                None,
-                None,
-            )
-            .await?;
+        // Password policy only applies to password-based auth types
+        let needs_password_policy = match auth_option.auth_type {
+            Some(databend_common_ast::ast::AuthType::Sha256Password)
+            | Some(databend_common_ast::ast::AuthType::DoubleSha1Password)
+            | None => true,
+            _ => false,
+        };
+        if needs_password_policy {
+            UserApiProvider::instance()
+                .verify_password(
+                    &self.ctx.get_tenant(),
+                    &user_option,
+                    auth_option,
+                    None,
+                    None,
+                )
+                .await?;
+        }
 
         // Validate public key PEM for key_pair auth
         if let Some(databend_common_ast::ast::AuthType::KeyPair) = &auth_option.auth_type {
@@ -514,7 +523,7 @@ impl Binder {
                     }
                 }
                 let entry = PublicKeyEntry {
-                    key: normalize_public_key(key_input),
+                    key: normalize_public_key(key_input)?,
                     label,
                     created_at: Utc::now().to_rfc3339(),
                 };
@@ -539,14 +548,12 @@ impl Binder {
 
         // None means auth info is not changed.
         let new_auth_info = if let Some(auth_option) = &auth_option {
-            // Reject re-IDENTIFIED WITH key_pair on existing key_pair users
-            if matches!(
-                auth_option.auth_type,
-                Some(databend_common_ast::ast::AuthType::KeyPair)
-            ) && matches!(user_info.auth_info, AuthInfo::KeyPair { .. })
-            {
+            // Reject any IDENTIFIED change on existing key_pair users:
+            // - explicit IDENTIFIED WITH key_pair: would wipe keys
+            // - IDENTIFIED BY (no auth_type): alter2 inherits KeyPair and rebuilds single key
+            if matches!(user_info.auth_info, AuthInfo::KeyPair { .. }) {
                 return Err(ErrorCode::BadArguments(
-                    "user already uses key-pair authentication, use ADD PUBLIC_KEY / REMOVE PUBLIC_KEY to manage keys",
+                    "user already uses key-pair authentication, use ADD PUBLIC_KEY / REMOVE PUBLIC_KEY to manage keys, or first switch to another auth type",
                 ));
             }
             // Validate PEM when switching to key_pair auth
@@ -568,16 +575,18 @@ impl Binder {
                 &auth_option.password,
                 need_change,
             )?;
-            // verify the password if changed
-            UserApiProvider::instance()
-                .verify_password(
-                    &self.ctx.get_tenant(),
-                    &user_option,
-                    auth_option,
-                    Some(&user_info),
-                    Some(&auth_info),
-                )
-                .await?;
+            // Password policy only applies to password-based auth
+            if let AuthInfo::Password { .. } = &auth_info {
+                UserApiProvider::instance()
+                    .verify_password(
+                        &self.ctx.get_tenant(),
+                        &user_option,
+                        auth_option,
+                        Some(&user_info),
+                        Some(&auth_info),
+                    )
+                    .await?;
+            }
             if user_info.auth_info == auth_info {
                 None
             } else {

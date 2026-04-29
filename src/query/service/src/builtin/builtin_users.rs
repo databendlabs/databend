@@ -73,7 +73,7 @@ impl BuiltinUsers {
                 )),
                 Some(key_input) => Ok(AuthInfo::KeyPair {
                     public_keys: vec![databend_common_meta_app::principal::PublicKeyEntry {
-                        key: databend_common_meta_app::principal::normalize_public_key(key_input),
+                        key: databend_common_meta_app::principal::normalize_public_key(key_input)?,
                         label: String::new(),
                         created_at: String::new(),
                     }],
