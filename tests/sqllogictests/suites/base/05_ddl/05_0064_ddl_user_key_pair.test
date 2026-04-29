@@ -19,7 +19,7 @@ CREATE USER 'kp_bad' IDENTIFIED WITH key_pair BY 'not-a-valid-key!!!'
 statement ok
 ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'backup'
 
-statement error 5100
+statement error 1006
 ALTER USER 'kp_user' WITH ADD PUBLIC_KEY = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEspgvQCsgbJiYhnl9L/E5uaAbBlbMTiBLp0hLlcuuhBO++Q6mo7JhyUsEOP9ia4BryZWV0bKhiwTG2X0AWeZVqQ==' LABEL = 'backup'
 
 statement error 5100
