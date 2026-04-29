@@ -518,7 +518,7 @@ impl Binder {
                     label,
                     created_at: Utc::now().to_rfc3339(),
                 };
-                user_info.auth_info.add_public_key(entry);
+                user_info.auth_info.add_public_key(entry)?;
                 key_pair_changed = true;
             } else if let UserOptionItem::RemovePublicKeyByLabel(label) = &option {
                 user_info.auth_info.remove_public_key_by_label(label)?;

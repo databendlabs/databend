@@ -101,6 +101,7 @@ pub fn decode_jwt_claims_insecure(token: &str) -> Result<JwtClaimsDecoded> {
 #[derive(serde::Deserialize)]
 pub struct JwtClaimsDecoded {
     pub sub: Option<String>,
+    pub iss: Option<String>,
 }
 
 /// Verify a JWT token against a list of public key entries.

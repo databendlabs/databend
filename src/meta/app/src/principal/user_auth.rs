@@ -64,9 +64,15 @@ pub fn normalize_public_key(input: &str) -> String {
     }
 }
 
+/// Compute fingerprint compatible with OpenSSH: SHA-256 of DER bytes, base64-encoded.
 pub fn sha256_fingerprint(key_base64: &str) -> String {
-    let digest = Sha256::digest(key_base64.as_bytes());
-    format!("SHA256:{}", hex::encode(digest))
+    use base64::Engine;
+    let der_bytes = base64::engine::general_purpose::STANDARD
+        .decode(key_base64)
+        .unwrap_or_default();
+    let digest = Sha256::digest(&der_bytes);
+    let encoded = base64::engine::general_purpose::STANDARD_NO_PAD.encode(digest);
+    format!("SHA256:{}", encoded)
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -372,16 +378,23 @@ impl AuthInfo {
         }
     }
 
-    pub fn add_public_key(&mut self, entry: PublicKeyEntry) {
+    pub fn add_public_key(&mut self, entry: PublicKeyEntry) -> Result<()> {
         match self {
             AuthInfo::KeyPair { public_keys } => {
+                // Reject duplicate fingerprints
+                let fp = entry.fingerprint();
+                if public_keys.iter().any(|k| k.fingerprint() == fp) {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "public key with fingerprint '{}' already exists",
+                        fp
+                    )));
+                }
                 public_keys.push(entry);
+                Ok(())
             }
-            _ => {
-                *self = AuthInfo::KeyPair {
-                    public_keys: vec![entry],
-                };
-            }
+            _ => Err(ErrorCode::AuthenticateFailure(
+                "user is not configured for key-pair authentication, use IDENTIFIED WITH key_pair BY '<key>' first".to_string(),
+            )),
         }
     }
 

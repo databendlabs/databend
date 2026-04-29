@@ -298,6 +298,24 @@ impl AuthMgr {
                     )
                 })?;
                 let tenant = session.get_current_tenant();
+
+                // Validate issuer: must be <tenant>.<username>
+                let expected_iss = format!("{}.{}", tenant.tenant_name(), user_name);
+                match &claims.iss {
+                    Some(iss) if iss == &expected_iss => {}
+                    Some(iss) => {
+                        return Err(ErrorCode::AuthenticateFailure(format!(
+                            "key-pair authentication failed: invalid issuer '{}', expected '{}'",
+                            iss, expected_iss
+                        )));
+                    }
+                    None => {
+                        return Err(ErrorCode::AuthenticateFailure(
+                            "key-pair authentication failed: 'iss' (issuer) claim is required, expected '<tenant>.<username>'",
+                        ));
+                    }
+                }
+
                 let identity = UserIdentity::new(&user_name, "%");
                 let user = user_api
                     .get_user_with_client_ip(&tenant, identity.clone(), client_ip.as_deref())
