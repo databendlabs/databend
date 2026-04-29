@@ -66,6 +66,20 @@ impl BlockThresholds {
     }
 
     #[inline]
+    pub fn set_rows_per_block(mut self, rows_per_block: usize) -> Self {
+        self.max_rows_per_block = rows_per_block;
+        self.min_rows_per_block = Self::min_block_threshold(rows_per_block);
+        self
+    }
+
+    #[inline]
+    pub fn set_bytes_per_block(mut self, bytes_per_block: usize) -> Self {
+        self.max_bytes_per_block = bytes_per_block * MAX_BYTES_PER_BLOCK_FACTOR;
+        self.min_bytes_per_block = Self::min_block_threshold(bytes_per_block);
+        self
+    }
+
+    #[inline]
     pub fn min_block_threshold(value: usize) -> usize {
         (value * 4).div_ceil(5)
     }
@@ -132,7 +146,7 @@ impl BlockThresholds {
         total_rows.div_ceil(block_num_by_size)
     }
 
-    /// Calculates the optimal number of rows per block based on total data size and row count.
+    /// Calculates the optimal rows and bytes per block based on total data size and row count.
     ///
     /// # Parameters
     /// - `total_bytes`: The total size of the data in bytes.
@@ -140,46 +154,55 @@ impl BlockThresholds {
     /// - `total_compressed`: The total compressed size of the data in bytes.
     ///
     /// # Returns
-    /// - The calculated number of rows per block that satisfies the thresholds.
+    /// - `(rows_per_block, bytes_per_block)`: rows are used as the sort block size,
+    ///   and bytes are used by ordered compact to keep post-sort blocks near the
+    ///   recluster target.
     #[inline]
     pub fn calc_rows_for_recluster(
         &self,
         total_rows: usize,
         total_bytes: usize,
         total_compressed: usize,
-    ) -> usize {
+    ) -> (usize, usize) {
+        debug_assert!(total_rows > 0);
+
+        let default_bytes_per_block = self
+            .max_bytes_per_block
+            .div_ceil(MAX_BYTES_PER_BLOCK_FACTOR);
         // Check if the data is compact enough to skip further calculations.
         if self.check_for_compact(total_rows, total_bytes)
             && total_compressed < 2 * self.min_compressed_per_block
         {
-            return total_rows;
+            return (total_rows, default_bytes_per_block);
         }
 
         let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
         let block_num_by_compressed = total_compressed.div_ceil(self.max_compressed_per_block);
         // If row-based block count exceeds compressed-based block count, use max rows per block.
         if block_num_by_rows >= block_num_by_compressed {
-            return self.max_rows_per_block;
+            return (self.max_rows_per_block, default_bytes_per_block);
         }
 
         let bytes_per_block = total_bytes.div_ceil(block_num_by_compressed);
         // Adjust the number of blocks based on block size thresholds.
-        let default_bytes_per_block = self
-            .max_bytes_per_block
-            .div_ceil(MAX_BYTES_PER_BLOCK_FACTOR);
         let max_bytes_per_block =
             default_bytes_per_block + default_bytes_per_block.min(DEFAULT_BLOCK_BUFFER_SIZE);
-        let min_bytes_per_block = self.min_bytes_per_block / 2;
-        let block_nums = if bytes_per_block > max_bytes_per_block {
+        if bytes_per_block > max_bytes_per_block {
             // Case 1: If the block size is too bigger.
-            total_bytes.div_ceil(max_bytes_per_block)
-        } else if bytes_per_block < min_bytes_per_block {
+            let bytes_per_block = max_bytes_per_block;
+            let block_nums = total_bytes.div_ceil(bytes_per_block);
+            (total_rows.div_ceil(block_nums).max(1), bytes_per_block)
+        } else if bytes_per_block < self.min_bytes_per_block {
             // Case 2: If the block size is too smaller.
-            total_bytes / min_bytes_per_block
+            let bytes_per_block = self.min_bytes_per_block;
+            let block_nums = std::cmp::max(total_bytes / bytes_per_block, 1);
+            (total_rows.div_ceil(block_nums).max(1), bytes_per_block)
         } else {
             // Case 3: Otherwise, use the compressed-based block count.
-            block_num_by_compressed
-        };
-        total_rows.div_ceil(block_nums.max(1)).max(1)
+            (
+                total_rows.div_ceil(block_num_by_compressed).max(1),
+                bytes_per_block,
+            )
+        }
     }
 }

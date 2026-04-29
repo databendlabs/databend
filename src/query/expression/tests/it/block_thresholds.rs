@@ -92,23 +92,26 @@ fn test_calc_rows_for_recluster() {
     let t = default_thresholds();
 
     // compact enough to skip further calculations
-    assert_eq!(t.calc_rows_for_recluster(1000, 500_000, 100_000), 1000);
+    assert_eq!(
+        t.calc_rows_for_recluster(1000, 500_000, 100_000),
+        (1000, 1_000_000)
+    );
 
     // row-based block count exceeds compressed-based block count, use max rows per block.
     assert_eq!(
         t.calc_rows_for_recluster(10_000, 2_000_000, 100_000),
-        t.max_rows_per_block
+        (t.max_rows_per_block, 1_000_000)
     );
 
     // Case 1: If the block size is too bigger.
     let result = t.calc_rows_for_recluster(4_000, 30_000_000, 600_000);
-    assert_eq!(result, 267);
+    assert_eq!(result, (267, 2_000_000));
 
     // Case 2: If the block size is too smaller.
     let result = t.calc_rows_for_recluster(4_000, 2_000_000, 600_000);
-    assert_eq!(result, 800);
+    assert_eq!(result, (2000, 800_000));
 
     // Case 3: use the compressed-based block count.
     let result = t.calc_rows_for_recluster(4_000, 10_000_000, 600_000);
-    assert_eq!(result, 667);
+    assert_eq!(result, (667, 1_666_667));
 }

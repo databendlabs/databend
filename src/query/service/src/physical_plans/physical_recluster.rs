@@ -213,7 +213,7 @@ impl IPhysicalPlan for Recluster {
                     .collect();
 
                 // merge sort
-                let sort_block_size = block_thresholds.calc_rows_for_recluster(
+                let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
                     task.total_rows,
                     task.total_bytes,
                     task.total_compressed,
@@ -227,17 +227,20 @@ impl IPhysicalPlan for Recluster {
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
-                .with_block_size_hit(sort_block_size);
+                .with_block_size_hit(rows_per_block);
                 sort_pipeline_builder
                     .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
                 // Compact after merge sort. This ordered compactor keeps block growth bounded
                 // without requiring a hard post-sort size cap, since final serialized sizes are
                 // not known yet and over-splitting here would create small fragmented blocks.
+                let compact_thresholds = block_thresholds
+                    .set_rows_per_block(rows_per_block)
+                    .set_bytes_per_block(bytes_per_block);
                 let max_threads = settings.get_max_threads()? as usize;
                 build_ordered_compact_pipeline(
                     &mut builder.main_pipeline,
-                    block_thresholds,
+                    compact_thresholds,
                     max_threads,
                 )?;
 

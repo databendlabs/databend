@@ -328,7 +328,7 @@ impl ReclusterTableInterpreter {
         let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
 
         // Determine rows per block based on data size and compression ratio
-        let rows_per_block =
+        let (rows_per_block, _) =
             block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
 
         // Calculate initial partition count based on data volume and block size
