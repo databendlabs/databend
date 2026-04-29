@@ -32,7 +32,7 @@ pub enum BlockCompactMeta {
     Concat(Vec<DataBlock>),
     Split {
         blocks: Vec<DataBlock>,
-        rows_per_block: usize,
+        block_num: usize,
     },
     NoChange(Vec<DataBlock>),
 }
@@ -65,10 +65,7 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
 
         match meta {
             BlockCompactMeta::Concat(blocks) => Ok(vec![DataBlock::concat(&blocks)?]),
-            BlockCompactMeta::Split {
-                blocks,
-                rows_per_block,
-            } => Self::split_blocks(blocks, rows_per_block),
+            BlockCompactMeta::Split { blocks, block_num } => Self::split_blocks(blocks, block_num),
             BlockCompactMeta::NoChange(blocks) => Ok(blocks),
         }
     }
@@ -79,25 +76,20 @@ impl BlockMetaTransform<BlockCompactMeta> for TransformCompactBlock {
 }
 
 impl TransformCompactBlock {
-    fn split_blocks(blocks: Vec<DataBlock>, rows_per_block: usize) -> Result<Vec<DataBlock>> {
+    fn split_blocks(blocks: Vec<DataBlock>, block_num: usize) -> Result<Vec<DataBlock>> {
         let total_rows: usize = blocks.iter().map(DataBlock::num_rows).sum();
         debug_assert!(total_rows > 0);
-        debug_assert!(rows_per_block > 0);
+        debug_assert!(block_num > 0);
 
-        // rows_per_block is a split target, not a hard upper bound.
-        // Use floor division to cap the output block count and absorb a small tail
-        // into previous blocks. This may produce blocks larger than rows_per_block,
-        // but avoids creating small fragments that would be compacted again.
-        let output_blocks = std::cmp::max(total_rows / rows_per_block, 1);
-        let base_rows = total_rows / output_blocks;
-        let extra_rows = total_rows % output_blocks;
+        let block_num = block_num.min(total_rows);
+        let base_rows = total_rows / block_num;
+        let extra_rows = total_rows % block_num;
         let mut blocks = blocks.into_iter();
         let mut current = blocks.next();
         let mut offset = 0;
-        let mut output = Vec::with_capacity(output_blocks);
+        let mut output = Vec::with_capacity(block_num);
 
-        // Split a sequence of blocks while preserving row order.
-        for index in 0..output_blocks {
+        for index in 0..block_num {
             let mut remain_rows = base_rows + usize::from(index < extra_rows);
             let mut pieces = vec![];
 
@@ -160,11 +152,11 @@ mod tests {
 
     fn assert_split_result(
         blocks: Vec<DataBlock>,
-        rows_per_block: usize,
+        block_num: usize,
         expected_sizes: &[usize],
         expected_values: &[Vec<i32>],
     ) -> Result<()> {
-        let actual = TransformCompactBlock::split_blocks(blocks.clone(), rows_per_block)?;
+        let actual = TransformCompactBlock::split_blocks(blocks.clone(), block_num)?;
 
         assert_eq!(
             actual.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
@@ -201,7 +193,7 @@ mod tests {
                 block_with_range(2, 3),
                 block_with_range(3, 10),
             ],
-            4,
+            2,
             &[5, 5],
             &[vec![0, 1, 2, 3, 4], vec![5, 6, 7, 8, 9]],
         )?;
@@ -212,10 +204,15 @@ mod tests {
                 block_with_range(4, 6),
                 block_with_range(6, 8),
             ],
-            5,
+            1,
             &[8],
             &[vec![0, 1, 2, 3, 4, 5, 6, 7]],
         )?;
+        assert_split_result(vec![block_with_range(0, 11)], 3, &[4, 4, 3], &[
+            vec![0, 1, 2, 3],
+            vec![4, 5, 6, 7],
+            vec![8, 9, 10],
+        ])?;
         Ok(())
     }
 }

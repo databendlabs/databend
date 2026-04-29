@@ -72,19 +72,14 @@ fn test_check_too_small() {
 }
 
 #[test]
-fn test_calc_rows_for_compact() {
+fn test_calc_compact_block_num() {
     let t = default_thresholds();
 
-    assert_eq!(t.calc_rows_for_compact(500_000, 1000), 1000);
-
-    // Block number by rows wins → max_rows_per_block
-    assert_eq!(
-        t.calc_rows_for_compact(2_000_000, 10_000),
-        t.max_rows_per_block
-    );
-
-    // Size-based block number wins
-    assert_eq!(t.calc_rows_for_compact(4_000_000, 2000), 400);
+    assert_eq!(t.calc_compact_block_num(1000, 500_000), 1);
+    assert_eq!(t.calc_compact_block_num(1800, 500_000), 2);
+    assert_eq!(t.calc_compact_block_num(10_000, 500_000), 10);
+    assert_eq!(t.calc_compact_block_num(1000, 1_800_000), 2);
+    assert_eq!(t.calc_compact_block_num(1000, 4_000_000), 4);
 }
 
 #[test]

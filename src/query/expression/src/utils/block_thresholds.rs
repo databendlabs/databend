@@ -133,17 +133,21 @@ impl BlockThresholds {
     }
 
     #[inline]
-    pub fn calc_rows_for_compact(&self, total_bytes: usize, total_rows: usize) -> usize {
-        if self.check_for_compact(total_rows, total_bytes) {
-            return total_rows;
-        }
+    pub fn calc_compact_block_num(&self, total_rows: usize, total_bytes: usize) -> usize {
+        let block_num_by_rows = if total_rows >= 2 * self.min_rows_per_block {
+            (total_rows / self.max_rows_per_block).max(2)
+        } else {
+            1
+        };
 
-        let block_num_by_rows = std::cmp::max(total_rows / self.min_rows_per_block, 1);
-        let block_num_by_size = total_bytes / self.min_bytes_per_block;
-        if block_num_by_rows >= block_num_by_size {
-            return self.max_rows_per_block;
-        }
-        total_rows.div_ceil(block_num_by_size)
+        let bytes_per_block = self.max_bytes_per_block / MAX_BYTES_PER_BLOCK_FACTOR;
+        let block_num_by_bytes = if total_bytes >= 2 * self.min_bytes_per_block {
+            (total_bytes / bytes_per_block).max(2)
+        } else {
+            1
+        };
+
+        block_num_by_rows.max(block_num_by_bytes).min(total_rows)
     }
 
     /// Calculates the optimal rows and bytes per block based on total data size and row count.
