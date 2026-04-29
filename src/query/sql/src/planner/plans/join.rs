@@ -253,6 +253,13 @@ impl JoinEquiCondition {
             })
             .collect()
     }
+
+    fn single_columns(&self) -> Option<JoinConditionColumns> {
+        Some(JoinConditionColumns {
+            left: single_used_column(&self.left)?,
+            right: single_used_column(&self.right)?,
+        })
+    }
 }
 
 /// Join operator. We will choose hash join by default.
@@ -330,7 +337,13 @@ impl Join {
             updated_columns: None,
         };
         estimator.estimate(&self.equi_conditions, left_statistics, right_statistics)?;
-        estimator.finish(left_statistics, right_statistics)
+        let Some(columns) = estimator.updated_columns else {
+            return Ok(estimator.join_card);
+        };
+
+        NewStatistic::finish_join_histograms(left_statistics, columns.left)?;
+        NewStatistic::finish_join_histograms(right_statistics, columns.right)?;
+        Ok(estimator.join_card)
     }
 
     pub fn has_null_equi_condition(&self) -> bool {
@@ -762,7 +775,7 @@ struct JoinCardinalityEstimator {
     left_cardinality: f64,
     right_cardinality: f64,
     join_card: f64,
-    updated_columns: Option<(Symbol, Symbol)>,
+    updated_columns: Option<JoinConditionColumns>,
 }
 
 impl JoinCardinalityEstimator {
@@ -787,47 +800,63 @@ impl JoinCardinalityEstimator {
         left_statistics: &mut Statistics,
         right_statistics: &mut Statistics,
     ) -> Result<()> {
-        // Currently don't consider the case such as: `t1.a + t1.b = t2.a`
-        let Some(left_index) = single_used_column(&condition.left) else {
+        let Some(columns) = condition.single_columns() else {
             return Ok(());
         };
-        let Some(right_index) = single_used_column(&condition.right) else {
-            return Ok(());
-        };
-        let Some(left_col_stat) = left_statistics.column_stats.get(&left_index) else {
-            return Ok(());
-        };
-        let Some(right_col_stat) = right_statistics.column_stats.get(&right_index) else {
-            return Ok(());
+        let condition_stats = match try {
+            JoinConditionEstimation {
+                condition,
+                left_col_stat: left_statistics.column_stats.get(&columns.left)?,
+                right_col_stat: right_statistics.column_stats.get(&columns.right)?,
+                left_cardinality: self.left_cardinality,
+                right_cardinality: self.right_cardinality,
+            }
+        } {
+            Some(estimation) => estimation.estimate()?,
+            None => return Ok(()),
         };
 
-        match self.estimate_condition_stats(left_col_stat, right_col_stat, condition)? {
+        match condition_stats {
             JoinConditionStats::Skip => {}
             JoinConditionStats::NoOverlap => {
                 self.join_card = 0.0;
             }
             JoinConditionStats::Estimated { new_stat, card } => {
-                let left_col_stat = left_statistics.column_stats.get_mut(&left_index).unwrap();
-                let right_col_stat = right_statistics.column_stats.get_mut(&right_index).unwrap();
-                new_stat.apply(left_col_stat, right_col_stat);
+                let left_stat = left_statistics.column_stats.get_mut(&columns.left).unwrap();
+                let right_stat = right_statistics
+                    .column_stats
+                    .get_mut(&columns.right)
+                    .unwrap();
+                new_stat.apply(left_stat, right_stat);
 
                 if card < self.join_card {
                     self.join_card = card;
-                    self.updated_columns = Some((left_index, right_index));
+                    self.updated_columns = Some(columns);
                 }
             }
         };
         Ok(())
     }
+}
 
-    fn estimate_condition_stats(
-        &self,
-        left_col_stat: &ColumnStat,
-        right_col_stat: &ColumnStat,
-        condition: &JoinEquiCondition,
-    ) -> Result<JoinConditionStats> {
-        let left_input = JoinColumnInput::from_column_stat(left_col_stat);
-        let right_input = JoinColumnInput::from_column_stat(right_col_stat);
+#[derive(Clone, Copy)]
+struct JoinConditionColumns {
+    left: Symbol,
+    right: Symbol,
+}
+
+struct JoinConditionEstimation<'a> {
+    condition: &'a JoinEquiCondition,
+    left_col_stat: &'a ColumnStat,
+    right_col_stat: &'a ColumnStat,
+    left_cardinality: f64,
+    right_cardinality: f64,
+}
+
+impl<'a> JoinConditionEstimation<'a> {
+    fn estimate(&self) -> Result<JoinConditionStats> {
+        let left_input = JoinColumnInput::from_column_stat(self.left_col_stat);
+        let right_input = JoinColumnInput::from_column_stat(self.right_col_stat);
         if left_input
             .interval()
             .has_same_supported_type(&right_input.interval())
@@ -848,10 +877,10 @@ impl JoinCardinalityEstimator {
         }
 
         let Some(kind) = mixed_numeric_stat_kind(
-            left_col_stat,
-            right_col_stat,
-            &condition.left.data_type()?,
-            &condition.right.data_type()?,
+            self.left_col_stat,
+            self.right_col_stat,
+            &self.condition.left.data_type()?,
+            &self.condition.right.data_type()?,
         )?
         else {
             return Ok(JoinConditionStats::Skip);
@@ -876,26 +905,12 @@ impl JoinCardinalityEstimator {
             new_stat: NewStatistic::mixed_type(
                 estimation.min,
                 estimation.max,
-                left_col_stat,
-                right_col_stat,
+                self.left_col_stat,
+                self.right_col_stat,
                 estimation.ndv,
             ),
             card: estimation.card,
         })
-    }
-
-    fn finish(
-        self,
-        left_statistics: &mut Statistics,
-        right_statistics: &mut Statistics,
-    ) -> Result<f64> {
-        let Some((left_column_index, right_column_index)) = self.updated_columns else {
-            return Ok(self.join_card);
-        };
-
-        update_joined_histograms(left_statistics, left_column_index)?;
-        update_joined_histograms(right_statistics, right_column_index)?;
-        Ok(self.join_card)
     }
 }
 
@@ -1042,21 +1057,6 @@ fn mixed_numeric_stat_kind(
     Ok(Some(DatumKind::Float))
 }
 
-fn update_joined_histograms(statistics: &mut Statistics, joined_column: Symbol) -> Result<()> {
-    for (idx, stat) in statistics.column_stats.iter_mut() {
-        stat.histogram = if let Some(histogram) = &stat.histogram
-            && *idx == joined_column
-            && stat.ndv.value() as u64 > 2
-        {
-            histogram.restrict_to_bounds(&stat.min, &stat.max)?
-        } else {
-            // Other columns' histograms are inaccurate after the join cardinality update.
-            None
-        };
-    }
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 struct NewStatistic {
     left_min: Option<Datum>,
@@ -1134,6 +1134,21 @@ impl NewStatistic {
             left_stat.ndv = Ndv::Stat(new_ndv);
             right_stat.ndv = Ndv::Stat(new_ndv);
         }
+    }
+
+    fn finish_join_histograms(statistics: &mut Statistics, joined_column: Symbol) -> Result<()> {
+        for (idx, stat) in statistics.column_stats.iter_mut() {
+            stat.histogram = if let Some(histogram) = &stat.histogram
+                && *idx == joined_column
+                && stat.ndv.value() as u64 > 2
+            {
+                histogram.restrict_to_bounds(&stat.min, &stat.max)?
+            } else {
+                // Other columns' histograms are inaccurate after the join cardinality update.
+                None
+            };
+        }
+        Ok(())
     }
 }
 

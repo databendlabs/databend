@@ -51,6 +51,7 @@ use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 
+pub mod comparison;
 pub mod function_builder;
 pub mod function_factory;
 pub mod function_stat;

@@ -27,6 +27,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::constraint::ColumnStatUpdate;
 use super::constraint::ValueConstraint;
 use crate::ColumnBinding;
 use crate::Symbol;
@@ -125,23 +126,10 @@ impl SelectivityEstimator {
                 continue;
             }
             let mut column_stat = column_stat.clone();
-            column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
-            column_stat.null_count = (column_stat.null_count as f64 * selectivity).ceil() as u64;
-
-            if let Some(histogram) = &mut column_stat.histogram {
-                if histogram.accuracy() {
-                    // If selectivity < 0.2, most buckets are invalid and
-                    // the accuracy histogram can be discarded.
-                    // Todo: find a better way to update histogram.
-                    if selectivity < 0.2 {
-                        column_stat.histogram = None;
-                    }
-                } else if column_stat.ndv.value() as u64 <= 2 {
-                    column_stat.histogram = None;
-                } else {
-                    histogram.scale_counts(selectivity);
-                }
+            ColumnStatUpdate {
+                column_stat: &mut column_stat,
             }
+            .apply_unconstrained_filter(selectivity);
 
             self.overrides.insert(*index, column_stat);
         }
@@ -236,7 +224,8 @@ impl SelectivityVisitor<'_> {
                     .ensure_column_stat(column_index)
                     .expect("checked above");
                 let constraint = ValueConstraint::from_comparison(op, const_datum);
-                constraint.apply_to_column_stat(column_stat, selectivity.as_n().copied())?;
+                ColumnStatUpdate { column_stat }
+                    .apply_constraint(&constraint, selectivity.as_n().copied())?;
                 return Ok(selectivity);
             }
             (Expr::FunctionCall(func), Expr::Constant(val))

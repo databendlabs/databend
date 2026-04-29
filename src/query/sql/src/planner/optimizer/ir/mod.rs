@@ -19,6 +19,7 @@ mod memo;
 mod property;
 mod stats;
 
+pub use databend_common_statistics::HistogramBuilder;
 pub use expr::AsyncSExprVisitor;
 pub use expr::MExpr;
 pub use expr::Matcher;
@@ -42,7 +43,6 @@ pub use property::StatInfo;
 pub use property::Statistics;
 pub use stats::ColumnStat;
 pub use stats::ColumnStatSet;
-pub use stats::HistogramBuilder;
 pub use stats::MAX_SELECTIVITY;
 pub use stats::Ndv;
 pub use stats::SelectivityEstimator;

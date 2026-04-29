@@ -14,6 +14,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use databend_common_expression::Column;
@@ -29,6 +30,7 @@ use databend_common_expression::LikePattern;
 use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
+use databend_common_expression::comparison::ConstantComparison;
 use databend_common_expression::comparison::GtOp;
 use databend_common_expression::comparison::GteOp;
 use databend_common_expression::comparison::LtOp;
@@ -251,216 +253,229 @@ fn register_stat_comparison_2_arg<T>(
 }
 
 fn derive_equality_stat(not_eq: bool, stat: StatBinaryArg) -> Result<Option<ReturnStat>, String> {
-    let cardinality = stat.cardinality;
-    let (stat, constant) = if let Some(constant) = stat.args[1].singleton() {
-        (&stat.args[0], constant)
-    } else if let Some(constant) = stat.args[0].singleton() {
-        (&stat.args[1], constant)
-    } else {
+    let Some(input) = ConstantComparison::from_equality_args(&stat) else {
         return Ok(None);
     };
 
-    let Some(true_count) = equal_true_count(stat, not_eq, &constant, cardinality) else {
+    let Some(true_count) = input.equality_true_count(not_eq, compare_stat_scalar) else {
         return Ok(None);
     };
 
     Ok(Some(ReturnStat::boolean(true_count)))
 }
 
-fn derive_comparison_stat<Op: StatComparisonEstimator>(
+fn derive_comparison_stat<Op: StatComparisonOp>(
     stat: StatBinaryArg,
 ) -> Result<Option<ReturnStat>, String> {
-    Ok(if let Some(constant) = stat.args[1].singleton() {
-        ordered_comparison_true_count::<Op>(&stat.args[0], stat.cardinality, &constant)?
-    } else if let Some(constant) = stat.args[0].singleton() {
-        ordered_comparison_true_count::<Op::Reverse>(&stat.args[1], stat.cardinality, &constant)?
-    } else {
-        None
-    }
-    .map(ReturnStat::boolean))
+    Ok(
+        if let Some(input) = ConstantComparison::from_right_constant(&stat) {
+            ordered_comparison_true_count::<Op>(&input)?
+        } else if let Some(input) = ConstantComparison::from_left_constant(&stat) {
+            ordered_comparison_true_count::<Op::Reverse>(&input)?
+        } else {
+            None
+        }
+        .map(ReturnStat::boolean),
+    )
 }
 
-fn ordered_comparison_true_count<Op: StatComparisonEstimator>(
-    stat: &ArgStat,
-    cardinality: f64,
-    constant: &Scalar,
+fn ordered_comparison_true_count<Op: StatComparisonOp>(
+    input: &ConstantComparison<'_, '_>,
 ) -> Result<Option<StatEstimate>, String> {
-    if let Some(true_count) = Op::estimate_true_count(stat, cardinality, constant)? {
-        return Ok(Some(true_count));
+    if let Some(histogram) = input.stat.histogram() {
+        return Ok(Some(
+            HistogramComparison::<Op> {
+                histogram,
+                constant: &input.constant,
+                cardinality: input.cardinality,
+                _op: PhantomData,
+            }
+            .true_count()?,
+        ));
     }
 
-    Ok(try {
-        let (min, max) = stat.value_minmax()?;
-        let cmp_min = compare_stat_scalar(constant, &min)?;
-        let cmp_max = compare_stat_scalar(constant, &max)?;
-        Op::estimate_minmax_range_true_count(stat.ndv, cardinality, cmp_min, cmp_max)?
+    Ok(match input.stat.value_domain() {
+        Some(
+            Domain::Number(NumberDomain::UInt8(_))
+            | Domain::Number(NumberDomain::UInt16(_))
+            | Domain::Number(NumberDomain::UInt32(_))
+            | Domain::Number(NumberDomain::UInt64(_))
+            | Domain::Number(NumberDomain::Int8(_))
+            | Domain::Number(NumberDomain::Int16(_))
+            | Domain::Number(NumberDomain::Int32(_))
+            | Domain::Number(NumberDomain::Int64(_))
+            | Domain::Date(_)
+            | Domain::Timestamp(_),
+        ) => {
+            let range = IntegerRangeComparison::from_input(input).unwrap();
+            Some(range.true_count::<Op>())
+        }
+        _ => input.minmax_range_true_count::<Op>(compare_stat_scalar),
     })
 }
 
-trait StatComparisonEstimator: StatComparisonOp {
-    fn estimate_true_count(
-        stat: &ArgStat,
-        cardinality: f64,
-        constant: &Scalar,
-    ) -> Result<Option<StatEstimate>, String> {
-        if let Some(histogram) = stat.histogram() {
-            let selectivity = Self::estimate_histogram_selectivity(histogram, constant)?;
-            let expected = selectivity * cardinality;
-            return Ok(Some(if histogram.is_range_distorted() {
-                StatEstimate::new(0.0, expected, cardinality)
-            } else {
-                StatEstimate::exact(expected)
-            }));
-        }
+struct HistogramComparison<'a, Op> {
+    histogram: &'a Histogram,
+    constant: &'a Scalar,
+    cardinality: f64,
+    _op: PhantomData<fn(Op)>,
+}
 
-        match stat.value_domain() {
-            Some(
-                Domain::Number(NumberDomain::UInt8(_))
-                | Domain::Number(NumberDomain::UInt16(_))
-                | Domain::Number(NumberDomain::UInt32(_))
-                | Domain::Number(NumberDomain::UInt64(_))
-                | Domain::Number(NumberDomain::Int8(_))
-                | Domain::Number(NumberDomain::Int16(_))
-                | Domain::Number(NumberDomain::Int32(_))
-                | Domain::Number(NumberDomain::Int64(_))
-                | Domain::Date(_)
-                | Domain::Timestamp(_),
-            ) => Ok(Self::estimate_integer_range_true_count(
-                stat,
-                constant,
-                cardinality,
-            )),
-            _ => Ok(None),
-        }
+impl<Op: StatComparisonOp> HistogramComparison<'_, Op> {
+    fn true_count(&self) -> Result<StatEstimate, String> {
+        let selectivity = self.selectivity()?;
+        let expected = selectivity * self.cardinality;
+        Ok(if self.histogram.is_range_distorted() {
+            StatEstimate::new(0.0, expected, self.cardinality)
+        } else {
+            StatEstimate::exact(expected)
+        })
     }
 
-    fn estimate_histogram_selectivity(
-        histogram: &Histogram,
-        constant: &Scalar,
-    ) -> Result<f64, String> {
-        if histogram.num_values() == 0.0 {
+    fn selectivity(&self) -> Result<f64, String> {
+        if self.histogram.num_values() == 0.0 {
             return Ok(0.0);
         }
 
-        match histogram {
+        match self.histogram {
             Histogram::Int(histogram) => {
-                let constant = match constant {
+                let constant = match self.constant {
                     Scalar::Number(NumberScalar::Int8(n)) => *n as i64,
                     Scalar::Number(NumberScalar::Int16(n)) => *n as i64,
                     Scalar::Number(NumberScalar::Int32(n)) => *n as i64,
                     Scalar::Number(NumberScalar::Int64(n)) => *n,
                     Scalar::Date(v) => *v as i64,
                     Scalar::Timestamp(v) => *v,
-                    _ => return Err(unexpected_histogram_constant("Int", constant)),
+                    _ => return Err(unexpected_histogram_constant("Int", self.constant)),
                 };
-                Ok(Self::estimate_typed_histogram_selectivity(
+                Ok(TypedHistogramScan::<_, Op> {
                     histogram,
-                    &constant,
-                    Self::estimate_partial_number_bucket,
-                ))
+                    constant: &constant,
+                    selected: 0.0,
+                    _op: PhantomData,
+                }
+                .selectivity(HistogramBucketComparison::number_selectivity))
             }
             Histogram::UInt(histogram) => {
-                let constant = match constant {
+                let constant = match self.constant {
                     Scalar::Number(NumberScalar::UInt8(n)) => *n as u64,
                     Scalar::Number(NumberScalar::UInt16(n)) => *n as u64,
                     Scalar::Number(NumberScalar::UInt32(n)) => *n as u64,
                     Scalar::Number(NumberScalar::UInt64(n)) => *n,
-                    _ => return Err(unexpected_histogram_constant("UInt", constant)),
+                    _ => return Err(unexpected_histogram_constant("UInt", self.constant)),
                 };
-                Ok(Self::estimate_typed_histogram_selectivity(
+                Ok(TypedHistogramScan::<_, Op> {
                     histogram,
-                    &constant,
-                    Self::estimate_partial_number_bucket,
-                ))
+                    constant: &constant,
+                    selected: 0.0,
+                    _op: PhantomData,
+                }
+                .selectivity(HistogramBucketComparison::number_selectivity))
             }
             Histogram::Float(histogram) => {
-                let constant = scalar_number_value(constant)
-                    .ok_or_else(|| unexpected_histogram_constant("Float", constant))?;
-                Ok(Self::estimate_typed_histogram_selectivity(
+                let constant = scalar_number_value(self.constant)
+                    .ok_or_else(|| unexpected_histogram_constant("Float", self.constant))?;
+                Ok(TypedHistogramScan::<_, Op> {
                     histogram,
-                    &constant,
-                    Self::estimate_partial_number_bucket,
-                ))
+                    constant: &constant,
+                    selected: 0.0,
+                    _op: PhantomData,
+                }
+                .selectivity(HistogramBucketComparison::number_selectivity))
             }
             Histogram::Bytes(histogram) => {
-                let constant = scalar_bytes_value(constant)
-                    .ok_or_else(|| unexpected_histogram_constant("Bytes", constant))?;
-                Ok(Self::estimate_typed_histogram_selectivity(
+                let constant = scalar_bytes_value(self.constant)
+                    .ok_or_else(|| unexpected_histogram_constant("Bytes", self.constant))?;
+                Ok(TypedHistogramScan::<_, Op> {
                     histogram,
-                    &constant,
-                    Self::estimate_partial_bytes_bucket,
-                ))
+                    constant: &constant,
+                    selected: 0.0,
+                    _op: PhantomData,
+                }
+                .selectivity(HistogramBucketComparison::bytes_selectivity))
             }
         }
     }
+}
 
-    fn estimate_typed_histogram_selectivity<T: Ord>(
-        histogram: &TypedHistogram<T>,
-        constant: &T,
-        estimate_partial_bucket: impl Fn(&TypedHistogramBucket<T>, &T) -> f64,
+struct TypedHistogramScan<'a, T, Op> {
+    histogram: &'a TypedHistogram<T>,
+    constant: &'a T,
+    selected: f64,
+    _op: PhantomData<fn(Op)>,
+}
+
+impl<'a, T: Ord, Op: StatComparisonOp> TypedHistogramScan<'a, T, Op> {
+    fn selectivity(
+        mut self,
+        estimate_partial_bucket: impl Fn(&HistogramBucketComparison<'a, T, Op>) -> f64,
     ) -> f64 {
-        let mut selected = 0.0;
-        for bucket in &histogram.buckets {
-            match Self::histogram_bucket_overlap(constant, bucket) {
+        for bucket in &self.histogram.buckets {
+            let bucket = HistogramBucketComparison::<_, Op> {
+                bucket,
+                constant: self.constant,
+                _op: PhantomData,
+            };
+            match bucket.overlap() {
                 HistogramBucketOverlap::None => {}
-                HistogramBucketOverlap::Complete => selected += bucket.num_values(),
+                HistogramBucketOverlap::Complete => self.selected += bucket.bucket.num_values(),
                 HistogramBucketOverlap::Partial => {
-                    let selectivity = estimate_partial_bucket(bucket, constant);
-                    selected += bucket.num_values() * selectivity;
+                    self.selected += bucket.bucket.num_values() * estimate_partial_bucket(&bucket);
                 }
             }
         }
 
-        selected / histogram.num_values()
+        self.selected / self.histogram.num_values()
     }
+}
 
-    fn histogram_bucket_overlap<T: Ord>(
-        constant: &T,
-        bucket: &TypedHistogramBucket<T>,
-    ) -> HistogramBucketOverlap {
-        let lower_cmp = constant.cmp(bucket.lower_bound());
-        let upper_cmp = constant.cmp(bucket.upper_bound());
-        if Self::SELECT_LESS {
-            if lower_cmp == Ordering::Less || (!Self::INCLUDE_EQUAL && lower_cmp == Ordering::Equal)
-            {
+struct HistogramBucketComparison<'a, T, Op> {
+    bucket: &'a TypedHistogramBucket<T>,
+    constant: &'a T,
+    _op: PhantomData<fn(Op)>,
+}
+
+impl<T: Ord, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
+    fn overlap(&self) -> HistogramBucketOverlap {
+        let lower_cmp = self.constant.cmp(self.bucket.lower_bound());
+        let upper_cmp = self.constant.cmp(self.bucket.upper_bound());
+        if Op::SELECT_LESS {
+            if lower_cmp == Ordering::Less || (!Op::INCLUDE_EQUAL && lower_cmp == Ordering::Equal) {
                 HistogramBucketOverlap::None
             } else if upper_cmp == Ordering::Greater
-                || (Self::INCLUDE_EQUAL && upper_cmp == Ordering::Equal)
+                || (Op::INCLUDE_EQUAL && upper_cmp == Ordering::Equal)
             {
                 HistogramBucketOverlap::Complete
             } else {
                 HistogramBucketOverlap::Partial
             }
         } else if upper_cmp == Ordering::Greater
-            || (!Self::INCLUDE_EQUAL && upper_cmp == Ordering::Equal)
+            || (!Op::INCLUDE_EQUAL && upper_cmp == Ordering::Equal)
         {
             HistogramBucketOverlap::None
-        } else if lower_cmp == Ordering::Less
-            || (Self::INCLUDE_EQUAL && lower_cmp == Ordering::Equal)
+        } else if lower_cmp == Ordering::Less || (Op::INCLUDE_EQUAL && lower_cmp == Ordering::Equal)
         {
             HistogramBucketOverlap::Complete
         } else {
             HistogramBucketOverlap::Partial
         }
     }
+}
 
-    fn estimate_partial_bytes_bucket(
-        bucket: &TypedHistogramBucket<Vec<u8>>,
-        _constant: &Vec<u8>,
-    ) -> f64 {
-        if Self::INCLUDE_EQUAL {
-            (0.5 + 1.0 / bucket.num_distinct().max(1.0)).min(1.0)
+impl<Op: StatComparisonOp> HistogramBucketComparison<'_, Vec<u8>, Op> {
+    fn bytes_selectivity(&self) -> f64 {
+        if Op::INCLUDE_EQUAL {
+            (0.5 + 1.0 / self.bucket.num_distinct().max(1.0)).min(1.0)
         } else {
             0.5
         }
     }
+}
 
-    fn estimate_partial_number_bucket<T: StatNumberValue>(
-        bucket: &TypedHistogramBucket<T>,
-        constant: &T,
-    ) -> f64 {
-        let (strict_less, equality) = Self::partial_number_bucket_less_parts(bucket, constant);
-        match (Self::SELECT_LESS, Self::INCLUDE_EQUAL) {
+impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
+    fn number_selectivity(&self) -> f64 {
+        let (strict_less, equality) = self.number_less_parts();
+        match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
             (true, false) => strict_less,
             (true, true) => (strict_less + equality).min(1.0),
             (false, false) => (1.0 - strict_less - equality).max(0.0),
@@ -468,22 +483,19 @@ trait StatComparisonEstimator: StatComparisonOp {
         }
     }
 
-    fn partial_number_bucket_less_parts<T: StatNumberValue>(
-        bucket: &TypedHistogramBucket<T>,
-        constant: &T,
-    ) -> (f64, f64) {
+    fn number_less_parts(&self) -> (f64, f64) {
         if let Some(parts) = T::partial_discrete_bucket_less_parts(
-            bucket.lower_bound(),
-            bucket.upper_bound(),
-            constant,
+            self.bucket.lower_bound(),
+            self.bucket.upper_bound(),
+            self.constant,
         ) {
             return parts;
         }
 
-        let ndv = bucket.num_distinct().max(1.0);
-        let lower_bound = bucket.lower_bound().to_f64();
-        let upper_bound = bucket.upper_bound().to_f64();
-        let const_value = constant.to_f64();
+        let ndv = self.bucket.num_distinct().max(1.0);
+        let lower_bound = self.bucket.lower_bound().to_f64();
+        let upper_bound = self.bucket.upper_bound().to_f64();
+        let const_value = self.constant.to_f64();
 
         let bucket_range = upper_bound - lower_bound;
         if bucket_range <= 0.0 {
@@ -501,88 +513,103 @@ trait StatComparisonEstimator: StatComparisonOp {
 
         (strict_less, equality)
     }
+}
 
-    fn estimate_integer_range_true_count(
-        stat: &ArgStat,
-        constant: &Scalar,
+enum IntegerRangeComparison<'s, 'a> {
+    MissingMinMax,
+    Bounded {
+        stat: &'s ArgStat<'a>,
+        min: F64,
+        max: F64,
+        literal: F64,
         cardinality: f64,
-    ) -> Option<StatEstimate> {
-        let Some((min, max)) = stat.value_minmax() else {
-            return Some(StatEstimate::exact(0.0));
+    },
+}
+
+impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
+    fn from_input(input: &ConstantComparison<'s, 'a>) -> Option<Self> {
+        let Some((min, max)) = input.stat.value_minmax() else {
+            return Some(Self::MissingMinMax);
         };
 
-        let min = scalar_number_value(&min)?;
-        let max = scalar_number_value(&max)?;
-        let numeric_literal = scalar_number_value(constant)?;
-
-        Some(Self::estimate_integer_bounds_count(
-            stat,
-            min.0,
-            max.0,
-            numeric_literal.0,
-            numeric_literal.total_cmp(&min),
-            numeric_literal.total_cmp(&max),
-            cardinality,
-        ))
+        Some(Self::Bounded {
+            stat: input.stat,
+            min: scalar_number_value(&min)?,
+            max: scalar_number_value(&max)?,
+            literal: scalar_number_value(&input.constant)?,
+            cardinality: input.cardinality,
+        })
     }
 
-    fn estimate_integer_bounds_count(
-        stat: &ArgStat,
-        min: f64,
-        max: f64,
-        numeric_literal: f64,
-        cmp_min: Ordering,
-        cmp_max: Ordering,
-        cardinality: f64,
-    ) -> StatEstimate {
+    fn true_count<Op: StatComparisonOp>(&self) -> StatEstimate {
         use std::cmp::Ordering::*;
 
-        if Self::SELECT_LESS {
-            if cmp_min == Less || !Self::INCLUDE_EQUAL && cmp_min == Equal {
+        let Self::Bounded {
+            stat,
+            min,
+            max,
+            literal,
+            cardinality,
+        } = self
+        else {
+            return StatEstimate::exact(0.0);
+        };
+
+        let min_value = min.0;
+        let max_value = max.0;
+        let numeric_literal = literal.0;
+        let cmp_min = literal.total_cmp(min);
+        let cmp_max = literal.total_cmp(max);
+
+        if Op::SELECT_LESS {
+            if cmp_min == Less || !Op::INCLUDE_EQUAL && cmp_min == Equal {
                 return StatEstimate::exact(0.0);
             }
             if cmp_min == Equal {
-                return estimate_ndv_true_count(stat.ndv, false, cardinality);
+                return estimate_ndv_true_count(stat.ndv, false, *cardinality);
             }
             if cmp_max == Greater {
-                return StatEstimate::exact(cardinality);
+                return StatEstimate::exact(*cardinality);
             }
-            if !Self::INCLUDE_EQUAL && cmp_max == Equal {
-                return estimate_ndv_true_count(stat.ndv, true, cardinality);
+            if !Op::INCLUDE_EQUAL && cmp_max == Equal {
+                return estimate_ndv_true_count(stat.ndv, true, *cardinality);
             }
-            let selected_values = if Self::INCLUDE_EQUAL {
-                numeric_literal - min + 1.0
+            let selected_values = if Op::INCLUDE_EQUAL {
+                numeric_literal - min_value + 1.0
             } else {
-                numeric_literal - min
+                numeric_literal - min_value
             };
-            return StatEstimate::exact((selected_values / (max - min + 1.0)) * cardinality);
+            return StatEstimate::exact(
+                (selected_values / (max_value - min_value + 1.0)) * *cardinality,
+            );
         }
 
-        if Self::INCLUDE_EQUAL {
+        if Op::INCLUDE_EQUAL {
             if cmp_max == Greater {
                 return StatEstimate::exact(0.0);
             }
-            if matches!(cmp_min, Less | Equal) {
-                return StatEstimate::exact(cardinality);
+            if cmp_min == Less || cmp_min == Equal {
+                return StatEstimate::exact(*cardinality);
             }
             if cmp_max == Equal {
-                return estimate_ndv_true_count(stat.ndv, false, cardinality);
+                return estimate_ndv_true_count(stat.ndv, false, *cardinality);
             }
             return StatEstimate::exact(
-                ((max - numeric_literal + 1.0) / (max - min + 1.0)) * cardinality,
+                ((max_value - numeric_literal + 1.0) / (max_value - min_value + 1.0))
+                    * *cardinality,
             );
         }
 
         match (cmp_min, cmp_max) {
             (_, Greater | Equal) => StatEstimate::exact(0.0),
-            (Less, _) => StatEstimate::exact(cardinality),
-            (Equal, _) => estimate_ndv_true_count(stat.ndv, true, cardinality),
-            _ => StatEstimate::exact(((max - numeric_literal) / (max - min + 1.0)) * cardinality),
+            (Less, _) => StatEstimate::exact(*cardinality),
+            (Equal, _) => estimate_ndv_true_count(stat.ndv, true, *cardinality),
+            _ => StatEstimate::exact(
+                ((max_value - numeric_literal) / (max_value - min_value + 1.0)) * *cardinality,
+            ),
         }
     }
 }
-
-impl<Op: StatComparisonOp> StatComparisonEstimator for Op {}
 
 enum HistogramBucketOverlap {
     None,
@@ -668,24 +695,6 @@ impl StatNumberValue for F64 {
     fn to_f64(&self) -> f64 {
         self.into_inner()
     }
-}
-
-fn equal_true_count(
-    stat: &ArgStat,
-    not_eq: bool,
-    constant: &Scalar,
-    cardinality: f64,
-) -> Option<StatEstimate> {
-    let Some((min, max)) = stat.value_minmax() else {
-        return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
-    };
-    if compare_stat_scalar(constant, &min)? == Ordering::Less
-        || compare_stat_scalar(constant, &max)? == Ordering::Greater
-    {
-        return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
-    }
-
-    Some(estimate_ndv_true_count(stat.ndv, not_eq, cardinality))
 }
 
 fn compare_stat_scalar(left: &Scalar, right: &Scalar) -> Option<Ordering> {
@@ -1967,8 +1976,21 @@ mod tests {
         });
         let constant = Scalar::Number(NumberScalar::Int64(10));
 
-        let gte_selectivity = GteOp::estimate_histogram_selectivity(&histogram, &constant).unwrap();
-        let lt_selectivity = LtOp::estimate_histogram_selectivity(&histogram, &constant).unwrap();
+        let gte_input = HistogramComparison::<GteOp> {
+            histogram: &histogram,
+            constant: &constant,
+            cardinality: 1.0,
+            _op: PhantomData,
+        };
+        let lt_input = HistogramComparison::<LtOp> {
+            histogram: &histogram,
+            constant: &constant,
+            cardinality: 1.0,
+            _op: PhantomData,
+        };
+
+        let gte_selectivity = gte_input.selectivity().unwrap();
+        let lt_selectivity = lt_input.selectivity().unwrap();
 
         assert!((gte_selectivity - 0.1).abs() < 1e-9);
         assert!((lt_selectivity - 0.9).abs() < 1e-9);
@@ -1983,9 +2005,15 @@ mod tests {
             distribution: BorrowedDistribution::Unknown,
         };
         let constant = Scalar::Number(NumberScalar::Int64(5));
+        let input = ConstantComparison {
+            stat: &stat,
+            constant,
+            cardinality: 10.0,
+        };
+        let range = IntegerRangeComparison::from_input(&input).unwrap();
 
-        let lt_count = LtOp::estimate_integer_range_true_count(&stat, &constant, 10.0).unwrap();
-        let gt_count = GtOp::estimate_integer_range_true_count(&stat, &constant, 10.0).unwrap();
+        let lt_count = range.true_count::<LtOp>();
+        let gt_count = range.true_count::<GtOp>();
 
         assert_eq!(lt_count, StatEstimate::exact(4.0));
         assert_eq!(gt_count, StatEstimate::exact(5.0));

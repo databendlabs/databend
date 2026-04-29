@@ -17,14 +17,14 @@ use std::ops::Bound;
 use databend_common_exception::Result;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
+use databend_common_statistics::HistogramBuilder;
 
-use super::HistogramBuilder;
 use crate::optimizer::ir::ColumnStat;
 use crate::plans::ComparisonOp;
 
 pub(super) enum ValueConstraint {
     Eq(Datum),
-    NotEq(Datum),
+    NotEq,
     Range {
         lower: Bound<Datum>,
         upper: Bound<Datum>,
@@ -35,7 +35,7 @@ impl ValueConstraint {
     pub(super) fn from_comparison(op: ComparisonOp, datum: Datum) -> Self {
         match op {
             ComparisonOp::Equal => ValueConstraint::Eq(datum),
-            ComparisonOp::NotEqual => ValueConstraint::NotEq(datum),
+            ComparisonOp::NotEqual => ValueConstraint::NotEq,
             ComparisonOp::GT => ValueConstraint::Range {
                 lower: Bound::Excluded(datum),
                 upper: Bound::Unbounded,
@@ -53,42 +53,6 @@ impl ValueConstraint {
                 upper: Bound::Included(datum),
             },
         }
-    }
-
-    pub(super) fn apply_to_column_stat(
-        &self,
-        column_stat: &mut ColumnStat,
-        selectivity: Option<f64>,
-    ) -> Result<()> {
-        match self {
-            ValueConstraint::Eq(datum) => {
-                *column_stat = ColumnStat::from_const(datum.clone());
-            }
-            ValueConstraint::NotEq(datum) => {
-                let _ = datum;
-                if let Some(selectivity) = selectivity {
-                    update_statistic(
-                        column_stat,
-                        column_stat.min.clone(),
-                        column_stat.max.clone(),
-                        selectivity,
-                    )?;
-                }
-            }
-            ValueConstraint::Range { .. } => match selectivity {
-                Some(0.0) => {
-                    column_stat.ndv = column_stat.ndv.reduce_by_selectivity(0.0);
-                }
-                Some(selectivity) if selectivity < 1.0 => {
-                    if let Some((new_min, new_max)) = self.range_bounds(column_stat)? {
-                        update_statistic(column_stat, new_min, new_max, selectivity)?;
-                    }
-                }
-                _ => {}
-            },
-        }
-
-        Ok(())
     }
 
     fn range_bounds(&self, column_stat: &ColumnStat) -> Result<Option<(Datum, Datum)>> {
@@ -120,37 +84,99 @@ impl ValueConstraint {
     }
 }
 
-fn update_statistic(
-    column_stat: &mut ColumnStat,
-    new_min: Datum,
-    new_max: Datum,
-    selectivity: f64,
-) -> Result<()> {
-    column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
-    column_stat.min = new_min.clone();
-    column_stat.max = new_max.clone();
-    column_stat.null_count = (column_stat.null_count as f64 * selectivity).ceil() as u64;
+pub(super) struct ColumnStatUpdate<'a> {
+    pub(super) column_stat: &'a mut ColumnStat,
+}
 
-    if let Some(histogram) = &column_stat.histogram {
-        // If selectivity < 0.2, most buckets are invalid and
-        // the accuracy histogram can be discarded.
-        // Todo: support unfixed buckets number for histogram and prune the histogram.
-        if !histogram.accuracy() || selectivity < 0.2 {
-            let num_values = histogram.num_values();
-            let new_num_values = (num_values * selectivity).ceil() as u64;
-            let new_ndv = column_stat.ndv.value() as u64;
-            column_stat.histogram = if new_ndv <= 2 {
-                None
+impl<'a> ColumnStatUpdate<'a> {
+    pub(super) fn apply_constraint(
+        &mut self,
+        constraint: &ValueConstraint,
+        selectivity: Option<f64>,
+    ) -> Result<()> {
+        match constraint {
+            ValueConstraint::Eq(datum) => {
+                *self.column_stat = ColumnStat::from_const(datum.clone());
+            }
+            ValueConstraint::NotEq => {
+                if let Some(selectivity) = selectivity {
+                    self.restrict_to_bounds(
+                        self.column_stat.min.clone(),
+                        self.column_stat.max.clone(),
+                        selectivity,
+                    )?;
+                }
+            }
+            ValueConstraint::Range { .. } => match selectivity {
+                Some(0.0) => {
+                    self.column_stat.ndv = self.column_stat.ndv.reduce_by_selectivity(0.0);
+                }
+                Some(selectivity) if selectivity < 1.0 => {
+                    if let Some((new_min, new_max)) = constraint.range_bounds(self.column_stat)? {
+                        self.restrict_to_bounds(new_min, new_max, selectivity)?;
+                    }
+                }
+                _ => {}
+            },
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn apply_unconstrained_filter(&mut self, selectivity: f64) {
+        self.column_stat.ndv = self.column_stat.ndv.reduce_by_selectivity(selectivity);
+        self.column_stat.null_count =
+            (self.column_stat.null_count as f64 * selectivity).ceil() as u64;
+
+        if let Some(histogram) = &mut self.column_stat.histogram {
+            if histogram.accuracy() {
+                // If selectivity < 0.2, most buckets are invalid and
+                // the accuracy histogram can be discarded.
+                // Todo: find a better way to update histogram.
+                if selectivity < 0.2 {
+                    self.column_stat.histogram = None;
+                }
+            } else if self.column_stat.ndv.value() as u64 <= 2 {
+                self.column_stat.histogram = None;
             } else {
-                Some(HistogramBuilder::from_ndv(
-                    new_ndv,
-                    new_num_values.max(new_ndv),
-                    Some((new_min, new_max)),
-                    DEFAULT_HISTOGRAM_BUCKETS,
-                )?)
+                histogram.scale_counts(selectivity);
             }
         }
     }
 
-    Ok(())
+    fn restrict_to_bounds(
+        &mut self,
+        new_min: Datum,
+        new_max: Datum,
+        selectivity: f64,
+    ) -> Result<()> {
+        self.column_stat.ndv = self.column_stat.ndv.reduce_by_selectivity(selectivity);
+        self.column_stat.min = new_min.clone();
+        self.column_stat.max = new_max.clone();
+        self.column_stat.null_count =
+            (self.column_stat.null_count as f64 * selectivity).ceil() as u64;
+
+        if let Some(histogram) = &self.column_stat.histogram {
+            // If selectivity < 0.2, most buckets are invalid and
+            // the accuracy histogram can be discarded.
+            // Todo: support unfixed buckets number for histogram and prune the histogram.
+            if !histogram.accuracy() || selectivity < 0.2 {
+                let num_values = histogram.num_values();
+                let new_num_values = (num_values * selectivity).ceil() as u64;
+                let new_ndv = self.column_stat.ndv.value() as u64;
+                self.column_stat.histogram = if new_ndv <= 2 {
+                    None
+                } else {
+                    Some(HistogramBuilder::from_ndv(
+                        new_ndv,
+                        new_num_values.max(new_ndv),
+                        Some((new_min, new_max)),
+                        DEFAULT_HISTOGRAM_BUCKETS,
+                    )?)
+                }
+            }
+        }
+
+        Ok(())
+    }
 }

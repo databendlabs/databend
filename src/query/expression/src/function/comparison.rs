@@ -14,10 +14,10 @@
 
 use std::cmp::Ordering;
 
-use databend_common_exception::ErrorCode;
-use databend_common_exception::Result;
-
+use crate::Scalar;
+use crate::stat_distribution::ArgStat;
 use crate::stat_distribution::Ndv;
+use crate::stat_distribution::StatBinaryArg;
 use crate::stat_distribution::StatEstimate;
 
 pub trait StatComparisonOp {
@@ -107,6 +107,75 @@ impl StatComparisonOp for GteOp {
 
     const SELECT_LESS: bool = false;
     const INCLUDE_EQUAL: bool = true;
+}
+
+pub struct ConstantComparison<'s, 'a> {
+    pub stat: &'s ArgStat<'a>,
+    pub constant: Scalar,
+    pub cardinality: f64,
+}
+
+impl<'s, 'a> ConstantComparison<'s, 'a> {
+    pub fn from_equality_args(stat: &'s StatBinaryArg<'a>) -> Option<Self> {
+        Self::from_right_constant(stat).or_else(|| Self::from_left_constant(stat))
+    }
+
+    pub fn from_right_constant(stat: &'s StatBinaryArg<'a>) -> Option<Self> {
+        Some(Self {
+            stat: &stat.args[0],
+            constant: stat.args[1].singleton()?,
+            cardinality: stat.cardinality,
+        })
+    }
+
+    pub fn from_left_constant(stat: &'s StatBinaryArg<'a>) -> Option<Self> {
+        Some(Self {
+            stat: &stat.args[1],
+            constant: stat.args[0].singleton()?,
+            cardinality: stat.cardinality,
+        })
+    }
+
+    pub fn equality_true_count(
+        &self,
+        not_eq: bool,
+        compare: impl Fn(&Scalar, &Scalar) -> Option<Ordering>,
+    ) -> Option<StatEstimate> {
+        let Some((min, max)) = self.stat.value_minmax() else {
+            return Some(StatEstimate::exact(if not_eq {
+                self.cardinality
+            } else {
+                0.0
+            }));
+        };
+        if compare(&self.constant, &min)? == Ordering::Less
+            || compare(&self.constant, &max)? == Ordering::Greater
+        {
+            return Some(StatEstimate::exact(if not_eq {
+                self.cardinality
+            } else {
+                0.0
+            }));
+        }
+
+        Some(estimate_ndv_true_count(
+            self.stat.ndv,
+            not_eq,
+            self.cardinality,
+        ))
+    }
+
+    pub fn minmax_range_true_count<Op: StatComparisonOp>(
+        &self,
+        compare: impl Fn(&Scalar, &Scalar) -> Option<Ordering>,
+    ) -> Option<StatEstimate> {
+        try {
+            let (min, max) = self.stat.value_minmax()?;
+            let cmp_min = compare(&self.constant, &min)?;
+            let cmp_max = compare(&self.constant, &max)?;
+            Op::estimate_minmax_range_true_count(self.stat.ndv, self.cardinality, cmp_min, cmp_max)?
+        }
+    }
 }
 
 pub fn estimate_ndv_true_count(ndv: Ndv, not_eq: bool, cardinality: f64) -> StatEstimate {

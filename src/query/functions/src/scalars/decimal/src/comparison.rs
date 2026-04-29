@@ -31,17 +31,15 @@ use databend_common_expression::ScalarFunction;
 use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
+use databend_common_expression::comparison::ConstantComparison;
 use databend_common_expression::comparison::GtOp;
 use databend_common_expression::comparison::GteOp;
 use databend_common_expression::comparison::LtOp;
 use databend_common_expression::comparison::LteOp;
 use databend_common_expression::comparison::StatComparisonOp;
-use databend_common_expression::comparison::estimate_ndv_true_count;
 use databend_common_expression::function_stat::DeriveStat;
 use databend_common_expression::function_stat::ReturnStat;
-use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::StatBinaryArg;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
@@ -102,74 +100,41 @@ fn derive_decimal_equality_stat<Op: DecimalEqualityStatOp>(
     stat: StatBinaryArg,
     _: &FunctionContext,
 ) -> Result<Option<ReturnStat>, String> {
-    let cardinality = stat.cardinality;
-    let true_count = if let Some(constant) = stat.args[1].singleton() {
-        decimal_equality_true_count(&stat.args[0], &constant, cardinality, Op::NOT_EQ)
-    } else if let Some(constant) = stat.args[0].singleton() {
-        decimal_equality_true_count(&stat.args[1], &constant, cardinality, Op::NOT_EQ)
-    } else {
+    let Some(input) = ConstantComparison::from_equality_args(&stat) else {
         return Ok(None);
     };
 
-    Ok(true_count.map(ReturnStat::boolean))
-}
-
-fn decimal_equality_true_count(
-    stat: &ArgStat,
-    constant: &Scalar,
-    cardinality: f64,
-    not_eq: bool,
-) -> Option<StatEstimate> {
-    let Some((min, max)) = stat.value_minmax() else {
-        return Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }));
-    };
-    let constant = decimal_stat_value(constant)?;
-    let min = decimal_stat_value(&min)?;
-    let max = decimal_stat_value(&max)?;
-    if constant < min || constant > max {
-        Some(StatEstimate::exact(if not_eq { cardinality } else { 0.0 }))
-    } else {
-        Some(estimate_ndv_true_count(stat.ndv, not_eq, cardinality))
-    }
+    Ok(input
+        .equality_true_count(Op::NOT_EQ, decimal_stat_cmp)
+        .map(ReturnStat::boolean))
 }
 
 fn derive_decimal_range_stat<Op: StatComparisonOp>(
     stat: StatBinaryArg,
     _: &FunctionContext,
 ) -> Result<Option<ReturnStat>, String> {
-    let cardinality = stat.cardinality;
-    let true_count = if let Some(constant) = stat.args[1].singleton() {
-        decimal_range_true_count::<Op>(&stat.args[0], &constant, cardinality)
-    } else if let Some(constant) = stat.args[0].singleton() {
-        decimal_range_true_count::<Op::Reverse>(&stat.args[1], &constant, cardinality)
-    } else {
-        return Ok(None);
-    };
-
-    Ok(true_count.map(ReturnStat::boolean))
+    Ok(
+        if let Some(input) = ConstantComparison::from_right_constant(&stat) {
+            input.minmax_range_true_count::<Op>(decimal_stat_cmp)
+        } else if let Some(input) = ConstantComparison::from_left_constant(&stat) {
+            input.minmax_range_true_count::<Op::Reverse>(decimal_stat_cmp)
+        } else {
+            None
+        }
+        .map(ReturnStat::boolean),
+    )
 }
 
-fn decimal_range_true_count<Op: StatComparisonOp>(
-    stat: &ArgStat,
-    constant: &Scalar,
-    cardinality: f64,
-) -> Option<StatEstimate> {
-    let (min, max) = stat.value_minmax()?;
-    let constant = decimal_stat_value(constant)?;
-    let min = decimal_stat_value(&min)?;
-    let max = decimal_stat_value(&max)?;
-    Op::estimate_minmax_range_true_count(
-        stat.ndv,
-        cardinality,
-        constant.total_cmp(&min),
-        constant.total_cmp(&max),
-    )
+fn decimal_stat_cmp(left: &Scalar, right: &Scalar) -> Option<Ordering> {
+    let left = decimal_stat_value(left)?;
+    let right = decimal_stat_value(right)?;
+    Some(left.total_cmp(&right))
 }
 
 fn decimal_stat_value(scalar: &Scalar) -> Option<f64> {
     match scalar {
         Scalar::Decimal(value) => Some(value.to_float64()),
-        Scalar::Number(value) => Some(value.to_f64().into_inner()),
+        Scalar::Number(value) => Some(value.to_f64().0),
         _ => None,
     }
 }
