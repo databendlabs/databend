@@ -407,12 +407,12 @@ impl Binder {
         // Password policy only applies to password-based auth types.
         // None means no explicit auth type (inherits old type); key_pair users
         // are already blocked above, so None here is always a password change.
-        let needs_password_policy = match auth_option.auth_type {
-            Some(databend_common_ast::ast::AuthType::Sha256Password) => true,
-            Some(databend_common_ast::ast::AuthType::DoubleSha1Password) => true,
-            None => true,
-            _ => false,
-        };
+        let needs_password_policy = matches!(
+            auth_option.auth_type,
+            Some(databend_common_ast::ast::AuthType::Sha256Password)
+                | Some(databend_common_ast::ast::AuthType::DoubleSha1Password)
+                | None
+        );
         if needs_password_policy {
             UserApiProvider::instance()
                 .verify_password(
