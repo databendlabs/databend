@@ -96,6 +96,10 @@ impl TableContextAuthorization for QueryContext {
             .get_visibility_checker(ignore_ownership, object)
             .await
     }
+
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.shared.session.get_db_table_grant_checker().await
+    }
 }
 
 #[async_trait::async_trait]

@@ -1170,6 +1170,10 @@ impl TableContextAuthorization for LiteTableContext {
     ) -> Result<GrantObjectVisibilityChecker> {
         unsupported("table_ctx::get_visibility_checker")
     }
+
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        unsupported("table_ctx::get_db_table_grant_checker")
+    }
 }
 
 impl TableContextTelemetry for LiteTableContext {

@@ -24,15 +24,14 @@ use databend_common_expression::expr::*;
 use databend_common_expression::filter_helper::FilterHelpers;
 use databend_common_expression::type_check::check_string;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::schema::CatalogMeta;
 use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
-use databend_common_users::UserApiProvider;
-use databend_common_users::is_role_owner;
+use databend_common_users::TableVisibilityTarget;
+use databend_common_users::filter_db_tables_by_visibility;
 use log::trace;
 use log::warn;
 
@@ -290,13 +289,8 @@ async fn filter_visible_tables(
     }
 }
 
-/// Filter tables with optimized path.
-/// This only loads ownerships for tables that need it.
-///
-/// Logic:
-/// 1. Check table grants first and short-circuit when all tables are visible.
-/// 2. If unresolved tables remain, check database ownership.
-/// 3. If still unresolved, check ownership for the remaining tables only.
+/// Filter tables with optimized path using the public lazy visibility helper.
+/// This delegates to `filter_db_tables_by_visibility` in `databend-common-users`.
 async fn filter_tables_with_optimized_path(
     grants_checker: &GrantObjectVisibilityChecker,
     effective_roles: &[databend_common_meta_app::principal::RoleInfo],
@@ -306,74 +300,30 @@ async fn filter_tables_with_optimized_path(
     db_id: u64,
     tables: Vec<Arc<dyn Table>>,
 ) -> Result<Vec<Arc<dyn Table>>> {
-    let user_api = UserApiProvider::instance();
-    let mut visible = Vec::with_capacity(tables.len());
-    let mut need_ownership_check = Vec::new();
-
-    // Check grants first so global grants can return without any ownership I/O.
-    for table in tables {
-        if grants_checker.check_table_visibility(
-            catalog_name,
-            db_name,
-            table.name(),
-            db_id,
-            table.get_id(),
-        ) {
-            visible.push(table);
-        } else {
-            need_ownership_check.push(table);
-        }
-    }
-
-    if need_ownership_check.is_empty() {
-        return Ok(visible);
-    }
-
-    // Database owner can see all tables in that database.
-    let t = std::time::Instant::now();
-    let db_ownership = user_api
-        .get_ownership(tenant, &OwnershipObject::Database {
-            catalog_name: catalog_name.to_string(),
-            db_id,
-        })
-        .await?;
-    trace!(
-        "filter_tables_optimized: get_ownership(db '{}') took {:?}",
-        db_name,
-        t.elapsed()
-    );
-
-    if let Some(db_owner_info) = db_ownership {
-        if is_role_owner(Some(&db_owner_info.role), effective_roles) {
-            visible.extend(need_ownership_check);
-            return Ok(visible);
-        }
-    }
-
-    let ownership_objects: Vec<OwnershipObject> = need_ownership_check
+    let targets: Vec<TableVisibilityTarget> = tables
         .iter()
-        .map(|t| OwnershipObject::Table {
-            catalog_name: catalog_name.to_string(),
-            db_id,
+        .map(|t| TableVisibilityTarget {
+            table_name: t.name(),
             table_id: t.get_id(),
         })
         .collect();
 
-    let t = std::time::Instant::now();
-    let ownerships = user_api.mget_ownerships(tenant, &ownership_objects).await?;
-    trace!(
-        "filter_tables_optimized: mget_ownerships({}) took {:?}",
-        ownership_objects.len(),
-        t.elapsed()
-    );
+    let result = filter_db_tables_by_visibility(
+        grants_checker,
+        effective_roles,
+        tenant,
+        catalog_name,
+        db_name,
+        db_id,
+        &targets,
+    )
+    .await?;
 
-    for (table, ownership) in need_ownership_check.into_iter().zip(ownerships) {
-        if let Some(owner_info) = ownership {
-            if is_role_owner(Some(&owner_info.role), effective_roles) {
-                visible.push(table);
-            }
-        }
-    }
+    let visible = result
+        .visible_table_indexes
+        .into_iter()
+        .map(|i| tables[i].clone())
+        .collect();
 
     Ok(visible)
 }

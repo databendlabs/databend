@@ -378,6 +378,11 @@ impl Session {
             .await
     }
 
+    #[async_backtrace::framed]
+    pub async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr().get_db_table_grant_checker().await
+    }
+
     pub fn get_settings(&self) -> Arc<Settings> {
         self.session_ctx.get_settings()
     }

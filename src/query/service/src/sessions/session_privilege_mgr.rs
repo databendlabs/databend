@@ -89,6 +89,11 @@ pub trait SessionPrivilegeManager {
         object: Object,
     ) -> Result<GrantObjectVisibilityChecker>;
 
+    /// Returns a grant-only visibility checker (no ownership loaded).
+    /// Equivalent to `get_visibility_checker(true, Object::All)` but with
+    /// clearer intent — the caller will handle ownership lazily.
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker>;
+
     // fn show_grants(&self);
     async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()>;
 }
@@ -416,6 +421,15 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             &self.get_current_user()?,
             &roles,
             &ownership_infos,
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        let roles = self.get_all_effective_roles().await?;
+        Ok(GrantObjectVisibilityChecker::new_from_grants(
+            &self.get_current_user()?,
+            &roles,
         ))
     }
 }

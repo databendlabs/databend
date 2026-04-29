@@ -31,3 +31,19 @@ inherited_case_0018
 db_inherited_0018
 db_inherited_0018.inherited_case_0018
 1
+=== dropped db owner before role drop ===
+db_dropped_db_0018
+dropped_case_0018
+hidden_dropped_0018
+db_dropped_db_0018
+db_dropped_db_0018.dropped_case_0018
+2
+db_dropped_db_0018
+dropped_case_0018
+hidden_dropped_0018
+dropped_case_0018
+=== dropped db owner after role drop ===
+404
+0
+0
+0

@@ -758,6 +758,10 @@ impl TableContextAuthorization for CtxDelegation {
     ) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
+
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        todo!()
+    }
 }
 
 #[async_trait::async_trait]

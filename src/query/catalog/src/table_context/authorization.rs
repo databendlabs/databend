@@ -44,4 +44,8 @@ pub trait TableContextAuthorization: Send + Sync {
         ignore_ownership: bool,
         object: Object,
     ) -> Result<GrantObjectVisibilityChecker>;
+
+    /// Returns a grant-only visibility checker (no ownership loaded).
+    /// Callers handle ownership lazily via the public helper.
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker>;
 }
