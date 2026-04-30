@@ -253,22 +253,83 @@ pub fn get_min_max_stats(
         let (_, domain_opt) =
             ConstantFolder::fold_with_domain(expr, &input_domains, &func_ctx, &BUILTIN_FUNCTIONS);
         let domain = domain_opt.unwrap_or_else(|| Domain::full(expr.data_type()));
-        let (min, max) = domain.to_minmax();
+        let (mut min, mut max) = domain.to_minmax();
+        if min.as_ref().cmp(&max.as_ref()) == Ordering::Greater {
+            warn!("invalid cluster key expression range, fallback to full domain");
+            (min, max) = Domain::full(expr.data_type()).to_minmax();
+        }
         mins.push(min);
         maxs.push(max);
     }
 
-    match mins
-        .iter()
-        .map(Scalar::as_ref)
-        .cmp(maxs.iter().map(Scalar::as_ref))
-    {
-        Ordering::Greater => {
-            warn!(
-                "clustering_information: please check your data and perform recluster to resort."
+    (mins, maxs)
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::types::NumberDataType;
+    use databend_common_expression::types::number::NumberScalar;
+    use databend_storages_common_table_meta::meta::ColumnStatistics;
+
+    use super::*;
+
+    fn int32_scalar(value: i32) -> Scalar {
+        Scalar::Number(NumberScalar::Int32(value))
+    }
+
+    fn int32_column_expr(index: usize, name: &str) -> Expr<usize> {
+        Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: index,
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: name.to_string(),
+        })
+    }
+
+    fn int32_schema(names: &[&str]) -> TableSchema {
+        TableSchema::new(
+            names
+                .iter()
+                .map(|name| TableField::new(name, TableDataType::Number(NumberDataType::Int32)))
+                .collect(),
+        )
+    }
+
+    fn int32_col_stats(ranges: &[(u32, i32, i32)]) -> StatisticsOfColumns {
+        let mut col_stats = StatisticsOfColumns::new();
+        for (column_id, min, max) in ranges {
+            col_stats.insert(
+                *column_id,
+                ColumnStatistics::new(int32_scalar(*min), int32_scalar(*max), 0, 0, None),
             );
-            (maxs, mins)
         }
-        _ => (mins, maxs),
+        col_stats
+    }
+
+    #[test]
+    fn test_get_min_max_stats_expands_multi_column_range() {
+        let schema = int32_schema(&["a", "b"]);
+        let exprs = vec![int32_column_expr(0, "a"), int32_column_expr(1, "b")];
+        let col_stats = int32_col_stats(&[(0, 1, 3), (1, 2, 5)]);
+
+        let (min, max) = get_min_max_stats(&exprs, &col_stats, None, Some(0), &schema);
+
+        assert_eq!(min, vec![int32_scalar(1), int32_scalar(2)]);
+        assert_eq!(max, vec![int32_scalar(3), int32_scalar(5)]);
+    }
+
+    #[test]
+    fn test_get_min_max_stats_falls_back_on_invalid_expression_range() {
+        let schema = int32_schema(&["a"]);
+        let exprs = vec![int32_column_expr(0, "a")];
+        let col_stats = int32_col_stats(&[(0, 10, 1)]);
+
+        let (min, max) = get_min_max_stats(&exprs, &col_stats, None, Some(0), &schema);
+
+        assert_eq!(min, vec![int32_scalar(i32::MIN)]);
+        assert_eq!(max, vec![int32_scalar(i32::MAX)]);
     }
 }
