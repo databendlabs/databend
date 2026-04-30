@@ -28,7 +28,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 4.00
+├── estimated rows: 3.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── scan id: 1
@@ -39,7 +39,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [is_true(t2.a (#2) > 0)], limit: NONE]
-│   └── estimated rows: 3.00
+│   └── estimated rows: 2.00
 └── TableScan(Probe)
     ├── table: default.default.t1
     ├── scan id: 0
@@ -50,7 +50,7 @@ HashJoin
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(t1.a (#0) > 0)], limit: NONE]
-    └── estimated rows: 4.00
+    └── estimated rows: 3.00
 
 # convert full outer join to inner join, can propagate t2.a > 0
 query T

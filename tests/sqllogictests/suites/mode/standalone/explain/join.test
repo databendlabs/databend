@@ -251,7 +251,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:a.x (#0), probe targets:[b.x (#1)@scan1], filter type:bloom,inlist,min_max
-├── estimated rows: 2.00
+├── estimated rows: 1.69
 ├── TableScan(Build)
 │   ├── table: default.default.onecolumn
 │   ├── scan id: 0
@@ -262,7 +262,7 @@ HashJoin
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 │   ├── push downs: [filters: [is_true(onecolumn.x (#0) > 42)], limit: NONE]
-│   └── estimated rows: 2.00
+│   └── estimated rows: 1.50
 └── TableScan(Probe)
     ├── table: default.default.twocolumn
     ├── scan id: 1
@@ -274,7 +274,7 @@ HashJoin
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(twocolumn.x (#1) > 42)], limit: NONE]
     ├── apply join filters: [#0]
-    └── estimated rows: 3.00
+    └── estimated rows: 2.25
 
 query T
 explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
