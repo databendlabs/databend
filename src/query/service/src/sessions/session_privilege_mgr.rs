@@ -32,6 +32,7 @@ use databend_common_users::Object;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_enterprise_resources_management::ResourcesManagement;
+use log::info;
 
 use crate::meta_service_error;
 use crate::sessions::SessionContext;
@@ -87,7 +88,7 @@ pub trait SessionPrivilegeManager {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker>;
+    ) -> Result<Arc<GrantObjectVisibilityChecker>>;
 
     /// Returns a grant-only visibility checker (no ownership loaded).
     /// Equivalent to `get_visibility_checker(true, Object::All)` but with
@@ -387,8 +388,49 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         &self,
         ignore_ownership: bool,
         object: Object,
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
+        // Cache path: only cache the full checker (ignore_ownership=false, Object::All)
+        if !ignore_ownership && matches!(object, Object::All) {
+            if let Some(shared) = self.session_ctx.get_query_context_shared() {
+                return shared
+                    .visibility_checker_cache
+                    .get_or_try_init(|| async {
+                        info!("visibility_checker_cache: miss, building full checker");
+                        let checker = self.build_visibility_checker(false, Object::All).await?;
+                        Ok(Arc::new(checker))
+                    })
+                    .await
+                    .cloned();
+            }
+            // No query context shared available: fallback to uncached build
+            return Ok(Arc::new(
+                self.build_visibility_checker(false, Object::All).await?,
+            ));
+        }
+
+        // All other variants: build fresh, wrap in Arc, no cache
+        Ok(Arc::new(
+            self.build_visibility_checker(ignore_ownership, object)
+                .await?,
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        let roles = self.get_all_effective_roles().await?;
+        Ok(GrantObjectVisibilityChecker::new_from_grants(
+            &self.get_current_user()?,
+            &roles,
+        ))
+    }
+}
+
+impl<'a> SessionPrivilegeManagerImpl<'a> {
+    async fn build_visibility_checker(
+        &self,
+        ignore_ownership: bool,
+        object: Object,
     ) -> Result<GrantObjectVisibilityChecker> {
-        // TODO(liyz): is it check the visibility according onwerships?
         let roles = self.get_all_effective_roles().await?;
         let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
@@ -421,15 +463,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
             &self.get_current_user()?,
             &roles,
             &ownership_infos,
-        ))
-    }
-
-    #[async_backtrace::framed]
-    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        let roles = self.get_all_effective_roles().await?;
-        Ok(GrantObjectVisibilityChecker::new_from_grants(
-            &self.get_current_user()?,
-            &roles,
         ))
     }
 }

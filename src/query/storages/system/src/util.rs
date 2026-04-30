@@ -123,10 +123,10 @@ enum VisibilityStrategy {
     /// No permission check (external catalogs)
     NoCheck,
     /// Preloaded ownership checker (for list all queries)
-    Preloaded(GrantObjectVisibilityChecker),
+    Preloaded(Arc<GrantObjectVisibilityChecker>),
     /// Optimized path (for filtered queries)
     Optimized {
-        grants_checker: GrantObjectVisibilityChecker,
+        grants_checker: Arc<GrantObjectVisibilityChecker>,
         effective_roles: Vec<databend_common_meta_app::principal::RoleInfo>,
         catalog_name: String,
         tenant: Tenant,
