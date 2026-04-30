@@ -13,12 +13,19 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::marker::PhantomData;
 
 use crate::Scalar;
+use crate::property::Domain;
 use crate::stat_distribution::ArgStat;
+use crate::stat_distribution::BooleanDistribution;
 use crate::stat_distribution::Ndv;
+use crate::stat_distribution::OwnedDistribution;
+use crate::stat_distribution::ReturnStat;
 use crate::stat_distribution::StatBinaryArg;
 use crate::stat_distribution::StatEstimate;
+use crate::types::boolean::BooleanDomain;
+use crate::types::nullable::NullableDomain;
 
 pub trait StatComparisonOp {
     type Reverse: StatComparisonOp;
@@ -72,13 +79,13 @@ pub trait StatComparisonOp {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct LtOp;
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct LteOp;
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct GtOp;
-#[derive(Default)]
+#[derive(Default, Clone, Copy)]
 pub struct GteOp;
 
 impl StatComparisonOp for LtOp {
@@ -109,72 +116,146 @@ impl StatComparisonOp for GteOp {
     const INCLUDE_EQUAL: bool = true;
 }
 
-pub struct ConstantComparison<'s, 'a> {
+pub struct ConstantComparison<'s, 'a, A: ConstantComparisonAdapter> {
     pub stat: &'s ArgStat<'a>,
-    pub constant: Scalar,
-    pub cardinality: f64,
+    pub constant: A::Value,
+    pub domain: Option<A::Domain>,
+    pub non_null_cardinality: f64,
+    pub null_count: u64,
+    pub nullable: bool,
+    _a: PhantomData<fn(A)>,
 }
 
-impl<'s, 'a> ConstantComparison<'s, 'a> {
-    pub fn from_equality_args(stat: &'s StatBinaryArg<'a>) -> Option<Self> {
-        Self::from_right_constant(stat).or_else(|| Self::from_left_constant(stat))
-    }
+pub trait ConstantComparisonAdapter {
+    type Value;
+    type Domain;
 
-    pub fn from_right_constant(stat: &'s StatBinaryArg<'a>) -> Option<Self> {
-        Some(Self {
-            stat: &stat.args[0],
-            constant: stat.args[1].singleton()?,
-            cardinality: stat.cardinality,
-        })
-    }
+    fn constant(scalar: Scalar) -> Result<Self::Value, String>;
 
-    pub fn from_left_constant(stat: &'s StatBinaryArg<'a>) -> Option<Self> {
-        Some(Self {
-            stat: &stat.args[1],
-            constant: stat.args[0].singleton()?,
-            cardinality: stat.cardinality,
-        })
-    }
+    fn domain(domain: &Domain) -> Result<Self::Domain, String>;
 
-    pub fn equality_true_count(
-        &self,
-        not_eq: bool,
-        compare: impl Fn(&Scalar, &Scalar) -> Option<Ordering>,
-    ) -> Option<StatEstimate> {
-        let Some((min, max)) = self.stat.value_minmax() else {
-            return Some(StatEstimate::exact(if not_eq {
-                self.cardinality
-            } else {
-                0.0
-            }));
-        };
-        if compare(&self.constant, &min)? == Ordering::Less
-            || compare(&self.constant, &max)? == Ordering::Greater
+    fn compare(left: &Self::Value, right: &Self::Value) -> Ordering;
+}
+
+impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
+    pub fn from_constant_args(stat: &'s StatBinaryArg<'a>) -> Result<Option<(Self, bool)>, String> {
+        if let Some(input) =
+            Self::new(&stat.args[0], &stat.args[1], stat.cardinality)?.map(|input| (input, false))
         {
-            return Some(StatEstimate::exact(if not_eq {
-                self.cardinality
-            } else {
-                0.0
-            }));
+            return Ok(Some(input));
         }
-
-        Some(estimate_ndv_true_count(
-            self.stat.ndv,
-            not_eq,
-            self.cardinality,
-        ))
+        Ok(Self::new(&stat.args[1], &stat.args[0], stat.cardinality)?.map(|input| (input, true)))
     }
 
-    pub fn minmax_range_true_count<Op: StatComparisonOp>(
-        &self,
-        compare: impl Fn(&Scalar, &Scalar) -> Option<Ordering>,
-    ) -> Option<StatEstimate> {
-        try {
-            let (min, max) = self.stat.value_minmax()?;
-            let cmp_min = compare(&self.constant, &min)?;
-            let cmp_max = compare(&self.constant, &max)?;
-            Op::estimate_minmax_range_true_count(self.stat.ndv, self.cardinality, cmp_min, cmp_max)?
+    fn new(
+        stat: &'s ArgStat<'a>,
+        constant_stat: &ArgStat<'_>,
+        input_cardinality: f64,
+    ) -> Result<Option<Self>, String> {
+        let Some(constant) = constant_stat.singleton() else {
+            return Ok(None);
+        };
+        if constant.is_null() {
+            return Err(
+                "constant comparison null constant was not handled before typed comparison"
+                    .to_string(),
+            );
         }
+        let nullable = stat.domain.is_nullable() || constant_stat.domain.is_nullable();
+        let null_count = stat.null_count.min(input_cardinality.ceil() as u64);
+        let non_null_cardinality = (input_cardinality - null_count as f64).max(0.0);
+        let domain = match &stat.domain {
+            Domain::Nullable(NullableDomain { value: None, .. }) => None,
+            Domain::Nullable(NullableDomain {
+                value: Some(box domain),
+                ..
+            })
+            | domain => match A::domain(domain) {
+                Ok(domain) => Some(domain),
+                Err(err) => {
+                    return Err(err);
+                }
+            },
+        };
+        let constant = match A::constant(constant) {
+            Ok(constant) => constant,
+            Err(err) => {
+                return Err(err);
+            }
+        };
+
+        Ok(Some(Self {
+            stat,
+            constant,
+            domain,
+            non_null_cardinality,
+            null_count,
+            nullable,
+            _a: PhantomData,
+        }))
+    }
+
+    pub fn boolean_stat(&self, true_count: StatEstimate) -> ReturnStat {
+        let domain = if self.nullable {
+            Domain::Nullable(NullableDomain {
+                has_null: self.null_count != 0,
+                value: Some(Box::new(Domain::Boolean(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                }))),
+            })
+        } else {
+            Domain::Boolean(BooleanDomain {
+                has_true: true,
+                has_false: true,
+            })
+        };
+
+        ReturnStat {
+            domain,
+            ndv: Ndv::Stat(2.0),
+            null_count: self.null_count,
+            distribution: OwnedDistribution::Boolean(BooleanDistribution { true_count }),
+        }
+    }
+
+    pub fn constant_equality_true_count(
+        &self,
+        minmax_cmp: Option<(Ordering, Ordering)>,
+        not_eq: bool,
+    ) -> StatEstimate {
+        let Some((cmp_min, cmp_max)) = minmax_cmp else {
+            return estimate_ndv_true_count(self.stat.ndv, not_eq, self.non_null_cardinality);
+        };
+        if cmp_min == Ordering::Less || cmp_max == Ordering::Greater {
+            return StatEstimate::exact(if not_eq {
+                self.non_null_cardinality
+            } else {
+                0.0
+            });
+        }
+
+        estimate_ndv_true_count(self.stat.ndv, not_eq, self.non_null_cardinality)
+    }
+}
+
+pub fn null_comparison_stat(stat: &StatBinaryArg) -> Option<ReturnStat> {
+    if stat.args.iter().any(|arg| {
+        arg.domain
+            .as_singleton()
+            .is_some_and(|scalar| scalar.is_null())
+    }) {
+        Some(ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: Ndv::Stat(0.0),
+            null_count: stat.cardinality.ceil() as u64,
+            distribution: OwnedDistribution::Unknown,
+        })
+    } else {
+        None
     }
 }
 

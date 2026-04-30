@@ -71,17 +71,6 @@ impl<D: DistributionInvariant> StatDistribution<D> {
 }
 
 impl<D> StatDistribution<D> {
-    pub fn value_domain(&self) -> Option<&Domain> {
-        match &self.domain {
-            Domain::Nullable(domain) => domain.value.as_deref(),
-            domain => Some(domain),
-        }
-    }
-
-    pub fn value_minmax(&self) -> Option<(Scalar, Scalar)> {
-        self.value_domain().map(Domain::to_minmax)
-    }
-
     pub fn singleton(&self) -> Option<Scalar> {
         self.domain.as_singleton()
     }
@@ -106,18 +95,6 @@ impl<'a> ArgStat<'a> {
 }
 
 impl ReturnStat {
-    pub fn boolean(true_count: StatEstimate) -> Self {
-        Self {
-            domain: Domain::Boolean(BooleanDomain {
-                has_true: true,
-                has_false: true,
-            }),
-            ndv: Ndv::Stat(2.0),
-            null_count: 0,
-            distribution: OwnedDistribution::Boolean(BooleanDistribution { true_count }),
-        }
-    }
-
     pub fn histogram(&self) -> Option<&Histogram> {
         self.distribution.as_histogram()
     }
@@ -241,8 +218,11 @@ fn check_histogram_distribution<D>(
     if !histogram_ndv.is_finite() || histogram_ndv < 0.0 {
         return Err(format!("histogram ndv is invalid: {histogram_ndv}"));
     }
-    if histogram.num_buckets() != 0 && stat.value_domain().is_none() {
-        return Err("histogram distribution requires a value domain".to_string());
+    if matches!(
+        stat.domain,
+        Domain::Nullable(NullableDomain { value: None, .. })
+    ) {
+        return Err("histogram distribution requires a non-null value domain".to_string());
     }
     Ok(())
 }
@@ -251,9 +231,12 @@ fn check_boolean_distribution<D>(
     stat: &StatDistribution<D>,
     distribution: &BooleanDistribution,
 ) -> Result<(), String> {
-    if !matches!(stat.value_domain(), Some(Domain::Boolean(_))) {
+    if !matches!(
+        stat.domain,
+        Domain::Nullable(NullableDomain { value: Some(box Domain::Boolean(_)), .. })|Domain::Boolean(_)
+    ) {
         return Err(format!(
-            "boolean distribution requires boolean value domain, got {:?}",
+            "boolean distribution requires boolean non-null value domain, got {:?}",
             stat.domain
         ));
     }
@@ -309,4 +292,67 @@ impl StatEstimate {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BooleanDistribution {
     pub true_count: StatEstimate,
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_statistics::Histogram;
+    use databend_common_statistics::TypedHistogram;
+
+    use super::*;
+    use crate::types::boolean::BooleanDomain;
+
+    #[test]
+    fn test_empty_histogram_requires_non_null_value_domain() {
+        let stat = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: Ndv::Stat(0.0),
+            null_count: 10,
+            distribution: OwnedDistribution::Histogram(Histogram::Int(TypedHistogram::new(
+                vec![],
+                true,
+            ))),
+        };
+
+        let err = stat.check_consistency().unwrap_err();
+        assert!(err.contains("non-null value domain"));
+    }
+
+    #[test]
+    fn test_nullable_boolean_distribution_checks_non_null_value_domain() {
+        let valid = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Boolean(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                }))),
+            }),
+            ndv: Ndv::Stat(2.0),
+            null_count: 1,
+            distribution: OwnedDistribution::Boolean(BooleanDistribution {
+                true_count: StatEstimate::exact(1.0),
+            }),
+        };
+
+        valid.check_consistency().unwrap();
+
+        let invalid = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: Ndv::Stat(0.0),
+            null_count: 10,
+            distribution: OwnedDistribution::Boolean(BooleanDistribution {
+                true_count: StatEstimate::exact(0.0),
+            }),
+        };
+
+        let err = invalid.check_consistency().unwrap_err();
+        assert!(err.contains("boolean non-null value domain"));
+    }
 }

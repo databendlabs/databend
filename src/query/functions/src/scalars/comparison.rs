@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use databend_common_column::types::months_days_micros;
+use databend_common_column::types::timestamp_tz;
 use databend_common_expression::Column;
 use databend_common_expression::Domain;
 use databend_common_expression::EvalContext;
@@ -31,12 +33,14 @@ use databend_common_expression::Scalar;
 use databend_common_expression::ScalarRef;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::comparison::ConstantComparison;
+use databend_common_expression::comparison::ConstantComparisonAdapter;
 use databend_common_expression::comparison::GtOp;
 use databend_common_expression::comparison::GteOp;
 use databend_common_expression::comparison::LtOp;
 use databend_common_expression::comparison::LteOp;
 use databend_common_expression::comparison::StatComparisonOp;
 use databend_common_expression::comparison::estimate_ndv_true_count;
+use databend_common_expression::comparison::null_comparison_stat;
 use databend_common_expression::function_stat::ReturnStat;
 use databend_common_expression::generate_like_pattern;
 use databend_common_expression::scalar_evaluator;
@@ -64,8 +68,6 @@ use databend_common_expression::types::MutableBitmap;
 use databend_common_expression::types::Number;
 use databend_common_expression::types::NumberClass;
 use databend_common_expression::types::NumberDataType;
-use databend_common_expression::types::NumberDomain;
-use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::ReturnType;
 use databend_common_expression::types::StringColumn;
@@ -182,42 +184,42 @@ macro_rules! register_simple_domain_type_cmp {
         register_stat_comparison_2_arg::<$T>(
             $registry,
             "eq",
-            |stat, _| derive_equality_stat(false, stat),
+            |stat, _| derive_equality_stat::<$T>(false, stat),
             |_, d1, d2| d1.domain_eq(d2),
             |lhs, rhs, _| lhs == rhs,
         );
         register_stat_comparison_2_arg::<$T>(
             $registry,
             "noteq",
-            |stat, _| derive_equality_stat(true, stat),
+            |stat, _| derive_equality_stat::<$T>(true, stat),
             |_, d1, d2| d1.domain_noteq(d2),
             |lhs, rhs, _| lhs != rhs,
         );
         register_stat_comparison_2_arg::<$T>(
             $registry,
             "gt",
-            |stat, _| derive_comparison_stat::<GtOp>(stat),
+            |stat, _| derive_comparison_stat::<$T, GtOp>(stat),
             |_, d1, d2| d1.domain_gt(d2),
             |lhs, rhs, _| lhs > rhs,
         );
         register_stat_comparison_2_arg::<$T>(
             $registry,
             "gte",
-            |stat, _| derive_comparison_stat::<GteOp>(stat),
+            |stat, _| derive_comparison_stat::<$T, GteOp>(stat),
             |_, d1, d2| d1.domain_gte(d2),
             |lhs, rhs, _| lhs >= rhs,
         );
         register_stat_comparison_2_arg::<$T>(
             $registry,
             "lt",
-            |stat, _| derive_comparison_stat::<LtOp>(stat),
+            |stat, _| derive_comparison_stat::<$T, LtOp>(stat),
             |_, d1, d2| d1.domain_lt(d2),
             |lhs, rhs, _| lhs < rhs,
         );
         register_stat_comparison_2_arg::<$T>(
             $registry,
             "lte",
-            |stat, _| derive_comparison_stat::<LteOp>(stat),
+            |stat, _| derive_comparison_stat::<$T, LteOp>(stat),
             |_, d1, d2| d1.domain_lte(d2),
             |lhs, rhs, _| lhs <= rhs,
         );
@@ -252,81 +254,209 @@ fn register_stat_comparison_2_arg<T>(
         .register();
 }
 
-fn derive_equality_stat(not_eq: bool, stat: StatBinaryArg) -> Result<Option<ReturnStat>, String> {
-    let Some(input) = ConstantComparison::from_equality_args(&stat) else {
-        return Ok(None);
-    };
-
-    let Some(true_count) = input.equality_true_count(not_eq, compare_stat_scalar) else {
-        return Ok(None);
-    };
-
-    Ok(Some(ReturnStat::boolean(true_count)))
-}
-
-fn derive_comparison_stat<Op: StatComparisonOp>(
+fn derive_equality_stat<T>(
+    not_eq: bool,
     stat: StatBinaryArg,
-) -> Result<Option<ReturnStat>, String> {
-    Ok(
-        if let Some(input) = ConstantComparison::from_right_constant(&stat) {
-            ordered_comparison_true_count::<Op>(&input)?
-        } else if let Some(input) = ConstantComparison::from_left_constant(&stat) {
-            ordered_comparison_true_count::<Op::Reverse>(&input)?
-        } else {
-            None
-        }
-        .map(ReturnStat::boolean),
-    )
+) -> Result<Option<ReturnStat>, String>
+where
+    T: ComparisonStatType,
+{
+    if let Some(stat) = null_comparison_stat(&stat) {
+        return Ok(Some(stat));
+    }
+
+    let Some((input, _)) = ConstantComparison::<TypedComparisonStat<T>>::from_constant_args(&stat)?
+    else {
+        return Ok(None);
+    };
+
+    let true_count = input.constant_equality_true_count(
+        input
+            .domain
+            .as_ref()
+            .and_then(T::domain_bounds)
+            .map(|(min, max)| {
+                (
+                    T::compare(T::to_scalar_ref(&input.constant), min),
+                    T::compare(T::to_scalar_ref(&input.constant), max),
+                )
+            }),
+        not_eq,
+    );
+
+    Ok(Some(input.boolean_stat(true_count)))
 }
 
-fn ordered_comparison_true_count<Op: StatComparisonOp>(
-    input: &ConstantComparison<'_, '_>,
-) -> Result<Option<StatEstimate>, String> {
+fn derive_comparison_stat<T, Op: StatComparisonOp>(
+    stat: StatBinaryArg,
+) -> Result<Option<ReturnStat>, String>
+where
+    T: ComparisonStatType,
+    T::Scalar: HistogramConstant,
+{
+    if let Some(stat) = null_comparison_stat(&stat) {
+        return Ok(Some(stat));
+    }
+
+    let Some((input, reverse)) =
+        ConstantComparison::<TypedComparisonStat<T>>::from_constant_args(&stat)?
+    else {
+        return Ok(None);
+    };
+
+    let true_count = if reverse {
+        ordered_comparison_true_count::<T, Op::Reverse>(&input)?
+    } else {
+        ordered_comparison_true_count::<T, Op>(&input)?
+    };
+    Ok(true_count.map(|true_count| input.boolean_stat(true_count)))
+}
+
+fn ordered_comparison_true_count<T, Op: StatComparisonOp>(
+    input: &ConstantComparison<'_, '_, TypedComparisonStat<T>>,
+) -> Result<Option<StatEstimate>, String>
+where
+    T: ComparisonStatType,
+    T::Scalar: HistogramConstant,
+{
     if let Some(histogram) = input.stat.histogram() {
         return Ok(Some(
-            HistogramComparison::<Op> {
+            HistogramComparison::<_, Op> {
                 histogram,
                 constant: &input.constant,
-                cardinality: input.cardinality,
+                non_null_cardinality: input.non_null_cardinality,
                 _op: PhantomData,
             }
             .true_count()?,
         ));
     }
 
-    Ok(match input.stat.value_domain() {
-        Some(
-            Domain::Number(NumberDomain::UInt8(_))
-            | Domain::Number(NumberDomain::UInt16(_))
-            | Domain::Number(NumberDomain::UInt32(_))
-            | Domain::Number(NumberDomain::UInt64(_))
-            | Domain::Number(NumberDomain::Int8(_))
-            | Domain::Number(NumberDomain::Int16(_))
-            | Domain::Number(NumberDomain::Int32(_))
-            | Domain::Number(NumberDomain::Int64(_))
-            | Domain::Date(_)
-            | Domain::Timestamp(_),
-        ) => {
-            let range = IntegerRangeComparison::from_input(input).unwrap();
-            Some(range.true_count::<Op>())
-        }
-        _ => input.minmax_range_true_count::<Op>(compare_stat_scalar),
-    })
+    if T::USE_INTEGER_RANGE_COMPARISON {
+        let range = IntegerRangeComparison::from_input(input)?;
+        return Ok(Some(range.true_count::<Op>()));
+    }
+
+    let Some((cmp_min, cmp_max)) =
+        input
+            .domain
+            .as_ref()
+            .and_then(T::domain_bounds)
+            .map(|(min, max)| {
+                (
+                    T::compare(T::to_scalar_ref(&input.constant), min),
+                    T::compare(T::to_scalar_ref(&input.constant), max),
+                )
+            })
+    else {
+        return Ok(None);
+    };
+
+    Ok(Op::estimate_minmax_range_true_count(
+        input.stat.ndv,
+        input.non_null_cardinality,
+        cmp_min,
+        cmp_max,
+    ))
 }
 
-struct HistogramComparison<'a, Op> {
+struct TypedComparisonStat<T> {
+    _marker: PhantomData<fn(T)>,
+}
+
+impl<T> Clone for TypedComparisonStat<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for TypedComparisonStat<T> {}
+
+impl<T> ConstantComparisonAdapter for TypedComparisonStat<T>
+where T: ComparisonStatType
+{
+    type Value = T::Scalar;
+    type Domain = T::Domain;
+
+    fn constant(scalar: Scalar) -> Result<T::Scalar, String> {
+        T::try_downcast_scalar(&scalar.as_ref())
+            .map(T::to_owned_scalar)
+            .map_err(|e| e.to_string())
+    }
+
+    fn domain(domain: &Domain) -> Result<T::Domain, String> {
+        T::try_downcast_domain(domain).map_err(|e| e.to_string())
+    }
+
+    fn compare(left: &T::Scalar, right: &T::Scalar) -> Ordering {
+        T::compare(T::to_scalar_ref(left), T::to_scalar_ref(right))
+    }
+}
+
+trait ComparisonStatType: ArgType {
+    const USE_INTEGER_RANGE_COMPARISON: bool = false;
+
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)>;
+}
+
+impl<T: Number> ComparisonStatType for NumberType<T> {
+    const USE_INTEGER_RANGE_COMPARISON: bool = !T::FLOATING;
+
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+        Some((
+            NumberType::<T>::to_scalar_ref(&domain.min),
+            NumberType::<T>::to_scalar_ref(&domain.max),
+        ))
+    }
+}
+
+impl ComparisonStatType for BooleanType {
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+        Some((!domain.has_false, domain.has_true))
+    }
+}
+
+impl ComparisonStatType for StringType {
+    fn domain_bounds(domain: &Self::Domain) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+        Some((domain.min.as_str(), domain.max.as_deref()?))
+    }
+}
+
+macro_rules! impl_simple_domain_stat_type {
+    ($($ty:ty => $use_integer_range:expr),* $(,)?) => {
+        $(
+            impl ComparisonStatType for $ty {
+                const USE_INTEGER_RANGE_COMPARISON: bool = $use_integer_range;
+
+                fn domain_bounds(
+                    domain: &Self::Domain,
+                ) -> Option<(Self::ScalarRef<'_>, Self::ScalarRef<'_>)> {
+                    Some((Self::to_scalar_ref(&domain.min), Self::to_scalar_ref(&domain.max)))
+                }
+            }
+        )*
+    };
+}
+
+impl_simple_domain_stat_type!(
+    DateType => true,
+    TimestampType => true,
+    TimestampTzType => false,
+    IntervalType => false,
+);
+
+struct HistogramComparison<'a, T, Op> {
     histogram: &'a Histogram,
-    constant: &'a Scalar,
-    cardinality: f64,
+    constant: &'a T,
+    non_null_cardinality: f64,
     _op: PhantomData<fn(Op)>,
 }
 
-impl<Op: StatComparisonOp> HistogramComparison<'_, Op> {
+impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> {
     fn true_count(&self) -> Result<StatEstimate, String> {
         let selectivity = self.selectivity()?;
-        let expected = selectivity * self.cardinality;
+        let expected = selectivity * self.non_null_cardinality;
         Ok(if self.histogram.is_range_distorted() {
-            StatEstimate::new(0.0, expected, self.cardinality)
+            StatEstimate::new(0.0, expected, self.non_null_cardinality)
         } else {
             StatEstimate::exact(expected)
         })
@@ -339,15 +469,10 @@ impl<Op: StatComparisonOp> HistogramComparison<'_, Op> {
 
         match self.histogram {
             Histogram::Int(histogram) => {
-                let constant = match self.constant {
-                    Scalar::Number(NumberScalar::Int8(n)) => *n as i64,
-                    Scalar::Number(NumberScalar::Int16(n)) => *n as i64,
-                    Scalar::Number(NumberScalar::Int32(n)) => *n as i64,
-                    Scalar::Number(NumberScalar::Int64(n)) => *n,
-                    Scalar::Date(v) => *v as i64,
-                    Scalar::Timestamp(v) => *v,
-                    _ => return Err(unexpected_histogram_constant("Int", self.constant)),
-                };
+                let constant = self
+                    .constant
+                    .histogram_i64()
+                    .ok_or_else(|| unexpected_histogram_constant("Int", self.constant))?;
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
@@ -357,13 +482,10 @@ impl<Op: StatComparisonOp> HistogramComparison<'_, Op> {
                 .selectivity(HistogramBucketComparison::number_selectivity))
             }
             Histogram::UInt(histogram) => {
-                let constant = match self.constant {
-                    Scalar::Number(NumberScalar::UInt8(n)) => *n as u64,
-                    Scalar::Number(NumberScalar::UInt16(n)) => *n as u64,
-                    Scalar::Number(NumberScalar::UInt32(n)) => *n as u64,
-                    Scalar::Number(NumberScalar::UInt64(n)) => *n,
-                    _ => return Err(unexpected_histogram_constant("UInt", self.constant)),
-                };
+                let constant = self
+                    .constant
+                    .histogram_u64()
+                    .ok_or_else(|| unexpected_histogram_constant("UInt", self.constant))?;
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
@@ -373,7 +495,9 @@ impl<Op: StatComparisonOp> HistogramComparison<'_, Op> {
                 .selectivity(HistogramBucketComparison::number_selectivity))
             }
             Histogram::Float(histogram) => {
-                let constant = scalar_number_value(self.constant)
+                let constant = self
+                    .constant
+                    .histogram_f64()
                     .ok_or_else(|| unexpected_histogram_constant("Float", self.constant))?;
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
@@ -384,8 +508,12 @@ impl<Op: StatComparisonOp> HistogramComparison<'_, Op> {
                 .selectivity(HistogramBucketComparison::number_selectivity))
             }
             Histogram::Bytes(histogram) => {
-                let constant = scalar_bytes_value(self.constant)
-                    .ok_or_else(|| unexpected_histogram_constant("Bytes", self.constant))?;
+                let constant = match self.constant {
+                    value if value.histogram_bytes().is_some() => {
+                        value.histogram_bytes().unwrap().to_vec()
+                    }
+                    _ => return Err(unexpected_histogram_constant("Bytes", self.constant)),
+                };
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
@@ -522,22 +650,40 @@ enum IntegerRangeComparison<'s, 'a> {
         min: F64,
         max: F64,
         literal: F64,
-        cardinality: f64,
+        non_null_cardinality: f64,
     },
 }
 
 impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
-    fn from_input(input: &ConstantComparison<'s, 'a>) -> Option<Self> {
-        let Some((min, max)) = input.stat.value_minmax() else {
-            return Some(Self::MissingMinMax);
+    fn from_input<T>(
+        input: &ConstantComparison<'s, 'a, TypedComparisonStat<T>>,
+    ) -> Result<Self, String>
+    where
+        T: ComparisonStatType,
+        T::Scalar: HistogramConstant,
+    {
+        let Some(domain) = input.domain.as_ref() else {
+            return Ok(Self::MissingMinMax);
+        };
+        let Some((min, max)) = T::domain_bounds(domain) else {
+            return Ok(Self::MissingMinMax);
         };
 
-        Some(Self::Bounded {
+        let min = T::to_owned_scalar(min)
+            .range_f64()
+            .ok_or_else(|| "constant comparison integer range bound is not numeric".to_string())?;
+        let max = T::to_owned_scalar(max)
+            .range_f64()
+            .ok_or_else(|| "constant comparison integer range bound is not numeric".to_string())?;
+
+        Ok(Self::Bounded {
             stat: input.stat,
-            min: scalar_number_value(&min)?,
-            max: scalar_number_value(&max)?,
-            literal: scalar_number_value(&input.constant)?,
-            cardinality: input.cardinality,
+            min,
+            max,
+            literal: input.constant.range_f64().ok_or_else(|| {
+                "constant comparison integer range literal is not numeric".to_string()
+            })?,
+            non_null_cardinality: input.non_null_cardinality,
         })
     }
 
@@ -549,7 +695,7 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
             min,
             max,
             literal,
-            cardinality,
+            non_null_cardinality,
         } = self
         else {
             return StatEstimate::exact(0.0);
@@ -566,13 +712,13 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
                 return StatEstimate::exact(0.0);
             }
             if cmp_min == Equal {
-                return estimate_ndv_true_count(stat.ndv, false, *cardinality);
+                return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
             }
             if cmp_max == Greater {
-                return StatEstimate::exact(*cardinality);
+                return StatEstimate::exact(*non_null_cardinality);
             }
             if !Op::INCLUDE_EQUAL && cmp_max == Equal {
-                return estimate_ndv_true_count(stat.ndv, true, *cardinality);
+                return estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality);
             }
             let selected_values = if Op::INCLUDE_EQUAL {
                 numeric_literal - min_value + 1.0
@@ -580,7 +726,7 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
                 numeric_literal - min_value
             };
             return StatEstimate::exact(
-                (selected_values / (max_value - min_value + 1.0)) * *cardinality,
+                (selected_values / (max_value - min_value + 1.0)) * *non_null_cardinality,
             );
         }
 
@@ -589,23 +735,24 @@ impl<'s, 'a> IntegerRangeComparison<'s, 'a> {
                 return StatEstimate::exact(0.0);
             }
             if cmp_min == Less || cmp_min == Equal {
-                return StatEstimate::exact(*cardinality);
+                return StatEstimate::exact(*non_null_cardinality);
             }
             if cmp_max == Equal {
-                return estimate_ndv_true_count(stat.ndv, false, *cardinality);
+                return estimate_ndv_true_count(stat.ndv, false, *non_null_cardinality);
             }
             return StatEstimate::exact(
                 ((max_value - numeric_literal + 1.0) / (max_value - min_value + 1.0))
-                    * *cardinality,
+                    * *non_null_cardinality,
             );
         }
 
         match (cmp_min, cmp_max) {
             (_, Greater | Equal) => StatEstimate::exact(0.0),
-            (Less, _) => StatEstimate::exact(*cardinality),
-            (Equal, _) => estimate_ndv_true_count(stat.ndv, true, *cardinality),
+            (Less, _) => StatEstimate::exact(*non_null_cardinality),
+            (Equal, _) => estimate_ndv_true_count(stat.ndv, true, *non_null_cardinality),
             _ => StatEstimate::exact(
-                ((max_value - numeric_literal) / (max_value - min_value + 1.0)) * *cardinality,
+                ((max_value - numeric_literal) / (max_value - min_value + 1.0))
+                    * *non_null_cardinality,
             ),
         }
     }
@@ -697,38 +844,99 @@ impl StatNumberValue for F64 {
     }
 }
 
-fn compare_stat_scalar(left: &Scalar, right: &Scalar) -> Option<Ordering> {
-    if let (Scalar::Boolean(left), Scalar::Boolean(right)) = (left, right) {
-        return Some(left.cmp(right));
+trait HistogramConstant: std::fmt::Debug {
+    fn histogram_i64(&self) -> Option<i64> {
+        None
     }
-    if let (Some(left), Some(right)) = (scalar_number_value(left), scalar_number_value(right)) {
-        return Some(left.cmp(&right));
-    }
-    if let (Some(left), Some(right)) = (scalar_bytes_value(left), scalar_bytes_value(right)) {
-        return Some(left.cmp(&right));
-    }
-    None
-}
 
-fn scalar_number_value(scalar: &Scalar) -> Option<F64> {
-    match scalar {
-        Scalar::Number(value) => Some(F64::from(value.to_f64().into_inner())),
-        Scalar::Decimal(value) => Some(F64::from(value.to_float64())),
-        Scalar::Date(value) => Some(F64::from(*value as f64)),
-        Scalar::Timestamp(value) => Some(F64::from(*value as f64)),
-        _ => None,
+    fn histogram_u64(&self) -> Option<u64> {
+        None
     }
-}
 
-fn scalar_bytes_value(scalar: &Scalar) -> Option<Vec<u8>> {
-    match scalar {
-        Scalar::String(value) => Some(value.as_bytes().to_vec()),
-        Scalar::Binary(value) => Some(value.clone()),
-        _ => None,
+    fn histogram_f64(&self) -> Option<F64> {
+        None
+    }
+
+    fn histogram_bytes(&self) -> Option<&[u8]> {
+        None
+    }
+
+    fn range_f64(&self) -> Option<F64> {
+        None
     }
 }
 
-fn unexpected_histogram_constant(histogram_type: &'static str, constant: &Scalar) -> String {
+macro_rules! impl_signed_histogram_constant {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl HistogramConstant for $ty {
+                fn histogram_i64(&self) -> Option<i64> {
+                    Some(*self as i64)
+                }
+
+                fn histogram_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+
+                fn range_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+            }
+        )*
+    };
+}
+
+macro_rules! impl_unsigned_histogram_constant {
+    ($($ty:ty),* $(,)?) => {
+        $(
+            impl HistogramConstant for $ty {
+                fn histogram_u64(&self) -> Option<u64> {
+                    Some(*self as u64)
+                }
+
+                fn histogram_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+
+                fn range_f64(&self) -> Option<F64> {
+                    Some(F64::from(*self as f64))
+                }
+            }
+        )*
+    };
+}
+
+impl_signed_histogram_constant!(i8, i16, i32, i64);
+impl_unsigned_histogram_constant!(u8, u16, u32, u64);
+
+impl HistogramConstant for F64 {
+    fn histogram_f64(&self) -> Option<F64> {
+        Some(*self)
+    }
+}
+
+impl HistogramConstant for databend_common_expression::types::F32 {
+    fn histogram_f64(&self) -> Option<F64> {
+        Some(F64::from(self.into_inner() as f64))
+    }
+}
+
+impl HistogramConstant for String {
+    fn histogram_bytes(&self) -> Option<&[u8]> {
+        Some(self.as_bytes())
+    }
+}
+
+impl HistogramConstant for bool {}
+
+impl HistogramConstant for timestamp_tz {}
+
+impl HistogramConstant for months_days_micros {}
+
+fn unexpected_histogram_constant<T: std::fmt::Debug>(
+    histogram_type: &'static str,
+    constant: &T,
+) -> String {
     format!("unexpected {histogram_type} histogram comparison constant: {constant:?}")
 }
 
@@ -736,42 +944,42 @@ fn register_string_cmp(registry: &mut FunctionRegistry) {
     register_stat_string_comparison_2_arg(
         registry,
         "eq",
-        |stat, _| derive_equality_stat(false, stat),
+        |stat, _| derive_equality_stat::<StringType>(false, stat),
         |_, d1, d2| d1.domain_eq(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Equal),
     );
     register_stat_string_comparison_2_arg(
         registry,
         "noteq",
-        |stat, _| derive_equality_stat(true, stat),
+        |stat, _| derive_equality_stat::<StringType>(true, stat),
         |_, d1, d2| d1.domain_noteq(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Equal),
     );
     register_stat_string_comparison_2_arg(
         registry,
         "gt",
-        |stat, _| derive_comparison_stat::<GtOp>(stat),
+        |stat, _| derive_comparison_stat::<StringType, GtOp>(stat),
         |_, d1, d2| d1.domain_gt(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Greater),
     );
     register_stat_string_comparison_2_arg(
         registry,
         "gte",
-        |stat, _| derive_comparison_stat::<GteOp>(stat),
+        |stat, _| derive_comparison_stat::<StringType, GteOp>(stat),
         |_, d1, d2| d1.domain_gte(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Less),
     );
     register_stat_string_comparison_2_arg(
         registry,
         "lt",
-        |stat, _| derive_comparison_stat::<LtOp>(stat),
+        |stat, _| derive_comparison_stat::<StringType, LtOp>(stat),
         |_, d1, d2| d1.domain_lt(d2),
         vectorize_string_cmp(|cmp| cmp == Ordering::Less),
     );
     register_stat_string_comparison_2_arg(
         registry,
         "lte",
-        |stat, _| derive_comparison_stat::<LteOp>(stat),
+        |stat, _| derive_comparison_stat::<StringType, LteOp>(stat),
         |_, d1, d2| d1.domain_lte(d2),
         vectorize_string_cmp(|cmp| cmp != Ordering::Greater),
     );
@@ -852,7 +1060,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     register_stat_comparison_2_arg::<BooleanType>(
         registry,
         "eq",
-        |stat, _| derive_equality_stat(false, stat),
+        |stat, _| derive_equality_stat::<BooleanType>(false, stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -865,7 +1073,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     register_stat_comparison_2_arg::<BooleanType>(
         registry,
         "noteq",
-        |stat, _| derive_equality_stat(true, stat),
+        |stat, _| derive_equality_stat::<BooleanType>(true, stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, true, false) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
             (false, true, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -878,7 +1086,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     register_stat_comparison_2_arg::<BooleanType>(
         registry,
         "gt",
-        |stat, _| derive_comparison_stat::<GtOp>(stat),
+        |stat, _| derive_comparison_stat::<BooleanType, GtOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (false, true, _, _) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -889,7 +1097,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     register_stat_comparison_2_arg::<BooleanType>(
         registry,
         "gte",
-        |stat, _| derive_comparison_stat::<GteOp>(stat),
+        |stat, _| derive_comparison_stat::<BooleanType, GteOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (true, false, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -901,7 +1109,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     register_stat_comparison_2_arg::<BooleanType>(
         registry,
         "lt",
-        |stat, _| derive_comparison_stat::<LtOp>(stat),
+        |stat, _| derive_comparison_stat::<BooleanType, LtOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, false, true) => FunctionDomain::Domain(ALL_FALSE_DOMAIN),
@@ -912,7 +1120,7 @@ fn register_boolean_cmp(registry: &mut FunctionRegistry) {
     register_stat_comparison_2_arg::<BooleanType>(
         registry,
         "lte",
-        |stat, _| derive_comparison_stat::<LteOp>(stat),
+        |stat, _| derive_comparison_stat::<BooleanType, LteOp>(stat),
         |_, d1, d2| match (d1.has_true, d1.has_false, d2.has_true, d2.has_false) {
             (false, true, _, _) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
             (_, _, true, false) => FunctionDomain::Domain(ALL_TRUE_DOMAIN),
@@ -1961,7 +2169,9 @@ mod tests {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
     use databend_common_expression::stat_distribution::Ndv;
+    use databend_common_expression::types::NumberDomain;
     use databend_common_expression::types::SimpleDomain;
+    use databend_common_expression::types::nullable::NullableDomain;
     use databend_common_expression::types::string::StringDomain;
     use jsonb::OwnedJsonb;
 
@@ -1974,18 +2184,18 @@ mod tests {
             buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
             avg_spacing: None,
         });
-        let constant = Scalar::Number(NumberScalar::Int64(10));
+        let constant = 10_i64;
 
-        let gte_input = HistogramComparison::<GteOp> {
+        let gte_input = HistogramComparison::<_, GteOp> {
             histogram: &histogram,
             constant: &constant,
-            cardinality: 1.0,
+            non_null_cardinality: 1.0,
             _op: PhantomData,
         };
-        let lt_input = HistogramComparison::<LtOp> {
+        let lt_input = HistogramComparison::<_, LtOp> {
             histogram: &histogram,
             constant: &constant,
-            cardinality: 1.0,
+            non_null_cardinality: 1.0,
             _op: PhantomData,
         };
 
@@ -2004,12 +2214,22 @@ mod tests {
             null_count: 0,
             distribution: BorrowedDistribution::Unknown,
         };
-        let constant = Scalar::Number(NumberScalar::Int64(5));
-        let input = ConstantComparison {
-            stat: &stat,
-            constant,
-            cardinality: 10.0,
+        let constant_stat = ArgStat {
+            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 5, max: 5 })),
+            ndv: Ndv::Stat(1.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Unknown,
         };
+        let args = [stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: 10.0,
+            args: &args,
+        };
+        let input =
+            ConstantComparison::<TypedComparisonStat<NumberType<i64>>>::from_constant_args(&stat)
+                .unwrap()
+                .unwrap()
+                .0;
         let range = IntegerRangeComparison::from_input(&input).unwrap();
 
         let lt_count = range.true_count::<LtOp>();
@@ -2017,6 +2237,149 @@ mod tests {
 
         assert_eq!(lt_count, StatEstimate::exact(4.0));
         assert_eq!(gt_count, StatEstimate::exact(5.0));
+    }
+
+    #[test]
+    fn test_nullable_constant_comparison_excludes_nulls() {
+        let column_stat = ArgStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Number(NumberDomain::Int64(
+                    SimpleDomain { min: 1, max: 10 },
+                )))),
+            }),
+            ndv: Ndv::Stat(10.0),
+            null_count: 3,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let constant_stat = ArgStat {
+            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 5, max: 5 })),
+            ndv: Ndv::Stat(1.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let args = [column_stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: 10.0,
+            args: &args,
+        };
+        let output = derive_comparison_stat::<NumberType<i64>, GtOp>(stat)
+            .unwrap()
+            .unwrap();
+        let true_count = output.boolean_distribution().unwrap().true_count;
+
+        assert_eq!(output.null_count, 3);
+        assert!(matches!(output.domain, Domain::Nullable(_)));
+        assert_eq!(true_count, StatEstimate::exact(3.5));
+    }
+
+    #[test]
+    fn test_null_constant_comparison_returns_all_null_stat() {
+        let column_stat = ArgStat {
+            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let constant_stat = ArgStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: Ndv::Stat(0.0),
+            null_count: 10,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let args = [column_stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: 10.0,
+            args: &args,
+        };
+
+        let output = derive_comparison_stat::<NumberType<i64>, GtOp>(stat)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(output.null_count, 10);
+        assert!(matches!(
+            output.domain,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None
+            })
+        ));
+        assert!(output.boolean_distribution().is_none());
+    }
+
+    #[test]
+    fn test_constant_comparison_uses_typed_literal_before_histogram() {
+        let histogram = Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(0, 10, 11.0, 11.0)],
+            avg_spacing: None,
+        });
+        let column_stat = ArgStat {
+            domain: Domain::Number(NumberDomain::UInt8(SimpleDomain { min: 0, max: 10 })),
+            ndv: Ndv::Stat(11.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Histogram(&histogram),
+        };
+        let constant_stat = ArgStat {
+            domain: Domain::Number(NumberDomain::UInt8(SimpleDomain { min: 5, max: 5 })),
+            ndv: Ndv::Stat(1.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let args = [column_stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: 11.0,
+            args: &args,
+        };
+        let input =
+            ConstantComparison::<TypedComparisonStat<NumberType<u8>>>::from_constant_args(&stat)
+                .unwrap()
+                .unwrap()
+                .0;
+
+        assert_eq!(input.constant, 5_u8);
+        let true_count = ordered_comparison_true_count::<NumberType<u8>, GtOp>(&input)
+            .unwrap()
+            .unwrap();
+        assert!((true_count.expected - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_unbounded_string_equality_uses_ndv_estimate() {
+        let column_stat = ArgStat {
+            domain: Domain::String(StringDomain {
+                min: "".to_string(),
+                max: None,
+            }),
+            ndv: Ndv::Stat(10.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let constant_stat = ArgStat {
+            domain: Domain::String(StringDomain {
+                min: "x".to_string(),
+                max: Some("x".to_string()),
+            }),
+            ndv: Ndv::Stat(1.0),
+            null_count: 0,
+            distribution: BorrowedDistribution::Unknown,
+        };
+        let args = [column_stat, constant_stat];
+        let stat = StatBinaryArg {
+            cardinality: 100.0,
+            args: &args,
+        };
+
+        let output = derive_equality_stat::<StringType>(false, stat)
+            .unwrap()
+            .unwrap();
+        let true_count = output.boolean_distribution().unwrap().true_count;
+
+        assert_eq!(true_count, StatEstimate::exact(10.0));
     }
 
     #[test]
