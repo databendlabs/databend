@@ -102,7 +102,7 @@ CommitSink
             ├── filters: []
             ├── build join filters:
             │   └── filter id:0, build key:subquery_2 (#2), probe targets:[t1.a (#0)@scan0], filter type:bloom,inlist,min_max
-            ├── estimated rows: 2.00
+            ├── estimated rows: 1.75
             ├── TableScan(Build)
             │   ├── table: default.default.t2
             │   ├── scan id: 1
@@ -125,4 +125,4 @@ CommitSink
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
                 ├── apply join filters: [#0]
-                └── estimated rows: 3.00
+                └── estimated rows: 3.50

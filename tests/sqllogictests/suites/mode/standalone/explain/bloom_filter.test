@@ -39,7 +39,7 @@ explain select 1 from bloom_test_t where c1 = '5'
 EvalScalar
 ├── output columns: [1 (#2)]
 ├── expressions: [1]
-├── estimated rows: 1.50
+├── estimated rows: 1.20
 └── TableScan
     ├── table: default.default.bloom_test_t
     ├── scan id: 0
@@ -50,7 +50,7 @@ EvalScalar
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 2 cost: <slt:ignore>, bloom pruning: 2 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = '5')], limit: NONE]
-    └── estimated rows: 1.50
+    └── estimated rows: 1.20
 
 query I
 select 1 from bloom_test_t where c1 = 5
