@@ -18,6 +18,8 @@ use databend_common_exception::Result;
 use databend_common_expression::RawExpr;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBindingBuilder;
@@ -34,6 +36,9 @@ use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql_test_support::parse_raw_expr;
 use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::TypedHistogram;
+use databend_common_statistics::TypedHistogramBucket;
 
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
@@ -44,12 +49,21 @@ fn run_case(
     columns: &[(&str, DataType)],
     column_stats: ColumnStatSet,
 ) -> Result<()> {
+    run_case_with_cardinality(file, expr_text, columns, column_stats, 100.0)
+}
+
+fn run_case_with_cardinality(
+    file: &mut impl Write,
+    expr_text: &str,
+    columns: &[(&str, DataType)],
+    column_stats: ColumnStatSet,
+    cardinality: f64,
+) -> Result<()> {
     writeln!(file, "expr          : {expr_text}")?;
 
     let in_stats = column_stats_to_string(&column_stats);
     let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
     let expr = raw_expr_to_scalar(&raw_expr, columns);
-    let cardinality = 100.0;
     let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
     let estimated_rows = estimator.apply(&[expr])?;
     let out_stats = estimator.column_stats();
@@ -183,6 +197,76 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
             comparison_stats.clone(),
         )?;
     }
+
+    write_case_title(
+        &mut file,
+        "typed_comparison_predicates",
+        "Typed comparison predicates should respect integer boundaries, nullable inputs, and histogram constants.",
+    )?;
+    let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: Ndv::Stat(10.0),
+        null_count: 0,
+        histogram: None,
+    })]);
+    for expr in ["i < 5", "i > 5"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("i", Int64Type::data_type())],
+            int_stats.clone(),
+        )?;
+    }
+    let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: Ndv::Stat(10.0),
+        null_count: 30,
+        histogram: None,
+    })]);
+    run_case(
+        &mut file,
+        "n > 5",
+        &[("n", Int64Type::data_type().wrap_nullable())],
+        nullable_stats,
+    )?;
+    let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: Ndv::Stat(10.0),
+        null_count: 0,
+        histogram: Some(Histogram::Int(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    for expr in ["h >= 10", "h < 10"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("h", Int64Type::data_type())],
+            edge_histogram_stats.clone(),
+        )?;
+    }
+    let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(10),
+        ndv: Ndv::Stat(11.0),
+        null_count: 0,
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(0, 10, 100.0, 11.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case(
+        &mut file,
+        "u > 5",
+        &[("u", UInt8Type::data_type())],
+        uint8_histogram_stats,
+    )?;
 
     write_case_title(
         &mut file,

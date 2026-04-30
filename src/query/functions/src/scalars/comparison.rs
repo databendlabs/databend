@@ -2170,107 +2170,11 @@ mod tests {
     use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::NumberDomain;
     use databend_common_expression::types::SimpleDomain;
-    use databend_common_expression::types::UInt8Type;
     use databend_common_expression::types::nullable::NullableDomain;
     use databend_common_expression::types::string::StringDomain;
     use jsonb::OwnedJsonb;
 
     use super::*;
-
-    #[test]
-    fn test_histogram_range_selectivity_handles_inclusive_bucket_edges() {
-        let histogram = Histogram::Int(TypedHistogram {
-            accuracy: true,
-            buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
-            avg_spacing: None,
-        });
-        let constant = 10_i64;
-
-        let gte_input = HistogramComparison::<_, GteOp> {
-            histogram: &histogram,
-            constant: &constant,
-            non_null_cardinality: 1.0,
-            _op: PhantomData,
-        };
-        let lt_input = HistogramComparison::<_, LtOp> {
-            histogram: &histogram,
-            constant: &constant,
-            non_null_cardinality: 1.0,
-            _op: PhantomData,
-        };
-
-        let gte_selectivity = gte_input.selectivity().unwrap();
-        let lt_selectivity = lt_input.selectivity().unwrap();
-
-        assert!((gte_selectivity - 0.1).abs() < 1e-9);
-        assert!((lt_selectivity - 0.9).abs() < 1e-9);
-    }
-
-    #[test]
-    fn test_strict_integer_range_selectivity_excludes_literal_without_histogram() {
-        let stat = ArgStat {
-            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
-            distribution: BorrowedDistribution::Unknown,
-        };
-        let constant_stat = ArgStat {
-            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 5, max: 5 })),
-            ndv: Ndv::Stat(1.0),
-            null_count: 0,
-            distribution: BorrowedDistribution::Unknown,
-        };
-        let args = [stat, constant_stat];
-        let stat = StatBinaryArg {
-            cardinality: 10.0,
-            args: &args,
-        };
-        let input = ConstantComparison::<TypedComparisonStat<Int64Type>>::from_args(&stat)
-            .unwrap()
-            .unwrap()
-            .0;
-        let range = IntegerRangeComparison::from_input(&input).unwrap();
-
-        let lt_count = range.true_count::<LtOp>();
-        let gt_count = range.true_count::<GtOp>();
-
-        assert_eq!(lt_count, StatEstimate::exact(4.0));
-        assert_eq!(gt_count, StatEstimate::exact(5.0));
-    }
-
-    #[test]
-    fn test_nullable_constant_comparison_excludes_nulls() {
-        let column_stat = ArgStat {
-            domain: Domain::Nullable(NullableDomain {
-                has_null: true,
-                value: Some(Box::new(Domain::Number(NumberDomain::Int64(
-                    SimpleDomain { min: 1, max: 10 },
-                )))),
-            }),
-            ndv: Ndv::Stat(10.0),
-            null_count: 3,
-            distribution: BorrowedDistribution::Unknown,
-        };
-        let constant_stat = ArgStat {
-            domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 5, max: 5 })),
-            ndv: Ndv::Stat(1.0),
-            null_count: 0,
-            distribution: BorrowedDistribution::Unknown,
-        };
-        let args = [column_stat, constant_stat];
-        let stat = StatBinaryArg {
-            cardinality: 10.0,
-            args: &args,
-        };
-        let output = derive_comparison_stat::<Int64Type, GtOp>(stat)
-            .unwrap()
-            .unwrap();
-        let true_count = output.boolean_distribution().unwrap().true_count;
-
-        assert_eq!(output.null_count, 3);
-        assert!(matches!(output.domain, Domain::Nullable(_)));
-        assert_eq!(true_count, StatEstimate::exact(3.5));
-    }
 
     #[test]
     fn test_null_constant_comparison_returns_all_null_stat() {
@@ -2308,42 +2212,6 @@ mod tests {
             })
         ));
         assert!(output.boolean_distribution().is_none());
-    }
-
-    #[test]
-    fn test_constant_comparison_uses_typed_literal_before_histogram() {
-        let histogram = Histogram::UInt(TypedHistogram {
-            accuracy: true,
-            buckets: vec![TypedHistogramBucket::new(0, 10, 11.0, 11.0)],
-            avg_spacing: None,
-        });
-        let column_stat = ArgStat {
-            domain: Domain::Number(NumberDomain::UInt8(SimpleDomain { min: 0, max: 10 })),
-            ndv: Ndv::Stat(11.0),
-            null_count: 0,
-            distribution: BorrowedDistribution::Histogram(&histogram),
-        };
-        let constant_stat = ArgStat {
-            domain: Domain::Number(NumberDomain::UInt8(SimpleDomain { min: 5, max: 5 })),
-            ndv: Ndv::Stat(1.0),
-            null_count: 0,
-            distribution: BorrowedDistribution::Unknown,
-        };
-        let args = [column_stat, constant_stat];
-        let stat = StatBinaryArg {
-            cardinality: 11.0,
-            args: &args,
-        };
-        let input = ConstantComparison::<TypedComparisonStat<UInt8Type>>::from_args(&stat)
-            .unwrap()
-            .unwrap()
-            .0;
-
-        assert_eq!(input.constant, 5_u8);
-        let true_count = ordered_comparison_true_count::<UInt8Type, GtOp>(&input)
-            .unwrap()
-            .unwrap();
-        assert!((true_count.expected - 5.0).abs() < 1e-9);
     }
 
     #[test]

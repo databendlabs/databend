@@ -250,6 +250,56 @@ out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(1.0), null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(10), max: UInt(20), ndv: Stat(1.0), null_count: 1, histogram: None }
 
+=== typed_comparison_predicates ===
+description: Typed comparison predicates should respect integer boundaries, nullable inputs, and histogram constants.
+expr          : i < 5
+cardinality   : 100
+estimated     : 40
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: Stat(10.0), null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(1), max: Int(5), ndv: Stat(4.0), null_count: 0, histogram: None }
+
+expr          : i > 5
+cardinality   : 100
+estimated     : 50
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: Stat(10.0), null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(5), max: Int(10), ndv: Stat(5.0), null_count: 0, histogram: None }
+
+expr          : n > 5
+cardinality   : 100
+estimated     : 35
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: Stat(10.0), null_count: 30, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(5), max: Int(10), ndv: Stat(4.0), null_count: 11, histogram: None }
+
+expr          : h >= 10
+cardinality   : 100
+estimated     : 9.999999999999998
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: Stat(10.0), null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: Int(10), max: Int(10), ndv: Stat(1.0), null_count: 0, histogram: None }
+
+expr          : h < 10
+cardinality   : 100
+estimated     : 90
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: Stat(10.0), null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: Stat(9.0), null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+
+expr          : u > 5
+cardinality   : 100
+estimated     : 45.454545454545446
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(10), ndv: Stat(11.0), null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 10, num_values: 100.0, num_distinct: 11.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: UInt(5), max: UInt(10), ndv: Stat(5.0), null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 10, num_values: 100.0, num_distinct: 11.0 }], avg_spacing: None })) }
+
 === logical_predicates ===
 description: Logical predicate composition should combine selectivity estimates and null handling.
 expr          : and_filters(a = 5, a > 3)
