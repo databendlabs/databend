@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
 use databend_common_base::runtime;
+use databend_common_catalog::session_type::SessionType;
 use databend_common_cloud_control::pb::BillingError as PbBillingError;
 use databend_common_cloud_control::pb::BillingUsageDailyRow;
 use databend_common_cloud_control::pb::GetBillingUsageDailyRequest;
@@ -27,9 +28,14 @@ use databend_common_cloud_control::pb::billing_service_server::BillingServiceSer
 use databend_common_config::InnerConfig;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_version::BUILD_INFO;
+use databend_query::interpreters::InterpreterFactory;
+use databend_query::sql::Planner;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
+use jsonb::OwnedJsonb;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -157,27 +163,56 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
         ScalarRef::String("¥")
     );
 
-    let expected_tags =
-        serde_json::to_vec(&HashMap::from([("env".to_string(), "test".to_string())]))?;
+    let expected_tags = OwnedJsonb::from_str(r#"{"env":"test"}"#)?.to_vec();
     match block.get_by_offset(6).index(0).unwrap() {
         ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_tags.as_slice()),
         other => panic!("unexpected scalar type for tags: {other:?}"),
     }
 
-    let expected_details = serde_json::to_vec(&serde_json::json!({
-        "cluster_name": "cl-00000",
-        "max_clusters": 1,
-        "size": "XSmall",
-    }))?;
+    let expected_details =
+        OwnedJsonb::from_str(r#"{"cluster_name":"cl-00000","max_clusters":1,"size":"XSmall"}"#)?
+            .to_vec();
     match block.get_by_offset(7).index(0).unwrap() {
         ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_details.as_slice()),
         other => panic!("unexpected scalar type for details: {other:?}"),
     }
 
+    let blocks = fixture
+        .execute_query(
+            "select tags:env::String, details:size::String, details:max_clusters::String \
+             from billing_usage_daily(month => '2026-03') \
+             where tags:env::String = 'test' and details:size::String = 'XSmall'",
+        )
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let block = extract_single_block(blocks);
+
+    assert_eq!(
+        block.get_by_offset(0).index(0).unwrap(),
+        ScalarRef::String("test")
+    );
+    assert_eq!(
+        block.get_by_offset(1).index(0).unwrap(),
+        ScalarRef::String("XSmall")
+    );
+    assert_eq!(
+        block.get_by_offset(2).index(0).unwrap(),
+        ScalarRef::String("1")
+    );
+
     let usage_daily_requests = requests.usage_daily.lock().unwrap().clone();
-    assert_eq!(usage_daily_requests.len(), 1);
-    assert_eq!(usage_daily_requests[0].billing_month, "2026-03");
-    assert_eq!(usage_daily_requests[0].sql_user, "'root'@'%'");
+    assert_eq!(usage_daily_requests.len(), 2);
+    assert!(
+        usage_daily_requests
+            .iter()
+            .all(|request| request.billing_month == "2026-03")
+    );
+    assert!(
+        usage_daily_requests
+            .iter()
+            .all(|request| request.sql_user == "'root'@'%'")
+    );
     assert!(!usage_daily_requests[0].tenant_id.is_empty());
     assert!(!usage_daily_requests[0].query_id.is_empty());
 
@@ -225,6 +260,58 @@ async fn test_billing_usage_daily_table_function_surfaces_task_error() -> anyhow
         .expect_err("billing usage task error should fail query");
     assert!(err.message().contains("billing usage unavailable"));
     assert!(err.message().contains("Internal"));
+
+    let _ = shutdown_tx.send(());
+    server_handle.await??;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_billing_usage_daily_table_function_requires_super_privilege() -> anyhow::Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let addr = listener.local_addr()?;
+
+    let requests = BillingRequests::default();
+    let mock = MockBillingServiceImpl {
+        requests: requests.clone(),
+        usage_daily_error: None,
+    };
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+    let server_handle = runtime::spawn(async move {
+        Server::builder()
+            .add_service(BillingServiceServer::new(mock))
+            .serve_with_incoming_shutdown(TcpListenerStream::new(listener), async {
+                let _ = shutdown_rx.await;
+            })
+            .await
+    });
+
+    let mut config: InnerConfig = ConfigBuilder::create().build();
+    config.query.common.cloud_control_grpc_server_address = Some(format!("http://{addr}"));
+    config.query.common.cloud_control_grpc_timeout = 5;
+
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let session = fixture.new_session_with_type(SessionType::Dummy).await?;
+    session
+        .set_authed_user(UserInfo::new_no_auth("billing_viewer", "%"), None)
+        .await?;
+
+    let ctx = session.create_query_context(&BUILD_INFO).await?;
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner
+        .plan_sql("select * from billing_usage_daily(month => '2026-03')")
+        .await?;
+    let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
+    let stream = executor.execute(ctx).await?;
+    let err = stream
+        .try_collect::<Vec<DataBlock>>()
+        .await
+        .expect_err("billing usage should require SUPER privilege");
+
+    assert!(err.message().contains("privilege [SUPER] is required"));
+    assert!(err.message().contains("billing_usage_daily"));
+    assert!(requests.usage_daily.lock().unwrap().is_empty());
 
     let _ = shutdown_tx.send(());
     server_handle.await??;

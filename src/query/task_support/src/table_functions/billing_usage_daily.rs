@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::DateTime;
@@ -42,6 +43,8 @@ use databend_common_expression::infer_table_schema;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::StringType;
 use databend_common_expression::types::VariantType;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
@@ -51,7 +54,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_storages_factory::Table;
-use serde_json::Value;
+use jsonb::OwnedJsonb;
 
 pub struct BillingUsageDailyTable {
     table_info: TableInfo,
@@ -169,6 +172,8 @@ impl AsyncSource for BillingUsageDailySource {
             ));
         }
 
+        ensure_billing_usage_privilege(&self.ctx).await?;
+
         let cloud_api = CloudControlApiProvider::instance();
         let tenant = self.ctx.get_tenant();
         let query_id = self.ctx.get_id();
@@ -197,6 +202,21 @@ impl AsyncSource for BillingUsageDailySource {
             .await?;
         Ok(Some(parse_billing_usage_daily_response(resp)?))
     }
+}
+
+async fn ensure_billing_usage_privilege(ctx: &Arc<dyn TableContext>) -> Result<()> {
+    if ctx
+        .validate_privilege(&GrantObject::Global, UserPrivilegeType::Super, false)
+        .await
+        .is_ok()
+    {
+        return Ok(());
+    }
+
+    let user = ctx.get_current_user()?.identity().display().to_string();
+    Err(ErrorCode::PermissionDenied(format!(
+        "Permission denied: privilege [SUPER] is required on *.* to query billing_usage_daily for user {user}",
+    )))
 }
 
 impl TableFunction for BillingUsageDailyTable {
@@ -280,7 +300,7 @@ fn parse_billing_usage_daily_response(resp: GetBillingUsageDailyResponse) -> Res
         ));
     }
 
-    Ok(parse_billing_usage_daily_to_datablock(resp))
+    parse_billing_usage_daily_to_datablock(resp)
 }
 
 fn billing_error_to_error_code(operation: &str, error: &PbBillingError) -> ErrorCode {
@@ -290,7 +310,7 @@ fn billing_error_to_error_code(operation: &str, error: &PbBillingError) -> Error
     ))
 }
 
-fn parse_billing_usage_daily_to_datablock(resp: GetBillingUsageDailyResponse) -> DataBlock {
+fn parse_billing_usage_daily_to_datablock(resp: GetBillingUsageDailyResponse) -> Result<DataBlock> {
     let mut usage_date = Vec::with_capacity(resp.rows.len());
     let mut usage_type = Vec::with_capacity(resp.rows.len());
     let mut service_type = Vec::with_capacity(resp.rows.len());
@@ -315,11 +335,14 @@ fn parse_billing_usage_daily_to_datablock(resp: GetBillingUsageDailyResponse) ->
         rate_unit.push(row.rate_unit);
         usage_in_currency.push(row.usage_in_currency);
         currency.push(row.currency);
-        tags.push(serde_json::to_vec(&row.tags).unwrap_or_else(|_| b"{}".to_vec()));
-        details.push(json_text_to_variant(&row.details));
+        let tags_json = serde_json::to_string(&row.tags).map_err(|err| {
+            ErrorCode::Internal(format!("failed to serialize billing usage tags: {err}"))
+        })?;
+        tags.push(json_text_to_variant("tags", &tags_json)?);
+        details.push(json_text_to_variant("details", &row.details)?);
     }
 
-    DataBlock::new_from_columns(vec![
+    Ok(DataBlock::new_from_columns(vec![
         StringType::from_data(usage_date),
         StringType::from_data(usage_type),
         StringType::from_data(service_type),
@@ -332,20 +355,15 @@ fn parse_billing_usage_daily_to_datablock(resp: GetBillingUsageDailyResponse) ->
         StringType::from_data(currency),
         VariantType::from_data(tags),
         VariantType::from_data(details),
-    ])
+    ]))
 }
 
-fn json_text_to_variant(raw: &str) -> Vec<u8> {
-    if raw.trim().is_empty() {
-        return b"{}".to_vec();
-    }
-
-    match serde_json::from_str::<Value>(raw) {
-        Ok(value) => serde_json::to_vec(&value).unwrap_or_else(|_| b"{}".to_vec()),
-        Err(_) => {
-            serde_json::to_vec(&Value::String(raw.to_string())).unwrap_or_else(|_| b"\"\"".to_vec())
-        }
-    }
+fn json_text_to_variant(field: &str, raw: &str) -> Result<Vec<u8>> {
+    let json = if raw.trim().is_empty() { "{}" } else { raw };
+    let jsonb = OwnedJsonb::from_str(json).map_err(|err| {
+        ErrorCode::BadBytes(format!("invalid billing usage {field} JSON value: {err}"))
+    })?;
+    Ok(jsonb.to_vec())
 }
 
 #[cfg(test)]
@@ -398,14 +416,11 @@ mod tests {
 
     #[test]
     fn test_parse_usage_daily_response_to_datablock() {
-        let expected_tags =
-            serde_json::to_vec(&HashMap::from([("env".to_string(), "test".to_string())])).unwrap();
-        let expected_details = serde_json::to_vec(&serde_json::json!({
-            "cluster_name": "cl-00000",
-            "max_clusters": 1,
-            "size": "XSmall",
-        }))
-        .unwrap();
+        let expected_tags = OwnedJsonb::from_str(r#"{"env":"test"}"#).unwrap().to_vec();
+        let expected_details =
+            OwnedJsonb::from_str(r#"{"cluster_name":"cl-00000","max_clusters":1,"size":"XSmall"}"#)
+                .unwrap()
+                .to_vec();
 
         let block = parse_billing_usage_daily_to_datablock(GetBillingUsageDailyResponse {
             rows: vec![databend_common_cloud_control::pb::BillingUsageDailyRow {
@@ -424,7 +439,8 @@ mod tests {
                     .to_string(),
             }],
             error: None,
-        });
+        })
+        .unwrap();
 
         assert_eq!(block.num_rows(), 1);
         assert_eq!(block.num_columns(), 12);
@@ -458,8 +474,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_usage_daily_response_preserves_invalid_details_as_string_variant() {
-        let block = parse_billing_usage_daily_to_datablock(GetBillingUsageDailyResponse {
+    fn test_parse_usage_daily_response_rejects_invalid_details_json() {
+        let err = parse_billing_usage_daily_to_datablock(GetBillingUsageDailyResponse {
             rows: vec![databend_common_cloud_control::pb::BillingUsageDailyRow {
                 usage_date: "2026-03-02".to_string(),
                 usage_type: "storage".to_string(),
@@ -475,13 +491,13 @@ mod tests {
                 details: "not-json".to_string(),
             }],
             error: None,
-        });
+        })
+        .expect_err("invalid details JSON should be rejected");
 
-        let expected = serde_json::to_vec(&Value::String("not-json".to_string())).unwrap();
-        match block.get_by_offset(11).index(0).unwrap() {
-            ScalarRef::Variant(bytes) => assert_eq!(bytes, expected.as_slice()),
-            other => panic!("unexpected scalar type for details: {other:?}"),
-        }
+        assert!(
+            err.message()
+                .contains("invalid billing usage details JSON value")
+        );
     }
 
     #[test]
