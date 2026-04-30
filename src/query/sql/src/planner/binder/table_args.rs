@@ -35,7 +35,7 @@ use crate::planner::QueryExecutor;
 use crate::plans::ConstantExpr;
 
 /// Check if an AST expression contains a subquery
-fn contains_subquery(expr: &Expr) -> bool {
+pub(crate) fn contains_subquery(expr: &Expr) -> bool {
     match expr {
         Expr::Subquery { .. } => true,
         Expr::InSubquery { .. } => true,
@@ -75,7 +75,7 @@ fn contains_subquery(expr: &Expr) -> bool {
 }
 
 /// Execute a subquery and extract a single scalar value from the result
-fn execute_subquery_for_scalar(
+pub(crate) fn execute_subquery_for_scalar(
     subquery_executor: &Arc<dyn QueryExecutor>,
     expr: &Expr,
 ) -> Result<Scalar> {

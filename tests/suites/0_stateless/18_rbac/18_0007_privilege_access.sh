@@ -10,7 +10,7 @@ SQL
 }
 
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql -A --user=test-user --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql_query_http_user_connect test-user password -A"
 export RM_UUID="sed -E ""s/[-a-z0-9]{32,36}/UUID/g"""
 
 run_test_user() {
@@ -185,7 +185,7 @@ rm -rf password.out
 
 ## Show grants test
 export TEST_USER_PASSWORD="password"
-export USER_A_CONNECT="bendsql -A --user=a --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_A_CONNECT="bendsql_query_http_user_connect a password -A"
 
 run_user_a() {
   cat <<SQL | $USER_A_CONNECT
@@ -240,7 +240,7 @@ echo "show columns from clusters from system" | $BENDSQL_CLIENT_CONNECT | echo $
 echo "show columns from tasks from system" | $BENDSQL_CLIENT_CONNECT | echo $?
 
 #DML privilege check
-export USER_B_CONNECT="bendsql -A --user=b --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_B_CONNECT="bendsql_query_http_user_connect b password -A"
 
 run_user_b() {
   cat <<SQL | $USER_B_CONNECT
@@ -374,7 +374,7 @@ create user c identified by '123';
 grant drop on default.t to c;
 "
 
-export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_C_CONNECT="bendsql_query_http_user_connect c 123 -A"
 
 run_user_c() {
   cat <<SQL | $USER_C_CONNECT
@@ -399,7 +399,7 @@ run_root_sql "
 drop user if exists c;
 create user c identified by '123';
 "
-export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_C_CONNECT="bendsql_query_http_user_connect c 123 -A"
 
 run_root_sql "
 set session max_threads=1000;

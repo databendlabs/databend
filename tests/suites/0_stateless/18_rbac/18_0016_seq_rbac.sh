@@ -9,9 +9,9 @@ $1
 SQL
 }
 
-export USER_A_CONNECT="bendsql -A --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_B_CONNECT="bendsql -A --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_C_CONNECT="bendsql -A --user=c --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_A_CONNECT="bendsql_query_http_user_connect a 123 -A"
+export USER_B_CONNECT="bendsql_query_http_user_connect b 123 -A"
+export USER_C_CONNECT="bendsql_query_http_user_connect c 123 -A"
 
 run_user_a() {
   cat <<SQL | $USER_A_CONNECT

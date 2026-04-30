@@ -41,6 +41,8 @@ use crate::types::decimal::DecimalSize;
 use crate::types::i256;
 use crate::visit_expr;
 
+const MAX_FUNCTION_MISMATCH_HINT_CANDIDATES: usize = 10;
+
 #[recursive::recursive]
 pub fn check<Index: ColumnIndex>(
     expr: &RawExpr<Index>,
@@ -392,22 +394,7 @@ pub fn check_function<Index: ColumnIndex>(
         return Ok(checked_candidates.pop().unwrap().0);
     }
 
-    let mut msg = if params.is_empty() {
-        format!(
-            "no function matches signature `{name}({})`, you might need to add explicit type casts.",
-            args.iter()
-                .map(|arg| arg.data_type().to_string())
-                .join(", ")
-        )
-    } else {
-        format!(
-            "no function matches signature `{name}({})({})`, you might need to add explicit type casts.",
-            params.iter().join(", "),
-            args.iter()
-                .map(|arg| arg.data_type().to_string())
-                .join(", ")
-        )
-    };
+    let mut msg = format_no_matching_function_signature(name, params, args);
 
     if !candidates.is_empty() {
         let candidates_sig: Vec<_> = candidates
@@ -426,19 +413,126 @@ pub fn check_function<Index: ColumnIndex>(
             .map(|(sig, err)| format!("  {sig:<max_len$}  : {}", err.message()))
             .join("\n");
 
-        let shorten_msg = if candidates_len > take_len {
-            format!("\n... and {} more", candidates_len - take_len)
-        } else {
-            "".to_string()
-        };
         write!(
             &mut msg,
-            "\n\ncandidate functions:\n{candidates_fail_reason}{shorten_msg}",
+            "\n\ncandidate functions:\n{candidates_fail_reason}",
         )
         .unwrap();
+        if candidates_len > take_len {
+            write!(&mut msg, "\n... and {} more", candidates_len - take_len).unwrap();
+        }
     };
 
     Err(ErrorCode::SemanticError(msg).set_span(span))
+}
+
+fn format_function_signature<Index: ColumnIndex>(
+    name: &str,
+    params: &[Scalar],
+    args: &[Expr<Index>],
+) -> String {
+    let args = args
+        .iter()
+        .map(|arg| arg.data_type().to_string())
+        .collect::<Vec<_>>();
+    format_function_signature_from_arg_types(name, params, &args)
+}
+
+fn format_function_signature_from_arg_types(
+    name: &str,
+    params: &[Scalar],
+    args: &[String],
+) -> String {
+    let args = args.iter().join(", ");
+    if params.is_empty() {
+        format!("{name}({args})")
+    } else {
+        format!("{name}({})({args})", params.iter().join(", "))
+    }
+}
+
+fn format_no_matching_function_signature<Index: ColumnIndex>(
+    name: &str,
+    params: &[Scalar],
+    args: &[Expr<Index>],
+) -> String {
+    format!(
+        "no function matches signature `{}`, you might need to add explicit type casts.",
+        format_function_signature(name, params, args)
+    )
+}
+
+pub fn format_function_argument_mismatch_hint<Index: ColumnIndex>(
+    name: &str,
+    params: &[Scalar],
+    args: &[Expr<Index>],
+    fn_registry: &FunctionRegistry,
+) -> Option<String> {
+    let name = fn_registry
+        .aliases
+        .get(name)
+        .map(|name| name.as_str())
+        .unwrap_or(name);
+
+    let candidates = fn_registry.search_candidates(name, params, args);
+    if candidates.is_empty() {
+        return None;
+    }
+
+    let auto_cast_rules = fn_registry.get_auto_cast_rules(name);
+    let dynamic_cast_rules = fn_registry.get_dynamic_cast_rules(name);
+    let mut concrete_candidates_sig = Vec::new();
+    for (_, func) in &candidates {
+        let Ok((checked_args, return_type, _)) = try_check_function(
+            args,
+            &func.signature,
+            auto_cast_rules,
+            &dynamic_cast_rules,
+            fn_registry,
+        ) else {
+            continue;
+        };
+
+        if checked_args == args {
+            return None;
+        }
+
+        concrete_candidates_sig.push(format!(
+            "{} :: {}",
+            format_function_signature(name, params, &checked_args),
+            return_type
+        ));
+    }
+
+    let mut msg = format_no_matching_function_signature(name, params, args);
+
+    let candidates_sig = if concrete_candidates_sig.is_empty() {
+        candidates
+            .iter()
+            .map(|(_, func)| func.signature.to_string())
+            .collect()
+    } else {
+        concrete_candidates_sig
+    };
+    let (mut candidates_sig, nullable_candidates_sig): (Vec<_>, Vec<_>) = candidates_sig
+        .into_iter()
+        .unique()
+        .partition(|sig| !sig.contains("NULL"));
+    candidates_sig.extend(nullable_candidates_sig);
+
+    let candidates_len = candidates_sig.len();
+    let take_len = candidates_len.min(MAX_FUNCTION_MISMATCH_HINT_CANDIDATES);
+    let candidates_sig = candidates_sig
+        .into_iter()
+        .take(take_len)
+        .map(|sig| format!("  {sig}"))
+        .join("\n");
+    write!(&mut msg, "\n\ncandidate functions:\n{candidates_sig}").unwrap();
+    if candidates_len > take_len {
+        write!(&mut msg, "\n... and {} more", candidates_len - take_len).unwrap();
+    }
+
+    Some(msg)
 }
 
 #[derive(Debug)]

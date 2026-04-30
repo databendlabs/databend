@@ -882,7 +882,7 @@ impl Binder {
     }
 
     pub(crate) fn normalize_identifier(&self, ident: &Identifier) -> Identifier {
-        normalize_identifier(ident, &self.name_resolution_ctx)
+        self.name_resolution_ctx.normalize_identifier(ident)
     }
 
     /// Bind an expr to a scalar expression.

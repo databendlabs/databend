@@ -35,6 +35,7 @@ use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
+use crate::optimizer::optimizers::SyncMaterializedCTERefOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
@@ -256,6 +257,12 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(RuleNormalizeAggregateOptimizer::new())
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
+        // Common subexpression elimination optimization
+        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
+        .add_if(
+            settings.get_enable_cse_optimizer()?,
+            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
+        )
         // Run default rewrite rules
         .add(RecursiveRuleOptimizer::new(
             opt_ctx.clone(),
@@ -263,6 +270,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ))
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
+        // Sync CTE consumer statistics with the latest producer estimates after pushdown rewrites.
+        .add(SyncMaterializedCTERefOptimizer::new())
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
@@ -283,12 +292,6 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add_if(
             settings.get_force_eager_aggregate()?,
             RuleEagerAggregation::new(opt_ctx.get_metadata()),
-        )
-        // Common subexpression elimination optimization
-        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
-        .add_if(
-            settings.get_enable_cse_optimizer()?,
-            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
         )
         // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)

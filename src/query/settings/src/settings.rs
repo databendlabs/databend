@@ -118,6 +118,7 @@ impl Settings {
             http_json_result_mode,
             headers: 0,
             http_arrow_use_jsonb: false,
+            http_arrow_use_decimal64: true,
             json_compact: false,
             json_strings: false,
             format_null_as_str,

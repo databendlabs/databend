@@ -573,8 +573,8 @@ pub fn travel_point(i: Input) -> IResult<TimeTravelPoint> {
 
 pub fn at_snapshot_or_ts(i: Input) -> IResult<TimeTravelPoint> {
     let at_snapshot = map(
-        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #literal_string ~ ")" },
-        |(_, _, _, s, _)| TimeTravelPoint::Snapshot(s),
+        rule! { "(" ~ SNAPSHOT ~ "=>" ~ #expr ~ ")" },
+        |(_, _, _, e, _)| TimeTravelPoint::Snapshot(Box::new(e)),
     );
     let at_timestamp = map(
         rule! { "(" ~ TIMESTAMP ~ "=>" ~ #expr ~ ")" },

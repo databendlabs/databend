@@ -40,8 +40,8 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_resources_management::DummyResourcesManagement;
-use databend_enterprise_row_access_policy_feature::RowAccessPolicyCacheManager;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::TempDirManager;
@@ -115,7 +115,7 @@ impl GlobalServices {
         // 4. cluster discovery init.
         ClusterDiscovery::init(config, version).await?;
 
-        SpillsBufferPool::init();
+        SpillsBufferPool::init(&config.spill)?;
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different
@@ -165,7 +165,7 @@ impl GlobalServices {
             .await?;
         }
         RoleCacheManager::init()?;
-        RowAccessPolicyCacheManager::init()?;
+        SecurityPolicyCacheManager::init()?;
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(

@@ -16,6 +16,7 @@
 
 use std::time::Duration;
 
+use databend_meta::openraft::rt::watch::WatchReceiver;
 use databend_meta::raft_store::StateMachineFeature;
 use databend_meta_admin::HttpService;
 use databend_meta_admin::HttpServiceConfig;
@@ -24,7 +25,6 @@ use databend_meta_runtime::DatabendRuntime;
 use databend_meta_test_harness::meta_service_test_harness;
 use databend_meta_test_harness::start_metasrv_cluster;
 use log::info;
-use openraft_rt::watch::WatchReceiver;
 use pretty_assertions::assert_eq;
 use test_harness::test;
 use tokio::time::Instant;

@@ -102,7 +102,7 @@ create view tmp_view(c1, c2) as select number % 3 as a, avg(number) from numbers
 query TTTTT
 describe tmp_view
 ----
-c1 TINYINT UNSIGNED NO 0 (empty)
+c1 TINYINT UNSIGNED NO NULL (empty)
 c2 DOUBLE YES NULL (empty)
 
 statement error 1018
