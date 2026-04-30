@@ -363,6 +363,15 @@ impl BindContext {
         self.columns.push(column_binding);
     }
 
+    pub fn named_window_spec(&self, window_name: &str) -> Result<WindowSpec> {
+        self.window_definitions
+            .get(window_name)
+            .ok_or_else(|| {
+                ErrorCode::SyntaxException(format!("Window definition {window_name} not found"))
+            })
+            .map(|entry| entry.value().clone())
+    }
+
     /// Assigns 1-based column positions for the current result columns.
     /// This is mainly used for derived tables/subqueries so that `$n` style
     /// ordinal references can resolve against their outputs.
@@ -941,6 +950,17 @@ impl BindContext {
         let old = self.expr_context;
         self.expr_context = new;
         old
+    }
+
+    pub fn with_expr_context<R>(
+        &mut self,
+        new: ExprContext,
+        f: impl FnOnce(&mut BindContext) -> R,
+    ) -> R {
+        let old = self.replace_expr_context(new);
+        let result = f(self);
+        self.expr_context = old;
+        result
     }
 }
 

@@ -464,6 +464,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 output_columns: agg_input_columns.to_vec(), // Will be populated based on original input
                 def: agg_input.clone(),
                 column_mapping: agg_input_columns.iter().map(|col| (*col, *col)).collect(), // Identity mapping
+                stat_info: None,
             }
             .into(),
         ));
@@ -670,6 +671,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
                 output_columns: parent_output_columns,
                 def: parent_cte.cte.child(0)?.clone(),
                 column_mapping,
+                stat_info: None,
             }
             .into(),
         ));
@@ -750,6 +752,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
             output_columns: source_output_columns.to_vec(),
             def: source_cte.cte.child(0)?.clone(),
             column_mapping,
+            stat_info: None,
         });
 
         // Apply grouping sets NULL semantics in EvalScalar

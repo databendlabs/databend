@@ -41,7 +41,7 @@ use crate::Binder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::optimizer::ir::SExpr;
-use crate::planner::binder::OrderByRewriteFlags;
+use crate::planner::binder::ExprContext;
 use crate::planner::binder::SelectInfo;
 use crate::plans::Limit;
 
@@ -232,14 +232,16 @@ impl Dataframe {
             .binder
             .normalize_select_list(&mut self.bind_context, &select_list)?;
 
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
+        let alias_catalog = select_list.alias_catalog();
+        let aliases = alias_catalog.all_aliases();
 
-        self.binder
-            .analyze_group_items(&mut self.bind_context, &select_list, &groupby)?;
+        let group_by_aliases = alias_catalog.bindings_for(ExprContext::GroupClaue);
+        self.binder.analyze_group_items(
+            &mut self.bind_context,
+            &select_list,
+            &group_by_aliases,
+            &groupby,
+        )?;
 
         if self.bind_context.aggregate_info.has_aggregate_calls()
             || self.bind_context.aggregate_info.has_group_items()
@@ -252,7 +254,7 @@ impl Dataframe {
         if let Some(having) = &having {
             let having =
                 self.binder
-                    .analyze_aggregate_having(&mut self.bind_context, &aliases, having)?;
+                    .analyze_aggregate_having(&mut self.bind_context, aliases, having)?;
             self.s_expr = self
                 .binder
                 .bind_having(&mut self.bind_context, having, self.s_expr)?;
@@ -362,7 +364,7 @@ impl Dataframe {
             &mut self.bind_context,
             &mut select_info,
             &aliases,
-            &vec![OrderByRewriteFlags::no_rewrite(); order.len()],
+            None,
             &order,
             distinct,
         )?;

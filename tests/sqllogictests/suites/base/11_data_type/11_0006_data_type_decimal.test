@@ -975,9 +975,9 @@ create table desc_decimal(c1 decimal(4,2) not null, c2 decimal(4,2) null, c3 dec
 query TTTTT
 desc desc_decimal
 ----
-c1 DECIMAL(4, 2) NO 0.00 (empty)
+c1 DECIMAL(4, 2) NO NULL (empty)
 c2 DECIMAL(4, 2) YES NULL (empty)
-c3 DECIMAL(39, 2) NO 0.00 (empty)
+c3 DECIMAL(39, 2) NO NULL (empty)
 c4 DECIMAL(39, 2) YES NULL (empty)
 
 statement ok

@@ -50,22 +50,28 @@ impl Walk for Query {
         &self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_control!(visitor.visit_query(self));
+        match visitor.visit_query(self)? {
+            VisitControl::Continue => {
+                if let Some(with) = &self.with {
+                    for cte in &with.ctes {
+                        try_walk!(cte.walk(visitor));
+                    }
+                }
+                try_walk!(self.body.walk(visitor));
+                for item in &self.order_by {
+                    try_walk!(item.walk(visitor));
+                }
+                for expr in &self.limit {
+                    try_walk!(expr.walk(visitor));
+                }
+                if let Some(offset) = &self.offset {
+                    try_walk!(offset.walk(visitor));
+                }
 
-        if let Some(with) = &self.with {
-            for cte in &with.ctes {
-                try_walk!(cte.walk(visitor));
+                visitor.leave_query(self)?;
             }
-        }
-        try_walk!(self.body.walk(visitor));
-        for item in &self.order_by {
-            try_walk!(item.walk(visitor));
-        }
-        for expr in &self.limit {
-            try_walk!(expr.walk(visitor));
-        }
-        if let Some(offset) = &self.offset {
-            try_walk!(offset.walk(visitor));
+            VisitControl::SkipChildren => {}
+            VisitControl::Break(value) => return Ok(VisitControl::Break(value)),
         }
 
         Ok(VisitControl::Continue)
@@ -77,22 +83,28 @@ impl WalkMut for Query {
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_control!(visitor.visit_query(self));
+        match visitor.visit_query(self)? {
+            VisitControl::Continue => {
+                if let Some(with) = &mut self.with {
+                    for cte in &mut with.ctes {
+                        try_walk!(cte.walk_mut(visitor));
+                    }
+                }
+                try_walk!(self.body.walk_mut(visitor));
+                for item in &mut self.order_by {
+                    try_walk!(item.walk_mut(visitor));
+                }
+                for expr in &mut self.limit {
+                    try_walk!(expr.walk_mut(visitor));
+                }
+                if let Some(offset) = &mut self.offset {
+                    try_walk!(offset.walk_mut(visitor));
+                }
 
-        if let Some(with) = &mut self.with {
-            for cte in &mut with.ctes {
-                try_walk!(cte.walk_mut(visitor));
+                visitor.leave_query(self)?;
             }
-        }
-        try_walk!(self.body.walk_mut(visitor));
-        for item in &mut self.order_by {
-            try_walk!(item.walk_mut(visitor));
-        }
-        for expr in &mut self.limit {
-            try_walk!(expr.walk_mut(visitor));
-        }
-        if let Some(offset) = &mut self.offset {
-            try_walk!(offset.walk_mut(visitor));
+            VisitControl::SkipChildren => {}
+            VisitControl::Break(value) => return Ok(VisitControl::Break(value)),
         }
 
         Ok(VisitControl::Continue)

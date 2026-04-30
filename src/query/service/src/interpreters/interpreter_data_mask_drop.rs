@@ -22,6 +22,8 @@ use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_sql::plans::DropDatamaskPolicyPlan;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_data_mask_feature::get_datamask_handler;
 
 use crate::interpreters::Interpreter;
@@ -61,6 +63,11 @@ impl Interpreter for DropDataMaskInterpreter {
             .drop_data_mask(meta_api.clone(), self.plan.clone().into())
             .await?
         {
+            SecurityPolicyCacheManager::instance().invalidate(
+                PolicyType::DataMask,
+                &tenant,
+                policy_id,
+            );
             let role_api = UserApiProvider::instance().role_api(&tenant);
             role_api
                 .revoke_ownership(&OwnershipObject::MaskingPolicy { policy_id })

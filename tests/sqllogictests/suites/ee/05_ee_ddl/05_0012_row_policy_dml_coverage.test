@@ -249,3 +249,97 @@ drop table rap_dml_test;
 
 statement ok
 drop row access policy rap_dml_policy;
+
+statement ok
+drop table if exists t_dialect_policy;
+
+statement ok
+drop row access policy if exists rap_dialect_test;
+
+statement ok
+drop masking policy if exists mask_dialect_test;
+
+## Create policies under default (PostgreSQL) dialect
+statement ok
+CREATE ROW ACCESS POLICY rap_dialect_test AS (dept STRING) RETURNS boolean ->
+  CASE WHEN dept = 'Engineering' THEN true ELSE false END;
+
+statement ok
+CREATE MASKING POLICY mask_dialect_test AS (val STRING) RETURNS STRING ->
+  CASE WHEN current_role() = 'admin' THEN val ELSE '***' END;
+
+statement ok
+create table t_dialect_policy(id int, name string, department string);
+
+statement ok
+insert into t_dialect_policy values (1, 'alice', 'Engineering'), (2, 'bob', 'Sales'), (3, 'charlie', 'Engineering');
+
+statement ok
+alter table t_dialect_policy add row access policy rap_dialect_test on (department);
+
+statement ok
+alter table t_dialect_policy modify column name set masking policy mask_dialect_test;
+
+## ---- PostgreSQL dialect (default) ----
+
+statement ok
+set sql_dialect = 'PostgreSQL';
+
+query ITT
+select * from t_dialect_policy order by id;
+----
+1 *** Engineering
+3 *** Engineering
+
+## ---- MySQL dialect ----
+
+statement ok
+set sql_dialect = 'MySQL';
+
+query ITT
+select * from t_dialect_policy order by id;
+----
+1 *** Engineering
+3 *** Engineering
+
+## ---- Hive dialect ----
+
+statement ok
+set sql_dialect = 'Hive';
+
+query ITT
+select * from t_dialect_policy order by id;
+----
+1 *** Engineering
+3 *** Engineering
+
+## ---- Experimental dialect ----
+
+statement ok
+set sql_dialect = 'Experimental';
+
+query ITT
+select * from t_dialect_policy order by id;
+----
+1 *** Engineering
+3 *** Engineering
+
+## Cleanup
+
+statement ok
+set sql_dialect = 'PostgreSQL';
+
+statement ok
+alter table t_dialect_policy drop all row access policies;
+
+statement ok
+alter table t_dialect_policy modify column name unset masking policy;
+
+statement ok
+drop table if exists t_dialect_policy;
+
+statement ok
+drop row access policy if exists rap_dialect_test;
+
+statement ok
+drop masking policy if exists mask_dialect_test;

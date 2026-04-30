@@ -221,6 +221,63 @@ Sort
                 └── limit: NONE
 
 
+=== distinct_order_by_reuses_same_aggregate_select_item ===
+description: SELECT DISTINCT should still accept an ORDER BY aggregate expression when it is already present in the select list.
+sql: SELECT DISTINCT sum(number) FROM t ORDER BY sum(number)
+status: ok
+Sort
+├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: []
+    └── Aggregate(Initial)
+        ├── group items: [sum(number) (#1) AS (#1)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [sum(number) (#1) AS (#1)]
+            └── Aggregate(Initial)
+                ├── group items: []
+                ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                └── EvalScalar
+                    ├── scalars: [t.number (#0) AS (#0)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== distinct_order_by_reuses_same_window_select_item ===
+description: SELECT DISTINCT should still accept an ORDER BY window expression when it is already present in the select list.
+sql: SELECT DISTINCT row_number() OVER (ORDER BY number) FROM t ORDER BY row_number() OVER (ORDER BY number)
+status: ok
+Sort
+├── sort keys: [row_number() OVER (ORDER BY number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: []
+    └── Aggregate(Initial)
+        ├── group items: [row_number() OVER (ORDER BY number) (#1) AS (#1)]
+        ├── aggregate functions: []
+        └── EvalScalar
+            ├── scalars: [row_number() OVER (ORDER BY number) (#1) AS (#1)]
+            └── Window
+                ├── aggregate function: row_number
+                ├── partition items: []
+                ├── order by items: [t.number (#0) AS (#0)]
+                ├── frame: [Range: Preceding(None) ~ CurrentRow]
+                └── Sort
+                    ├── sort keys: [t.number (#0) ASC NULLS LAST]
+                    ├── limit: [NONE]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
 === aggregate_argument_prefers_base_column_over_select_alias ===
 description: Inside an aggregate function, a same-name select alias should not shadow the base column.
 sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a

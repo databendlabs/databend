@@ -1070,7 +1070,190 @@ Query {
                     temporal: Some(
                         TimeTravel(
                             Snapshot(
-                                "xxxx",
+                                Literal {
+                                    span: Some(
+                                        48..54,
+                                    ),
+                                    value: String(
+                                        "xxxx",
+                                    ),
+                                },
+                            ),
+                        ),
+                    ),
+                    with_options: None,
+                    pivot: None,
+                    unpivot: None,
+                    sample: None,
+                },
+            ],
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+            qualify: None,
+        },
+    ),
+    order_by: [],
+    limit: [],
+    offset: None,
+    ignore_result: false,
+}
+
+
+---------- Input ----------
+select * from t at (snapshot => (select snapshot_id from fuse_snapshot('db', 't') limit 1))
+---------- Output ---------
+SELECT * FROM t AT (SNAPSHOT => (SELECT snapshot_id FROM fuse_snapshot('db', 't') LIMIT 1))
+---------- AST ------------
+Query {
+    span: Some(
+        0..91,
+    ),
+    with: None,
+    body: Select(
+        SelectStmt {
+            span: Some(
+                0..91,
+            ),
+            hints: None,
+            distinct: false,
+            top_n: None,
+            select_list: [
+                StarColumns {
+                    qualified: [
+                        Star(
+                            Some(
+                                7..8,
+                            ),
+                        ),
+                    ],
+                    column_filter: None,
+                },
+            ],
+            from: [
+                Table {
+                    span: Some(
+                        14..91,
+                    ),
+                    table: TableRef {
+                        catalog: None,
+                        database: None,
+                        table: Identifier {
+                            span: Some(
+                                14..15,
+                            ),
+                            name: "t",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        branch: None,
+                    },
+                    alias: None,
+                    temporal: Some(
+                        TimeTravel(
+                            Snapshot(
+                                Subquery {
+                                    span: Some(
+                                        32..90,
+                                    ),
+                                    modifier: None,
+                                    subquery: Query {
+                                        span: Some(
+                                            33..81,
+                                        ),
+                                        with: None,
+                                        body: Select(
+                                            SelectStmt {
+                                                span: Some(
+                                                    33..81,
+                                                ),
+                                                hints: None,
+                                                distinct: false,
+                                                top_n: None,
+                                                select_list: [
+                                                    AliasedExpr {
+                                                        expr: ColumnRef {
+                                                            span: Some(
+                                                                40..51,
+                                                            ),
+                                                            column: ColumnRef {
+                                                                database: None,
+                                                                table: None,
+                                                                column: Name(
+                                                                    Identifier {
+                                                                        span: Some(
+                                                                            40..51,
+                                                                        ),
+                                                                        name: "snapshot_id",
+                                                                        quote: None,
+                                                                        ident_type: None,
+                                                                    },
+                                                                ),
+                                                            },
+                                                        },
+                                                        alias: None,
+                                                    },
+                                                ],
+                                                from: [
+                                                    TableFunction {
+                                                        span: Some(
+                                                            57..81,
+                                                        ),
+                                                        lateral: false,
+                                                        name: Identifier {
+                                                            span: Some(
+                                                                57..70,
+                                                            ),
+                                                            name: "fuse_snapshot",
+                                                            quote: None,
+                                                            ident_type: None,
+                                                        },
+                                                        params: [
+                                                            Literal {
+                                                                span: Some(
+                                                                    71..75,
+                                                                ),
+                                                                value: String(
+                                                                    "db",
+                                                                ),
+                                                            },
+                                                            Literal {
+                                                                span: Some(
+                                                                    77..80,
+                                                                ),
+                                                                value: String(
+                                                                    "t",
+                                                                ),
+                                                            },
+                                                        ],
+                                                        named_params: [],
+                                                        alias: None,
+                                                        sample: None,
+                                                    },
+                                                ],
+                                                selection: None,
+                                                group_by: None,
+                                                having: None,
+                                                window_list: None,
+                                                qualify: None,
+                                            },
+                                        ),
+                                        order_by: [],
+                                        limit: [
+                                            Literal {
+                                                span: Some(
+                                                    88..89,
+                                                ),
+                                                value: UInt64(
+                                                    1,
+                                                ),
+                                            },
+                                        ],
+                                        offset: None,
+                                        ignore_result: false,
+                                    },
+                                },
                             ),
                         ),
                     ),

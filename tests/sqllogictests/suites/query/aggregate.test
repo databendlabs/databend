@@ -60,6 +60,15 @@ select typeof(sum(number::Decimal(19, 1))), typeof(sum(number::Decimal(66, 1))) 
 ----
 DECIMAL(38, 1) NULL DECIMAL(76, 1) NULL
 
+query R
+SELECT SUM(agg0) FROM (
+  SELECT SUM(0.5) AS agg0 FROM numbers(2) a, numbers(2) b
+  UNION ALL
+  SELECT SUM(0.5) AS agg0 FROM numbers(2) a, numbers(2) b
+) x
+----
+4.0
+
 query RRT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);
 ----

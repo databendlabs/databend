@@ -5,9 +5,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 export TEST_USER_NAME="owner"
 export TEST_USER_PASSWORD="password"
-export TEST_USER_CONNECT="bendsql -A --user=owner --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_USER_CONNECT="bendsql_query_http_user_connect owner password -A"
 
-export TEST_TRANSFER_USER_CONNECT="bendsql -A --user=owner1 --password=password --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export TEST_TRANSFER_USER_CONNECT="bendsql_query_http_user_connect owner1 password -A"
 
 run_root_sql "
 drop database if exists d_0002;
@@ -93,8 +93,8 @@ grant role role1 to a;
 create user b identified by '123';
 "
 
-export USER_A_CONNECT="bendsql -A --user=a --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_B_CONNECT="bendsql -A --user=b --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_A_CONNECT="bendsql_query_http_user_connect a 123 -A"
+export USER_B_CONNECT="bendsql_query_http_user_connect b 123 -A"
 
 echo "set default role role1;" | $USER_A_CONNECT
 echo "show roles;" | $USER_A_CONNECT
@@ -139,7 +139,7 @@ create user u1 identified by '123' with DEFAULT_ROLE='drop_role';
 grant role drop_role to u1;
 grant create database on *.* to role drop_role;
 "
-export USER_U1_CONNECT="bendsql -A --user=u1 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_U1_CONNECT="bendsql_query_http_user_connect u1 123 -A"
 
 echo "create database a" | $USER_U1_CONNECT
 echo "create table a.t(id int)" | $USER_U1_CONNECT
@@ -205,7 +205,7 @@ echo "set role role1;insert into db1.t1 values(1);" | $USER_U1_CONNECT
 echo "set role role1;insert into db1.t2 values(2);" | $USER_U1_CONNECT
 echo "set role role1;select * from db1.t1;" | $USER_U1_CONNECT
 echo "set role role1;select * from db1.t2;" | $USER_U1_CONNECT
-export USER_U2_CONNECT="bendsql -A --user=u2 --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_U2_CONNECT="bendsql_query_http_user_connect u2 123 -A"
 echo "set role role2;select * from db1.t1;" | $USER_U2_CONNECT
 echo "set role role2;select * from db1.t2;" | $USER_U2_CONNECT
 
