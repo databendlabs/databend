@@ -144,8 +144,7 @@ fn derive_decimal_equality_stat<Op: EqualityOp>(
         return Ok(Some(stat));
     }
 
-    let Some((input, _)) = ConstantComparison::<DecimalComparisonStat>::from_constant_args(&stat)?
-    else {
+    let Some((input, _)) = ConstantComparison::<DecimalComparisonStat>::from_args(&stat)? else {
         return Ok(None);
     };
 
@@ -155,7 +154,7 @@ fn derive_decimal_equality_stat<Op: EqualityOp>(
             DecimalComparisonStat::compare(&input.constant, &max),
         )
     });
-    let true_count = input.constant_equality_true_count(minmax_cmp, Op::NOT_EQ);
+    let true_count = input.equality_true_count(minmax_cmp, Op::NOT_EQ);
     Ok(Some(input.boolean_stat(true_count)))
 }
 
@@ -166,8 +165,7 @@ fn derive_decimal_range_stat<Op: StatComparisonOp>(
         return Ok(Some(stat));
     }
 
-    let Some((input, reverse)) =
-        ConstantComparison::<DecimalComparisonStat>::from_constant_args(&stat)?
+    let Some((input, reverse)) = ConstantComparison::<DecimalComparisonStat>::from_args(&stat)?
     else {
         return Ok(None);
     };
@@ -178,19 +176,9 @@ fn derive_decimal_range_stat<Op: StatComparisonOp>(
     let cmp_min = DecimalComparisonStat::compare(&input.constant, &min);
     let cmp_max = DecimalComparisonStat::compare(&input.constant, &max);
     Ok(if reverse {
-        Op::Reverse::estimate_minmax_range_true_count(
-            input.stat.ndv,
-            input.non_null_cardinality,
-            cmp_min,
-            cmp_max,
-        )
+        Op::Reverse::range_true_count(input.stat.ndv, input.non_null_cardinality, cmp_min, cmp_max)
     } else {
-        Op::estimate_minmax_range_true_count(
-            input.stat.ndv,
-            input.non_null_cardinality,
-            cmp_min,
-            cmp_max,
-        )
+        Op::range_true_count(input.stat.ndv, input.non_null_cardinality, cmp_min, cmp_max)
     }
     .map(|true_count| input.boolean_stat(true_count)))
 }

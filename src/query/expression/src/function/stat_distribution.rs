@@ -231,10 +231,18 @@ fn check_boolean_distribution<D>(
     stat: &StatDistribution<D>,
     distribution: &BooleanDistribution,
 ) -> Result<(), String> {
-    if !matches!(
-        stat.domain,
-        Domain::Nullable(NullableDomain { value: Some(box Domain::Boolean(_)), .. })|Domain::Boolean(_)
-    ) {
+    let valid_domain = match &stat.domain {
+        Domain::Boolean(_) => true,
+        Domain::Nullable(NullableDomain {
+            value: Some(box Domain::Boolean(_)),
+            ..
+        }) => true,
+        Domain::Nullable(NullableDomain { value: None, .. }) => {
+            distribution.true_count.upper == 0.0
+        }
+        _ => false,
+    };
+    if !valid_domain {
         return Err(format!(
             "boolean distribution requires boolean non-null value domain, got {:?}",
             stat.domain
@@ -340,7 +348,7 @@ mod tests {
 
         valid.check_consistency().unwrap();
 
-        let invalid = ReturnStat {
+        let all_null = ReturnStat {
             domain: Domain::Nullable(NullableDomain {
                 has_null: true,
                 value: None,
@@ -349,6 +357,20 @@ mod tests {
             null_count: 10,
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(0.0),
+            }),
+        };
+
+        all_null.check_consistency().unwrap();
+
+        let invalid = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: Ndv::Max(1.0),
+            null_count: 10,
+            distribution: OwnedDistribution::Boolean(BooleanDistribution {
+                true_count: StatEstimate::new(0.0, 0.5, 1.0),
             }),
         };
 

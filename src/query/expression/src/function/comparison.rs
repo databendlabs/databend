@@ -33,7 +33,7 @@ pub trait StatComparisonOp {
     const SELECT_LESS: bool;
     const INCLUDE_EQUAL: bool;
 
-    fn estimate_minmax_range_true_count(
+    fn range_true_count(
         ndv: Ndv,
         cardinality: f64,
         cmp_min: Ordering,
@@ -138,7 +138,7 @@ pub trait ConstantComparisonAdapter {
 }
 
 impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
-    pub fn from_constant_args(stat: &'s StatBinaryArg<'a>) -> Result<Option<(Self, bool)>, String> {
+    pub fn from_args(stat: &'s StatBinaryArg<'a>) -> Result<Option<(Self, bool)>, String> {
         if let Some(input) =
             Self::new(&stat.args[0], &stat.args[1], stat.cardinality)?.map(|input| (input, false))
         {
@@ -196,30 +196,32 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
     }
 
     pub fn boolean_stat(&self, true_count: StatEstimate) -> ReturnStat {
+        let has_true = true_count.upper > 0.0;
+        let has_false = true_count.lower < self.non_null_cardinality;
+        let boolean_domain = BooleanDomain {
+            has_true,
+            has_false,
+        };
+        let value_domain = (has_true || has_false || self.null_count == 0)
+            .then(|| Box::new(Domain::Boolean(boolean_domain)));
         let domain = if self.nullable {
             Domain::Nullable(NullableDomain {
                 has_null: self.null_count != 0,
-                value: Some(Box::new(Domain::Boolean(BooleanDomain {
-                    has_true: true,
-                    has_false: true,
-                }))),
+                value: value_domain,
             })
         } else {
-            Domain::Boolean(BooleanDomain {
-                has_true: true,
-                has_false: true,
-            })
+            Domain::Boolean(boolean_domain)
         };
-
+        let possible_values = has_true as u8 + has_false as u8;
         ReturnStat {
             domain,
-            ndv: Ndv::Stat(2.0),
+            ndv: Ndv::Stat(possible_values as f64),
             null_count: self.null_count,
             distribution: OwnedDistribution::Boolean(BooleanDistribution { true_count }),
         }
     }
 
-    pub fn constant_equality_true_count(
+    pub fn equality_true_count(
         &self,
         minmax_cmp: Option<(Ordering, Ordering)>,
         not_eq: bool,
@@ -271,6 +273,131 @@ pub fn estimate_ndv_true_count(ndv: Ndv, not_eq: bool, cardinality: f64) -> Stat
     let expected = selectivity * cardinality;
     match ndv {
         Ndv::Stat(_) => StatEstimate::exact(expected),
-        Ndv::Max(_) => StatEstimate::new(0.0, expected, cardinality),
+        Ndv::Max(_) => {
+            if not_eq {
+                StatEstimate::new(0.0, expected, expected)
+            } else {
+                StatEstimate::new(expected, expected, cardinality)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestAdapter;
+
+    impl ConstantComparisonAdapter for TestAdapter {
+        type Value = ();
+        type Domain = ();
+
+        fn constant(_scalar: Scalar) -> Result<Self::Value, String> {
+            unimplemented!()
+        }
+
+        fn domain(_domain: &Domain) -> Result<Self::Domain, String> {
+            unimplemented!()
+        }
+
+        fn compare(_left: &Self::Value, _right: &Self::Value) -> Ordering {
+            unimplemented!()
+        }
+    }
+
+    fn test_comparison<'a>(
+        stat: &'a ArgStat<'a>,
+        non_null_cardinality: f64,
+        null_count: u64,
+        nullable: bool,
+    ) -> ConstantComparison<'a, 'a, TestAdapter> {
+        ConstantComparison {
+            stat,
+            constant: (),
+            domain: None,
+            non_null_cardinality,
+            null_count,
+            nullable,
+            _a: PhantomData,
+        }
+    }
+
+    #[test]
+    fn test_boolean_stat_uses_true_count_domain_and_ndv() {
+        let stat = ArgStat {
+            domain: Domain::Boolean(BooleanDomain {
+                has_true: true,
+                has_false: true,
+            }),
+            ndv: Ndv::Stat(2.0),
+            null_count: 0,
+            distribution: crate::stat_distribution::BorrowedDistribution::Unknown,
+        };
+        let comparison = test_comparison(&stat, 100.0, 0, false);
+
+        let all_false = comparison.boolean_stat(StatEstimate::exact(0.0));
+        assert_eq!(
+            all_false.domain,
+            Domain::Boolean(BooleanDomain {
+                has_true: false,
+                has_false: true,
+            })
+        );
+        assert!(matches!(all_false.ndv, Ndv::Stat(1.0)));
+
+        let all_true = comparison.boolean_stat(StatEstimate::exact(100.0));
+        assert_eq!(
+            all_true.domain,
+            Domain::Boolean(BooleanDomain {
+                has_true: true,
+                has_false: false,
+            })
+        );
+        assert!(matches!(all_true.ndv, Ndv::Stat(1.0)));
+
+        let uncertain = comparison.boolean_stat(StatEstimate::new(10.0, 10.0, 100.0));
+        assert_eq!(
+            uncertain.domain,
+            Domain::Boolean(BooleanDomain {
+                has_true: true,
+                has_false: true,
+            })
+        );
+        assert!(matches!(uncertain.ndv, Ndv::Stat(2.0)));
+    }
+
+    #[test]
+    fn test_boolean_stat_omits_nullable_value_domain_without_non_null_values() {
+        let stat = ArgStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: Ndv::Stat(0.0),
+            null_count: 10,
+            distribution: crate::stat_distribution::BorrowedDistribution::Unknown,
+        };
+        let comparison = test_comparison(&stat, 0.0, 10, true);
+
+        let output = comparison.boolean_stat(StatEstimate::exact(0.0));
+        assert_eq!(
+            output.domain,
+            Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            })
+        );
+        assert!(matches!(output.ndv, Ndv::Stat(0.0)));
+        output.check_consistency().unwrap();
+    }
+
+    #[test]
+    fn test_estimate_ndv_true_count_uses_max_ndv_bounds() {
+        let eq_count = estimate_ndv_true_count(Ndv::Max(10.0), false, 100.0);
+        assert_eq!(eq_count, StatEstimate::new(10.0, 10.0, 100.0));
+
+        let not_eq_count = estimate_ndv_true_count(Ndv::Max(10.0), true, 100.0);
+        assert_eq!(not_eq_count, StatEstimate::new(0.0, 90.0, 90.0));
     }
 }

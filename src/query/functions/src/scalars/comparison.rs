@@ -265,12 +265,11 @@ where
         return Ok(Some(stat));
     }
 
-    let Some((input, _)) = ConstantComparison::<TypedComparisonStat<T>>::from_constant_args(&stat)?
-    else {
+    let Some((input, _)) = ConstantComparison::<TypedComparisonStat<T>>::from_args(&stat)? else {
         return Ok(None);
     };
 
-    let true_count = input.constant_equality_true_count(
+    let true_count = input.equality_true_count(
         input
             .domain
             .as_ref()
@@ -298,8 +297,7 @@ where
         return Ok(Some(stat));
     }
 
-    let Some((input, reverse)) =
-        ConstantComparison::<TypedComparisonStat<T>>::from_constant_args(&stat)?
+    let Some((input, reverse)) = ConstantComparison::<TypedComparisonStat<T>>::from_args(&stat)?
     else {
         return Ok(None);
     };
@@ -351,7 +349,7 @@ where
         return Ok(None);
     };
 
-    Ok(Op::estimate_minmax_range_true_count(
+    Ok(Op::range_true_count(
         input.stat.ndv,
         input.non_null_cardinality,
         cmp_min,
@@ -2169,8 +2167,10 @@ mod tests {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
     use databend_common_expression::stat_distribution::Ndv;
+    use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::NumberDomain;
     use databend_common_expression::types::SimpleDomain;
+    use databend_common_expression::types::UInt8Type;
     use databend_common_expression::types::nullable::NullableDomain;
     use databend_common_expression::types::string::StringDomain;
     use jsonb::OwnedJsonb;
@@ -2225,11 +2225,10 @@ mod tests {
             cardinality: 10.0,
             args: &args,
         };
-        let input =
-            ConstantComparison::<TypedComparisonStat<NumberType<i64>>>::from_constant_args(&stat)
-                .unwrap()
-                .unwrap()
-                .0;
+        let input = ConstantComparison::<TypedComparisonStat<Int64Type>>::from_args(&stat)
+            .unwrap()
+            .unwrap()
+            .0;
         let range = IntegerRangeComparison::from_input(&input).unwrap();
 
         let lt_count = range.true_count::<LtOp>();
@@ -2263,7 +2262,7 @@ mod tests {
             cardinality: 10.0,
             args: &args,
         };
-        let output = derive_comparison_stat::<NumberType<i64>, GtOp>(stat)
+        let output = derive_comparison_stat::<Int64Type, GtOp>(stat)
             .unwrap()
             .unwrap();
         let true_count = output.boolean_distribution().unwrap().true_count;
@@ -2296,7 +2295,7 @@ mod tests {
             args: &args,
         };
 
-        let output = derive_comparison_stat::<NumberType<i64>, GtOp>(stat)
+        let output = derive_comparison_stat::<Int64Type, GtOp>(stat)
             .unwrap()
             .unwrap();
 
@@ -2335,14 +2334,13 @@ mod tests {
             cardinality: 11.0,
             args: &args,
         };
-        let input =
-            ConstantComparison::<TypedComparisonStat<NumberType<u8>>>::from_constant_args(&stat)
-                .unwrap()
-                .unwrap()
-                .0;
+        let input = ConstantComparison::<TypedComparisonStat<UInt8Type>>::from_args(&stat)
+            .unwrap()
+            .unwrap()
+            .0;
 
         assert_eq!(input.constant, 5_u8);
-        let true_count = ordered_comparison_true_count::<NumberType<u8>, GtOp>(&input)
+        let true_count = ordered_comparison_true_count::<UInt8Type, GtOp>(&input)
             .unwrap()
             .unwrap();
         assert!((true_count.expected - 5.0).abs() < 1e-9);
