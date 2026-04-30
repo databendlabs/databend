@@ -39,8 +39,6 @@ use databend_common_storages_iceberg::IcebergInspectTable;
 use databend_common_storages_stream::stream_status_table_func::StreamStatusTable;
 use databend_meta_client::types::MetaId;
 #[cfg(feature = "task-support")]
-use databend_query_task_support::table_functions::BillingUsageDailyTable;
-#[cfg(feature = "task-support")]
 use databend_query_task_support::table_functions::TaskDependentsEnableTable;
 #[cfg(feature = "task-support")]
 use databend_query_task_support::table_functions::TaskDependentsTable;
@@ -51,6 +49,7 @@ use databend_storages_common_table_meta::table_id_ranges::SYS_TBL_FUNC_ID_BEGIN;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::BillingUsageDailyTable;
 use super::LicenseInfoTable;
 use super::TenantQuotaTable;
 use super::others::UdfEchoTable;
@@ -111,9 +110,6 @@ pub struct TableFunctionFactory {
 
 impl TableFunctionFactory {
     pub fn create(config: &InnerConfig) -> Self {
-        #[cfg(not(feature = "task-support"))]
-        let _ = config;
-
         let mut id = SYS_TBL_FUNC_ID_BEGIN;
         let mut next_id = || -> MetaId {
             if id >= SYS_TBL_FUC_ID_END {
@@ -346,7 +342,14 @@ impl TableFunctionFactory {
                 "task_history".to_string(),
                 (next_id(), Arc::new(TaskHistoryTable::create)),
             );
+        }
 
+        if config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_some()
+        {
             creators.insert(
                 "billing_usage_daily".to_string(),
                 (next_id(), Arc::new(BillingUsageDailyTable::create)),

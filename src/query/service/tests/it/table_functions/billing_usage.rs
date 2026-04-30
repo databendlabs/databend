@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+use chrono::NaiveDate;
 use databend_common_base::runtime;
 use databend_common_catalog::session_type::SessionType;
 use databend_common_cloud_control::pb::BillingError as PbBillingError;
@@ -27,11 +28,15 @@ use databend_common_cloud_control::pb::billing_service_server::BillingService;
 use databend_common_cloud_control::pb::billing_service_server::BillingServiceServer;
 use databend_common_config::InnerConfig;
 use databend_common_expression::DataBlock;
+use databend_common_expression::NumberScalar;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::types::DecimalScalar;
+use databend_common_expression::types::DecimalSize;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_version::BUILD_INFO;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sql::Planner;
+use databend_query::table_functions::TableFunctionFactory;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestFixture;
 use futures::TryStreamExt;
@@ -101,6 +106,26 @@ fn extract_single_block(blocks: Vec<DataBlock>) -> DataBlock {
     block
 }
 
+fn date_days(date: &str) -> i32 {
+    let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap();
+    let epoch = NaiveDate::from_ymd_opt(1970, 1, 1).unwrap();
+    date.signed_duration_since(epoch).num_days() as i32
+}
+
+#[test]
+fn test_billing_usage_daily_table_function_registered_only_with_cloud_control() {
+    let config: InnerConfig = ConfigBuilder::create().build();
+    let factory = TableFunctionFactory::create(&config);
+    assert!(!factory.exists("billing_usage_daily"));
+
+    let mut config: InnerConfig = ConfigBuilder::create().build();
+    config.query.common.cloud_control_grpc_server_address =
+        Some("http://127.0.0.1:65535".to_string());
+    let factory = TableFunctionFactory::create(&config);
+    assert!(factory.exists("billing_usage_daily"));
+    assert!(factory.exists("BILLING_USAGE_DAILY"));
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -130,7 +155,7 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
 
     let blocks = fixture
         .execute_query(
-            "select usage_date, usage_type, service_type, resource_name, usage_in_currency, currency, tags, details \
+            "select usage_date, usage_type, service_type, resource_name, usage, rate, usage_in_currency, currency, tags, details \
              from billing_usage_daily(start_date => '2026-03-01', end_date => '2026-03-31')",
         )
         .await?
@@ -140,7 +165,7 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
 
     assert_eq!(
         block.get_by_offset(0).index(0).unwrap(),
-        ScalarRef::String("2026-03-02")
+        ScalarRef::Date(date_days("2026-03-02"))
     );
     assert_eq!(
         block.get_by_offset(1).index(0).unwrap(),
@@ -156,15 +181,26 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
     );
     assert_eq!(
         block.get_by_offset(4).index(0).unwrap(),
-        ScalarRef::String("0.737")
+        ScalarRef::Decimal(DecimalScalar::Decimal128(
+            2653,
+            DecimalSize::new_unchecked(38, 0)
+        ))
+    );
+    assert_eq!(block.get_by_offset(5).index(0).unwrap(), ScalarRef::Null);
+    assert_eq!(
+        block.get_by_offset(6).index(0).unwrap(),
+        ScalarRef::Decimal(DecimalScalar::Decimal128(
+            737_000_000_000,
+            DecimalSize::new_unchecked(38, 12)
+        ))
     );
     assert_eq!(
-        block.get_by_offset(5).index(0).unwrap(),
+        block.get_by_offset(7).index(0).unwrap(),
         ScalarRef::String("¥")
     );
 
     let expected_tags = OwnedJsonb::from_str(r#"{"env":"test"}"#)?.to_vec();
-    match block.get_by_offset(6).index(0).unwrap() {
+    match block.get_by_offset(8).index(0).unwrap() {
         ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_tags.as_slice()),
         other => panic!("unexpected scalar type for tags: {other:?}"),
     }
@@ -172,10 +208,39 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
     let expected_details =
         OwnedJsonb::from_str(r#"{"cluster_name":"cl-00000","max_clusters":1,"size":"XSmall"}"#)?
             .to_vec();
-    match block.get_by_offset(7).index(0).unwrap() {
+    match block.get_by_offset(9).index(0).unwrap() {
         ScalarRef::Variant(bytes) => assert_eq!(bytes, expected_details.as_slice()),
         other => panic!("unexpected scalar type for details: {other:?}"),
     }
+
+    let blocks = fixture
+        .execute_query(
+            "select count(), sum(usage), sum(usage_in_currency) \
+             from billing_usage_daily(start_date => '2026-03-01', end_date => '2026-03-31') \
+             where usage_date = to_date('2026-03-02') and usage = 2653 and usage_in_currency = 0.737 and rate is null",
+        )
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+    let block = extract_single_block(blocks);
+    assert_eq!(
+        block.get_by_offset(0).index(0).unwrap(),
+        ScalarRef::Number(NumberScalar::UInt64(1))
+    );
+    assert_eq!(
+        block.get_by_offset(1).index(0).unwrap(),
+        ScalarRef::Decimal(DecimalScalar::Decimal128(
+            2653,
+            DecimalSize::new_unchecked(38, 0)
+        ))
+    );
+    assert_eq!(
+        block.get_by_offset(2).index(0).unwrap(),
+        ScalarRef::Decimal(DecimalScalar::Decimal128(
+            737_000_000_000,
+            DecimalSize::new_unchecked(38, 12)
+        ))
+    );
 
     let blocks = fixture
         .execute_query(
@@ -202,7 +267,7 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
     );
 
     let usage_daily_requests = requests.usage_daily.lock().unwrap().clone();
-    assert_eq!(usage_daily_requests.len(), 2);
+    assert_eq!(usage_daily_requests.len(), 3);
     assert!(
         usage_daily_requests
             .iter()
