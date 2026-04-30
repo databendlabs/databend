@@ -90,7 +90,7 @@ impl TableContextAuthorization for QueryContext {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         self.shared
             .session
             .get_visibility_checker(ignore_ownership, object)

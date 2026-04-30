@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::RoleInfo;
@@ -43,7 +45,7 @@ pub trait TableContextAuthorization: Send + Sync {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker>;
+    ) -> Result<Arc<GrantObjectVisibilityChecker>>;
 
     /// Returns a grant-only visibility checker (no ownership loaded).
     /// Callers handle ownership lazily via the public helper.

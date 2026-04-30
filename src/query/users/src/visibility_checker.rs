@@ -319,12 +319,9 @@ impl GrantObjectVisibilityChecker {
         let mut granted_masking_policies_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
         let mut granted_row_access_policies_id: FastHashSet<u64> = FastHashSet::with_capacity(16);
 
-        let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> =
-            FxHashSet::default();
-        let mut extra_databases: FxHashSet<(Arc<str>, Arc<str>)> =
-            FxHashSet::default();
-        let mut granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)> =
-            FxHashSet::default();
+        let mut granted_databases: FxHashSet<(Arc<str>, Arc<str>)> = FxHashSet::default();
+        let mut extra_databases: FxHashSet<(Arc<str>, Arc<str>)> = FxHashSet::default();
+        let mut granted_tables: FxHashSet<(Arc<str>, Arc<str>, Arc<str>)> = FxHashSet::default();
 
         let mut granted_udfs: FxHashSet<Arc<str>> = FxHashSet::default();
         let mut granted_write_stages: FxHashSet<Arc<str>> = FxHashSet::default();
@@ -595,10 +592,11 @@ impl GrantObjectVisibilityChecker {
                     db_id,
                 } => {
                     let catalog_id = checker.catalog_pool.get_or_insert(catalog_name);
-                    let db_set =
-                        fast_map_get_or_insert(&mut checker.granted_databases_id, catalog_id, || {
-                            FastHashSet::with_capacity(estimated_dbs_per_catalog)
-                        });
+                    let db_set = fast_map_get_or_insert(
+                        &mut checker.granted_databases_id,
+                        catalog_id,
+                        || FastHashSet::with_capacity(estimated_dbs_per_catalog),
+                    );
                     let _ = db_set.set_insert(*db_id);
                     let extra_set =
                         fast_map_get_or_insert(&mut checker.extra_databases_id, catalog_id, || {
@@ -612,9 +610,10 @@ impl GrantObjectVisibilityChecker {
                     table_id,
                 } => {
                     let catalog_id = checker.catalog_pool.get_or_insert(catalog_name);
-                    let db_map = fast_map_get_or_insert(&mut checker.granted_tables_id, catalog_id, || {
-                        FastHashMap::with_capacity(estimated_dbs_per_catalog)
-                    });
+                    let db_map =
+                        fast_map_get_or_insert(&mut checker.granted_tables_id, catalog_id, || {
+                            FastHashMap::with_capacity(estimated_dbs_per_catalog)
+                        });
                     let table_set = fast_map_get_or_insert(db_map, *db_id, || {
                         FastHashSet::with_capacity(estimated_tables_per_db)
                     });
@@ -651,7 +650,9 @@ impl GrantObjectVisibilityChecker {
                     let _ = checker.granted_masking_policies_id.set_insert(*policy_id);
                 }
                 OwnershipObject::RowAccessPolicy { policy_id } => {
-                    let _ = checker.granted_row_access_policies_id.set_insert(*policy_id);
+                    let _ = checker
+                        .granted_row_access_policies_id
+                        .set_insert(*policy_id);
                 }
             }
         }
@@ -1100,5 +1101,3 @@ pub async fn filter_db_tables_by_visibility(
         db_visible,
     })
 }
-
-

@@ -614,7 +614,7 @@ impl TableContextAuthorization for CtxDelegation {
         &self,
         _ignore_ownership: bool,
         _object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         todo!()
     }
 
@@ -1219,7 +1219,7 @@ impl Catalog for FakedCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -1229,7 +1229,7 @@ impl Catalog for FakedCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

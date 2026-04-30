@@ -750,7 +750,7 @@ where TablesTable<WITH_HISTORY, WITHOUT_VIEW>: HistoryAware
                 (None, HashMap::new())
             } else {
                 let checker = ctx.get_visibility_checker(false, Object::All).await?;
-                let own = if get_owner_field && !checker.has_global_db_table_privilege() {
+                let own = if get_owner_field {
                     let t = std::time::Instant::now();
                     let result = user_api.list_ownerships(&tenant).await.unwrap_or_default();
                     trace!(

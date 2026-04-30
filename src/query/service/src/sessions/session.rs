@@ -372,7 +372,7 @@ impl Session {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         self.privilege_mgr()
             .get_visibility_checker(ignore_ownership, object)
             .await
