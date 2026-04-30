@@ -192,7 +192,8 @@ impl AsyncSource for BillingUsageDailySource {
         );
         let req = GetBillingUsageDailyRequest {
             tenant_id: tenant.tenant_name().to_string(),
-            billing_month: self.args_parsed.month.clone(),
+            start_date: self.args_parsed.start_date.clone(),
+            end_date: self.args_parsed.end_date.clone(),
             sql_user: user,
             query_id,
         };
@@ -232,22 +233,25 @@ impl TableFunction for BillingUsageDailyTable {
 
 #[derive(Clone, Debug)]
 struct BillingUsageDailyArgsParsed {
-    month: String,
+    start_date: String,
+    end_date: String,
 }
 
 impl BillingUsageDailyArgsParsed {
     fn parse(table_args: &TableArgs) -> Result<Self> {
         let args = table_args.expect_all_named("billing_usage_daily")?;
-        if args.len() != 1 {
+        if args.is_empty() || args.len() > 2 {
             return Err(ErrorCode::BadArguments(
-                "billing_usage_daily requires exactly one named argument: month".to_string(),
+                "billing_usage_daily requires named argument: start_date, and optional argument: end_date".to_string(),
             ));
         }
 
-        let mut month = None;
+        let mut start_date = None;
+        let mut end_date = None;
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
-                "month" => month = v.as_string().cloned(),
+                "start_date" => start_date = v.as_string().cloned(),
+                "end_date" => end_date = v.as_string().cloned(),
                 _ => {
                     return Err(ErrorCode::BadArguments(format!(
                         "unknown param {} for billing_usage_daily",
@@ -257,22 +261,35 @@ impl BillingUsageDailyArgsParsed {
             }
         }
 
-        let month = month.ok_or_else(|| {
+        let start_date = start_date.ok_or_else(|| {
             ErrorCode::BadArguments(
-                "billing_usage_daily requires named string argument: month".to_string(),
+                "billing_usage_daily requires named string argument: start_date".to_string(),
             )
         })?;
+        let start = parse_date_arg("start_date", &start_date)?;
 
-        validate_month(&month)?;
-        Ok(Self { month })
+        let end_date = end_date.unwrap_or_else(|| start_date.clone());
+        let end = parse_date_arg("end_date", &end_date)?;
+        if end < start {
+            return Err(ErrorCode::BadArguments(
+                "end_date must be greater than or equal to start_date".to_string(),
+            ));
+        }
+
+        Ok(Self {
+            start_date,
+            end_date,
+        })
     }
 }
 
-fn validate_month(month: &str) -> Result<()> {
-    NaiveDate::parse_from_str(&format!("{month}-01"), "%Y-%m-%d").map_err(|_| {
-        ErrorCode::BadArguments("invalid month format, expected YYYY-MM".to_string())
-    })?;
-    Ok(())
+fn parse_date_arg(name: &str, date: &str) -> Result<NaiveDate> {
+    parse_date(date)
+        .map_err(|_| ErrorCode::BadArguments(format!("invalid {name} format, expected YYYY-MM-DD")))
+}
+
+fn parse_date(date: &str) -> std::result::Result<NaiveDate, chrono::ParseError> {
+    NaiveDate::parse_from_str(date, "%Y-%m-%d")
 }
 
 fn billing_usage_daily_schema() -> DataSchemaRef {
@@ -378,40 +395,60 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_args_accepts_named_month() {
+    fn test_parse_args_accepts_start_date_only() {
         let args = TableArgs::new_named(HashMap::from([(
-            "month".to_string(),
-            Scalar::String("2026-03".to_string()),
+            "start_date".to_string(),
+            Scalar::String("2026-03-02".to_string()),
         )]));
 
         let parsed = BillingUsageDailyArgsParsed::parse(&args).unwrap();
-        assert_eq!(parsed.month, "2026-03");
+        assert_eq!(parsed.start_date, "2026-03-02");
+        assert_eq!(parsed.end_date, "2026-03-02");
     }
 
     #[test]
-    fn test_parse_args_accepts_uppercase_named_month() {
-        let args = TableArgs::new_named(HashMap::from([(
-            "MONTH".to_string(),
-            Scalar::String("2026-03".to_string()),
-        )]));
+    fn test_parse_args_accepts_uppercase_named_date_range() {
+        let args = TableArgs::new_named(HashMap::from([
+            (
+                "START_DATE".to_string(),
+                Scalar::String("2026-03-01".to_string()),
+            ),
+            (
+                "END_DATE".to_string(),
+                Scalar::String("2026-03-31".to_string()),
+            ),
+        ]));
 
         let parsed = BillingUsageDailyArgsParsed::parse(&args).unwrap();
-        assert_eq!(parsed.month, "2026-03");
+        assert_eq!(parsed.start_date, "2026-03-01");
+        assert_eq!(parsed.end_date, "2026-03-31");
     }
 
     #[test]
-    fn test_parse_args_rejects_non_named_or_invalid_month() {
-        let positioned = TableArgs::new_positioned(vec![Scalar::String("2026-03".to_string())]);
+    fn test_parse_args_rejects_non_named_or_invalid_date_range() {
+        let positioned = TableArgs::new_positioned(vec![Scalar::String("2026-03-01".to_string())]);
         assert!(BillingUsageDailyArgsParsed::parse(&positioned).is_err());
 
         let missing = TableArgs::new_named(HashMap::new());
         assert!(BillingUsageDailyArgsParsed::parse(&missing).is_err());
 
         let invalid = TableArgs::new_named(HashMap::from([(
-            "month".to_string(),
-            Scalar::String("202603".to_string()),
+            "start_date".to_string(),
+            Scalar::String("20260301".to_string()),
         )]));
         assert!(BillingUsageDailyArgsParsed::parse(&invalid).is_err());
+
+        let reversed = TableArgs::new_named(HashMap::from([
+            (
+                "start_date".to_string(),
+                Scalar::String("2026-03-02".to_string()),
+            ),
+            (
+                "end_date".to_string(),
+                Scalar::String("2026-03-01".to_string()),
+            ),
+        ]));
+        assert!(BillingUsageDailyArgsParsed::parse(&reversed).is_err());
     }
 
     #[test]

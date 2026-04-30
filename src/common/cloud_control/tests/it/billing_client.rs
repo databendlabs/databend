@@ -42,7 +42,7 @@ impl BillingService for MockBillingService {
     ) -> std::result::Result<Response<GetBillingUsageDailyResponse>, Status> {
         Ok(Response::new(GetBillingUsageDailyResponse {
             rows: vec![BillingUsageDailyRow {
-                usage_date: request.into_inner().billing_month,
+                usage_date: request.into_inner().start_date,
                 usage_type: "compute".to_string(),
                 service_type: "WAREHOUSE_METERING".to_string(),
                 resource_name: "default".to_string(),
@@ -94,13 +94,14 @@ async fn test_billing_client_success_cases() -> anyhow::Result<()> {
     let resp = client
         .get_billing_usage_daily(Request::new(GetBillingUsageDailyRequest {
             tenant_id: "tenant".to_string(),
-            billing_month: "2026-03".to_string(),
+            start_date: "2026-03-01".to_string(),
+            end_date: "2026-03-31".to_string(),
             sql_user: "root".to_string(),
             query_id: "query-1".to_string(),
         }))
         .await?;
     assert_eq!(resp.rows.len(), 1);
-    assert_eq!(resp.rows[0].usage_date, "2026-03");
+    assert_eq!(resp.rows[0].usage_date, "2026-03-01");
     assert_eq!(resp.rows[0].usage_type, "compute");
     assert_eq!(resp.rows[0].resource_name, "default");
 

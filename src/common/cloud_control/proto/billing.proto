@@ -10,9 +10,10 @@ message BillingError {
 
 message GetBillingUsageDailyRequest {
   string tenant_id = 1;
-  string billing_month = 2; // YYYY-MM
-  string sql_user = 3; // audit only, empty means absent
-  string query_id = 4; // audit only, empty means absent
+  string start_date = 2; // YYYY-MM-DD
+  string end_date = 3; // YYYY-MM-DD, empty means start_date
+  string sql_user = 4; // audit only, empty means absent
+  string query_id = 5; // audit only, empty means absent
 }
 
 message BillingUsageDailyRow {

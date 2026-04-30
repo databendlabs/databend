@@ -131,7 +131,7 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
     let blocks = fixture
         .execute_query(
             "select usage_date, usage_type, service_type, resource_name, usage_in_currency, currency, tags, details \
-             from billing_usage_daily(month => '2026-03')",
+             from billing_usage_daily(start_date => '2026-03-01', end_date => '2026-03-31')",
         )
         .await?
         .try_collect::<Vec<DataBlock>>()
@@ -180,7 +180,7 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
     let blocks = fixture
         .execute_query(
             "select tags:env::String, details:size::String, details:max_clusters::String \
-             from billing_usage_daily(month => '2026-03') \
+             from billing_usage_daily(start_date => '2026-03-01', end_date => '2026-03-31') \
              where tags:env::String = 'test' and details:size::String = 'XSmall'",
         )
         .await?
@@ -206,7 +206,12 @@ async fn test_billing_usage_daily_table_function_via_mock_grpc() -> anyhow::Resu
     assert!(
         usage_daily_requests
             .iter()
-            .all(|request| request.billing_month == "2026-03")
+            .all(|request| request.start_date == "2026-03-01")
+    );
+    assert!(
+        usage_daily_requests
+            .iter()
+            .all(|request| request.end_date == "2026-03-31")
     );
     assert!(
         usage_daily_requests
@@ -252,7 +257,7 @@ async fn test_billing_usage_daily_table_function_surfaces_task_error() -> anyhow
     let fixture = TestFixture::setup_with_config(&config).await?;
 
     let stream = fixture
-        .execute_query("select * from billing_usage_daily(month => '2026-03')")
+        .execute_query("select * from billing_usage_daily(start_date => '2026-03-01')")
         .await?;
     let err = stream
         .try_collect::<Vec<DataBlock>>()
@@ -300,7 +305,7 @@ async fn test_billing_usage_daily_table_function_requires_super_privilege() -> a
     let ctx = session.create_query_context(&BUILD_INFO).await?;
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner
-        .plan_sql("select * from billing_usage_daily(month => '2026-03')")
+        .plan_sql("select * from billing_usage_daily(start_date => '2026-03-01')")
         .await?;
     let executor = InterpreterFactory::get(ctx.clone(), &plan).await?;
     let stream = executor.execute(ctx).await?;
