@@ -14,8 +14,10 @@
 
 use std::fmt;
 
+use databend_meta_client::kvapi;
+
 /// Uniquely identifies a dictionary with a db_id and a dict_name
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Default, kvapi::KeyCodec)]
 pub struct DictionaryIdentity {
     pub db_id: u64,
     pub dict_name: String,
@@ -33,25 +35,5 @@ impl DictionaryIdentity {
 impl fmt::Display for DictionaryIdentity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}/{}", self.db_id, self.dict_name)
-    }
-}
-
-mod kvapi_key_impl {
-
-    use databend_meta_client::kvapi;
-
-    use super::DictionaryIdentity;
-
-    impl kvapi::KeyCodec for DictionaryIdentity {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.dict_name)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-        where Self: Sized {
-            let db_id = parser.next_u64()?;
-            let dict_name = parser.next_str()?;
-            Ok(Self { db_id, dict_name })
-        }
     }
 }

@@ -61,7 +61,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::schema::sequence_storage::SequenceStorageIdent;
     use crate::tenant::Tenant;
@@ -70,10 +71,6 @@ mod tests {
     fn test_sequence_storage_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = SequenceStorageIdent::new_generic(tenant, "3".to_string());
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_sequence_storage/dummy/3");
-
-        assert_eq!(ident, SequenceStorageIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_sequence_storage/dummy/3");
     }
 }

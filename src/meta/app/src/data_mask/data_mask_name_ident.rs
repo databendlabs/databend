@@ -35,7 +35,7 @@ impl DataMaskNameIdentRaw {
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::KeyWithTenant;
     use crate::data_mask::DataMaskId;
@@ -61,7 +61,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::data_mask::DataMaskNameIdent;
     use crate::tenant::Tenant;
@@ -69,10 +70,7 @@ mod tests {
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("tenant1");
-        let ident = DataMaskNameIdent::new(tenant.clone(), "test");
-        assert_eq!("__fd_datamask/tenant1/test", ident.to_string_key());
-
-        let got = DataMaskNameIdent::from_str_key(&ident.to_string_key()).unwrap();
-        assert_eq!(ident, got);
+        let ident = DataMaskNameIdent::new(tenant, "test");
+        assert_round_trip(ident, "__fd_datamask/tenant1/test");
     }
 }
