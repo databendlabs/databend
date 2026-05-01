@@ -19,7 +19,7 @@ use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::SequenceMeta;
 use databend_common_meta_app::schema::sequence_storage::SequenceStorageIdent;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnOp;

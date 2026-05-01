@@ -62,7 +62,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::data_mask::DataMaskId;
     use crate::data_mask::DataMaskIdToNameIdent;
@@ -72,10 +73,6 @@ mod tests {
     fn test_data_mask_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = DataMaskIdToNameIdent::new_generic(tenant, DataMaskId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_datamask_id_to_name/dummy/3");
-
-        assert_eq!(ident, DataMaskIdToNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_datamask_id_to_name/dummy/3");
     }
 }

@@ -31,6 +31,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VirtualDataSchema;
+use databend_meta_client::kvapi;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaId;
 use maplit::hashmap;
@@ -1111,7 +1112,9 @@ pub struct GcDroppedTableReq {
     pub drop_ids: Vec<DroppedId>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// `__fd_table_id_to_name/<table_id> -> DBIdTableName`
+#[derive(Clone, Debug, Default, Eq, PartialEq, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_id_to_name")]
 pub struct TableIdToName {
     pub table_id: u64,
 }
@@ -1187,10 +1190,7 @@ pub struct EmptyProto {}
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
-    use databend_meta_client::kvapi::KeyBuilder;
-    use databend_meta_client::kvapi::KeyError;
-    use databend_meta_client::kvapi::KeyParser;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::schema::DBIdTableName;
     use crate::schema::DatabaseId;
@@ -1202,22 +1202,7 @@ mod kvapi_key_impl {
     use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
 
-    impl kvapi::KeyCodec for DBIdTableName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.db_id).push_str(&self.table_name)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let db_id = p.next_u64()?;
-            let table_name = p.next_str()?;
-            Ok(Self { db_id, table_name })
-        }
-    }
-
-    /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
-        const PREFIX: &'static str = "__fd_table";
-
         type ValueType = TableId;
 
         fn parent(&self) -> Option<String> {
@@ -1225,21 +1210,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for TableIdToName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_id_to_name/<table_id> -> DBIdTableName"
     impl kvapi::Key for TableIdToName {
-        const PREFIX: &'static str = "__fd_table_id_to_name";
-
         type ValueType = DBIdTableName;
 
         fn parent(&self) -> Option<String> {
@@ -1247,21 +1218,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for TableId {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            Ok(Self { table_id })
-        }
-    }
-
-    /// "__fd_table_by_id/<tb_id> -> TableMeta"
     impl kvapi::Key for TableId {
-        const PREFIX: &'static str = "__fd_table_by_id";
-
         type ValueType = TableMeta;
 
         fn parent(&self) -> Option<String> {
@@ -1269,25 +1226,7 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for TableIdHistoryIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.database_id).push_str(&self.table_name)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = b.next_u64()?;
-            let table_name = b.next_str()?;
-            Ok(Self {
-                database_id: db_id,
-                table_name,
-            })
-        }
-    }
-
-    /// "_fd_table_id_list/<db_id>/<tb_name> -> id_list"
     impl kvapi::Key for TableIdHistoryIdent {
-        const PREFIX: &'static str = "__fd_table_id_list";
-
         type ValueType = TableIdList;
 
         fn parent(&self) -> Option<String> {
@@ -1296,24 +1235,30 @@ mod kvapi_key_impl {
     }
 
     impl kvapi::KeyCodec for TableCopiedFileNameIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             // TODO: file is not escaped!!!
             //       There already are non escaped data stored on disk.
             //       We can not change it anymore.
             b.push_u64(self.table_id).push_raw(&self.file)
         }
 
-        fn decode_key(p: &mut KeyParser) -> Result<Self, kvapi::KeyError> {
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
             let table_id = p.next_u64()?;
             let file = p.tail_raw()?.to_string();
             Ok(Self { table_id, file })
         }
+
+        fn segment_count(&self) -> usize {
+            2
+        }
     }
 
     // __fd_table_copied_files/table_id/file_name -> TableCopiedFileInfo
-    impl kvapi::Key for TableCopiedFileNameIdent {
+    impl kvapi::StructKey for TableCopiedFileNameIdent {
         const PREFIX: &'static str = "__fd_table_copied_files";
+    }
 
+    impl kvapi::Key for TableCopiedFileNameIdent {
         type ValueType = TableCopiedFileInfo;
 
         fn parent(&self) -> Option<String> {
@@ -1362,10 +1307,17 @@ mod kvapi_key_impl {
 #[cfg(test)]
 mod tests {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::StructKey;
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::schema::TableCopiedFileNameIdent;
+    use crate::schema::TableIdToName;
     use crate::schema::TableMeta;
+
+    #[test]
+    fn test_table_id_to_name_key_format() {
+        assert_round_trip(TableIdToName { table_id: 9 }, "__fd_table_id_to_name/9");
+    }
 
     #[test]
     fn test_table_copied_file_name_ident_conversion() -> Result<(), kvapi::KeyError> {

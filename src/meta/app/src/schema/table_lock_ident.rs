@@ -17,23 +17,10 @@ use databend_meta_client::kvapi;
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, kvapi::KeyCodec)]
 pub struct TableIdRevision {
     table_id: u64,
     revision: u64,
-}
-
-impl kvapi::KeyCodec for TableIdRevision {
-    fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-        b.push_u64(self.table_id).push_u64(self.revision)
-    }
-
-    fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-        let table_id = p.next_u64()?;
-        let revision = p.next_u64()?;
-
-        Ok(Self { table_id, revision })
-    }
 }
 
 /// The identifier of a Table lock,
@@ -89,7 +76,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TableLockIdent;
     use crate::tenant::Tenant;
@@ -98,10 +86,6 @@ mod tests {
     fn test_catalog_name_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = TableLockIdent::new(tenant, 5, 6);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_table_lock/test/5/6");
-
-        assert_eq!(ident, TableLockIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_table_lock/test/5/6");
     }
 }
