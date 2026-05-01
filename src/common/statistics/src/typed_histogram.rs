@@ -20,43 +20,6 @@ mod join;
 
 pub use join::JoinEstimation;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TypedHistogramEstimate {
-    pub lower: f64,
-    pub expected: f64,
-    pub upper: f64,
-}
-
-impl TypedHistogramEstimate {
-    pub fn new(lower: f64, expected: f64, upper: f64) -> Self {
-        let lower = lower.max(0.0);
-        let upper = upper.max(lower);
-        let expected = expected.clamp(lower, upper);
-        Self {
-            lower,
-            expected,
-            upper,
-        }
-    }
-
-    pub fn exact(value: f64) -> Self {
-        let value = value.max(0.0);
-        Self {
-            lower: value,
-            expected: value,
-            upper: value,
-        }
-    }
-
-    fn add(self, other: Self) -> Self {
-        Self::new(
-            self.lower + other.lower,
-            self.expected + other.expected,
-            self.upper + other.upper,
-        )
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct TypedHistogram<T> {
     /// Whether buckets come from ANALYZE's observed row-order tiles.
@@ -799,6 +762,7 @@ impl OverlapCoverage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::StatEstimate;
 
     #[test]
     fn test_typed_histogram_bucket_bounds_keep_same_type() {
@@ -886,8 +850,8 @@ mod tests {
         let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
 
         assert_eq!(histogram.estimate_join(&histogram), JoinEstimation {
-            cardinality: TypedHistogramEstimate::exact(10.0),
-            ndv: TypedHistogramEstimate::exact(10.0),
+            cardinality: StatEstimate::exact(10.0),
+            ndv: StatEstimate::exact(10.0),
         });
     }
 

@@ -332,7 +332,7 @@ impl SelectivityVisitor<'_> {
             return Ok(Selectivity::N(0.0));
         }
         Ok(Selectivity::N(
-            (self.cardinality - column_stat.null_count as f64) / self.cardinality,
+            (self.cardinality - column_stat.null_count.expected) / self.cardinality,
         ))
     }
 
@@ -482,6 +482,7 @@ fn is_true_constant_predicate(constant: &Constant) -> bool {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
+    use databend_common_expression::stat_distribution::StatEstimate;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_expression::types::decimal::DecimalScalar;
@@ -493,7 +494,6 @@ mod tests {
     use crate::ColumnBindingBuilder;
     use crate::Visibility;
     use crate::optimizer::ir::HistogramBuilder;
-    use crate::optimizer::ir::Ndv;
     use crate::plans::BoundColumnRef;
     use crate::plans::ConstantExpr;
     use crate::plans::FunctionCall;
@@ -505,8 +505,8 @@ mod tests {
         column_stats.insert(column_index, ColumnStat {
             min: Datum::Int(20),
             max: Datum::Int(30),
-            ndv: Ndv::Stat(11.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(11.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         });
 
@@ -548,8 +548,8 @@ mod tests {
         column_stats.insert(column_index, ColumnStat {
             min: Datum::Bytes(b"b".to_vec()),
             max: Datum::Bytes(b"d".to_vec()),
-            ndv: Ndv::Stat(3.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(3.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         });
 
@@ -571,8 +571,8 @@ mod tests {
         column_stats.insert(column_index, ColumnStat {
             min: Datum::Float(1.0.into()),
             max: Datum::Float(3.0.into()),
-            ndv: Ndv::Stat(3.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(3.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         });
 
@@ -595,8 +595,8 @@ mod tests {
         column_stats.insert(column_index, ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(737),
-            ndv: Ndv::Stat(738.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(738.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: Some(
                 HistogramBuilder::from_ndv(
                     738,

@@ -125,8 +125,10 @@ impl<'a> ColumnStatUpdate<'a> {
 
     pub(super) fn apply_unconstrained_filter(&mut self, selectivity: f64) {
         self.column_stat.ndv = self.column_stat.ndv.reduce_by_selectivity(selectivity);
-        self.column_stat.null_count =
-            (self.column_stat.null_count as f64 * selectivity).ceil() as u64;
+        self.column_stat.null_count = self
+            .column_stat
+            .null_count
+            .reduce_by_selectivity(selectivity);
 
         if let Some(histogram) = &mut self.column_stat.histogram {
             if histogram.accuracy() {
@@ -136,7 +138,7 @@ impl<'a> ColumnStatUpdate<'a> {
                 if selectivity < 0.2 {
                     self.column_stat.histogram = None;
                 }
-            } else if self.column_stat.ndv.value() as u64 <= 2 {
+            } else if self.column_stat.ndv.expected as u64 <= 2 {
                 self.column_stat.histogram = None;
             } else {
                 histogram.scale_counts(selectivity);
@@ -153,8 +155,10 @@ impl<'a> ColumnStatUpdate<'a> {
         self.column_stat.ndv = self.column_stat.ndv.reduce_by_selectivity(selectivity);
         self.column_stat.min = new_min.clone();
         self.column_stat.max = new_max.clone();
-        self.column_stat.null_count =
-            (self.column_stat.null_count as f64 * selectivity).ceil() as u64;
+        self.column_stat.null_count = self
+            .column_stat
+            .null_count
+            .reduce_by_selectivity(selectivity);
 
         if let Some(histogram) = &self.column_stat.histogram {
             // If selectivity < 0.2, most buckets are invalid and
@@ -163,7 +167,7 @@ impl<'a> ColumnStatUpdate<'a> {
             if !histogram.accuracy() || selectivity < 0.2 {
                 let num_values = histogram.num_values();
                 let new_num_values = (num_values * selectivity).ceil() as u64;
-                let new_ndv = self.column_stat.ndv.value() as u64;
+                let new_ndv = self.column_stat.ndv.expected as u64;
                 self.column_stat.histogram = if new_ndv <= 2 {
                     None
                 } else {

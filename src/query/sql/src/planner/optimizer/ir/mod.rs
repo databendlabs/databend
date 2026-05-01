@@ -44,6 +44,5 @@ pub use property::Statistics;
 pub use stats::ColumnStat;
 pub use stats::ColumnStatSet;
 pub use stats::MAX_SELECTIVITY;
-pub use stats::Ndv;
 pub use stats::SelectivityEstimator;
 pub use stats::UniformSampleSet;

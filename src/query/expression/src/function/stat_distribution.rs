@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_statistics::Histogram;
-pub use databend_common_statistics::Ndv;
+pub use databend_common_statistics::StatEstimate;
 
 use crate::Domain;
 use crate::Scalar;
@@ -24,8 +24,8 @@ use crate::types::nullable::NullableDomain;
 #[derive(Debug, Clone)]
 pub struct StatDistribution<D> {
     pub domain: Domain,
-    pub ndv: Ndv,
-    pub null_count: u64,
+    pub ndv: StatEstimate,
+    pub null_count: StatEstimate,
     pub distribution: D,
 }
 
@@ -43,9 +43,7 @@ impl<D: DistributionInvariant> StatDistribution<D> {
     }
 
     pub fn check_consistency_with_type(&self, data_type: Option<&DataType>) -> Result<(), String> {
-        if !self.ndv.value().is_finite() || self.ndv.value() < 0.0 {
-            return Err(format!("invalid ndv {:?}", self.ndv));
-        }
+        self.ndv.check_consistency()?;
         if let Some(data_type) = data_type {
             if data_type.has_generic() {
                 return Err(format!(
@@ -54,8 +52,9 @@ impl<D: DistributionInvariant> StatDistribution<D> {
             }
             self.domain.check_data_type(data_type)?;
         }
+        self.null_count.check_consistency()?;
         if let Domain::Nullable(domain) = &self.domain {
-            if self.null_count != 0 && !domain.has_null {
+            if self.null_count.upper > 0.0 && !domain.has_null {
                 return Err(
                     "null_count is positive but nullable domain has_null is false".to_string(),
                 );
@@ -63,7 +62,7 @@ impl<D: DistributionInvariant> StatDistribution<D> {
             if !domain.has_null && domain.value.is_none() {
                 return Err("nullable domain without nulls must carry a value domain".to_string());
             }
-        } else if self.null_count != 0 {
+        } else if self.null_count.upper > 0.0 {
             return Err("non-nullable domain has positive null_count".to_string());
         }
         self.distribution.check_distribution(self)
@@ -76,11 +75,29 @@ impl<D> StatDistribution<D> {
     }
 
     pub fn has_null(&self) -> bool {
-        self.null_count != 0
+        self.null_count.upper > 0.0
             || matches!(
                 self.domain,
                 Domain::Nullable(NullableDomain { has_null: true, .. })
             )
+    }
+
+    pub fn expected_null_count(&self) -> f64 {
+        self.null_count.expected
+    }
+
+    pub fn effective_null_count(&self, cardinality: f64) -> StatEstimate {
+        let cardinality = cardinality.max(0.0);
+        let non_null_lower = self.ndv.lower;
+        let upper = self
+            .null_count
+            .upper
+            .min((cardinality - non_null_lower).max(0.0));
+        StatEstimate::new(
+            self.null_count.lower.min(upper),
+            self.null_count.expected.min(upper),
+            upper,
+        )
     }
 }
 
@@ -253,51 +270,6 @@ fn check_boolean_distribution<D>(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct StatEstimate {
-    pub lower: f64,
-    pub expected: f64,
-    pub upper: f64,
-}
-
-impl StatEstimate {
-    pub fn check_consistency(&self) -> Result<(), String> {
-        if !self.lower.is_finite() || !self.expected.is_finite() || !self.upper.is_finite() {
-            return Err(format!("estimate must be finite: {:?}", self));
-        }
-        if self.lower < 0.0 {
-            return Err(format!(
-                "estimate lower bound must be non-negative: {:?}",
-                self
-            ));
-        }
-        if self.lower > self.expected || self.expected > self.upper {
-            return Err(format!("estimate bounds are inconsistent: {:?}", self));
-        }
-        Ok(())
-    }
-
-    pub fn new(lower: f64, expected: f64, upper: f64) -> Self {
-        let lower = lower.max(0.0);
-        let upper = upper.max(lower);
-        let expected = expected.clamp(lower, upper);
-        Self {
-            lower,
-            expected,
-            upper,
-        }
-    }
-
-    pub fn exact(value: f64) -> Self {
-        let value = value.max(0.0);
-        Self {
-            lower: value,
-            expected: value,
-            upper: value,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BooleanDistribution {
     pub true_count: StatEstimate,
 }
@@ -317,8 +289,8 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: Ndv::Stat(0.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(0.0),
+            null_count: StatEstimate::exact(10.0),
             distribution: OwnedDistribution::Histogram(Histogram::Int(TypedHistogram::new(
                 vec![],
                 true,
@@ -339,8 +311,8 @@ mod tests {
                     has_false: true,
                 }))),
             }),
-            ndv: Ndv::Stat(2.0),
-            null_count: 1,
+            ndv: StatEstimate::exact(2.0),
+            null_count: StatEstimate::exact(1.0),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(1.0),
             }),
@@ -353,8 +325,8 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: Ndv::Stat(0.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(0.0),
+            null_count: StatEstimate::exact(10.0),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(0.0),
             }),
@@ -367,8 +339,8 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: Ndv::Max(1.0),
-            null_count: 10,
+            ndv: StatEstimate::new(0.0, 1.0, 1.0),
+            null_count: StatEstimate::exact(10.0),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::new(0.0, 0.5, 1.0),
             }),
@@ -376,5 +348,23 @@ mod tests {
 
         let err = invalid.check_consistency().unwrap_err();
         assert!(err.contains("boolean non-null value domain"));
+    }
+
+    #[test]
+    fn test_effective_null_count_keeps_known_ndv_rows() {
+        let stat = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Boolean(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                }))),
+            }),
+            ndv: StatEstimate::exact(3.0),
+            null_count: StatEstimate::exact(1.0),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        assert_eq!(stat.effective_null_count(3.0), StatEstimate::exact(0.0));
     }
 }

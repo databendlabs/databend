@@ -16,6 +16,7 @@ use std::io::Write;
 
 use databend_common_exception::Result;
 use databend_common_expression::RawExpr;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
@@ -28,7 +29,6 @@ use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::ColumnStatSet;
-use databend_common_sql::optimizer::ir::Ndv;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::CastExpr;
@@ -150,15 +150,15 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(10),
             max: Datum::UInt(20),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(10),
             max: Datum::UInt(20),
-            ndv: Ndv::Stat(10.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(10.0),
             histogram: None,
         }),
     ]);
@@ -206,8 +206,8 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
     let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: Ndv::Stat(10.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatEstimate::exact(0.0),
         histogram: None,
     })]);
     for expr in ["i < 5", "i > 5"] {
@@ -221,8 +221,8 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
     let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: Ndv::Stat(10.0),
-        null_count: 30,
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatEstimate::exact(30.0),
         histogram: None,
     })]);
     run_case(
@@ -234,8 +234,8 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
     let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: Ndv::Stat(10.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatEstimate::exact(0.0),
         histogram: Some(Histogram::Int(TypedHistogram {
             accuracy: true,
             buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
@@ -253,8 +253,8 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
     let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(10),
-        ndv: Ndv::Stat(11.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(11.0),
+        null_count: StatEstimate::exact(0.0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
             buckets: vec![TypedHistogramBucket::new(0, 10, 100.0, 11.0)],
@@ -277,15 +277,15 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(10.0),
             histogram: None,
         }),
     ]);
@@ -320,15 +320,15 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(10.0),
             histogram: None,
         }),
     ]);
@@ -349,8 +349,8 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
     let like_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes("aa".as_bytes().to_vec()),
         max: Datum::Bytes("zz".as_bytes().to_vec()),
-        ndv: Ndv::Stat(52.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(52.0),
+        null_count: StatEstimate::exact(0.0),
         histogram: None,
     })]);
     for expr in ["s like 'ab%'", "s like '%ab_'"] {

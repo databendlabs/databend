@@ -24,8 +24,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
-use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_storages_common_table_meta::table::ChangeType;
 
@@ -37,7 +37,6 @@ use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
-use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -215,16 +214,14 @@ impl Scan {
     }
 }
 
-fn reduce_ndv_by_datum_range(ndv: Ndv, min: &Datum, max: &Datum) -> Ndv {
-    match (max, min) {
-        (Datum::UInt(m), Datum::UInt(n)) if m >= n => {
-            ndv.reduce(m.saturating_sub(*n).saturating_add(1) as _)
-        }
-        (Datum::Int(m), Datum::Int(n)) if m >= n => {
-            ndv.reduce(m.saturating_add(1).saturating_sub(*n) as _)
-        }
-        _ if max == min => Ndv::Stat(1.0),
-        _ => ndv,
+fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> StatEstimate {
+    let max_non_null_count = num_rows
+        .map(|num_rows| num_rows.saturating_sub(null_count) as f64)
+        .unwrap_or(u64::MAX as f64);
+
+    match ndv {
+        Some(ndv) => StatEstimate::exact(ndv as f64),
+        None => StatEstimate::new(0.0, max_non_null_count, max_non_null_count),
     }
 }
 
@@ -329,18 +326,8 @@ impl Operator for Scan {
                     continue;
                 };
 
-                // NOTE: don't touch the original num_rows, since it will be used in other places.
-                let ndv = match col_stat.ndv {
-                    Some(ndv) => Ndv::Stat(ndv as f64),
-                    None => Ndv::Max(
-                        num_rows
-                            .and_then(|n| n.checked_sub(col_stat.null_count))
-                            .unwrap_or(u64::MAX) as _,
-                    ),
-                };
-
-                // Alter ndv based on min and max if the datum is uint or int.
-                let ndv = reduce_ndv_by_datum_range(ndv, &min, &max);
+                let null_count = StatEstimate::exact(col_stat.null_count as f64);
+                let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
@@ -352,9 +339,11 @@ impl Operator for Scan {
                         if num_rows == 0 {
                             return None;
                         }
-                        let Ndv::Stat(ndv) = ndv else { return None };
+                        if ndv.lower != ndv.upper {
+                            return None;
+                        }
                         HistogramBuilder::from_ndv(
-                            ndv as _,
+                            ndv.expected as _,
                             num_rows,
                             Some((min.clone(), max.clone())),
                             DEFAULT_HISTOGRAM_BUCKETS,
@@ -366,7 +355,7 @@ impl Operator for Scan {
                     min,
                     max,
                     ndv,
-                    null_count: col_stat.null_count,
+                    null_count,
                     histogram,
                 });
             }
@@ -443,17 +432,6 @@ impl Operator for Scan {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_reduce_ndv_by_uint_full_range_saturates() {
-        let reduced = reduce_ndv_by_datum_range(
-            Ndv::Stat((u64::MAX as f64) + 1.0),
-            &Datum::UInt(0),
-            &Datum::UInt(u64::MAX),
-        );
-
-        assert_eq!(reduced.value(), u64::MAX as f64);
-    }
 
     #[test]
     fn test_derive_scan_preserves_bind_time_metadata() {

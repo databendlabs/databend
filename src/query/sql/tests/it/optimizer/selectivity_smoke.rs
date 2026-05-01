@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_expression::Scalar;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
@@ -24,7 +25,6 @@ use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::ColumnStatSet;
 use databend_common_sql::optimizer::ir::HistogramBuilder;
-use databend_common_sql::optimizer::ir::Ndv;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
@@ -66,8 +66,8 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
     let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(10),
-        ndv: Ndv::Stat(0.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(0.0),
+        null_count: StatEstimate::exact(0.0),
         histogram: None,
     })]);
     let expr = comparison_expr(
@@ -90,8 +90,8 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
     let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(1000),
-        ndv: Ndv::Stat(100.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(100.0),
+        null_count: StatEstimate::exact(0.0),
         histogram: Some(Histogram::Float(TypedHistogram {
             accuracy: false,
             buckets: vec![TypedHistogramBucket::new(
@@ -250,10 +250,10 @@ fn assert_estimator_smoke_invariants(
     );
 
     for stat in estimator.column_stats().values() {
-        prop_assert!(stat.ndv.value().is_finite(), "ndv must stay finite");
-        prop_assert!(stat.ndv.value() >= 0.0, "ndv must stay non-negative");
+        prop_assert!(stat.ndv.expected.is_finite(), "ndv must stay finite");
+        prop_assert!(stat.ndv.expected >= 0.0, "ndv must stay non-negative");
         prop_assert!(
-            (stat.null_count as f64) <= cardinality.ceil(),
+            stat.null_count.expected <= cardinality.ceil(),
             "null count must not exceed input cardinality"
         );
         let arg_stat = stat.to_arg_stat(data_type).map_err(|err| {
@@ -333,8 +333,8 @@ proptest! {
         let column_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
             min,
             max,
-            ndv: Ndv::Stat(ndv as f64),
-            null_count,
+            ndv: StatEstimate::exact(ndv as f64),
+            null_count: StatEstimate::exact(null_count as f64),
             histogram,
         })]);
         for stat in column_stats.values() {

@@ -18,20 +18,20 @@ use super::Intersection;
 use super::OverlapCoverage;
 use super::TypedHistogram;
 use super::TypedHistogramBucket;
-use super::TypedHistogramEstimate;
 use super::Value;
+use crate::StatEstimate;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JoinEstimation {
-    pub cardinality: TypedHistogramEstimate,
-    pub ndv: TypedHistogramEstimate,
+    pub cardinality: StatEstimate,
+    pub ndv: StatEstimate,
 }
 
 impl JoinEstimation {
     pub fn zero() -> Self {
         Self {
-            cardinality: TypedHistogramEstimate::exact(0.0),
-            ndv: TypedHistogramEstimate::exact(0.0),
+            cardinality: StatEstimate::exact(0.0),
+            ndv: StatEstimate::exact(0.0),
         }
     }
 
@@ -69,8 +69,8 @@ impl<T: Value> TypedHistogramBucket<T> {
             && T::compare(self.lower_bound(), other.lower_bound()) == Ordering::Equal
         {
             return JoinEstimation {
-                cardinality: TypedHistogramEstimate::exact(self.num_values() * other.num_values()),
-                ndv: TypedHistogramEstimate::exact(1.0),
+                cardinality: StatEstimate::exact(self.num_values() * other.num_values()),
+                ndv: StatEstimate::exact(1.0),
             };
         }
 
@@ -85,12 +85,12 @@ impl<T: Value> TypedHistogramBucket<T> {
         };
 
         JoinEstimation {
-            cardinality: TypedHistogramEstimate::new(
+            cardinality: StatEstimate::new(
                 0.0,
                 expected.cardinality.expected,
                 self.num_values() * other.num_values(),
             ),
-            ndv: TypedHistogramEstimate::new(0.0, expected.ndv.expected, upper_ndv),
+            ndv: StatEstimate::new(0.0, expected.ndv.expected, upper_ndv),
         }
     }
 
@@ -109,8 +109,8 @@ impl<T: Value> TypedHistogramBucket<T> {
         }
 
         Some(JoinEstimation {
-            cardinality: TypedHistogramEstimate::exact(left_num_rows * right_num_rows / max_ndv),
-            ndv: TypedHistogramEstimate::exact(left_ndv.min(right_ndv)),
+            cardinality: StatEstimate::exact(left_num_rows * right_num_rows / max_ndv),
+            ndv: StatEstimate::exact(left_ndv.min(right_ndv)),
         })
     }
 }
@@ -133,8 +133,8 @@ mod tests {
         };
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
-            cardinality: TypedHistogramEstimate::new(0.0, 1.0, 100.0),
-            ndv: TypedHistogramEstimate::new(0.0, 1.0, 1.0),
+            cardinality: StatEstimate::new(0.0, 1.0, 100.0),
+            ndv: StatEstimate::new(0.0, 1.0, 1.0),
         });
     }
 
@@ -152,8 +152,8 @@ mod tests {
         };
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
-            cardinality: TypedHistogramEstimate::exact(12.0),
-            ndv: TypedHistogramEstimate::exact(1.0),
+            cardinality: StatEstimate::exact(12.0),
+            ndv: StatEstimate::exact(1.0),
         });
     }
 }

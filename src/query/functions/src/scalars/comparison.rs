@@ -2166,7 +2166,7 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 mod tests {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
-    use databend_common_expression::stat_distribution::Ndv;
+    use databend_common_expression::stat_distribution::StatEstimate;
     use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::NumberDomain;
     use databend_common_expression::types::SimpleDomain;
@@ -2180,8 +2180,8 @@ mod tests {
     fn test_null_constant_comparison_returns_all_null_stat() {
         let column_stat = ArgStat {
             domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(0.0),
             distribution: BorrowedDistribution::Unknown,
         };
         let constant_stat = ArgStat {
@@ -2189,8 +2189,8 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: Ndv::Stat(0.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(0.0),
+            null_count: StatEstimate::exact(10.0),
             distribution: BorrowedDistribution::Unknown,
         };
         let args = [column_stat, constant_stat];
@@ -2203,7 +2203,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(output.null_count, 10);
+        assert_eq!(output.null_count, StatEstimate::exact(10.0));
         assert!(matches!(
             output.domain,
             Domain::Nullable(NullableDomain {
@@ -2221,8 +2221,8 @@ mod tests {
                 min: "".to_string(),
                 max: None,
             }),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatEstimate::exact(0.0),
             distribution: BorrowedDistribution::Unknown,
         };
         let constant_stat = ArgStat {
@@ -2230,8 +2230,8 @@ mod tests {
                 min: "x".to_string(),
                 max: Some("x".to_string()),
             }),
-            ndv: Ndv::Stat(1.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(1.0),
+            null_count: StatEstimate::exact(0.0),
             distribution: BorrowedDistribution::Unknown,
         };
         let args = [column_stat, constant_stat];

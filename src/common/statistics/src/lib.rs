@@ -15,11 +15,11 @@
 mod datum;
 mod histogram;
 mod histogram_builder;
-mod ndv;
+mod stat_estimate;
 mod typed_histogram;
 
 pub use datum::*;
 pub use histogram::*;
 pub use histogram_builder::*;
-pub use ndv::*;
+pub use stat_estimate::*;
 pub use typed_histogram::*;

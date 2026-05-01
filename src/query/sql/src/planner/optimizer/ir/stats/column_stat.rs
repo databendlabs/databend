@@ -17,10 +17,10 @@ use std::collections::HashMap;
 use databend_common_expression::Domain;
 use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::BorrowedDistribution;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
-pub use databend_common_statistics::Ndv;
 
 use crate::Symbol;
 
@@ -36,10 +36,10 @@ pub struct ColumnStat {
     pub max: Datum,
 
     /// Number of distinct values
-    pub ndv: Ndv,
+    pub ndv: StatEstimate,
 
     /// Count of null values
-    pub null_count: u64,
+    pub null_count: StatEstimate,
 
     /// Histogram of column
     pub histogram: Option<Histogram>,
@@ -51,7 +51,7 @@ impl ColumnStat {
             data_type,
             self.min.clone(),
             self.max.clone(),
-            self.null_count != 0,
+            self.null_count.upper > 0.0,
         )?;
         Ok(ArgStat {
             domain,
@@ -69,8 +69,8 @@ impl ColumnStat {
         Self {
             min: datum.clone(),
             max: datum,
-            ndv: Ndv::Stat(1.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(1.0),
+            null_count: StatEstimate::exact(0.0),
             histogram: None,
         }
     }

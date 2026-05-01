@@ -21,6 +21,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
@@ -32,7 +33,6 @@ use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
 use crate::optimizer::ir::HistogramBuilder;
-use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -223,8 +223,8 @@ impl Operator for ConstantTableScan {
             let column_stat = ColumnStat {
                 min,
                 max,
-                ndv: Ndv::Stat(ndv as _),
-                null_count,
+                ndv: StatEstimate::exact(ndv as f64),
+                null_count: StatEstimate::exact(null_count as f64),
                 histogram,
             };
             column_stats.insert(*index, column_stat);
