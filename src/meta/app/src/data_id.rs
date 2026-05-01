@@ -16,10 +16,7 @@ use std::any::type_name;
 use std::fmt;
 use std::marker::PhantomData;
 
-use databend_meta_client::kvapi::KeyBuilder;
-use databend_meta_client::kvapi::KeyCodec;
-use databend_meta_client::kvapi::KeyError;
-use databend_meta_client::kvapi::KeyParser;
+use databend_meta_client::kvapi;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
@@ -38,7 +35,7 @@ use crate::tenant_key::resource::TenantResource;
 ///
 /// `DataId` implements `prost::Message` so that it can be used as a protobuf message.
 /// Although internally it uses JSON encoding.
-#[derive(Deref, DerefMut)]
+#[derive(Deref, DerefMut, kvapi::KeyCodec)]
 pub struct DataId<R> {
     #[deref]
     #[deref_mut]
@@ -125,18 +122,6 @@ impl<R> DataId<R> {
     }
 }
 
-impl<R> KeyCodec for DataId<R> {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        b.push_u64(self.id)
-    }
-
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-    where Self: Sized {
-        let v = parser.next_u64()?;
-        Ok(Self::new(v))
-    }
-}
-
 /// Implement `prost::Message` for `Id`, but internally use JSON encoding.
 ///
 /// This enables `Id` to be used as a protobuf message,
@@ -216,23 +201,13 @@ mod prost_message_impl {
             type ValueType = Bar;
         }
 
-        #[derive(Debug, Default, PartialEq, Eq)]
-        struct Foo(u64);
-
-        impl kvapi::KeyCodec for Foo {
-            fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-                b.push_u64(self.0)
-            }
-
-            fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError>
-            where Self: Sized {
-                let v = parser.next_u64()?;
-                Ok(Foo(v))
-            }
+        #[derive(Debug, Default, PartialEq, Eq, kvapi::StructKey)]
+        #[structkey(prefix = "foo")]
+        struct Foo {
+            id: u64,
         }
 
         impl kvapi::Key for Foo {
-            const PREFIX: &'static str = "";
             type ValueType = Bar;
 
             fn parent(&self) -> Option<String> {
@@ -283,6 +258,28 @@ mod prost_message_impl {
         fn test_display() {
             let id = DataId::<Resource>::new(1u64);
             assert_eq!(format!("{}", id), "DataId<Foo>(1)");
+        }
+
+        #[test]
+        fn test_keycodec_round_trip() {
+            use databend_meta_client::kvapi::KeyCodec;
+
+            let id = DataId::<Resource>::new(42);
+
+            // The encoded key has exactly one segment: the u64. PhantomData<R>
+            // contributes nothing -- which also proves the derive doesn't
+            // synthesize an `R: KeyCodec` bound, since `Resource` has no
+            // `KeyCodec` impl yet this whole block still compiles.
+            let encoded = id.encode_key(kvapi::KeyBuilder::new()).done();
+            assert_eq!("42", encoded);
+
+            // segment_count must equal segments actually pushed; mismatch
+            // would cause the Builder budget to silently truncate.
+            assert_eq!(1, id.segment_count());
+
+            let mut p = kvapi::KeyParser::new(&encoded);
+            let decoded = DataId::<Resource>::decode_key(&mut p).expect("decode");
+            assert_eq!(id, decoded);
         }
     }
 }

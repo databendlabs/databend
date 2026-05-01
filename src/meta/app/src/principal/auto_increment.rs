@@ -15,9 +15,10 @@
 use std::fmt::Display;
 
 use databend_common_expression::ColumnId;
+use databend_meta_client::kvapi;
 use databend_meta_client::types::MetaId;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, kvapi::KeyCodec)]
 pub struct AutoIncrementKey {
     pub table_id: MetaId,
     pub column_id: ColumnId,
@@ -38,28 +39,3 @@ impl Display for AutoIncrementKey {
     }
 }
 
-mod kvapi_key_impl {
-    use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::KeyBuilder;
-    use databend_meta_client::kvapi::KeyError;
-    use databend_meta_client::kvapi::KeyParser;
-
-    use crate::principal::auto_increment::AutoIncrementKey;
-
-    impl kvapi::KeyCodec for AutoIncrementKey {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id).push_u64(self.column_id as u64)
-        }
-
-        fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-        where Self: Sized {
-            let table_id = parser.next_u64()?;
-            let column_id = parser.next_u64()?;
-
-            Ok(Self {
-                table_id,
-                column_id: column_id as u32,
-            })
-        }
-    }
-}

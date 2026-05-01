@@ -1,3 +1,4 @@
+use databend_meta_client::kvapi;
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,11 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::KeyCodec;
 
 /// Identify a file path belonging to a stage.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, kvapi::KeyCodec)]
 pub struct StageFilePath {
     stage: String,
     path: String,
@@ -36,17 +35,5 @@ impl StageFilePath {
 
     pub fn path(&self) -> &str {
         &self.path
-    }
-}
-
-impl KeyCodec for StageFilePath {
-    fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-        b.push_str(&self.stage).push_str(&self.path)
-    }
-
-    fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-        let stage = p.next_str()?;
-        let path = p.next_str()?;
-        Ok(StageFilePath::new(stage, path))
     }
 }
