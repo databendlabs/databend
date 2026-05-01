@@ -156,8 +156,8 @@ use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIde
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant::ToTenant;
 use databend_meta_client::kvapi;
-use databend_meta_client::kvapi::Key;
 use databend_meta_client::kvapi::KvApiExt;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::UpsertKV;

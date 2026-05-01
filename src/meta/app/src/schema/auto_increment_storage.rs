@@ -62,7 +62,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::AutoIncrementKey;
     use crate::schema::auto_increment_storage::AutoIncrementStorageIdent;
@@ -73,13 +74,6 @@ mod tests {
         let tenant = Tenant::new_literal("dummy");
         let key = AutoIncrementKey::new(0, 3);
         let ident = AutoIncrementStorageIdent::new_generic(tenant, key);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_autoincrement_storage/dummy/0/3");
-
-        assert_eq!(
-            ident,
-            AutoIncrementStorageIdent::from_str_key(&key).unwrap()
-        );
+        assert_round_trip(ident, "__fd_autoincrement_storage/dummy/0/3");
     }
 }

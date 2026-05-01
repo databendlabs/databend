@@ -26,7 +26,7 @@ use crate::tenant_key::raw::TIdentRaw;
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::KeyWithTenant;
     use crate::schema::CatalogNameIdent;
@@ -55,7 +55,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::CatalogNameIdent;
     use crate::tenant::Tenant;
@@ -64,10 +65,6 @@ mod tests {
     fn test_catalog_name_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = CatalogNameIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_catalog/test/test1");
-
-        assert_eq!(ident, CatalogNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_catalog/test/test1");
     }
 }

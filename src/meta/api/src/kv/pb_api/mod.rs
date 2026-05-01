@@ -330,7 +330,7 @@ pub trait KVPbApi: KVApi {
     {
         let keys = keys
             .into_iter()
-            .map(|k| kvapi::Key::to_string_key(&k))
+            .map(|k| k.to_string_key())
             .collect::<Vec<_>>();
 
         async move {
