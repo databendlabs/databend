@@ -20,6 +20,7 @@ use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_meta_client::kvapi;
 use databend_meta_client::types::SeqV;
 
 use super::CreateOption;
@@ -36,7 +37,9 @@ pub struct DatabaseInfo {
     pub meta: SeqV<DatabaseMeta>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+/// `__fd_database_id_to_name/<db_id> -> DatabaseNameIdent`
+#[derive(Clone, Debug, Default, Eq, PartialEq, kvapi::StructKey)]
+#[structkey(prefix = "__fd_database_id_to_name")]
 pub struct DatabaseIdToName {
     pub db_id: u64,
 }
@@ -350,25 +353,13 @@ impl ListDatabaseReq {
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
     use crate::schema::database_name_ident::DatabaseNameIdentRaw;
 
-    impl kvapi::KeyCodec for DatabaseIdToName {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = parser.next_u64()?;
-            Ok(Self { db_id })
-        }
-    }
-
-    /// "__fd_database_id_to_name/<db_id> -> DatabaseNameIdent"
     impl kvapi::Key for DatabaseIdToName {
-        const PREFIX: &'static str = "__fd_database_id_to_name";
 
         type ValueType = DatabaseNameIdentRaw;
 

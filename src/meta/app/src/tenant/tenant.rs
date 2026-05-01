@@ -88,30 +88,35 @@ impl ToTenant for &Tenant {
 mod kvapi_key_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::KeyBuilder;
-    use databend_meta_client::kvapi::KeyError;
 
     use crate::tenant::tenant::Tenant;
 
     impl kvapi::KeyCodec for Tenant {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
+        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
             b.push_str(&self.tenant)
         }
 
-        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, KeyError> {
+        fn decode_key(p: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
             let tenant = p.next_nonempty()?;
 
             Ok(Self {
                 tenant: tenant.to_string(),
             })
         }
+
+        fn segment_count(&self) -> usize {
+            1
+        }
     }
 
     #[derive(Debug)]
     pub struct EmptyTenantValue;
 
-    impl kvapi::Key for Tenant {
+    impl kvapi::StructKey for Tenant {
         const PREFIX: &'static str = "__fd_tenant";
+    }
+
+    impl kvapi::Key for Tenant {
         type ValueType = EmptyTenantValue;
 
         fn parent(&self) -> Option<String> {

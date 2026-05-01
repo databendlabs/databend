@@ -22,7 +22,7 @@ use databend_common_meta_app::schema::CatalogOption;
 use databend_common_meta_app::schema::HiveCatalogOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_test_harness::TokioRuntime;
 

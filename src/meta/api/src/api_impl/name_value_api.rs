@@ -20,8 +20,8 @@ use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_proto_conv::FromToProto;
+use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KVApi;
-use databend_meta_client::kvapi::KeyCodec;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::With;
@@ -42,7 +42,7 @@ pub trait NameValueApi<R, N>: KVApi<Error = MetaError>
 where
     R: TenantResource + Send + Sync + 'static,
     R::ValueType: FromToProto + Clone + Send + Sync + 'static,
-    N: KeyCodec,
+    N: kvapi::KeyCodec,
     N: fmt::Debug + Clone + Send + Sync + 'static,
 {
     /// Create a `name -> value` mapping.
@@ -89,7 +89,7 @@ where
     T: KVApi<Error = MetaError> + ?Sized,
     R: TenantResource + Send + Sync + 'static,
     R::ValueType: FromToProto + Clone + Send + Sync + 'static,
-    N: KeyCodec,
+    N: kvapi::KeyCodec,
     N: fmt::Debug + Clone + Send + Sync + 'static,
 {
 }
