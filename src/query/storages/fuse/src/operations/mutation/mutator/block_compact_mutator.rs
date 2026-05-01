@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,8 +25,6 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockThresholds;
-use databend_common_expression::ColumnId;
-use databend_common_expression::is_stream_column_id;
 use databend_common_metrics::storage::*;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
@@ -113,12 +110,12 @@ impl BlockCompactMutator {
             self.operator.clone(),
             Arc::new(self.compact_params.base_snapshot.schema.clone()),
         );
-        let mut checker = SegmentCompactChecker::new(self.thresholds, self.cluster_key_id);
+        let mut checker = SegmentCompactChecker::new(self.thresholds);
 
         let mut segment_idx = 0;
         let mut is_end = false;
         let mut stop_after_next = false;
-        let mut parts = Vec::new();
+        let mut lazy_parts = Vec::new();
         let chunk_size = max_threads * 4;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
@@ -151,7 +148,7 @@ impl BlockCompactMutator {
             for (segment_idx, compact_segment) in segment_infos.into_iter() {
                 let segments_vec = checker.add(segment_idx, compact_segment);
                 for segments in segments_vec {
-                    checker.generate_part(segments, &mut parts);
+                    checker.generate_part(segments, &mut lazy_parts);
                 }
 
                 if stop_after_next {
@@ -192,13 +189,13 @@ impl BlockCompactMutator {
         }
 
         // finalize the compaction.
-        checker.finalize(&mut parts);
+        checker.finalize(&mut lazy_parts);
 
         // Status.
         let elapsed_time = start.elapsed();
         self.ctx.set_status_info(&format!(
             "[BLOCK-COMPACT] Built lazy compact parts: {}, segments to compact: {}, elapsed: {:?}",
-            parts.len(),
+            lazy_parts.len(),
             checker.compacted_segment_cnt,
             elapsed_time
         ));
@@ -208,29 +205,13 @@ impl BlockCompactMutator {
         let enable_distributed_compact = settings.get_enable_distributed_compact()?;
         let partitions = if !enable_distributed_compact
             || cluster.is_empty()
-            || parts.len() < cluster.nodes.len() * max_threads
+            || lazy_parts.len() < cluster.nodes.len() * max_threads
         {
-            // NOTE: The snapshot schema does not contain the stream column.
-            let column_ids = self
-                .compact_params
-                .base_snapshot
-                .schema
-                .to_leaf_column_id_set();
-            let lazy_parts = parts
-                .into_iter()
-                .map(|v| {
-                    v.as_any()
-                        .downcast_ref::<CompactLazyPartInfo>()
-                        .unwrap()
-                        .clone()
-                })
-                .collect::<Vec<_>>();
             Partitions::create(
                 PartitionsShuffleKind::Mod,
                 BlockCompactMutator::build_compact_tasks(
                     self.ctx.clone(),
                     self.operator.clone(),
-                    column_ids,
                     self.cluster_key_id,
                     self.thresholds,
                     lazy_parts,
@@ -238,7 +219,15 @@ impl BlockCompactMutator {
                 .await?,
             )
         } else {
-            Partitions::create(PartitionsShuffleKind::Mod, parts)
+            Partitions::create(
+                PartitionsShuffleKind::Mod,
+                lazy_parts
+                    .into_iter()
+                    .map(|part| {
+                        CompactLazyPartInfo::create(part.segment_indices, part.compact_segments)
+                    })
+                    .collect(),
+            )
         };
         Ok(partitions)
     }
@@ -247,10 +236,9 @@ impl BlockCompactMutator {
     pub async fn build_compact_tasks(
         ctx: Arc<dyn TableContext>,
         dal: Operator,
-        column_ids: HashSet<ColumnId>,
         cluster_key_id: Option<u32>,
         thresholds: BlockThresholds,
-        mut lazy_parts: Vec<CompactLazyPartInfo>,
+        lazy_parts: Vec<CompactLazyPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
         let start = Instant::now();
 
@@ -258,28 +246,30 @@ impl BlockCompactMutator {
         let max_concurrency = std::cmp::max(max_threads * 2, 10);
         let semaphore = Arc::new(Semaphore::new(max_concurrency));
 
-        let mut remain = lazy_parts.len() % max_threads;
-        let batch_size = lazy_parts.len() / max_threads;
+        let total_parts = lazy_parts.len();
+        let mut remain = total_parts % max_threads;
+        let batch_size = total_parts / max_threads;
         let mut works = Vec::with_capacity(max_threads);
-        while !lazy_parts.is_empty() {
+        let mut lazy_parts = lazy_parts.into_iter();
+        let mut remaining_parts = total_parts;
+        while remaining_parts > 0 {
             let gap_size = std::cmp::min(1, remain);
-            let batch_size = batch_size + gap_size;
+            let current_batch_size = batch_size + gap_size;
             remain -= gap_size;
+            remaining_parts -= current_batch_size;
 
-            let column_ids = column_ids.clone();
             let semaphore = semaphore.clone();
             let dal = dal.clone();
 
-            let batch = lazy_parts.drain(0..batch_size).collect::<Vec<_>>();
+            let batch = lazy_parts
+                .by_ref()
+                .take(current_batch_size)
+                .collect::<Vec<_>>();
             works.push(async move {
                 let mut res = vec![];
                 for lazy_part in batch {
-                    let mut builder = CompactTaskBuilder::new(
-                        dal.clone(),
-                        column_ids.clone(),
-                        cluster_key_id,
-                        thresholds,
-                    );
+                    let mut builder =
+                        CompactTaskBuilder::new(dal.clone(), cluster_key_id, thresholds);
                     let parts = builder
                         .build_tasks(
                             lazy_part.segment_indices,
@@ -332,35 +322,23 @@ pub struct SegmentCompactChecker {
     thresholds: BlockThresholds,
     segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
     total_block_count: u64,
-    cluster_key_id: Option<u32>,
 
     compacted_segment_cnt: usize,
     compacted_imperfect_block_cnt: u64,
 }
 
 impl SegmentCompactChecker {
-    pub fn new(thresholds: BlockThresholds, cluster_key_id: Option<u32>) -> Self {
+    pub fn new(thresholds: BlockThresholds) -> Self {
         Self {
             segments: vec![],
             total_block_count: 0,
             thresholds,
-            cluster_key_id,
             compacted_segment_cnt: 0,
             compacted_imperfect_block_cnt: 0,
         }
     }
 
     fn check_not_need_compact(&self, summary: &Statistics) -> bool {
-        let cluster_match = match (self.cluster_key_id, summary.cluster_stats.as_ref()) {
-            (Some(id), Some(stats)) => id == stats.cluster_key_id,
-            (None, _) => true,
-            _ => false,
-        };
-
-        if !cluster_match {
-            return false;
-        }
-
         if summary.block_count == 1 {
             return true;
         }
@@ -424,18 +402,18 @@ impl SegmentCompactChecker {
     pub fn generate_part(
         &mut self,
         segments: Vec<(SegmentIndex, Arc<CompactSegmentInfo>)>,
-        parts: &mut Vec<PartInfoPtr>,
+        parts: &mut Vec<CompactLazyPartInfo>,
     ) {
         if !segments.is_empty() && self.check_for_compact(&segments) {
             let (segment_indices, compact_segments) = segments.into_iter().unzip();
-            parts.push(CompactLazyPartInfo::create(
+            parts.push(CompactLazyPartInfo {
                 segment_indices,
                 compact_segments,
-            ));
+            });
         }
     }
 
-    pub fn finalize(&mut self, parts: &mut Vec<PartInfoPtr>) {
+    pub fn finalize(&mut self, parts: &mut Vec<CompactLazyPartInfo>) {
         let final_segments = std::mem::take(&mut self.segments);
         self.generate_part(final_segments, parts);
     }
@@ -470,7 +448,6 @@ impl SegmentCompactChecker {
 
 struct CompactTaskBuilder {
     dal: Operator,
-    column_ids: HashSet<ColumnId>,
     cluster_key_id: Option<u32>,
     thresholds: BlockThresholds,
 
@@ -481,15 +458,9 @@ struct CompactTaskBuilder {
 }
 
 impl CompactTaskBuilder {
-    fn new(
-        dal: Operator,
-        column_ids: HashSet<ColumnId>,
-        cluster_key_id: Option<u32>,
-        thresholds: BlockThresholds,
-    ) -> Self {
+    fn new(dal: Operator, cluster_key_id: Option<u32>, thresholds: BlockThresholds) -> Self {
         Self {
             dal,
-            column_ids,
             cluster_key_id,
             thresholds,
             blocks: vec![],
@@ -558,35 +529,13 @@ impl CompactTaskBuilder {
         block_idx: BlockIndex,
         blocks: Vec<BlockMetaWithHLL>,
     ) -> bool {
-        if blocks.len() == 1 && !self.check_compact(&blocks[0].0) {
+        if blocks.len() == 1 {
             unchanged_blocks.push((block_idx, blocks[0].clone()));
             true
         } else {
             let blocks = blocks.into_iter().map(|v| v.0).collect();
             tasks.push_back((block_idx, blocks));
             false
-        }
-    }
-
-    fn check_compact(&self, block: &BlockMeta) -> bool {
-        // The snapshot schema does not contain stream columns,
-        // so the stream columns need to be filtered out.
-        let column_ids = block
-            .col_metas
-            .keys()
-            .filter(|id| !is_stream_column_id(**id))
-            .cloned()
-            .collect::<HashSet<_>>();
-        if self.column_ids == column_ids {
-            // Check if the block needs to be resort.
-            self.cluster_key_id.is_some_and(|key| {
-                block
-                    .cluster_stats
-                    .as_ref()
-                    .is_none_or(|v| v.cluster_key_id != key)
-            })
-        } else {
-            true
         }
     }
 
@@ -667,19 +616,16 @@ impl CompactTaskBuilder {
 
         if !self.is_empty() {
             let tail = self.take_blocks();
-            if self.cluster_key_id.is_some() && latest_flag {
-                // The clustering table cannot compact different level blocks.
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, tail);
+            let mut blocks = if latest_flag {
+                unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
             } else {
-                let mut blocks = if latest_flag {
-                    unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
-                } else {
-                    tasks
-                        .pop_back()
-                        .map_or(vec![], |(_, v)| v.into_iter().map(|v| (v, None)).collect())
-                };
+                tasks
+                    .pop_back()
+                    .map_or(vec![], |(_, v)| v.into_iter().map(|v| (v, None)).collect())
+            };
 
-                let (total_rows, total_size, total_compressed) = blocks
+            let (total_rows, total_size, total_compressed) =
+                blocks
                     .iter()
                     .chain(tail.iter())
                     .fold((0, 0, 0), |mut acc, x| {
@@ -688,14 +634,13 @@ impl CompactTaskBuilder {
                         acc.2 += x.0.file_size as usize;
                         acc
                     });
-                if self.check_for_compact(total_rows, total_size, total_compressed) {
-                    blocks.extend(tail);
-                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                } else {
-                    // blocks >= 2N
-                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
-                }
+            if self.check_for_compact(total_rows, total_size, total_compressed) {
+                blocks.extend(tail);
+                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+            } else {
+                // blocks >= 2N
+                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
             }
         }
 

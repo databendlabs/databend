@@ -156,8 +156,6 @@ impl BloomIndexRebuilder {
             self.table_schema.clone(),
             projection,
             false,
-            false,
-            false,
         )?;
 
         let settings = ReadSettings::from_ctx(&self.table_ctx)?;

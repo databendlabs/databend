@@ -108,56 +108,6 @@ insert into t4 select number % 2, to_string(number) from numbers(500)
 statement ok
 alter table t4 recluster final
 
-## test recluster with compact task.
-statement ok
-create table t5(a int, b int);
-
-statement ok
-set compact_max_block_selection = 2;
-
-statement ok
-insert into t5 values(1, 1),(6, 6);
-
-statement ok
-insert into t5 values(0, 0),(3, 3);
-
-statement ok
-insert into t5 values(2, 2),(4, 4);
-
-statement ok
-alter table t5 cluster by(a);
-
-statement ok
-alter table t5 recluster;
-
-query T
-select info from clustering_information('db_09_0016','t5');
-----
-{"average_depth":2.0,"average_overlaps":1.0,"block_depth_histogram":{"00002":2},"constant_block_count":0,"total_block_count":2}
-
-query TTI
-select min, max, level from clustering_statistics('db_09_0016','t5') order by segment_name;
-----
-NULL NULL NULL
-[0] [4] 0
-
-statement ok
-alter table t5 recluster;
-
-query TTI
-select min, max, level from clustering_statistics('db_09_0016','t5') order by segment_name;
-----
-[0] [4] 0
-[1] [6] 0
-
-statement ok
-alter table t5 recluster;
-
-query TTI
-select min, max, level from clustering_statistics('db_09_0016','t5') order by segment_name;
-----
-[0] [6] 1
-
 statement ok
 DROP DATABASE db_09_0016
 

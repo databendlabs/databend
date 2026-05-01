@@ -17,12 +17,12 @@ use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
 use databend_common_catalog::plan::VectorIndexInfo;
 use databend_common_exception::Result;
-use databend_common_expression::Column;
 use databend_common_expression::Scalar;
 use databend_common_expression::VECTOR_SCORE_COL_NAME;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::VectorScalar;
 use databend_common_meta_app::schema::TableIndexType;
 use unicase::Ascii;
 
@@ -30,8 +30,6 @@ use super::TypeChecker;
 use crate::ColumnBinding;
 use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
-use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
 impl<'a> TypeChecker<'a> {
@@ -42,6 +40,24 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("l2_distance"),
         ];
         VECTOR_FUNCTIONS
+    }
+
+    fn try_fold_cast_to_vector(&self, expr: &ScalarExpr) -> Option<Vec<F32>> {
+        if expr.evaluable() {
+            let checked_expr = expr.as_expr().ok()?;
+            let folded = self.try_fold_constant(&checked_expr, true)?;
+            let constant = match &folded.0 {
+                ScalarExpr::ConstantExpr(constant) | ScalarExpr::TypedConstantExpr(constant, _) => {
+                    constant.clone()
+                }
+                _ => return None,
+            };
+
+            if let Scalar::Vector(VectorScalar::Float32(values)) = constant.value {
+                return Some(values.clone());
+            }
+        }
+        None
     }
 
     pub(super) fn try_rewrite_vector_function(
@@ -68,18 +84,10 @@ impl<'a> TypeChecker<'a> {
                             },
                         ..
                     }),
-                    ScalarExpr::CastExpr(CastExpr {
-                        argument,
-                        target_type,
-                        ..
-                    }),
+                    arg,
                 ]
                 | [
-                    ScalarExpr::CastExpr(CastExpr {
-                        argument,
-                        target_type,
-                        ..
-                    }),
+                    arg,
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
                         column:
                             ColumnBinding {
@@ -94,12 +102,7 @@ impl<'a> TypeChecker<'a> {
                     }),
                 ] => {
                     let col_data_type = data_type.remove_nullable();
-                    let target_type = target_type.remove_nullable();
-                    if table_index.is_some()
-                        && matches!(col_data_type, DataType::Vector(_))
-                        && matches!(&**argument, ScalarExpr::ConstantExpr(_))
-                        && matches!(&target_type, DataType::Vector(_))
-                    {
+                    if table_index.is_some() && matches!(col_data_type, DataType::Vector(_)) {
                         let table_index = table_index.unwrap();
                         let table_entry = self.metadata.read().table(table_index).clone();
                         let table = table_entry.table();
@@ -116,6 +119,14 @@ impl<'a> TypeChecker<'a> {
                         let Ok(column_id) = table_schema.column_id_of(column_name) else {
                             return None;
                         };
+                        let query_values = self.try_fold_cast_to_vector(arg)?;
+                        let col_vector_type = col_data_type.as_vector().unwrap();
+                        let col_dimension = col_vector_type.dimension() as usize;
+                        let arg_dimension = query_values.len();
+                        if col_dimension != arg_dimension {
+                            return None;
+                        }
+
                         for vector_index in table_indexes.values() {
                             if vector_index.index_type != TableIndexType::Vector {
                                 continue;
@@ -160,39 +171,6 @@ impl<'a> TypeChecker<'a> {
                                     span,
                                     column: column_binding,
                                 });
-
-                                let arg = ConstantExpr::try_from(*argument.clone()).unwrap();
-                                let Scalar::Array(arg_col) = arg.value else {
-                                    return None;
-                                };
-                                let arg_col = arg_col.remove_nullable();
-
-                                let col_vector_type = col_data_type.as_vector().unwrap();
-                                let col_dimension = col_vector_type.dimension() as usize;
-                                let arg_vector_type = target_type.as_vector().unwrap();
-                                let arg_dimension = arg_vector_type.dimension() as usize;
-                                if col_dimension != arg_dimension || arg_col.len() != col_dimension
-                                {
-                                    return None;
-                                }
-                                let mut query_values = Vec::with_capacity(arg_col.len());
-                                match arg_col {
-                                    Column::Number(num_col) => {
-                                        for i in 0..num_col.len() {
-                                            let num = unsafe { num_col.index_unchecked(i) };
-                                            query_values.push(num.to_f32());
-                                        }
-                                    }
-                                    Column::Decimal(dec_col) => {
-                                        for i in 0..dec_col.len() {
-                                            let dec = unsafe { dec_col.index_unchecked(i) };
-                                            query_values.push(F32::from(dec.to_float32()));
-                                        }
-                                    }
-                                    _ => {
-                                        return None;
-                                    }
-                                }
 
                                 let index_info = VectorIndexInfo {
                                     index_name: vector_index.name.clone(),

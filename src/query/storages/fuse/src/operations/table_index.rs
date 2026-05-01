@@ -129,8 +129,7 @@ pub async fn do_refresh_table_index(
     // Read data here to keep the order of blocks in segment.
     let projection = Projection::Columns(field_indices);
 
-    let block_reader =
-        fuse_table.create_block_reader(ctx.clone(), projection, false, false, false)?;
+    let block_reader = fuse_table.create_block_reader(ctx.clone(), projection, false)?;
 
     let meta_locations = fuse_table.meta_location_generator().clone();
     let segment_reader = MetaReaders::segment_info_reader(fuse_table.get_operator(), table_schema);

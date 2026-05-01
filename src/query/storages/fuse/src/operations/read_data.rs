@@ -37,8 +37,6 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         projection: Projection,
-        query_internal_columns: bool,
-        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.schema_with_stream();
@@ -47,8 +45,6 @@ impl FuseTable {
             self.operator.clone(),
             table_schema,
             projection,
-            query_internal_columns,
-            update_stream_columns,
             put_cache,
         )
     }
@@ -66,8 +62,6 @@ impl FuseTable {
                 &self.schema_with_stream(),
                 plan.push_downs.as_ref(),
             ),
-            plan.internal_columns.is_some(),
-            plan.update_stream_columns,
             put_cache,
         )
     }
