@@ -75,7 +75,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::TenantUserIdent;
     use crate::principal::UserIdentity;
@@ -83,17 +84,8 @@ mod tests {
 
     fn test_format_parse(user: &str, host: &str, expect: &str) {
         let tenant = Tenant::new_literal("test_tenant");
-        let user_ident = UserIdentity::new(user, host);
-        let tenant_user_ident = TenantUserIdent::new(tenant, user_ident);
-
-        let key = tenant_user_ident.to_string_key();
-        assert_eq!(key, expect, "'{user}' '{host}' '{expect}'");
-
-        let tenant_user_ident_parsed = TenantUserIdent::from_str_key(&key).unwrap();
-        assert_eq!(
-            tenant_user_ident, tenant_user_ident_parsed,
-            "'{user}' '{host}' '{expect}'"
-        );
+        let ident = TenantUserIdent::new(tenant, UserIdentity::new(user, host));
+        assert_round_trip(ident, expect);
     }
 
     #[test]

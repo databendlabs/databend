@@ -15,13 +15,10 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use databend_meta_client::kvapi::KeyBuilder;
-use databend_meta_client::kvapi::KeyCodec;
-use databend_meta_client::kvapi::KeyError;
-use databend_meta_client::kvapi::KeyParser;
+use databend_meta_client::kvapi;
 
 /// Uniquely identifies a procedure with a name and a args vec(string).
-#[derive(Clone, Debug, Eq, PartialEq, Hash, Default)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Default, kvapi::KeyCodec)]
 pub struct ProcedureIdentity {
     pub name: String,
     pub args: String,
@@ -43,22 +40,9 @@ impl Display for ProcedureIdentity {
         write!(
             f,
             "{}({})",
-            KeyBuilder::escape_specified(&self.name, &Self::ESCAPE_CHARS),
-            KeyBuilder::escape_specified(&self.args, &Self::ESCAPE_CHARS),
+            kvapi::KeyBuilder::escape_specified(&self.name, &Self::ESCAPE_CHARS),
+            kvapi::KeyBuilder::escape_specified(&self.args, &Self::ESCAPE_CHARS),
         )
-    }
-}
-
-impl KeyCodec for ProcedureIdentity {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        b.push_str(&self.name).push_str(&self.args)
-    }
-
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-    where Self: Sized {
-        let name = parser.next_str()?;
-        let args = parser.next_str()?;
-        Ok(Self { name, args })
     }
 }
 

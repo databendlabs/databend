@@ -18,6 +18,8 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_meta_client::kvapi;
+
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::tenant::Tenant;
 use crate::tenant::ToTenant;
@@ -95,7 +97,9 @@ impl Display for TableNameIdent {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+/// `__fd_table/<db_id>/<tb_name>`
+#[derive(Clone, Debug, Eq, PartialEq, Default, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table")]
 pub struct DBIdTableName {
     pub db_id: u64,
     pub table_name: String,
@@ -119,7 +123,9 @@ impl Display for DBIdTableName {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Default)]
+/// `__fd_table_by_id/<tb_id> -> TableMeta`
+#[derive(Clone, Debug, Eq, PartialEq, Default, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_by_id")]
 pub struct TableId {
     pub table_id: u64,
 }
@@ -136,8 +142,11 @@ impl Display for TableId {
     }
 }
 
-/// The meta-service key for storing table id history ever used by a table name
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// The meta-service key for storing table id history ever used by a table name.
+///
+/// `__fd_table_id_list/<db_id>/<tb_name> -> id_list`
+#[derive(Clone, Debug, Eq, PartialEq, Hash, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_id_list")]
 pub struct TableIdHistoryIdent {
     pub database_id: u64,
     pub table_name: String,

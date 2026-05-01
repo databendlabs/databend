@@ -46,7 +46,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::data_mask::mask_policy_table_id_list_ident::MaskPolicyTableIdListIdent;
     use crate::tenant::Tenant;
@@ -54,10 +55,7 @@ mod tests {
     #[test]
     fn test_ident() {
         let tenant = Tenant::new_literal("tenant1");
-        let ident = MaskPolicyTableIdListIdent::new(tenant.clone(), "test");
-        assert_eq!("__fd_datamask_id_list/tenant1/test", ident.to_string_key());
-
-        let got = MaskPolicyTableIdListIdent::from_str_key(&ident.to_string_key()).unwrap();
-        assert_eq!(ident, got);
+        let ident = MaskPolicyTableIdListIdent::new(tenant, "test");
+        assert_round_trip(ident, "__fd_datamask_id_list/tenant1/test");
     }
 }
