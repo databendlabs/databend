@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_statistics::Histogram;
+pub use databend_common_statistics::StatCardinality;
+pub use databend_common_statistics::StatCount;
 pub use databend_common_statistics::StatEstimate;
 
 use crate::Domain;
@@ -25,7 +27,7 @@ use crate::types::nullable::NullableDomain;
 pub struct StatDistribution<D> {
     pub domain: Domain,
     pub ndv: StatEstimate,
-    pub null_count: StatEstimate,
+    pub null_count: StatCount,
     pub distribution: D,
 }
 
@@ -54,7 +56,7 @@ impl<D: DistributionInvariant> StatDistribution<D> {
         }
         self.null_count.check_consistency()?;
         if let Domain::Nullable(domain) = &self.domain {
-            if self.null_count.upper > 0.0 && !domain.has_null {
+            if self.null_count.upper() > 0.0 && !domain.has_null {
                 return Err(
                     "null_count is positive but nullable domain has_null is false".to_string(),
                 );
@@ -62,7 +64,7 @@ impl<D: DistributionInvariant> StatDistribution<D> {
             if !domain.has_null && domain.value.is_none() {
                 return Err("nullable domain without nulls must carry a value domain".to_string());
             }
-        } else if self.null_count.upper > 0.0 {
+        } else if self.null_count.upper() > 0.0 {
             return Err("non-nullable domain has positive null_count".to_string());
         }
         self.distribution.check_distribution(self)
@@ -75,7 +77,7 @@ impl<D> StatDistribution<D> {
     }
 
     pub fn has_null(&self) -> bool {
-        self.null_count.upper > 0.0
+        self.null_count.upper() > 0.0
             || matches!(
                 self.domain,
                 Domain::Nullable(NullableDomain { has_null: true, .. })
@@ -83,21 +85,17 @@ impl<D> StatDistribution<D> {
     }
 
     pub fn expected_null_count(&self) -> f64 {
-        self.null_count.expected
+        self.null_count.expected()
     }
 
-    pub fn effective_null_count(&self, cardinality: f64) -> StatEstimate {
-        let cardinality = cardinality.max(0.0);
+    pub fn effective_null_count(&self, cardinality: StatCardinality) -> StatCount {
+        let cardinality = cardinality.value();
         let non_null_lower = self.ndv.lower;
         let upper = self
             .null_count
-            .upper
+            .upper()
             .min((cardinality - non_null_lower).max(0.0));
-        StatEstimate::new(
-            self.null_count.lower.min(upper),
-            self.null_count.expected.min(upper),
-            upper,
-        )
+        self.null_count.reduce(upper)
     }
 }
 
@@ -123,19 +121,19 @@ impl ReturnStat {
 
 #[derive(Debug, Clone)]
 pub struct StatUnaryArg<'a> {
-    pub cardinality: f64,
+    pub cardinality: StatCardinality,
     pub args: &'a [ArgStat<'a>; 1],
 }
 
 #[derive(Debug, Clone)]
 pub struct StatBinaryArg<'a> {
-    pub cardinality: f64,
+    pub cardinality: StatCardinality,
     pub args: &'a [ArgStat<'a>; 2],
 }
 
 #[derive(Debug, Clone)]
 pub struct StatArgs<'a> {
-    pub cardinality: f64,
+    pub cardinality: StatCardinality,
     pub args: &'a [ArgStat<'a>],
 }
 
@@ -290,7 +288,7 @@ mod tests {
                 value: None,
             }),
             ndv: StatEstimate::exact(0.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Histogram(Histogram::Int(TypedHistogram::new(
                 vec![],
                 true,
@@ -312,7 +310,7 @@ mod tests {
                 }))),
             }),
             ndv: StatEstimate::exact(2.0),
-            null_count: StatEstimate::exact(1.0),
+            null_count: StatCount::exact(1),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(1.0),
             }),
@@ -326,7 +324,7 @@ mod tests {
                 value: None,
             }),
             ndv: StatEstimate::exact(0.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::exact(0.0),
             }),
@@ -340,7 +338,7 @@ mod tests {
                 value: None,
             }),
             ndv: StatEstimate::new(0.0, 1.0, 1.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::new(0.0, 0.5, 1.0),
             }),
@@ -361,10 +359,13 @@ mod tests {
                 }))),
             }),
             ndv: StatEstimate::exact(3.0),
-            null_count: StatEstimate::exact(1.0),
+            null_count: StatCount::exact(1),
             distribution: OwnedDistribution::Unknown,
         };
 
-        assert_eq!(stat.effective_null_count(3.0), StatEstimate::exact(0.0));
+        assert_eq!(
+            stat.effective_null_count(StatCardinality::estimate(3.0)),
+            StatCount::estimate(0.0, 0.0)
+        );
     }
 }

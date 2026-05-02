@@ -84,13 +84,13 @@ impl<T: Value> TypedHistogramBucket<T> {
             Intersection::Range => self.num_distinct().min(other.num_distinct()),
         };
 
+        let upper_cardinality = self.num_values() * other.num_values();
+        let expected_cardinality = expected.cardinality.expected.min(upper_cardinality);
+        let expected_ndv = expected.ndv.expected.min(upper_ndv);
+
         JoinEstimation {
-            cardinality: StatEstimate::new(
-                0.0,
-                expected.cardinality.expected,
-                self.num_values() * other.num_values(),
-            ),
-            ndv: StatEstimate::new(0.0, expected.ndv.expected, upper_ndv),
+            cardinality: StatEstimate::new(0.0, expected_cardinality, upper_cardinality),
+            ndv: StatEstimate::new(0.0, expected_ndv, upper_ndv),
         }
     }
 
@@ -155,5 +155,33 @@ mod tests {
             cardinality: StatEstimate::exact(12.0),
             ndv: StatEstimate::exact(1.0),
         });
+    }
+
+    #[test]
+    fn test_typed_histogram_estimate_join_caps_scaled_bucket_expected_count() {
+        let left = TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.984, 0.93)],
+            avg_spacing: None,
+        };
+        let right = TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.984, 0.93)],
+            avg_spacing: None,
+        };
+
+        let raw_expected = left.buckets[0].num_values() * right.buckets[0].num_values()
+            / left.buckets[0].num_distinct();
+        let cartesian_upper = left.buckets[0].num_values() * right.buckets[0].num_values();
+        assert!(raw_expected > cartesian_upper);
+
+        let estimation = left.estimate_join(&right);
+        estimation.cardinality.check_consistency().unwrap();
+        estimation.ndv.check_consistency().unwrap();
+        assert_eq!(estimation.cardinality.upper, cartesian_upper);
+        assert_eq!(
+            estimation.cardinality.expected,
+            estimation.cardinality.upper
+        );
     }
 }

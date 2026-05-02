@@ -24,6 +24,8 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Histogram;
@@ -326,7 +328,7 @@ impl Operator for Scan {
                     continue;
                 };
 
-                let null_count = StatEstimate::exact(col_stat.null_count as f64);
+                let null_count = StatCount::exact(col_stat.null_count);
                 let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
@@ -370,7 +372,10 @@ impl Operator for Scan {
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(prewhere)) => {
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(column_stats, precise_cardinality as f64);
+                let mut sb = SelectivityEstimator::new(
+                    column_stats,
+                    StatCardinality::exact(precise_cardinality),
+                );
                 let cardinality = sb.apply(&prewhere.predicates)?;
                 column_stats = sb.into_column_stats();
                 cardinality
@@ -393,7 +398,10 @@ impl Operator for Scan {
         if self.secure_predicates.is_some() {
             let cardinality = match &self.secure_predicates {
                 Some(preds) if !preds.is_empty() => {
-                    SelectivityEstimator::new(column_stats, cardinality).apply(preds)?
+                    let input_cardinality = precise_cardinality
+                        .map(StatCardinality::exact)
+                        .unwrap_or_else(|| StatCardinality::estimate(cardinality));
+                    SelectivityEstimator::new(column_stats, input_cardinality).apply(preds)?
                 }
                 _ => cardinality,
             };

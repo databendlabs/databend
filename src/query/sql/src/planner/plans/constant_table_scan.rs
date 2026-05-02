@@ -21,6 +21,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::NumberType;
@@ -224,7 +225,7 @@ impl Operator for ConstantTableScan {
                 min,
                 max,
                 ndv: StatEstimate::exact(ndv as f64),
-                null_count: StatEstimate::exact(null_count as f64),
+                null_count: StatCount::exact(null_count),
                 histogram,
             };
             column_stats.insert(*index, column_stat);

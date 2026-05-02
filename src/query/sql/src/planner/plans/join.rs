@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
@@ -839,10 +840,10 @@ impl JoinStatsEstimator {
         };
         if self.drop_null_join_keys && !condition.is_null_equal {
             if let Some(stat) = left_statistics.column_stats.get_mut(&columns.left) {
-                stat.null_count = StatEstimate::exact(0.0);
+                stat.null_count = StatCount::exact(0);
             }
             if let Some(stat) = right_statistics.column_stats.get_mut(&columns.right) {
-                stat.null_count = StatEstimate::exact(0.0);
+                stat.null_count = StatCount::exact(0);
             }
         }
 
@@ -886,7 +887,7 @@ fn join_key_null_count_for_cardinality(stat: &ColumnStat, cardinality: f64) -> f
     // Keep at least known NDV rows for non-null values; derived filters may
     // leave a stale null_count that would otherwise be subtracted again.
     let max_null_count = (cardinality - stat.ndv.lower).max(0.0);
-    stat.null_count.expected.min(max_null_count)
+    stat.null_count.expected().min(max_null_count)
 }
 
 #[derive(Clone, Copy)]
@@ -1262,14 +1263,14 @@ mod tests {
             min: Datum::Int(0),
             max: Datum::Int(100),
             ndv: StatEstimate::exact(100.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         };
         let right_stat = ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(10),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         };
 
@@ -1293,14 +1294,14 @@ mod tests {
             min: Datum::Int(0),
             max: Datum::Int(100),
             ndv: StatEstimate::exact(100.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         };
         let float_stat = ColumnStat {
             min: Datum::Float(F64::from(1.2)),
             max: Datum::Float(F64::from(8.8)),
             ndv: StatEstimate::exact(8.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         };
 
@@ -1324,14 +1325,14 @@ mod tests {
             min: Datum::Int(0),
             max: Datum::Int(100),
             ndv: StatEstimate::exact(100.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         };
         let right_stat = ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(10),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         };
 
@@ -1364,7 +1365,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
                 ndv: StatEstimate::exact(3.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1374,7 +1375,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
                 ndv: StatEstimate::exact(2.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1396,11 +1397,11 @@ mod tests {
         assert_eq!(estimator.join_card, 2.0);
         assert_eq!(
             left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         assert_eq!(
             right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         Ok(())
     }
@@ -1413,7 +1414,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
                 ndv: StatEstimate::exact(3.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1423,7 +1424,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
                 ndv: StatEstimate::exact(3.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1445,11 +1446,11 @@ mod tests {
         assert!((estimator.join_card - 2.3333333333333335).abs() < 1e-9);
         assert_eq!(
             left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         assert_eq!(
             right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         Ok(())
     }
@@ -1462,7 +1463,7 @@ mod tests {
                 min: Datum::Bool(false),
                 max: Datum::Bool(true),
                 ndv: StatEstimate::exact(2.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1472,7 +1473,7 @@ mod tests {
                 min: Datum::Bool(false),
                 max: Datum::Bool(true),
                 ndv: StatEstimate::exact(2.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1494,11 +1495,11 @@ mod tests {
         assert_eq!(estimator.join_card, 9.0);
         assert_eq!(
             left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         assert_eq!(
             right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         Ok(())
     }
@@ -1511,7 +1512,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
                 ndv: StatEstimate::exact(3.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1521,7 +1522,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
                 ndv: StatEstimate::exact(2.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1542,11 +1543,11 @@ mod tests {
 
         assert_eq!(
             left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(1.0)
+            StatCount::exact(1)
         );
         assert_eq!(
             right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatEstimate::exact(1.0)
+            StatCount::exact(1)
         );
         Ok(())
     }
@@ -1561,7 +1562,7 @@ mod tests {
                     min: Datum::Int(42),
                     max: Datum::Int(44),
                     ndv: StatEstimate::exact(2.0),
-                    null_count: StatEstimate::exact(1.0),
+                    null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
             },
@@ -1574,7 +1575,7 @@ mod tests {
                     min: Datum::Int(42),
                     max: Datum::Int(45),
                     ndv: StatEstimate::exact(3.0),
-                    null_count: StatEstimate::exact(1.0),
+                    null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
             },
@@ -1594,7 +1595,7 @@ mod tests {
         assert_eq!(stat_info.cardinality, 4.0);
         assert_eq!(
             stat_info.statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(1.0)
+            StatCount::estimate(1.0, 1.0)
         );
         Ok(())
     }
@@ -1607,7 +1608,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
                 ndv: StatEstimate::exact(3.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1617,7 +1618,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
                 ndv: StatEstimate::exact(2.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1641,11 +1642,11 @@ mod tests {
 
         assert_eq!(
             left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         assert_eq!(
             right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatEstimate::exact(0.0)
+            StatCount::exact(0)
         );
         assert_eq!(estimator.join_card, 2.0);
         Ok(())
@@ -1659,7 +1660,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
                 ndv: StatEstimate::exact(3.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1669,7 +1670,7 @@ mod tests {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
                 ndv: StatEstimate::exact(2.0),
-                null_count: StatEstimate::exact(1.0),
+                null_count: StatCount::exact(1),
                 histogram: None,
             })]),
         };
@@ -1698,11 +1699,11 @@ mod tests {
         assert!(estimator.updated_columns.is_none());
         assert_eq!(
             left_statistics.column_stats[&Symbol::new(0)].null_count,
-            StatEstimate::exact(1.0)
+            StatCount::exact(1)
         );
         assert_eq!(
             right_statistics.column_stats[&Symbol::new(1)].null_count,
-            StatEstimate::exact(1.0)
+            StatCount::exact(1)
         );
         Ok(())
     }

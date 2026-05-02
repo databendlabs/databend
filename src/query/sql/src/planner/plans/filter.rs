@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_expression::stat_distribution::StatCardinality;
 
 use crate::ColumnSet;
 use crate::optimizer::ir::RelExpr;
@@ -87,10 +88,13 @@ impl Operator for Filter {
     fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         // Derive cardinality
-        let mut sb = SelectivityEstimator::new(
-            stat_info.statistics.column_stats.clone(),
-            stat_info.cardinality,
-        );
+        let input_cardinality = stat_info
+            .statistics
+            .precise_cardinality
+            .map(StatCardinality::exact)
+            .unwrap_or_else(|| StatCardinality::estimate(stat_info.cardinality));
+        let mut sb =
+            SelectivityEstimator::new(stat_info.statistics.column_stats.clone(), input_cardinality);
         let cardinality = sb.apply(&self.predicates)?;
         // Derive column statistics
         let column_stats = if cardinality == 0.0 {

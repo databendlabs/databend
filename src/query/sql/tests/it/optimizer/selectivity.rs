@@ -16,6 +16,8 @@ use std::io::Write;
 
 use databend_common_exception::Result;
 use databend_common_expression::RawExpr;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
@@ -64,7 +66,8 @@ fn run_case_with_cardinality(
     let in_stats = column_stats_to_string(&column_stats);
     let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
     let expr = raw_expr_to_scalar(&raw_expr, columns);
-    let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
+    let mut estimator =
+        SelectivityEstimator::new(column_stats, StatCardinality::estimate(cardinality));
     let estimated_rows = estimator.apply(&[expr])?;
     let out_stats = estimator.column_stats();
 
@@ -151,14 +154,14 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
             min: Datum::UInt(10),
             max: Datum::UInt(20),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(10),
             max: Datum::UInt(20),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
@@ -207,7 +210,7 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         min: Datum::Int(1),
         max: Datum::Int(10),
         ndv: StatEstimate::exact(10.0),
-        null_count: StatEstimate::exact(0.0),
+        null_count: StatCount::exact(0),
         histogram: None,
     })]);
     for expr in ["i < 5", "i > 5"] {
@@ -222,7 +225,7 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         min: Datum::Int(1),
         max: Datum::Int(10),
         ndv: StatEstimate::exact(10.0),
-        null_count: StatEstimate::exact(30.0),
+        null_count: StatCount::exact(30),
         histogram: None,
     })]);
     run_case(
@@ -235,7 +238,7 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         min: Datum::Int(1),
         max: Datum::Int(10),
         ndv: StatEstimate::exact(10.0),
-        null_count: StatEstimate::exact(0.0),
+        null_count: StatCount::exact(0),
         histogram: Some(Histogram::Int(TypedHistogram {
             accuracy: true,
             buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
@@ -254,7 +257,7 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         min: Datum::UInt(0),
         max: Datum::UInt(10),
         ndv: StatEstimate::exact(11.0),
-        null_count: StatEstimate::exact(0.0),
+        null_count: StatCount::exact(0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
             buckets: vec![TypedHistogramBucket::new(0, 10, 100.0, 11.0)],
@@ -278,14 +281,14 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
@@ -321,14 +324,14 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
@@ -350,7 +353,7 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         min: Datum::Bytes("aa".as_bytes().to_vec()),
         max: Datum::Bytes("zz".as_bytes().to_vec()),
         ndv: StatEstimate::exact(52.0),
-        null_count: StatEstimate::exact(0.0),
+        null_count: StatCount::exact(0),
         histogram: None,
     })]);
     for expr in ["s like 'ab%'", "s like '%ab_'"] {

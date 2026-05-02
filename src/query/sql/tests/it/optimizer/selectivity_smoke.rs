@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_expression::Scalar;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
@@ -67,7 +69,7 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
         min: Datum::UInt(0),
         max: Datum::UInt(10),
         ndv: StatEstimate::exact(0.0),
-        null_count: StatEstimate::exact(0.0),
+        null_count: StatCount::exact(0),
         histogram: None,
     })]);
     let expr = comparison_expr(
@@ -76,7 +78,7 @@ fn zero_cardinality_comparison_selectivity_is_finite() {
         constant_expr(Scalar::Number(NumberScalar::UInt64(5))),
     );
 
-    let mut estimator = SelectivityEstimator::new(column_stats, 0.0);
+    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(0.0));
     let estimated_rows = estimator
         .apply(&[expr])
         .expect("zero-cardinality comparison should estimate");
@@ -91,7 +93,7 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
         min: Datum::UInt(0),
         max: Datum::UInt(1000),
         ndv: StatEstimate::exact(100.0),
-        null_count: StatEstimate::exact(0.0),
+        null_count: StatCount::exact(0),
         histogram: Some(Histogram::Float(TypedHistogram {
             accuracy: false,
             buckets: vec![TypedHistogramBucket::new(
@@ -109,7 +111,7 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
         constant_expr(Scalar::Number(NumberScalar::UInt64(100))),
     );
 
-    let mut estimator = SelectivityEstimator::new(column_stats, 100.0);
+    let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(100.0));
     let estimated_rows = estimator
         .apply(&[expr])
         .expect("distorted histogram comparison should estimate");
@@ -253,7 +255,7 @@ fn assert_estimator_smoke_invariants(
         prop_assert!(stat.ndv.expected.is_finite(), "ndv must stay finite");
         prop_assert!(stat.ndv.expected >= 0.0, "ndv must stay non-negative");
         prop_assert!(
-            stat.null_count.expected <= cardinality.ceil(),
+            stat.null_count.expected() <= cardinality.ceil(),
             "null count must not exceed input cardinality"
         );
         let arg_stat = stat.to_arg_stat(data_type).map_err(|err| {
@@ -334,7 +336,7 @@ proptest! {
             min,
             max,
             ndv: StatEstimate::exact(ndv as f64),
-            null_count: StatEstimate::exact(null_count as f64),
+            null_count: StatCount::exact(null_count),
             histogram,
         })]);
         for stat in column_stats.values() {
@@ -353,7 +355,7 @@ proptest! {
             comparison_expr(&case.func_name, column, constant)
         };
 
-        let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
+        let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(cardinality));
         let estimated_rows = estimator.apply(&[expr]).expect("selectivity estimation should not fail for valid comparison variants");
         assert_estimator_smoke_invariants(&estimator, estimated_rows, cardinality, &case.data_type)?;
     }

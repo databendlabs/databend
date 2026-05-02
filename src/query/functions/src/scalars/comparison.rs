@@ -2166,6 +2166,8 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 mod tests {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
+    use databend_common_expression::stat_distribution::StatCardinality;
+    use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::stat_distribution::StatEstimate;
     use databend_common_expression::types::Int64Type;
     use databend_common_expression::types::NumberDomain;
@@ -2181,7 +2183,7 @@ mod tests {
         let column_stat = ArgStat {
             domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
         let constant_stat = ArgStat {
@@ -2190,12 +2192,12 @@ mod tests {
                 value: None,
             }),
             ndv: StatEstimate::exact(0.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             distribution: BorrowedDistribution::Unknown,
         };
         let args = [column_stat, constant_stat];
         let stat = StatBinaryArg {
-            cardinality: 10.0,
+            cardinality: StatCardinality::exact(10),
             args: &args,
         };
 
@@ -2203,7 +2205,7 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(output.null_count, StatEstimate::exact(10.0));
+        assert_eq!(output.null_count, StatCount::exact(10));
         assert!(matches!(
             output.domain,
             Domain::Nullable(NullableDomain {
@@ -2222,7 +2224,7 @@ mod tests {
                 max: None,
             }),
             ndv: StatEstimate::exact(10.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
         let constant_stat = ArgStat {
@@ -2231,12 +2233,12 @@ mod tests {
                 max: Some("x".to_string()),
             }),
             ndv: StatEstimate::exact(1.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
         let args = [column_stat, constant_stat];
         let stat = StatBinaryArg {
-            cardinality: 100.0,
+            cardinality: StatCardinality::exact(100),
             args: &args,
         };
 

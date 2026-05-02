@@ -33,6 +33,8 @@ use super::stat_distribution::OwnedDistribution;
 use super::stat_distribution::ReturnStat;
 use super::stat_distribution::StatArgs;
 use super::stat_distribution::StatBinaryArg;
+use super::stat_distribution::StatCardinality;
+use super::stat_distribution::StatCount;
 use super::stat_distribution::StatEstimate;
 use super::stat_distribution::StatUnaryArg;
 use crate::Constant;
@@ -40,7 +42,7 @@ use crate::Constant;
 pub struct StatEvaluator<'a> {
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
-    cardinality: f64,
+    cardinality: StatCardinality,
 }
 
 impl<'a> StatEvaluator<'a> {
@@ -48,7 +50,7 @@ impl<'a> StatEvaluator<'a> {
         expr: &Expr<I>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
-        cardinality: f64,
+        cardinality: StatCardinality,
         input_stats: &'s HashMap<I, ArgStat<'s>>,
     ) -> Result<Option<CowStat<'s>>> {
         let evaluator = StatEvaluator {
@@ -64,7 +66,7 @@ impl<'a> StatEvaluator<'a> {
         expr: &Expr<I>,
         input_stats: &'s HashMap<I, ArgStat<'_>>,
     ) -> Result<Option<CowStat<'s>>> {
-        if self.cardinality == 0.0 {
+        if self.cardinality.is_zero() {
             return Ok(None);
         }
         match expr {
@@ -73,12 +75,9 @@ impl<'a> StatEvaluator<'a> {
             }) => Ok(Some({
                 let domain = scalar.as_ref().domain(data_type);
                 let (ndv, null_count) = if scalar.is_null() {
-                    (
-                        StatEstimate::exact(0.0),
-                        StatEstimate::exact(self.cardinality),
-                    )
+                    (StatEstimate::exact(0.0), self.cardinality.as_null_count())
                 } else {
-                    (StatEstimate::exact(1.0), StatEstimate::exact(0.0))
+                    (StatEstimate::exact(1.0), StatCount::exact(0))
                 };
                 CowStat::Owned(ReturnStat {
                     domain,
@@ -209,5 +208,31 @@ impl<'a> CowStat<'a> {
             },
             CowStat::Owned(owned) => owned,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::types::DataType;
+
+    #[test]
+    fn test_constant_null_uses_exact_input_cardinality() {
+        let expr = Expr::<usize>::constant(Scalar::Null, Some(DataType::Null));
+        let registry = FunctionRegistry::empty();
+        let stat = StatEvaluator::run(
+            &expr,
+            &FunctionContext::default(),
+            &registry,
+            StatCardinality::exact(7),
+            &HashMap::new(),
+        )
+        .unwrap()
+        .unwrap()
+        .into_owned();
+
+        assert_eq!(stat.null_count, StatCount::exact(7));
     }
 }

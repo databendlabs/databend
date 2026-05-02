@@ -22,6 +22,8 @@ use crate::stat_distribution::BooleanDistribution;
 use crate::stat_distribution::OwnedDistribution;
 use crate::stat_distribution::ReturnStat;
 use crate::stat_distribution::StatBinaryArg;
+use crate::stat_distribution::StatCardinality;
+use crate::stat_distribution::StatCount;
 use crate::stat_distribution::StatEstimate;
 use crate::types::boolean::BooleanDomain;
 use crate::types::nullable::NullableDomain;
@@ -120,7 +122,7 @@ pub struct ConstantComparison<'s, 'a, A: ConstantComparisonAdapter> {
     pub constant: A::Value,
     pub domain: Option<A::Domain>,
     pub non_null_cardinality: f64,
-    pub null_count: StatEstimate,
+    pub null_count: StatCount,
     pub nullable: bool,
     _a: PhantomData<fn(A)>,
 }
@@ -149,7 +151,7 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
     fn new(
         stat: &'s ArgStat<'a>,
         constant_stat: &ArgStat<'_>,
-        input_cardinality: f64,
+        input_cardinality: StatCardinality,
     ) -> Result<Option<Self>, String> {
         let Some(constant) = constant_stat.singleton() else {
             return Ok(None);
@@ -161,8 +163,9 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
             );
         }
         let nullable = stat.domain.is_nullable() || constant_stat.domain.is_nullable();
+        let cardinality = input_cardinality.value();
         let null_count = stat.effective_null_count(input_cardinality);
-        let non_null_cardinality = (input_cardinality - null_count.expected).max(0.0);
+        let non_null_cardinality = (cardinality - null_count.expected()).max(0.0);
         let domain = match &stat.domain {
             Domain::Nullable(NullableDomain { value: None, .. }) => None,
             Domain::Nullable(NullableDomain {
@@ -201,11 +204,11 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
             has_true,
             has_false,
         };
-        let value_domain = (has_true || has_false || self.null_count.upper == 0.0)
+        let value_domain = (has_true || has_false || self.null_count.upper() == 0.0)
             .then(|| Box::new(Domain::Boolean(boolean_domain)));
         let domain = if self.nullable {
             Domain::Nullable(NullableDomain {
-                has_null: self.null_count.upper > 0.0,
+                has_null: self.null_count.upper() > 0.0,
                 value: value_domain,
             })
         } else {
@@ -252,7 +255,7 @@ pub fn null_comparison_stat(stat: &StatBinaryArg) -> Option<ReturnStat> {
                 value: None,
             }),
             ndv: StatEstimate::exact(0.0),
-            null_count: StatEstimate::exact(stat.cardinality),
+            null_count: stat.cardinality.as_null_count(),
             distribution: OwnedDistribution::Unknown,
         })
     } else {
@@ -316,7 +319,7 @@ mod tests {
     fn test_comparison<'a>(
         stat: &'a ArgStat<'a>,
         non_null_cardinality: f64,
-        null_count: StatEstimate,
+        null_count: StatCount,
         nullable: bool,
     ) -> ConstantComparison<'a, 'a, TestAdapter> {
         ConstantComparison {
@@ -338,10 +341,10 @@ mod tests {
                 has_false: true,
             }),
             ndv: StatEstimate::exact(2.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             distribution: crate::stat_distribution::BorrowedDistribution::Unknown,
         };
-        let comparison = test_comparison(&stat, 100.0, StatEstimate::exact(0.0), false);
+        let comparison = test_comparison(&stat, 100.0, StatCount::exact(0), false);
 
         let all_false = comparison.boolean_stat(StatEstimate::exact(0.0));
         assert_eq!(
@@ -382,10 +385,10 @@ mod tests {
                 value: None,
             }),
             ndv: StatEstimate::exact(0.0),
-            null_count: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             distribution: crate::stat_distribution::BorrowedDistribution::Unknown,
         };
-        let comparison = test_comparison(&stat, 0.0, StatEstimate::exact(10.0), true);
+        let comparison = test_comparison(&stat, 0.0, StatCount::exact(10), true);
 
         let output = comparison.boolean_stat(StatEstimate::exact(0.0));
         assert_eq!(

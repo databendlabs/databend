@@ -23,6 +23,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StatEvaluator;
 use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -52,14 +53,16 @@ const FULL_WILDCARD_SEL: f64 = 2.0;
 
 pub struct SelectivityEstimator {
     pub cardinality: f64,
+    input_cardinality: StatCardinality,
     column_stats: ColumnStatSet,
     overrides: ColumnStatSet,
 }
 
 impl SelectivityEstimator {
-    pub fn new(input_stat: ColumnStatSet, cardinality: f64) -> Self {
+    pub fn new(input_stat: ColumnStatSet, input_cardinality: StatCardinality) -> Self {
         Self {
-            cardinality,
+            cardinality: input_cardinality.value(),
+            input_cardinality,
             column_stats: input_stat,
             overrides: ColumnStatSet::new(),
         }
@@ -99,6 +102,7 @@ impl SelectivityEstimator {
             ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
         let mut visitor = SelectivityVisitor {
             cardinality: self.cardinality,
+            input_cardinality: self.input_cardinality,
             selectivity: Selectivity::Unknown,
             column_stats: &self.column_stats,
             overrides: ColumnStatSet::new(),
@@ -139,6 +143,7 @@ impl SelectivityEstimator {
 #[derive(Clone)]
 struct SelectivityVisitor<'a> {
     cardinality: f64,
+    input_cardinality: StatCardinality,
     selectivity: Selectivity,
     column_stats: &'a ColumnStatSet,
     overrides: ColumnStatSet,
@@ -268,7 +273,7 @@ impl SelectivityVisitor<'_> {
             &Expr::FunctionCall(func.clone()),
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
-            self.cardinality,
+            self.input_cardinality,
             &input_stats,
         )?
         else {
@@ -332,7 +337,7 @@ impl SelectivityVisitor<'_> {
             return Ok(Selectivity::N(0.0));
         }
         Ok(Selectivity::N(
-            (self.cardinality - column_stat.null_count.expected) / self.cardinality,
+            (self.cardinality - column_stat.null_count.expected()) / self.cardinality,
         ))
     }
 
@@ -353,6 +358,7 @@ impl SelectivityVisitor<'_> {
     fn spawn_child(&self) -> SelectivityVisitor<'_> {
         SelectivityVisitor {
             cardinality: self.cardinality,
+            input_cardinality: self.input_cardinality,
             selectivity: Selectivity::Unknown,
             column_stats: self.column_stats,
             overrides: self.overrides.clone(),
@@ -482,6 +488,7 @@ fn is_true_constant_predicate(constant: &Constant) -> bool {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
+    use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::stat_distribution::StatEstimate;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
@@ -506,7 +513,7 @@ mod tests {
             min: Datum::Int(20),
             max: Datum::Int(30),
             ndv: StatEstimate::exact(11.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         });
 
@@ -535,7 +542,8 @@ mod tests {
             ],
         });
 
-        let mut estimator = SelectivityEstimator::new(column_stats, 100.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats, StatCardinality::estimate(100.0));
 
         assert_eq!(estimator.apply(&[predicate])?, 0.0);
         Ok(())
@@ -549,16 +557,18 @@ mod tests {
             min: Datum::Bytes(b"b".to_vec()),
             max: Datum::Bytes(b"d".to_vec()),
             ndv: StatEstimate::exact(3.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         });
 
         let predicate = string_comparison_predicate(column_index, ComparisonOp::Equal, "a");
-        let mut estimator = SelectivityEstimator::new(column_stats.clone(), 30.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(30.0));
         assert_eq!(estimator.apply(&[predicate])?, 0.0);
 
         let predicate = string_comparison_predicate(column_index, ComparisonOp::Equal, "c");
-        let mut estimator = SelectivityEstimator::new(column_stats, 30.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats, StatCardinality::estimate(30.0));
         assert_eq!(estimator.apply(&[predicate])?, 10.0);
         Ok(())
     }
@@ -572,18 +582,20 @@ mod tests {
             min: Datum::Float(1.0.into()),
             max: Datum::Float(3.0.into()),
             ndv: StatEstimate::exact(3.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         });
 
         let predicate =
             decimal_comparison_predicate(column_index, ComparisonOp::Equal, 400, decimal_size);
-        let mut estimator = SelectivityEstimator::new(column_stats.clone(), 30.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(30.0));
         assert_eq!(estimator.apply(&[predicate])?, 0.0);
 
         let predicate =
             decimal_comparison_predicate(column_index, ComparisonOp::Equal, 200, decimal_size);
-        let mut estimator = SelectivityEstimator::new(column_stats, 30.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats, StatCardinality::estimate(30.0));
         assert_eq!(estimator.apply(&[predicate])?, 10.0);
         Ok(())
     }
@@ -596,7 +608,7 @@ mod tests {
             min: Datum::UInt(0),
             max: Datum::UInt(737),
             ndv: StatEstimate::exact(738.0),
-            null_count: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(0),
             histogram: Some(
                 HistogramBuilder::from_ndv(
                     738,
@@ -609,17 +621,20 @@ mod tests {
         });
 
         let predicate = uint_comparison_predicate(column_index, ComparisonOp::GT, 731);
-        let mut estimator = SelectivityEstimator::new(column_stats.clone(), 738.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(738.0));
 
         assert!((estimator.apply(&[predicate])? - 6.0).abs() < 1e-9);
 
         let predicate = uint_comparison_predicate(column_index, ComparisonOp::GT, 700);
-        let mut estimator = SelectivityEstimator::new(column_stats.clone(), 738.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats.clone(), StatCardinality::estimate(738.0));
 
         assert!((estimator.apply(&[predicate])? - 37.0).abs() < 1e-9);
 
         let predicate = uint_comparison_predicate(column_index, ComparisonOp::GT, 737);
-        let mut estimator = SelectivityEstimator::new(column_stats, 738.0);
+        let mut estimator =
+            SelectivityEstimator::new(column_stats, StatCardinality::estimate(738.0));
 
         assert_eq!(estimator.apply(&[predicate])?, 0.0);
         Ok(())

@@ -19,6 +19,7 @@ use databend_common_statistics::Datum;
 pub use super::stat_distribution::ReturnStat;
 pub use super::stat_distribution::StatArgs;
 use super::stat_distribution::StatBinaryArg;
+use super::stat_distribution::StatCardinality;
 use super::stat_distribution::StatUnaryArg;
 use crate::Domain;
 use crate::FunctionContext;
@@ -46,7 +47,7 @@ pub trait ScalarFunctionStat: Send + Sync + 'static {
 
 #[derive(Clone, Copy)]
 pub enum DeriveStat {
-    Nullary(fn(cardinality: f64, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
+    Nullary(fn(StatCardinality, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
     Unary(fn(StatUnaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
     Binary(fn(StatBinaryArg, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),
     Other(fn(StatArgs, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>),

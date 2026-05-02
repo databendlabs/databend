@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
+use databend_common_statistics::StatCount;
 
 use crate::optimizer::ir::Matcher;
 use crate::optimizer::ir::RelExpr;
@@ -93,8 +94,8 @@ impl Rule for RuleFoldCountAggregate {
                     });
                 } else if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0]
                     && let Some(card) = column_stats.get(&col.column.index)
-                    && card.null_count.lower == card.null_count.upper
-                    && let Some(card) = table_card.checked_sub(card.null_count.expected as u64)
+                    && let StatCount::Exact(null_count) = card.null_count
+                    && let Some(card) = table_card.checked_sub(null_count)
                 {
                     item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                         span: item.scalar.span(),
