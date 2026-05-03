@@ -250,7 +250,7 @@ HashJoin
 ├── probe keys: [t1.a (#0)]
 ├── keys is null equal: [false]
 ├── filters: [t2.a (#2) > 0]
-├── estimated rows: 4.00
+├── estimated rows: 5.00
 ├── TableScan(Build)
 │   ├── table: default.default.t2
 │   ├── scan id: 1
