@@ -282,7 +282,7 @@ impl<'a> JoinStream for RightMarkHashJoinStream<'a> {
     }
 }
 
-fn init_markers(cols: ProjectedBlock, num_rows: usize, markers: &mut [u8]) {
+pub(crate) fn init_markers(cols: ProjectedBlock, num_rows: usize, markers: &mut [u8]) {
     if !cols
         .iter()
         .any(|entry| entry.data_type().is_nullable_or_null())

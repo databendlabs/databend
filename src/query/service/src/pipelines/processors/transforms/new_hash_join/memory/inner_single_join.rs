@@ -40,6 +40,7 @@ use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::P
 use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
+use crate::pipelines::processors::transforms::wrap_nullable_block;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
@@ -99,7 +100,13 @@ impl Join for InnerSingleHashJoin {
         }
 
         self.basic_hash_join.finalize_chunks();
-        let probe_keys = self.desc.probe_key(&data, &self.function_ctx)?;
+        let probe_keys = match self.desc.single_to_inner {
+            Some(JoinType::RightSingle) => {
+                let nullable_block = wrap_nullable_block(&data);
+                self.desc.probe_key(&nullable_block, &self.function_ctx)?
+            }
+            _ => self.desc.probe_key(&data, &self.function_ctx)?,
+        };
         let mut probe_keys = DataBlock::new(probe_keys, data.num_rows());
         let valids = match self.desc.from_correlated_subquery {
             true => None,
@@ -209,20 +216,33 @@ impl<'a> JoinStream for InnerSingleHashJoinStream<'a> {
                 continue;
             }
 
+            let single_to_inner = self.desc.single_to_inner;
             let probe_block = match probe_data_block.num_columns() {
                 0 => None,
-                _ => Some(DataBlock::take(
-                    &probe_data_block,
-                    self.probed_rows.matched_probe.as_slice(),
-                )?),
+                _ => {
+                    let block = DataBlock::take(
+                        &probe_data_block,
+                        self.probed_rows.matched_probe.as_slice(),
+                    )?;
+                    match single_to_inner {
+                        Some(JoinType::RightSingle) => Some(wrap_nullable_block(&block)),
+                        _ => Some(block),
+                    }
+                }
             };
             let build_block = match self.join_state.columns.is_empty() {
                 true => None,
-                false => Some(DataBlock::take_column_vec(
-                    self.join_state.columns.as_slice(),
-                    self.join_state.column_types.as_slice(),
-                    self.probed_rows.matched_build.as_slice(),
-                )),
+                false => {
+                    let block = DataBlock::take_column_vec(
+                        self.join_state.columns.as_slice(),
+                        self.join_state.column_types.as_slice(),
+                        self.probed_rows.matched_build.as_slice(),
+                    );
+                    match single_to_inner {
+                        Some(JoinType::LeftSingle) => Some(wrap_nullable_block(&block)),
+                        _ => Some(block),
+                    }
+                }
             };
             let result_block = final_result_block(
                 &self.desc,
@@ -231,7 +251,6 @@ impl<'a> JoinStream for InnerSingleHashJoinStream<'a> {
                 self.probed_rows.matched_build.len(),
             );
 
-            let single_to_inner = self.desc.single_to_inner;
             let join_state = self.join_state.clone();
             if matches!(single_to_inner, Some(JoinType::LeftSingle)) {
                 for probe_idx in &self.probed_rows.matched_probe {
@@ -270,17 +289,30 @@ impl<'a> JoinStream for InnerSingleHashJoinStream<'a> {
             return Ok(None);
         }
 
+        let single_to_inner = self.desc.single_to_inner;
         let probe_block = match probe_data_block.num_columns() {
             0 => None,
-            _ => Some(DataBlock::take(&probe_data_block, output_probe.as_slice())?),
+            _ => {
+                let block = DataBlock::take(&probe_data_block, output_probe.as_slice())?;
+                match single_to_inner {
+                    Some(JoinType::RightSingle) => Some(wrap_nullable_block(&block)),
+                    _ => Some(block),
+                }
+            }
         };
         let build_block = match self.join_state.columns.is_empty() {
             true => None,
-            false => Some(DataBlock::take_column_vec(
-                self.join_state.columns.as_slice(),
-                self.join_state.column_types.as_slice(),
-                output_build.as_slice(),
-            )),
+            false => {
+                let block = DataBlock::take_column_vec(
+                    self.join_state.columns.as_slice(),
+                    self.join_state.column_types.as_slice(),
+                    output_build.as_slice(),
+                );
+                match single_to_inner {
+                    Some(JoinType::LeftSingle) => Some(wrap_nullable_block(&block)),
+                    _ => Some(block),
+                }
+            }
         };
         Ok(Some(final_result_block(
             &self.desc,

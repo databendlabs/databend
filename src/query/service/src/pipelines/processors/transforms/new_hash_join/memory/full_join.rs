@@ -272,11 +272,11 @@ impl<'a> JoinStream for FullHashJoinStream<'a> {
             };
             let build_block = match self.join_state.columns.is_empty() {
                 true => None,
-                false => Some(DataBlock::take_column_vec(
+                false => Some(wrap_nullable_block(&DataBlock::take_column_vec(
                     self.join_state.columns.as_slice(),
                     self.join_state.column_types.as_slice(),
                     self.probed_rows.matched_build.as_slice(),
-                )),
+                ))),
             };
             let result_block = final_result_block(
                 &self.desc,
@@ -366,11 +366,11 @@ impl<'a> JoinStream for FullHashJoinFinalStream<'a> {
         let probe_block = null_block(&self.types, num_rows);
         let build_block = match self.join_state.columns.is_empty() {
             true => None,
-            false => Some(DataBlock::take_column_vec(
+            false => Some(wrap_nullable_block(&DataBlock::take_column_vec(
                 self.join_state.columns.as_slice(),
                 self.join_state.column_types.as_slice(),
                 self.scan_idx.as_slice(),
-            )),
+            ))),
         };
         self.scan_idx.clear();
         Ok(Some(final_result_block(

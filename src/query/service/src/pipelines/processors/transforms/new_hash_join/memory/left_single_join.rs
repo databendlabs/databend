@@ -40,6 +40,7 @@ use crate::pipelines::processors::transforms::new_hash_join::join::EmptyJoinStre
 use crate::pipelines::processors::transforms::new_hash_join::join::JoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::join::OneBlockJoinStream;
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
+use crate::pipelines::processors::transforms::wrap_nullable_block;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextSettings;
 
@@ -213,11 +214,14 @@ impl<'a> JoinStream for LeftSingleHashJoinStream<'a> {
             };
             let build_block = match self.join_state.columns.is_empty() {
                 true => None,
-                false => Some(DataBlock::take_column_vec(
-                    self.join_state.columns.as_slice(),
-                    self.join_state.column_types.as_slice(),
-                    self.probed_rows.matched_build.as_slice(),
-                )),
+                false => {
+                    let block = DataBlock::take_column_vec(
+                        self.join_state.columns.as_slice(),
+                        self.join_state.column_types.as_slice(),
+                        self.probed_rows.matched_build.as_slice(),
+                    );
+                    Some(wrap_nullable_block(&block))
+                }
             };
             let result_block = final_result_block(
                 &self.desc,
@@ -286,11 +290,14 @@ impl<'a> JoinStream for LeftSingleHashJoinStream<'a> {
             };
             let build_block = match self.join_state.columns.is_empty() {
                 true => None,
-                false => Some(DataBlock::take_column_vec(
-                    self.join_state.columns.as_slice(),
-                    self.join_state.column_types.as_slice(),
-                    matched_build.as_slice(),
-                )),
+                false => {
+                    let block = DataBlock::take_column_vec(
+                        self.join_state.columns.as_slice(),
+                        self.join_state.column_types.as_slice(),
+                        matched_build.as_slice(),
+                    );
+                    Some(wrap_nullable_block(&block))
+                }
             };
             blocks.push(final_result_block(
                 &self.desc,
