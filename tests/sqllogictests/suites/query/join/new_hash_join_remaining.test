@@ -1,0 +1,97 @@
+statement ok
+set enable_experimental_new_join = 1
+
+statement ok
+set disable_join_reorder = 1
+
+statement ok
+drop table if exists new_hash_join_l
+
+statement ok
+drop table if exists new_hash_join_r
+
+statement ok
+create table new_hash_join_l(k int null, v int null)
+
+statement ok
+create table new_hash_join_r(k int null, v int null)
+
+statement ok
+insert into new_hash_join_l values (1, 10), (2, 20), (3, 30), (null, 99)
+
+statement ok
+insert into new_hash_join_r values (1, 5), (2, 25), (4, 40), (null, 50)
+
+# Cross join does not need a hash table but still goes through the new join pipeline.
+query II rowsort
+select l.k, r.v
+from (select * from new_hash_join_l where k in (1, 2)) l
+cross join (select * from new_hash_join_r where k in (1, 4)) r
+----
+1 40
+1 5
+2 40
+2 5
+
+# Full join keeps left and right unmatched rows when the residual predicate is false.
+query TTTT rowsort
+select
+    ifnull(to_string(l.k), 'N'),
+    ifnull(to_string(l.v), 'N'),
+    ifnull(to_string(r.k), 'N'),
+    ifnull(to_string(r.v), 'N')
+from new_hash_join_l l
+full join new_hash_join_r r
+    on l.k = r.k and l.v < r.v
+----
+1 10 N N
+2 20 2 25
+3 30 N N
+N 99 N N
+N N 1 5
+N N 4 40
+N N N 50
+
+# Scalar subquery uses single join semantics and returns NULL for no match.
+query II rowsort
+select k, (select r.v from new_hash_join_r r where r.k = l.k) as scalar_v
+from new_hash_join_l l
+where k in (1, 2, 3)
+----
+1 5
+2 25
+3 NULL
+
+# Filtering the scalar result exercises single_to_inner via InnerSingleHashJoin.
+query II rowsort
+select k, scalar_v
+from (
+    select k, (select r.v from new_hash_join_r r where r.k = l.k) as scalar_v
+    from new_hash_join_l l
+) t
+where scalar_v is not null
+----
+1 5
+2 25
+
+# Mark join keeps SQL three-valued logic for build-side and probe-side NULLs.
+query IB rowsort
+select k, k in (select k from new_hash_join_r)
+from new_hash_join_l
+----
+1 1
+2 1
+3 NULL
+NULL 1
+
+statement ok
+drop table new_hash_join_l
+
+statement ok
+drop table new_hash_join_r
+
+statement ok
+set disable_join_reorder = 0
+
+statement ok
+set enable_experimental_new_join = 0

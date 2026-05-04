@@ -20,7 +20,14 @@ use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::AntiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::AntiRightHashJoin;
+use crate::pipelines::processors::transforms::memory::CrossHashJoin;
+use crate::pipelines::processors::transforms::memory::FullHashJoin;
+use crate::pipelines::processors::transforms::memory::InnerSingleHashJoin;
+use crate::pipelines::processors::transforms::memory::LeftMarkHashJoin;
+use crate::pipelines::processors::transforms::memory::LeftSingleHashJoin;
 use crate::pipelines::processors::transforms::memory::OuterRightHashJoin;
+use crate::pipelines::processors::transforms::memory::RightMarkHashJoin;
+use crate::pipelines::processors::transforms::memory::RightSingleHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
@@ -33,42 +40,70 @@ fn reset_basic_state(state: &BasicHashJoinState) {
     let locked = state.mutex.lock();
     let _locked = locked.unwrap_or_else(PoisonError::into_inner);
 
-    if !state.columns.is_empty() {
-        state.columns.as_mut().clear();
-    }
-
-    if !state.chunks.is_empty() {
-        state.chunks.as_mut().clear();
-    }
-
-    if *state.build_rows != 0 {
-        *state.build_rows.as_mut() = 0;
-    }
-
-    if !state.column_types.is_empty() {
-        state.column_types.as_mut().clear();
-    }
-
-    if !state.arenas.is_empty() {
-        state.arenas.as_mut().clear();
-    }
-
-    if !state.build_queue.is_empty() {
-        state.build_queue.as_mut().clear();
-    }
-
-    if !state.scan_map.is_empty() {
-        state.scan_map.as_mut().clear();
-    }
-
-    if !state.scan_queue.is_empty() {
-        state.scan_queue.as_mut().clear();
-    }
-
+    *state.build_rows.as_mut() = 0;
+    state.chunks.as_mut().clear();
+    state.columns.as_mut().clear();
+    state.column_types.as_mut().clear();
+    state.build_queue.as_mut().clear();
+    state.arenas.as_mut().clear();
     *state.hash_table.as_mut() = HashJoinHashTable::Null;
+    state.packets.as_mut().clear();
+    state.scan_map.as_mut().clear();
+    state.scan_queue.as_mut().clear();
 }
 
 impl GraceMemoryJoin for InnerHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for InnerSingleHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for CrossHashJoin {
+    fn reset_memory(&mut self) {
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for FullHashJoin {
+    fn reset_memory(&mut self) {
+        self.finished = false;
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for LeftSingleHashJoin {
+    fn reset_memory(&mut self) {
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for RightSingleHashJoin {
+    fn reset_memory(&mut self) {
+        self.finished = false;
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for LeftMarkHashJoin {
+    fn reset_memory(&mut self) {
+        self.finished = false;
+        self.performance_context.clear();
+        reset_basic_state(&self.basic_state);
+    }
+}
+
+impl GraceMemoryJoin for RightMarkHashJoin {
     fn reset_memory(&mut self) {
         self.performance_context.clear();
         reset_basic_state(&self.basic_state);

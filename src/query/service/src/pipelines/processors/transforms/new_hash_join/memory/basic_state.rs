@@ -26,6 +26,10 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 
+pub const SCAN_ROW_UNMATCHED: u8 = 0;
+pub const SCAN_ROW_MATCHED: u8 = 1;
+pub const SCAN_ROW_MARK_NULL: u8 = 2;
+
 pub struct BasicHashJoinState {
     pub mutex: Mutex<()>,
     pub build_rows: CStyleCell<usize>,
@@ -38,6 +42,8 @@ pub struct BasicHashJoinState {
     pub hash_table: CStyleCell<HashJoinHashTable>,
     pub packets: CStyleCell<Vec<JoinRuntimeFilterPacket>>,
 
+    /// Build-side row status map. Non-mark joins use unmatched/matched states;
+    /// LeftMark additionally uses the mark-null state for nullable marker output.
     pub scan_map: CStyleCell<Vec<Vec<u8>>>,
     pub scan_queue: CStyleCell<VecDeque<usize>>,
 

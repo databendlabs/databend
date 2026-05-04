@@ -34,6 +34,8 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MATCHED;
+use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::memory::left_join::null_block;
 use crate::pipelines::processors::transforms::merge_join_runtime_filter_packets;
@@ -258,7 +260,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                 for row_ptr in &self.probed_rows.matched_build {
                     let row_idx = row_ptr.row_index as usize;
                     let chunk_idx = row_ptr.chunk_index as usize;
-                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
+                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = SCAN_ROW_MATCHED;
                 }
 
                 return Ok(Some(data_block));
@@ -268,7 +270,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                 for row_ptr in &self.probed_rows.matched_build {
                     let row_idx = row_ptr.row_index as usize;
                     let chunk_idx = row_ptr.chunk_index as usize;
-                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
+                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = SCAN_ROW_MATCHED;
                 }
 
                 return Ok(Some(data_block));
@@ -287,7 +289,7 @@ impl<'a, const CONJUNCT: bool> JoinStream for OuterRightHashJoinStream<'a, CONJU
                     let row_ptr = self.probed_rows.matched_build[*idx as usize];
                     let row_idx = row_ptr.row_index as usize;
                     let chunk_idx = row_ptr.chunk_index as usize;
-                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = 1;
+                    self.join_state.scan_map.as_mut()[chunk_idx][row_idx] = SCAN_ROW_MATCHED;
                 }
 
                 let num_rows = data_block.num_rows();
@@ -338,7 +340,7 @@ impl<'a> JoinStream for OuterRightHashJoinFinalStream<'a> {
                 assume(idx < scan_map.len());
                 assume(self.scan_idx.len() < self.scan_idx.capacity());
 
-                if scan_map[idx] == 0 {
+                if scan_map[idx] == SCAN_ROW_UNMATCHED {
                     self.scan_idx.push(RowPtr {
                         chunk_index: chunk_idx as u32,
                         row_index: idx as u32,
