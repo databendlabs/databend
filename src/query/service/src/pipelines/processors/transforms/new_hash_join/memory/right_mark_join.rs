@@ -38,6 +38,7 @@ use crate::pipelines::processors::transforms::BasicHashJoinState;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_DISABLED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MARK_NULL;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
@@ -120,7 +121,7 @@ impl Join for RightMarkHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<false>()
+        self.basic_hash_join.final_build::<SCAN_MAP_DISABLED>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

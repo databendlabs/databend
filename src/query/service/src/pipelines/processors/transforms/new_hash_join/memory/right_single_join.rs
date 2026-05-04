@@ -14,7 +14,6 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
-use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::base::ProgressValues;
@@ -34,8 +33,10 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
+use crate::pipelines::processors::transforms::memory::basic_state::atomic_scan_map;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::memory::left_join::null_block;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
@@ -93,7 +94,7 @@ impl Join for RightSingleHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<true>()
+        self.basic_hash_join.final_build::<SCAN_MAP_MATCHED>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
@@ -169,13 +170,6 @@ pub(crate) fn mark_right_single_row(
             "Scalar subquery can't return more than one row",
         )),
     }
-}
-
-fn atomic_scan_map(scan_map: &[u8]) -> &[AtomicU8] {
-    debug_assert_eq!(std::mem::size_of::<u8>(), std::mem::size_of::<AtomicU8>());
-    debug_assert_eq!(std::mem::align_of::<u8>(), std::mem::align_of::<AtomicU8>());
-
-    unsafe { std::slice::from_raw_parts(scan_map.as_ptr().cast::<AtomicU8>(), scan_map.len()) }
 }
 
 struct RightSingleHashJoinStream<'a> {

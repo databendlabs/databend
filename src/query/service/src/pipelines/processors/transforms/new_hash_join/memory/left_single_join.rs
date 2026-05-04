@@ -31,6 +31,7 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_DISABLED;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::memory::left_join::null_block;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
@@ -88,7 +89,7 @@ impl Join for LeftSingleHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<false>()
+        self.basic_hash_join.final_build::<SCAN_MAP_DISABLED>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {

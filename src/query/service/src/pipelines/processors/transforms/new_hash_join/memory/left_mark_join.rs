@@ -14,17 +14,15 @@
 
 use std::ops::Deref;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use databend_common_base::base::ProgressValues;
 use databend_common_base::hints::assume;
-use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
-use databend_common_expression::ProjectedBlock;
 use databend_common_expression::with_join_hash_method;
 
 use crate::pipelines::processors::HashJoinDesc;
@@ -33,12 +31,13 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_MARK_NULL;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MARK_NULL;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
+use crate::pipelines::processors::transforms::memory::basic_state::atomic_scan_map;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::memory::right_mark_join::create_marker_block;
-use crate::pipelines::processors::transforms::memory::right_mark_join::init_markers;
 use crate::pipelines::processors::transforms::memory::right_mark_join::nullable_filter;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::basic::ProbeStream;
@@ -56,12 +55,6 @@ pub struct LeftMarkHashJoin {
     pub(crate) basic_state: Arc<BasicHashJoinState>,
     pub(crate) performance_context: PerformanceContext,
     pub(crate) finished: bool,
-}
-
-struct BuildMarkerState {
-    chunk_index: usize,
-    keys: Vec<BlockEntry>,
-    validity: Option<Bitmap>,
 }
 
 impl LeftMarkHashJoin {
@@ -93,28 +86,6 @@ impl LeftMarkHashJoin {
             finished: false,
         })
     }
-
-    fn next_build_marker_state(&self) -> Result<Option<BuildMarkerState>> {
-        let Some(chunk_index) = self.basic_state.build_queue.front().copied() else {
-            return Ok(None);
-        };
-        let chunk = &self.basic_state.chunks[chunk_index];
-        let keys = self.desc.build_key(chunk, &self.function_ctx)?;
-        if keys.is_empty() {
-            return Ok(Some(BuildMarkerState {
-                chunk_index,
-                keys,
-                validity: None,
-            }));
-        }
-        let keys_block = DataBlock::new(keys.clone(), chunk.num_rows());
-        let validity = self.desc.build_valids_by_keys(&keys_block)?;
-        Ok(Some(BuildMarkerState {
-            chunk_index,
-            keys,
-            validity,
-        }))
-    }
 }
 
 impl Join for LeftMarkHashJoin {
@@ -123,35 +94,7 @@ impl Join for LeftMarkHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        let build_marker_state = self.next_build_marker_state()?;
-        let progress = self.basic_hash_join.final_build::<true>()?;
-        if progress.is_some() {
-            if let Some(build_marker_state) = build_marker_state {
-                let scan_map =
-                    &mut self.basic_state.scan_map.as_mut()[build_marker_state.chunk_index];
-                match build_marker_state.validity {
-                    Some(validity) => {
-                        let valid_count = validity.true_count();
-                        let mut invalid_count = 0;
-                        for is_valid in validity.iter() {
-                            if !is_valid {
-                                let scan_idx = valid_count + invalid_count;
-                                invalid_count += 1;
-                                if scan_map[scan_idx] == SCAN_ROW_UNMATCHED {
-                                    scan_map[scan_idx] = SCAN_ROW_MARK_NULL;
-                                }
-                            }
-                        }
-                    }
-                    None => init_markers(
-                        ProjectedBlock::from(build_marker_state.keys.as_slice()),
-                        scan_map.len(),
-                        scan_map,
-                    ),
-                }
-            }
-        }
-        Ok(progress)
+        self.basic_hash_join.final_build::<SCAN_MAP_MARK_NULL>()
     }
 
     fn probe_block(&mut self, data: DataBlock) -> Result<Box<dyn JoinStream + '_>> {
@@ -309,16 +252,18 @@ impl<'a> JoinStream for LeftMarkHashJoinStream<'a> {
 
 impl LeftMarkHashJoinStream<'_> {
     fn mark_true(&self, row_ptr: RowPtr) {
-        self.join_state.scan_map.as_mut()[row_ptr.chunk_index as usize]
-            [row_ptr.row_index as usize] = SCAN_ROW_MATCHED;
+        let scan_map = atomic_scan_map(&self.join_state.scan_map[row_ptr.chunk_index as usize]);
+        scan_map[row_ptr.row_index as usize].store(SCAN_ROW_MATCHED, Ordering::SeqCst);
     }
 
     fn mark_null(&self, row_ptr: RowPtr) {
-        let state = &mut self.join_state.scan_map.as_mut()[row_ptr.chunk_index as usize]
-            [row_ptr.row_index as usize];
-        if *state == SCAN_ROW_UNMATCHED {
-            *state = SCAN_ROW_MARK_NULL;
-        }
+        let scan_map = atomic_scan_map(&self.join_state.scan_map[row_ptr.chunk_index as usize]);
+        let _ = scan_map[row_ptr.row_index as usize].compare_exchange(
+            SCAN_ROW_UNMATCHED,
+            SCAN_ROW_MARK_NULL,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
     }
 }
 

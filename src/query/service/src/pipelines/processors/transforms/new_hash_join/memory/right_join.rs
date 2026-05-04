@@ -34,6 +34,7 @@ use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::JoinRuntimeFilterPacket;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_MATCHED;
 use crate::pipelines::processors::transforms::memory::basic_state::SCAN_ROW_UNMATCHED;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
@@ -110,7 +111,7 @@ impl Join for OuterRightHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<true>()
+        self.basic_hash_join.final_build::<SCAN_MAP_MATCHED>()
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {

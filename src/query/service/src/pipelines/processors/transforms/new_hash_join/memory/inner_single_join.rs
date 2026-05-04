@@ -32,6 +32,8 @@ use crate::pipelines::processors::transforms::HashJoinHashTable;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::hash_join_table::RowPtr;
 use crate::pipelines::processors::transforms::memory::basic::BasicHashJoin;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_DISABLED;
+use crate::pipelines::processors::transforms::memory::basic::SCAN_MAP_MATCHED;
 use crate::pipelines::processors::transforms::memory::left_join::final_result_block;
 use crate::pipelines::processors::transforms::memory::right_single_join::mark_right_single_row;
 use crate::pipelines::processors::transforms::new_hash_join::hashtable::ProbeData;
@@ -89,8 +91,8 @@ impl Join for InnerSingleHashJoin {
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
         match self.desc.single_to_inner {
-            Some(JoinType::RightSingle) => self.basic_hash_join.final_build::<true>(),
-            _ => self.basic_hash_join.final_build::<false>(),
+            Some(JoinType::RightSingle) => self.basic_hash_join.final_build::<SCAN_MAP_MATCHED>(),
+            _ => self.basic_hash_join.final_build::<SCAN_MAP_DISABLED>(),
         }
     }
 

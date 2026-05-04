@@ -30,6 +30,7 @@ use databend_common_expression::with_join_hash_method;
 use databend_common_settings::Settings;
 
 use super::basic::BasicHashJoin;
+use super::basic::SCAN_MAP_DISABLED;
 use super::basic_state::BasicHashJoinState;
 use crate::pipelines::processors::HashJoinDesc;
 use crate::pipelines::processors::transforms::HashJoinHashTable;
@@ -102,7 +103,7 @@ impl Join for InnerHashJoin {
     }
 
     fn final_build(&mut self) -> Result<Option<ProgressValues>> {
-        self.basic_hash_join.final_build::<false>()
+        self.basic_hash_join.final_build::<SCAN_MAP_DISABLED>()
     }
 
     fn add_runtime_filter_packet(&self, packet: JoinRuntimeFilterPacket) {

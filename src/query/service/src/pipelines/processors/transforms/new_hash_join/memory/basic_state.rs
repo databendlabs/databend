@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::PoisonError;
+use std::sync::atomic::AtomicU8;
 
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
@@ -29,6 +30,13 @@ use crate::pipelines::processors::transforms::new_hash_join::common::CStyleCell;
 pub const SCAN_ROW_UNMATCHED: u8 = 0;
 pub const SCAN_ROW_MATCHED: u8 = 1;
 pub const SCAN_ROW_MARK_NULL: u8 = 2;
+
+pub(crate) fn atomic_scan_map(scan_map: &[u8]) -> &[AtomicU8] {
+    debug_assert_eq!(std::mem::size_of::<u8>(), std::mem::size_of::<AtomicU8>());
+    debug_assert_eq!(std::mem::align_of::<u8>(), std::mem::align_of::<AtomicU8>());
+
+    unsafe { std::slice::from_raw_parts(scan_map.as_ptr().cast::<AtomicU8>(), scan_map.len()) }
+}
 
 pub struct BasicHashJoinState {
     pub mutex: Mutex<()>,

@@ -85,6 +85,24 @@ from new_hash_join_l
 NULL 1
 
 statement ok
+set disable_join_reorder = 0
+
+statement ok
+set inlist_to_join_threshold = 5
+
+# In-list NOT IN is planned as LEFT MARK; the build-side NULL row must not pass the filter.
+query I
+select count(*) from new_hash_join_l where k not in (0, 1, 2, 3, 4, 5)
+----
+0
+
+statement ok
+unset inlist_to_join_threshold
+
+statement ok
+set disable_join_reorder = 1
+
+statement ok
 drop table new_hash_join_l
 
 statement ok
