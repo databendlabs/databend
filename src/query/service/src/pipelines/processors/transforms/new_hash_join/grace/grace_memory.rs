@@ -20,7 +20,6 @@ use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::AntiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::AntiRightHashJoin;
-use crate::pipelines::processors::transforms::memory::CrossHashJoin;
 use crate::pipelines::processors::transforms::memory::FullHashJoin;
 use crate::pipelines::processors::transforms::memory::InnerSingleHashJoin;
 use crate::pipelines::processors::transforms::memory::LeftMarkHashJoin;
@@ -62,12 +61,6 @@ impl GraceMemoryJoin for InnerHashJoin {
 impl GraceMemoryJoin for InnerSingleHashJoin {
     fn reset_memory(&mut self) {
         self.performance_context.clear();
-        reset_basic_state(&self.basic_state);
-    }
-}
-
-impl GraceMemoryJoin for CrossHashJoin {
-    fn reset_memory(&mut self) {
         reset_basic_state(&self.basic_state);
     }
 }

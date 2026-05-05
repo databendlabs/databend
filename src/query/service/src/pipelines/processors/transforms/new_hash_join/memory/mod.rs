@@ -31,6 +31,8 @@ mod right_single_join;
 
 pub use basic_state::BasicHashJoinState;
 pub use cross_join::CrossHashJoin;
+pub use cross_join::CrossJoinShared;
+pub use cross_join::CrossStateMap;
 pub use full_join::FullHashJoin;
 pub use inner_join::InnerHashJoin;
 pub use inner_single_join::InnerSingleHashJoin;
