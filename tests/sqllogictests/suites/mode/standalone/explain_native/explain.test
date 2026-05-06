@@ -765,7 +765,7 @@ AggregateFinal
             └── EvalScalar
                 ├── output columns: [t1.b (#1), _1 (#2)]
                 ├── expressions: [if(CAST(t1.a (#0) = 0 AS Boolean NULL), NULL, CAST(t1.a (#0) AS UInt64 NULL))]
-                ├── estimated rows: 0.20
+                ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.t1
                     ├── scan id: 0
@@ -776,7 +776,7 @@ AggregateFinal
                     ├── partitions scanned: 0
                     ├── pruning stats: [segments: <range pruning: 1 to 0 cost: 1 ms>]
                     ├── push downs: [filters: [is_not_null(if(CAST(t1.a (#0) = 0 AS Boolean NULL), NULL, CAST(t1.a (#0) AS UInt64 NULL)))], limit: NONE]
-                    └── estimated rows: 0.20
+                    └── estimated rows: 0.00
 
 query T
 explain select count_distinct(a) from t1;

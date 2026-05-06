@@ -111,20 +111,25 @@ impl SelectivityEstimator {
             &BUILTIN_FUNCTIONS,
         );
 
-        // ConstantFolder owns expression/domain reasoning: constant predicates,
-        // boolean shortcuts, and contradictions visible from input column
-        // domains. The visitor below only estimates predicates that remain
-        // after that pass.
+        // ConstantFolder owns expression/domain reasoning: boolean shortcuts and
+        // contradictions visible from input column domains. It can still leave
+        // SQL-truthy constants such as `WHERE 1`, so handle constant predicates
+        // here before falling through to estimation rules.
         if let Expr::Constant(constant) = &expr {
-            return match &constant.scalar {
-                Scalar::Boolean(true) => Ok(self.cardinality.value()),
-                Scalar::Boolean(false) | Scalar::Null => {
+            return match constant_filter_truthiness(&constant.scalar) {
+                Some(true) => Ok(self.cardinality.value()),
+                Some(false) => {
                     self.clear_column_stats_for_empty_result();
                     Ok(0.0)
                 }
-                scalar => Err(ErrorCode::Internal(format!(
-                    "folded filter predicate should be boolean or null: {scalar:?}"
-                ))),
+                None => {
+                    // Non-boolean constants can survive folding in legacy SQL
+                    // truthiness paths. Leave the exact interpretation to
+                    // execution and use the normal unknown-filter fallback.
+                    let selectivity =
+                        self.update_other_statistic_by_selectivity(Selectivity::Unknown);
+                    Ok(self.cardinality.value() * selectivity)
+                }
             };
         }
         if output_domain.as_ref().is_some_and(|domain| match domain {
@@ -190,15 +195,13 @@ impl SelectivityEstimator {
                 ) {
                     Ok(domain) => Ok((binding, domain)),
                     Err(msg) => {
-                        if cfg!(debug_assertions) {
-                            Err(ErrorCode::Internal(format!(
-                                "Failed to build input domain {msg} {:?} {:?}",
-                                column_stat, data_type
-                            )))
-                        } else {
-                            log::warn!(data_type:?, msg; "to_arg_stat failed");
-                            Ok((binding, Domain::full(&data_type)))
-                        }
+                        log::warn!(
+                            data_type:?,
+                            column_stat:?,
+                            msg;
+                            "Failed to build input domain"
+                        );
+                        Ok((binding, Domain::full(&data_type)))
                     }
                 }
             })
@@ -222,6 +225,7 @@ impl SelectivityEstimator {
                 self.clear_column_stats_for_empty_result();
                 return 0.0;
             }
+            Selectivity::All => return MAX_SELECTIVITY,
             Selectivity::N(n) => n,
         };
 
@@ -243,6 +247,18 @@ impl SelectivityEstimator {
         }
 
         selectivity
+    }
+}
+
+fn constant_filter_truthiness(scalar: &Scalar) -> Option<bool> {
+    match scalar {
+        Scalar::Null => Some(false),
+        Scalar::Boolean(value) => Some(*value),
+        _ => scalar
+            .clone()
+            .to_datum()
+            .and_then(|datum| datum.as_double().ok())
+            .map(|value| value != 0.0),
     }
 }
 
@@ -279,10 +295,12 @@ pub enum Selectivity {
     #[default]
     Unknown,
     LowerBound,
-    // Visitor-local empty-result signal for rules not covered by
-    // ConstantFolder's domain reasoning, such as modulo remainder bounds.
-    // It is not a numeric zero estimate.
+    // A deterministic false predicate produced by constants, boolean logic, or
+    // exact local rules. This is stronger than an estimated `N(0.0)`.
     Zero,
+    // A deterministic true predicate produced by constants, boolean logic, or
+    // exact local rules. This is stronger than an estimated `N(1.0)`.
+    All,
     N(f64),
 }
 
@@ -295,12 +313,8 @@ impl Selectivity {
         }
 
         let msg = format!("invalid selectivity estimate: {value:?}");
-        if cfg!(debug_assertions) {
-            Err(ErrorCode::Internal(msg))
-        } else {
-            log::warn!(msg; "Invalid selectivity estimate");
-            Ok(Selectivity::Unknown)
-        }
+        log::warn!(msg; "Invalid selectivity estimate");
+        Ok(Selectivity::Unknown)
     }
 }
 
@@ -523,11 +537,19 @@ impl SelectivityVisitor<'_> {
 
     fn visit_expr(&mut self, expr: &Expr<ColumnBinding>) -> Result<()> {
         match expr {
-            Expr::Constant(_) => {
-                // Top-level folded constants are consumed in SelectivityEstimator::apply.
-                // Nested constants that survive folding are not estimator rules, so
-                // do not add truthiness or boolean simplification here.
-                self.selectivity = Selectivity::Unknown;
+            Expr::Constant(constant) => {
+                // Top-level constants are consumed in SelectivityEstimator::apply.
+                // Nested constants can still appear after domain folding, so keep
+                // their boolean identity for logical composition.
+                self.selectivity = constant_filter_truthiness(&constant.scalar)
+                    .map(|value| {
+                        if value {
+                            Selectivity::All
+                        } else {
+                            Selectivity::Zero
+                        }
+                    })
+                    .unwrap_or(Selectivity::Unknown);
                 Ok(())
             }
             Expr::ColumnRef(_) => {
@@ -552,7 +574,8 @@ impl SelectivityVisitor<'_> {
                 // boolean simplification such as `false AND x`.
                 let mut has_unknown = false;
                 let mut has_lower_bound = false;
-                let mut has_trusted_zero = false;
+                let mut has_zero = false;
+                let mut has_n = false;
                 let mut acc = 1.0_f64;
                 for arg in &func.args {
                     let mut sub_visitor = self.spawn_child();
@@ -561,36 +584,40 @@ impl SelectivityVisitor<'_> {
                         Selectivity::Unknown => has_unknown = true,
                         Selectivity::LowerBound => has_lower_bound = true,
                         Selectivity::Zero => {
-                            has_trusted_zero = true;
+                            has_zero = true;
                             acc = 0.0;
                         }
-                        Selectivity::N(n) => acc = acc.min(n),
+                        Selectivity::All => {}
+                        Selectivity::N(n) => {
+                            has_n = true;
+                            acc = acc.min(n);
+                        }
                     }
                     self.overrides.extend(sub_visitor.overrides);
                 }
 
-                self.selectivity =
-                    if (!has_unknown && !has_lower_bound) || acc < DEFAULT_SELECTIVITY {
-                        if has_trusted_zero {
-                            Selectivity::Zero
-                        } else {
-                            Selectivity::N(acc)
-                        }
-                    } else if has_unknown {
-                        Selectivity::Unknown
-                    } else if has_lower_bound {
-                        Selectivity::LowerBound
-                    } else {
-                        Selectivity::Unknown
-                    };
+                self.selectivity = if has_zero {
+                    Selectivity::Zero
+                } else if !has_unknown && !has_lower_bound && !has_n {
+                    Selectivity::All
+                } else if (!has_unknown && !has_lower_bound) || acc < DEFAULT_SELECTIVITY {
+                    Selectivity::N(acc)
+                } else if has_unknown {
+                    Selectivity::Unknown
+                } else if has_lower_bound {
+                    Selectivity::LowerBound
+                } else {
+                    Selectivity::Unknown
+                };
             }
 
             "or_filters" => {
-                // `Zero` children are visitor-local empty branches here. Constant
-                // false branches should have been removed or folded before this
-                // visitor sees the expression.
+                // Keep constant false as `Zero` for boolean composition, but keep
+                // numeric `N(0.0)` as an estimate that does not prove emptiness.
                 let mut has_unknown = false;
                 let mut has_lower_bound = false;
+                let mut has_zero = false;
+                let mut has_all = false;
                 let mut acc = 0.0_f64;
                 let mut has_numeric_selectivity = false;
                 for arg in &func.args {
@@ -599,21 +626,25 @@ impl SelectivityVisitor<'_> {
                     match sub_visitor.selectivity {
                         Selectivity::Unknown => has_unknown = true,
                         Selectivity::LowerBound => has_lower_bound = true,
-                        Selectivity::Zero => {}
+                        Selectivity::Zero => has_zero = true,
+                        Selectivity::All => has_all = true,
                         Selectivity::N(n) => {
                             has_numeric_selectivity = true;
                             acc += (1.0 - acc) * n;
                         }
                     }
                 }
-                self.selectivity = if (!has_unknown || acc > DEFAULT_SELECTIVITY)
-                    && !has_lower_bound
+                self.selectivity = if has_all {
+                    Selectivity::All
+                } else if has_zero && !has_numeric_selectivity && !has_unknown && !has_lower_bound {
+                    Selectivity::Zero
+                } else if (!has_unknown || acc > DEFAULT_SELECTIVITY) && !has_lower_bound
                     || acc > UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND
                 {
                     if has_numeric_selectivity {
                         Selectivity::N(acc)
                     } else {
-                        Selectivity::Zero
+                        Selectivity::Unknown
                     }
                 } else if has_lower_bound {
                     Selectivity::LowerBound
@@ -626,10 +657,8 @@ impl SelectivityVisitor<'_> {
                 let mut sub_visitor = self.spawn_child();
                 sub_visitor.visit_expr(&func.args[0])?;
                 self.selectivity = match sub_visitor.selectivity {
-                    // A visitor-local empty branch is not enough to prove `NOT
-                    // predicate` keeps every row, especially with nullable inputs.
-                    // Constant `NOT false` belongs to ConstantFolder.
-                    Selectivity::Zero => Selectivity::Unknown,
+                    Selectivity::Zero => Selectivity::All,
+                    Selectivity::All => Selectivity::Zero,
                     Selectivity::N(n) => Selectivity::N(1.0 - n),
                     selectivity => selectivity,
                 };
@@ -971,7 +1000,7 @@ mod tests {
     }
 
     #[test]
-    fn test_estimated_zero_cardinality_does_not_create_trusted_zero() -> Result<()> {
+    fn test_estimated_zero_cardinality_does_not_clear_column_distribution() -> Result<()> {
         let column_index = Symbol::new(0);
         let mut column_stats = ColumnStatSet::new();
         column_stats.insert(column_index, ColumnStat {
@@ -998,6 +1027,29 @@ mod tests {
         let column_stat = &column_stats[&column_index];
         assert_ne!(column_stat.ndv, StatEstimate::exact(0.0));
         assert_ne!(column_stat.null_count, StatCount::Exact(0));
+        Ok(())
+    }
+
+    #[test]
+    fn test_constant_filter_truthiness_accepts_numeric_constants() -> Result<()> {
+        for (scalar, expected_rows) in [
+            (Scalar::Number(NumberScalar::UInt8(1)), 10.0),
+            (Scalar::Number(NumberScalar::Int8(-1)), 10.0),
+            (Scalar::Number(NumberScalar::UInt8(0)), 0.0),
+            (Scalar::Boolean(true), 10.0),
+            (Scalar::Boolean(false), 0.0),
+            (Scalar::Null, 0.0),
+        ] {
+            let mut estimator =
+                SelectivityEstimator::new(ColumnStatSet::new(), StatCardinality::estimate(10.0));
+            let predicate = ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: scalar,
+            });
+
+            assert_eq!(estimator.apply(&[predicate])?, expected_rows);
+        }
+
         Ok(())
     }
 

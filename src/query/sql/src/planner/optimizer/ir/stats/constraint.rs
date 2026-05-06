@@ -91,7 +91,7 @@ impl ValueConstraint {
         column_stat: &mut ColumnStat,
         selectivity: Selectivity,
     ) -> Result<()> {
-        if matches!(selectivity, Selectivity::Zero) {
+        if matches!(selectivity, Selectivity::Zero | Selectivity::N(0.0)) {
             clear_for_empty_result(column_stat);
             return Ok(());
         }

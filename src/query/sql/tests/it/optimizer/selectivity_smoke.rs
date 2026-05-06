@@ -117,7 +117,7 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
         .expect("distorted histogram comparison should estimate");
     let stat = &estimator.column_stats()[&Symbol::new(0)];
 
-    assert!((estimated_rows - 89.0).abs() < f64::EPSILON);
+    assert!((estimated_rows - 89.1).abs() < f64::EPSILON);
     assert_eq!(stat.min, Datum::UInt(100));
     assert_eq!(stat.max, Datum::UInt(1000));
 }
