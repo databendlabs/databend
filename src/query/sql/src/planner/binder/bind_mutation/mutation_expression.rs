@@ -566,7 +566,7 @@ impl Binder {
                 )
                 .set_span(scalar.span()));
             }
-            let strategy = if !self.has_subquery(&scalar)? {
+            let strategy = if !self.has_subquery(&scalar)? && scalar.get_udf_names()?.is_empty() {
                 MutationStrategy::Direct
             } else {
                 MutationStrategy::MatchedOnly
