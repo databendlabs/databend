@@ -591,7 +591,14 @@ impl<T: Ord, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
 impl<Op: StatComparisonOp> HistogramBucketComparison<'_, Vec<u8>, Op> {
     fn bytes_selectivity(&self) -> f64 {
         if Op::INCLUDE_EQUAL {
-            (0.5 + 1.0 / self.bucket.num_distinct().max(1.0)).min(1.0)
+            // Bytes buckets only have a coarse partial-bucket model. For the
+            // equality mass, a non-empty bucket still has at least one value.
+            let ndv = if self.bucket.num_distinct() < 1.0 {
+                1.0
+            } else {
+                self.bucket.num_distinct()
+            };
+            if ndv <= 2.0 { 1.0 } else { 0.5 + 1.0 / ndv }
         } else {
             0.5
         }
@@ -601,12 +608,17 @@ impl<Op: StatComparisonOp> HistogramBucketComparison<'_, Vec<u8>, Op> {
 impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
     fn number_selectivity(&self) -> f64 {
         let (strict_less, equality) = self.number_less_parts();
-        match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
+        let selectivity = match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
             (true, false) => strict_less,
-            (true, true) => (strict_less + equality).min(1.0),
-            (false, false) => (1.0 - strict_less - equality).max(0.0),
-            (false, true) => (1.0 - strict_less).min(1.0),
-        }
+            (true, true) => strict_less + equality,
+            (false, false) => 1.0 - strict_less - equality,
+            (false, true) => 1.0 - strict_less,
+        };
+        debug_assert!(
+            (0.0..=1.0).contains(&selectivity),
+            "invalid numeric bucket selectivity: {selectivity:?}"
+        );
+        selectivity
     }
 
     fn number_less_parts(&self) -> (f64, f64) {
@@ -618,7 +630,13 @@ impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, 
             return parts;
         }
 
-        let ndv = self.bucket.num_distinct().max(1.0);
+        // Scaled buckets can be fractional, but equality mass is based on a
+        // count of possible values and must not use a denominator below one.
+        let ndv = if self.bucket.num_distinct() < 1.0 {
+            1.0
+        } else {
+            self.bucket.num_distinct()
+        };
         let lower_bound = self.bucket.lower_bound().to_f64();
         let upper_bound = self.bucket.upper_bound().to_f64();
         let const_value = self.constant.to_f64();
@@ -631,11 +649,20 @@ impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, 
         let strict_less = if const_value == lower_bound {
             0.0
         } else if const_value == upper_bound {
-            (1.0 - 1.0 / ndv).max(0.0)
+            1.0 - 1.0 / ndv
         } else {
-            ((const_value - lower_bound) / bucket_range).clamp(0.0, 1.0)
+            let strict_less = (const_value - lower_bound) / bucket_range;
+            debug_assert!(
+                (0.0..=1.0).contains(&strict_less),
+                "invalid numeric bucket strict-less selectivity: {strict_less:?}"
+            );
+            strict_less
         };
-        let equality = (1.0 / ndv).clamp(0.0, 1.0);
+        let equality = 1.0 / ndv;
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid numeric bucket equality selectivity: {equality:?}"
+        );
 
         (strict_less, equality)
     }
@@ -798,10 +825,17 @@ impl StatNumberValue for i64 {
             0.0
         };
 
-        Some((
-            (strict_less_count / value_count).clamp(0.0, 1.0),
-            (equality_count / value_count).clamp(0.0, 1.0),
-        ))
+        let strict_less = strict_less_count / value_count;
+        let equality = equality_count / value_count;
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_less),
+            "invalid i64 strict-less selectivity: {strict_less:?}"
+        );
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid i64 equality selectivity: {equality:?}"
+        );
+        Some((strict_less, equality))
     }
 }
 
@@ -829,10 +863,17 @@ impl StatNumberValue for u64 {
             0.0
         };
 
-        Some((
-            (strict_less_count / value_count).clamp(0.0, 1.0),
-            (equality_count / value_count).clamp(0.0, 1.0),
-        ))
+        let strict_less = strict_less_count / value_count;
+        let equality = equality_count / value_count;
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_less),
+            "invalid u64 strict-less selectivity: {strict_less:?}"
+        );
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid u64 equality selectivity: {equality:?}"
+        );
+        Some((strict_less, equality))
     }
 }
 

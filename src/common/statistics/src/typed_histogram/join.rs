@@ -21,6 +21,7 @@ use super::TypedHistogramBucket;
 use super::Value;
 use crate::StatEstimate;
 
+#[must_use]
 #[derive(Debug, Clone, PartialEq)]
 pub struct JoinEstimation {
     pub cardinality: StatEstimate,
@@ -85,8 +86,16 @@ impl<T: Value> TypedHistogramBucket<T> {
         };
 
         let upper_cardinality = self.num_values() * other.num_values();
-        let expected_cardinality = expected.cardinality.expected.min(upper_cardinality);
-        let expected_ndv = expected.ndv.expected.min(upper_ndv);
+        let expected_cardinality = expected.cardinality.expected;
+        let expected_ndv = expected.ndv.expected;
+        debug_assert!(
+            expected_cardinality <= upper_cardinality,
+            "join expected cardinality exceeds cartesian upper: {expected_cardinality:?} > {upper_cardinality:?}"
+        );
+        debug_assert!(
+            expected_ndv <= upper_ndv,
+            "join expected ndv exceeds intersection upper: {expected_ndv:?} > {upper_ndv:?}"
+        );
 
         JoinEstimation {
             cardinality: StatEstimate::new(0.0, expected_cardinality, upper_cardinality),
@@ -107,9 +116,12 @@ impl<T: Value> TypedHistogramBucket<T> {
         if max_ndv <= 0.0 {
             return None;
         }
+        // The equality denominator is a value count. Fractional NDV estimates
+        // below one would otherwise produce more rows than the cartesian upper.
+        let effective_max_ndv = if max_ndv < 1.0 { 1.0 } else { max_ndv };
 
         Some(JoinEstimation {
-            cardinality: StatEstimate::exact(left_num_rows * right_num_rows / max_ndv),
+            cardinality: StatEstimate::exact(left_num_rows * right_num_rows / effective_max_ndv),
             ndv: StatEstimate::exact(left_ndv.min(right_ndv)),
         })
     }

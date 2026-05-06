@@ -125,15 +125,16 @@ impl<'a> StatEvaluator<'a> {
         match res {
             Ok(None) => Ok(None),
             Ok(Some(res)) => {
-                if cfg!(debug_assertions) {
-                    let return_type = call.return_type.remove_generics(&call.generics);
-                    res.check_consistency_with_type(Some(&return_type))
-                        .map_err(|msg| {
-                            ErrorCode::Internal(format!(
-                                "Failed to derive statistics for function {:?}: {msg}",
-                                call.function.signature.name
-                            ))
-                        })?;
+                let return_type = call.return_type.remove_generics(&call.generics);
+                if let Err(msg) = res.check_consistency_with_type(Some(&return_type)) {
+                    if cfg!(debug_assertions) {
+                        return Err(ErrorCode::Internal(format!(
+                            "Failed to derive statistics for function {:?}: {msg}",
+                            call.function.signature.name
+                        )));
+                    }
+                    log::warn!(function = call.function.signature.name, msg; "Derived invalid function statistics");
+                    return Ok(None);
                 }
                 Ok(Some(res))
             }

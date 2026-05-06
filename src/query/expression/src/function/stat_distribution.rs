@@ -91,10 +91,12 @@ impl<D> StatDistribution<D> {
     pub fn effective_null_count(&self, cardinality: StatCardinality) -> StatCount {
         let cardinality = cardinality.value();
         let non_null_lower = self.ndv.lower;
-        let upper = self
-            .null_count
-            .upper()
-            .min((cardinality - non_null_lower).max(0.0));
+        let null_upper_from_cardinality = cardinality - non_null_lower;
+        debug_assert!(
+            null_upper_from_cardinality >= 0.0,
+            "ndv lower bound exceeds cardinality: {non_null_lower:?} > {cardinality:?}"
+        );
+        let upper = self.null_count.upper().min(null_upper_from_cardinality);
         self.null_count.reduce(upper)
     }
 }

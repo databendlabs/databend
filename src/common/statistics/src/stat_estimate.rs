@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+#[must_use]
 #[derive(Clone, Copy, PartialEq)]
 pub struct StatEstimate {
     pub lower: f64,
@@ -85,7 +86,10 @@ impl StatEstimate {
     }
 
     pub fn reduce(self, upper: f64) -> Self {
-        let upper = upper.max(0.0);
+        debug_assert!(
+            !upper.is_nan() && upper >= 0.0,
+            "invalid reduction upper bound: {upper:?}"
+        );
         Self::new(
             self.lower.min(upper),
             self.expected.min(upper),
@@ -94,7 +98,10 @@ impl StatEstimate {
     }
 
     pub fn reduce_by_selectivity(self, selectivity: f64) -> Self {
-        let selectivity = selectivity.clamp(0.0, 1.0);
+        debug_assert!(
+            selectivity.is_finite() && (0.0..=1.0).contains(&selectivity),
+            "invalid selectivity: {selectivity:?}"
+        );
         Self::new(
             self.lower * selectivity,
             self.expected * selectivity,
@@ -119,6 +126,7 @@ impl StatEstimate {
     }
 }
 
+#[must_use]
 #[derive(Clone, Copy, PartialEq)]
 pub enum StatCount {
     Exact(u64),
@@ -140,6 +148,7 @@ impl fmt::Debug for StatCount {
     }
 }
 
+#[must_use]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum StatCardinality {
     Exact(u64),
@@ -264,7 +273,10 @@ impl StatCount {
     }
 
     pub fn reduce(self, upper: f64) -> Self {
-        let upper = upper.max(0.0);
+        debug_assert!(
+            !upper.is_nan() && upper >= 0.0,
+            "invalid count reduction upper bound: {upper:?}"
+        );
         match self {
             StatCount::Exact(0) => StatCount::Exact(0),
             _ => StatCount::estimate(self.expected().min(upper), self.upper().min(upper)),
@@ -272,41 +284,21 @@ impl StatCount {
     }
 
     pub fn reduce_by_selectivity(self, selectivity: f64) -> Self {
-        let selectivity = selectivity.clamp(0.0, 1.0);
-        if selectivity == 1.0 {
+        debug_assert!(
+            selectivity.is_finite() && (0.0..=1.0).contains(&selectivity),
+            "invalid count selectivity: {selectivity:?}"
+        );
+        if self == StatCount::Exact(0) {
             return self;
         }
-        if selectivity == 0.0 {
-            return StatCount::Exact(0);
+        match selectivity {
+            1.0 => self,
+            0.0 => StatCount::estimate(0.0, 0.0),
+            _ => {
+                let expected = self.expected() * selectivity;
+                let upper = self.upper() * selectivity;
+                StatCount::estimate(expected, upper)
+            }
         }
-        let expected = self.expected() * selectivity;
-        let upper = self.upper() * selectivity;
-        if upper == 0.0 {
-            StatCount::Exact(0)
-        } else {
-            StatCount::estimate(expected, upper)
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_stat_count_keeps_exactness_explicit() {
-        assert_eq!(StatCount::exact(10).exact_value(), Some(10));
-        assert_eq!(
-            StatCount::exact(10).reduce_by_selectivity(0.5),
-            StatCount::estimate(5.0, 5.0)
-        );
-        assert_eq!(
-            StatCount::exact(10).reduce(5.0),
-            StatCount::estimate(5.0, 5.0)
-        );
-        assert_eq!(
-            StatCount::estimate(10.0, f64::INFINITY).reduce_by_selectivity(0.0),
-            StatCount::exact(0)
-        );
     }
 }

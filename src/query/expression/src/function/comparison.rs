@@ -165,7 +165,12 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
         let nullable = stat.domain.is_nullable() || constant_stat.domain.is_nullable();
         let cardinality = input_cardinality.value();
         let null_count = stat.effective_null_count(input_cardinality);
-        let non_null_cardinality = (cardinality - null_count.expected()).max(0.0);
+        let non_null_cardinality = cardinality - null_count.expected();
+        debug_assert!(
+            non_null_cardinality >= 0.0,
+            "null count exceeds cardinality: {:?} > {cardinality:?}",
+            null_count.expected()
+        );
         let domain = match &stat.domain {
             Domain::Nullable(NullableDomain { value: None, .. }) => None,
             Domain::Nullable(NullableDomain {
@@ -264,30 +269,45 @@ pub fn null_comparison_stat(stat: &StatBinaryArg) -> Option<ReturnStat> {
 }
 
 pub fn estimate_ndv_true_count(ndv: StatEstimate, not_eq: bool, cardinality: f64) -> StatEstimate {
-    let cardinality = cardinality.max(0.0);
+    debug_assert!(
+        cardinality.is_finite() && cardinality >= 0.0,
+        "invalid cardinality for ndv true count: {cardinality:?}"
+    );
     if ndv.upper == 0.0 || cardinality == 0.0 {
         return StatEstimate::exact(0.0);
     }
 
+    // Fractional NDV estimates may appear after scaling, but equality cannot
+    // divide by less than one possible non-null value.
+    let effective_upper_ndv = if ndv.upper < 1.0 { 1.0 } else { ndv.upper };
+    let effective_expected_ndv = if ndv.expected < 1.0 {
+        1.0
+    } else {
+        ndv.expected
+    };
+    let effective_lower_ndv = if ndv.lower < 1.0 { 1.0 } else { ndv.lower };
     let eq_count = StatEstimate::new(
-        (cardinality / ndv.upper).min(cardinality),
+        cardinality / effective_upper_ndv,
         if ndv.expected == 0.0 {
             0.0
         } else {
-            (cardinality / ndv.expected).min(cardinality)
+            cardinality / effective_expected_ndv
         },
         if ndv.lower == 0.0 {
             cardinality
         } else {
-            (cardinality / ndv.lower).min(cardinality)
+            cardinality / effective_lower_ndv
         },
     );
     if not_eq {
-        StatEstimate::new(
-            (cardinality - eq_count.upper).max(0.0),
-            (cardinality - eq_count.expected).max(0.0),
-            (cardinality - eq_count.lower).max(0.0),
-        )
+        let lower = cardinality - eq_count.upper;
+        let expected = cardinality - eq_count.expected;
+        let upper = cardinality - eq_count.lower;
+        debug_assert!(
+            lower >= 0.0 && expected >= 0.0 && upper >= 0.0,
+            "invalid not-eq count from equality estimate: cardinality={cardinality:?}, eq={eq_count:?}"
+        );
+        StatEstimate::new(lower, expected, upper)
     } else {
         eq_count
     }

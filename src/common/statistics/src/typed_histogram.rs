@@ -397,12 +397,17 @@ trait NumericValue: Value {
                     return None;
                 }
 
-                Some({
-                    OverlapCoverage {
-                        left: (overlap_width / left_width).clamp(0.0, 1.0),
-                        right: (overlap_width / right_width).clamp(0.0, 1.0),
-                    }
-                })
+                let left = overlap_width / left_width;
+                let right = overlap_width / right_width;
+                debug_assert!(
+                    (0.0..=1.0).contains(&left),
+                    "invalid left overlap coverage: {left:?}"
+                );
+                debug_assert!(
+                    (0.0..=1.0).contains(&right),
+                    "invalid right overlap coverage: {right:?}"
+                );
+                Some(OverlapCoverage { left, right })
             }
         }
     }
@@ -752,9 +757,13 @@ impl OverlapCoverage {
             return None;
         }
 
+        // Scaled histogram buckets may carry fractional NDV estimates, but a
+        // non-empty point overlap has at least one distinct value.
+        let left_ndv = if left_ndv < 1.0 { 1.0 } else { left_ndv };
+        let right_ndv = if right_ndv < 1.0 { 1.0 } else { right_ndv };
         Some(Self {
-            left: (1.0 / left_ndv).clamp(0.0, 1.0),
-            right: (1.0 / right_ndv).clamp(0.0, 1.0),
+            left: 1.0 / left_ndv,
+            right: 1.0 / right_ndv,
         })
     }
 }

@@ -368,7 +368,12 @@ fn bucket_overlap_selectivity(
                 return 1.0;
             }
             let overlap_width = new_max.into_inner() - new_min.into_inner();
-            (overlap_width / bucket_width).clamp(0.0, 1.0)
+            let selectivity = overlap_width / bucket_width;
+            debug_assert!(
+                (0.0..=1.0).contains(&selectivity),
+                "invalid float bucket overlap selectivity: {selectivity:?}"
+            );
+            selectivity
         }
         (Datum::Bytes(_), Datum::Bytes(_), Datum::Bytes(_), Datum::Bytes(_)) => 1.0,
         _ => 1.0,
@@ -386,7 +391,12 @@ fn discrete_overlap_selectivity(
         return 1.0;
     }
     let overlap_count = new_max - new_min + 1;
-    (overlap_count as f64 / bucket_count as f64).clamp(0.0, 1.0)
+    let selectivity = overlap_count as f64 / bucket_count as f64;
+    debug_assert!(
+        (0.0..=1.0).contains(&selectivity),
+        "invalid discrete bucket overlap selectivity: {selectivity:?}"
+    );
+    selectivity
 }
 
 pub enum HistogramBucketIter<'a> {

@@ -187,6 +187,10 @@ fn derive_decimal_range_stat<Op: StatComparisonOp>(
 struct DecimalComparisonStat;
 
 impl ConstantComparisonAdapter for DecimalComparisonStat {
+    // TODO: Decimal statistics still inherit the existing Datum/ColumnStat
+    // limitation of representing decimal bounds as f64. Preserve the current
+    // behavior for now, but compare scaled decimal integers here once the
+    // statistics path can carry exact decimal bounds end-to-end.
     type Value = F64;
     type Domain = DecimalDomain;
 

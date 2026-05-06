@@ -18,8 +18,11 @@ use databend_common_exception::Result;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::HistogramBuilder;
+use databend_common_statistics::StatCount;
+use databend_common_statistics::StatEstimate;
 
 use crate::optimizer::ir::ColumnStat;
+use crate::optimizer::ir::stats::selectivity::Selectivity;
 use crate::plans::ComparisonOp;
 
 pub(super) enum ValueConstraint {
@@ -92,14 +95,23 @@ impl<'a> ColumnStatUpdate<'a> {
     pub(super) fn apply_constraint(
         &mut self,
         constraint: &ValueConstraint,
-        selectivity: Option<f64>,
+        selectivity: Selectivity,
     ) -> Result<()> {
+        if matches!(selectivity, Selectivity::Zero) {
+            self.column_stat.ndv = StatEstimate::exact(0.0);
+            self.column_stat.null_count = StatCount::exact(0);
+            self.column_stat.histogram = None;
+            return Ok(());
+        }
+
         match constraint {
             ValueConstraint::Eq(datum) => {
                 *self.column_stat = ColumnStat::from_const(datum.clone());
             }
             ValueConstraint::NotEq => {
-                if let Some(selectivity) = selectivity {
+                if let Selectivity::N(selectivity) = selectivity
+                    && selectivity > 0.0
+                {
                     self.restrict_to_bounds(
                         self.column_stat.min.clone(),
                         self.column_stat.max.clone(),
@@ -108,10 +120,7 @@ impl<'a> ColumnStatUpdate<'a> {
                 }
             }
             ValueConstraint::Range { .. } => match selectivity {
-                Some(0.0) => {
-                    self.column_stat.ndv = self.column_stat.ndv.reduce_by_selectivity(0.0);
-                }
-                Some(selectivity) if selectivity < 1.0 => {
+                Selectivity::N(selectivity) if selectivity > 0.0 && selectivity < 1.0 => {
                     if let Some((new_min, new_max)) = constraint.range_bounds(self.column_stat)? {
                         self.restrict_to_bounds(new_min, new_max, selectivity)?;
                     }
