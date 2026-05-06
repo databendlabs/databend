@@ -604,6 +604,9 @@ impl ExecuteState {
                 location_prefix,
                 disk_spill,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+                writer_pool_bytes: settings
+                    .get_spill_writer_memory_pool_size_mb()?
+                    .saturating_mul(1024 * 1024),
             };
             let op = DataOperator::instance().spill_operator();
             Some(LiteSpiller::new(op, config)?)

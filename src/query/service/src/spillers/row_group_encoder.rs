@@ -466,7 +466,8 @@ impl<A> SpillerInner<A> {
         };
 
         let remote_location = self.create_unique_location();
-        let remote = pool.buffer_writer(op.clone(), remote_location.clone())?;
+        let remote =
+            pool.buffer_writer(op.clone(), remote_location.clone(), self.writer_pool_bytes)?;
 
         Ok(AnyFileWriter::Remote {
             path: remote_location.clone(),

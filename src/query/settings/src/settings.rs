@@ -339,6 +339,7 @@ mod tests {
     use databend_common_meta_app::tenant::Tenant;
 
     use crate::ChangeValue;
+    use crate::DefaultSettings;
     use crate::ScopeLevel;
     use crate::Settings;
 
@@ -363,6 +364,15 @@ mod tests {
 
         assert_eq!(settings.tenant.tenant.as_str(), "test_tenant");
         assert_eq!(settings.changes.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn test_spill_writer_memory_pool_setting_default() -> Result<()> {
+        assert_eq!(
+            DefaultSettings::try_get_u64("spill_writer_memory_pool_size_mb")?,
+            20
+        );
         Ok(())
     }
 }
