@@ -387,12 +387,6 @@ impl io::Write for BufferWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        if let Some(b) = self.current_bytes.take() {
-            if self.buffer_tx.try_send(b.freeze()).is_err() {
-                return Err(io::ErrorKind::BrokenPipe.into());
-            }
-        }
-
         self.last_error()
     }
 }
@@ -879,6 +873,24 @@ mod tests {
 
         buffer_writer.flush().unwrap();
         let _metadata = buffer_writer.close().unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_flush_keeps_partial_chunk_buffered() {
+        let pool = SpillsBufferPool::create(1).unwrap();
+        let operator = create_test_operator().unwrap();
+        let writer = operator.writer("flush_partial_test").await.unwrap();
+
+        let mut buffer_writer = pool.buffer_write(writer, CHUNK_SIZE);
+        buffer_writer.write_all(b"partial chunk").unwrap();
+
+        buffer_writer.flush().unwrap();
+
+        let current = buffer_writer.current_bytes.as_ref().unwrap();
+        assert_eq!(current.len(), b"partial chunk".len());
+
+        let metadata = buffer_writer.close().unwrap();
+        assert_eq!(metadata.content_length(), b"partial chunk".len() as u64);
     }
 
     #[tokio::test(flavor = "multi_thread")]
