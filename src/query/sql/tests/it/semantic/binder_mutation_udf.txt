@@ -9,12 +9,16 @@ target_table: default.default.t
 ├── can_try_update_column_only: true
 ├── matched update: [condition: None,update set b = t.a (#0)]
 └── Filter
-    ├── filters: [gt(add_one(a) (#2), 1)]
+    ├── filters: [gt(add_one(a) (#3), 1)]
     └── UdfScript
-        ├── scalars: [add_one(t.a (#0)) AS (#2)]
+        ├── scalars: [add_one(t.a (#0)) AS (#3)]
         └── EvalScalar
             ├── scalars: [t.a (#0) AS (#0)]
-            └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "a", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "b", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Update, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 
 === delete_where_accepts_script_udf ===
@@ -28,12 +32,16 @@ target_table: default.default.t
 ├── can_try_update_column_only: false
 ├── matched delete: [condition: None]
 └── Filter
-    ├── filters: [gt(add_one(a) (#2), 1)]
+    ├── filters: [gt(add_one(a) (#3), 1)]
     └── UdfScript
-        ├── scalars: [add_one(t.a (#0)) AS (#2)]
+        ├── scalars: [add_one(t.a (#0)) AS (#3)]
         └── EvalScalar
             ├── scalars: [t.a (#0) AS (#0)]
-            └── MutationSource(MutationSource { schema: TableSchema { fields: [TableField { name: "a", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 0, computed_expr: None, auto_increment_expr: None }, TableField { name: "b", default_expr: None, data_type: Nullable(Number(Int32)), column_id: 1, computed_expr: None, auto_increment_expr: None }], metadata: {}, next_column_id: 2 }, columns: {0, 1}, table_index: 0, mutation_type: Delete, secure_predicates: [], user_predicates: [], predicate_column_index: None, read_partition_columns: {} })
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
 
 
 === merge_matched_condition_accepts_script_udf ===
