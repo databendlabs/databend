@@ -1,10 +1,11 @@
-Aggregate(Final)
-├── group items: []
-├── aggregate functions: [sum(integers.i (#0)) AS (#2), min(integers.i (#0)) AS (#3), max(integers.i (#1)) AS (#4)]
-└── Aggregate(Partial)
+EvalScalar
+├── scalars: [_eager_final_sum (#14) AS (#2), _eager_final_min (#15) AS (#3), MAX(i2.i) (#4) AS (#4)]
+└── Aggregate(Final)
     ├── group items: []
-    ├── aggregate functions: [sum(integers.i (#0)) AS (#2), min(integers.i (#0)) AS (#3), max(integers.i (#1)) AS (#4)]
-    └── Exchange(Merge)
+    ├── aggregate functions: [sum(SUM(i1.i) (#2)) AS (#14), min(MIN(i1.i) (#3)) AS (#15), max(integers.i (#1)) AS (#4)]
+    └── Aggregate(Partial)
+        ├── group items: []
+        ├── aggregate functions: [sum(SUM(i1.i) (#2)) AS (#14), min(MIN(i1.i) (#3)) AS (#15), max(integers.i (#1)) AS (#4)]
         └── Join(Cross)
             ├── build keys: []
             ├── probe keys: []
@@ -15,9 +16,16 @@ Aggregate(Final)
             │       ├── filters: []
             │       ├── order by: []
             │       └── limit: NONE
-            └── Scan
-                ├── table: default.integers (#0)
-                ├── filters: []
-                ├── order by: []
-                └── limit: NONE
+            └── Aggregate(Final)
+                ├── group items: []
+                ├── aggregate functions: [sum(integers.i (#0)) AS (#2), min(integers.i (#0)) AS (#3), count() AS (#16)]
+                └── Aggregate(Partial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(integers.i (#0)) AS (#2), min(integers.i (#0)) AS (#3), count() AS (#16)]
+                    └── Exchange(Merge)
+                        └── Scan
+                            ├── table: default.integers (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
 
