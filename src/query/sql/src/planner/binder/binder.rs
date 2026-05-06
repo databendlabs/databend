@@ -1067,21 +1067,6 @@ impl Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::UDFCall(_)
-                    | ScalarExpr::SubqueryExpr(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-            ) || scalar.is_aggregate()
-        };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
-    }
-
     pub(crate) fn check_allowed_scalar_expr_with_subquery_for_copy_table(
         &self,
         scalar: &ScalarExpr,

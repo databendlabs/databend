@@ -561,7 +561,7 @@ impl Binder {
             let (scalar, _) = scalar_binder.bind(expr)?;
             if !self.check_allowed_scalar_expr_with_subquery(&scalar)? {
                 return Err(ErrorCode::SemanticError(
-                    "filter in mutation statement can't contain window|aggregate|udf functions"
+                    "filter in mutation statement can't contain window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar.span()));
@@ -605,9 +605,7 @@ impl Binder {
         let f = |scalar: &ScalarExpr| {
             matches!(
                 scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-                    | ScalarExpr::UDFCall(_)
+                ScalarExpr::WindowFunction(_) | ScalarExpr::AsyncFunctionCall(_)
             ) || scalar.is_aggregate()
         };
 

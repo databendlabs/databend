@@ -67,6 +67,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -258,6 +259,11 @@ impl Table for FakeTable {
         } else {
             DistributionLevel::Local
         }
+    }
+
+    // for test MERGE INTO
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        column_id == ROW_ID_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {
