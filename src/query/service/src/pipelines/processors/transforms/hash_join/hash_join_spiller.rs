@@ -81,6 +81,10 @@ impl HashJoinSpiller {
             location_prefix,
             disk_spill: None,
             use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+            writer_pool_bytes: ctx
+                .get_settings()
+                .get_spill_writer_memory_pool_size_mb()?
+                .saturating_mul(1024 * 1024),
         };
         let operator = DataOperator::instance().spill_operator();
         let spiller = Spiller::create(ctx.clone(), operator, spill_config)?;

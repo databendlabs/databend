@@ -46,12 +46,15 @@ use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataReader;
 use crate::spillers::SpillsDataWriter;
 
+const BYTES_PER_MIB: usize = 1024 * 1024;
+
 pub struct GraceHashJoin<T: GraceMemoryJoin> {
     pub(crate) desc: Arc<HashJoinDesc>,
     pub(crate) hash_method_kind: HashMethodKind,
     pub(crate) function_context: FunctionContext,
 
     pub(crate) location_prefix: String,
+    pub(crate) writer_pool_bytes: usize,
     pub(crate) shift_bits: usize,
 
     pub(crate) stage: RestoreStage,
@@ -93,7 +96,8 @@ impl<T: GraceMemoryJoin> Join for GraceHashJoin<T> {
 
         let mut ready_partitions = Vec::with_capacity(self.partitions.len());
         for id in 0..self.partitions.len() {
-            let mut partition = GraceJoinPartition::create(&self.location_prefix)?;
+            let mut partition =
+                GraceJoinPartition::create(&self.location_prefix, self.writer_pool_bytes)?;
 
             std::mem::swap(&mut self.partitions[id], &mut partition);
             ready_partitions.push(partition);
@@ -206,11 +210,17 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
         let rows = settings.get_max_block_size()? as usize;
         let bytes = settings.get_max_block_bytes()? as usize;
         let location_prefix = ctx.query_id_spill_prefix();
+        let writer_pool_bytes = settings
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(BYTES_PER_MIB);
 
         let mut partitions = Vec::with_capacity(16);
 
         for _ in 0..16 {
-            partitions.push(GraceJoinPartition::create(&location_prefix)?);
+            partitions.push(GraceJoinPartition::create(
+                &location_prefix,
+                writer_pool_bytes,
+            )?);
         }
 
         Ok(GraceHashJoin {
@@ -218,6 +228,7 @@ impl<T: GraceMemoryJoin> GraceHashJoin<T> {
             state,
             shift_bits,
             location_prefix,
+            writer_pool_bytes,
             hash_method_kind,
             memory_hash_join,
             function_context: function_ctx,
@@ -416,13 +427,14 @@ pub struct GraceJoinPartition {
 }
 
 impl GraceJoinPartition {
-    pub fn create(prefix: &str) -> Result<GraceJoinPartition> {
+    pub fn create(prefix: &str, writer_pool_bytes: usize) -> Result<GraceJoinPartition> {
         let data_operator = DataOperator::instance();
 
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone())?;
+        let spills_data_writer =
+            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
 
         Ok(GraceJoinPartition {
             path: file_path,

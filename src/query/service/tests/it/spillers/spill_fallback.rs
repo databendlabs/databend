@@ -64,6 +64,10 @@ async fn test_spill_fallback_to_remote_when_local_full() -> anyhow::Result<()> {
         location_prefix: ctx.query_id_spill_prefix(),
         disk_spill: Some(disk_spill),
         use_parquet: false,
+        writer_pool_bytes: ctx
+            .get_settings()
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(1024 * 1024),
     };
 
     let operator = DataOperator::instance().spill_operator();
