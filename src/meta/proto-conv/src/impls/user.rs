@@ -33,6 +33,22 @@ use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
+fn public_key_entry_from_pb(e: pb::auth_info::PublicKeyEntry) -> mt::principal::PublicKeyEntry {
+    mt::principal::PublicKeyEntry {
+        key: e.key,
+        label: e.label,
+        created_at: e.created_at,
+    }
+}
+
+fn public_key_entry_to_pb(e: &mt::principal::PublicKeyEntry) -> pb::auth_info::PublicKeyEntry {
+    pb::auth_info::PublicKeyEntry {
+        key: e.key.clone(),
+        label: e.label.clone(),
+        created_at: e.created_at,
+    }
+}
+
 impl FromToProto for mt::principal::AuthInfo {
     type PB = pb::AuthInfo;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -53,11 +69,7 @@ impl FromToProto for mt::principal::AuthInfo {
                 Ok(mt::principal::AuthInfo::KeyPair {
                     public_keys: public_keys
                         .into_iter()
-                        .map(|e| mt::principal::PublicKeyEntry {
-                            key: e.key,
-                            label: e.label,
-                            created_at: e.created_at,
-                        })
+                        .map(public_key_entry_from_pb)
                         .collect(),
                 })
             }
@@ -84,14 +96,7 @@ impl FromToProto for mt::principal::AuthInfo {
             mt::principal::AuthInfo::JWT => Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})),
             mt::principal::AuthInfo::KeyPair { public_keys } => {
                 Some(pb::auth_info::Info::KeyPair(pb::auth_info::KeyPair {
-                    public_keys: public_keys
-                        .iter()
-                        .map(|e| pb::auth_info::PublicKeyEntry {
-                            key: e.key.clone(),
-                            label: e.label.clone(),
-                            created_at: e.created_at,
-                        })
-                        .collect(),
+                    public_keys: public_keys.iter().map(public_key_entry_to_pb).collect(),
                 }))
             }
             mt::principal::AuthInfo::Password {
