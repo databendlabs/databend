@@ -91,11 +91,34 @@ SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i
 3 13
 
 # SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
-# SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i
-# SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i
-# SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2
-# SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2
-# SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1
+query III
+SELECT i, SUM(j), FIRST(j) FROM integers GROUP BY i ORDER BY i
+----
+2 4 4
+3 8 4
+
+query III
+SELECT i, SUM(j), LAST(j) FROM integers GROUP BY i ORDER BY i
+----
+2 4 4
+3 8 4
+
+query II
+SELECT 1 AS k, SUM(i) FROM integers GROUP BY k ORDER BY 2
+----
+1 8
+
+query II
+SELECT 1 AS i, SUM(i) FROM integers GROUP BY i ORDER BY 2
+----
+1 2
+1 6
+
+query II
+SELECT i % 2 AS k, SUM(i) FROM integers GROUP BY k, k ORDER BY 1
+----
+0 2
+1 6
 
 statement ok
 DROP TABLE integers
@@ -114,4 +137,3 @@ INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
 # query II
 # SELECT test.b, SUM(a) FROM test GROUP BY b ORDER BY COUNT(a) DESC
-
