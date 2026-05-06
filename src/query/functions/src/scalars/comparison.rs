@@ -632,37 +632,36 @@ impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, 
 
         // Scaled buckets can be fractional, but equality mass is based on a
         // count of possible values and must not use a denominator below one.
-        let ndv = if self.bucket.num_distinct() < 1.0 {
+        let equality = if self.bucket.num_distinct() < 1.0 {
             1.0
         } else {
-            self.bucket.num_distinct()
+            1.0 / self.bucket.num_distinct()
         };
+        debug_assert!(
+            (0.0..=1.0).contains(&equality),
+            "invalid numeric bucket equality selectivity: {equality:?}"
+        );
         let lower_bound = self.bucket.lower_bound().to_f64();
         let upper_bound = self.bucket.upper_bound().to_f64();
         let const_value = self.constant.to_f64();
 
         let bucket_range = upper_bound - lower_bound;
         if bucket_range <= 0.0 {
-            return (0.0, 1.0 / ndv);
+            return (0.0, equality);
         }
 
         let strict_less = if const_value == lower_bound {
             0.0
         } else if const_value == upper_bound {
-            1.0 - 1.0 / ndv
+            1.0 - equality
         } else {
-            let strict_less = (const_value - lower_bound) / bucket_range;
+            let range_selectivity = (const_value - lower_bound) / bucket_range;
             debug_assert!(
-                (0.0..=1.0).contains(&strict_less),
-                "invalid numeric bucket strict-less selectivity: {strict_less:?}"
+                (0.0..=1.0).contains(&range_selectivity),
+                "invalid numeric bucket range selectivity: {range_selectivity:?}"
             );
-            strict_less
+            range_selectivity * (1.0 - equality)
         };
-        let equality = 1.0 / ndv;
-        debug_assert!(
-            (0.0..=1.0).contains(&equality),
-            "invalid numeric bucket equality selectivity: {equality:?}"
-        );
 
         (strict_less, equality)
     }
@@ -2218,6 +2217,20 @@ mod tests {
     use jsonb::OwnedJsonb;
 
     use super::*;
+
+    #[test]
+    fn test_numeric_histogram_partial_bucket_reserves_equality_mass() {
+        let bucket = TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 10.0, 2.0);
+        let constant = F64::from(9.0);
+        let comparison = HistogramBucketComparison::<_, GtOp> {
+            bucket: &bucket,
+            constant: &constant,
+            _op: PhantomData,
+        };
+
+        let selectivity = comparison.number_selectivity();
+        assert!((selectivity - 0.05).abs() < 1e-12);
+    }
 
     #[test]
     fn test_null_constant_comparison_returns_all_null_stat() {

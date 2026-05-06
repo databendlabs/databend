@@ -981,7 +981,7 @@ HashJoin
 ├── probe keys: [CAST(CAST(subquery_2 (#2) AS UInt16 NULL) AS Int32 NULL)]
 ├── keys is null equal: [false]
 ├── filters: []
-├── estimated rows: 2.18
+├── estimated rows: 1.55
 ├── TableScan(Build)
 │   ├── table: default.default.t1
 │   ├── scan id: 0

@@ -18,6 +18,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Constant;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::Domain;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
@@ -25,13 +26,12 @@ use databend_common_expression::StatEvaluator;
 use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
-use super::constraint::ColumnStatUpdate;
 use super::constraint::ValueConstraint;
+use super::constraint::clear_for_empty_result;
 use crate::ColumnBinding;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
@@ -88,6 +88,11 @@ impl SelectivityEstimator {
     }
 
     pub fn apply(&mut self, predicates: &[ScalarExpr]) -> Result<f64> {
+        if self.cardinality == StatCardinality::Exact(0) {
+            self.clear_column_stats_for_empty_result();
+            return Ok(0.0);
+        }
+
         let scalar_expr = match predicates {
             [pred] => pred.clone(),
             predicates => ScalarExpr::FunctionCall(FunctionCall {
@@ -98,8 +103,42 @@ impl SelectivityEstimator {
             }),
         };
         let expr = scalar_expr.as_expr()?;
-        let (expr, _) =
-            ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+        let input_domains = self.build_input_domains(&expr)?;
+        let (expr, output_domain) = ConstantFolder::fold_with_domain(
+            &expr,
+            &input_domains,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+        );
+
+        // ConstantFolder owns expression/domain reasoning: constant predicates,
+        // boolean shortcuts, and contradictions visible from input column
+        // domains. The visitor below only estimates predicates that remain
+        // after that pass.
+        if let Expr::Constant(constant) = &expr {
+            return match &constant.scalar {
+                Scalar::Boolean(true) => Ok(self.cardinality.value()),
+                Scalar::Boolean(false) | Scalar::Null => {
+                    self.clear_column_stats_for_empty_result();
+                    Ok(0.0)
+                }
+                scalar => Err(ErrorCode::Internal(format!(
+                    "folded filter predicate should be boolean or null: {scalar:?}"
+                ))),
+            };
+        }
+        if output_domain.as_ref().is_some_and(|domain| match domain {
+            Domain::Boolean(domain)
+            | Domain::Nullable(NullableDomain {
+                value: Some(box Domain::Boolean(domain)),
+                ..
+            }) => !domain.has_true,
+            _ => false,
+        }) {
+            self.clear_column_stats_for_empty_result();
+            return Ok(0.0);
+        }
+
         let mut visitor = SelectivityVisitor {
             cardinality: self.cardinality,
             selectivity: Selectivity::Unknown,
@@ -119,19 +158,68 @@ impl SelectivityEstimator {
         Ok(self.cardinality.value() * selectivity)
     }
 
+    fn build_input_domains(
+        &self,
+        expr: &Expr<ColumnBinding>,
+    ) -> Result<HashMap<ColumnBinding, Domain>> {
+        expr.column_refs()
+            .into_iter()
+            .map(|(binding, data_type)| {
+                let Some(column_stat) = self.column_stats.get(&binding.index) else {
+                    return Ok((binding, Domain::full(&data_type)));
+                };
+
+                if matches!(data_type, DataType::Nullable(_))
+                    && let StatCardinality::Exact(cardinality) = self.cardinality
+                    && column_stat.null_count == StatCount::Exact(cardinality)
+                {
+                    return Ok((
+                        binding,
+                        Domain::Nullable(NullableDomain {
+                            has_null: true,
+                            value: None,
+                        }),
+                    ));
+                }
+
+                match Domain::from_datum(
+                    &data_type,
+                    column_stat.min.clone(),
+                    column_stat.max.clone(),
+                    column_stat.null_count.upper() > 0.0,
+                ) {
+                    Ok(domain) => Ok((binding, domain)),
+                    Err(msg) => {
+                        if cfg!(debug_assertions) {
+                            Err(ErrorCode::Internal(format!(
+                                "Failed to build input domain {msg} {:?} {:?}",
+                                column_stat, data_type
+                            )))
+                        } else {
+                            log::warn!(data_type:?, msg; "to_arg_stat failed");
+                            Ok((binding, Domain::full(&data_type)))
+                        }
+                    }
+                }
+            })
+            .collect()
+    }
+
+    fn clear_column_stats_for_empty_result(&mut self) {
+        for (index, column_stat) in &self.column_stats {
+            let mut column_stat = column_stat.clone();
+            clear_for_empty_result(&mut column_stat);
+            self.overrides.insert(*index, column_stat);
+        }
+    }
+
     // Update other columns' statistic according to selectivity.
     pub fn update_other_statistic_by_selectivity(&mut self, selectivity: Selectivity) -> f64 {
         let selectivity = match selectivity {
             Selectivity::Unknown => DEFAULT_SELECTIVITY,
             Selectivity::LowerBound => UNKNOWN_COL_STATS_FILTER_SEL_LOWER_BOUND,
             Selectivity::Zero => {
-                for (index, column_stat) in &self.column_stats {
-                    let mut column_stat = column_stat.clone();
-                    column_stat.ndv = StatEstimate::exact(0.0);
-                    column_stat.null_count = StatCount::exact(0);
-                    column_stat.histogram = None;
-                    self.overrides.insert(*index, column_stat);
-                }
+                self.clear_column_stats_for_empty_result();
                 return 0.0;
             }
             Selectivity::N(n) => n,
@@ -149,15 +237,32 @@ impl SelectivityEstimator {
                 continue;
             }
             let mut column_stat = column_stat.clone();
-            ColumnStatUpdate {
-                column_stat: &mut column_stat,
-            }
-            .apply_unconstrained_filter(selectivity);
+            apply_unconstrained_filter(&mut column_stat, selectivity);
 
             self.overrides.insert(*index, column_stat);
         }
 
         selectivity
+    }
+}
+
+fn apply_unconstrained_filter(column_stat: &mut ColumnStat, selectivity: f64) {
+    column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
+    column_stat.null_count = column_stat.null_count.reduce_by_selectivity(selectivity);
+
+    if let Some(histogram) = &mut column_stat.histogram {
+        if histogram.accuracy() {
+            // If selectivity < 0.2, most buckets are invalid and
+            // the accuracy histogram can be discarded.
+            // Todo: find a better way to update histogram.
+            if selectivity < 0.2 {
+                column_stat.histogram = None;
+            }
+        } else if column_stat.ndv.expected as u64 <= 2 {
+            column_stat.histogram = None;
+        } else {
+            histogram.scale_counts(selectivity);
+        }
     }
 }
 
@@ -174,9 +279,9 @@ pub enum Selectivity {
     #[default]
     Unknown,
     LowerBound,
-    // Trusted empty-result signal. This is intentionally separate from a
-    // numeric estimate of 0.0 so downstream statistics are cleared only when
-    // the predicate is known to produce no rows.
+    // Visitor-local empty-result signal for rules not covered by
+    // ConstantFolder's domain reasoning, such as modulo remainder bounds.
+    // It is not a numeric zero estimate.
     Zero,
     N(f64),
 }
@@ -260,43 +365,33 @@ impl SelectivityVisitor<'_> {
                     // Another case: column is from system table, such as numbers. We shouldn't use numbers() table to test cardinality estimation.
                     return Ok(Selectivity::LowerBound);
                 };
-                let Some(const_datum) = constant.scalar.clone().to_datum() else {
-                    return Ok(Selectivity::Unknown);
-                };
                 let op = if left.is_constant() { op.reverse() } else { op };
-                let is_zero = {
-                    use std::cmp::Ordering::*;
+                let selectivity = self.derive_function_selectivity(func)?;
 
-                    match op {
-                        ComparisonOp::Equal => {
-                            matches!(const_datum.compare(&column_stat.min)?, Less)
-                                || matches!(const_datum.compare(&column_stat.max)?, Greater)
-                        }
-                        ComparisonOp::NotEqual => false,
-                        ComparisonOp::GT => {
-                            matches!(const_datum.compare(&column_stat.max)?, Greater | Equal)
-                        }
-                        ComparisonOp::GTE => {
-                            matches!(const_datum.compare(&column_stat.max)?, Greater)
-                        }
-                        ComparisonOp::LT => {
-                            matches!(const_datum.compare(&column_stat.min)?, Less | Equal)
-                        }
-                        ComparisonOp::LTE => {
-                            matches!(const_datum.compare(&column_stat.min)?, Less)
-                        }
-                    }
+                let can_apply_constant_constraint = {
+                    use DataType::*;
+                    matches!(
+                        (
+                            column_ref.data_type.remove_nullable(),
+                            constant.data_type.remove_nullable(),
+                        ),
+                        (Number(_), Number(_))
+                            | (Boolean, Boolean)
+                            | (String, String)
+                            | (Binary, Binary)
+                            | (Date, Date)
+                            | (Timestamp, Timestamp)
+                            | (Decimal(_), Decimal(_))
+                    )
                 };
-                let selectivity = if is_zero {
-                    Selectivity::Zero
-                } else {
-                    self.derive_function_selectivity(func)?
+                if !can_apply_constant_constraint {
+                    return Ok(selectivity);
+                }
+                let Some(const_datum) = constant.scalar.clone().to_datum() else {
+                    return Ok(selectivity);
                 };
                 let constraint = ValueConstraint::from_comparison(op, const_datum);
-                ColumnStatUpdate {
-                    column_stat: &mut column_stat,
-                }
-                .apply_constraint(&constraint, selectivity)?;
+                constraint.apply(&mut column_stat, selectivity)?;
                 self.overrides.insert(column_index, column_stat);
                 return Ok(selectivity);
             }
@@ -327,7 +422,6 @@ impl SelectivityVisitor<'_> {
 
     fn derive_function_selectivity(&self, func: &ExprCall) -> Result<Selectivity> {
         let cardinality = match self.cardinality {
-            StatCardinality::Exact(0) => return Ok(Selectivity::Zero),
             StatCardinality::Estimate(0.0) => return Ok(Selectivity::N(0.0)),
             cardinality => cardinality.value(),
         };
@@ -399,12 +493,8 @@ impl SelectivityVisitor<'_> {
             return Ok(Selectivity::Unknown);
         };
         match self.cardinality {
-            StatCardinality::Exact(0) => Ok(Selectivity::Zero),
             StatCardinality::Estimate(0.0) => Ok(Selectivity::N(0.0)),
             StatCardinality::Exact(cardinality) => {
-                if column_stat.null_count.exact_value() == Some(cardinality) {
-                    return Ok(Selectivity::Zero);
-                }
                 let cardinality = cardinality as f64;
                 Selectivity::checked_estimate(
                     (cardinality - column_stat.null_count.expected()) / cardinality,
@@ -433,12 +523,11 @@ impl SelectivityVisitor<'_> {
 
     fn visit_expr(&mut self, expr: &Expr<ColumnBinding>) -> Result<()> {
         match expr {
-            Expr::Constant(constant) => {
-                self.selectivity = if is_true_constant_predicate(constant) {
-                    Selectivity::N(1.0)
-                } else {
-                    Selectivity::Zero
-                };
+            Expr::Constant(_) => {
+                // Top-level folded constants are consumed in SelectivityEstimator::apply.
+                // Nested constants that survive folding are not estimator rules, so
+                // do not add truthiness or boolean simplification here.
+                self.selectivity = Selectivity::Unknown;
                 Ok(())
             }
             Expr::ColumnRef(_) => {
@@ -458,6 +547,9 @@ impl SelectivityVisitor<'_> {
         let func_name = func.function.signature.name.as_str();
         match func_name {
             "and_filters" => {
+                // Logical composition here combines estimates for predicates that
+                // survived constant folding. It should not duplicate expression-only
+                // boolean simplification such as `false AND x`.
                 let mut has_unknown = false;
                 let mut has_lower_bound = false;
                 let mut has_trusted_zero = false;
@@ -494,6 +586,9 @@ impl SelectivityVisitor<'_> {
             }
 
             "or_filters" => {
+                // `Zero` children are visitor-local empty branches here. Constant
+                // false branches should have been removed or folded before this
+                // visitor sees the expression.
                 let mut has_unknown = false;
                 let mut has_lower_bound = false;
                 let mut acc = 0.0_f64;
@@ -531,7 +626,10 @@ impl SelectivityVisitor<'_> {
                 let mut sub_visitor = self.spawn_child();
                 sub_visitor.visit_expr(&func.args[0])?;
                 self.selectivity = match sub_visitor.selectivity {
-                    Selectivity::Zero => Selectivity::N(1.0),
+                    // A visitor-local empty branch is not enough to prove `NOT
+                    // predicate` keeps every row, especially with nullable inputs.
+                    // Constant `NOT false` belongs to ConstantFolder.
+                    Selectivity::Zero => Selectivity::Unknown,
                     Selectivity::N(n) => Selectivity::N(1.0 - n),
                     selectivity => selectivity,
                 };
@@ -558,22 +656,9 @@ impl SelectivityVisitor<'_> {
     }
 }
 
-// TODO(andylokandy): match on non-null boolean only once we have constant folding in the optimizer.
-fn is_true_constant_predicate(constant: &Constant) -> bool {
-    match &constant.scalar {
-        Scalar::Null => false,
-        Scalar::Boolean(v) => *v,
-        Scalar::Number(NumberScalar::Int64(v)) => *v != 0,
-        Scalar::Number(NumberScalar::UInt64(v)) => *v != 0,
-        Scalar::Number(NumberScalar::Float64(v)) => *v != 0.0,
-        _ => true,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
-    use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::stat_distribution::StatEstimate;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
@@ -598,7 +683,7 @@ mod tests {
             min: Datum::Int(20),
             max: Datum::Int(30),
             ndv: StatEstimate::exact(11.0),
-            null_count: StatCount::exact(0),
+            null_count: StatCount::Exact(0),
             histogram: None,
         });
 
@@ -634,7 +719,7 @@ mod tests {
         let column_stats = estimator.into_column_stats();
         let column_stat = &column_stats[&column_index];
         assert_eq!(column_stat.ndv, StatEstimate::exact(0.0));
-        assert_eq!(column_stat.null_count, StatCount::exact(0));
+        assert_eq!(column_stat.null_count, StatCount::Exact(0));
         Ok(())
     }
 
@@ -646,7 +731,7 @@ mod tests {
             min: Datum::Bytes(b"b".to_vec()),
             max: Datum::Bytes(b"d".to_vec()),
             ndv: StatEstimate::exact(3.0),
-            null_count: StatCount::exact(0),
+            null_count: StatCount::Exact(0),
             histogram: None,
         });
 
@@ -665,6 +750,97 @@ mod tests {
     }
 
     #[test]
+    fn test_string_number_equality_does_not_create_column_constraint() -> Result<()> {
+        let column_index = Symbol::new(0);
+        let mut column_stats = ColumnStatSet::new();
+        column_stats.insert(column_index, ColumnStat {
+            min: Datum::Int(1),
+            max: Datum::Int(10),
+            ndv: StatEstimate::exact(3.0),
+            null_count: StatCount::Exact(0),
+            histogram: None,
+        });
+
+        let predicate = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: ComparisonOp::Equal.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ColumnBindingBuilder::new(
+                        "number".to_string(),
+                        column_index,
+                        Box::new(DataType::Number(NumberDataType::Int32)),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }),
+                ScalarExpr::TypedConstantExpr(
+                    ConstantExpr {
+                        span: None,
+                        value: Scalar::String("5".to_string()),
+                    },
+                    DataType::String,
+                ),
+            ],
+        });
+
+        let mut estimator = SelectivityEstimator::new(column_stats, StatCardinality::estimate(6.0));
+        estimator.apply(&[predicate])?;
+        let column_stats = estimator.into_column_stats();
+        assert_eq!(column_stats[&column_index].min, Datum::Int(1));
+        assert_eq!(column_stats[&column_index].max, Datum::Int(10));
+        Ok(())
+    }
+
+    #[test]
+    fn test_number_equality_allows_different_number_types() -> Result<()> {
+        let column_index = Symbol::new(0);
+        let mut column_stats = ColumnStatSet::new();
+        column_stats.insert(column_index, ColumnStat {
+            min: Datum::Int(1),
+            max: Datum::Int(10),
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::Exact(0),
+            histogram: None,
+        });
+
+        let predicate = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: ComparisonOp::Equal.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![
+                ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: ColumnBindingBuilder::new(
+                        "number".to_string(),
+                        column_index,
+                        Box::new(DataType::Number(NumberDataType::Int32)),
+                        Visibility::Visible,
+                    )
+                    .build(),
+                }),
+                ScalarExpr::TypedConstantExpr(
+                    ConstantExpr {
+                        span: None,
+                        value: Scalar::Number(NumberScalar::UInt64(5)),
+                    },
+                    DataType::Number(NumberDataType::UInt64),
+                ),
+            ],
+        });
+
+        let mut estimator =
+            SelectivityEstimator::new(column_stats, StatCardinality::estimate(10.0));
+        estimator.apply(&[predicate])?;
+        let column_stats = estimator.into_column_stats();
+        assert_eq!(column_stats[&column_index].min, Datum::Int(5));
+        assert_eq!(column_stats[&column_index].max, Datum::Int(5));
+        Ok(())
+    }
+
+    #[test]
     fn test_decimal_comparison_uses_function_statistics() -> Result<()> {
         let column_index = Symbol::new(0);
         let decimal_size = DecimalSize::new(10, 2).unwrap();
@@ -673,7 +849,7 @@ mod tests {
             min: Datum::Float(1.0.into()),
             max: Datum::Float(3.0.into()),
             ndv: StatEstimate::exact(3.0),
-            null_count: StatCount::exact(0),
+            null_count: StatCount::Exact(0),
             histogram: None,
         });
 
@@ -699,7 +875,7 @@ mod tests {
             min: Datum::UInt(0),
             max: Datum::UInt(737),
             ndv: StatEstimate::exact(738.0),
-            null_count: StatCount::exact(0),
+            null_count: StatCount::Exact(0),
             histogram: Some(
                 HistogramBuilder::from_ndv(
                     738,
@@ -739,7 +915,7 @@ mod tests {
             min: Datum::UInt(0),
             max: Datum::UInt(5),
             ndv: StatEstimate::exact(6.0),
-            null_count: StatCount::exact(2),
+            null_count: StatCount::Exact(2),
             histogram: Some(
                 HistogramBuilder::from_ndv(
                     6,
@@ -758,7 +934,7 @@ mod tests {
         let column_stats = estimator.into_column_stats();
         let column_stat = &column_stats[&column_index];
         assert_eq!(column_stat.ndv, StatEstimate::exact(0.0));
-        assert_eq!(column_stat.null_count, StatCount::exact(0));
+        assert_eq!(column_stat.null_count, StatCount::Exact(0));
         assert!(column_stat.histogram.is_none());
         Ok(())
     }
@@ -790,7 +966,7 @@ mod tests {
         let column_stats = estimator.into_column_stats();
         let column_stat = &column_stats[&column_index];
         assert_ne!(column_stat.ndv, StatEstimate::exact(0.0));
-        assert_ne!(column_stat.null_count, StatCount::exact(0));
+        assert_ne!(column_stat.null_count, StatCount::Exact(0));
         Ok(())
     }
 
@@ -802,7 +978,7 @@ mod tests {
             min: Datum::UInt(0),
             max: Datum::UInt(5),
             ndv: StatEstimate::exact(6.0),
-            null_count: StatCount::exact(2),
+            null_count: StatCount::Exact(2),
             histogram: Some(
                 HistogramBuilder::from_ndv(
                     6,
@@ -821,7 +997,7 @@ mod tests {
         let column_stats = estimator.into_column_stats();
         let column_stat = &column_stats[&column_index];
         assert_ne!(column_stat.ndv, StatEstimate::exact(0.0));
-        assert_ne!(column_stat.null_count, StatCount::exact(0));
+        assert_ne!(column_stat.null_count, StatCount::Exact(0));
         Ok(())
     }
 

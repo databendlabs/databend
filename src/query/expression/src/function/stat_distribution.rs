@@ -89,7 +89,10 @@ impl<D> StatDistribution<D> {
     }
 
     pub fn effective_null_count(&self, cardinality: StatCardinality) -> StatCount {
-        let cardinality = cardinality.value();
+        let StatCardinality::Exact(cardinality) = cardinality else {
+            return self.null_count;
+        };
+        let cardinality = cardinality as f64;
         let non_null_lower = self.ndv.lower;
         let null_upper_from_cardinality = cardinality - non_null_lower;
         debug_assert!(
@@ -366,8 +369,12 @@ mod tests {
         };
 
         assert_eq!(
-            stat.effective_null_count(StatCardinality::estimate(3.0)),
+            stat.effective_null_count(StatCardinality::exact(3)),
             StatCount::estimate(0.0, 0.0)
+        );
+        assert_eq!(
+            stat.effective_null_count(StatCardinality::estimate(3.0)),
+            StatCount::exact(1)
         );
     }
 }
