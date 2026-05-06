@@ -518,10 +518,19 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2",
         },
         SqlTestCase {
-            name: "group_by_prefers_select_alias_over_same_name_base_column",
-            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.",
-            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
-            sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
+            name: "group_by_prefers_input_column_over_same_name_select_alias",
+            description: "GROUP BY should resolve an unqualified name to the input column before a same-name SELECT alias.",
+            setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+            sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_alias_over_outer_column",
+            description: "GROUP BY should resolve a SELECT alias before falling back to a same-name outer column.",
+            setup_sqls: &[
+                "CREATE TABLE t_outer(b UInt64)",
+                "CREATE TABLE t_inner(a UInt64)",
+            ],
+            sql: "SELECT * FROM t_outer WHERE EXISTS (SELECT t_inner.a AS b FROM t_inner GROUP BY b)",
         },
         SqlTestCase {
             name: "group_by_prefers_input_column_over_aggregate_alias",

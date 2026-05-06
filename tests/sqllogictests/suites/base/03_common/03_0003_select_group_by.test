@@ -21,6 +21,26 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 1
 2
 
+statement error must appear in the GROUP BY clause or be used in an aggregate function
+SELECT i, SUM(j), j FROM (SELECT 3 AS i, 4 AS j UNION ALL SELECT 3, 4 UNION ALL SELECT 2, 4) AS integers GROUP BY i ORDER BY i
+
+query II
+SELECT 1 AS k, SUM(i) FROM (SELECT 3 AS i UNION ALL SELECT 3 UNION ALL SELECT 2) AS integers GROUP BY k ORDER BY 2
+----
+1 8
+
+query II
+SELECT 1 AS i, SUM(i) FROM (SELECT 3 AS i UNION ALL SELECT 3 UNION ALL SELECT 2) AS integers GROUP BY i ORDER BY 2
+----
+1 2
+1 6
+
+query II
+SELECT i % 2 AS k, SUM(i) FROM (SELECT 3 AS i UNION ALL SELECT 3 UNION ALL SELECT 2) AS integers GROUP BY k, k ORDER BY 1
+----
+0 2
+1 6
+
 query TI
 SELECT try_cast(number % 3 as string) c1, count()  FROM numbers_mt(10) where number > 2 group by c1 order by c1
 ----

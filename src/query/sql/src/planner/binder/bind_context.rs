@@ -87,7 +87,10 @@ pub enum ExprContext {
 
 impl ExprContext {
     pub fn prefer_resolve_alias(&self) -> bool {
-        !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
+        !matches!(
+            self,
+            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue
+        )
     }
 
     pub fn allow_resolve_alias(&self) -> bool {
@@ -425,6 +428,38 @@ impl BindContext {
                 column_case_sensitive,
                 &mut result,
             );
+        } else if self.expr_context == ExprContext::GroupClaue {
+            Self::search_bound_columns_in_context(
+                self,
+                database,
+                table,
+                column,
+                column_case_sensitive,
+                &mut result,
+            );
+
+            if result.is_empty() {
+                for (alias, scalar) in available_aliases {
+                    if database.is_none() && table.is_none() && name == alias {
+                        result.push(NameResolutionResult::Alias {
+                            alias: alias.clone(),
+                            scalar: scalar.clone(),
+                        });
+                    }
+                }
+            }
+
+            if result.is_empty()
+                && let Some(ref parent) = self.parent
+            {
+                parent.search_bound_columns_recursively(
+                    database,
+                    table,
+                    column,
+                    column_case_sensitive,
+                    &mut result,
+                );
+            }
         } else if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && name == alias {
@@ -529,41 +564,14 @@ impl BindContext {
     ) {
         let mut bind_context: &BindContext = self;
         loop {
-            for column_binding in bind_context.columns.iter() {
-                if let Some(lower) = &column_binding.column_name_lower {
-                    if !column_case_sensitive
-                        && &column.name == lower
-                        && Self::match_column_binding_case_insensitive(
-                            database,
-                            table,
-                            column_binding,
-                        )
-                    {
-                        let mut binding = column_binding.clone();
-                        binding.column_name = lower.clone();
-                        result.push(NameResolutionResult::Column(binding));
-                        continue;
-                    }
-                }
-                if Self::match_column_binding(database, table, &column.name, column_binding) {
-                    result.push(NameResolutionResult::Column(column_binding.clone()));
-                }
-            }
-
-            if !result.is_empty() {
-                return;
-            }
-
-            // look up internal column
-            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(&column.name)
-            {
-                let column_binding = InternalColumnBinding {
-                    database_name: database.map(|n| n.to_owned()),
-                    table_name: table.map(|n| n.to_owned()),
-                    internal_column,
-                };
-                result.push(NameResolutionResult::InternalColumn(column_binding));
-            }
+            Self::search_bound_columns_in_context(
+                bind_context,
+                database,
+                table,
+                column,
+                column_case_sensitive,
+                result,
+            );
 
             if !result.is_empty() {
                 return;
@@ -574,6 +582,46 @@ impl BindContext {
             } else {
                 break;
             }
+        }
+    }
+
+    fn search_bound_columns_in_context(
+        bind_context: &BindContext,
+        database: Option<&str>,
+        table: Option<&str>,
+        column: &Identifier,
+        column_case_sensitive: bool,
+        result: &mut Vec<NameResolutionResult>,
+    ) {
+        for column_binding in bind_context.columns.iter() {
+            if let Some(lower) = &column_binding.column_name_lower {
+                if !column_case_sensitive
+                    && &column.name == lower
+                    && Self::match_column_binding_case_insensitive(database, table, column_binding)
+                {
+                    let mut binding = column_binding.clone();
+                    binding.column_name = lower.clone();
+                    result.push(NameResolutionResult::Column(binding));
+                    continue;
+                }
+            }
+            if Self::match_column_binding(database, table, &column.name, column_binding) {
+                result.push(NameResolutionResult::Column(column_binding.clone()));
+            }
+        }
+
+        if !result.is_empty() {
+            return;
+        }
+
+        // look up internal column
+        if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(&column.name) {
+            let column_binding = InternalColumnBinding {
+                database_name: database.map(|n| n.to_owned()),
+                table_name: table.map(|n| n.to_owned()),
+                internal_column,
+            };
+            result.push(NameResolutionResult::InternalColumn(column_binding));
         }
     }
 

@@ -1175,11 +1175,11 @@ impl Binder {
         }
         let preferred_aliases = group_by_aliases.preferred_aliases();
         let available_aliases = group_by_aliases.available_aliases();
-        // GROUP BY first uses the preferred alias set, then falls back to the
-        // full alias set only when the expression cannot be resolved. This
-        // keeps the main binding path centralized while allowing SRF and
-        // aggregate aliases to remain available without letting them shadow
-        // same-name input columns.
+        // GROUP BY binds names with column-first resolution. The first pass
+        // uses the preferred alias set, then falls back to the full alias set
+        // only when the expression cannot be resolved. This keeps SRF and
+        // aggregate aliases available without letting them shadow same-name
+        // input columns.
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
