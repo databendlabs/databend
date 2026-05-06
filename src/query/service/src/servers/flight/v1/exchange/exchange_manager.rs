@@ -578,13 +578,27 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        match queries_coordinator.get_mut(query_id) {
+        let cleanup_empty_partial_query = match queries_coordinator.get_mut(query_id) {
             None => Err(ErrorCode::Internal(format!(
                 "Query {} not found in cluster.",
                 query_id
             ))),
-            Some(coordinator) => coordinator.execute_pipeline(),
+            Some(coordinator) => {
+                coordinator.execute_pipeline()?;
+                Ok(coordinator.should_cleanup_empty_partial_query())
+            }
+        }?;
+
+        if cleanup_empty_partial_query {
+            if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
+                drop(queries_coordinator_guard);
+
+                query_coordinator.shutdown_query(None);
+                query_coordinator.on_finished();
+            }
         }
+
+        Ok(())
     }
 
     // Create a pipeline based on query plan
@@ -1224,6 +1238,15 @@ impl QueryCoordinator {
 
     pub fn on_finished(self) {
         // Do something when query finished.
+    }
+
+    fn should_cleanup_empty_partial_query(&self) -> bool {
+        !self.is_request_server
+            && self.fragments_coordinator.is_empty()
+            && self
+                .info
+                .as_ref()
+                .is_some_and(|info| info.query_executor.is_none())
     }
 
     pub fn execute_pipeline(&mut self) -> Result<()> {
