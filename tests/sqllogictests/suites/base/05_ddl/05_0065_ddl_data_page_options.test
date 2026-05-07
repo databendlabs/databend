@@ -1,0 +1,109 @@
+statement ok
+create or replace database test_data_page_options;
+
+statement ok
+use test_data_page_options;
+
+# CREATE TABLE with both data_page_rows and data_page_bytes
+statement ok
+create or replace table t1(a int, b string) data_page_rows=1000 data_page_bytes=524288;
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t1';
+----
+ COMPRESSION='zstd' DATA_PAGE_BYTES='524288' DATA_PAGE_ROWS='1000' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+# CREATE TABLE with only data_page_rows
+statement ok
+create or replace table t2(a int, b string) data_page_rows=500;
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t2';
+----
+ COMPRESSION='zstd' DATA_PAGE_ROWS='500' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+# CREATE TABLE with only data_page_bytes
+statement ok
+create or replace table t3(a int, b string) data_page_bytes=65536;
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t3';
+----
+ COMPRESSION='zstd' DATA_PAGE_BYTES='65536' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+# ALTER TABLE SET OPTIONS - verify each change
+statement ok
+alter table t1 set options(data_page_rows=2000);
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t1';
+----
+ COMPRESSION='zstd' DATA_PAGE_BYTES='524288' DATA_PAGE_ROWS='2000' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+statement ok
+alter table t1 set options(data_page_bytes=1048576);
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t1';
+----
+ COMPRESSION='zstd' DATA_PAGE_BYTES='1048576' DATA_PAGE_ROWS='2000' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+# ALTER TABLE UNSET OPTIONS - verify each removal
+statement ok
+alter table t1 unset options(data_page_rows);
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t1';
+----
+ COMPRESSION='zstd' DATA_PAGE_BYTES='1048576' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+statement ok
+alter table t1 unset options(data_page_bytes);
+
+query T
+select table_option from system.tables where database='test_data_page_options' and name='t1';
+----
+ COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+
+# Validation: data_page_rows=0 is invalid
+statement error 1301
+create or replace table t_err(a int) data_page_rows=0;
+
+# Validation: data_page_bytes=0 is invalid
+statement error 1301
+create or replace table t_err(a int) data_page_bytes=0;
+
+# Validation: non-integer value is invalid
+statement error 1301
+create or replace table t_err(a int) data_page_rows=abc;
+
+# Validation: non-integer value is invalid for bytes
+statement error 1301
+create or replace table t_err(a int) data_page_bytes=abc;
+
+# Insert and query data to verify writes work correctly with data_page_rows
+statement ok
+create or replace table t4(id int, val string) data_page_rows=100;
+
+statement ok
+insert into t4 select number, to_string(number) from numbers(1000);
+
+query I
+select count(*) from t4;
+----
+1000
+
+# Insert and query data to verify writes work correctly with data_page_bytes
+statement ok
+create or replace table t5(id int, val string) data_page_bytes=65536;
+
+statement ok
+insert into t5 select number, to_string(number) from numbers(1000);
+
+query I
+select count(*) from t5;
+----
+1000
+
+statement ok
+drop database test_data_page_options;

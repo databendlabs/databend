@@ -25,6 +25,8 @@ pub const FUSE_OPT_KEY_ENABLE_AUTO_VACUUM: &str = "enable_auto_vacuum";
 pub const FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE: &str = "enable_auto_analyze";
 pub const FUSE_OPT_KEY_ATTACH_COLUMN_IDS: &str = "attach_column_ids";
 pub const FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY: &str = "enable_parquet_dictionary";
+pub const FUSE_OPT_KEY_DATA_PAGE_ROWS: &str = "data_page_rows";
+pub const FUSE_OPT_KEY_DATA_PAGE_BYTES: &str = "data_page_bytes";
 
 pub const FUSE_TBL_BLOCK_PREFIX: &str = "_b";
 pub const FUSE_TBL_BLOCK_INDEX_PREFIX: &str = "_i";
