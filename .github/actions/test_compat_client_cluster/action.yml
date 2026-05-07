@@ -27,13 +27,6 @@ runs:
       with:
         go-version: "1.25"
 
-    - name: checkout bendsql
-      uses: actions/checkout@v4
-      with:
-        repository: databendlabs/bendsql
-        ref: main
-        path: tests/nox/cache/bendsql
-
     - name: Run databend with Cluster mode
       shell: bash
       env:
