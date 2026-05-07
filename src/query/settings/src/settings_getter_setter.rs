@@ -907,6 +907,10 @@ impl Settings {
         Ok(self.try_get_u64("use_legacy_query_executor")? == 1)
     }
 
+    pub fn get_enable_decimal_sum_widening(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_decimal_sum_widening")? != 0)
+    }
+
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {
         self.try_get_u64("statement_queued_timeout_in_seconds")
     }
