@@ -16,9 +16,8 @@ INSERT INTO t0 VALUES(0.0,NULL)
 statement error 1006
 SELECT t0.c1, (1/t0.c1) IS NULL FROM t0 order by c1
 
-# FIXME: https://github.com/datafuselabs/databend/issues/12834
-# statement error 1006
-# SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1
+statement error 1006
+SELECT t0.c1 FROM t0 WHERE (((1/(t0.c1))) IS NULL) order by c1
 
 statement ok
 CREATE TABLE t1(c0 DOUBLE)

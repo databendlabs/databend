@@ -137,35 +137,30 @@ select '255'::BIGINT::UINT8
 ----
 255
 
-# TODO https://github.com/datafuselabs/databend/issues/7347
-# statement error xxx
-# select '-1'::BIGINT::uint8
+statement error 1006
+select '-1'::BIGINT::uint8
 
-# TODO https://github.com/datafuselabs/databend/issues/7347
-# statement error xxx
-# select '256'::BIGINT::uint8
+statement error 1006
+select '256'::BIGINT::uint8
 
 query I
 select '65535'::BIGINT::UINT16
 ----
 65535
 
-# TODO https://github.com/datafuselabs/databend/issues/7347
-# statement error xxx
-# select '-1'::BIGINT::uint16
+statement error 1006
+select '-1'::BIGINT::uint16
 
-# TODO https://github.com/datafuselabs/databend/issues/7347
-# statement error xxx
-# select '65536'::BIGINT::uint16
+statement error 1006
+select '65536'::BIGINT::uint16
 
 query I
 select '4294967295'::BIGINT::UINT32
 ----
 4294967295
 
-# TODO https://github.com/datafuselabs/databend/issues/7347
-# statement error xxx
-# select '-1'::BIGINT::uint32
+statement error 1006
+select '-1'::BIGINT::uint32
 
 # TODO https://github.com/datafuselabs/databend/issues/7347
 # query I
@@ -177,9 +172,8 @@ select '4294967295'::BIGINT::UINT32
 statement error 1006
 select '18446744073709551615'::BIGINT::UINT64
 
-# TODO https://github.com/datafuselabs/databend/issues/7347
-# statement error XXX
-# select '-1'::BIGINT::UINT64
+statement error 1006
+select '-1'::BIGINT::UINT64
 
 statement error 1006
 select '18446744073709551616'::BIGINT::UINT64
@@ -205,4 +199,3 @@ select '4294967295'::UINT32::BIGINT
 
 # ----
 # 18446744073709551615
-

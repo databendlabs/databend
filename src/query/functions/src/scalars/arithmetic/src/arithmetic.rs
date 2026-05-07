@@ -531,8 +531,8 @@ fn register_round_cast<
                 let min = AsPrimitive::<f64>::as_(domain.min);
                 let max = AsPrimitive::<f64>::as_(domain.max);
                 let round_domain = SimpleDomain::<F64> {
-                    min: min.round().into(),
-                    max: max.round().into(),
+                    min: min.round_ties_even().into(),
+                    max: max.round_ties_even().into(),
                 };
                 round_domain.overflow_cast()
             } else {
@@ -547,7 +547,7 @@ fn register_round_cast<
         .each_row_throw(|val, ctx| {
             let val = if ctx.func_ctx.rounding_mode {
                 let val = AsPrimitive::<f64>::as_(val);
-                num_traits::cast::cast(val.round())
+                num_traits::cast::cast(val.round_ties_even())
             } else {
                 num_traits::cast::cast(val)
             };
@@ -630,8 +630,8 @@ fn register_try_round_cast<
                 let min = AsPrimitive::<f64>::as_(domain.min);
                 let max = AsPrimitive::<f64>::as_(domain.max);
                 let round_domain = SimpleDomain::<F64> {
-                    min: min.round().into(),
-                    max: max.round().into(),
+                    min: min.round_ties_even().into(),
+                    max: max.round_ties_even().into(),
                 };
                 round_domain.overflow_cast()
             } else {
@@ -646,7 +646,7 @@ fn register_try_round_cast<
             |val, output, ctx| {
                 let val = if ctx.func_ctx.rounding_mode {
                     let val = AsPrimitive::<f64>::as_(val);
-                    num_traits::cast::cast(val.round())
+                    num_traits::cast::cast(val.round_ties_even())
                 } else {
                     num_traits::cast::cast(val)
                 };
