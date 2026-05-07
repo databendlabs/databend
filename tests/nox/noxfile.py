@@ -37,6 +37,8 @@ JDBC_RELEASE_DOWNLOAD_ROOT = (
 JDBC_SOURCE_BUILD_ENV = {"TEST_HANDLERS": "http"}
 JDBC_EXCLUDED_GROUPS = "FLAKY,cluster,MULTI_HOST"
 JDBC_MAIN_TEST_ARGS = [
+    "-B",
+    "-ntp",
     "-pl",
     "databend-jdbc",
     "test",
