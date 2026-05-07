@@ -536,6 +536,12 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s",
         },
         SqlTestCase {
+            name: "group_by_complex_expr_does_not_shadow_column_with_same_name_alias",
+            description: "A complex GROUP BY expression should resolve internal column refs from FROM, not from a same-name SELECT alias.",
+            setup_sqls: &["CREATE TABLE t(type Int32)"],
+            sql: "SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END",
+        },
+        SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],

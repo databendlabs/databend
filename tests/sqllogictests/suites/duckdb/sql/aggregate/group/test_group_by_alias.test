@@ -22,6 +22,12 @@ SELECT i % 2 AS k, SUM(i) FROM integers WHERE i IS NOT NULL GROUP BY 1 HAVING i%
 ----
 1 4
 
+query TI
+SELECT CASE WHEN i = 1 THEN 'one' ELSE 'other' END AS i, COUNT(*) FROM integers GROUP BY CASE WHEN i = 1 THEN 'one' ELSE 'other' END ORDER BY i
+----
+one 1
+other 3
+
 # SELECT i, i % 2 AS i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3
 # SELECT i, i % 2 AS k, SUM(i) FROM integers GROUP BY i ORDER BY k, 3
 

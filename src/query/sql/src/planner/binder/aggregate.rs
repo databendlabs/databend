@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -1212,26 +1213,45 @@ impl Binder {
                 continue;
             }
 
-            let mut scalar_binder = ScalarBinder::new(
-                bind_context,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                self.metadata.clone(),
-                preferred_aliases,
+            let is_simple_column_ref = matches!(
+                expr,
+                Expr::ColumnRef {
+                    column: ColumnRef { database: None, table: None, .. },
+                    ..
+                }
             );
-            let (mut scalar_expr, _) = if preferred_aliases == available_aliases {
-                scalar_binder.bind(expr)?
+
+            let (mut scalar_expr, _) = if is_simple_column_ref {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    preferred_aliases,
+                );
+                if preferred_aliases == available_aliases {
+                    scalar_binder.bind(expr)?
+                } else {
+                    scalar_binder.bind(expr).or_else(|_| {
+                        let mut fallback_scalar_binder = ScalarBinder::new(
+                            bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            available_aliases,
+                        );
+                        fallback_scalar_binder.bind(expr)
+                    })?
+                }
             } else {
-                scalar_binder.bind(expr).or_else(|_| {
-                    let mut fallback_scalar_binder = ScalarBinder::new(
-                        bind_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        available_aliases,
-                    );
-                    fallback_scalar_binder.bind(expr)
-                })?
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
+                scalar_binder.bind(expr)?
             };
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
