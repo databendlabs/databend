@@ -27,29 +27,12 @@ runs:
       with:
         go-version: "1.25"
 
-    - name: checkout databend-jdbc
-      uses: actions/checkout@v4
-      with:
-        repository: databendlabs/databend-jdbc
-        ref: main
-        path: tests/nox/cache/databend-jdbc
-
     - name: checkout bendsql
       uses: actions/checkout@v4
       with:
         repository: databendlabs/bendsql
         ref: main
         path: tests/nox/cache/bendsql
-
-    - name: build databend-jdbc
-      shell: bash
-      working-directory: tests/nox/cache/databend-jdbc
-      env:
-        TEST_HANDLERS: http
-      run: |
-        mvn package -DskipTests
-        echo "JDBC_MAIN_VER=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_ENV
-        pwd
 
     - name: Run databend with Cluster mode
       shell: bash
@@ -62,4 +45,3 @@ runs:
       run: nox -f tests/nox/noxfile.py -s python_client java_client go_client
       env:
         DATABEND_GO_SKIP_UP: "1"
-        JDBC_MAIN_VER: ${{env.JDBC_MAIN_VER}}

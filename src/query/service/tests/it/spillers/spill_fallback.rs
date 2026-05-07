@@ -17,6 +17,7 @@ use databend_common_expression::FromData;
 use databend_common_expression::types::Int32Type;
 use databend_common_storage::DataOperator;
 use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextSettings;
 use databend_query::spillers::Location;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
@@ -64,6 +65,10 @@ async fn test_spill_fallback_to_remote_when_local_full() -> anyhow::Result<()> {
         location_prefix: ctx.query_id_spill_prefix(),
         disk_spill: Some(disk_spill),
         use_parquet: false,
+        writer_pool_bytes: ctx
+            .get_settings()
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(1024 * 1024),
     };
 
     let operator = DataOperator::instance().spill_operator();

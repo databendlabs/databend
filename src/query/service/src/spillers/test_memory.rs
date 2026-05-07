@@ -207,6 +207,7 @@ async fn init() -> Result<LiteSpiller> {
         location_prefix: "_query_spill".to_string(),
         disk_spill,
         use_parquet: true,
+        writer_pool_bytes: 20 * 1024 * 1024,
     };
     let operator = DataOperator::instance().spill_operator();
     LiteSpiller::new(operator, spiller_config)

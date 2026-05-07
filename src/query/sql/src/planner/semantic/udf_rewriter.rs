@@ -113,6 +113,14 @@ impl UdfRewriter {
                         }
                     }
                 }
+                for unmatched_evaluator in plan.unmatched_evaluators.iter_mut() {
+                    if let Some(condition) = unmatched_evaluator.condition.as_mut() {
+                        self.visit(condition)?;
+                    }
+                    for scalar in unmatched_evaluator.values.iter_mut() {
+                        self.visit(scalar)?;
+                    }
+                }
                 let child_expr = self.create_udf_expr(s_expr.children[0].clone());
                 let new_expr = SExpr::create_unary(Arc::new(plan.into()), child_expr);
                 Ok(new_expr)

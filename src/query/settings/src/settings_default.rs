@@ -498,6 +498,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
+                ("spill_writer_memory_pool_size_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(20),
+                    desc: "Set the memory pool size (MB) for each spill writer.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
+                }),
                 ("spilling_file_format", DefaultSettingValue {
                     value: UserSettingValue::String("parquet".to_string()),
                     desc: "Set the storage file format for spilling.",
