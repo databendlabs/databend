@@ -47,8 +47,8 @@ use databend_common_expression::with_number_type;
 use databend_storages_common_table_meta::meta::ColumnStatistics;
 use enum_dispatch::enum_dispatch;
 
-use crate::statistics::Trim;
 use crate::statistics::STATS_STRING_PREFIX_LEN;
+use crate::statistics::Trim;
 use crate::statistics::trim_string_max_with_len;
 use crate::statistics::trim_string_min_with_len;
 
@@ -103,7 +103,10 @@ where
     }
 }
 
-pub fn create_column_stats_builder(data_type: &DataType, string_col_len: usize) -> ColumnStatisticsBuilder {
+pub fn create_column_stats_builder(
+    data_type: &DataType,
+    string_col_len: usize,
+) -> ColumnStatisticsBuilder {
     let inner_type = data_type.remove_nullable();
     macro_rules! match_number_type_create {
         ($inner_type:expr) => {{
@@ -121,9 +124,9 @@ pub fn create_column_stats_builder(data_type: &DataType, string_col_len: usize) 
         DataType::Number(num_type) => {
             match_number_type_create!(num_type)
         }
-        DataType::String => {
-            ColumnStatisticsBuilder::String(CommonBuilder::<StringType>::create_with_string_len(inner_type, string_col_len))
-        }
+        DataType::String => ColumnStatisticsBuilder::String(
+            CommonBuilder::<StringType>::create_with_string_len(inner_type, string_col_len),
+        ),
         DataType::Date => {
             ColumnStatisticsBuilder::Date(CommonBuilder::<DateType>::create(inner_type))
         }

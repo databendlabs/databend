@@ -138,7 +138,7 @@ fn test_decode_v2_table_meta() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
-            field_stats_truncate_len: btreemap! {},
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),

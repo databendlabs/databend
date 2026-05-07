@@ -98,8 +98,9 @@ pub fn gen_columns_statistics(
                         min = if let Some(v) = mins.index(0) {
                             let owned = v.to_owned();
                             let trimmed = match owned {
-                                Scalar::String(s) => trim_string_min_with_len(s, truncate_len)
-                                    .map(Scalar::String),
+                                Scalar::String(s) => {
+                                    trim_string_min_with_len(s, truncate_len).map(Scalar::String)
+                                }
                                 other => other.trim_min(),
                             };
                             if let Some(v) = trimmed {
@@ -116,8 +117,9 @@ pub fn gen_columns_statistics(
                         max = if let Some(v) = maxs.index(0) {
                             let owned = v.to_owned();
                             let trimmed = match owned {
-                                Scalar::String(s) => trim_string_max_with_len(s, truncate_len)
-                                    .map(Scalar::String),
+                                Scalar::String(s) => {
+                                    trim_string_max_with_len(s, truncate_len).map(Scalar::String)
+                                }
                                 other => other.trim_max(),
                             };
                             if let Some(v) = trimmed {

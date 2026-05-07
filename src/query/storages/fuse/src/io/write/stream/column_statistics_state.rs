@@ -178,7 +178,8 @@ mod tests {
             ]),
         ]);
 
-        let stats_0 = gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
+        let stats_0 =
+            gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
 
         let mut stats_columns = vec![];
         let leaf_fields = schema.leaf_fields();
@@ -189,7 +190,8 @@ mod tests {
                 stats_columns.push((column_id, data_type.clone()));
             }
         }
-        let mut column_stats_state = ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new());
+        let mut column_stats_state =
+            ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new());
         column_stats_state.add_block(&schema, &block)?;
         let stats_1 = column_stats_state.finalize(HashMap::new())?;
 

@@ -1925,7 +1925,10 @@ impl Binder {
                 let inner_type = schema_data_type.remove_nullable();
                 if inner_type != databend_common_expression::TableDataType::String {
                     return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
-                        format!("STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}", name, inner_type),
+                        format!(
+                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                            name, inner_type
+                        ),
                     ));
                 }
                 if len == 0 || len > 4096 {

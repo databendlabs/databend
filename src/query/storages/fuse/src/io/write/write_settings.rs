@@ -14,8 +14,8 @@
 
 use std::collections::BTreeMap;
 
-use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_common_expression::ColumnId;
+use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_table_meta::table::TableCompression;
 

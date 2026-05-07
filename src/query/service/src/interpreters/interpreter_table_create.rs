@@ -407,12 +407,12 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
-        let field_stats_truncate_len = self.plan.field_stats_truncate_len
+        let field_stats_truncate_len = self
+            .plan
+            .field_stats_truncate_len
             .iter()
             .enumerate()
-            .filter_map(|(i, opt_len)| {
-                opt_len.map(|len| (schema.fields()[i].column_id(), len))
-            })
+            .filter_map(|(i, opt_len)| opt_len.map(|len| (schema.fields()[i].column_id(), len)))
             .collect();
         let mut options = self.plan.options.clone();
 

@@ -143,7 +143,7 @@ async fn create_internal_recursive_cte_memory_table(
         storage_params: None,
         options,
         field_comments: vec![],
-            field_stats_truncate_len: vec![],
+        field_stats_truncate_len: vec![],
         cluster_key: None,
         as_select: None,
         table_indexes: None,
