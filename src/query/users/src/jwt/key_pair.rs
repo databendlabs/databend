@@ -22,20 +22,34 @@ use jwt_simple::algorithms::ES384PublicKey;
 use jwt_simple::algorithms::Ed25519PublicKey;
 use jwt_simple::algorithms::EdDSAPublicKeyLike;
 use jwt_simple::algorithms::RS256PublicKey;
+use jwt_simple::algorithms::RS384PublicKey;
+use jwt_simple::algorithms::RS512PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
 use jwt_simple::prelude::JWTClaims;
 use jwt_simple::prelude::NoCustomClaims;
 
+/// Minimum RSA key size in bits.
+const RSA_MIN_KEY_BITS: usize = 2048;
+
 pub enum PublicKeyType {
-    RSA256(Box<RS256PublicKey>),
+    RSA(String), // PEM string; parsed into RS256/RS384/RS512 at verify time
     ES256(ES256PublicKey),
     ES384(ES384PublicKey),
     Ed25519(Ed25519PublicKey),
 }
 
 pub fn parse_public_key_pem(pem: &str) -> Result<PublicKeyType> {
+    // Try RSA first (RS256/RS384/RS512 all parse from the same RSA PEM).
+    // We use RS256 for detection; the actual algorithm is selected at verify time.
     if let Ok(key) = RS256PublicKey::from_pem(pem) {
-        return Ok(PublicKeyType::RSA256(Box::new(key)));
+        let components = key.to_components();
+        let key_bits = components.n.len() * 8;
+        if key_bits < RSA_MIN_KEY_BITS {
+            return Err(ErrorCode::AuthenticateFailure(format!(
+                "RSA key must be at least {RSA_MIN_KEY_BITS} bits, got {key_bits} bits"
+            )));
+        }
+        return Ok(PublicKeyType::RSA(pem.to_string()));
     }
     if let Ok(key) = ES256PublicKey::from_pem(pem) {
         return Ok(PublicKeyType::ES256(key));
@@ -47,7 +61,7 @@ pub fn parse_public_key_pem(pem: &str) -> Result<PublicKeyType> {
         return Ok(PublicKeyType::Ed25519(key));
     }
     Err(ErrorCode::AuthenticateFailure(
-        "invalid public key: expected PEM-encoded RSA, ECDSA (P-256/P-384), or Ed25519 public key",
+        "invalid public key: expected PEM-encoded RSA (2048+ bits), ECDSA (P-256/P-384), or Ed25519 public key",
     ))
 }
 
@@ -72,7 +86,29 @@ fn verify_token_with_key(
     key: &PublicKeyType,
 ) -> std::result::Result<JWTClaims<NoCustomClaims>, jwt_simple::Error> {
     match key {
-        PublicKeyType::RSA256(pk) => pk.verify_token::<NoCustomClaims>(token, None),
+        PublicKeyType::RSA(pem) => {
+            // Try RS256, RS384, RS512 in order. The JWT's `alg` header determines
+            // which hash the signer used; we attempt all three since the underlying
+            // RSA key is the same.
+            if let Ok(k) = RS256PublicKey::from_pem(pem) {
+                if let Ok(claims) = k.verify_token::<NoCustomClaims>(token, None) {
+                    return Ok(claims);
+                }
+            }
+            if let Ok(k) = RS384PublicKey::from_pem(pem) {
+                if let Ok(claims) = k.verify_token::<NoCustomClaims>(token, None) {
+                    return Ok(claims);
+                }
+            }
+            if let Ok(k) = RS512PublicKey::from_pem(pem) {
+                if let Ok(claims) = k.verify_token::<NoCustomClaims>(token, None) {
+                    return Ok(claims);
+                }
+            }
+            Err(jwt_simple::Error::msg(
+                "RSA signature verification failed with RS256, RS384, and RS512",
+            ))
+        }
         PublicKeyType::ES256(pk) => pk.verify_token::<NoCustomClaims>(token, None),
         PublicKeyType::ES384(pk) => pk.verify_token::<NoCustomClaims>(token, None),
         PublicKeyType::Ed25519(pk) => pk.verify_token::<NoCustomClaims>(token, None),
