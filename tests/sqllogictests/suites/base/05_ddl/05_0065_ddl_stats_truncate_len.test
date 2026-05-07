@@ -151,3 +151,66 @@ ORDER BY column_id;
 
 statement ok
 DROP TABLE t_trunc40;
+
+## MIN/MAX aggregate correctness: truncated stats must NOT be used as exact answers
+## When STATS_TRUNCATE_LEN 4 is set, the stored min "abcd" is a prefix, not the real min.
+## SELECT MIN(a) must scan data and return the full value, not the truncated prefix.
+statement ok
+CREATE TABLE t_minmax (
+    a STRING STATS_TRUNCATE_LEN 4,
+    b STRING
+) row_per_block=100;
+
+statement ok
+INSERT INTO t_minmax VALUES ('abcdefghijklmnopqrstuvwxyz', 'abcdefghijklmnopqrstuvwxyz');
+
+## MIN(a) must return the full string, not the 4-char truncated prefix "abcd"
+query T
+SELECT MIN(a) FROM t_minmax;
+----
+abcdefghijklmnopqrstuvwxyz
+
+## MAX(a) must return the full string, not the truncated max
+query T
+SELECT MAX(a) FROM t_minmax;
+----
+abcdefghijklmnopqrstuvwxyz
+
+## MIN(b) uses default 16-char truncation; stored min "abcdefghijklmnop" is also a prefix
+## so it must also scan and return the full value
+query T
+SELECT MIN(b) FROM t_minmax;
+----
+abcdefghijklmnopqrstuvwxyz
+
+## MAX(b) same
+query T
+SELECT MAX(b) FROM t_minmax;
+----
+abcdefghijklmnopqrstuvwxyz
+
+statement ok
+DROP TABLE t_minmax;
+
+## Short string that fits within STATS_TRUNCATE_LEN: stats ARE exact, optimizer CAN use them
+statement ok
+CREATE TABLE t_short (
+    a STRING STATS_TRUNCATE_LEN 4
+) row_per_block=100;
+
+statement ok
+INSERT INTO t_short VALUES ('ab');
+
+## "ab" (2 bytes) < 4, so min stat is exact — optimizer may answer from stats
+query T
+SELECT MIN(a) FROM t_short;
+----
+ab
+
+query T
+SELECT MAX(a) FROM t_short;
+----
+ab
+
+statement ok
+DROP TABLE t_short;

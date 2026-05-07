@@ -186,7 +186,6 @@ pub fn scalar_min_max(data_type: &DataType, scalar: Scalar) -> Option<(Scalar, S
 pub trait Trim: Sized {
     fn trim_min(self) -> Option<Self>;
     fn trim_max(self) -> Option<Self>;
-    fn may_be_trimmed(&self) -> bool;
 }
 
 pub const END_OF_UNICODE_RANGE: char = '\u{10FFFF}';
@@ -264,13 +263,6 @@ impl Trim for Scalar {
                 }
             }
             v => Some(v),
-        }
-    }
-
-    fn may_be_trimmed(&self) -> bool {
-        match self {
-            Scalar::String(s) => s.len() >= STATS_STRING_PREFIX_LEN,
-            _ => false,
         }
     }
 }
