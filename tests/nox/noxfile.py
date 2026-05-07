@@ -188,7 +188,7 @@ def http_query(sql, port=8000):
     return result
 
 
-def create_jdbc_test_user():
+def create_test_user():
     try:
         http_query("DROP USER IF EXISTS databend")
     except RuntimeError as e:
@@ -431,7 +431,7 @@ def python_client(session, driver_version):
 @nox.session
 @nox.parametrize("driver_version", JDBC_DRIVER)
 def java_client(session, driver_version):
-    create_jdbc_test_user()
+    create_test_user()
 
     if driver_version == "main":
         jdbc_target = prepare_jdbc_main_source(session)
@@ -449,6 +449,7 @@ def java_client(session, driver_version):
 @nox.session
 @nox.parametrize("source_ref", GO_DRIVER)
 def go_client(session, source_ref):
+    create_test_user()
     source_dir, resolved_ref = prepare_go_client_source(source_ref)
     env = get_go_driver_env(resolved_ref)
     test_dir = source_dir / "tests"
