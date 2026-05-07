@@ -335,7 +335,7 @@ impl StreamBlockBuilder {
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
         let column_stats_state =
-            ColumnStatisticsState::new(&properties.stats_columns, &properties.distinct_columns);
+            ColumnStatisticsState::new(&properties.stats_columns, &properties.distinct_columns, &properties.write_settings.col_stats_truncate_lens);
         Ok(StreamBlockBuilder {
             properties,
             block_writer,

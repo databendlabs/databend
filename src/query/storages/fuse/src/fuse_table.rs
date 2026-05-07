@@ -345,6 +345,13 @@ impl FuseTable {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
+            col_stats_truncate_lens: self
+                .table_info
+                .meta
+                .field_stats_truncate_len
+                .iter()
+                .map(|(&k, &v)| (k, v as usize))
+                .collect(),
         }
     }
 

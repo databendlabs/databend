@@ -212,7 +212,7 @@ async fn generate_blocks(
 
     let blocks: std::vec::Vec<DataBlock> = stream.try_collect().await?;
     for block in blocks {
-        let stats = gen_columns_statistics(&block, None, &schema)?;
+        let stats = gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
         let (block_meta, _index_meta, hll) = block_writer
             .write(FuseStorageFormat::Parquet, &schema, block, stats, None)
             .await?;

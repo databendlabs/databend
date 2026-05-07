@@ -503,6 +503,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     expr: None,
                     check: None,
                     comment: None,
+            stats_truncate_len: None,
                 };
                 (
                     AlterTableAction::ModifyColumn {

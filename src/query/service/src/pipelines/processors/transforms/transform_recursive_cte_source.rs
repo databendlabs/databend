@@ -613,6 +613,7 @@ async fn create_memory_table_for_cte_scan(
                     storage_params: None,
                     options,
                     field_comments: vec![],
+            field_stats_truncate_len: vec![],
                     cluster_key: None,
                     as_select: None,
                     table_indexes: None,

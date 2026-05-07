@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -55,6 +56,7 @@ pub fn gen_columns_statistics(
     data_block: &DataBlock,
     column_distinct_count: Option<HashMap<ColumnId, usize>>,
     schema: &TableSchemaRef,
+    col_stats_truncate_lens: &BTreeMap<ColumnId, usize>,
 ) -> Result<StatisticsOfColumns> {
     let mut statistics = StatisticsOfColumns::new();
     let rows = data_block.num_rows();
@@ -87,9 +89,20 @@ pub fn gen_columns_statistics(
                     let (mins, _) = eval_aggr("min", vec![], &[col.clone().into()], rows, vec![])?;
                     let (maxs, _) = eval_aggr("max", vec![], &[col.clone().into()], rows, vec![])?;
 
+                    let truncate_len = col_stats_truncate_lens
+                        .get(&column_id)
+                        .copied()
+                        .unwrap_or(STATS_STRING_PREFIX_LEN);
+
                     if mins.len() > 0 {
                         min = if let Some(v) = mins.index(0) {
-                            if let Some(v) = v.to_owned().trim_min() {
+                            let owned = v.to_owned();
+                            let trimmed = match owned {
+                                Scalar::String(s) => trim_string_min_with_len(s, truncate_len)
+                                    .map(Scalar::String),
+                                other => other.trim_min(),
+                            };
+                            if let Some(v) = trimmed {
                                 v
                             } else {
                                 continue;
@@ -101,7 +114,13 @@ pub fn gen_columns_statistics(
 
                     if maxs.len() > 0 {
                         max = if let Some(v) = maxs.index(0) {
-                            if let Some(v) = v.to_owned().trim_max() {
+                            let owned = v.to_owned();
+                            let trimmed = match owned {
+                                Scalar::String(s) => trim_string_max_with_len(s, truncate_len)
+                                    .map(Scalar::String),
+                                other => other.trim_max(),
+                            };
+                            if let Some(v) = trimmed {
                                 v
                             } else {
                                 continue;
@@ -252,6 +271,52 @@ impl Trim for Scalar {
             _ => false,
         }
     }
+}
+
+pub fn trim_string_min_with_len(s: String, len: usize) -> Option<String> {
+    if s.len() <= len {
+        return Some(s);
+    }
+    let vs = s.as_str();
+    let slice = match vs.char_indices().nth(len) {
+        None => vs,
+        Some((idx, _)) => &vs[..idx],
+    };
+    let mut result = String::with_capacity(len);
+    result.push_str(slice);
+    Some(result)
+}
+
+pub fn trim_string_max_with_len(s: String, len: usize) -> Option<String> {
+    if s.len() <= len {
+        return Some(s);
+    }
+    let number_of_chars = s.as_str().chars().count();
+    if number_of_chars <= len {
+        return Some(s);
+    }
+    let vs = s.as_str();
+    let sliced = match vs.char_indices().nth(len) {
+        None => vs,
+        Some((idx, _)) => &vs[..idx],
+    };
+    let mut idx = None;
+    for (i, c) in sliced.char_indices().rev() {
+        if c < END_OF_UNICODE_RANGE {
+            idx = Some(i);
+            break;
+        }
+    }
+    let replacement_point = idx?;
+    let mut r = String::with_capacity(len);
+    for (i, c) in sliced.char_indices() {
+        if i < replacement_point {
+            r.push(c)
+        } else {
+            r.push(END_OF_UNICODE_RANGE);
+        }
+    }
+    Some(r)
 }
 
 #[cfg(test)]

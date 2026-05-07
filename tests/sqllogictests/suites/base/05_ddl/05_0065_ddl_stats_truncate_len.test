@@ -1,0 +1,153 @@
+## Tests for STATS_TRUNCATE_LEN column option
+
+statement ok
+DROP TABLE IF EXISTS t_stats_truncate;
+
+## Basic CREATE TABLE with STATS_TRUNCATE_LEN
+statement ok
+CREATE TABLE t_stats_truncate (
+    a STRING STATS_TRUNCATE_LEN 4,
+    b STRING,
+    c INT
+) row_per_block=100;
+
+## SHOW CREATE TABLE should round-trip the option
+query TT
+SHOW CREATE TABLE t_stats_truncate;
+----
+t_stats_truncate CREATE TABLE t_stats_truncate ( a VARCHAR NULL STATS_TRUNCATE_LEN 4, b VARCHAR NULL, c INT NULL ) ENGINE=FUSE
+
+## Insert a string longer than both truncation lengths (>16 chars to trigger default truncation on b)
+statement ok
+INSERT INTO t_stats_truncate VALUES ('abcdefghijklmnopqrstuvwxyz', 'abcdefghijklmnopqrstuvwxyz', 1);
+
+## Verify the table has data
+query TTI
+SELECT a, b, c FROM t_stats_truncate;
+----
+abcdefghijklmnopqrstuvwxyz abcdefghijklmnopqrstuvwxyz 1
+
+## Verify column statistics are truncated correctly via fuse_block_statistics:
+## - column 'a' (STATS_TRUNCATE_LEN 4): min truncated to 4 chars, max has replacement char at position 4
+## - column 'b' (default 16): min truncated to 16 chars, max has replacement char at position 16
+query IT?
+SELECT column_id, column_name, statistics
+FROM fuse_block_statistics('default', 't_stats_truncate')
+ORDER BY column_id;
+----
+0 a {"distinct_count":1,"in_memory_size":43,"max":"abc􏿿","min":"abcd","null_count":0}
+1 b {"distinct_count":1,"in_memory_size":43,"max":"abcdefghijklmno􏿿","min":"abcdefghijklmnop","null_count":0}
+2 c {"distinct_count":1,"in_memory_size":5,"max":1,"min":1,"null_count":0}
+
+statement ok
+DROP TABLE t_stats_truncate;
+
+## STATS_TRUNCATE_LEN on a non-string column should fail
+statement error 1301
+CREATE TABLE t_bad (a INT STATS_TRUNCATE_LEN 4);
+
+## STATS_TRUNCATE_LEN = 0 should fail
+statement error 1301
+CREATE TABLE t_bad (a STRING STATS_TRUNCATE_LEN 0);
+
+## STATS_TRUNCATE_LEN > 4096 should fail
+statement error 1301
+CREATE TABLE t_bad (a STRING STATS_TRUNCATE_LEN 4097);
+
+## STATS_TRUNCATE_LEN = 1 (minimum valid)
+statement ok
+CREATE TABLE t_min_len (a STRING STATS_TRUNCATE_LEN 1);
+
+query TT
+SHOW CREATE TABLE t_min_len;
+----
+t_min_len CREATE TABLE t_min_len ( a VARCHAR NULL STATS_TRUNCATE_LEN 1 ) ENGINE=FUSE
+
+statement ok
+DROP TABLE t_min_len;
+
+## STATS_TRUNCATE_LEN = 4096 (maximum valid)
+statement ok
+CREATE TABLE t_max_len (a STRING STATS_TRUNCATE_LEN 4096);
+
+query TT
+SHOW CREATE TABLE t_max_len;
+----
+t_max_len CREATE TABLE t_max_len ( a VARCHAR NULL STATS_TRUNCATE_LEN 4096 ) ENGINE=FUSE
+
+statement ok
+DROP TABLE t_max_len;
+
+## Multiple columns with different truncation lengths
+statement ok
+CREATE TABLE t_multi (
+    a STRING STATS_TRUNCATE_LEN 4,
+    b STRING STATS_TRUNCATE_LEN 8,
+    c STRING STATS_TRUNCATE_LEN 32,
+    d STRING
+);
+
+query TT
+SHOW CREATE TABLE t_multi;
+----
+t_multi CREATE TABLE t_multi ( a VARCHAR NULL STATS_TRUNCATE_LEN 4, b VARCHAR NULL STATS_TRUNCATE_LEN 8, c VARCHAR NULL STATS_TRUNCATE_LEN 32, d VARCHAR NULL ) ENGINE=FUSE
+
+statement ok
+DROP TABLE t_multi;
+
+## STATS_TRUNCATE_LEN combined with COMMENT
+statement ok
+CREATE TABLE t_with_comment (
+    a STRING COMMENT 'my column' STATS_TRUNCATE_LEN 8
+);
+
+query TT
+SHOW CREATE TABLE t_with_comment;
+----
+t_with_comment CREATE TABLE t_with_comment ( a VARCHAR NULL COMMENT 'my column' STATS_TRUNCATE_LEN 8 ) ENGINE=FUSE
+
+statement ok
+DROP TABLE t_with_comment;
+
+## CREATE TABLE ... LIKE does not carry STATS_TRUNCATE_LEN (expected: empty map)
+statement ok
+CREATE TABLE t_orig (a STRING STATS_TRUNCATE_LEN 4, b INT);
+
+statement ok
+CREATE TABLE t_like LIKE t_orig;
+
+## LIKE table should not have STATS_TRUNCATE_LEN in its definition
+query TT
+SHOW CREATE TABLE t_like;
+----
+t_like CREATE TABLE t_like ( a VARCHAR NULL, b INT NULL ) ENGINE=FUSE
+
+statement ok
+DROP TABLE t_orig;
+
+statement ok
+DROP TABLE t_like;
+
+## STATS_TRUNCATE_LEN 40: verify stats are truncated at 40 chars, not the default 16
+statement ok
+CREATE TABLE t_trunc40 (
+    a STRING STATS_TRUNCATE_LEN 40,
+    b STRING
+) row_per_block=100;
+
+## Insert a 52-char string (longer than both 40 and 16)
+statement ok
+INSERT INTO t_trunc40 VALUES ('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
+
+## column 'a' (STATS_TRUNCATE_LEN 40): min=first 40 chars, max=first 39 chars + replacement
+## column 'b' (default 16): min=first 16 chars, max=first 15 chars + replacement
+query IT?
+SELECT column_id, column_name, statistics
+FROM fuse_block_statistics('default', 't_trunc40')
+ORDER BY column_id;
+----
+0 a {"distinct_count":1,"in_memory_size":69,"max":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLM􏿿","min":"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN","null_count":0}
+1 b {"distinct_count":1,"in_memory_size":69,"max":"abcdefghijklmno􏿿","min":"abcdefghijklmnop","null_count":0}
+
+statement ok
+DROP TABLE t_trunc40;

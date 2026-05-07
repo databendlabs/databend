@@ -180,6 +180,9 @@ pub struct TableMeta {
     pub updated_on: DateTime<Utc>,
     pub comment: String,
     pub field_comments: Vec<String>,
+    /// Per-column string stats truncation length, keyed by ColumnId.
+    /// Absent means use the default (STATS_STRING_PREFIX_LEN = 16).
+    pub field_stats_truncate_len: BTreeMap<ColumnId, u64>,
     pub virtual_schema: Option<VirtualDataSchema>,
 
     // if used in CreateTableReq, this field MUST set to None.
@@ -401,6 +404,7 @@ impl Default for TableMeta {
             updated_on: Utc::now(),
             comment: "".to_string(),
             field_comments: vec![],
+            field_stats_truncate_len: BTreeMap::new(),
             virtual_schema: Default::default(),
             drop_on: None,
             statistics: Default::default(),

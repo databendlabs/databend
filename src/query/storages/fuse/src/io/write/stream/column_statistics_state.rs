@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
@@ -39,10 +40,17 @@ impl ColumnStatisticsState {
     pub fn new(
         stats_columns: &[(ColumnId, DataType)],
         distinct_columns: &[(ColumnId, DataType)],
+        col_stats_truncate_lens: &BTreeMap<ColumnId, usize>,
     ) -> Self {
         let col_stats = stats_columns
             .iter()
-            .map(|(col_id, data_type)| (*col_id, create_column_stats_builder(data_type)))
+            .map(|(col_id, data_type)| {
+                let string_len = col_stats_truncate_lens
+                    .get(col_id)
+                    .copied()
+                    .unwrap_or(crate::statistics::STATS_STRING_PREFIX_LEN);
+                (*col_id, create_column_stats_builder(data_type, string_len))
+            })
             .collect();
 
         let distinct_columns = distinct_columns
@@ -170,7 +178,7 @@ mod tests {
             ]),
         ]);
 
-        let stats_0 = gen_columns_statistics(&block, None, &schema)?;
+        let stats_0 = gen_columns_statistics(&block, None, &schema, &std::collections::BTreeMap::new())?;
 
         let mut stats_columns = vec![];
         let leaf_fields = schema.leaf_fields();
@@ -181,7 +189,7 @@ mod tests {
                 stats_columns.push((column_id, data_type.clone()));
             }
         }
-        let mut column_stats_state = ColumnStatisticsState::new(&stats_columns, &stats_columns);
+        let mut column_stats_state = ColumnStatisticsState::new(&stats_columns, &stats_columns, &BTreeMap::new());
         column_stats_state.add_block(&schema, &block)?;
         let stats_1 = column_stats_state.finalize(HashMap::new())?;
 
