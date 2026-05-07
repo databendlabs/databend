@@ -34,9 +34,6 @@ message AuthInfo {
   }
   message JWT {}
   message PublicKeyEntry {
-    uint64 ver = 100;
-    uint64 min_reader_ver = 101;
-
     string key = 1;
     string label = 2;
     int64 created_at = 3;
