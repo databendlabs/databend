@@ -1,0 +1,33 @@
+name: "Test Unit Valgrind"
+description: "Running unit tests with memory check using valgrind"
+
+inputs:
+  target:
+    description: "Build target to use"
+    required: true
+    default: x86_64-unknown-linux-gnu
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        target: ${{ inputs.target }}
+        bypass_env_vars: RUSTFLAGS,RUSTDOCFLAGS,RUST_TEST_THREADS,RUST_LOG,RUST_BACKTRACE
+
+    - shell: bash
+      run: |
+        cargo valgrind nextest run \
+          -E "not group(skip-memcheck)" --profile memcheck
+      env:
+        RUST_LOG: ERROR
+        # 1GiB
+        # RUST_MIN_STACK: 1073741824
+        # RUST_BACKTRACE: 1
+
+    - name: Upload failure
+      if: failure()
+      uses: ./.github/actions/artifact_failure
+      with:
+        name: test-unit-valgrind

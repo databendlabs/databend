@@ -659,6 +659,63 @@ function install_typos_cli {
 	"${typos_bin}/typos" --version
 }
 
+function install_cargo_valgrind {
+	REPO="jfrimmel/cargo-valgrind"
+	CARGO_HOME="${CARGO_HOME:-${HOME}/.cargo}"
+	CARGO_BIN_DIR="${CARGO_HOME}/bin"
+	tmpdir="$(mktemp -d)"
+	archive_path="$tmpdir/cargo-valgrind.tar.gz"
+	if [[ "$(uname -s)" != "Linux" ]] || \
+	   [[ "$(uname -m)" != "x86_64" ]]; then
+		rm -rf "$tmpdir"
+		echo "Only run cargo-valgrind on x86_64 Linux, ignoring"
+		return
+	elif cargo valgrind --version &>/dev/null; then
+		rm -rf "$tmpdir"
+		echo "cargo-valgrind is already installed"
+		cargo valgrind --version
+		return
+	fi
+	install_pkg valgrind "$PACKAGE_MANAGER"
+	# using latest pre-build tarball from
+	# https://github.com/jfrimmel/cargo-valgrind/releases
+	# and install it to cargo bin directory
+	release_json="$(
+		curl -fsSL \
+		"https://api.github.com/repos/${REPO}/releases/latest")"
+	asset_url="$(
+	python3 -c '
+import json, re, sys
+
+data = json.loads(sys.stdin.read())
+for asset in data.get("assets", []):
+    if re.search(
+        r"^cargo-valgrind-.*-x86_64-unknown-linux-musl\.tar\.gz$",
+        asset.get("name", "")
+    ):
+        print(asset["browser_download_url"])
+        break
+else:
+    raise SystemExit("No matching release asset found")
+	' <<<"$release_json"
+	)"
+	curl -fL "$asset_url" -o "$archive_path"
+	mkdir -p "$tmpdir/extract"
+	tar -xzf "$archive_path" -C "$tmpdir/extract"
+	binary_path="$(
+		find "$tmpdir/extract" -type f -name 'cargo-valgrind' | \
+		head -n 1)"
+	if [[ -z "$binary_path" ]]; then
+		echo "Error: cargo-valgrind binary not found in archive" >&2
+		rm -rf "$tmpdir"
+		return 1
+	fi
+
+	install -m 0755 "$binary_path" "$CARGO_BIN_DIR/cargo-valgrind"
+	rm -rf "$tmpdir"
+	cargo valgrind --version
+}
+
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -881,6 +938,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 
 	install_sccache "v0.12.0"
 	install_cargo_nextest
+	install_cargo_valgrind
 fi
 
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
