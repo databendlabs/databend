@@ -20,6 +20,7 @@ use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_management::WorkloadApi;
 use databend_common_management::WorkloadMgr;
 use databend_common_sql::plans::DescUserPlan;
@@ -82,6 +83,15 @@ impl Interpreter for DescUserInterpreter {
             }
         };
 
+        let public_keys = {
+            let keys = user.auth_info.get_public_keys();
+            if keys.is_empty() {
+                vec![None]
+            } else {
+                vec![Some(keys.len() as u64)]
+            }
+        };
+
         PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(hostnames),
@@ -94,6 +104,7 @@ impl Interpreter for DescUserInterpreter {
             StringType::from_opt_data(password_policies),
             BooleanType::from_opt_data(must_change_passwords),
             StringType::from_opt_data(workload_group),
+            UInt64Type::from_opt_data(public_keys),
         ])])
     }
 }

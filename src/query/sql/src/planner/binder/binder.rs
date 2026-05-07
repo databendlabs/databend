@@ -74,6 +74,7 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
+use crate::plans::ShowPublicKeysPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -386,6 +387,11 @@ impl Binder {
             Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
                 user: user.clone().into(),
             })),
+            Statement::ShowPublicKeys { user } => {
+                Plan::ShowPublicKeys(Box::new(ShowPublicKeysPlan {
+                    user: user.clone().into(),
+                }))
+            }
 
             // Roles
             Statement::ShowRoles { show_options } => {

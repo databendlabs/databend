@@ -33,6 +33,29 @@ use crate::ToProtoOptionExt;
 use crate::VER;
 use crate::reader_check_msg;
 
+impl FromToProto for mt::principal::PublicKeyEntry {
+    type PB = pb::auth_info::PublicKeyEntry;
+    fn get_pb_ver(_p: &Self::PB) -> u64 {
+        0
+    }
+    fn from_pb(p: pb::auth_info::PublicKeyEntry) -> Result<Self, Incompatible>
+    where Self: Sized {
+        Ok(Self {
+            key: p.key,
+            label: p.label,
+            created_at: p.created_at,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::auth_info::PublicKeyEntry, Incompatible> {
+        Ok(pb::auth_info::PublicKeyEntry {
+            key: self.key.clone(),
+            label: self.label.clone(),
+            created_at: self.created_at,
+        })
+    }
+}
+
 impl FromToProto for mt::principal::AuthInfo {
     type PB = pb::AuthInfo;
     fn get_pb_ver(p: &Self::PB) -> u64 {
@@ -48,6 +71,14 @@ impl FromToProto for mt::principal::AuthInfo {
             }
             Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})) => {
                 Ok(mt::principal::AuthInfo::JWT)
+            }
+            Some(pb::auth_info::Info::KeyPair(pb::auth_info::KeyPair { public_keys })) => {
+                Ok(mt::principal::AuthInfo::KeyPair {
+                    public_keys: public_keys
+                        .into_iter()
+                        .map(mt::principal::PublicKeyEntry::from_pb)
+                        .collect::<Result<Vec<_>, _>>()?,
+                })
             }
             Some(pb::auth_info::Info::Password(pb::auth_info::Password {
                 hash_value,
@@ -70,6 +101,14 @@ impl FromToProto for mt::principal::AuthInfo {
                 Some(pb::auth_info::Info::None(pb::auth_info::None {}))
             }
             mt::principal::AuthInfo::JWT => Some(pb::auth_info::Info::Jwt(pb::auth_info::Jwt {})),
+            mt::principal::AuthInfo::KeyPair { public_keys } => {
+                Some(pb::auth_info::Info::KeyPair(pb::auth_info::KeyPair {
+                    public_keys: public_keys
+                        .iter()
+                        .map(|e| e.to_pb())
+                        .collect::<Result<Vec<_>, _>>()?,
+                }))
+            }
             mt::principal::AuthInfo::Password {
                 hash_value,
                 hash_method,

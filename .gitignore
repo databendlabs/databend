@@ -97,3 +97,4 @@ benchmark/clickbench/results
 tmp
 # superpowers agent plan docs
 docs/
+.alma-snapshots
