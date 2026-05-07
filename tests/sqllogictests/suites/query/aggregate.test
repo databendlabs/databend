@@ -69,6 +69,24 @@ SELECT SUM(agg0) FROM (
 ----
 4.0
 
+query TT
+select typeof(sum(number::Decimal(18, 1))), typeof(sum(number::Decimal(19, 1))) from numbers(1000);
+----
+DECIMAL(38, 1) NULL DECIMAL(38, 1) NULL
+
+query TT
+settings(enable_decimal_sum_widening=1) select typeof(sum(number::Decimal(18, 1))), typeof(sum(number::Decimal(19, 1))) from numbers(1000);
+----
+DECIMAL(38, 1) NULL DECIMAL(76, 1) NULL
+
+statement error Decimal overflow
+select sum(a) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a)
+
+query RT
+settings(enable_decimal_sum_widening=1) select sum(a), typeof(sum(a)) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a);
+----
+100000000000000000000000000000000000000 DECIMAL(76, 0) NULL
+
 query RRT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);
 ----
