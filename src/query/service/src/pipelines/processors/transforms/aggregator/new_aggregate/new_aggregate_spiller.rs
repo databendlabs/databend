@@ -39,6 +39,7 @@ use crate::pipelines::processors::transforms::aggregator::NewSpilledPayload;
 use crate::pipelines::processors::transforms::aggregator::SerializedPayload;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Layout;
 use crate::spillers::SpillAdapter;
@@ -46,18 +47,21 @@ use crate::spillers::SpillTarget;
 use crate::spillers::SpillsBufferPool;
 use crate::spillers::SpillsDataWriter;
 
+const BYTES_PER_MIB: usize = 1024 * 1024;
+
 struct PayloadWriter {
     path: String,
     writer: SpillsDataWriter,
 }
 
 impl PayloadWriter {
-    fn try_create(prefix: &str) -> Result<Self> {
+    fn try_create(prefix: &str, writer_pool_bytes: usize) -> Result<Self> {
         let data_operator = DataOperator::instance();
         let operator = data_operator.spill_operator();
         let buffer_pool = SpillsBufferPool::instance();
         let file_path = format!("{}/{}", prefix, GlobalUniq::unique());
-        let spills_data_writer = buffer_pool.writer(operator, file_path.clone())?;
+        let spills_data_writer =
+            buffer_pool.writer(operator, file_path.clone(), writer_pool_bytes)?;
 
         Ok(PayloadWriter {
             path: file_path,
@@ -110,16 +114,23 @@ impl WriteStats {
 struct AggregatePayloadWriters {
     spill_prefix: String,
     partition_count: usize,
+    writer_pool_bytes: usize,
     writers: Vec<Option<PayloadWriter>>,
     write_stats: WriteStats,
     ctx: Arc<QueryContext>,
 }
 
 impl AggregatePayloadWriters {
-    pub fn create(prefix: &str, partition_count: usize, ctx: Arc<QueryContext>) -> Self {
+    pub fn create(
+        prefix: &str,
+        partition_count: usize,
+        writer_pool_bytes: usize,
+        ctx: Arc<QueryContext>,
+    ) -> Self {
         AggregatePayloadWriters {
             spill_prefix: prefix.to_string(),
             partition_count,
+            writer_pool_bytes,
             writers: Self::empty_writers(partition_count),
             write_stats: WriteStats::default(),
             ctx,
@@ -134,7 +145,10 @@ impl AggregatePayloadWriters {
 
     fn ensure_writer(&mut self, bucket: usize) -> Result<&mut PayloadWriter> {
         if self.writers[bucket].is_none() {
-            self.writers[bucket] = Some(PayloadWriter::try_create(&self.spill_prefix)?);
+            self.writers[bucket] = Some(PayloadWriter::try_create(
+                &self.spill_prefix,
+                self.writer_pool_bytes,
+            )?);
         }
 
         Ok(self.writers[bucket].as_mut().unwrap())
@@ -336,8 +350,13 @@ impl<P: PartitionStream> NewAggregateSpiller<P> {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let read_setting = ReadSettings::from_settings(&table_ctx.get_settings())?;
         let spill_prefix = ctx.query_id_spill_prefix();
+        let writer_pool_bytes = ctx
+            .get_settings()
+            .get_spill_writer_memory_pool_size_mb()?
+            .saturating_mul(BYTES_PER_MIB);
 
-        let payload_writers = AggregatePayloadWriters::create(&spill_prefix, partition_count, ctx);
+        let payload_writers =
+            AggregatePayloadWriters::create(&spill_prefix, partition_count, writer_pool_bytes, ctx);
 
         Ok(Self {
             memory_settings,

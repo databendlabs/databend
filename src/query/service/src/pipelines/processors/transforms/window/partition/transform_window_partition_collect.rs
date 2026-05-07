@@ -193,6 +193,9 @@ impl<S: DataProcessorStrategy> TransformWindowPartitionCollect<S> {
             location_prefix,
             disk_spill,
             use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+            writer_pool_bytes: settings
+                .get_spill_writer_memory_pool_size_mb()?
+                .saturating_mul(1024 * 1024),
         };
 
         // Create spillers for window operator.

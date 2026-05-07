@@ -168,11 +168,12 @@ databend-storages-common-stage = { path = "src/query/storages/common/stage" }
 databend-storages-common-table-meta = { path = "src/query/storages/common/table_meta" }
 
 # External meta service
-databend-meta = "260312.9.0"
-databend-meta-test-harness = "260312.9.0"
+databend-meta = "260428.1.0"
+databend-meta-test-harness = "260428.1.0"
 
 # External meta client
-databend-meta-client = "260205.6.0"
+databend-meta-client = "260205.8.0"
+structkey = "0.1.1"
 
 # Crates.io dependencies
 ahash = { version = "0.8", features = ["no-rng"] }
@@ -619,9 +620,9 @@ backtrace = { git = "https://github.com/rust-lang/backtrace-rs.git", rev = "7226
 color-eyre = { git = "https://github.com/eyre-rs/eyre.git", rev = "e5d92c3" }
 csv-core = { git = "https://github.com/youngsofun/rust-csv.git", rev = "44a0b3c" }
 databend-base = { git = "https://github.com/databendlabs/databend-base", tag = "v0.4.0" }
-databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.9.0" }
-databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.6.0" }
-databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260312.9.0" }
+databend-meta = { git = "https://github.com/databendlabs/databend-meta", tag = "v260428.1.0" }
+databend-meta-client = { git = "https://github.com/databendlabs/databend-meta", tag = "v260205.8.0" }
+databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta", tag = "v260428.1.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc812ad7010" }

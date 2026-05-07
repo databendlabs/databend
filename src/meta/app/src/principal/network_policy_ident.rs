@@ -66,7 +66,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::network_policy_ident::NetworkPolicyIdent;
     use crate::tenant::Tenant;
@@ -75,10 +76,6 @@ mod tests {
     fn test_network_policy_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = NetworkPolicyIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_network_policies/test/test1");
-
-        assert_eq!(ident, NetworkPolicyIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_network_policies/test/test1");
     }
 }

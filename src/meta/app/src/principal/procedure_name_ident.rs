@@ -36,7 +36,7 @@ impl ProcedureNameIdent {
 
 mod kvapi_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::KeyWithTenant;
     use crate::principal::ProcedureNameIdent;
@@ -64,7 +64,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::ProcedureNameIdent;
     use crate::principal::ProcedureIdentity;
@@ -72,17 +73,8 @@ mod tests {
 
     fn test_format_parse(procedure: &str, args: &str, expect: &str) {
         let tenant = Tenant::new_literal("test_tenant");
-        let procedure_ident = ProcedureIdentity::new(procedure, args);
-        let tenant_procedure_ident = ProcedureNameIdent::new(tenant, procedure_ident);
-
-        let key = tenant_procedure_ident.to_string_key();
-        assert_eq!(key, expect, "'{procedure}' '{args}' '{expect}'");
-
-        let tenant_procedure_ident_parsed = ProcedureNameIdent::from_str_key(&key).unwrap();
-        assert_eq!(
-            tenant_procedure_ident, tenant_procedure_ident_parsed,
-            "'{procedure}' '{args}' '{expect}'"
-        );
+        let ident = ProcedureNameIdent::new(tenant, ProcedureIdentity::new(procedure, args));
+        assert_round_trip(ident, expect);
     }
 
     #[test]

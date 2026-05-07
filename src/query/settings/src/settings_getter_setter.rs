@@ -422,6 +422,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
     }
 
+    pub fn get_spill_writer_memory_pool_size_mb(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spill_writer_memory_pool_size_mb")? as usize)
+    }
+
     pub fn get_spilling_file_format(&self) -> Result<SpillFileFormat> {
         self.try_get_string("spilling_file_format")?.parse()
     }
