@@ -6159,6 +6159,7 @@ dependencies = [
  "databend-common-users",
  "itertools 0.13.0",
  "jiff",
+ "jsonb",
  "serde_json",
 ]
 
