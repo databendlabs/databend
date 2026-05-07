@@ -60,20 +60,11 @@ impl OrderedBlockCompactBuilder {
             // this path intentionally does not enforce a hard post-sort per-block maximum.
             // A block may remain above max_rows_per_block / max_bytes_per_block when that
             // avoids creating very small tail blocks inside the compaction window.
-            let mut block_nums = 2;
-            if blocks.total_rows > 2 * thresholds.min_rows_per_block {
-                block_nums = block_nums.max(blocks.total_rows / thresholds.min_rows_per_block);
-            }
-            if blocks.total_bytes > thresholds.max_bytes_per_block {
-                block_nums = block_nums.max(blocks.total_bytes / thresholds.min_bytes_per_block);
-            }
-            // rows_per_block is a split target for the downstream no-tail splitter rather than
-            // a hard upper bound for the produced blocks.
-            let rows_per_block = blocks.total_rows.div_ceil(block_nums).max(1);
-
+            let block_num =
+                thresholds.calc_compact_block_num(blocks.total_rows, blocks.total_bytes);
             DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Split {
                 blocks: blocks.take_blocks(),
-                rows_per_block,
+                block_num,
             }))
         } else if blocks.len() > 1 {
             DataBlock::empty_with_meta(Box::new(BlockCompactMeta::Concat(blocks.take_blocks())))
@@ -181,7 +172,9 @@ mod tests {
     }
 
     fn row_focused_thresholds() -> BlockThresholds {
-        BlockThresholds::new(1000, 1 << 20, 1 << 20, 1000)
+        BlockThresholds::default()
+            .set_rows_per_block(1000)
+            .set_bytes_per_block(1 << 20)
     }
 
     #[test]
@@ -217,6 +210,49 @@ mod tests {
         assert_eq!(output[0].num_rows(), 1001);
         assert_eq!(output[1].num_rows(), 1000);
         assert!(output[0].num_rows() > thresholds.max_rows_per_block);
+        Ok(())
+    }
+
+    #[test]
+    fn test_ordered_compact_splits_by_target_block_count() -> Result<()> {
+        let thresholds = BlockThresholds::default()
+            .set_rows_per_block(5)
+            .set_bytes_per_block(1 << 20);
+        let mut group = BlockGroup::default();
+        for rows in [2, 6, 6, 2, 2] {
+            let block = block_with_rows(rows);
+            group.push(block.clone(), block.num_rows(), block.estimate_block_size());
+        }
+
+        let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
+        let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
+        let output = TransformCompactBlock::default().transform(meta)?;
+
+        assert_eq!(
+            output.iter().map(DataBlock::num_rows).collect::<Vec<_>>(),
+            vec![6, 6, 6]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_ordered_compact_split_does_not_exceed_target_block_count() -> Result<()> {
+        let block = block_with_rows(1000);
+        let mut group = BlockGroup::default();
+        group.push(block.clone(), block.num_rows(), block.estimate_block_size());
+
+        let target_block_count = 500;
+        let thresholds = BlockThresholds::default()
+            .set_rows_per_block(1000)
+            .set_bytes_per_block(group.total_bytes / target_block_count);
+        let block_num = thresholds.calc_compact_block_num(group.total_rows, group.total_bytes);
+
+        let meta_block = OrderedBlockCompactBuilder::create_output_data(&mut group, thresholds);
+        let meta = BlockCompactMeta::downcast_from(meta_block.get_owned_meta().unwrap()).unwrap();
+        let output = TransformCompactBlock::default().transform(meta)?;
+
+        assert!(output.len() <= block_num);
+        assert!(output.iter().all(|block| block.num_rows() > 1));
         Ok(())
     }
 }

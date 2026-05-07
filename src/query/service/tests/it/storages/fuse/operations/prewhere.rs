@@ -321,8 +321,6 @@ async fn prepare_prewhere_data() -> Result<PrewhereTestSetup> {
         schema.clone(),
         prewhere_info.output_columns.clone(),
         false,
-        false,
-        false,
     )?;
 
     // Extract column chunks from parquet bytes

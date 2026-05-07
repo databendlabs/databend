@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 
 use chrono::DateTime;
 use chrono::Utc;
+use databend_meta_client::kvapi;
 use databend_meta_client::types::MatchSeq;
 use databend_meta_client::types::SeqV;
 
@@ -27,14 +28,6 @@ use super::TableMeta;
 use crate::tenant::Tenant;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TableBranch {
-    /// After this timestamp, the branch becomes inactive.
-    pub expire_at: Option<DateTime<Utc>>,
-    /// The unique id of the branch.
-    pub branch_id: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableTag {
     /// After this timestamp, the tag becomes inactive.
     pub expire_at: Option<DateTime<Utc>>,
@@ -42,50 +35,9 @@ pub struct TableTag {
     pub snapshot_loc: String,
 }
 
-/// Value stored in `__fd_dropped_branch/<table_id>/<branch_name>/<branch_id>`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DroppedBranchMeta {
-    pub drop_on: DateTime<Utc>,
-    pub expire_at: Option<DateTime<Utc>>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct TableIdBranchName {
-    pub table_id: u64,
-    pub branch_name: String,
-}
-
-impl TableIdBranchName {
-    pub fn new(table_id: u64, branch_name: impl ToString) -> Self {
-        Self {
-            table_id,
-            branch_name: branch_name.to_string(),
-        }
-    }
-
-    pub fn display(&self) -> impl Display {
-        format!("{}.'{}'", self.table_id, self.branch_name)
-    }
-}
-
-impl Display for TableIdBranchName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{}.'{}'", self.table_id, self.branch_name)
-    }
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
-pub struct BranchIdToName {
-    pub branch_id: u64,
-}
-
-impl Display for BranchIdToName {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "BranchIdToName{{{}}}", self.branch_id)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// `__fd_table_tag/<tb_id>/<tag_name> -> TableTag`
+#[derive(Clone, Debug, Eq, PartialEq, Hash, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_tag")]
 pub struct TableIdTagName {
     pub table_id: u64,
     pub tag_name: String,
@@ -110,8 +62,64 @@ impl Display for TableIdTagName {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TableBranch {
+    /// After this timestamp, the branch becomes inactive.
+    pub expire_at: Option<DateTime<Utc>>,
+    /// The unique id of the branch.
+    pub branch_id: u64,
+}
+
+/// `__fd_table_branch/<tb_id>/<branch_name> -> TableBranch`
+#[derive(Clone, Debug, Eq, PartialEq, Hash, kvapi::StructKey)]
+#[structkey(prefix = "__fd_table_branch")]
+pub struct TableIdBranchName {
+    pub table_id: u64,
+    pub branch_name: String,
+}
+
+impl TableIdBranchName {
+    pub fn new(table_id: u64, branch_name: impl ToString) -> Self {
+        Self {
+            table_id,
+            branch_name: branch_name.to_string(),
+        }
+    }
+
+    pub fn display(&self) -> impl Display {
+        format!("{}.'{}'", self.table_id, self.branch_name)
+    }
+}
+
+impl Display for TableIdBranchName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{}.'{}'", self.table_id, self.branch_name)
+    }
+}
+
+/// `__fd_branch_id_to_name/<branch_id> -> TableIdBranchName`
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash, kvapi::StructKey)]
+#[structkey(prefix = "__fd_branch_id_to_name")]
+pub struct BranchIdToName {
+    pub branch_id: u64,
+}
+
+impl Display for BranchIdToName {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "BranchIdToName{{{}}}", self.branch_id)
+    }
+}
+
+/// Value stored in `__fd_dropped_branch/<table_id>/<branch_name>/<branch_id>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DroppedBranchMeta {
+    pub drop_on: DateTime<Utc>,
+    pub expire_at: Option<DateTime<Utc>>,
+}
+
 /// Key: `__fd_dropped_branch/<base_table_id>/<branch_name>/<branch_id>`
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, kvapi::StructKey)]
+#[structkey(prefix = "__fd_dropped_branch")]
 pub struct DroppedBranchIdent {
     pub table_id: u64,
     pub branch_name: String,
@@ -247,10 +255,7 @@ pub struct ListTableTagsReq {
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
-    use databend_meta_client::kvapi::KeyBuilder;
-    use databend_meta_client::kvapi::KeyError;
-    use databend_meta_client::kvapi::KeyParser;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::schema::TableId;
     use crate::schema::table::BranchIdToName;
@@ -261,48 +266,8 @@ mod kvapi_key_impl {
     use crate::schema::table::TableIdTagName;
     use crate::schema::table::TableTag;
 
-    impl kvapi::KeyCodec for TableIdBranchName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id).push_str(&self.branch_name)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = b.next_u64()?;
-            let branch_name = b.next_str()?;
-            Ok(Self {
-                table_id,
-                branch_name,
-            })
-        }
-    }
-
-    impl kvapi::KeyCodec for TableIdTagName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id).push_str(&self.tag_name)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = b.next_u64()?;
-            let tag_name = b.next_str()?;
-            Ok(Self { table_id, tag_name })
-        }
-    }
-
-    impl kvapi::KeyCodec for BranchIdToName {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.branch_id)
-        }
-
-        fn decode_key(b: &mut KeyParser) -> Result<Self, KeyError> {
-            let branch_id = b.next_u64()?;
-            Ok(Self { branch_id })
-        }
-    }
-
     /// "__fd_table_branch/<tb_id>/<branch_name> -> TableBranch"
     impl kvapi::Key for TableIdBranchName {
-        const PREFIX: &'static str = "__fd_table_branch";
-
         type ValueType = TableBranch;
 
         fn parent(&self) -> Option<String> {
@@ -312,8 +277,6 @@ mod kvapi_key_impl {
 
     /// "__fd_table_tag/<tb_id>/<tag_name> -> TableTag"
     impl kvapi::Key for TableIdTagName {
-        const PREFIX: &'static str = "__fd_table_tag";
-
         type ValueType = TableTag;
 
         fn parent(&self) -> Option<String> {
@@ -323,8 +286,6 @@ mod kvapi_key_impl {
 
     /// "__fd_branch_id_to_name/<branch_id> -> TableIdBranchName"
     impl kvapi::Key for BranchIdToName {
-        const PREFIX: &'static str = "__fd_branch_id_to_name";
-
         type ValueType = TableIdBranchName;
 
         fn parent(&self) -> Option<String> {
@@ -356,29 +317,8 @@ mod kvapi_key_impl {
         }
     }
 
-    impl kvapi::KeyCodec for DroppedBranchIdent {
-        fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-            b.push_u64(self.table_id)
-                .push_str(&self.branch_name)
-                .push_u64(self.branch_id)
-        }
-
-        fn decode_key(p: &mut KeyParser) -> Result<Self, KeyError> {
-            let table_id = p.next_u64()?;
-            let branch_name = p.next_str()?;
-            let branch_id = p.next_u64()?;
-            Ok(Self {
-                table_id,
-                branch_name,
-                branch_id,
-            })
-        }
-    }
-
     /// "__fd_dropped_branch/<table_id>/<branch_name>/<branch_id> -> DroppedBranchMeta"
     impl kvapi::Key for DroppedBranchIdent {
-        const PREFIX: &'static str = "__fd_dropped_branch";
-
         type ValueType = DroppedBranchMeta;
 
         fn parent(&self) -> Option<String> {
@@ -392,5 +332,41 @@ mod kvapi_key_impl {
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_meta_client::kvapi::testing::assert_round_trip;
+
+    use super::BranchIdToName;
+    use super::DroppedBranchIdent;
+    use super::TableIdBranchName;
+    use super::TableIdTagName;
+
+    #[test]
+    fn test_table_id_tag_name_key_format() {
+        assert_round_trip(TableIdTagName::new(9, "tag/a"), "__fd_table_tag/9/tag%2fa");
+    }
+
+    #[test]
+    fn test_table_id_branch_name_key_format() {
+        assert_round_trip(
+            TableIdBranchName::new(7, "branch/a"),
+            "__fd_table_branch/7/branch%2fa",
+        );
+    }
+
+    #[test]
+    fn test_branch_id_to_name_key_format() {
+        assert_round_trip(BranchIdToName { branch_id: 9 }, "__fd_branch_id_to_name/9");
+    }
+
+    #[test]
+    fn test_dropped_branch_ident_key_format() {
+        assert_round_trip(
+            DroppedBranchIdent::new(7, "branch/a", 9),
+            "__fd_dropped_branch/7/branch%2fa/9",
+        );
     }
 }

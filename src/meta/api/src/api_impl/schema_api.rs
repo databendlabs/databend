@@ -65,8 +65,8 @@ use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIde
 use databend_common_meta_app::tenant::Tenant;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
 use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::ConditionResult;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;

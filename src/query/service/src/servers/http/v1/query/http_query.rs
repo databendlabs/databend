@@ -72,6 +72,7 @@ use crate::servers::http::v1::ClientSessionManager;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::QueryResponse;
 use crate::servers::http::v1::QueryStats;
+use crate::servers::http::v1::http_query_handlers::ArrowFeatures;
 use crate::servers::http::v1::http_query_handlers::QueryResponseSettings;
 use crate::sessions::QueryAffect;
 use crate::sessions::Session;
@@ -94,6 +95,7 @@ pub struct HttpQueryRequest {
     #[serde(default)]
     pub params: Option<serde_json::Value>,
     pub arrow_result_version_max: Option<u64>,
+    pub arrow_features: Option<ArrowFeatures>,
 }
 
 impl HttpQueryRequest {
@@ -164,6 +166,7 @@ impl Debug for HttpQueryRequest {
             .field("stage_attachment", &self.stage_attachment)
             .field("params", &self.params)
             .field("arrow_result_version_max", &self.arrow_result_version_max)
+            .field("arrow_features", &self.arrow_features)
             .finish()
     }
 }
@@ -504,6 +507,7 @@ pub struct ResponseState {
     pub schema: DataSchemaRef,
     pub response_settings: Option<QueryResponseSettings>,
     pub arrow_result_version: Option<u64>,
+    pub arrow_features: Option<ArrowFeatures>,
     pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
@@ -636,6 +640,7 @@ impl HttpQuery {
         http_ctx: &HttpQueryContext,
         req: HttpQueryRequest,
         arrow_result_version: Option<u64>,
+        arrow_features: Option<ArrowFeatures>,
     ) -> Result<HttpQuery> {
         http_ctx.try_set_worksheet_session(&req.session).await?;
         let (session, ctx) = http_ctx
@@ -670,6 +675,7 @@ impl HttpQuery {
                 ctx: ctx.clone(),
                 sender: Some(sender),
                 arrow_result_version,
+                arrow_features,
             }),
         }));
 
@@ -832,7 +838,7 @@ impl HttpQuery {
         sql: String,
         params: Option<serde_json::Value>,
     ) -> Result<()> {
-        let (block_sender, query_context, arrow_result_version) = {
+        let (block_sender, query_context, arrow_result_version, arrow_features) = {
             let state = &mut self.execute_state.lock().state;
             let ExecuteState::Starting(state) = state else {
                 return Err(ErrorCode::Internal(
@@ -844,6 +850,7 @@ impl HttpQuery {
                 state.sender.take().unwrap(),
                 state.ctx.clone(),
                 state.arrow_result_version,
+                state.arrow_features.clone(),
             )
         };
 
@@ -864,6 +871,7 @@ impl HttpQuery {
                         query_session,
                         query_context.clone(),
                         arrow_result_version,
+                        arrow_features,
                         block_sender,
                     ))
                     .await

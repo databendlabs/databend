@@ -63,7 +63,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DictionaryId;
     use super::DictionaryIdIdent;
@@ -73,10 +74,7 @@ mod tests {
     fn test_dictionary_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = DictionaryIdIdent::new_generic(tenant, DictionaryId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_dictionary_by_id/3");
-        assert_eq!(ident, DictionaryIdIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_dictionary_by_id/3");
     }
 
     #[test]

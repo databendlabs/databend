@@ -24,6 +24,7 @@ pub use accumulator::ColumnHLLAccumulator;
 pub use accumulator::RowOrientedSegmentBuilder;
 pub use accumulator::VirtualColumnAccumulator;
 pub use cluster_statistics::ClusterStatsGenerator;
+pub use cluster_statistics::get_min_max_stats;
 pub use cluster_statistics::sort_by_cluster_stats;
 pub use column_statistic::END_OF_UNICODE_RANGE;
 pub use column_statistic::STATS_STRING_PREFIX_LEN;

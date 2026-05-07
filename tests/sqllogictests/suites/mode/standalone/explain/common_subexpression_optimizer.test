@@ -68,3 +68,612 @@ on t.b = agg.b;
 
 statement ok
 drop table cse_t;
+
+statement ok
+create or replace table cse_left as
+select number as a
+from numbers(3);
+
+statement ok
+create or replace table cse_right as
+select number as b
+from numbers(3);
+
+query T nosort
+explain
+SELECT *
+FROM
+  (SELECT count(*) q1
+   FROM cse_left,
+        cse_right
+   WHERE cse_left.a = cse_right.b
+     AND cse_left.a < 1) s1,
+  (SELECT count(*) q2
+   FROM cse_left,
+        cse_right
+   WHERE cse_left.a = cse_right.b
+     AND cse_left.a < 2) s2;
+----
+Sequence
+├── MaterializedCTE: cte_cse_0
+│   └── Filter
+│       ├── output columns: [cse_left.a (#0), cse_right.b (#1)]
+│       ├── filters: [cse_left.a (#0) < 1 and cse_right.b (#1) < 1 or cse_left.a (#0) < 2 and cse_right.b (#1) < 2]
+│       ├── estimated rows: 1.81
+│       └── HashJoin
+│           ├── output columns: [cse_left.a (#0), cse_right.b (#1)]
+│           ├── join type: INNER
+│           ├── build keys: [cse_right.b (#1)]
+│           ├── probe keys: [cse_left.a (#0)]
+│           ├── keys is null equal: [false]
+│           ├── filters: []
+│           ├── build join filters:
+│           │   └── filter id:0, build key:cse_right.b (#1), probe targets:[cse_left.a (#0)@scan0], filter type:bloom,inlist,min_max
+│           ├── estimated rows: 2.33
+│           ├── Filter(Build)
+│           │   ├── output columns: [cse_right.b (#1)]
+│           │   ├── filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2]
+│           │   ├── estimated rows: 2.33
+│           │   └── TableScan
+│           │       ├── table: default.default.cse_right
+│           │       ├── scan id: 1
+│           │       ├── output columns: [b (#1)]
+│           │       ├── read rows: 3
+│           │       ├── read size: < 1 KiB
+│           │       ├── partitions total: 1
+│           │       ├── partitions scanned: 1
+│           │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│           │       ├── push downs: [filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2], limit: NONE]
+│           │       └── estimated rows: 3.00
+│           └── Filter(Probe)
+│               ├── output columns: [cse_left.a (#0)]
+│               ├── filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2]
+│               ├── estimated rows: 2.33
+│               └── TableScan
+│                   ├── table: default.default.cse_left
+│                   ├── scan id: 0
+│                   ├── output columns: [a (#0)]
+│                   ├── read rows: 3
+│                   ├── read size: < 1 KiB
+│                   ├── partitions total: 1
+│                   ├── partitions scanned: 1
+│                   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                   ├── push downs: [filters: [cse_left.a (#0) < 1 or cse_left.a (#0) < 2], limit: NONE]
+│                   ├── apply join filters: [#0]
+│                   └── estimated rows: 3.00
+└── HashJoin
+    ├── output columns: [COUNT(*) (#2), COUNT(*) (#5)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── keys is null equal: []
+    ├── filters: []
+    ├── estimated rows: 1.00
+    ├── AggregateFinal(Build)
+    │   ├── output columns: [COUNT(*) (#5)]
+    │   ├── group by: []
+    │   ├── aggregate functions: [count()]
+    │   ├── estimated rows: 1.00
+    │   └── AggregatePartial
+    │       ├── group by: []
+    │       ├── aggregate functions: [count()]
+    │       ├── estimated rows: 1.00
+    │       └── Filter
+    │           ├── output columns: []
+    │           ├── filters: [is_true(cse_left.a (#3) < 2), is_true(cse_right.b (#4) < 2), is_true(cse_left.a (#3) = cse_right.b (#4))]
+    │           ├── estimated rows: 0.36
+    │           └── MaterializeCTERef
+    │               ├── cte_name: cte_cse_0
+    │               ├── cte_schema: [a (#3), b (#4)]
+    │               └── estimated rows: 1.81
+    └── AggregateFinal(Probe)
+        ├── output columns: [COUNT(*) (#2)]
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── AggregatePartial
+            ├── group by: []
+            ├── aggregate functions: [count()]
+            ├── estimated rows: 1.00
+            └── Filter
+                ├── output columns: []
+                ├── filters: [is_true(cse_left.a (#0) < 1), is_true(cse_right.b (#1) < 1), is_true(cse_left.a (#0) = cse_right.b (#1))]
+                ├── estimated rows: 0.36
+                └── MaterializeCTERef
+                    ├── cte_name: cte_cse_0
+                    ├── cte_schema: [a (#0), b (#1)]
+                    └── estimated rows: 1.81
+
+statement ok
+drop table cse_left;
+
+statement ok
+drop table cse_right;
+
+# Simulate TPC-DS Q88 and verify the common subexpression optimizer plan.
+statement ok
+create or replace table store_sales (
+    ss_sold_time_sk int,
+    ss_hdemo_sk int,
+    ss_store_sk int
+);
+
+statement ok
+create or replace table household_demographics (
+    hd_demo_sk int,
+    hd_dep_count int,
+    hd_vehicle_count int
+);
+
+statement ok
+create or replace table time_dim (
+    t_time_sk int,
+    t_hour int,
+    t_minute int
+);
+
+statement ok
+create or replace table store (
+    s_store_sk int,
+    s_store_name string
+);
+
+statement ok
+insert into household_demographics values
+    (1, 4, 6),
+    (2, 2, 4),
+    (3, 0, 2),
+    (4, 1, 5);
+
+statement ok
+insert into time_dim values
+    (1, 8, 30),
+    (2, 9, 0),
+    (3, 9, 30),
+    (4, 10, 0),
+    (5, 10, 30),
+    (6, 11, 0),
+    (7, 11, 30),
+    (8, 12, 0),
+    (9, 12, 45);
+
+statement ok
+insert into store values
+    (1, 'ese'),
+    (2, 'other');
+
+statement ok
+insert into store_sales
+select
+    t.t_time_sk as ss_sold_time_sk,
+    h.hd_demo_sk as ss_hdemo_sk,
+    1 as ss_store_sk
+from time_dim t
+cross join household_demographics h;
+
+query T nosort
+explain
+SELECT *
+FROM
+  (SELECT count(*) h8_30_to_9
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 8
+     AND time_dim.t_minute >= 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s1,
+  (SELECT count(*) h9_to_9_30
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 9
+     AND time_dim.t_minute < 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s2,
+  (SELECT count(*) h9_30_to_10
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 9
+     AND time_dim.t_minute >= 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s3,
+  (SELECT count(*) h10_to_10_30
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 10
+     AND time_dim.t_minute < 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s4,
+  (SELECT count(*) h10_30_to_11
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 10
+     AND time_dim.t_minute >= 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s5,
+  (SELECT count(*) h11_to_11_30
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 11
+     AND time_dim.t_minute < 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s6,
+  (SELECT count(*) h11_30_to_12
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 11
+     AND time_dim.t_minute >= 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s7,
+  (SELECT count(*) h12_to_12_30
+   FROM store_sales,
+        household_demographics,
+        time_dim,
+        store
+   WHERE ss_sold_time_sk = time_dim.t_time_sk
+     AND ss_hdemo_sk = household_demographics.hd_demo_sk
+     AND ss_store_sk = s_store_sk
+     AND time_dim.t_hour = 12
+     AND time_dim.t_minute < 30
+     AND ((household_demographics.hd_dep_count = 4
+           AND household_demographics.hd_vehicle_count <= 4 + 2)
+          OR (household_demographics.hd_dep_count = 2
+              AND household_demographics.hd_vehicle_count <= 2 + 2)
+          OR (household_demographics.hd_dep_count = 0
+              AND household_demographics.hd_vehicle_count <= 0 + 2))
+     AND store.s_store_name = 'ese') s8;
+----
+Sequence
+├── MaterializedCTE: cte_cse_0
+│   └── HashJoin
+│       ├── output columns: [store_sales.ss_sold_time_sk (#0), store_sales.ss_hdemo_sk (#1), store_sales.ss_store_sk (#2), household_demographics.hd_dep_count (#4), household_demographics.hd_vehicle_count (#5), household_demographics.hd_demo_sk (#3), time_dim.t_hour (#7), time_dim.t_minute (#8), time_dim.t_time_sk (#6), store.s_store_name (#10), store.s_store_sk (#9)]
+│       ├── join type: INNER
+│       ├── build keys: [store.s_store_sk (#9)]
+│       ├── probe keys: [store_sales.ss_store_sk (#2)]
+│       ├── keys is null equal: [false]
+│       ├── filters: []
+│       ├── build join filters:
+│       │   └── filter id:2, build key:store.s_store_sk (#9), probe targets:[store_sales.ss_store_sk (#2)@scan0], filter type:bloom,inlist,min_max
+│       ├── estimated rows: 17.32
+│       ├── TableScan(Build)
+│       │   ├── table: default.default.store
+│       │   ├── scan id: 3
+│       │   ├── output columns: [s_store_sk (#9), s_store_name (#10)]
+│       │   ├── read rows: 2
+│       │   ├── read size: < 1 KiB
+│       │   ├── partitions total: 1
+│       │   ├── partitions scanned: 1
+│       │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
+│       │   ├── push downs: [filters: [is_true(store.s_store_name (#10) = 'ese')], limit: NONE]
+│       │   └── estimated rows: 1.00
+│       └── HashJoin(Probe)
+│           ├── output columns: [store_sales.ss_sold_time_sk (#0), store_sales.ss_hdemo_sk (#1), store_sales.ss_store_sk (#2), household_demographics.hd_dep_count (#4), household_demographics.hd_vehicle_count (#5), household_demographics.hd_demo_sk (#3), time_dim.t_hour (#7), time_dim.t_minute (#8), time_dim.t_time_sk (#6)]
+│           ├── join type: INNER
+│           ├── build keys: [time_dim.t_time_sk (#6)]
+│           ├── probe keys: [store_sales.ss_sold_time_sk (#0)]
+│           ├── keys is null equal: [false]
+│           ├── filters: []
+│           ├── build join filters:
+│           │   └── filter id:1, build key:time_dim.t_time_sk (#6), probe targets:[store_sales.ss_sold_time_sk (#0)@scan0], filter type:bloom,inlist,min_max
+│           ├── estimated rows: 17.32
+│           ├── Filter(Build)
+│           │   ├── output columns: [time_dim.t_time_sk (#6), time_dim.t_hour (#7), time_dim.t_minute (#8)]
+│           │   ├── filters: [time_dim.t_hour (#7) = 8 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 9 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 9 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 10 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 10 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 11 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 11 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 12 and time_dim.t_minute (#8) < 30]
+│           │   ├── estimated rows: 7.49
+│           │   └── TableScan
+│           │       ├── table: default.default.time_dim
+│           │       ├── scan id: 2
+│           │       ├── output columns: [t_time_sk (#6), t_hour (#7), t_minute (#8)]
+│           │       ├── read rows: 9
+│           │       ├── read size: < 1 KiB
+│           │       ├── partitions total: 1
+│           │       ├── partitions scanned: 1
+│           │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
+│           │       ├── push downs: [filters: [time_dim.t_hour (#7) = 8 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 9 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 9 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 10 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 10 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 11 and time_dim.t_minute (#8) < 30 or time_dim.t_hour (#7) = 11 and time_dim.t_minute (#8) >= 30 or time_dim.t_hour (#7) = 12 and time_dim.t_minute (#8) < 30], limit: NONE]
+│           │       └── estimated rows: 9.00
+│           └── HashJoin(Probe)
+│               ├── output columns: [store_sales.ss_sold_time_sk (#0), store_sales.ss_hdemo_sk (#1), store_sales.ss_store_sk (#2), household_demographics.hd_dep_count (#4), household_demographics.hd_vehicle_count (#5), household_demographics.hd_demo_sk (#3)]
+│               ├── join type: INNER
+│               ├── build keys: [household_demographics.hd_demo_sk (#3)]
+│               ├── probe keys: [store_sales.ss_hdemo_sk (#1)]
+│               ├── keys is null equal: [false]
+│               ├── filters: []
+│               ├── build join filters:
+│               │   └── filter id:0, build key:household_demographics.hd_demo_sk (#3), probe targets:[store_sales.ss_hdemo_sk (#1)@scan0], filter type:bloom,inlist,min_max
+│               ├── estimated rows: 20.81
+│               ├── TableScan(Build)
+│               │   ├── table: default.default.household_demographics
+│               │   ├── scan id: 1
+│               │   ├── output columns: [hd_demo_sk (#3), hd_dep_count (#4), hd_vehicle_count (#5)]
+│               │   ├── read rows: 4
+│               │   ├── read size: < 1 KiB
+│               │   ├── partitions total: 1
+│               │   ├── partitions scanned: 1
+│               │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: <slt:ignore>>]
+│               │   ├── push downs: [filters: [household_demographics.hd_dep_count (#4) = 4 and household_demographics.hd_vehicle_count (#5) <= 6 or household_demographics.hd_dep_count (#4) = 2 and household_demographics.hd_vehicle_count (#5) <= 4 or household_demographics.hd_dep_count (#4) = 0 and household_demographics.hd_vehicle_count (#5) <= 2], limit: NONE]
+│               │   └── estimated rows: 2.31
+│               └── TableScan(Probe)
+│                   ├── table: default.default.store_sales
+│                   ├── scan id: 0
+│                   ├── output columns: [ss_sold_time_sk (#0), ss_hdemo_sk (#1), ss_store_sk (#2)]
+│                   ├── read rows: 36
+│                   ├── read size: < 1 KiB
+│                   ├── partitions total: 1
+│                   ├── partitions scanned: 1
+│                   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│                   ├── push downs: [filters: [], limit: NONE]
+│                   ├── apply join filters: [#2, #1, #0]
+│                   └── estimated rows: 36.00
+└── HashJoin
+    ├── output columns: [COUNT(*) (#11), COUNT(*) (#23), COUNT(*) (#35), COUNT(*) (#47), COUNT(*) (#59), COUNT(*) (#71), COUNT(*) (#83), COUNT(*) (#95)]
+    ├── join type: CROSS
+    ├── build keys: []
+    ├── probe keys: []
+    ├── keys is null equal: []
+    ├── filters: []
+    ├── estimated rows: 1.00
+    ├── AggregateFinal(Build)
+    │   ├── output columns: [COUNT(*) (#95)]
+    │   ├── group by: []
+    │   ├── aggregate functions: [count()]
+    │   ├── estimated rows: 1.00
+    │   └── AggregatePartial
+    │       ├── group by: []
+    │       ├── aggregate functions: [count()]
+    │       ├── estimated rows: 1.00
+    │       └── Filter
+    │           ├── output columns: []
+    │           ├── filters: [is_true(time_dim.t_hour (#91) = 12), is_true(time_dim.t_minute (#92) < 30), is_true(store_sales.ss_sold_time_sk (#84) = time_dim.t_time_sk (#90)), is_true(store_sales.ss_hdemo_sk (#85) = household_demographics.hd_demo_sk (#87)), is_true(store_sales.ss_store_sk (#86) = store.s_store_sk (#93)), household_demographics.hd_dep_count (#88) = 4 and household_demographics.hd_vehicle_count (#89) <= 6 or household_demographics.hd_dep_count (#88) = 2 and household_demographics.hd_vehicle_count (#89) <= 4 or household_demographics.hd_dep_count (#88) = 0 and household_demographics.hd_vehicle_count (#89) <= 2, is_true(store.s_store_name (#94) = 'ese')]
+    │           ├── estimated rows: 3.46
+    │           └── MaterializeCTERef
+    │               ├── cte_name: cte_cse_0
+    │               ├── cte_schema: [ss_sold_time_sk (#84), ss_hdemo_sk (#85), ss_store_sk (#86), hd_demo_sk (#87), hd_dep_count (#88), hd_vehicle_count (#89), t_time_sk (#90), t_hour (#91), t_minute (#92), s_store_sk (#93), s_store_name (#94)]
+    │               └── estimated rows: 17.32
+    └── HashJoin(Probe)
+        ├── output columns: [COUNT(*) (#11), COUNT(*) (#23), COUNT(*) (#35), COUNT(*) (#47), COUNT(*) (#59), COUNT(*) (#71), COUNT(*) (#83)]
+        ├── join type: CROSS
+        ├── build keys: []
+        ├── probe keys: []
+        ├── keys is null equal: []
+        ├── filters: []
+        ├── estimated rows: 1.00
+        ├── AggregateFinal(Build)
+        │   ├── output columns: [COUNT(*) (#83)]
+        │   ├── group by: []
+        │   ├── aggregate functions: [count()]
+        │   ├── estimated rows: 1.00
+        │   └── AggregatePartial
+        │       ├── group by: []
+        │       ├── aggregate functions: [count()]
+        │       ├── estimated rows: 1.00
+        │       └── Filter
+        │           ├── output columns: []
+        │           ├── filters: [is_true(time_dim.t_hour (#79) = 11), is_true(time_dim.t_minute (#80) >= 30), is_true(store_sales.ss_sold_time_sk (#72) = time_dim.t_time_sk (#78)), is_true(store_sales.ss_hdemo_sk (#73) = household_demographics.hd_demo_sk (#75)), is_true(store_sales.ss_store_sk (#74) = store.s_store_sk (#81)), household_demographics.hd_dep_count (#76) = 4 and household_demographics.hd_vehicle_count (#77) <= 6 or household_demographics.hd_dep_count (#76) = 2 and household_demographics.hd_vehicle_count (#77) <= 4 or household_demographics.hd_dep_count (#76) = 0 and household_demographics.hd_vehicle_count (#77) <= 2, is_true(store.s_store_name (#82) = 'ese')]
+        │           ├── estimated rows: 3.46
+        │           └── MaterializeCTERef
+        │               ├── cte_name: cte_cse_0
+        │               ├── cte_schema: [ss_sold_time_sk (#72), ss_hdemo_sk (#73), ss_store_sk (#74), hd_demo_sk (#75), hd_dep_count (#76), hd_vehicle_count (#77), t_time_sk (#78), t_hour (#79), t_minute (#80), s_store_sk (#81), s_store_name (#82)]
+        │               └── estimated rows: 17.32
+        └── HashJoin(Probe)
+            ├── output columns: [COUNT(*) (#11), COUNT(*) (#23), COUNT(*) (#35), COUNT(*) (#47), COUNT(*) (#59), COUNT(*) (#71)]
+            ├── join type: CROSS
+            ├── build keys: []
+            ├── probe keys: []
+            ├── keys is null equal: []
+            ├── filters: []
+            ├── estimated rows: 1.00
+            ├── AggregateFinal(Build)
+            │   ├── output columns: [COUNT(*) (#71)]
+            │   ├── group by: []
+            │   ├── aggregate functions: [count()]
+            │   ├── estimated rows: 1.00
+            │   └── AggregatePartial
+            │       ├── group by: []
+            │       ├── aggregate functions: [count()]
+            │       ├── estimated rows: 1.00
+            │       └── Filter
+            │           ├── output columns: []
+            │           ├── filters: [is_true(time_dim.t_hour (#67) = 11), is_true(time_dim.t_minute (#68) < 30), is_true(store_sales.ss_sold_time_sk (#60) = time_dim.t_time_sk (#66)), is_true(store_sales.ss_hdemo_sk (#61) = household_demographics.hd_demo_sk (#63)), is_true(store_sales.ss_store_sk (#62) = store.s_store_sk (#69)), household_demographics.hd_dep_count (#64) = 4 and household_demographics.hd_vehicle_count (#65) <= 6 or household_demographics.hd_dep_count (#64) = 2 and household_demographics.hd_vehicle_count (#65) <= 4 or household_demographics.hd_dep_count (#64) = 0 and household_demographics.hd_vehicle_count (#65) <= 2, is_true(store.s_store_name (#70) = 'ese')]
+            │           ├── estimated rows: 3.46
+            │           └── MaterializeCTERef
+            │               ├── cte_name: cte_cse_0
+            │               ├── cte_schema: [ss_sold_time_sk (#60), ss_hdemo_sk (#61), ss_store_sk (#62), hd_demo_sk (#63), hd_dep_count (#64), hd_vehicle_count (#65), t_time_sk (#66), t_hour (#67), t_minute (#68), s_store_sk (#69), s_store_name (#70)]
+            │               └── estimated rows: 17.32
+            └── HashJoin(Probe)
+                ├── output columns: [COUNT(*) (#11), COUNT(*) (#23), COUNT(*) (#35), COUNT(*) (#47), COUNT(*) (#59)]
+                ├── join type: CROSS
+                ├── build keys: []
+                ├── probe keys: []
+                ├── keys is null equal: []
+                ├── filters: []
+                ├── estimated rows: 1.00
+                ├── AggregateFinal(Build)
+                │   ├── output columns: [COUNT(*) (#59)]
+                │   ├── group by: []
+                │   ├── aggregate functions: [count()]
+                │   ├── estimated rows: 1.00
+                │   └── AggregatePartial
+                │       ├── group by: []
+                │       ├── aggregate functions: [count()]
+                │       ├── estimated rows: 1.00
+                │       └── Filter
+                │           ├── output columns: []
+                │           ├── filters: [is_true(time_dim.t_hour (#55) = 10), is_true(time_dim.t_minute (#56) >= 30), is_true(store_sales.ss_sold_time_sk (#48) = time_dim.t_time_sk (#54)), is_true(store_sales.ss_hdemo_sk (#49) = household_demographics.hd_demo_sk (#51)), is_true(store_sales.ss_store_sk (#50) = store.s_store_sk (#57)), household_demographics.hd_dep_count (#52) = 4 and household_demographics.hd_vehicle_count (#53) <= 6 or household_demographics.hd_dep_count (#52) = 2 and household_demographics.hd_vehicle_count (#53) <= 4 or household_demographics.hd_dep_count (#52) = 0 and household_demographics.hd_vehicle_count (#53) <= 2, is_true(store.s_store_name (#58) = 'ese')]
+                │           ├── estimated rows: 3.46
+                │           └── MaterializeCTERef
+                │               ├── cte_name: cte_cse_0
+                │               ├── cte_schema: [ss_sold_time_sk (#48), ss_hdemo_sk (#49), ss_store_sk (#50), hd_demo_sk (#51), hd_dep_count (#52), hd_vehicle_count (#53), t_time_sk (#54), t_hour (#55), t_minute (#56), s_store_sk (#57), s_store_name (#58)]
+                │               └── estimated rows: 17.32
+                └── HashJoin(Probe)
+                    ├── output columns: [COUNT(*) (#11), COUNT(*) (#23), COUNT(*) (#35), COUNT(*) (#47)]
+                    ├── join type: CROSS
+                    ├── build keys: []
+                    ├── probe keys: []
+                    ├── keys is null equal: []
+                    ├── filters: []
+                    ├── estimated rows: 1.00
+                    ├── AggregateFinal(Build)
+                    │   ├── output columns: [COUNT(*) (#47)]
+                    │   ├── group by: []
+                    │   ├── aggregate functions: [count()]
+                    │   ├── estimated rows: 1.00
+                    │   └── AggregatePartial
+                    │       ├── group by: []
+                    │       ├── aggregate functions: [count()]
+                    │       ├── estimated rows: 1.00
+                    │       └── Filter
+                    │           ├── output columns: []
+                    │           ├── filters: [is_true(time_dim.t_hour (#43) = 10), is_true(time_dim.t_minute (#44) < 30), is_true(store_sales.ss_sold_time_sk (#36) = time_dim.t_time_sk (#42)), is_true(store_sales.ss_hdemo_sk (#37) = household_demographics.hd_demo_sk (#39)), is_true(store_sales.ss_store_sk (#38) = store.s_store_sk (#45)), household_demographics.hd_dep_count (#40) = 4 and household_demographics.hd_vehicle_count (#41) <= 6 or household_demographics.hd_dep_count (#40) = 2 and household_demographics.hd_vehicle_count (#41) <= 4 or household_demographics.hd_dep_count (#40) = 0 and household_demographics.hd_vehicle_count (#41) <= 2, is_true(store.s_store_name (#46) = 'ese')]
+                    │           ├── estimated rows: 3.46
+                    │           └── MaterializeCTERef
+                    │               ├── cte_name: cte_cse_0
+                    │               ├── cte_schema: [ss_sold_time_sk (#36), ss_hdemo_sk (#37), ss_store_sk (#38), hd_demo_sk (#39), hd_dep_count (#40), hd_vehicle_count (#41), t_time_sk (#42), t_hour (#43), t_minute (#44), s_store_sk (#45), s_store_name (#46)]
+                    │               └── estimated rows: 17.32
+                    └── HashJoin(Probe)
+                        ├── output columns: [COUNT(*) (#11), COUNT(*) (#23), COUNT(*) (#35)]
+                        ├── join type: CROSS
+                        ├── build keys: []
+                        ├── probe keys: []
+                        ├── keys is null equal: []
+                        ├── filters: []
+                        ├── estimated rows: 1.00
+                        ├── AggregateFinal(Build)
+                        │   ├── output columns: [COUNT(*) (#35)]
+                        │   ├── group by: []
+                        │   ├── aggregate functions: [count()]
+                        │   ├── estimated rows: 1.00
+                        │   └── AggregatePartial
+                        │       ├── group by: []
+                        │       ├── aggregate functions: [count()]
+                        │       ├── estimated rows: 1.00
+                        │       └── Filter
+                        │           ├── output columns: []
+                        │           ├── filters: [is_true(time_dim.t_hour (#31) = 9), is_true(time_dim.t_minute (#32) >= 30), is_true(store_sales.ss_sold_time_sk (#24) = time_dim.t_time_sk (#30)), is_true(store_sales.ss_hdemo_sk (#25) = household_demographics.hd_demo_sk (#27)), is_true(store_sales.ss_store_sk (#26) = store.s_store_sk (#33)), household_demographics.hd_dep_count (#28) = 4 and household_demographics.hd_vehicle_count (#29) <= 6 or household_demographics.hd_dep_count (#28) = 2 and household_demographics.hd_vehicle_count (#29) <= 4 or household_demographics.hd_dep_count (#28) = 0 and household_demographics.hd_vehicle_count (#29) <= 2, is_true(store.s_store_name (#34) = 'ese')]
+                        │           ├── estimated rows: 3.46
+                        │           └── MaterializeCTERef
+                        │               ├── cte_name: cte_cse_0
+                        │               ├── cte_schema: [ss_sold_time_sk (#24), ss_hdemo_sk (#25), ss_store_sk (#26), hd_demo_sk (#27), hd_dep_count (#28), hd_vehicle_count (#29), t_time_sk (#30), t_hour (#31), t_minute (#32), s_store_sk (#33), s_store_name (#34)]
+                        │               └── estimated rows: 17.32
+                        └── HashJoin(Probe)
+                            ├── output columns: [COUNT(*) (#11), COUNT(*) (#23)]
+                            ├── join type: CROSS
+                            ├── build keys: []
+                            ├── probe keys: []
+                            ├── keys is null equal: []
+                            ├── filters: []
+                            ├── estimated rows: 1.00
+                            ├── AggregateFinal(Build)
+                            │   ├── output columns: [COUNT(*) (#23)]
+                            │   ├── group by: []
+                            │   ├── aggregate functions: [count()]
+                            │   ├── estimated rows: 1.00
+                            │   └── AggregatePartial
+                            │       ├── group by: []
+                            │       ├── aggregate functions: [count()]
+                            │       ├── estimated rows: 1.00
+                            │       └── Filter
+                            │           ├── output columns: []
+                            │           ├── filters: [is_true(time_dim.t_hour (#19) = 9), is_true(time_dim.t_minute (#20) < 30), is_true(store_sales.ss_sold_time_sk (#12) = time_dim.t_time_sk (#18)), is_true(store_sales.ss_hdemo_sk (#13) = household_demographics.hd_demo_sk (#15)), is_true(store_sales.ss_store_sk (#14) = store.s_store_sk (#21)), household_demographics.hd_dep_count (#16) = 4 and household_demographics.hd_vehicle_count (#17) <= 6 or household_demographics.hd_dep_count (#16) = 2 and household_demographics.hd_vehicle_count (#17) <= 4 or household_demographics.hd_dep_count (#16) = 0 and household_demographics.hd_vehicle_count (#17) <= 2, is_true(store.s_store_name (#22) = 'ese')]
+                            │           ├── estimated rows: 3.46
+                            │           └── MaterializeCTERef
+                            │               ├── cte_name: cte_cse_0
+                            │               ├── cte_schema: [ss_sold_time_sk (#12), ss_hdemo_sk (#13), ss_store_sk (#14), hd_demo_sk (#15), hd_dep_count (#16), hd_vehicle_count (#17), t_time_sk (#18), t_hour (#19), t_minute (#20), s_store_sk (#21), s_store_name (#22)]
+                            │               └── estimated rows: 17.32
+                            └── AggregateFinal(Probe)
+                                ├── output columns: [COUNT(*) (#11)]
+                                ├── group by: []
+                                ├── aggregate functions: [count()]
+                                ├── estimated rows: 1.00
+                                └── AggregatePartial
+                                    ├── group by: []
+                                    ├── aggregate functions: [count()]
+                                    ├── estimated rows: 1.00
+                                    └── Filter
+                                        ├── output columns: []
+                                        ├── filters: [is_true(time_dim.t_hour (#7) = 8), is_true(time_dim.t_minute (#8) >= 30), is_true(store_sales.ss_sold_time_sk (#0) = time_dim.t_time_sk (#6)), is_true(store_sales.ss_hdemo_sk (#1) = household_demographics.hd_demo_sk (#3)), is_true(store_sales.ss_store_sk (#2) = store.s_store_sk (#9)), household_demographics.hd_dep_count (#4) = 4 and household_demographics.hd_vehicle_count (#5) <= 6 or household_demographics.hd_dep_count (#4) = 2 and household_demographics.hd_vehicle_count (#5) <= 4 or household_demographics.hd_dep_count (#4) = 0 and household_demographics.hd_vehicle_count (#5) <= 2, is_true(store.s_store_name (#10) = 'ese')]
+                                        ├── estimated rows: 3.46
+                                        └── MaterializeCTERef
+                                            ├── cte_name: cte_cse_0
+                                            ├── cte_schema: [ss_sold_time_sk (#0), ss_hdemo_sk (#1), ss_store_sk (#2), hd_demo_sk (#3), hd_dep_count (#4), hd_vehicle_count (#5), t_time_sk (#6), t_hour (#7), t_minute (#8), s_store_sk (#9), s_store_name (#10)]
+                                            └── estimated rows: 17.32
+
+statement ok
+drop table store_sales;
+
+statement ok
+drop table household_demographics;
+
+statement ok
+drop table time_dim;
+
+statement ok
+drop table store;

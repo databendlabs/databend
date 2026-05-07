@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::atomic;
 use std::sync::atomic::AtomicUsize;
 
+use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::ReclusterTask;
@@ -114,6 +115,8 @@ impl IPhysicalPlan for Recluster {
     //           └──────────────┘
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         match self.tasks.len() {
+            // A zero-task recluster still rebuilds segments from sidecar `remained_blocks`
+            // during commit. This is the segment-only reorder path, not a no-op success path.
             0 => builder.main_pipeline.add_source(EmptySource::create, 1),
             1 => {
                 let table = builder
@@ -137,7 +140,8 @@ impl IPhysicalPlan for Recluster {
                     push_downs: None,
                     internal_columns: None,
                     base_block_ids: None,
-                    update_stream_columns: table.change_tracking_enabled(),
+                    block_meta_options: BlockMetaOptions::default()
+                        .set_update_stream_columns(table.change_tracking_enabled()),
                     table_index: usize::MAX,
                     scan_id: usize::MAX,
                 };
@@ -209,7 +213,7 @@ impl IPhysicalPlan for Recluster {
                     .collect();
 
                 // merge sort
-                let sort_block_size = block_thresholds.calc_rows_for_recluster(
+                let (rows_per_block, bytes_per_block) = block_thresholds.calc_rows_for_recluster(
                     task.total_rows,
                     task.total_bytes,
                     task.total_compressed,
@@ -223,18 +227,20 @@ impl IPhysicalPlan for Recluster {
                     None,
                     settings.get_enable_fixed_rows_sort()?,
                 )?
-                .with_block_size_hit(sort_block_size);
-                // Todo(zhyass): Recluster will no longer perform sort in the near future.
+                .with_block_size_hit(rows_per_block);
                 sort_pipeline_builder
                     .build_full_sort_pipeline(&mut builder.main_pipeline, false)?;
 
                 // Compact after merge sort. This ordered compactor keeps block growth bounded
                 // without requiring a hard post-sort size cap, since final serialized sizes are
                 // not known yet and over-splitting here would create small fragmented blocks.
+                let compact_thresholds = block_thresholds
+                    .set_rows_per_block(rows_per_block)
+                    .set_bytes_per_block(bytes_per_block);
                 let max_threads = settings.get_max_threads()? as usize;
                 build_ordered_compact_pipeline(
                     &mut builder.main_pipeline,
-                    block_thresholds,
+                    compact_thresholds,
                     max_threads,
                 )?;
 

@@ -131,6 +131,7 @@ impl DefaultSettings {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
             let num_cpus = Self::num_cpus();
             let max_memory_usage = Self::max_memory_usage()?;
+            let max_query_memory_usage = max_memory_usage / 2;
             let recluster_block_size = Self::recluster_block_size(max_memory_usage);
             let default_max_spill_io_requests = Self::spill_io_requests(num_cpus);
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
@@ -196,14 +197,14 @@ impl DefaultSettings {
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("max_query_memory_usage", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(max_query_memory_usage),
                     desc: "The maximum memory usage for query. If set to 0, memory usage is unlimited. This setting is the successor/replacement to the older max_memory_usage setting.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
                 }),
                 ("query_out_of_memory_behavior", DefaultSettingValue {
-                    value: UserSettingValue::String(String::from("throw")),
+                    value: UserSettingValue::String(String::from("spilling")),
                     desc: "If the query memory limit is exceeded, the system will enforce predefined actions (e.g., throw or spilling).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
@@ -496,6 +497,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("spill_writer_memory_pool_size_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(20),
+                    desc: "Set the memory pool size (MB) for each spill writer.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("spilling_file_format", DefaultSettingValue {
                     value: UserSettingValue::String("parquet".to_string()),
@@ -1445,6 +1453,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: None,
+                }),
+                ("max_public_keys_per_user", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Maximum number of public keys allowed per user for key-pair authentication",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(2..=100)),
                 }),
                 ("stream_consume_batch_size_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

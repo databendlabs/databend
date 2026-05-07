@@ -24,7 +24,7 @@ SELECT * FROM tmp_view
 query TTTTT
 DESCRIBE tmp_view;
 ----
-number BIGINT UNSIGNED NO 0 (empty)
+number BIGINT UNSIGNED NO NULL (empty)
 
 statement ok
 ALTER VIEW tmp_view(c1) AS SELECT * from numbers(3)
@@ -32,7 +32,7 @@ ALTER VIEW tmp_view(c1) AS SELECT * from numbers(3)
 query TTTTT
 DESCRIBE tmp_view;
 ----
-c1 BIGINT UNSIGNED NO 0 (empty)
+c1 BIGINT UNSIGNED NO NULL (empty)
 
 statement error 1018
 ALTER VIEW tmp_view(c1) AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a

@@ -12,34 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_client::kvapi::KeyBuilder;
-use databend_meta_client::kvapi::KeyCodec;
-use databend_meta_client::kvapi::KeyError;
-use databend_meta_client::kvapi::KeyParser;
+use databend_meta_client::kvapi;
 
 use crate::tenant_key::ident::TIdent;
 use crate::tenant_key::raw::TIdentRaw;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, kvapi::KeyCodec)]
 pub struct RowAccessPolicyIdTableId {
     pub policy_id: u64,
     pub table_id: u64,
-}
-
-impl KeyCodec for RowAccessPolicyIdTableId {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        b.push_u64(self.policy_id).push_u64(self.table_id)
-    }
-
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-    where Self: Sized {
-        let policy_id = parser.next_u64()?;
-        let table_id = parser.next_u64()?;
-        Ok(Self {
-            policy_id,
-            table_id,
-        })
-    }
 }
 
 /// RowAccess Policy can be applied to tables. When dropping a row access policy,
@@ -76,7 +57,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::row_access_policy::RowAccessPolicyTableIdIdent;
     use crate::row_access_policy::row_access_policy_table_id_ident::RowAccessPolicyIdTableId;
@@ -89,13 +71,7 @@ mod tests {
             policy_id: 20,
             table_id: 10,
         };
-        let ident = RowAccessPolicyTableIdIdent::new_generic(tenant.clone(), id);
-        assert_eq!(
-            "__fd_row_access_policy_apply_table_id/tenant1/20/10",
-            ident.to_string_key()
-        );
-
-        let got = RowAccessPolicyTableIdIdent::from_str_key(&ident.to_string_key()).unwrap();
-        assert_eq!(ident, got);
+        let ident = RowAccessPolicyTableIdIdent::new_generic(tenant, id);
+        assert_round_trip(ident, "__fd_row_access_policy_apply_table_id/tenant1/20/10");
     }
 }

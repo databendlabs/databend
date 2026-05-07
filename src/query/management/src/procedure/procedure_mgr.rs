@@ -40,7 +40,7 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnOp;

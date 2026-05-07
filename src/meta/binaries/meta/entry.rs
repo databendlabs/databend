@@ -39,6 +39,7 @@ use databend_meta::meta_node::meta_worker::MetaWorker;
 use databend_meta::meta_service::MetaNode;
 use databend_meta::meta_service::meta_leader::MetaLeader;
 use databend_meta::metrics::server_metrics;
+use databend_meta::openraft::MessageSummary;
 use databend_meta::raft_store::config::RaftConfig;
 use databend_meta::raft_store::ondisk::DATA_VERSION;
 use databend_meta::raft_store::ondisk::OnDisk;
@@ -57,7 +58,6 @@ use databend_meta_cli_config::MetaConfig;
 use databend_meta_ver::MIN_QUERY_VER_FOR_METASRV;
 use log::info;
 use log::warn;
-use openraft::MessageSummary;
 use tokio::time::Instant;
 use tokio::time::sleep;
 

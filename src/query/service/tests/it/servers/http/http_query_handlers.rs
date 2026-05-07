@@ -20,6 +20,8 @@ use std::io::Read;
 use std::time::Duration;
 
 use arrow_ipc::reader::StreamReader;
+use arrow_schema::DataType as ArrowDataType;
+use arrow_schema::SchemaRef;
 use base64::engine::general_purpose;
 use base64::prelude::*;
 use databend_common_base::base::get_free_tcp_port;
@@ -143,6 +145,7 @@ pub struct TestQueryResponse {
 #[derive(Deserialize, Debug, Clone)]
 pub struct TestResultFormatSettings {
     pub arrow_result_version: Option<u64>,
+    pub arrow_features: Option<TestArrowFeatures>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -150,11 +153,18 @@ struct TestLoginResponse {
     version: String,
     session_id: String,
     server_max_arrow_result_version: u64,
+    server_arrow_features: Option<TestArrowFeatures>,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct TestArrowFeatures {
+    decimal64: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
 struct TestArrowQueryResponse {
     header: TestQueryResponse,
+    schema: SchemaRef,
     num_rows: usize,
 }
 
@@ -304,6 +314,7 @@ impl TestHttpQueryRequest {
 
 fn decode_arrow_query_response(body: &[u8]) -> anyhow::Result<TestArrowQueryResponse> {
     let mut reader = StreamReader::try_new(Cursor::new(body), None)?;
+    let schema = reader.schema();
     let header = serde_json::from_str::<TestQueryResponse>(
         reader
             .schema()
@@ -315,7 +326,11 @@ fn decode_arrow_query_response(body: &[u8]) -> anyhow::Result<TestArrowQueryResp
     for batch in &mut reader {
         num_rows += batch?.num_rows();
     }
-    Ok(TestArrowQueryResponse { header, num_rows })
+    Ok(TestArrowQueryResponse {
+        header,
+        schema,
+        num_rows,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -2031,6 +2046,7 @@ async fn test_arrow_query_legacy_bendsql_python_ua_fallback() -> anyhow::Result<
         response
             .header
             .settings
+            .clone()
             .and_then(|settings| settings.arrow_result_version),
         None
     );
@@ -2078,6 +2094,7 @@ async fn test_arrow_query_negotiates_result_format_version_in_metadata() -> anyh
         response
             .header
             .settings
+            .clone()
             .and_then(|settings| settings.arrow_result_version),
         Some(login.server_max_arrow_result_version)
     );
@@ -2107,8 +2124,18 @@ async fn test_arrow_query_page_keeps_negotiated_result_format_version() -> anyho
         response
             .header
             .settings
+            .clone()
             .and_then(|settings| settings.arrow_result_version),
         Some(2)
+    );
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        None
     );
 
     let ep = create_endpoint()?;
@@ -2125,8 +2152,19 @@ async fn test_arrow_query_page_keeps_negotiated_result_format_version() -> anyho
             .1
             .header
             .settings
+            .clone()
             .and_then(|settings| settings.arrow_result_version),
         Some(2)
+    );
+    assert_eq!(
+        response
+            .1
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        None
     );
 
     let (status, response) = get_uri_checked(&ep, &final_uri).await?;
@@ -2217,6 +2255,206 @@ async fn test_login_returns_server_max_arrow_result_version() -> anyhow::Result<
     assert_eq!(login.version, DATABEND_SEMVER.to_string());
     assert!(!login.session_id.is_empty());
     assert!(login.server_max_arrow_result_version >= 1);
+    if login.server_max_arrow_result_version >= 3 {
+        assert_eq!(
+            login
+                .server_arrow_features
+                .and_then(|features| features.decimal64),
+            Some(true)
+        );
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_arrow_query_v3_defaults_decimal64_feature_enabled() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::ACCEPT,
+        "application/vnd.apache.arrow.stream".parse().unwrap(),
+    );
+
+    let req = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "select cast(1.23 as decimal(10, 2)) as d",
+        "arrow_result_version_max": 3
+    }))
+    .with_headers(headers);
+    let (status, response) = req.do_arrow_request(Method::POST, "/v1/query").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.num_rows, 1);
+    assert_eq!(
+        response.schema.field(0).data_type(),
+        &ArrowDataType::Decimal64(10, 2)
+    );
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_result_version),
+        Some(3)
+    );
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        Some(true)
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_arrow_query_v3_allows_disabling_decimal64_feature() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::ACCEPT,
+        "application/vnd.apache.arrow.stream".parse().unwrap(),
+    );
+
+    let req = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "select cast(1.23 as decimal(10, 2)) as d",
+        "arrow_result_version_max": 3,
+        "arrow_features": {
+            "decimal64": false
+        }
+    }))
+    .with_headers(headers);
+    let (status, response) = req.do_arrow_request(Method::POST, "/v1/query").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response.num_rows, 1);
+    assert_eq!(
+        response.schema.field(0).data_type(),
+        &ArrowDataType::Decimal128(10, 2)
+    );
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_result_version),
+        Some(3)
+    );
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        None
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_arrow_query_page_keeps_disabled_decimal64_feature() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::ACCEPT,
+        "application/vnd.apache.arrow.stream".parse().unwrap(),
+    );
+
+    let req = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "select cast(number + 123 as decimal(10, 2)) as d from numbers(10)",
+        "pagination": {"wait_time_secs": 6, "max_rows_per_page": 2},
+        "arrow_result_version_max": 3,
+        "arrow_features": {
+            "decimal64": false
+        }
+    }))
+    .with_headers(headers.clone());
+    let (status, response) = req.do_arrow_request(Method::POST, "/v1/query").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        response.schema.field(0).data_type(),
+        &ArrowDataType::Decimal128(10, 2)
+    );
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        None
+    );
+
+    let ep = create_endpoint()?;
+    let next_uri = response.header.next_uri.clone().expect("expected next uri");
+    let response = get_arrow_uri(&ep, &next_uri, headers).await?;
+    assert_eq!(response.0, StatusCode::OK);
+    assert_eq!(
+        response.1.schema.field(0).data_type(),
+        &ArrowDataType::Decimal128(10, 2)
+    );
+    assert_eq!(
+        response
+            .1
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        None
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_arrow_query_page_keeps_negotiated_decimal64_feature() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::ACCEPT,
+        "application/vnd.apache.arrow.stream".parse().unwrap(),
+    );
+
+    let req = TestHttpQueryRequest::new(serde_json::json!({
+        "sql": "select * from numbers(10)",
+        "pagination": {"wait_time_secs": 6, "max_rows_per_page": 2},
+        "arrow_result_version_max": 3
+    }))
+    .with_headers(headers.clone());
+    let (status, response) = req.do_arrow_request(Method::POST, "/v1/query").await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        response
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        Some(true)
+    );
+
+    let ep = create_endpoint()?;
+    let next_uri = response.header.next_uri.clone().expect("expected next uri");
+    let response = get_arrow_uri(&ep, &next_uri, headers).await?;
+    assert_eq!(response.0, StatusCode::OK);
+    assert_eq!(
+        response
+            .1
+            .header
+            .settings
+            .clone()
+            .and_then(|settings| settings.arrow_features)
+            .and_then(|features| features.decimal64),
+        Some(true)
+    );
 
     Ok(())
 }

@@ -33,12 +33,10 @@ mod recluster;
 mod replace;
 mod replace_into;
 mod revert;
+mod snapshot_hint;
 mod table_index;
 mod truncate;
 mod util;
-
-mod snapshot_hint;
-
 mod vacuum;
 
 pub use agg_index_sink::AggIndexSink;

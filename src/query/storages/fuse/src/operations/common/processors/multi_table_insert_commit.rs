@@ -26,6 +26,8 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
+use databend_common_meta_app::schema::TableInfo;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::UpdateMultiTableMetaReq;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_meta_app::schema::UpdateTableMetaReq;
@@ -106,12 +108,17 @@ impl AsyncSink for CommitMultiTableInsert {
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
             if table.is_temp() {
-                update_temp_tables.push(UpdateTempTableReq {
-                    table_id,
-                    new_table_meta: table.get_table_info().meta.clone(),
-                    copied_files: Default::default(),
-                    desc: table.get_table_info().desc.clone(),
-                });
+                update_temp_tables.push(
+                    build_update_temp_table_req(
+                        table.as_ref(),
+                        &snapshot_generator,
+                        self.ctx.txn_mgr(),
+                        *self.table_meta_timestampss.get(&table_id).unwrap(),
+                        &commit_meta.hll,
+                        insert_rows.get(&table_id).cloned().unwrap_or_default(),
+                    )
+                    .await?,
+                );
             } else {
                 update_table_metas.push((
                     build_update_table_meta_req(
@@ -134,32 +141,42 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut retries = 0;
 
         loop {
-            let update_multi_table_meta_req = UpdateMultiTableMetaReq {
-                update_table_metas: update_table_metas.clone(),
-                copied_files: vec![],
-                update_stream_metas: self.update_stream_meta.clone(),
-                deduplicated_labels: self.deduplicated_label.clone().into_iter().collect(),
-                update_temp_tables: std::mem::take(&mut update_temp_tables),
-            };
+            let update_multi_table_meta_req = build_non_temp_update_multi_table_meta_req(
+                update_table_metas.clone(),
+                self.update_stream_meta.clone(),
+                self.deduplicated_label.clone(),
+            );
 
-            let update_meta_result = match self
-                .catalog
-                .retryable_update_multi_table_meta(update_multi_table_meta_req)
-                .await
-            {
-                Ok(ret) => ret,
-                Err(e) => {
-                    // other errors may occur, especially the version mismatch of streams,
-                    // let's log it here for the convenience of diagnostics
-                    error!(
-                        "Non-recoverable fault occurred during updating tables. {}",
-                        e
-                    );
-                    return Err(e);
+            let update_meta_result = if update_multi_table_meta_req.is_empty() {
+                Ok(Default::default())
+            } else {
+                match self
+                    .catalog
+                    .retryable_update_multi_table_meta(update_multi_table_meta_req)
+                    .await
+                {
+                    Ok(ret) => ret,
+                    Err(e) => {
+                        // other errors may occur, especially the version mismatch of streams,
+                        // let's log it here for the convenience of diagnostics
+                        error!(
+                            "Non-recoverable fault occurred during updating tables. {}",
+                            e
+                        );
+                        return Err(e);
+                    }
                 }
             };
 
             let Err(update_failed_tbls) = update_meta_result else {
+                if !update_temp_tables.is_empty() {
+                    self.catalog
+                        .update_multi_table_meta(build_temp_update_multi_table_meta_req(
+                            std::mem::take(&mut update_temp_tables),
+                        ))
+                        .await?;
+                }
+
                 let table_descriptions = self
                     .tables
                     .values()
@@ -262,6 +279,56 @@ impl AsyncSink for CommitMultiTableInsert {
     }
 }
 
+fn build_non_temp_update_multi_table_meta_req(
+    update_table_metas: Vec<(UpdateTableMetaReq, TableInfo)>,
+    update_stream_metas: Vec<UpdateStreamMetaReq>,
+    deduplicated_label: Option<String>,
+) -> UpdateMultiTableMetaReq {
+    UpdateMultiTableMetaReq {
+        update_table_metas,
+        copied_files: vec![],
+        update_stream_metas,
+        deduplicated_labels: deduplicated_label.into_iter().collect(),
+        update_temp_tables: vec![],
+    }
+}
+
+fn build_temp_update_multi_table_meta_req(
+    update_temp_tables: Vec<UpdateTempTableReq>,
+) -> UpdateMultiTableMetaReq {
+    UpdateMultiTableMetaReq {
+        update_temp_tables,
+        ..Default::default()
+    }
+}
+
+async fn build_update_temp_table_req(
+    table: &dyn Table,
+    snapshot_generator: &AppendGenerator,
+    txn_mgr: TxnManagerRef,
+    table_meta_timestamps: TableMetaTimestamps,
+    insert_hll: &BlockHLL,
+    insert_rows: u64,
+) -> Result<UpdateTempTableReq> {
+    let table_info = table.get_table_info();
+    let new_table_meta = write_new_snapshot_and_build_table_meta(
+        table,
+        snapshot_generator,
+        txn_mgr,
+        table_meta_timestamps,
+        insert_hll,
+        insert_rows,
+    )
+    .await?;
+
+    Ok(UpdateTempTableReq {
+        table_id: table_info.ident.table_id,
+        new_table_meta,
+        copied_files: Default::default(),
+        desc: table_info.desc.clone(),
+    })
+}
+
 async fn build_update_table_meta_req(
     table: &dyn Table,
     snapshot_generator: &AppendGenerator,
@@ -270,6 +337,37 @@ async fn build_update_table_meta_req(
     insert_hll: &BlockHLL,
     insert_rows: u64,
 ) -> Result<UpdateTableMetaReq> {
+    let fuse_table = FuseTable::try_from_table(table)?;
+    let new_table_meta = write_new_snapshot_and_build_table_meta(
+        table,
+        snapshot_generator,
+        txn_mgr,
+        table_meta_timestamps,
+        insert_hll,
+        insert_rows,
+    )
+    .await?;
+    let table_id = fuse_table.table_info.ident.table_id;
+    let table_version = fuse_table.table_info.ident.seq;
+
+    let req = UpdateTableMetaReq {
+        table_id,
+        seq: MatchSeq::Exact(table_version),
+        new_table_meta,
+        base_snapshot_location: fuse_table.snapshot_loc(),
+        lvt_check: None,
+    };
+    Ok(req)
+}
+
+async fn write_new_snapshot_and_build_table_meta(
+    table: &dyn Table,
+    snapshot_generator: &AppendGenerator,
+    txn_mgr: TxnManagerRef,
+    table_meta_timestamps: TableMetaTimestamps,
+    insert_hll: &BlockHLL,
+    insert_rows: u64,
+) -> Result<TableMeta> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     let table_stats_gen = fuse_table
@@ -292,25 +390,49 @@ async fn build_update_table_meta_req(
         &snapshot.summary,
     );
 
-    // write snapshot
     let dal = fuse_table.get_operator();
     let location_generator = &fuse_table.meta_location_generator;
     let location =
         location_generator.gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     dal.write(&location, snapshot.to_bytes()?).await?;
 
-    // build new table meta
-    let new_table_meta =
-        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot);
-    let table_id = fuse_table.table_info.ident.table_id;
-    let table_version = fuse_table.table_info.ident.seq;
+    Ok(FuseTable::build_new_table_meta(
+        &fuse_table.table_info.meta,
+        &location,
+        &snapshot,
+    ))
+}
 
-    let req = UpdateTableMetaReq {
-        table_id,
-        seq: MatchSeq::Exact(table_version),
-        new_table_meta,
-        base_snapshot_location: fuse_table.snapshot_loc(),
-        lvt_check: None,
-    };
-    Ok(req)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn non_temp_update_req_does_not_carry_temp_table_updates() {
+        let req =
+            build_non_temp_update_multi_table_meta_req(vec![], vec![], Some("label".to_string()));
+
+        assert!(req.update_table_metas.is_empty());
+        assert!(req.copied_files.is_empty());
+        assert!(req.update_stream_metas.is_empty());
+        assert_eq!(req.deduplicated_labels, vec!["label".to_string()]);
+        assert!(req.update_temp_tables.is_empty());
+    }
+
+    #[test]
+    fn temp_update_req_only_carries_temp_table_updates() {
+        let temp_req = UpdateTempTableReq {
+            table_id: 1,
+            desc: "default.tmp".to_string(),
+            new_table_meta: TableMeta::default(),
+            copied_files: Default::default(),
+        };
+        let req = build_temp_update_multi_table_meta_req(vec![temp_req]);
+
+        assert!(req.update_table_metas.is_empty());
+        assert!(req.copied_files.is_empty());
+        assert!(req.update_stream_metas.is_empty());
+        assert!(req.deduplicated_labels.is_empty());
+        assert_eq!(req.update_temp_tables.len(), 1);
+    }
 }

@@ -93,9 +93,9 @@ use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTime
 use databend_common_meta_app::schema::table_niv::TableNIV;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::ConditionResult::Eq;
 use databend_meta_client::types::MatchSeqExt;
 use databend_meta_client::types::MetaError;

@@ -16,10 +16,15 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_meta_client::kvapi;
 use derive_more::Deref;
 use derive_more::DerefMut;
 
-#[derive(Clone, Debug, Copy, Default, Eq, PartialEq, PartialOrd, Ord, Deref, DerefMut)]
+/// `__fd_database_by_id/<db_id>`
+#[derive(
+    Clone, Debug, Copy, Default, Eq, PartialEq, PartialOrd, Ord, Deref, DerefMut, kvapi::StructKey,
+)]
+#[structkey(prefix = "__fd_database_by_id")]
 pub struct DatabaseId {
     pub db_id: u64,
 }
@@ -48,21 +53,7 @@ mod kvapi_key_impl {
     use crate::schema::DatabaseId;
     use crate::schema::DatabaseMeta;
 
-    impl kvapi::KeyCodec for DatabaseId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.db_id)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let db_id = parser.next_u64()?;
-            Ok(Self { db_id })
-        }
-    }
-
-    /// "__fd_database_by_id/<db_id>"
     impl kvapi::Key for DatabaseId {
-        const PREFIX: &'static str = "__fd_database_by_id";
-
         type ValueType = DatabaseMeta;
 
         fn parent(&self) -> Option<String> {
@@ -75,5 +66,17 @@ mod kvapi_key_impl {
         fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
             []
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_meta_client::kvapi::testing::assert_round_trip;
+
+    use super::DatabaseId;
+
+    #[test]
+    fn test_database_id_key_format() {
+        assert_round_trip(DatabaseId::new(3), "__fd_database_by_id/3");
     }
 }

@@ -196,7 +196,7 @@ pub type SequenceCounters = Vec<Arc<SequenceCounter>>;
 enum VisibilityCheckerState {
     Disabled,
     Pending,
-    Ready(GrantObjectVisibilityChecker),
+    Ready(Arc<GrantObjectVisibilityChecker>),
 }
 
 impl VisibilityCheckerState {
@@ -880,7 +880,7 @@ impl SequenceNextValFetcher {
         &self,
         ctx: &QueryContext,
         catalog: &Arc<dyn Catalog>,
-    ) -> Result<(GetSequenceReply, Option<GrantObjectVisibilityChecker>)> {
+    ) -> Result<(GetSequenceReply, Option<Arc<GrantObjectVisibilityChecker>>)> {
         let visibility_checker = if ctx
             .get_settings()
             .get_enable_experimental_sequence_privilege_check()?

@@ -3481,6 +3481,10 @@ pub struct SpillConfig {
     /// TODO: keep 0 to avoid deleting local result-set spill dir before HTTP pagination finishes.
     #[clap(long, value_name = "PERCENT", default_value = "0")]
     pub result_set_spilling_disk_quota_ratio: u64,
+
+    /// Number of worker tasks in the spill buffer pool.
+    #[clap(long, value_name = "VALUE", default_value = "2")]
+    pub spill_buffer_pool_workers: usize,
 }
 
 impl Default for SpillConfig {
@@ -3594,6 +3598,7 @@ mod config_converters {
             window_partition_spilling_disk_quota_ratio: spill
                 .window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
+            buffer_pool_workers: spill.spill_buffer_pool_workers,
         })
     }
 
@@ -3616,6 +3621,7 @@ mod config_converters {
                 window_partition_spilling_disk_quota_ratio: value
                     .window_partition_spilling_disk_quota_ratio,
                 result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,
+                spill_buffer_pool_workers: value.buffer_pool_workers,
             }
         }
     }

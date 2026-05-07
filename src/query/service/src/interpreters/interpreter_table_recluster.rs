@@ -19,7 +19,6 @@ use std::time::SystemTime;
 
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
-use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReclusterInfoSideCar;
 use databend_common_catalog::plan::ReclusterParts;
@@ -67,7 +66,6 @@ use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::interpreters::interpreter_insert_multi_table::scalar_expr_to_remote_expr;
 use crate::physical_plans::CommitSink;
 use crate::physical_plans::CommitType;
-use crate::physical_plans::CompactSource;
 use crate::physical_plans::Exchange;
 use crate::physical_plans::HilbertPartition;
 use crate::physical_plans::PhysicalPlan;
@@ -330,7 +328,7 @@ impl ReclusterTableInterpreter {
         let total_compressed = recluster_info.removed_statistics.compressed_byte_size as usize;
 
         // Determine rows per block based on data size and compression ratio
-        let rows_per_block =
+        let (rows_per_block, _) =
             block_thresholds.calc_rows_for_recluster(total_rows, total_bytes, total_compressed);
 
         // Calculate initial partition count based on data volume and block size
@@ -516,56 +514,33 @@ impl ReclusterTableInterpreter {
 
         let table_info = tbl.get_table_info().clone();
         let is_distributed = parts.is_distributed(self.ctx.clone());
-        let plan = match parts {
-            ReclusterParts::Recluster {
-                tasks,
-                remained_blocks,
+        let ReclusterParts {
+            tasks,
+            remained_blocks,
+            removed_segment_indexes,
+            removed_segment_summary,
+        } = parts;
+        let root = PhysicalPlan::new(Recluster {
+            tasks,
+            table_meta_timestamps,
+
+            table_info: table_info.clone(),
+            meta: PhysicalPlanMeta::new("Recluster"),
+        });
+
+        let plan = Self::add_commit_sink(
+            root,
+            is_distributed,
+            table_info,
+            snapshot,
+            false,
+            Some(ReclusterInfoSideCar {
+                merged_blocks: remained_blocks,
                 removed_segment_indexes,
-                removed_segment_summary,
-            } => {
-                let root = PhysicalPlan::new(Recluster {
-                    tasks,
-                    table_meta_timestamps,
-
-                    table_info: table_info.clone(),
-                    meta: PhysicalPlanMeta::new("Recluster"),
-                });
-
-                Self::add_commit_sink(
-                    root,
-                    is_distributed,
-                    table_info,
-                    snapshot,
-                    false,
-                    Some(ReclusterInfoSideCar {
-                        merged_blocks: remained_blocks,
-                        removed_segment_indexes,
-                        removed_statistics: removed_segment_summary,
-                    }),
-                    table_meta_timestamps,
-                )
-            }
-            ReclusterParts::Compact(parts) => {
-                let merge_meta = parts.partitions_type() == PartInfoType::LazyLevel;
-                let root = PhysicalPlan::new(CompactSource {
-                    parts,
-                    table_info: table_info.clone(),
-                    column_ids: snapshot.schema.to_leaf_column_id_set(),
-                    table_meta_timestamps,
-                    meta: PhysicalPlanMeta::new("CompactSource"),
-                });
-
-                Self::add_commit_sink(
-                    root,
-                    is_distributed,
-                    table_info,
-                    snapshot,
-                    merge_meta,
-                    None,
-                    table_meta_timestamps,
-                )
-            }
-        };
+                removed_statistics: removed_segment_summary,
+            }),
+            table_meta_timestamps,
+        );
         Ok(Some(plan))
     }
 
