@@ -730,7 +730,12 @@ impl CompactSegmentTestFixture {
                 for block in blocks {
                     let block = block?;
 
-                    let col_stats = gen_columns_statistics(&block, None, &schema)?;
+                    let col_stats = gen_columns_statistics(
+                        &block,
+                        None,
+                        &schema,
+                        &std::collections::BTreeMap::new(),
+                    )?;
 
                     let cluster_stats = if unclustered && num_blocks % 4 == 0 {
                         None

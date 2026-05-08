@@ -275,6 +275,7 @@ impl BlockBuilder {
             &data_block,
             Some(column_distinct_count),
             &self.source_schema,
+            &self.write_settings.col_stats_truncate_lens,
         )?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
