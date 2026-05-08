@@ -129,11 +129,10 @@ pub struct QueuedPermit {
 
 impl fmt::Debug for QueuedPermit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "QueuedPermit{{ permit_key: {}, permit_entry: {} }}",
-            self.permit_key, self.permit_entry
-        )
+        f.debug_struct("QueuedPermit")
+            .field("permit_key", &self.permit_key)
+            .field("permit_entry", &self.permit_entry)
+            .finish()
     }
 }
 
@@ -348,8 +347,8 @@ impl Acquirer {
     ///
     /// # Conflict Resolution
     /// When timestamp conflicts occur, the method automatically increments the timestamp
-    /// by 1 microsecond and retries. This means the final sequence number may differ
-    /// from the initially provided timestamp.
+    /// by 1 microsecond and retries after a bounded backoff. This means the final sequence
+    /// number may differ from the initially provided timestamp.
     ///
     /// # Ordering Guarantees
     /// Unlike generator-based sequencing, timestamp-based sequencing may allow more
@@ -362,6 +361,9 @@ impl Acquirer {
         let val_bytes = permit_entry
             .encode_to_vec()
             .map_err(|e| conn_io_error(e, "encode semaphore entry").context(&self.name))?;
+
+        let mut sleep_time = Duration::from_micros(100);
+        let max_sleep_time = Duration::from_millis(50);
 
         loop {
             // Use provided timestamp.
@@ -403,9 +405,12 @@ impl Acquirer {
                 return Ok(permit_key);
             } else {
                 info!(
-                    "acquire semaphore: enqueue failed(duplicated key): acquirer: {}, sem_seq: {}; retry at once",
-                    self.acquirer_id, sem_seq
+                    "acquire semaphore: enqueue failed(duplicated key): acquirer: {}, sem_seq: {}; sleep {:?} and retry",
+                    self.acquirer_id, sem_seq, sleep_time
                 );
+
+                tokio::time::sleep(sleep_time).await;
+                sleep_time = next_retry_sleep_time(sleep_time, max_sleep_time);
             }
         }
     }
@@ -544,4 +549,25 @@ impl Acquirer {
 /// Create a [`ConnectionClosed`] error from io error with context.
 fn conn_io_error(e: impl Into<io::Error>, ctx: impl ToString) -> ConnectionClosed {
     ConnectionClosed::new_io_error(e).context(ctx)
+}
+
+fn next_retry_sleep_time(sleep_time: Duration, max_sleep_time: Duration) -> Duration {
+    std::cmp::min(sleep_time * 3 / 2, max_sleep_time)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next_retry_sleep_time() {
+        assert_eq!(
+            next_retry_sleep_time(Duration::from_micros(100), Duration::from_millis(50)),
+            Duration::from_micros(150)
+        );
+        assert_eq!(
+            next_retry_sleep_time(Duration::from_millis(40), Duration::from_millis(50)),
+            Duration::from_millis(50)
+        );
+    }
 }
