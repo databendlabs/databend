@@ -142,7 +142,7 @@ impl SimpleTableFunc for FuseVacuum2Table {
             }
             _ => {
                 return Err(ErrorCode::NumberArgumentsNotMatch(
-                    "Expected 0 or 2 arguments".to_string(),
+                    "Expected 0, 2 or 3 arguments".to_string(),
                 ));
             }
         };
