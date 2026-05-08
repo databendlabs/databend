@@ -49,6 +49,7 @@ async fn test_fuse_alter_table_cluster_key() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: None,

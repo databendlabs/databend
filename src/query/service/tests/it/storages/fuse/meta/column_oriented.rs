@@ -88,7 +88,13 @@ async fn generate_column_oriented_segment()
         .finish();
     let loc_generator = TableMetaLocationGenerator::new("/".to_owned());
     for block in data_blocks {
-        let col_stats = gen_columns_statistics(&block, None, &table_schema).unwrap();
+        let col_stats = gen_columns_statistics(
+            &block,
+            None,
+            &table_schema,
+            &std::collections::BTreeMap::new(),
+        )
+        .unwrap();
         let block_writer = BlockWriter::new(
             &operator,
             &loc_generator,

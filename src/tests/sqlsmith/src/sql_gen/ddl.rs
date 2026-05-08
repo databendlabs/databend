@@ -251,6 +251,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
             expr: None,
             check: None,
             comment: None,
+            stats_truncate_len: None,
         }
     }
 
@@ -281,6 +282,7 @@ impl<R: Rng> SqlGenerator<'_, R> {
                 expr: default_expr,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             };
             column_defs.push(column_def);
         }
