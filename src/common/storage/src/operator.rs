@@ -724,6 +724,10 @@ impl IcebergFileIO {
             opendal_config.insert("bucket".to_string(), bucket.to_string());
         }
 
+        let has_s3_credentials = self.props.contains_key("s3.access-key-id")
+            || self.props.contains_key("s3.secret-access-key")
+            || self.props.contains_key("s3.session-token");
+
         for (key, value) in &self.props {
             let opendal_key = match key.as_str() {
                 "s3.endpoint" => Some("endpoint"),
@@ -732,21 +736,21 @@ impl IcebergFileIO {
                 "s3.region" | "client.region" => Some("region"),
                 "s3.session-token" => Some("session_token"),
                 "aws_access_key_id" => {
-                    if self.props.contains_key("s3.access-key-id") {
+                    if has_s3_credentials {
                         None
                     } else {
                         Some("access_key_id")
                     }
                 }
                 "aws_secret_access_key" => {
-                    if self.props.contains_key("s3.secret-access-key") {
+                    if has_s3_credentials {
                         None
                     } else {
                         Some("secret_access_key")
                     }
                 }
                 "aws_session_token" | "aws_token" | "token" => {
-                    if self.props.contains_key("s3.session-token") {
+                    if has_s3_credentials {
                         None
                     } else {
                         Some("session_token")
@@ -834,7 +838,7 @@ mod tests {
     use super::IcebergFileIO;
 
     #[test]
-    fn iceberg_file_io_prefers_s3_keys_over_aws_aliases() {
+    fn iceberg_file_io_does_not_mix_catalog_token_with_explicit_s3_credentials() {
         let file_io = IcebergFileIO {
             scheme: "s3".to_string(),
             props: HashMap::from([
@@ -844,15 +848,13 @@ mod tests {
                     "glue_secret".to_string(),
                 ),
                 ("aws_session_token".to_string(), "glue_token".to_string()),
-                ("region_name".to_string(), "us-west-2".to_string()),
+                ("region_name".to_string(), "us-east-1".to_string()),
                 (
                     "s3.endpoint".to_string(),
                     "http://localhost:9000".to_string(),
                 ),
                 ("s3.access-key-id".to_string(), "s3_access".to_string()),
                 ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
-                ("s3.session-token".to_string(), "s3_token".to_string()),
-                ("s3.region".to_string(), "us-east-1".to_string()),
             ]),
         };
 
