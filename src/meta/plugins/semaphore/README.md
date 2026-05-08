@@ -53,7 +53,7 @@ let acquired_guard = Semaphore::new_acquired(
         Duration::from_secs(3)      // lease time
 ).await?;
 
-acquired_guard.await;
+acquired_guard.await?;
 // Released
 ```
 
