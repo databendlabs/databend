@@ -187,6 +187,18 @@ impl SelectivityEstimator {
                     ));
                 }
 
+                if !matches!(
+                    data_type.remove_nullable(),
+                    DataType::Boolean
+                        | DataType::String
+                        | DataType::Number(_)
+                        | DataType::Decimal(_)
+                        | DataType::Date
+                        | DataType::Timestamp
+                ) {
+                    return Ok((binding, Domain::full(&data_type)));
+                }
+
                 match Domain::from_datum(
                     &data_type,
                     column_stat.min.clone(),
