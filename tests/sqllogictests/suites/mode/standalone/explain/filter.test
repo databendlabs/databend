@@ -74,7 +74,7 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 2 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t1.d (#0) < CAST(t1.a (#1) AS Timestamp NULL))], limit: NONE]
-└── estimated rows: 40.00
+└── estimated rows: 0.00
 
 query T
 explain select * from  t2 where d < a;
@@ -89,7 +89,7 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 2 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [t2.d (#0) < CAST(t2.a (#1) AS Timestamp)], limit: NONE]
-└── estimated rows: 40.00
+└── estimated rows: 0.00
 
 query T
 explain select number from numbers(6) where number = 1 or number = 5 or number = 3;

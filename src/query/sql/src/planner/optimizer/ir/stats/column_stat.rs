@@ -15,11 +15,13 @@
 use std::collections::HashMap;
 
 use databend_common_expression::Domain;
-use databend_common_expression::function_stat::ArgStat;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::BorrowedDistribution;
+use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
-pub use databend_common_statistics::Ndv;
 
 use crate::Symbol;
 
@@ -35,10 +37,10 @@ pub struct ColumnStat {
     pub max: Datum,
 
     /// Number of distinct values
-    pub ndv: Ndv,
+    pub ndv: StatEstimate,
 
     /// Count of null values
-    pub null_count: u64,
+    pub null_count: StatCount,
 
     /// Histogram of column
     pub histogram: Option<Histogram>,
@@ -50,13 +52,17 @@ impl ColumnStat {
             data_type,
             self.min.clone(),
             self.max.clone(),
-            self.null_count != 0,
+            self.null_count.upper() > 0.0,
         )?;
         Ok(ArgStat {
             domain,
             ndv: self.ndv,
             null_count: self.null_count,
-            histogram: self.histogram.as_ref(),
+            distribution: self
+                .histogram
+                .as_ref()
+                .map(BorrowedDistribution::Histogram)
+                .unwrap_or(BorrowedDistribution::Unknown),
         })
     }
 
@@ -64,8 +70,8 @@ impl ColumnStat {
         Self {
             min: datum.clone(),
             max: datum,
-            ndv: Ndv::Stat(1.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(1.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }
     }

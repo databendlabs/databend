@@ -256,8 +256,8 @@ where
                     "{{ min: {}, max: {}, ndv: {}, null count: {} }}",
                     hist.min,
                     hist.max,
-                    hist.ndv.value(),
-                    hist.null_count
+                    hist.ndv.expected,
+                    hist.null_count.expected()
                 );
                 FormatTreeNode::new(format!("{}: {}", column, hist))
             })

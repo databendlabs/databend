@@ -26,19 +26,23 @@ use super::FunctionDomain;
 use super::FunctionEval;
 use super::FunctionRegistry;
 use super::Scalar;
-use super::function_stat::ArgStat;
 use super::function_stat::DeriveStat;
-use super::function_stat::Ndv;
-use super::function_stat::ReturnStat;
-use super::function_stat::StatBinaryArg;
-use super::function_stat::StatUnaryArg;
+use super::stat_distribution::ArgStat;
+use super::stat_distribution::BorrowedDistribution;
+use super::stat_distribution::OwnedDistribution;
+use super::stat_distribution::ReturnStat;
+use super::stat_distribution::StatArgs;
+use super::stat_distribution::StatBinaryArg;
+use super::stat_distribution::StatCardinality;
+use super::stat_distribution::StatCount;
+use super::stat_distribution::StatEstimate;
+use super::stat_distribution::StatUnaryArg;
 use crate::Constant;
-use crate::function_stat::StatArgs;
 
 pub struct StatEvaluator<'a> {
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
-    cardinality: f64,
+    cardinality: StatCardinality,
 }
 
 impl<'a> StatEvaluator<'a> {
@@ -46,7 +50,7 @@ impl<'a> StatEvaluator<'a> {
         expr: &Expr<I>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
-        cardinality: f64,
+        cardinality: StatCardinality,
         input_stats: &'s HashMap<I, ArgStat<'s>>,
     ) -> Result<Option<CowStat<'s>>> {
         let evaluator = StatEvaluator {
@@ -62,7 +66,7 @@ impl<'a> StatEvaluator<'a> {
         expr: &Expr<I>,
         input_stats: &'s HashMap<I, ArgStat<'_>>,
     ) -> Result<Option<CowStat<'s>>> {
-        if self.cardinality == 0.0 {
+        if self.cardinality.is_zero() {
             return Ok(None);
         }
         match expr {
@@ -71,15 +75,15 @@ impl<'a> StatEvaluator<'a> {
             }) => Ok(Some({
                 let domain = scalar.as_ref().domain(data_type);
                 let (ndv, null_count) = if scalar.is_null() {
-                    (Ndv::Stat(0.0), self.cardinality.ceil() as u64)
+                    (StatEstimate::exact(0.0), self.cardinality.as_null_count())
                 } else {
-                    (Ndv::Stat(1.0), 0)
+                    (StatEstimate::exact(1.0), StatCount::exact(0))
                 };
                 CowStat::Owned(ReturnStat {
                     domain,
                     ndv,
                     null_count,
-                    histogram: None,
+                    distribution: OwnedDistribution::Unknown,
                 })
             })),
             Expr::ColumnRef(col) => Ok(input_stats
@@ -119,6 +123,21 @@ impl<'a> StatEvaluator<'a> {
         });
 
         match res {
+            Ok(None) => Ok(None),
+            Ok(Some(res)) => {
+                let return_type = call.return_type.remove_generics(&call.generics);
+                if let Err(msg) = res.check_consistency_with_type(Some(&return_type)) {
+                    if cfg!(debug_assertions) {
+                        return Err(ErrorCode::Internal(format!(
+                            "Failed to derive statistics for function {:?}: {msg}",
+                            call.function.signature.name
+                        )));
+                    }
+                    log::warn!(function = call.function.signature.name, msg; "Derived invalid function statistics");
+                    return Ok(None);
+                }
+                Ok(Some(res))
+            }
             Err(msg) => {
                 if cfg!(debug_assertions) {
                     Err(ErrorCode::Internal(format!(
@@ -130,7 +149,6 @@ impl<'a> StatEvaluator<'a> {
                     Ok(None)
                 }
             }
-            Ok(res) => Ok(res),
         }
     }
 }
@@ -147,23 +165,23 @@ impl<'a> CowStat<'a> {
                 ref domain,
                 ndv,
                 null_count,
-                histogram,
+                distribution,
             }) => ArgStat {
                 domain: domain.clone(),
                 ndv,
                 null_count,
-                histogram,
+                distribution,
             },
             CowStat::Owned(ReturnStat {
                 ref domain,
                 ndv,
                 null_count,
-                ref histogram,
+                ref distribution,
             }) => ArgStat {
                 domain: domain.clone(),
                 ndv,
                 null_count,
-                histogram: histogram.as_ref(),
+                distribution: distribution.as_borrowed_distribution(),
             },
         }
     }
@@ -174,14 +192,48 @@ impl<'a> CowStat<'a> {
                 domain,
                 ndv,
                 null_count,
-                histogram,
+                distribution,
             }) => ReturnStat {
                 domain,
                 ndv,
                 null_count,
-                histogram: histogram.cloned(),
+                distribution: match distribution {
+                    BorrowedDistribution::Unknown => OwnedDistribution::Unknown,
+                    BorrowedDistribution::Histogram(histogram) => {
+                        OwnedDistribution::Histogram(histogram.clone())
+                    }
+                    BorrowedDistribution::Boolean(distribution) => {
+                        OwnedDistribution::Boolean(distribution)
+                    }
+                },
             },
             CowStat::Owned(owned) => owned,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::types::DataType;
+
+    #[test]
+    fn test_constant_null_uses_exact_input_cardinality() {
+        let expr = Expr::<usize>::constant(Scalar::Null, Some(DataType::Null));
+        let registry = FunctionRegistry::empty();
+        let stat = StatEvaluator::run(
+            &expr,
+            &FunctionContext::default(),
+            &registry,
+            StatCardinality::exact(7),
+            &HashMap::new(),
+        )
+        .unwrap()
+        .unwrap()
+        .into_owned();
+
+        assert_eq!(stat.null_count, StatCount::exact(7));
     }
 }
