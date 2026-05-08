@@ -58,8 +58,10 @@ pub struct Permit {
 
 impl std::fmt::Debug for Permit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let stat = self.stat.to_string();
-        write!(f, "{}-Permit: {}", self.acquirer_name, stat)
+        f.debug_struct("Permit")
+            .field("acquirer_name", &self.acquirer_name)
+            .field("stat", &self.stat.to_string())
+            .finish()
     }
 }
 

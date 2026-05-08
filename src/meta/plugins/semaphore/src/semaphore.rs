@@ -159,12 +159,8 @@ impl Semaphore {
         capacity: u64,
         permit_ttl: Duration,
     ) -> Self {
-        let mut prefix = prefix.to_string();
-
-        // strip the trailing '/'
-        if prefix.ends_with('/') {
-            prefix.pop();
-        }
+        let prefix = prefix.to_string();
+        let prefix = prefix.trim_end_matches('/').to_string();
 
         let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
         let (tx, rx) = mpsc::channel(64);
@@ -272,7 +268,7 @@ impl Semaphore {
         let name = format!("{}-Acquirer(id={})", self, id);
         Acquirer {
             prefix: self.prefix.clone(),
-            acquirer_id: id.to_string(),
+            acquirer_id: id,
             lease,
             seq_policy: self.seq_policy(),
             meta_client: self.meta_client.clone(),

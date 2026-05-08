@@ -172,5 +172,3 @@ pub type PermitSeq = u64;
 pub use semaphore::Semaphore;
 pub use storage::PermitEntry;
 pub use storage::PermitKey;
-
-// TODO test: fake several events sequence, assume different initial_flush set, and check the final state to be consistent.

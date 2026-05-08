@@ -129,11 +129,10 @@ pub struct QueuedPermit {
 
 impl fmt::Debug for QueuedPermit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "QueuedPermit{{ permit_key: {}, permit_entry: {} }}",
-            self.permit_key, self.permit_entry
-        )
+        f.debug_struct("QueuedPermit")
+            .field("permit_key", &self.permit_key)
+            .field("permit_entry", &self.permit_entry)
+            .finish()
     }
 }
 
