@@ -49,3 +49,27 @@ def test_register_arrow_table_uses_register_parquet(tmp_path):
     register_parquet.assert_called_once()
     _, parquet_path = register_parquet.call_args.args
     assert Path(parquet_path).suffix == ".parquet"
+
+
+def test_register_csv_local_path_allows_select_star(tmp_path):
+    csv_path = tmp_path / "foods.csv"
+    csv_path.write_text("1,apple\n2,bread\n")
+    conn = databend.SessionContext(data_path=str(tmp_path / "embedded"))
+
+    conn.register_csv("foods", str(csv_path))
+
+    rows = conn.table("foods").fetchall()
+    assert len(rows) == 2
+    assert len(rows[0]) == 2
+
+
+def test_register_text_local_path_allows_select_star(tmp_path):
+    text_path = tmp_path / "foods.tsv"
+    text_path.write_text("1\tapple\n2\tbread\n")
+    conn = databend.SessionContext(data_path=str(tmp_path / "embedded"))
+
+    conn.register_text("foods_text", str(text_path))
+
+    rows = conn.table("foods_text").fetchall()
+    assert len(rows) == 2
+    assert len(rows[0]) == 2

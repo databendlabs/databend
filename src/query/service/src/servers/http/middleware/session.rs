@@ -206,12 +206,17 @@ fn get_credential(
         return Err(ErrorCode::AuthenticateFailure(msg));
     }
     let client_ip = get_client_ip(req);
+    let is_keypair = req
+        .headers()
+        .get(databend_common_base::headers::HEADER_AUTH_METHOD)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.eq_ignore_ascii_case("keypair"));
     if std_auth_headers.is_empty() {
         Err(ErrorCode::AuthenticateFailure(
             "Authentication error: no authorization header provided",
         ))
     } else {
-        get_credential_from_header(&std_auth_headers, client_ip, endpoint_kind)
+        get_credential_from_header(&std_auth_headers, client_ip, endpoint_kind, is_keypair)
     }
 }
 
@@ -246,6 +251,7 @@ fn get_credential_from_header(
     std_auth_headers: &[&HeaderValue],
     client_ip: Option<String>,
     endpoint_kind: EndpointKind,
+    is_keypair: bool,
 ) -> Result<Credential> {
     let value = &std_auth_headers[0];
     if value.as_bytes().starts_with(b"Basic ") {
@@ -278,6 +284,8 @@ fn get_credential_from_header(
                         }
                     }
                     Ok(Credential::DatabendToken { token })
+                } else if is_keypair {
+                    Ok(Credential::KeyPair { token, client_ip })
                 } else {
                     Ok(Credential::Jwt { token, client_ip })
                 }

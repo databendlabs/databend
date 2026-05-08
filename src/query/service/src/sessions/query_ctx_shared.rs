@@ -59,6 +59,7 @@ use databend_common_settings::Settings;
 use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
+use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
@@ -178,6 +179,10 @@ pub struct QueryContextShared {
     // performed inside child contexts.
     pub(super) recursive_cte_temp_tables: Arc<RwLock<Vec<(String, String, String)>>>,
     pub(super) logical_recursive_cte_runtime_ids: Arc<RwLock<HashMap<u32, String>>>,
+
+    /// Cached full visibility checker (ignore_ownership=false, Object::All).
+    /// Shared across all QueryContext instances within this query.
+    pub(super) visibility_checker_cache: tokio::sync::OnceCell<Arc<GrantObjectVisibilityChecker>>,
 }
 
 impl QueryContextShared {
@@ -248,6 +253,7 @@ impl QueryContextShared {
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
+            visibility_checker_cache: Default::default(),
         }))
     }
 

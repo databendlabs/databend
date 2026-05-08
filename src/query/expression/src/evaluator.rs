@@ -22,6 +22,8 @@ use databend_common_column::bitmap::MutableBitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use itertools::Itertools;
+use jsonb::RawJsonb;
+use jsonb::Value as JsonbValue;
 
 use crate::BlockEntry;
 use crate::FunctionContext;
@@ -47,7 +49,6 @@ use crate::types::ReturnType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
-use crate::types::VectorColumn;
 use crate::types::VectorDataType;
 use crate::types::VectorScalar;
 use crate::types::any::AnyType;
@@ -967,6 +968,74 @@ impl<'a> Evaluator<'a> {
                     other => unreachable!("source: {}", other),
                 }
             }
+            (DataType::String, DataType::Vector(inner_dest_ty)) => {
+                if matches!(inner_dest_ty, VectorDataType::Int8(_)) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
+                    ))
+                    .set_span(span));
+                }
+
+                let dimension = inner_dest_ty.dimension() as usize;
+                match value {
+                    Value::Scalar(Scalar::String(val)) => {
+                        if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
+                            Ok(Value::Scalar(Scalar::Vector(
+                                Self::cast_string_to_vector_scalar(span, &val, dimension)?,
+                            )))
+                        } else {
+                            Ok(Value::Scalar(Scalar::default_value(dest_type)))
+                        }
+                    }
+                    Value::Column(Column::String(col)) => {
+                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                        for (idx, val) in col.iter().enumerate() {
+                            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
+                                builder.push_default();
+                                continue;
+                            }
+                            let vector = Self::cast_string_to_vector_scalar(span, val, dimension)?;
+                            builder.push(ScalarRef::Vector(vector.as_ref()));
+                        }
+                        Ok(Value::Column(builder.build()))
+                    }
+                    other => unreachable!("source: {}", other),
+                }
+            }
+            (DataType::Variant, DataType::Vector(inner_dest_ty)) => {
+                if matches!(inner_dest_ty, VectorDataType::Int8(_)) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to vector type `{dest_type}`"
+                    ))
+                    .set_span(span));
+                }
+
+                let dimension = inner_dest_ty.dimension() as usize;
+                match value {
+                    Value::Scalar(Scalar::Variant(val)) => {
+                        if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
+                            Ok(Value::Scalar(Scalar::Vector(
+                                Self::cast_variant_to_vector_scalar(span, &val, dimension)?,
+                            )))
+                        } else {
+                            Ok(Value::Scalar(Scalar::default_value(dest_type)))
+                        }
+                    }
+                    Value::Column(Column::Variant(col)) => {
+                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                        for (idx, val) in col.iter().enumerate() {
+                            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
+                                builder.push_default();
+                                continue;
+                            }
+                            let vector = Self::cast_variant_to_vector_scalar(span, val, dimension)?;
+                            builder.push(ScalarRef::Vector(vector.as_ref()));
+                        }
+                        Ok(Value::Column(builder.build()))
+                    }
+                    other => unreachable!("source: {}", other),
+                }
+            }
             (DataType::Array(inner_src_ty), DataType::Vector(inner_dest_ty)) => {
                 if !matches!(
                     inner_src_ty.remove_nullable(),
@@ -981,76 +1050,29 @@ impl<'a> Evaluator<'a> {
                 let dimension = inner_dest_ty.dimension() as usize;
                 match value {
                     Value::Scalar(Scalar::Array(col)) => {
-                        if col.len() != dimension {
-                            return Err(ErrorCode::BadArguments(
-                                "Array value cast to a vector has incorrect dimension".to_string(),
-                            )
-                            .set_span(span));
+                        if validity.as_ref().map(|v| v.get_bit(0)).unwrap_or(true) {
+                            Ok(Value::Scalar(Scalar::Vector(
+                                Self::cast_array_to_vector_scalar(span, col, dimension)?,
+                            )))
+                        } else {
+                            Ok(Value::Scalar(Scalar::default_value(dest_type)))
                         }
-                        let mut vals = Vec::with_capacity(dimension);
-                        let col = col.remove_nullable();
-                        match col {
-                            Column::Number(num_col) => {
-                                for i in 0..dimension {
-                                    let num = unsafe { num_col.index_unchecked(i) };
-                                    vals.push(num.to_f32());
-                                }
-                            }
-                            Column::Decimal(dec_col) => {
-                                for i in 0..dimension {
-                                    let dec = unsafe { dec_col.index_unchecked(i) };
-                                    vals.push(F32::from(dec.to_float32()));
-                                }
-                            }
-                            _ => {
-                                return Err(ErrorCode::BadArguments(
-                                    "Array value cast to a vector has invalid value".to_string(),
-                                )
-                                .set_span(span));
-                            }
-                        }
-                        Ok(Value::Scalar(Scalar::Vector(VectorScalar::Float32(vals))))
                     }
                     Value::Column(Column::Array(array_col)) => {
-                        let mut vals = Vec::with_capacity(dimension * array_col.len());
-                        for col in array_col.iter() {
-                            if col.len() != dimension {
-                                return Err(ErrorCode::BadArguments(
-                                    "Array value cast to a vector has incorrect dimension"
-                                        .to_string(),
-                                )
-                                .set_span(span));
+                        let mut builder = ColumnBuilder::with_capacity(dest_type, array_col.len());
+                        for (idx, col) in array_col.iter().enumerate() {
+                            if validity.as_ref().map(|v| !v.get_bit(idx)).unwrap_or(false) {
+                                builder.push_default();
+                                continue;
                             }
-                            let col = col.remove_nullable();
-                            match col {
-                                Column::Number(num_col) => {
-                                    for i in 0..dimension {
-                                        let num = unsafe { num_col.index_unchecked(i) };
-                                        vals.push(num.to_f32());
-                                    }
-                                }
-                                Column::Decimal(dec_col) => {
-                                    for i in 0..dimension {
-                                        let dec = unsafe { dec_col.index_unchecked(i) };
-                                        vals.push(F32::from(dec.to_float32()));
-                                    }
-                                }
-                                _ => {
-                                    return Err(ErrorCode::BadArguments(
-                                        "Array value cast to a vector has invalid value"
-                                            .to_string(),
-                                    )
-                                    .set_span(span));
-                                }
-                            }
+                            let vector = Self::cast_array_to_vector_scalar(span, col, dimension)?;
+                            builder.push(ScalarRef::Vector(vector.as_ref()));
                         }
-                        let vector_col = VectorColumn::Float32((vals.into(), dimension));
-                        Ok(Value::Column(Column::Vector(vector_col)))
+                        Ok(Value::Column(builder.build()))
                     }
                     other => unreachable!("source: {}", other),
                 }
             }
-
             _ => Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
@@ -1258,12 +1280,235 @@ impl<'a> Evaluator<'a> {
                     other => unreachable!("source: {}", other),
                 }
             }
+            (DataType::String, DataType::Vector(inner_vector_ty)) => {
+                if matches!(inner_vector_ty, VectorDataType::Int8(_)) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                    ))
+                    .set_span(span));
+                }
+
+                let dimension = inner_vector_ty.dimension() as usize;
+                match value {
+                    Value::Scalar(Scalar::String(val)) => Ok(
+                        match Self::cast_string_to_vector_scalar(span, &val, dimension) {
+                            Ok(vector) => Value::Scalar(Scalar::Vector(vector)),
+                            Err(_) => Value::Scalar(Scalar::Null),
+                        },
+                    ),
+                    Value::Column(Column::String(col)) => {
+                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                        for val in col.iter() {
+                            match Self::cast_string_to_vector_scalar(span, val, dimension) {
+                                Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
+                                Err(_) => builder.push(ScalarRef::Null),
+                            }
+                        }
+                        Ok(Value::Column(builder.build()))
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            (DataType::Variant, DataType::Vector(inner_vector_ty)) => {
+                if matches!(inner_vector_ty, VectorDataType::Int8(_)) {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                    ))
+                    .set_span(span));
+                }
+
+                let dimension = inner_vector_ty.dimension() as usize;
+                match value {
+                    Value::Scalar(Scalar::Variant(val)) => Ok(
+                        match Self::cast_variant_to_vector_scalar(span, &val, dimension) {
+                            Ok(vector) => Value::Scalar(Scalar::Vector(vector)),
+                            Err(_) => Value::Scalar(Scalar::Null),
+                        },
+                    ),
+                    Value::Column(Column::Variant(col)) => {
+                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                        for val in col.iter() {
+                            match Self::cast_variant_to_vector_scalar(span, val, dimension) {
+                                Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
+                                Err(_) => builder.push(ScalarRef::Null),
+                            }
+                        }
+                        Ok(Value::Column(builder.build()))
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            (DataType::Array(inner_src_ty), DataType::Vector(inner_vector_ty)) => {
+                if !matches!(
+                    inner_src_ty.remove_nullable(),
+                    DataType::Number(_) | DataType::Decimal(_)
+                ) || matches!(inner_vector_ty, VectorDataType::Int8(_))
+                {
+                    return Err(ErrorCode::BadArguments(format!(
+                        "unable to cast type `{src_type}` to type `{dest_type}`"
+                    ))
+                    .set_span(span));
+                }
+
+                let dimension = inner_vector_ty.dimension() as usize;
+                match value {
+                    Value::Scalar(Scalar::Array(col)) => Ok(
+                        match Self::cast_array_to_vector_scalar(span, col, dimension) {
+                            Ok(vector) => Value::Scalar(Scalar::Vector(vector)),
+                            Err(_) => Value::Scalar(Scalar::Null),
+                        },
+                    ),
+                    Value::Column(Column::Array(col)) => {
+                        let mut builder = ColumnBuilder::with_capacity(dest_type, col.len());
+                        for value in col.iter() {
+                            match Self::cast_array_to_vector_scalar(span, value, dimension) {
+                                Ok(vector) => builder.push(ScalarRef::Vector(vector.as_ref())),
+                                Err(_) => builder.push(ScalarRef::Null),
+                            }
+                        }
+                        Ok(Value::Column(builder.build()))
+                    }
+                    _ => unreachable!(),
+                }
+            }
 
             _ => Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
             .set_span(span)),
         }
+    }
+
+    fn cast_array_to_vector_scalar(
+        span: Span,
+        col: Column,
+        dimension: usize,
+    ) -> Result<VectorScalar> {
+        if col.len() != dimension {
+            return Err(ErrorCode::BadArguments(format!(
+                "Array value cast to vector expected {} dimensions, not {}",
+                dimension,
+                col.len()
+            ))
+            .set_span(span));
+        }
+
+        let col = match col {
+            Column::Nullable(inner) => {
+                if inner.validity.null_count() > 0 {
+                    return Err(ErrorCode::BadArguments(
+                        "Array value cast to a vector has invalid value".to_string(),
+                    )
+                    .set_span(span));
+                }
+                inner.column
+            }
+            other => other,
+        };
+
+        let mut vals = Vec::with_capacity(dimension);
+        match col {
+            Column::Number(num_col) => {
+                for i in 0..dimension {
+                    let num = unsafe { num_col.index_unchecked(i) };
+                    vals.push(num.to_f32());
+                }
+            }
+            Column::Decimal(dec_col) => {
+                for i in 0..dimension {
+                    let dec = unsafe { dec_col.index_unchecked(i) };
+                    vals.push(F32::from(dec.to_float32()));
+                }
+            }
+            _ => {
+                return Err(ErrorCode::BadArguments(
+                    "Array value cast to a vector has invalid value".to_string(),
+                )
+                .set_span(span));
+            }
+        }
+
+        Ok(VectorScalar::Float32(vals))
+    }
+
+    fn cast_string_to_vector_scalar(
+        span: Span,
+        val: &str,
+        dimension: usize,
+    ) -> Result<VectorScalar> {
+        let input = val.trim();
+        let Some(input) = input.strip_prefix('[') else {
+            return Err(
+                ErrorCode::BadArguments("Vector contents must start with `[`".to_string())
+                    .set_span(span),
+            );
+        };
+        let Some(input) = input.strip_suffix(']') else {
+            return Err(
+                ErrorCode::BadArguments("Vector contents must end with `]`".to_string())
+                    .set_span(span),
+            );
+        };
+
+        let mut vals = Vec::with_capacity(dimension);
+        for item in input.split(',') {
+            let Ok(num) = item.trim().parse::<f32>() else {
+                return Err(ErrorCode::BadArguments(
+                    "String value cast to a vector has invalid value".to_string(),
+                )
+                .set_span(span));
+            };
+            vals.push(F32::from(num));
+        }
+
+        if vals.len() != dimension {
+            return Err(ErrorCode::BadArguments(format!(
+                "String value cast to vector expected {} dimensions, not {}",
+                dimension,
+                vals.len()
+            ))
+            .set_span(span));
+        }
+        Ok(VectorScalar::Float32(vals))
+    }
+
+    fn cast_variant_to_vector_scalar(
+        span: Span,
+        val: &[u8],
+        dimension: usize,
+    ) -> Result<VectorScalar> {
+        let vals = match jsonb::from_slice(val) {
+            Ok(JsonbValue::Array(vals)) => vals,
+            _ => {
+                return Err(ErrorCode::BadArguments(
+                    "Variant value cast to vector only support Array".to_string(),
+                )
+                .set_span(span));
+            }
+        };
+        if vals.len() != dimension {
+            return Err(ErrorCode::BadArguments(format!(
+                "Variant value cast to vector expected {} dimensions, not {}",
+                dimension,
+                vals.len()
+            ))
+            .set_span(span));
+        }
+        let mut vector = Vec::with_capacity(dimension);
+        for val in vals {
+            let num = match val {
+                JsonbValue::Number(num) => num.as_f64(),
+                _ => {
+                    return Err(ErrorCode::BadArguments(
+                        "Variant value cast to a vector has invalid value".to_string(),
+                    )
+                    .set_span(span));
+                }
+            };
+            vector.push(F32::from(num as f32));
+        }
+
+        Ok(VectorScalar::Float32(vector))
     }
 
     fn run_simple_cast(

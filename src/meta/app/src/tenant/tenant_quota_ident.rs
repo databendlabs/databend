@@ -50,7 +50,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TenantQuotaIdent;
     use crate::tenant::Tenant;
@@ -59,10 +60,6 @@ mod tests {
     fn test_tenant_quota_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = TenantQuotaIdent::new(tenant);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_quotas/test");
-
-        assert_eq!(ident, TenantQuotaIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_quotas/test");
     }
 }

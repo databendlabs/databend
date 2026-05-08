@@ -37,7 +37,7 @@ impl TagNameIdentRaw {
 
 mod kvapi_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::StructKey;
 
     use super::super::id_ident::TagId;
     use crate::key_with_tenant::KeyWithTenant;
@@ -63,7 +63,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::TagNameIdent;
     use crate::tenant::Tenant;
@@ -72,9 +73,6 @@ mod tests {
     fn test_tag_name_ident() {
         let tenant = Tenant::new_literal("tenant_a");
         let ident = TagNameIdent::new(tenant, "pii_flag");
-
-        let key = ident.to_string_key();
-        assert_eq!("__fd_tag/tenant_a/pii_flag", key);
-        assert_eq!(ident, TagNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_tag/tenant_a/pii_flag");
     }
 }

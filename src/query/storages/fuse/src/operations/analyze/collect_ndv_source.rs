@@ -138,8 +138,7 @@ impl AnalyzeCollectNDVSource {
             .distinct_column_fields(table_schema.clone(), RangeIndex::supported_table_type)?;
         let field_indices = ndv_columns_map.keys().cloned().collect();
         let projection = Projection::Columns(field_indices);
-        let block_reader =
-            table.create_block_reader(ctx.clone(), projection, false, false, false)?;
+        let block_reader = table.create_block_reader(ctx.clone(), projection, false)?;
 
         // Rebuild `ndv_columns_map` so that keys correspond to the column order in the projection.
         //

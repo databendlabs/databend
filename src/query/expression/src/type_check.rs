@@ -732,7 +732,9 @@ fn can_cast_to(src_ty: &DataType, dest_ty: &DataType) -> bool {
         | (DataType::EmptyArray, DataType::Array(_))
         | (DataType::EmptyMap, DataType::Map(_))
         | (DataType::Variant, DataType::Array(_))
-        | (DataType::Variant, DataType::Map(_)) => true,
+        | (DataType::Variant, DataType::Map(_))
+        | (DataType::Variant, DataType::Vector(_))
+        | (DataType::String, DataType::Vector(_)) => true,
 
         (DataType::Tuple(fields_src_ty), DataType::Tuple(fields_dest_ty))
             if fields_src_ty.len() == fields_dest_ty.len() =>

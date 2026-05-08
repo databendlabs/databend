@@ -35,7 +35,7 @@ impl DatabaseNameIdentRaw {
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
+    use databend_meta_client::kvapi::StructKey;
 
     use crate::primitive::Id;
     use crate::schema::DatabaseId;
@@ -64,7 +64,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DatabaseNameIdent;
     use crate::tenant::Tenant;
@@ -73,10 +74,6 @@ mod tests {
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = DatabaseNameIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_database/test/test1");
-
-        assert_eq!(ident, DatabaseNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_database/test/test1");
     }
 }

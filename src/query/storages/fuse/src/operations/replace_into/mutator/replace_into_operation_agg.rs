@@ -157,8 +157,6 @@ impl ReplaceIntoOperationAggregator {
                 table_schema.clone(),
                 projection,
                 false,
-                update_stream_columns,
-                false,
             )
         }?;
 
@@ -172,8 +170,6 @@ impl ReplaceIntoOperationAggregator {
                     data_accessor.clone(),
                     table_schema.clone(),
                     projection,
-                    false,
-                    update_stream_columns,
                     false,
                 )?;
                 Some(reader)

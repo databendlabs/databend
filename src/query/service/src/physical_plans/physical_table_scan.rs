@@ -67,6 +67,7 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::need_reserve_block_info;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
@@ -508,6 +509,8 @@ impl PhysicalPlanBuilder {
         }
         source.table_index = scan.table_index;
         source.scan_id = scan.scan_id;
+        source.block_meta_options.reserve_block_index =
+            need_reserve_block_info(self.ctx.clone(), scan.table_index).0;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();

@@ -49,6 +49,15 @@ export function finish(state) {
 $$
 "#;
 
+const TEST_SCRIPT_UDF_SQL: &str = r#"
+CREATE OR REPLACE FUNCTION add_one (INT) RETURNS INT
+LANGUAGE javascript HANDLER = 'add_one' AS $$
+export function add_one(v) {
+    return v + 1;
+}
+$$
+"#;
+
 async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
     let outcome = match ctx.bind_sql(case.sql).await {
@@ -223,6 +232,46 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
     ];
 
     run_binder_cases("binder_clauses.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_mutation_udf() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "update_where_accepts_script_udf",
+            description: "A mutation filter should allow script UDFs and rewrite them before the filter is evaluated.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "UPDATE t SET b = a WHERE add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "delete_where_accepts_script_udf",
+            description: "DELETE should allow script UDFs in the mutation filter.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "DELETE FROM t WHERE add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "merge_matched_condition_accepts_script_udf",
+            description: "MERGE matched conditions should allow script UDFs.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE TABLE s(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+            ],
+            sql: "MERGE INTO t USING s ON t.a = s.a WHEN MATCHED AND add_one(s.b) > 1 THEN UPDATE SET b = add_one(s.b)",
+        },
+        SqlTestCase {
+            name: "merge_unmatched_accepts_script_udf",
+            description: "MERGE unmatched conditions and insert values should allow script UDFs.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE TABLE s(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+            ],
+            sql: "MERGE INTO t USING s ON t.a = s.a WHEN NOT MATCHED AND add_one(s.b) > 1 THEN INSERT (a, b) VALUES (s.a, add_one(s.b))",
+        },
+    ];
+
+    run_binder_cases("binder_mutation_udf.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

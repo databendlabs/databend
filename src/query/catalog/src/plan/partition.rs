@@ -371,53 +371,21 @@ pub struct ReclusterTask {
 
 pub type BlockMetaWithHLL = (Arc<BlockMeta>, Option<RawBlockHLL>);
 
-#[derive(Clone)]
-pub enum ReclusterParts {
-    Recluster {
-        tasks: Vec<ReclusterTask>,
-        remained_blocks: Vec<BlockMetaWithHLL>,
-        removed_segment_indexes: Vec<usize>,
-        removed_segment_summary: Statistics,
-    },
-    Compact(Partitions),
+#[derive(Clone, Default)]
+pub struct ReclusterParts {
+    pub tasks: Vec<ReclusterTask>,
+    pub remained_blocks: Vec<BlockMetaWithHLL>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_segment_summary: Statistics,
 }
 
 impl ReclusterParts {
     pub fn is_empty(&self) -> bool {
-        match self {
-            ReclusterParts::Recluster {
-                tasks,
-                remained_blocks,
-                ..
-            } => tasks.is_empty() && remained_blocks.is_empty(),
-            ReclusterParts::Compact(parts) => parts.is_empty(),
-        }
+        self.tasks.is_empty() && self.remained_blocks.is_empty()
     }
 
-    pub fn new_recluster_parts() -> Self {
-        Self::Recluster {
-            tasks: vec![],
-            remained_blocks: vec![],
-            removed_segment_indexes: vec![],
-            removed_segment_summary: Statistics::default(),
-        }
-    }
-
-    pub fn new_compact_parts() -> Self {
-        Self::Compact(Partitions::default())
-    }
-
-    pub fn is_distributed(&self, ctx: Arc<dyn TableContext>) -> bool {
-        match self {
-            ReclusterParts::Recluster { tasks, .. } => tasks.len() > 1,
-            ReclusterParts::Compact(_) => {
-                (!ctx.get_cluster().is_empty())
-                    && ctx
-                        .get_settings()
-                        .get_enable_distributed_compact()
-                        .unwrap_or(false)
-            }
-        }
+    pub fn is_distributed(&self, _ctx: Arc<dyn TableContext>) -> bool {
+        self.tasks.len() > 1
     }
 }
 
