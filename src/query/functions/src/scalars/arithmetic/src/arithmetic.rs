@@ -289,6 +289,7 @@ fn parse_number<T>(
 where
     T: FromStr + num_traits::Num,
 {
+    let s = s.trim();
     match s.parse::<T>() {
         Ok(v) => Ok(v),
         Err(e) => {

@@ -57,6 +57,7 @@ fn test_decode_v165_cluster_key_id() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),
         field_comments: vec![],
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),

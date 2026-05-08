@@ -11,10 +11,19 @@ from pathlib import Path
 import nox
 
 
-PYTHON_DRIVER = ["0.33.7"]
+PYTHON_DRIVER_PINNED = ["0.33.6"]
+PYTHON_DRIVER = ["latest", *PYTHON_DRIVER_PINNED]
+PYTHON_TEST_TIMEZONE = "UTC"
+PYTHON_TEST_ENV = {"TZ": PYTHON_TEST_TIMEZONE}
 CACHE_DIR = Path(__file__).resolve().parent / "cache"
 GITHUB_ARCHIVE_ROOT = "https://github.com/databendlabs"
 HTTP_USER_AGENT = "databend-nox-client"
+PYTHON_SOURCE_REPO = "bendsql"
+PYTHON_BINDINGS_TEST_DIR = Path("bindings") / "python"
+PYTHON_CLIENT_ARCHIVE_ROOT = f"{GITHUB_ARCHIVE_ROOT}/{PYTHON_SOURCE_REPO}/archive/refs"
+PYTHON_CLIENT_LATEST_RELEASE_URL = (
+    f"https://github.com/databendlabs/{PYTHON_SOURCE_REPO}/releases/latest"
+)
 
 JDBC_DRIVER_PINNED = ["0.4.1"]
 JDBC_DRIVER = ["main", "latest", *JDBC_DRIVER_PINNED]
@@ -28,6 +37,8 @@ JDBC_RELEASE_DOWNLOAD_ROOT = (
 JDBC_SOURCE_BUILD_ENV = {"TEST_HANDLERS": "http"}
 JDBC_EXCLUDED_GROUPS = "FLAKY,cluster,MULTI_HOST"
 JDBC_MAIN_TEST_ARGS = [
+    "-B",
+    "-ntp",
     "-pl",
     "databend-jdbc",
     "test",
@@ -132,6 +143,33 @@ def merge_env(*env_sets):
     return env
 
 
+def resolve_python_driver_version(driver_version):
+    if driver_version != "latest":
+        return driver_version
+
+    return resolve_latest_release_tag(PYTHON_CLIENT_LATEST_RELEASE_URL).removeprefix("v")
+
+
+def prepare_python_client_source():
+    return prepare_source_archive(
+        source_name=PYTHON_SOURCE_REPO,
+        source_ref="main",
+        resolved_ref="main",
+        archive_root=PYTHON_CLIENT_ARCHIVE_ROOT,
+        required_path=str(PYTHON_BINDINGS_TEST_DIR / "pyproject.toml"),
+    )
+
+
+def get_current_timezone():
+    result = http_query("select timezone()")
+    return result["data"][0][0]
+
+
+def set_global_timezone(timezone_name):
+    escaped_timezone = timezone_name.replace("'", "''")
+    http_query(f"set global timezone='{escaped_timezone}'")
+
+
 def http_query(sql, port=8000):
     payload = json.dumps({"sql": sql}).encode()
     request = urllib.request.Request(
@@ -152,7 +190,7 @@ def http_query(sql, port=8000):
     return result
 
 
-def create_jdbc_test_user():
+def create_test_user():
     try:
         http_query("DROP USER IF EXISTS databend")
     except RuntimeError as e:
@@ -358,23 +396,44 @@ def prepare_go_client_source(source_ref):
 @nox.session
 @nox.parametrize("driver_version", PYTHON_DRIVER)
 def python_client(session, driver_version):
-    session.install("pytest")
-    session.install(f"databend-driver=={driver_version}")
-    session.run("pytest", "python_client")
+    source_dir = prepare_python_client_source()
+    resolved_version = resolve_python_driver_version(driver_version)
+    bindings_dir = source_dir / PYTHON_BINDINGS_TEST_DIR
+    original_timezone = get_current_timezone()
 
-    session.install("behave")
-    with session.chdir("cache/bendsql/bindings/python"):
+    session.log(
+        f"switching Databend global timezone from {original_timezone} to {PYTHON_TEST_TIMEZONE}"
+    )
+    set_global_timezone(PYTHON_TEST_TIMEZONE)
+
+    try:
+        session.install("pytest")
+        session.install(f"databend-driver=={resolved_version}")
+        session.run("pytest", "python_client", env=PYTHON_TEST_ENV)
+
+        session.install("behave")
         env = {
-            "DRIVER_VERSION": driver_version,
+            "DRIVER_VERSION": resolved_version,
         }
-        for impl in ["blocking", "asyncio", "cursor"]:
-            session.run("behave", f"tests/{impl}", env=env)
+        session.log(
+            f"running bendsql main python binding tests with databend-driver {resolved_version}"
+        )
+        with session.chdir(str(bindings_dir)):
+            for impl in ["blocking", "asyncio", "cursor"]:
+                session.run("behave", f"tests/{impl}", env=merge_env(PYTHON_TEST_ENV, env))
+    finally:
+        current_timezone = get_current_timezone()
+        if current_timezone != original_timezone:
+            session.log(
+                f"restoring Databend global timezone from {current_timezone} to {original_timezone}"
+            )
+            set_global_timezone(original_timezone)
 
 
 @nox.session
 @nox.parametrize("driver_version", JDBC_DRIVER)
 def java_client(session, driver_version):
-    create_jdbc_test_user()
+    create_test_user()
 
     if driver_version == "main":
         jdbc_target = prepare_jdbc_main_source(session)
@@ -392,6 +451,7 @@ def java_client(session, driver_version):
 @nox.session
 @nox.parametrize("source_ref", GO_DRIVER)
 def go_client(session, source_ref):
+    create_test_user()
     source_dir, resolved_ref = prepare_go_client_source(source_ref)
     env = get_go_driver_env(resolved_ref)
     test_dir = source_dir / "tests"

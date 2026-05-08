@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::TimeZone;
 use chrono::Utc;
 use databend_common_expression as ce;
 use databend_common_meta_app::schema as mt;
-use databend_common_meta_app::schema::Constraint;
 use fastrace::func_name;
 use maplit::btreemap;
 
@@ -36,15 +34,14 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_pb_from_to()`
 #[test]
-fn test_decode_v146_constraint() -> anyhow::Result<()> {
-    let table_meta_v142 = vec![
-        10, 7, 160, 6, 146, 1, 168, 6, 24, 64, 0, 162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50,
-        56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49,
-        49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 146,
-        1, 168, 6, 24, 226, 1, 1, 1, 146, 2, 32, 10, 12, 99, 111, 110, 115, 116, 114, 97, 105, 110,
-        116, 95, 49, 18, 16, 18, 7, 99, 49, 32, 62, 32, 49, 48, 160, 6, 146, 1, 168, 6, 24, 146, 2,
-        32, 10, 12, 99, 111, 110, 115, 116, 114, 97, 105, 110, 116, 95, 50, 18, 16, 18, 7, 99, 49,
-        32, 33, 61, 32, 48, 160, 6, 146, 1, 168, 6, 24, 160, 6, 146, 1, 168, 6, 24,
+fn test_decode_v175_field_stats_truncate_len() -> anyhow::Result<()> {
+    // Run test_pb_from_to first to get these bytes
+    let table_meta_v175: Vec<u8> = vec![
+        10, 7, 160, 6, 175, 1, 168, 6, 24, 64, 3, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41,
+        162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32,
+        85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58,
+        49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 175, 1, 168, 6, 24, 176, 2, 2, 186, 2, 2, 16, 4,
+        186, 2, 4, 8, 1, 16, 40, 160, 6, 175, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
@@ -52,31 +49,29 @@ fn test_decode_v146_constraint() -> anyhow::Result<()> {
         engine: s(""),
         storage_params: None,
         part_prefix: s(""),
-        engine_options: BTreeMap::default(),
-        options: BTreeMap::default(),
+        engine_options: btreemap! {},
+        options: btreemap! {},
         cluster_key: None,
-        cluster_key_v2: None,
-        cluster_key_seq: 0,
+        cluster_key_v2: Some((2, "(a + 2, b)".to_string())),
+        cluster_key_seq: 3,
         created_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),
         field_comments: vec![],
-        field_stats_truncate_len: btreemap! {},
+        field_stats_truncate_len: btreemap! { 0u32 => 4u64, 1u32 => 40u64 },
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
         column_mask_policy: None,
-        column_mask_policy_columns_ids: BTreeMap::new(),
+        column_mask_policy_columns_ids: btreemap! {},
         row_access_policy: None,
         row_access_policy_columns_ids: None,
-        indexes: BTreeMap::default(),
-        constraints: btreemap! {
-            "constraint_1".to_string() => Constraint::Check("c1 > 10".to_string()),
-            "constraint_2".to_string() => Constraint::Check("c1 != 0".to_string()),
-        },
+        indexes: btreemap! {},
+        constraints: btreemap! {},
     };
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), table_meta_v142.as_slice(), 146, want())?;
+
+    common::test_load_old(func_name!(), table_meta_v175.as_slice(), 175, want())?;
 
     Ok(())
 }

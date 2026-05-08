@@ -52,6 +52,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
@@ -138,7 +139,7 @@ use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
-use crate::statistics::Trim;
+use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
 #[derive(Clone)]
@@ -345,6 +346,13 @@ impl FuseTable {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
+            col_stats_truncate_lens: self
+                .table_info
+                .meta
+                .field_stats_truncate_len
+                .iter()
+                .map(|(&k, &v)| (k, v as usize))
+                .collect(),
         }
     }
 
@@ -1170,16 +1178,29 @@ impl Table for FuseTable {
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 
+        let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
         let r = reduced
             .into_iter()
             .map(|(k, v)| {
+                let truncate_len = col_stats_truncate_lens
+                    .get(&k)
+                    .map(|&n| n as usize)
+                    .unwrap_or(STATS_STRING_PREFIX_LEN);
+                let min_may_be_truncated = match &v.min {
+                    Scalar::String(s) => s.len() >= truncate_len,
+                    _ => false,
+                };
+                let max_may_be_truncated = match &v.max {
+                    Scalar::String(s) => s.len() >= truncate_len,
+                    _ => false,
+                };
                 (k, ColumnRange {
                     min: Bound {
-                        may_be_truncated: v.min.may_be_trimmed(),
+                        may_be_truncated: min_may_be_truncated,
                         value: v.min,
                     },
                     max: Bound {
-                        may_be_truncated: v.max.may_be_trimmed(),
+                        may_be_truncated: max_may_be_truncated,
                         value: v.max,
                     },
                 })
