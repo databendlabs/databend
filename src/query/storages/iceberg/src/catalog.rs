@@ -151,6 +151,7 @@ fn with_s3_file_io_aliases(
         ("aws_secret_access_key", "s3.secret-access-key"),
         ("aws_session_token", "s3.session-token"),
         ("region_name", "s3.region"),
+        ("aws_region", "s3.region"),
     ];
 
     for (aws_key, s3_key) in aliases {
@@ -839,6 +840,17 @@ mod tests {
             props.get("s3.session-token"),
             Some(&"aws_token".to_string())
         );
+        assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+    }
+
+    #[test]
+    fn storage_catalog_keeps_aws_region_and_adds_missing_s3_region() {
+        let props = with_s3_file_io_aliases(&HashMap::from([(
+            "aws_region".to_string(),
+            "us-east-1".to_string(),
+        )]));
+
+        assert_eq!(props.get("aws_region"), Some(&"us-east-1".to_string()));
         assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
     }
 
