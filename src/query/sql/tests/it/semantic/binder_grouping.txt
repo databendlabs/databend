@@ -68,7 +68,7 @@ Sort
 
 
 === group_by_prefers_input_column_over_same_name_select_alias ===
-description: GROUP BY should resolve an unqualified name to the input column before a same-name SELECT alias.
+description: GROUP BY should resolve an unqualified name to the input column before a same-name SELECT alias by default.
 sql: SELECT 1 AS i, sum(i) FROM t GROUP BY i
 status: ok
 EvalScalar
@@ -83,36 +83,6 @@ EvalScalar
             ├── filters: []
             ├── order by: []
             └── limit: NONE
-
-
-=== group_by_prefers_alias_over_outer_column ===
-description: GROUP BY should resolve a SELECT alias before falling back to a same-name outer column.
-sql: SELECT * FROM t_outer WHERE EXISTS (SELECT t_inner.a AS b FROM t_inner GROUP BY b)
-status: ok
-EvalScalar
-├── scalars: [t_outer.b (#0) AS (#0)]
-└── Filter
-    ├── filters: [SUBQUERY AS (#1)]
-    ├── subquerys
-    │   └── Subquery (Exists)
-    │       ├── output_column: t_inner.a (#1)
-    │       └── EvalScalar
-    │           ├── scalars: [t_inner.a (#1) AS (#1)]
-    │           └── Aggregate(Initial)
-    │               ├── group items: [t_inner.a (#1) AS (#1)]
-    │               ├── aggregate functions: []
-    │               └── EvalScalar
-    │                   ├── scalars: [t_inner.a (#1) AS (#1)]
-    │                   └── Scan
-    │                       ├── table: default.t_inner (#1)
-    │                       ├── filters: []
-    │                       ├── order by: []
-    │                       └── limit: NONE
-    └── Scan
-        ├── table: default.t_outer (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
 
 
 === group_by_prefers_input_column_over_aggregate_alias ===

@@ -87,10 +87,7 @@ pub enum ExprContext {
 
 impl ExprContext {
     pub fn prefer_resolve_alias(&self) -> bool {
-        !matches!(
-            self,
-            ExprContext::SelectClause | ExprContext::WhereClause | ExprContext::GroupClaue
-        )
+        !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
     }
 
     pub fn allow_resolve_alias(&self) -> bool {
@@ -193,6 +190,9 @@ pub struct BindContext {
 
     pub expr_context: ExprContext,
 
+    /// Resolve GROUP BY names to SELECT aliases before input columns.
+    pub group_by_alias_first: bool,
+
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
@@ -273,6 +273,7 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
+            group_by_alias_first: false,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         }
@@ -320,6 +321,7 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
+            group_by_alias_first: parent.group_by_alias_first,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         })
@@ -332,6 +334,7 @@ impl BindContext {
         bind_context.cte_context = self.cte_context.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
+        bind_context.group_by_alias_first = self.group_by_alias_first;
         bind_context
     }
 
@@ -428,7 +431,7 @@ impl BindContext {
                 column_case_sensitive,
                 &mut result,
             );
-        } else if self.expr_context == ExprContext::GroupClaue {
+        } else if self.expr_context == ExprContext::GroupClaue && !self.group_by_alias_first {
             Self::search_bound_columns_in_context(
                 self,
                 database,

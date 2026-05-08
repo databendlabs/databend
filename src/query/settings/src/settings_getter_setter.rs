@@ -599,6 +599,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_enable_group_by_alias_first(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_group_by_alias_first")? != 0)
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
