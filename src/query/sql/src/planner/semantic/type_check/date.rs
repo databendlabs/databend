@@ -28,6 +28,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
 use crate::binder::wrap_cast;
 use crate::plans::ScalarExpr;
 
@@ -128,36 +129,31 @@ impl<'a> TypeChecker<'a> {
         interval_kind: &ASTIntervalKind,
         arg: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        match interval_kind {
-            ASTIntervalKind::ISOYear => self.resolve_function(span, "to_iso_year", vec![], &[arg]),
-            ASTIntervalKind::Year => self.resolve_function(span, "to_year", vec![], &[arg]),
-            ASTIntervalKind::Quarter => self.resolve_function(span, "to_quarter", vec![], &[arg]),
-            ASTIntervalKind::Month => self.resolve_function(span, "to_month", vec![], &[arg]),
-            ASTIntervalKind::Day => self.resolve_function(span, "to_day_of_month", vec![], &[arg]),
-            ASTIntervalKind::Hour => self.resolve_function(span, "to_hour", vec![], &[arg]),
-            ASTIntervalKind::Minute => self.resolve_function(span, "to_minute", vec![], &[arg]),
-            ASTIntervalKind::Second => self.resolve_function(span, "to_second", vec![], &[arg]),
-            ASTIntervalKind::Doy => self.resolve_function(span, "to_day_of_year", vec![], &[arg]),
+        let func_name = match interval_kind {
+            ASTIntervalKind::ISOYear => "to_iso_year",
+            ASTIntervalKind::Year => "to_year",
+            ASTIntervalKind::Quarter => "to_quarter",
+            ASTIntervalKind::Month => "to_month",
+            ASTIntervalKind::Day => "to_day_of_month",
+            ASTIntervalKind::Hour => "to_hour",
+            ASTIntervalKind::Minute => "to_minute",
+            ASTIntervalKind::Second => "to_second",
+            ASTIntervalKind::Doy => "to_day_of_year",
             // Day of the week (Sunday = 0, Saturday = 6)
-            ASTIntervalKind::Dow => self.resolve_function(span, "dayofweek", vec![], &[arg]),
-            ASTIntervalKind::Week => self.resolve_function(span, "to_week_of_year", vec![], &[arg]),
-            ASTIntervalKind::Epoch => self.resolve_function(span, "epoch", vec![], &[arg]),
-            ASTIntervalKind::MicroSecond => {
-                self.resolve_function(span, "to_microsecond", vec![], &[arg])
-            }
+            ASTIntervalKind::Dow => "dayofweek",
+            ASTIntervalKind::Week => "to_week_of_year",
+            ASTIntervalKind::Epoch => "epoch",
+            ASTIntervalKind::MicroSecond => "to_microsecond",
             // ISO day of the week (Monday = 1, Sunday = 7)
-            ASTIntervalKind::ISODow => {
-                self.resolve_function(span, "to_day_of_week", vec![], &[arg])
-            }
-            ASTIntervalKind::YearWeek => self.resolve_function(span, "yearweek", vec![], &[arg]),
-            ASTIntervalKind::Millennium => {
-                self.resolve_function(span, "millennium", vec![], &[arg])
-            }
+            ASTIntervalKind::ISODow => "to_day_of_week",
+            ASTIntervalKind::YearWeek => "yearweek",
+            ASTIntervalKind::Millennium => "millennium",
             _ => Err(ErrorCode::SemanticError(
                 "Only support interval type [ISOYear, Year, Quarter, Month, Day, Hour, Minute, Second, Doy, Dow, Week, Epoch, MicroSecond, ISODow, YearWeek, Millennium]".to_string(),
             )
-            .set_span(span)),
-        }
+            .set_span(span))?,
+        };
+        self.resolve_core_function(span, func_name, &[arg])
     }
 
     pub(super) fn resolve_date_arith(
@@ -187,19 +183,7 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         };
-        let mut args = vec![];
-        let mut arg_types = vec![];
-
-        let (date_lhs, date_lhs_type) = *self.resolve(date_lhs)?;
-        args.push(date_lhs);
-        arg_types.push(date_lhs_type);
-
-        let (date_rhs, date_rhs_type) = *self.resolve(date_rhs)?;
-
-        args.push(date_rhs);
-        arg_types.push(date_rhs_type);
-
-        self.resolve_scalar_function_call(span, &func_name, vec![], args)
+        self.resolve_core_function(span, func_name, &[date_lhs, date_rhs])
     }
 
     pub(super) fn resolve_date_trunc(
@@ -210,78 +194,39 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match kind {
             ASTIntervalKind::Year => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_year", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_year", &[date])
             }
             ASTIntervalKind::ISOYear => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_iso_year", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_iso_year", &[date])
             }
             ASTIntervalKind::Quarter => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_quarter", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_quarter", &[date])
             }
             ASTIntervalKind::Month => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_month", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_month", &[date])
             }
             ASTIntervalKind::Week => {
                 let week_start = self.func_ctx.week_start;
-                self.resolve_function(
-                    span,
-                    "to_start_of_week", vec![],
-                    &[date, &Expr::Literal {
-                        span: None,
-                        value: Literal::UInt64(week_start as u64)
-                    }],
-                )
+                let mut arena = CoreExprArena::new();
+                let date = arena.ast(date);
+                let week_start = arena.literal(None, Literal::UInt64(week_start as u64));
+                let root = arena.call(span, "to_start_of_week", vec![date, week_start]);
+                self.resolve_core(&arena, root)
             }
             ASTIntervalKind::ISOWeek => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_iso_week", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_iso_week", &[date])
             }
             ASTIntervalKind::Day => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_day", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_day", &[date])
             }
             ASTIntervalKind::Hour => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_hour", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_hour", &[date])
             }
             ASTIntervalKind::Minute => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_minute", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_minute", &[date])
             }
             ASTIntervalKind::Second => {
-                self.resolve_function(
-                    span,
-                    "to_start_of_second", vec![],
-                    &[date],
-                )
+                self.resolve_core_function(span, "to_start_of_second", &[date])
             }
             _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
         }
@@ -300,17 +245,10 @@ impl<'a> TypeChecker<'a> {
                 "slice_length must be greater than or equal to 1",
             ));
         }
-        let slice_length = &Expr::Literal {
-            span: None,
-            value: Literal::UInt64(slice_length),
-        };
         let start_or_end = if start_or_end.eq_ignore_ascii_case("start")
             || start_or_end.eq_ignore_ascii_case("end")
         {
-            &Expr::Literal {
-                span: None,
-                value: Literal::String(start_or_end),
-            }
+            start_or_end
         } else {
             return Err(ErrorCode::BadArguments(
                 "time_slice only support start or end",
@@ -318,23 +256,29 @@ impl<'a> TypeChecker<'a> {
         };
 
         let kind = match kind {
-            ASTIntervalKind::Year |
-            ASTIntervalKind::Quarter |
-            ASTIntervalKind::Month|
-            ASTIntervalKind::Week| ASTIntervalKind::ISOWeek | ASTIntervalKind::Day | ASTIntervalKind::Hour | ASTIntervalKind::Minute | ASTIntervalKind::Second => {
-                    &Expr::Literal {
-                    span: None,
-                    value: Literal::String(kind.to_string())
-                }
-            }
+            ASTIntervalKind::Year
+            | ASTIntervalKind::Quarter
+            | ASTIntervalKind::Month
+            | ASTIntervalKind::Week
+            | ASTIntervalKind::ISOWeek
+            | ASTIntervalKind::Day
+            | ASTIntervalKind::Hour
+            | ASTIntervalKind::Minute
+            | ASTIntervalKind::Second => kind.to_string(),
             _ => return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
         };
-        self.resolve_function(span, "time_slice", vec![], &[
+        let mut arena = CoreExprArena::new();
+        let date = arena.ast(date);
+        let slice_length = arena.literal(None, Literal::UInt64(slice_length));
+        let start_or_end = arena.literal(None, Literal::String(start_or_end));
+        let kind = arena.literal(None, Literal::String(kind));
+        let root = arena.call(span, "time_slice", vec![
             date,
             slice_length,
             start_or_end,
             kind,
-        ])
+        ]);
+        self.resolve_core(&arena, root)
     }
 
     pub(super) fn resolve_last_day(
@@ -343,25 +287,20 @@ impl<'a> TypeChecker<'a> {
         date: &Expr,
         kind: &ASTIntervalKind,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        match kind {
-            ASTIntervalKind::Year => {
-                self.resolve_function(span, "to_last_of_year", vec![], &[date])
+        let func_name = match kind {
+            ASTIntervalKind::Year => "to_last_of_year",
+            ASTIntervalKind::Quarter => "to_last_of_quarter",
+            ASTIntervalKind::Month => "to_last_of_month",
+            ASTIntervalKind::Week => "to_last_of_week",
+            _ => {
+                return Err(ErrorCode::SemanticError(
+                    "Only these interval types are currently supported: [year, quarter, month, week]"
+                        .to_string(),
+                )
+                .set_span(span));
             }
-            ASTIntervalKind::Quarter => {
-                self.resolve_function(span, "to_last_of_quarter", vec![], &[date])
-            }
-            ASTIntervalKind::Month => {
-                self.resolve_function(span, "to_last_of_month", vec![], &[date])
-            }
-            ASTIntervalKind::Week => {
-                self.resolve_function(span, "to_last_of_week", vec![], &[date])
-            }
-            _ => Err(ErrorCode::SemanticError(
-                "Only these interval types are currently supported: [year, quarter, month, week]"
-                    .to_string(),
-            )
-            .set_span(span)),
-        }
+        };
+        self.resolve_core_function(span, func_name, &[date])
     }
 
     pub(super) fn resolve_previous_or_next_day(
@@ -386,7 +325,6 @@ impl<'a> TypeChecker<'a> {
             ASTWeekday::Saturday => format!("{}saturday", prefix),
             ASTWeekday::Sunday => format!("{}sunday", prefix),
         };
-
-        self.resolve_function(span, &func_name, vec![], &[date])
+        self.resolve_core_function(span, func_name, &[date])
     }
 }

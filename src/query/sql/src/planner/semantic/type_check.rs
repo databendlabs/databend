@@ -96,6 +96,7 @@ const DEFAULT_DECIMAL_SCALE: i64 = 0;
 
 mod aggregate;
 mod async_functions;
+mod core_expr;
 mod date;
 mod lambda;
 mod like;
@@ -566,7 +567,7 @@ impl<'a> TypeChecker<'a> {
                 right,
             } => {
                 let func_name = op.to_func_name();
-                self.resolve_function(*span, func_name.as_str(), vec![], &[left, right])
+                self.resolve_core_function(*span, func_name.as_str(), &[left, right])
             }
 
             Expr::UnaryOp { span, op, expr, .. } => self.resolve_unary_op(*span, op, expr.as_ref()),
@@ -721,7 +722,7 @@ impl<'a> TypeChecker<'a> {
                 if let Some(substring_for) = substring_for {
                     arguments.push(substring_for.as_ref());
                 }
-                self.resolve_function(*span, "substring", vec![], &arguments)
+                self.resolve_core_function(*span, "substring", &arguments)
             }
 
             Expr::Literal { span, value } => self.resolve_literal(*span, value),
@@ -1209,10 +1210,8 @@ impl<'a> TypeChecker<'a> {
                 str_expr,
                 span,
                 ..
-            } => self.resolve_function(*span, "locate", vec![], &[
-                substr_expr.as_ref(),
-                str_expr.as_ref(),
-            ]),
+            } => self
+                .resolve_core_function(*span, "locate", &[substr_expr.as_ref(), str_expr.as_ref()]),
 
             Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs),
 
@@ -1689,7 +1688,7 @@ impl<'a> TypeChecker<'a> {
             BinaryOperator::Eq | BinaryOperator::NotEq => {
                 let name = op.to_func_name();
                 let box (res, ty) =
-                    self.resolve_function(span, name.as_str(), vec![], &[left, right])?;
+                    self.resolve_core_function(span, name.as_str(), &[left, right])?;
                 // When a variant type column is compared with a scalar string value,
                 // we try to cast the scalar string value to variant type,
                 // because casting variant column data is a time-consuming operation.
@@ -1756,7 +1755,7 @@ impl<'a> TypeChecker<'a> {
             }
             other => {
                 let name = other.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[left, right])
+                self.resolve_core_function(span, name.as_str(), &[left, right])
             }
         }
     }
@@ -1780,11 +1779,11 @@ impl<'a> TypeChecker<'a> {
                     return Ok(Box::new((scalar_expr, data_type)));
                 }
                 let name = op.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[child])
+                self.resolve_core_function(span, name.as_str(), &[child])
             }
             other => {
                 let name = other.to_func_name();
-                self.resolve_function(span, name.as_str(), vec![], &[child])
+                self.resolve_core_function(span, name.as_str(), &[child])
             }
         }
     }
@@ -1795,29 +1794,21 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr,
         trim_where: &Option<(TrimWhere, Box<Expr>)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (func_name, trim_scalar, _trim_type) = if let Some((trim_type, trim_expr)) = trim_where
-        {
+        let mut arena = core_expr::CoreExprArena::new();
+        let (func_name, trim_arg) = if let Some((trim_type, trim_expr)) = trim_where {
             let func_name = match trim_type {
                 TrimWhere::Leading => "trim_leading",
                 TrimWhere::Trailing => "trim_trailing",
                 TrimWhere::Both => "trim_both",
             };
-
-            let box (trim_scalar, trim_type) = self.resolve(trim_expr)?;
-            (func_name, trim_scalar, trim_type)
+            (func_name, arena.ast(trim_expr.as_ref()))
         } else {
-            let trim_scalar = ConstantExpr {
-                span,
-                value: Scalar::String(" ".to_string()),
-            }
-            .into();
-            ("trim_both", trim_scalar, DataType::String)
+            let trim_arg = arena.literal(span, Literal::String(" ".to_string()));
+            ("trim_both", trim_arg)
         };
-
-        let box (trim_source, _source_type) = self.resolve(expr)?;
-        let args = vec![trim_source, trim_scalar];
-
-        self.resolve_scalar_function_call(span, func_name, vec![], args)
+        let expr = arena.ast(expr);
+        let root = arena.call(span, func_name, vec![expr, trim_arg]);
+        self.resolve_core(&arena, root)
     }
 
     fn convert_inlist_to_subquery(

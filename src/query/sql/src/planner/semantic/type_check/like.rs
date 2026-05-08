@@ -23,6 +23,7 @@ use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::DataType;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
 use crate::plans::ScalarExpr;
 
 impl<'a> TypeChecker<'a> {
@@ -95,15 +96,13 @@ impl<'a> TypeChecker<'a> {
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let name = op.to_func_name();
-        let escape_expr = escape.as_ref().map(|escape| Expr::Literal {
-            span,
-            value: Literal::String(escape.clone()),
-        });
-        let mut arguments = vec![left, right];
-        if let Some(expr) = &escape_expr {
-            arguments.push(expr)
+        let mut arena = CoreExprArena::new();
+        let mut arguments = vec![arena.ast(left), arena.ast(right)];
+        if let Some(escape) = escape {
+            arguments.push(arena.literal(span, Literal::String(escape.clone())));
         }
-        self.resolve_function(span, name.as_str(), vec![], &arguments)
+        let root = arena.call(span, name, arguments);
+        self.resolve_core(&arena, root)
     }
 }
 
