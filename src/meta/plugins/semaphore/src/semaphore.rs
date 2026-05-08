@@ -85,21 +85,23 @@ impl fmt::Display for Semaphore {
 }
 
 impl Semaphore {
-    /// Acquires a new semaphore and returns an [`Permit`] handle.
+    /// Acquires a new semaphore and returns a [`Permit`] handle.
     ///
     /// # Parameters
     ///
     /// * `meta_client` - The metadata client to interact with the remote meta-service.
     /// * `prefix` - The name of the semaphore and also the directory name to store in meta-service.
     /// * `capacity` - The capacity of the semaphore.
-    /// * `id` - The unique identifier for the acquirer. Not used yet in this implementation. In future it is used to force release a semaphore by name.
+    /// * `id` - A unique identifier kept in the permit entry for debugging and ownership tracking.
     /// * `lease` - The time-to-live duration for the acquired semaphore to be released automatically if the lease is not extended.
     ///
     /// # Returns
     ///
-    /// Returns an [`Permit`] handle that represents the acquired semaphore. When this handle
-    /// is dropped, the semaphore will be released.
-    /// It is also a [`Future`] that will be resolved when the semaphore is removed from meta-service.
+    /// Returns a [`Permit`] handle that represents the acquired semaphore.
+    /// Dropping this handle releases the semaphore.
+    /// It is also a [`Future`] that resolves with `Ok(())` when the semaphore is removed
+    /// from meta-service, or with `Err` containing [`ConnectionClosed`] when the watcher can
+    /// no longer prove the permit is still held.
     pub async fn new_acquired(
         meta_client: Arc<ClientHandle<DatabendRuntime>>,
         prefix: impl ToString,
@@ -117,7 +119,13 @@ impl Semaphore {
     /// the default generator-based ordering, which can be more efficient but less strict.
     ///
     /// # Parameters
+    /// * `meta_client` - The metadata client to interact with the remote meta-service.
+    /// * `prefix` - The name of the semaphore and also the directory name to store in meta-service.
+    /// * `capacity` - The capacity of the semaphore.
+    /// * `id` - The unique identifier for the acquirer.
     /// * `seq_timestamp` - Optional timestamp to use as sequence number. If `None`, uses current time.
+    /// * `lease` - The time-to-live duration for the acquired semaphore to be released
+    ///   automatically if the lease is not extended.
     pub async fn new_acquired_by_time(
         meta_client: Arc<ClientHandle<DatabendRuntime>>,
         prefix: impl ToString,
@@ -141,6 +149,7 @@ impl Semaphore {
     /// * `meta_client` - The metadata client to interact with the remote meta-service.
     /// * `prefix` - The prefix of the semaphore name and also the directory name to store in meta-service.
     /// * `capacity` - The capacity of the semaphore.
+    /// * `permit_ttl` - The time-to-live duration for permit entries.
     ///
     /// This method spawns a background task to subscribe to the meta-service key value change events.
     /// The task will be notified to quit when this instance is dropped.
@@ -206,7 +215,7 @@ impl Semaphore {
         };
     }
 
-    /// Acquires a semaphore with a given id and ttl.
+    /// Acquires a semaphore with a given id.
     ///
     /// This function will block until the semaphore is acquired or an error occurs.
     ///
@@ -215,14 +224,11 @@ impl Semaphore {
     /// * `id` - A unique identifier to differentiate between different acquirers.
     ///   The content of the ID does not affect the semaphore behavior.
     ///   It is only kept for other process to identify an acquirer.
-    /// * `lease` - The time-to-live duration after which the semaphore will be automatically released.
-    ///   Note that this is not a timeout for the acquisition process itself.
-    ///
     /// # Lease Extension
     ///
     /// When attempting to acquire a semaphore, after the semaphore permit entry is inserted into
     /// the queue in meta-service, a background task is spawned to periodically extend the lease to
-    /// prevent it from expiring. The extension interval is calculated as `lease / 3`,
+    /// prevent it from expiring. The extension interval is calculated as `permit_ttl / 3`,
     /// but capped at 2000ms maximum. This lease extender task will be automatically cancelled when
     /// either:
     ///
@@ -231,8 +237,9 @@ impl Semaphore {
     ///
     /// # Returns
     ///
-    /// Returns an [`Permit`] handle that represents the acquired semaphore. When this handle
-    /// is dropped or its future is awaited, the semaphore will be released.
+    /// Returns a [`Permit`] handle that represents the acquired semaphore.
+    /// Dropping this handle releases the semaphore. Polling it as a [`Future`] observes
+    /// permit removal or watcher failure; it does not release the semaphore by itself.
     pub async fn acquire(self, id: impl ToString) -> Result<Permit, AcquireError> {
         let permit_ttl = self.permit_ttl;
         let mut acquirer = self.new_acquirer(id, permit_ttl);
