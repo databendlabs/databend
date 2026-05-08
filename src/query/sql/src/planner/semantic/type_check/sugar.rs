@@ -32,9 +32,14 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 use serde_json::json;
 use serde_json::to_string;
+use smallvec::smallvec;
 use unicase::Ascii;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
+use super::core_expr::SugarFunctionArgs;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -88,6 +93,106 @@ impl<'a> TypeChecker<'a> {
         FUNCTIONS
     }
 
+    pub(super) fn can_lower_core_sugar_function(func_name: &str) -> bool {
+        static FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("nullif"),
+            Ascii::new("iff"),
+            Ascii::new("ifnull"),
+            Ascii::new("nvl"),
+            Ascii::new("nvl2"),
+            Ascii::new("is_null"),
+            Ascii::new("isnull"),
+            Ascii::new("is_error"),
+            Ascii::new("error_or"),
+            Ascii::new("equal_null"),
+        ];
+        FUNCTIONS.contains(&Ascii::new(func_name))
+    }
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_sugar_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: SugarFunctionArgs<'a>,
+    ) -> CoreExprId {
+        let lowered = match (func_name, args.as_slice()) {
+            ("nullif", &[arg_x, arg_y]) => {
+                let arg_x_eq = self.lower_ast_expr(arg_x);
+                let arg_y = self.lower_ast_expr(arg_y);
+                let eq = self.call(span, "eq", smallvec![arg_x_eq, arg_y]);
+                let null = self.literal(span, Literal::Null);
+                let arg_x = self.lower_ast_expr(arg_x);
+                Some(self.call(span, "if", smallvec![eq, null, arg_x]))
+            }
+            ("equal_null", &[arg_x, arg_y]) => {
+                let arg_x_eq = self.lower_ast_expr(arg_x);
+                let arg_y_eq = self.lower_ast_expr(arg_y);
+                let eq = self.call(span, "eq", smallvec![arg_x_eq, arg_y_eq]);
+                let eq_is_not_null = self.call(span, "is_not_null", smallvec![eq]);
+                let eq_is_true = self.call(span, "is_true", smallvec![eq]);
+
+                let arg_x = self.lower_ast_expr(arg_x);
+                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x]);
+                let arg_x_is_null = self.call(span, "not", smallvec![arg_x_is_not_null]);
+                let arg_y = self.lower_ast_expr(arg_y);
+                let arg_y_is_not_null = self.call(span, "is_not_null", smallvec![arg_y]);
+                let arg_y_is_null = self.call(span, "not", smallvec![arg_y_is_not_null]);
+                let both_null =
+                    self.call(span, "and_filters", smallvec![arg_x_is_null, arg_y_is_null]);
+
+                Some(self.call(span, "if", smallvec![eq_is_not_null, eq_is_true, both_null]))
+            }
+            ("iff", args) => {
+                let args = args.iter().map(|arg| self.lower_ast_expr(arg)).collect();
+                Some(self.call(span, "if", args))
+            }
+            ("ifnull" | "nvl", &[arg_x, arg_y]) => {
+                let arg_x_null_check = self.lower_ast_expr(arg_x);
+                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x_null_check]);
+                let arg_x_is_null = self.call(span, "not", smallvec![arg_x_is_not_null]);
+                let arg_y = self.lower_ast_expr(arg_y);
+                let arg_x = self.lower_ast_expr(arg_x);
+                Some(self.call(span, "if", smallvec![arg_x_is_null, arg_y, arg_x]))
+            }
+            ("nvl2", &[arg_x, arg_y, arg_z]) => {
+                let arg_x = self.lower_ast_expr(arg_x);
+                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x]);
+                let arg_y = self.lower_ast_expr(arg_y);
+                let arg_z = self.lower_ast_expr(arg_z);
+                Some(self.call(span, "if", smallvec![arg_x_is_not_null, arg_y, arg_z]))
+            }
+            ("is_null" | "isnull", &[arg_x]) => {
+                let arg_x = self.lower_ast_expr(arg_x);
+                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x]);
+                Some(self.call(span, "not", smallvec![arg_x_is_not_null]))
+            }
+            ("is_error", &[arg_x]) => {
+                let arg_x = self.lower_ast_expr(arg_x);
+                let arg_x_is_not_error = self.call(span, "is_not_error", smallvec![arg_x]);
+                Some(self.call(span, "not", smallvec![arg_x_is_not_error]))
+            }
+            ("error_or", args) => {
+                let mut new_args = CoreExprArgs::with_capacity(args.len() * 2 + 1);
+                for arg in args {
+                    let arg_error_check = self.lower_ast_expr(arg);
+                    let is_not_error = self.call(span, "is_not_error", smallvec![arg_error_check]);
+                    let arg = self.lower_ast_expr(arg);
+                    new_args.push(is_not_error);
+                    new_args.push(arg);
+                }
+                new_args.push(self.literal(span, Literal::Null));
+                Some(self.call(span, "if", new_args))
+            }
+            _ => None,
+        };
+
+        lowered.unwrap_or_else(|| self.sugar_function(span, func_name, args))
+    }
+}
+
+impl<'a> TypeChecker<'a> {
     pub(super) async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,

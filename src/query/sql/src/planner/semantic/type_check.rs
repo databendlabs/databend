@@ -68,6 +68,8 @@ use databend_common_meta_app::principal::StageInfo;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use simsearch::SimSearch;
+use smallvec::SmallVec;
+use smallvec::smallvec;
 use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
@@ -365,7 +367,9 @@ impl<'a> TypeChecker<'a> {
                 if *not {
                     self.resolve_function(*span, "is_not_null", vec![], args)
                 } else {
-                    self.resolve_function(*span, "is_null", vec![], args)
+                    let (is_not_null, _) =
+                        *self.resolve_function(*span, "is_not_null", vec![], args)?;
+                    self.resolve_scalar_function_call(*span, "not", vec![], vec![is_not_null])
                 }
             }
 
@@ -740,8 +744,13 @@ impl<'a> TypeChecker<'a> {
                         lambda,
                     },
             } => {
-                let func_name = name.name.to_lowercase();
-                let func_name = func_name.as_str();
+                let normalized_func_name;
+                let func_name = if name.name.chars().any(char::is_uppercase) {
+                    normalized_func_name = name.name.to_lowercase();
+                    normalized_func_name.as_str()
+                } else {
+                    name.name.as_str()
+                };
                 let uni_case_func_name = Ascii::new(func_name);
                 if !is_builtin_function(func_name)
                     && !Self::all_sugar_functions().contains(&uni_case_func_name)
@@ -836,7 +845,7 @@ impl<'a> TypeChecker<'a> {
                     .set_span(*span));
                 }
 
-                let args: Vec<&Expr> = args.iter().collect();
+                let args = args.iter().collect::<SmallVec<[&Expr; 4]>>();
 
                 if GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name) {
                     // general window function
@@ -1095,11 +1104,19 @@ impl<'a> TypeChecker<'a> {
 
             Expr::Extract {
                 span, kind, expr, ..
-            } => self.resolve_extract_expr(*span, kind, expr),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_extract_expr(*span, kind, expr)?;
+                self.resolve_core(&arena, root)
+            }
 
             Expr::DatePart {
                 span, kind, expr, ..
-            } => self.resolve_extract_expr(*span, kind, expr),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_extract_expr(*span, kind, expr)?;
+                self.resolve_core(&arena, root)
+            }
 
             Expr::Interval { span, expr, unit } => {
                 let ex = Expr::Cast {
@@ -1143,41 +1160,61 @@ impl<'a> TypeChecker<'a> {
                 interval,
                 date,
                 ..
-            } => self.resolve_date_arith(*span, unit, interval, date, expr),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_date_arith_expr(*span, unit, interval, date, expr)?;
+                self.resolve_core(&arena, root)
+            }
             Expr::DateDiff {
                 span,
                 unit,
                 date_start,
                 date_end,
                 ..
-            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_date_arith_expr(*span, unit, date_start, date_end, expr)?;
+                self.resolve_core(&arena, root)
+            }
             Expr::DateBetween {
                 span,
                 unit,
                 date_start,
                 date_end,
                 ..
-            } => self.resolve_date_arith(*span, unit, date_start, date_end, expr),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_date_arith_expr(*span, unit, date_start, date_end, expr)?;
+                self.resolve_core(&arena, root)
+            }
             Expr::DateSub {
                 span,
                 unit,
                 interval,
                 date,
                 ..
-            } => self.resolve_date_arith(
-                *span,
-                unit,
-                &Expr::UnaryOp {
+            } => {
+                let date_rhs = Expr::UnaryOp {
                     span: *span,
                     op: UnaryOperator::Minus,
                     expr: interval.clone(),
-                },
-                date,
-                expr,
-            ),
+                };
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_date_arith_expr(*span, unit, &date_rhs, date, expr)?;
+                self.resolve_core(&arena, root)
+            }
             Expr::DateTrunc {
                 span, unit, date, ..
-            } => self.resolve_date_trunc(*span, date, unit),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_date_trunc_expr(
+                    *span,
+                    unit,
+                    date,
+                    self.func_ctx.week_start as u64,
+                )?;
+                self.resolve_core(&arena, root)
+            }
             Expr::TimeSlice {
                 span,
                 unit,
@@ -1185,17 +1222,37 @@ impl<'a> TypeChecker<'a> {
                 slice_length,
                 start_or_end,
             } => {
-                self.resolve_time_slice(*span, date, *slice_length, unit, start_or_end.to_string())
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_time_slice_expr(
+                    *span,
+                    date,
+                    *slice_length,
+                    unit,
+                    start_or_end.to_string(),
+                )?;
+                self.resolve_core(&arena, root)
             }
             Expr::LastDay {
                 span, unit, date, ..
-            } => self.resolve_last_day(*span, date, unit),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_last_day_expr(*span, date, unit)?;
+                self.resolve_core(&arena, root)
+            }
             Expr::PreviousDay {
                 span, unit, date, ..
-            } => self.resolve_previous_or_next_day(*span, date, unit, true),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_previous_or_next_day_expr(*span, date, unit, true);
+                self.resolve_core(&arena, root)
+            }
             Expr::NextDay {
                 span, unit, date, ..
-            } => self.resolve_previous_or_next_day(*span, date, unit, false),
+            } => {
+                let mut arena = core_expr::CoreExprArena::new();
+                let root = arena.lower_previous_or_next_day_expr(*span, date, unit, false);
+                self.resolve_core(&arena, root)
+            }
             Expr::Trim {
                 span,
                 expr,
@@ -1345,6 +1402,68 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
+    pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
+        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
+            return false;
+        }
+        BUILTIN_FUNCTIONS
+            .get_property(func_name)
+            .map(|property| property.kind != FunctionKind::SRF)
+            .unwrap_or(false)
+    }
+
+    pub(super) fn rewrite_variant_compare_constant(
+        &self,
+        scalar: ScalarExpr,
+        data_type: DataType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let ScalarExpr::FunctionCall(ref func) = scalar else {
+            return Ok(Box::new((scalar, data_type)));
+        };
+        if func.arguments.len() != 2 {
+            return Ok(Box::new((scalar, data_type)));
+        }
+        let arg0 = &func.arguments[0];
+        let arg1 = &func.arguments[1];
+        let (constant_arg_index, constant_arg) = match (arg0, arg1) {
+            (ScalarExpr::ConstantExpr(_), _)
+                if arg1.data_type()?.remove_nullable() == DataType::Variant
+                    && !arg1.used_columns().is_empty()
+                    && arg0.data_type()? == DataType::String =>
+            {
+                (0, arg0)
+            }
+            (_, ScalarExpr::ConstantExpr(_))
+                if arg0.data_type()?.remove_nullable() == DataType::Variant
+                    && !arg0.used_columns().is_empty()
+                    && arg1.data_type()? == DataType::String =>
+            {
+                (1, arg1)
+            }
+            _ => {
+                return Ok(Box::new((scalar, data_type)));
+            }
+        };
+
+        let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall {
+            span: func.span,
+            func_name: "to_variant".to_string(),
+            params: vec![],
+            arguments: vec![constant_arg.clone()],
+        });
+        let mut new_arguments = func.arguments.clone();
+        new_arguments[constant_arg_index] = wrap_new_arg;
+
+        let new_func = ScalarExpr::FunctionCall(FunctionCall {
+            span: func.span,
+            func_name: func.func_name.clone(),
+            params: func.params.clone(),
+            arguments: new_arguments,
+        });
+
+        Ok(Box::new((new_func, data_type)))
+    }
+
     /// Resolve function call.
     pub fn resolve_function(
         &mut self,
@@ -1354,35 +1473,45 @@ impl<'a> TypeChecker<'a> {
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
-            self.try_rewrite_sugar_function(span, func_name, arguments),
-        ) {
-            return rewritten_func_result;
+        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
+            if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
+                self.try_rewrite_sugar_function(span, func_name, arguments),
+            ) {
+                return rewritten_func_result;
+            }
         }
 
-        let mut args = vec![];
-        let mut arg_types = vec![];
+        let mut args = Vec::with_capacity(arguments.len());
 
         for argument in arguments {
-            let box (arg, mut arg_type) = self.resolve(argument)?;
-            if let ScalarExpr::SubqueryExpr(subquery) = &arg {
-                if subquery.typ == SubqueryType::Scalar && !arg.data_type()?.is_nullable() {
-                    arg_type = arg_type.wrap_nullable();
-                }
-            }
+            let box (arg, _) = self.resolve(argument)?;
             args.push(arg);
-            arg_types.push(arg_type);
         }
 
-        if let Some(rewritten_variant_expr) =
-            self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
-        {
-            return rewritten_variant_expr;
+        if self.should_try_rewrite_variant_function(func_name) {
+            let mut arg_types = Vec::with_capacity(args.len());
+            for arg in &args {
+                let mut arg_type = arg.data_type()?;
+                if let ScalarExpr::SubqueryExpr(subquery) = arg
+                    && subquery.typ == SubqueryType::Scalar
+                    && !arg_type.is_nullable()
+                {
+                    arg_type = arg_type.wrap_nullable();
+                }
+                arg_types.push(arg_type);
+            }
+            if let Some(rewritten_variant_expr) =
+                self.try_rewrite_variant_function(span, func_name, &args, &arg_types)
+            {
+                return rewritten_variant_expr;
+            }
         }
-        if let Some(rewritten_vector_expr) =
-            self.try_rewrite_vector_function(span, func_name, &args)
-        {
-            return rewritten_vector_expr;
+        if Self::is_vector_function(func_name) {
+            if let Some(rewritten_vector_expr) =
+                self.try_rewrite_vector_function(span, func_name, &args)
+            {
+                return rewritten_vector_expr;
+            }
         }
 
         self.resolve_scalar_function_call(span, func_name, params, args)
@@ -1574,11 +1703,15 @@ impl<'a> TypeChecker<'a> {
                         .iter()
                         .map(DataType::is_generic),
                 )
-                .map(|(checked_arg, is_generic)| self.try_fold_constant(checked_arg, !is_generic))
                 .zip(args)
-                .map(|(folded, arg)| match folded {
-                    Some(box (constant, _)) if arg.evaluable() => constant,
-                    _ => arg,
+                .map(|((checked_arg, is_generic), arg)| {
+                    if !arg.evaluable() {
+                        return arg;
+                    }
+                    match self.try_fold_constant(checked_arg, !is_generic) {
+                        Some(box (constant, _)) => constant,
+                        _ => arg,
+                    }
                 })
                 .collect(),
             _ => args,
@@ -1801,13 +1934,13 @@ impl<'a> TypeChecker<'a> {
                 TrimWhere::Trailing => "trim_trailing",
                 TrimWhere::Both => "trim_both",
             };
-            (func_name, arena.ast(trim_expr.as_ref()))
+            (func_name, arena.lower_ast_expr(trim_expr.as_ref()))
         } else {
             let trim_arg = arena.literal(span, Literal::String(" ".to_string()));
             ("trim_both", trim_arg)
         };
-        let expr = arena.ast(expr);
-        let root = arena.call(span, func_name, vec![expr, trim_arg]);
+        let expr = arena.lower_ast_expr(expr);
+        let root = arena.call(span, func_name, smallvec![expr, trim_arg]);
         self.resolve_core(&arena, root)
     }
 

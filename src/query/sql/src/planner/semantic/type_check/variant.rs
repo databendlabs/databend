@@ -55,6 +55,11 @@ impl<'a> TypeChecker<'a> {
         VARIANT_FUNCTIONS
     }
 
+    pub(super) fn should_try_rewrite_variant_function(&self, func_name: &str) -> bool {
+        self.bind_context.allow_virtual_column
+            && Self::rewritable_variant_functions().contains(&Ascii::new(func_name))
+    }
+
     pub(super) fn try_rewrite_variant_function(
         &mut self,
         span: Span,
@@ -62,8 +67,7 @@ impl<'a> TypeChecker<'a> {
         args: &[ScalarExpr],
         arg_types: &[DataType],
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self.bind_context.allow_virtual_column
-            || !Self::rewritable_variant_functions().contains(&Ascii::new(func_name))
+        if !self.should_try_rewrite_variant_function(func_name)
             || arg_types.is_empty()
             || arg_types[0].remove_nullable() != DataType::Variant
         {

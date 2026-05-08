@@ -26,10 +26,12 @@ use databend_common_expression::Expr as EExpr;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use smallvec::smallvec;
 
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use crate::binder::wrap_cast;
+use crate::planner::semantic::type_check::core_expr::CoreExprId;
 use crate::plans::ScalarExpr;
 
 impl<'a> TypeChecker<'a> {
@@ -122,13 +124,15 @@ impl<'a> TypeChecker<'a> {
         }
         Ok(false)
     }
+}
 
-    pub(super) fn resolve_extract_expr(
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_extract_expr(
         &mut self,
         span: Span,
         interval_kind: &ASTIntervalKind,
-        arg: &Expr,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        arg: &'a Expr,
+    ) -> Result<CoreExprId> {
         let func_name = match interval_kind {
             ASTIntervalKind::ISOYear => "to_iso_year",
             ASTIntervalKind::Year => "to_year",
@@ -153,17 +157,18 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span))?,
         };
-        self.resolve_core_function(span, func_name, &[arg])
+        let arg = self.lower_ast_expr(arg);
+        Ok(self.call(span, func_name, smallvec![arg]))
     }
 
-    pub(super) fn resolve_date_arith(
+    pub(super) fn lower_date_arith_expr(
         &mut self,
         span: Span,
         interval_kind: &ASTIntervalKind,
-        date_rhs: &Expr,
-        date_lhs: &Expr,
+        date_rhs: &'a Expr,
+        date_lhs: &'a Expr,
         is_diff: &Expr,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<CoreExprId> {
         let func_name = match is_diff {
             Expr::DateDiff { .. } => format!("diff_{}s", interval_kind.to_string().to_lowercase()),
             Expr::DateSub { .. } | Expr::DateAdd { .. } => {
@@ -183,63 +188,49 @@ impl<'a> TypeChecker<'a> {
                 ));
             }
         };
-        self.resolve_core_function(span, func_name, &[date_lhs, date_rhs])
+        let date_lhs = self.lower_ast_expr(date_lhs);
+        let date_rhs = self.lower_ast_expr(date_rhs);
+        Ok(self.call(span, func_name, smallvec![date_lhs, date_rhs]))
     }
 
-    pub(super) fn resolve_date_trunc(
+    pub(super) fn lower_date_trunc_expr(
         &mut self,
         span: Span,
-        date: &Expr,
         kind: &ASTIntervalKind,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        match kind {
-            ASTIntervalKind::Year => {
-                self.resolve_core_function(span, "to_start_of_year", &[date])
-            }
-            ASTIntervalKind::ISOYear => {
-                self.resolve_core_function(span, "to_start_of_iso_year", &[date])
-            }
-            ASTIntervalKind::Quarter => {
-                self.resolve_core_function(span, "to_start_of_quarter", &[date])
-            }
-            ASTIntervalKind::Month => {
-                self.resolve_core_function(span, "to_start_of_month", &[date])
-            }
+        date: &'a Expr,
+        week_start: u64,
+    ) -> Result<CoreExprId> {
+        let func_name = match kind {
+            ASTIntervalKind::Year => "to_start_of_year",
+            ASTIntervalKind::ISOYear => "to_start_of_iso_year",
+            ASTIntervalKind::Quarter => "to_start_of_quarter",
+            ASTIntervalKind::Month => "to_start_of_month",
             ASTIntervalKind::Week => {
-                let week_start = self.func_ctx.week_start;
-                let mut arena = CoreExprArena::new();
-                let date = arena.ast(date);
-                let week_start = arena.literal(None, Literal::UInt64(week_start as u64));
-                let root = arena.call(span, "to_start_of_week", vec![date, week_start]);
-                self.resolve_core(&arena, root)
+                let date = self.lower_ast_expr(date);
+                let week_start = self.literal(None, Literal::UInt64(week_start));
+                return Ok(self.call(span, "to_start_of_week", smallvec![date, week_start]));
             }
-            ASTIntervalKind::ISOWeek => {
-                self.resolve_core_function(span, "to_start_of_iso_week", &[date])
+            ASTIntervalKind::ISOWeek => "to_start_of_iso_week",
+            ASTIntervalKind::Day => "to_start_of_day",
+            ASTIntervalKind::Hour => "to_start_of_hour",
+            ASTIntervalKind::Minute => "to_start_of_minute",
+            ASTIntervalKind::Second => "to_start_of_second",
+            _ => {
+                return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span));
             }
-            ASTIntervalKind::Day => {
-                self.resolve_core_function(span, "to_start_of_day", &[date])
-            }
-            ASTIntervalKind::Hour => {
-                self.resolve_core_function(span, "to_start_of_hour", &[date])
-            }
-            ASTIntervalKind::Minute => {
-                self.resolve_core_function(span, "to_start_of_minute", &[date])
-            }
-            ASTIntervalKind::Second => {
-                self.resolve_core_function(span, "to_start_of_second", &[date])
-            }
-            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
-        }
+        };
+        let date = self.lower_ast_expr(date);
+        Ok(self.call(span, func_name, smallvec![date]))
     }
 
-    pub(super) fn resolve_time_slice(
+    pub(super) fn lower_time_slice_expr(
         &mut self,
         span: Span,
-        date: &Expr,
+        date: &'a Expr,
         slice_length: u64,
         kind: &ASTIntervalKind,
         start_or_end: String,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<CoreExprId> {
         if slice_length < 1 {
             return Err(ErrorCode::BadArguments(
                 "slice_length must be greater than or equal to 1",
@@ -254,7 +245,6 @@ impl<'a> TypeChecker<'a> {
                 "time_slice only support start or end",
             ));
         };
-
         let kind = match kind {
             ASTIntervalKind::Year
             | ASTIntervalKind::Quarter
@@ -267,26 +257,24 @@ impl<'a> TypeChecker<'a> {
             | ASTIntervalKind::Second => kind.to_string(),
             _ => return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
         };
-        let mut arena = CoreExprArena::new();
-        let date = arena.ast(date);
-        let slice_length = arena.literal(None, Literal::UInt64(slice_length));
-        let start_or_end = arena.literal(None, Literal::String(start_or_end));
-        let kind = arena.literal(None, Literal::String(kind));
-        let root = arena.call(span, "time_slice", vec![
+        let date = self.lower_ast_expr(date);
+        let slice_length = self.literal(None, Literal::UInt64(slice_length));
+        let start_or_end = self.literal(None, Literal::String(start_or_end));
+        let kind = self.literal(None, Literal::String(kind));
+        Ok(self.call(span, "time_slice", smallvec![
             date,
             slice_length,
             start_or_end,
-            kind,
-        ]);
-        self.resolve_core(&arena, root)
+            kind
+        ]))
     }
 
-    pub(super) fn resolve_last_day(
+    pub(super) fn lower_last_day_expr(
         &mut self,
         span: Span,
-        date: &Expr,
+        date: &'a Expr,
         kind: &ASTIntervalKind,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> Result<CoreExprId> {
         let func_name = match kind {
             ASTIntervalKind::Year => "to_last_of_year",
             ASTIntervalKind::Quarter => "to_last_of_quarter",
@@ -300,16 +288,17 @@ impl<'a> TypeChecker<'a> {
                 .set_span(span));
             }
         };
-        self.resolve_core_function(span, func_name, &[date])
+        let date = self.lower_ast_expr(date);
+        Ok(self.call(span, func_name, smallvec![date]))
     }
 
-    pub(super) fn resolve_previous_or_next_day(
+    pub(super) fn lower_previous_or_next_day_expr(
         &mut self,
         span: Span,
-        date: &Expr,
+        date: &'a Expr,
         weekday: &ASTWeekday,
         is_previous: bool,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
+    ) -> CoreExprId {
         let prefix = if is_previous {
             "to_previous_"
         } else {
@@ -325,6 +314,7 @@ impl<'a> TypeChecker<'a> {
             ASTWeekday::Saturday => format!("{}saturday", prefix),
             ASTWeekday::Sunday => format!("{}sunday", prefix),
         };
-        self.resolve_core_function(span, func_name, &[date])
+        let date = self.lower_ast_expr(date);
+        self.call(span, func_name, smallvec![date])
     }
 }

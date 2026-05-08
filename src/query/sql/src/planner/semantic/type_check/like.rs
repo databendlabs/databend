@@ -21,6 +21,7 @@ use databend_common_ast::ast::Literal;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::convert_escape_pattern;
 use databend_common_expression::types::DataType;
+use smallvec::smallvec;
 
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
@@ -97,7 +98,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let name = op.to_func_name();
         let mut arena = CoreExprArena::new();
-        let mut arguments = vec![arena.ast(left), arena.ast(right)];
+        let mut arguments = smallvec![arena.lower_ast_expr(left), arena.lower_ast_expr(right)];
         if let Some(escape) = escape {
             arguments.push(arena.literal(span, Literal::String(escape.clone())));
         }

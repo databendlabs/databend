@@ -42,6 +42,10 @@ impl<'a> TypeChecker<'a> {
         VECTOR_FUNCTIONS
     }
 
+    pub(super) fn is_vector_function(func_name: &str) -> bool {
+        Self::vector_functions().contains(&Ascii::new(func_name))
+    }
+
     fn try_fold_cast_to_vector(&self, expr: &ScalarExpr) -> Option<Vec<F32>> {
         if expr.evaluable() {
             let checked_expr = expr.as_expr().ok()?;
@@ -68,8 +72,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
         // Try rewrite vector distance function to vector score internal column,
         // so that the vector index can be used to accelerate the query.
-        let uni_case_func_name = Ascii::new(func_name);
-        if Self::vector_functions().contains(&uni_case_func_name) {
+        if Self::is_vector_function(func_name) {
             match args {
                 [
                     ScalarExpr::BoundColumnRef(BoundColumnRef {
