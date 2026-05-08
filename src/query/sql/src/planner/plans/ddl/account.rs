@@ -58,6 +58,21 @@ pub struct DescUserPlan {
     pub user: UserIdentity,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShowPublicKeysPlan {
+    pub user: UserIdentity,
+}
+
+impl ShowPublicKeysPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("fingerprint", DataType::String),
+            DataField::new("label", DataType::String),
+            DataField::new("created_at", DataType::String),
+        ])
+    }
+}
+
 impl DescUserPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
@@ -83,6 +98,12 @@ impl DescUserPlan {
             DataField::new(
                 "workload_group",
                 DataType::Nullable(Box::new(DataType::String)),
+            ),
+            DataField::new(
+                "public_keys",
+                DataType::Nullable(Box::new(DataType::Number(
+                    databend_common_expression::types::NumberDataType::UInt64,
+                ))),
             ),
         ])
     }

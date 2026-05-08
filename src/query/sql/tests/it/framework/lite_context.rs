@@ -547,7 +547,7 @@ impl Catalog for DummyCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unsupported("catalog::get_sequence")
     }
@@ -559,7 +559,7 @@ impl Catalog for DummyCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unsupported("catalog::get_sequence_next_value")
     }
@@ -1173,8 +1173,12 @@ impl TableContextAuthorization for LiteTableContext {
         &self,
         _ignore_ownership: bool,
         _object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         unsupported("table_ctx::get_visibility_checker")
+    }
+
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        unsupported("table_ctx::get_db_table_grant_checker")
     }
 }
 

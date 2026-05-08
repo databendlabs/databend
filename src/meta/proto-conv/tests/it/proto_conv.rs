@@ -149,6 +149,7 @@ fn new_table_meta() -> mt::TableMeta {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s("table_comment"),
         field_comments: vec!["c".to_string(); 21],
+        field_stats_truncate_len: btreemap! {},
         virtual_schema: Some(ce::VirtualDataSchema {
             fields: vec![ce::VirtualDataField {
                 name: "field_0".to_string(),

@@ -671,7 +671,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply>;
 
     async fn list_sequences(&self, req: ListSequencesReq) -> Result<ListSequencesReply>;
@@ -679,7 +679,7 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply>;
 
     async fn drop_sequence(&self, req: DropSequenceReq) -> Result<DropSequenceReply>;

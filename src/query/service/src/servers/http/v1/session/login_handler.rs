@@ -121,8 +121,12 @@ pub async fn login_handler(
 
     match ctx.credential {
         Credential::Jwt { .. } => id_only(),
-        Credential::Password { .. } if query.disable_session_token.unwrap_or(false) => id_only(),
-        Credential::Password { .. } => {
+        Credential::KeyPair { .. } | Credential::Password { .. }
+            if query.disable_session_token.unwrap_or(false) =>
+        {
+            id_only()
+        }
+        Credential::KeyPair { .. } | Credential::Password { .. } => {
             let (session_id, token_pair) = ClientSessionManager::instance()
                 .new_token_pair(&ctx.session, session_id, None, None)
                 .await
@@ -141,6 +145,8 @@ pub async fn login_handler(
                 }),
             }))
         }
-        _ => unreachable!("/session/login endpoint requires password or JWT authentication"),
+        _ => unreachable!(
+            "/session/login endpoint requires password, JWT, or key-pair authentication"
+        ),
     }
 }

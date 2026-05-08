@@ -16,8 +16,10 @@ SELECT CAST('  e1' AS DOUBLE)
 statement error 1006
 SELECT CAST('  E1' AS DOUBLE)
 
-statement error 1006
+query I
 SELECT CAST('  1e1' AS INTEGER)
+----
+10
 
 query R
 SELECT CAST('1e1' AS DOUBLE)

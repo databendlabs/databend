@@ -407,6 +407,13 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
+        let field_stats_truncate_len = self
+            .plan
+            .field_stats_truncate_len
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt_len)| opt_len.map(|len| (schema.fields()[i].column_id(), len)))
+            .collect();
         let mut options = self.plan.options.clone();
 
         if self.plan.engine == Engine::Fuse {
@@ -443,6 +450,7 @@ impl CreateTableInterpreter {
             options,
             engine_options: self.plan.engine_options.clone(),
             field_comments,
+            field_stats_truncate_len,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_exception::ErrorCode;
 use jwt_simple::prelude::Deserialize;
 use jwt_simple::prelude::Serialize;
 use poem::IntoResponse;
@@ -41,14 +42,18 @@ pub async fn refresh_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<RefreshRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    let client_session_id = ctx
-        .client_session_id
-        .as_ref()
-        .expect("Refresh handler requires session ID in context")
-        .clone();
     let mgr = ClientSessionManager::instance();
     match &ctx.credential {
         Credential::DatabendToken { token, .. } => {
+            let client_session_id = ctx
+                .client_session_id
+                .as_ref()
+                .ok_or_else(|| {
+                    HttpErrorCode::bad_request(ErrorCode::AuthenticateFailure(
+                        "refresh endpoint requires a client session ID",
+                    ))
+                })?
+                .clone();
             let (_, token_pair) = mgr
                 .new_token_pair(
                     &ctx.session,
@@ -68,10 +73,9 @@ pub async fn refresh_handler(
                 },
             }))
         }
-        _ => {
-            unreachable!(
-                "/v1/session/refresh endpoint requires authentication with databend refresh token"
-            )
-        }
+        _ => Err(HttpErrorCode::bad_request(ErrorCode::AuthenticateFailure(
+            "refresh endpoint requires a Databend refresh token, not a JWT or key-pair token",
+        ))
+        .into()),
     }
 }

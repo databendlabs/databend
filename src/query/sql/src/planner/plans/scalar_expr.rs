@@ -1352,7 +1352,7 @@ impl AsyncFunctionCall {
         &self,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {
