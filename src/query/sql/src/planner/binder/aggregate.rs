@@ -893,35 +893,42 @@ impl Binder {
         group_by: &GroupBy,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
+        let original_group_by_column_first = bind_context.group_by_column_first;
+        bind_context.group_by_column_first =
+            self.ctx.get_settings().get_enable_group_by_column_first()?;
 
-        let group_by = Self::expand_group(group_by.clone())?;
-        match &group_by {
-            GroupBy::Normal(exprs) => self.resolve_group_items(
-                bind_context,
-                select_list,
-                exprs,
-                group_by_aliases,
-                false,
-                &mut vec![],
-            )?,
-            GroupBy::All => {
-                let groups = self.resolve_group_all(select_list)?;
-                self.resolve_group_items(
+        let result = (|| {
+            let group_by = Self::expand_group(group_by.clone())?;
+            match &group_by {
+                GroupBy::Normal(exprs) => self.resolve_group_items(
                     bind_context,
                     select_list,
-                    &groups,
+                    exprs,
                     group_by_aliases,
                     false,
                     &mut vec![],
-                )?;
+                )?,
+                GroupBy::All => {
+                    let groups = self.resolve_group_all(select_list)?;
+                    self.resolve_group_items(
+                        bind_context,
+                        select_list,
+                        &groups,
+                        group_by_aliases,
+                        false,
+                        &mut vec![],
+                    )?;
+                }
+                GroupBy::GroupingSets(sets) => {
+                    self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
+                }
+                _ => unreachable!(),
             }
-            GroupBy::GroupingSets(sets) => {
-                self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
-            }
-            _ => unreachable!(),
-        }
+            Ok(())
+        })();
         bind_context.expr_context = original_context;
-        Ok(())
+        bind_context.group_by_column_first = original_group_by_column_first;
+        result
     }
 
     pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {

@@ -21,6 +21,13 @@ SELECT number%3 as c1 FROM numbers_mt(10) where number > 2 group by number%3 ord
 1
 2
 
+query II
+SELECT number % 3 AS number, count() FROM numbers(10) GROUP BY number ORDER BY number
+----
+0 4
+1 3
+2 3
+
 statement error must appear in the GROUP BY clause or be used in an aggregate function
 SELECT i, SUM(j), j FROM (SELECT 3 AS i, 4 AS j UNION ALL SELECT 3, 4 UNION ALL SELECT 2, 4) AS integers GROUP BY i ORDER BY i
 
@@ -30,7 +37,7 @@ SELECT 1 AS k, SUM(i) FROM (SELECT 3 AS i UNION ALL SELECT 3 UNION ALL SELECT 2)
 1 8
 
 query II
-SELECT 1 AS i, SUM(i) FROM (SELECT 3 AS i UNION ALL SELECT 3 UNION ALL SELECT 2) AS integers GROUP BY i ORDER BY 2
+settings(enable_group_by_column_first=1) SELECT 1 AS i, SUM(i) FROM (SELECT 3 AS i UNION ALL SELECT 3 UNION ALL SELECT 2) AS integers GROUP BY i ORDER BY 2
 ----
 1 2
 1 6

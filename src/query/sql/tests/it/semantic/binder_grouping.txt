@@ -67,52 +67,22 @@ Sort
                     └── limit: NONE
 
 
-=== group_by_prefers_input_column_over_same_name_select_alias ===
-description: GROUP BY should resolve an unqualified name to the input column before a same-name SELECT alias.
-sql: SELECT 1 AS i, sum(i) FROM t GROUP BY i
+=== group_by_prefers_select_alias_over_same_name_base_column ===
+description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.
+sql: SELECT a AS b, count(*) FROM t GROUP BY b
 status: ok
 EvalScalar
-├── scalars: [sum(i) (#2) AS (#2), 1 AS (#3)]
+├── scalars: [t.a (#0) AS (#0), COUNT(*) (#2) AS (#2)]
 └── Aggregate(Initial)
-    ├── group items: [t.i (#0) AS (#0)]
-    ├── aggregate functions: [sum(t.i (#0)) AS (#2)]
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
     └── EvalScalar
-        ├── scalars: [t.i (#0) AS (#0)]
+        ├── scalars: [t.a (#0) AS (#0)]
         └── Scan
             ├── table: default.t (#0)
             ├── filters: []
             ├── order by: []
             └── limit: NONE
-
-
-=== group_by_prefers_alias_over_outer_column ===
-description: GROUP BY should resolve a SELECT alias before falling back to a same-name outer column.
-sql: SELECT * FROM t_outer WHERE EXISTS (SELECT t_inner.a AS b FROM t_inner GROUP BY b)
-status: ok
-EvalScalar
-├── scalars: [t_outer.b (#0) AS (#0)]
-└── Filter
-    ├── filters: [SUBQUERY AS (#1)]
-    ├── subquerys
-    │   └── Subquery (Exists)
-    │       ├── output_column: t_inner.a (#1)
-    │       └── EvalScalar
-    │           ├── scalars: [t_inner.a (#1) AS (#1)]
-    │           └── Aggregate(Initial)
-    │               ├── group items: [t_inner.a (#1) AS (#1)]
-    │               ├── aggregate functions: []
-    │               └── EvalScalar
-    │                   ├── scalars: [t_inner.a (#1) AS (#1)]
-    │                   └── Scan
-    │                       ├── table: default.t_inner (#1)
-    │                       ├── filters: []
-    │                       ├── order by: []
-    │                       └── limit: NONE
-    └── Scan
-        ├── table: default.t_outer (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
 
 
 === group_by_prefers_input_column_over_aggregate_alias ===

@@ -253,6 +253,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("enable_group_by_column_first", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Resolve GROUP BY names to input columns before SELECT aliases. Disabled by default for compatibility.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
                     desc: "Sets the maximum number of concurrent storage I/O requests.",
