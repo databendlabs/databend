@@ -142,19 +142,33 @@ fn trim_props(
 
 /// Add iceberg s3 FileIO credential keys from AWS SDK style keys while keeping
 /// the original AWS keys for catalog clients such as S3Tables.
+///
+/// Treat S3 credentials as a group: if users provide explicit s3 credential
+/// keys, don't mix in AWS catalog credentials such as Glue session tokens.
 fn with_s3_file_io_aliases(
     raw: &std::collections::HashMap<String, String>,
 ) -> std::collections::HashMap<String, String> {
     let mut out = trim_props(raw);
-    let aliases = [
-        ("aws_access_key_id", "s3.access-key-id"),
-        ("aws_secret_access_key", "s3.secret-access-key"),
-        ("aws_session_token", "s3.session-token"),
-        ("region_name", "s3.region"),
-        ("aws_region", "s3.region"),
-    ];
+    let has_s3_credentials = out.contains_key("s3.access-key-id")
+        || out.contains_key("s3.secret-access-key")
+        || out.contains_key("s3.session-token");
 
-    for (aws_key, s3_key) in aliases {
+    if !has_s3_credentials {
+        let credential_aliases = [
+            ("aws_access_key_id", "s3.access-key-id"),
+            ("aws_secret_access_key", "s3.secret-access-key"),
+            ("aws_session_token", "s3.session-token"),
+        ];
+
+        for (aws_key, s3_key) in credential_aliases {
+            if let Some(val) = out.get(aws_key).cloned() {
+                out.entry(s3_key.to_string()).or_insert(val);
+            }
+        }
+    }
+
+    let region_aliases = [("region_name", "s3.region"), ("aws_region", "s3.region")];
+    for (aws_key, s3_key) in region_aliases {
         if let Some(val) = out.get(aws_key).cloned() {
             out.entry(s3_key.to_string()).or_insert(val);
         }
@@ -851,6 +865,32 @@ mod tests {
         )]));
 
         assert_eq!(props.get("aws_region"), Some(&"us-east-1".to_string()));
+        assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+    }
+
+    #[test]
+    fn storage_catalog_does_not_mix_aws_session_token_with_explicit_s3_credentials() {
+        let props = with_s3_file_io_aliases(&HashMap::from([
+            ("aws_access_key_id".to_string(), "aws_access".to_string()),
+            (
+                "aws_secret_access_key".to_string(),
+                "aws_secret".to_string(),
+            ),
+            ("aws_session_token".to_string(), "aws_token".to_string()),
+            ("region_name".to_string(), "us-east-1".to_string()),
+            ("s3.access-key-id".to_string(), "s3_access".to_string()),
+            ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
+        ]));
+
+        assert_eq!(
+            props.get("s3.access-key-id"),
+            Some(&"s3_access".to_string())
+        );
+        assert_eq!(
+            props.get("s3.secret-access-key"),
+            Some(&"s3_secret".to_string())
+        );
+        assert!(!props.contains_key("s3.session-token"));
         assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
     }
 
