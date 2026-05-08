@@ -731,6 +731,42 @@ impl IcebergFileIO {
                 "s3.secret-access-key" => Some("secret_access_key"),
                 "s3.region" | "client.region" => Some("region"),
                 "s3.session-token" => Some("session_token"),
+                "aws_access_key_id" => {
+                    if self.props.contains_key("s3.access-key-id") {
+                        None
+                    } else {
+                        Some("access_key_id")
+                    }
+                }
+                "aws_secret_access_key" => {
+                    if self.props.contains_key("s3.secret-access-key") {
+                        None
+                    } else {
+                        Some("secret_access_key")
+                    }
+                }
+                "aws_session_token" | "aws_token" | "token" => {
+                    if self.props.contains_key("s3.session-token") {
+                        None
+                    } else {
+                        Some("session_token")
+                    }
+                }
+                "aws_region" | "region_name" => {
+                    if self.props.contains_key("s3.region")
+                        || self.props.contains_key("client.region")
+                    {
+                        None
+                    } else {
+                        Some("region")
+                    }
+                }
+                "aws_server_side_encryption" => Some("server_side_encryption"),
+                "aws_sse_kms_key_id" => Some("server_side_encryption_aws_kms_key_id"),
+                "aws_sse_customer_key_base64" => Some("server_side_encryption_customer_key"),
+                "aws_checksum_algorithm" => Some("checksum_algorithm"),
+                "aws_request_payer" => Some("request_payer"),
+                "aws_bucket" | "aws_bucket_name" | "bucket_name" => None,
                 "s3.path-style-access" => {
                     let enable_virtual_host_style =
                         !["true", "t", "1", "on"].contains(&value.to_lowercase().as_str());
@@ -788,5 +824,42 @@ impl OperatorRegistry for IcebergFileIO {
     fn get_operator_path<'a>(&self, location: &'a str) -> Result<(Operator, &'a str)> {
         let (op, pos) = self.build_operator(location)?;
         Ok((op, &location[pos..]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::IcebergFileIO;
+
+    #[test]
+    fn iceberg_file_io_prefers_s3_keys_over_aws_aliases() {
+        let file_io = IcebergFileIO {
+            scheme: "s3".to_string(),
+            props: HashMap::from([
+                ("aws_access_key_id".to_string(), "glue_access".to_string()),
+                (
+                    "aws_secret_access_key".to_string(),
+                    "glue_secret".to_string(),
+                ),
+                ("aws_session_token".to_string(), "glue_token".to_string()),
+                ("region_name".to_string(), "us-west-2".to_string()),
+                (
+                    "s3.endpoint".to_string(),
+                    "http://localhost:9000".to_string(),
+                ),
+                ("s3.access-key-id".to_string(), "s3_access".to_string()),
+                ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
+                ("s3.session-token".to_string(), "s3_token".to_string()),
+                ("s3.region".to_string(), "us-east-1".to_string()),
+            ]),
+        };
+
+        let res = file_io.build_operator("s3://bucket/path/to/file.parquet");
+
+        assert!(res.is_ok(), "operator build failed: {:?}", res.err());
+        let (_, path_pos) = res.unwrap();
+        assert_eq!(path_pos, "s3://bucket/".len());
     }
 }

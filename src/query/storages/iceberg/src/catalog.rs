@@ -132,9 +132,36 @@ impl CatalogCreator for IcebergMutableCreator {
     }
 }
 
-/// `Catalog` for a external iceberg storage
-///
-/// - Metadata of databases are saved in meta store
+fn trim_props(
+    raw: &std::collections::HashMap<String, String>,
+) -> std::collections::HashMap<String, String> {
+    raw.iter()
+        .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
+        .collect()
+}
+
+/// Add iceberg s3 FileIO credential keys from AWS SDK style keys while keeping
+/// the original AWS keys for catalog clients such as S3Tables.
+fn with_s3_file_io_aliases(
+    raw: &std::collections::HashMap<String, String>,
+) -> std::collections::HashMap<String, String> {
+    let mut out = trim_props(raw);
+    let aliases = [
+        ("aws_access_key_id", "s3.access-key-id"),
+        ("aws_secret_access_key", "s3.secret-access-key"),
+        ("aws_session_token", "s3.session-token"),
+        ("region_name", "s3.region"),
+    ];
+
+    for (aws_key, s3_key) in aliases {
+        if let Some(val) = out.get(aws_key).cloned() {
+            out.entry(s3_key.to_string()).or_insert(val);
+        }
+    }
+
+    out
+}
+
 /// - Instances of `Database` are created from reading subdirectories of
 ///   Iceberg table
 /// - Table metadata are saved in external Iceberg storage
@@ -167,11 +194,7 @@ impl IcebergMutableCatalog {
         // We only do this while building catalog so this won't affect existing catalogs.
         let ctl: Arc<dyn iceberg::Catalog> = match opt {
             IcebergCatalogOption::Hms(hms) => {
-                let mut props: std::collections::HashMap<String, String> = hms
-                    .props
-                    .iter()
-                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
-                    .collect();
+                let mut props = trim_props(&hms.props);
                 props.insert("uri".to_string(), hms.address.clone());
                 props.insert("warehouse".to_string(), hms.warehouse.clone());
 
@@ -185,11 +208,7 @@ impl IcebergMutableCatalog {
             }
             IcebergCatalogOption::Rest(rest) => {
                 let client = HttpClient::default();
-                let mut props: std::collections::HashMap<String, String> = rest
-                    .props
-                    .iter()
-                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
-                    .collect();
+                let mut props = trim_props(&rest.props);
                 props.insert("uri".to_string(), rest.uri.clone());
                 props.insert("warehouse".to_string(), rest.warehouse.clone());
 
@@ -204,11 +223,7 @@ impl IcebergMutableCatalog {
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Glue(glue) => {
-                let mut props: std::collections::HashMap<String, String> = glue
-                    .props
-                    .iter()
-                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
-                    .collect();
+                let mut props = trim_props(&glue.props);
                 props.insert("uri".to_string(), glue.address.clone());
                 props.insert("warehouse".to_string(), glue.warehouse.clone());
 
@@ -223,11 +238,10 @@ impl IcebergMutableCatalog {
                 Arc::new(ctl)
             }
             IcebergCatalogOption::Storage(s) => {
-                let mut props: std::collections::HashMap<String, String> = s
-                    .props
-                    .iter()
-                    .map(|(k, v)| (k.trim_matches('"').to_string(), v.clone()))
-                    .collect();
+                // S3Tables uses aws_* keys for the AWS SDK client, while its
+                // FileIO path expects iceberg s3.* keys. Keep the AWS keys and
+                // add missing s3.* aliases for file access.
+                let mut props = with_s3_file_io_aliases(&s.props);
                 props.insert("endpoint_url".to_string(), s.address.clone());
                 props.insert("table_bucket_arn".to_string(), s.table_bucket_arn.clone());
 
@@ -779,5 +793,80 @@ impl Catalog for IcebergMutableCatalog {
         _func_name: &str,
     ) -> Result<Arc<dyn TableFunction>> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::with_s3_file_io_aliases;
+
+    #[test]
+    fn storage_catalog_keeps_aws_keys_and_adds_missing_s3_aliases() {
+        let props = with_s3_file_io_aliases(&HashMap::from([
+            ("aws_access_key_id".to_string(), "aws_access".to_string()),
+            (
+                "aws_secret_access_key".to_string(),
+                "aws_secret".to_string(),
+            ),
+            ("aws_session_token".to_string(), "aws_token".to_string()),
+            ("region_name".to_string(), "us-east-1".to_string()),
+        ]));
+
+        assert_eq!(
+            props.get("aws_access_key_id"),
+            Some(&"aws_access".to_string())
+        );
+        assert_eq!(
+            props.get("aws_secret_access_key"),
+            Some(&"aws_secret".to_string())
+        );
+        assert_eq!(
+            props.get("aws_session_token"),
+            Some(&"aws_token".to_string())
+        );
+        assert_eq!(props.get("region_name"), Some(&"us-east-1".to_string()));
+        assert_eq!(
+            props.get("s3.access-key-id"),
+            Some(&"aws_access".to_string())
+        );
+        assert_eq!(
+            props.get("s3.secret-access-key"),
+            Some(&"aws_secret".to_string())
+        );
+        assert_eq!(
+            props.get("s3.session-token"),
+            Some(&"aws_token".to_string())
+        );
+        assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+    }
+
+    #[test]
+    fn storage_catalog_does_not_override_explicit_s3_aliases() {
+        let props = with_s3_file_io_aliases(&HashMap::from([
+            ("aws_access_key_id".to_string(), "aws_access".to_string()),
+            (
+                "aws_secret_access_key".to_string(),
+                "aws_secret".to_string(),
+            ),
+            ("aws_session_token".to_string(), "aws_token".to_string()),
+            ("region_name".to_string(), "us-east-1".to_string()),
+            ("s3.access-key-id".to_string(), "s3_access".to_string()),
+            ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
+            ("s3.session-token".to_string(), "s3_token".to_string()),
+            ("s3.region".to_string(), "us-west-2".to_string()),
+        ]));
+
+        assert_eq!(
+            props.get("s3.access-key-id"),
+            Some(&"s3_access".to_string())
+        );
+        assert_eq!(
+            props.get("s3.secret-access-key"),
+            Some(&"s3_secret".to_string())
+        );
+        assert_eq!(props.get("s3.session-token"), Some(&"s3_token".to_string()));
+        assert_eq!(props.get("s3.region"), Some(&"us-west-2".to_string()));
     }
 }
