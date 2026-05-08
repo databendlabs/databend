@@ -679,6 +679,20 @@ TableScan
 └── estimated rows: 0.00
 
 query T
+explain select * from t4 where b = a and b = 5;
+----
+TableScan
+├── table: default.default.t4
+├── scan id: 0
+├── output columns: [a (#0), b (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [TRY_CAST(t4.b (#1) AS Int32 NULL) = CAST(t4.a (#0) AS Int32 NULL) and TRY_CAST(t4.b (#1) AS UInt8 NULL) = 5], limit: NONE]
+└── estimated rows: 0.00
+
+query T
 explain select * from t3 join t4 on t3.b = t4.b where strip_null_value(t4.b) is not null;
 ----
 HashJoin
@@ -768,6 +782,23 @@ HashJoin
     ├── push downs: [filters: [t1.id (#0) = 869550529], limit: NONE]
     ├── apply join filters: [#0]
     └── estimated rows: 1.00
+
+statement ok
+create or replace table t1(i BIGINT NOT NULL, d DECIMAL(18, 2) NULL);
+
+query T
+explain SELECT * FROM t1 where i = d and i = 10;
+----
+TableScan
+├── table: default.default.t1
+├── scan id: 0
+├── output columns: [i (#0), d (#1)]
+├── read rows: 0
+├── read size: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [t1.i (#0) = 10 and t1.d (#1) = 10 and true], limit: NONE]
+└── estimated rows: 0.00
 
 statement ok
 drop table if exists t1;

@@ -14,8 +14,12 @@
 
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::VectorDataType;
+use databend_common_sql::Symbol;
 use databend_common_sql::optimizer::optimizers::operator::InferFilterOptimizer;
+use databend_common_sql::planner::plans::FunctionCall;
 use databend_common_sql::planner::plans::ScalarExpr;
 
 use crate::sql::planner::optimizer::test_utils::ExprBuilder;
@@ -935,6 +939,474 @@ fn test_contradiction_detection() -> anyhow::Result<()> {
             "Should infer B < 10 predicate through equality"
         );
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_equal_type_compatibility_uses_explicit_type_cases() -> anyhow::Result<()> {
+    for case in equal_compatibility_cases() {
+        let left = create_table_bound_column_ref(
+            Symbol::new(0),
+            "left",
+            case.left_ty.clone(),
+            Some("t"),
+            Some(0),
+        );
+        let right = create_table_bound_column_ref(
+            Symbol::new(1),
+            "right",
+            case.right_ty.clone(),
+            Some("t"),
+            Some(0),
+        );
+
+        let mut optimizer = InferFilterOptimizer::new(None);
+        assert_eq!(
+            optimizer.add_equal_expr(&left, &right),
+            case.expected,
+            "{}: left={:?}, right={:?}",
+            case.name,
+            case.left_ty,
+            case.right_ty,
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_equal_type_compatibility_propagates_number_decimal_predicates() -> anyhow::Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let int_col = builder.column(
+        "int_col",
+        0,
+        "int_col",
+        DataType::Number(NumberDataType::Int64),
+        "",
+        0,
+    );
+    let decimal_col = builder.column(
+        "decimal_col",
+        1,
+        "decimal_col",
+        DataType::Decimal(DecimalSize::new_unchecked(18, 2)),
+        "",
+        0,
+    );
+
+    let result = run_optimizer(vec![
+        builder.eq(int_col.clone(), decimal_col),
+        builder.eq(int_col, builder.int(10)),
+    ])?;
+
+    assert!(
+        builder.find_predicate(&result, "eq", 1, Some(10)),
+        "Should propagate constants through Number/Decimal equality"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_equal_type_compatibility_rejects_number_float_predicates() -> anyhow::Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let int_col = builder.column(
+        "int_col",
+        0,
+        "int_col",
+        DataType::Number(NumberDataType::Int64),
+        "",
+        0,
+    );
+    let float_col = builder.column(
+        "float_col",
+        1,
+        "float_col",
+        DataType::Number(NumberDataType::Float64),
+        "",
+        0,
+    );
+
+    let result = run_optimizer(vec![
+        builder.eq(int_col.clone(), float_col),
+        builder.eq(int_col, builder.int(10)),
+    ])?;
+
+    assert!(
+        !builder.find_predicate(&result, "eq", 1, Some(10)),
+        "Should not propagate constants through Number/Float equality"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_equal_type_compatibility_rejects_string_number_transitivity() -> anyhow::Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let string_col_1 = builder.column("s1", 0, "s1", DataType::String, "", 0);
+    let string_col_2 = builder.column("s2", 1, "s2", DataType::String, "", 0);
+    let number_col = builder.column("n", 2, "n", DataType::Number(NumberDataType::Int64), "", 0);
+
+    let result = run_optimizer(vec![
+        builder.eq(string_col_1.clone(), number_col.clone()),
+        builder.eq(string_col_2.clone(), number_col),
+    ])?;
+
+    assert!(
+        !result.iter().any(|predicate| {
+            if let ScalarExpr::FunctionCall(func) = predicate {
+                if func.func_name != "eq" {
+                    return false;
+                }
+                let left_index = get_column_index(&func.arguments[0]);
+                let right_index = get_column_index(&func.arguments[1]);
+                (left_index == Some(Symbol::new(0)) && right_index == Some(Symbol::new(1)))
+                    || (left_index == Some(Symbol::new(1)) && right_index == Some(Symbol::new(0)))
+            } else {
+                false
+            }
+        }),
+        "String/Number equality should not infer String/String equality"
+    );
+
+    Ok(())
+}
+
+struct EqualCompatibilityCase {
+    name: &'static str,
+    left_ty: DataType,
+    right_ty: DataType,
+    expected: bool,
+}
+
+fn equal_compatibility_cases() -> Vec<EqualCompatibilityCase> {
+    fn case(
+        name: &'static str,
+        left_ty: DataType,
+        right_ty: DataType,
+        expected: bool,
+    ) -> EqualCompatibilityCase {
+        EqualCompatibilityCase {
+            name,
+            left_ty,
+            right_ty,
+            expected,
+        }
+    }
+
+    let int64 = DataType::Number(NumberDataType::Int64);
+    let uint64 = DataType::Number(NumberDataType::UInt64);
+    let float64 = DataType::Number(NumberDataType::Float64);
+    let decimal_18_2 = DataType::Decimal(DecimalSize::new_unchecked(18, 2));
+    let decimal_38_4 = DataType::Decimal(DecimalSize::new_unchecked(38, 4));
+    let string = DataType::String;
+    let boolean = DataType::Boolean;
+    let date = DataType::Date;
+    let timestamp = DataType::Timestamp;
+    let timestamp_tz = DataType::TimestampTz;
+    let variant = DataType::Variant;
+    let binary = DataType::Binary;
+    let interval = DataType::Interval;
+    let geometry = DataType::Geometry;
+    let geography = DataType::Geography;
+    let bitmap = DataType::Bitmap;
+    let vector = DataType::Vector(VectorDataType::Float32(3));
+    let array_int64 = DataType::Array(Box::new(int64.clone()));
+    let array_decimal = DataType::Array(Box::new(decimal_18_2.clone()));
+    let empty_array = DataType::EmptyArray;
+    let map_string_int64 = DataType::Map(Box::new(DataType::Tuple(vec![
+        string.clone(),
+        int64.clone(),
+    ])));
+    let map_string_decimal = DataType::Map(Box::new(DataType::Tuple(vec![
+        string.clone(),
+        decimal_18_2.clone(),
+    ])));
+    let empty_map = DataType::EmptyMap;
+    let tuple_int_string = DataType::Tuple(vec![int64.clone(), string.clone()]);
+    let tuple_decimal_string = DataType::Tuple(vec![decimal_18_2.clone(), string.clone()]);
+    let tuple_nested = DataType::Tuple(vec![
+        DataType::Nullable(Box::new(int64.clone())),
+        array_int64.clone(),
+        map_string_int64.clone(),
+    ]);
+
+    vec![
+        case(
+            "null coerces to number",
+            DataType::Null,
+            int64.clone(),
+            true,
+        ),
+        case(
+            "empty array coerces to typed array",
+            empty_array,
+            array_int64.clone(),
+            true,
+        ),
+        case(
+            "empty map is not comparable",
+            empty_map,
+            map_string_int64.clone(),
+            false,
+        ),
+        case("boolean with boolean", boolean.clone(), boolean, true),
+        case("string with string", string.clone(), string.clone(), true),
+        case(
+            "string with number is not inferred",
+            string.clone(),
+            int64.clone(),
+            false,
+        ),
+        case(
+            "string with boolean is not inferred",
+            string.clone(),
+            DataType::Boolean,
+            false,
+        ),
+        case(
+            "string with date is not inferred",
+            string.clone(),
+            date.clone(),
+            false,
+        ),
+        case(
+            "string with timestamp is not inferred",
+            string.clone(),
+            timestamp.clone(),
+            false,
+        ),
+        case(
+            "string with timestamp_tz is not inferred",
+            string.clone(),
+            timestamp_tz.clone(),
+            false,
+        ),
+        case("signed with unsigned number", int64.clone(), uint64, true),
+        case(
+            "integer with float is not inferred",
+            int64.clone(),
+            float64.clone(),
+            false,
+        ),
+        case(
+            "integer with decimal",
+            int64.clone(),
+            decimal_18_2.clone(),
+            true,
+        ),
+        case(
+            "decimal with larger decimal",
+            decimal_18_2.clone(),
+            decimal_38_4,
+            true,
+        ),
+        case(
+            "decimal with float is not inferred",
+            decimal_18_2.clone(),
+            float64,
+            false,
+        ),
+        case("date with timestamp", date.clone(), timestamp.clone(), true),
+        case(
+            "timestamp with timestamp",
+            timestamp.clone(),
+            timestamp,
+            true,
+        ),
+        case(
+            "timestamp_tz with timestamp_tz",
+            timestamp_tz.clone(),
+            timestamp_tz,
+            true,
+        ),
+        case(
+            "nullable number with number",
+            DataType::Nullable(Box::new(int64.clone())),
+            int64.clone(),
+            true,
+        ),
+        case(
+            "nullable decimal with integer",
+            DataType::Nullable(Box::new(decimal_18_2.clone())),
+            int64.clone(),
+            true,
+        ),
+        case(
+            "variant with number is not inferred",
+            DataType::Nullable(Box::new(variant.clone())),
+            int64.clone(),
+            false,
+        ),
+        case(
+            "variant with string is not inferred",
+            variant.clone(),
+            string.clone(),
+            false,
+        ),
+        case(
+            "variant with boolean is not inferred",
+            variant.clone(),
+            DataType::Boolean,
+            false,
+        ),
+        case(
+            "variant with date is not inferred",
+            variant.clone(),
+            date.clone(),
+            false,
+        ),
+        case(
+            "variant with timestamp is not inferred",
+            variant.clone(),
+            DataType::Timestamp,
+            false,
+        ),
+        case(
+            "variant with decimal is not inferred",
+            variant.clone(),
+            decimal_18_2.clone(),
+            false,
+        ),
+        case(
+            "variant with variant",
+            variant.clone(),
+            variant.clone(),
+            true,
+        ),
+        case(
+            "array element decimal widening",
+            array_int64.clone(),
+            array_decimal,
+            true,
+        ),
+        case(
+            "array variant with array number is not comparable",
+            DataType::Array(Box::new(DataType::Nullable(Box::new(variant.clone())))),
+            array_int64.clone(),
+            false,
+        ),
+        case(
+            "map is not comparable",
+            map_string_int64.clone(),
+            map_string_decimal,
+            false,
+        ),
+        case(
+            "map variant value is not comparable",
+            DataType::Map(Box::new(DataType::Tuple(vec![
+                string.clone(),
+                DataType::Nullable(Box::new(variant.clone())),
+            ]))),
+            map_string_int64.clone(),
+            false,
+        ),
+        case(
+            "tuple field decimal widening",
+            tuple_int_string.clone(),
+            tuple_decimal_string,
+            true,
+        ),
+        case(
+            "nested tuple with itself",
+            tuple_nested.clone(),
+            tuple_nested,
+            true,
+        ),
+        case(
+            "interval with interval",
+            interval.clone(),
+            interval.clone(),
+            true,
+        ),
+        case("bitmap with bitmap", bitmap.clone(), bitmap.clone(), true),
+        case("binary is not comparable", binary.clone(), binary, false),
+        case(
+            "string does not compare as binary",
+            string.clone(),
+            DataType::Binary,
+            false,
+        ),
+        case(
+            "geometry is not comparable",
+            geometry.clone(),
+            geometry,
+            false,
+        ),
+        case(
+            "geography is not comparable",
+            geography.clone(),
+            geography,
+            false,
+        ),
+        case("vector is not comparable", vector.clone(), vector, false),
+        case(
+            "opaque is not comparable",
+            DataType::Opaque(1),
+            DataType::Opaque(1),
+            false,
+        ),
+        case(
+            "stage location is not comparable",
+            DataType::StageLocation,
+            DataType::StageLocation,
+            false,
+        ),
+        case("bitmap with string", bitmap, DataType::String, false),
+        case("interval with number", interval, int64.clone(), false),
+        case("array with tuple", array_int64, tuple_int_string, false),
+        case(
+            "map with tuple",
+            map_string_int64,
+            DataType::Tuple(vec![string.clone(), int64]),
+            false,
+        ),
+    ]
+}
+
+#[test]
+fn test_replaced_remaining_predicate_must_still_type_check() -> anyhow::Result<()> {
+    let mut builder = ExprBuilder::new();
+
+    let int_col = builder.column(
+        "int_col",
+        0,
+        "int_col",
+        DataType::Number(NumberDataType::Int64),
+        "",
+        0,
+    );
+    let variant_col = builder.column(
+        "variant_col",
+        1,
+        "variant_col",
+        DataType::Nullable(Box::new(DataType::Variant)),
+        "",
+        0,
+    );
+    let strip_null_value = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "strip_null_value".to_string(),
+        params: vec![],
+        arguments: vec![variant_col.clone()],
+    });
+    let is_not_null = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: "is_not_null".to_string(),
+        params: vec![],
+        arguments: vec![strip_null_value],
+    });
+
+    let result = run_optimizer(vec![builder.eq(int_col, variant_col), is_not_null])?;
+
+    assert!(
+        result.iter().all(|expr| expr.data_type().is_ok()),
+        "Inferred predicates should not contain invalid function arguments"
+    );
 
     Ok(())
 }
