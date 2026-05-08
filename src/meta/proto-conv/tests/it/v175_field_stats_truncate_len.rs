@@ -40,8 +40,8 @@ fn test_decode_v175_field_stats_truncate_len() -> anyhow::Result<()> {
         10, 7, 160, 6, 175, 1, 168, 6, 24, 64, 3, 74, 10, 40, 97, 32, 43, 32, 50, 44, 32, 98, 41,
         162, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32,
         85, 84, 67, 170, 1, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58,
-        49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 175, 1, 168, 6, 24, 176, 2, 2, 160, 6, 175, 1,
-        168, 6, 24,
+        49, 48, 32, 85, 84, 67, 186, 1, 7, 160, 6, 175, 1, 168, 6, 24, 176, 2, 2, 186, 2, 2, 16, 4,
+        186, 2, 4, 8, 1, 16, 40, 160, 6, 175, 1, 168, 6, 24,
     ];
 
     let want = || mt::TableMeta {
@@ -58,7 +58,7 @@ fn test_decode_v175_field_stats_truncate_len() -> anyhow::Result<()> {
         updated_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 10).unwrap(),
         comment: s(""),
         field_comments: vec![],
-        field_stats_truncate_len: btreemap! {},
+        field_stats_truncate_len: btreemap! { 0u32 => 4u64, 1u32 => 40u64 },
         virtual_schema: None,
         drop_on: None,
         statistics: Default::default(),
