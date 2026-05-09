@@ -21,6 +21,7 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
+use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::OrderByExpr;
@@ -33,9 +34,13 @@ use databend_common_ast::ast::WindowDesc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
+use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
@@ -81,10 +86,6 @@ impl<'a> CoreExprArena<'a> {
             nodes: Vec::new(),
             week_start,
         }
-    }
-
-    pub(super) fn legacy_ast(&mut self, expr: &'a Expr) -> CoreExprId {
-        self.alloc(CoreExpr::LegacyAst(expr))
     }
 
     #[recursive::recursive]
@@ -490,6 +491,12 @@ impl<'a> CoreExprArena<'a> {
         } = func;
         let func_name = normalized_func_name(&name.name);
 
+        if !is_builtin_function(&func_name)
+            && !TypeChecker::all_sugar_functions().contains(&Ascii::new(func_name.as_str()))
+        {
+            return Ok(self.runtime_call(span, name, args));
+        }
+
         if lambda.is_none()
             && let Some(func_name) = general_window_function_name(&func_name)
         {
@@ -534,6 +541,53 @@ impl<'a> CoreExprArena<'a> {
             });
         }
 
+        let uni_case_func_name = Ascii::new(func_name.as_str());
+        if !order_by.is_empty() && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&uni_case_func_name) {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        if window.is_some()
+            && !AggregateFunctionFactory::instance().contains(&func_name)
+            && !GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name)
+        {
+            return Err(ErrorCode::SemanticError(
+                "only window and aggregate functions allowed in window syntax",
+            )
+            .set_span(span));
+        }
+        if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
+            return Err(
+                ErrorCode::SemanticError("only lambda functions allowed in lambda syntax")
+                    .set_span(span),
+            );
+        }
+
+        if let Some(func_name) = general_lambda_function_name(&func_name) {
+            return match lambda.as_ref() {
+                Some(lambda) => {
+                    Ok(self.lambda_function(span, func_name, args.iter().collect(), lambda))
+                }
+                None => Err(ErrorCode::SemanticError(format!(
+                    "function {func_name} must have a lambda expression",
+                ))
+                .set_span(span)),
+            };
+        }
+
+        if let Some(func_name) = general_search_function_name(&func_name) {
+            return Ok(self.search_function(span, func_name, args.iter().collect()));
+        }
+
+        if let Some(func_name) = async_function_name(&func_name) {
+            return Ok(self.async_function(span, func_name, args.iter().collect()));
+        }
+
+        if let Some(func_name) = set_returning_function_name(&func_name) {
+            return Ok(self.set_returning_function(span, func_name, args.iter().collect()));
+        }
+
         if !*distinct
             && params.is_empty()
             && order_by.is_empty()
@@ -552,13 +606,16 @@ impl<'a> CoreExprArena<'a> {
                 let args = self.lower_expr_args(args)?;
                 return Ok(self.call(span, func_name, args));
             }
-
-            if !is_builtin_function(&func_name) {
-                return Ok(self.runtime_call(span, name, args));
-            }
         }
 
-        Ok(self.legacy_ast(original_expr))
+        let Some(func_name) = builtin_scalar_function_name(&func_name) else {
+            return Err(ErrorCode::Internal(format!(
+                "function {func_name} should have been classified before scalar lowering",
+            )));
+        };
+        let params = self.lower_function_params(params)?;
+        let args = self.lower_expr_args(args)?;
+        Ok(self.scalar_function(span, func_name, params, args))
     }
 
     fn lower_unary_op_expr(
@@ -857,6 +914,75 @@ impl<'a> CoreExprArena<'a> {
         self.alloc(CoreExpr::StageLocation { span, location })
     }
 
+    fn lambda_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+        lambda: &'a Lambda,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::LambdaFunction {
+            span,
+            func_name,
+            args,
+            lambda,
+        })
+    }
+
+    fn search_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::SearchFunction {
+            span,
+            func_name,
+            args,
+        })
+    }
+
+    fn async_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::AsyncFunction {
+            span,
+            func_name,
+            args,
+        })
+    }
+
+    fn set_returning_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::SetReturningFunction {
+            span,
+            func_name,
+            args,
+        })
+    }
+
+    fn scalar_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::ScalarFunction {
+            span,
+            func_name,
+            params,
+            args,
+        })
+    }
+
     fn alloc(&mut self, expr: CoreExpr<'a>) -> CoreExprId {
         let index = self.nodes.len();
         self.nodes.push(expr);
@@ -869,7 +995,6 @@ impl<'a> CoreExprArena<'a> {
 }
 
 pub(super) enum CoreExpr<'a> {
-    LegacyAst(&'a Expr),
     ColumnRef {
         span: Span,
         column: &'a ColumnRef,
@@ -905,6 +1030,33 @@ pub(super) enum CoreExpr<'a> {
         span: Span,
         name: &'a Identifier,
         args: &'a [Expr],
+    },
+    LambdaFunction {
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+        lambda: &'a Lambda,
+    },
+    SearchFunction {
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+    },
+    AsyncFunction {
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+    },
+    SetReturningFunction {
+        span: Span,
+        func_name: &'static str,
+        args: AstExprArgs<'a>,
+    },
+    ScalarFunction {
+        span: Span,
+        func_name: &'static str,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
     },
     BinaryOp {
         span: Span,
@@ -1028,7 +1180,6 @@ impl<'a> TypeChecker<'a> {
         id: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match arena.get(id) {
-            CoreExpr::LegacyAst(expr) => self.resolve_legacy_ast(expr),
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::Literal { span, value } => {
                 let (value, data_type) = infer_literal_data_type(value.clone());
@@ -1075,6 +1226,42 @@ impl<'a> TypeChecker<'a> {
             CoreExpr::RuntimeCall { span, name, args } => {
                 self.resolve_core_runtime_call(*span, name, args)
             }
+            CoreExpr::LambdaFunction {
+                span,
+                func_name,
+                args,
+                lambda,
+            } => self.resolve_lambda_function(*span, func_name, args, lambda),
+            CoreExpr::SearchFunction {
+                span,
+                func_name,
+                args,
+            } => match *func_name {
+                "score" => self.resolve_score_search_function(*span, func_name, args),
+                "match" => self.resolve_match_search_function(*span, func_name, args),
+                "query" => self.resolve_query_search_function(*span, func_name, args),
+                _ => Err(ErrorCode::SemanticError(format!(
+                    "cannot find search function {}",
+                    func_name
+                ))
+                .set_span(*span)),
+            },
+            CoreExpr::AsyncFunction {
+                span,
+                func_name,
+                args,
+            } => self.resolve_async_function(*span, func_name, args),
+            CoreExpr::SetReturningFunction {
+                span,
+                func_name,
+                args,
+            } => self.resolve_set_returning_function(*span, func_name, args),
+            CoreExpr::ScalarFunction {
+                span,
+                func_name,
+                params,
+                args,
+            } => self.resolve_core_scalar_function(arena, *span, func_name, params, args),
             CoreExpr::BinaryOp {
                 span,
                 op,
@@ -1245,6 +1432,45 @@ impl<'a> TypeChecker<'a> {
             return Ok(udf);
         }
         Err(self.unknown_function_error(span, &udf_name))
+    }
+
+    fn resolve_core_scalar_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        params: &CoreFunctionParams,
+        args: &CoreExprArgs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
+        let (scalars, _) = self.resolve_core_expr_args(arena, args)?;
+
+        if self.should_try_rewrite_variant_function(func_name) {
+            let mut arg_types = Vec::with_capacity(scalars.len());
+            for scalar in &scalars {
+                let mut data_type = scalar.data_type()?;
+                if let ScalarExpr::SubqueryExpr(subquery) = scalar
+                    && subquery.typ == SubqueryType::Scalar
+                    && !data_type.is_nullable()
+                {
+                    data_type = data_type.wrap_nullable();
+                }
+                arg_types.push(data_type);
+            }
+            if let Some(rewritten_variant_expr) =
+                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+            {
+                return rewritten_variant_expr;
+            }
+        }
+        if Self::is_vector_function(func_name)
+            && let Some(rewritten_vector_expr) =
+                self.try_rewrite_vector_function(span, func_name, &scalars)
+        {
+            return rewritten_vector_expr;
+        }
+
+        self.resolve_scalar_function_call(span, func_name, params, scalars)
     }
 
     fn resolve_core_window_function(
@@ -1471,8 +1697,57 @@ fn general_window_function_name(func_name: &str) -> Option<&'static str> {
         .map(Ascii::into_inner)
 }
 
+fn general_lambda_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    GENERAL_LAMBDA_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
+
+fn general_search_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    GENERAL_SEARCH_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
+
+fn async_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    ASYNC_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
+
 fn builtin_scalar_function_name(func_name: &str) -> Option<&'static str> {
     if !TypeChecker::can_lower_core_scalar_function(func_name) {
+        return None;
+    }
+
+    let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
+    if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((name, _)) = functions.factories.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
+        return Some(alias.as_str());
+    }
+    None
+}
+
+fn set_returning_function_name(func_name: &str) -> Option<&'static str> {
+    if !BUILTIN_FUNCTIONS
+        .get_property(func_name)
+        .map(|property| property.kind == FunctionKind::SRF)
+        .unwrap_or(false)
+    {
         return None;
     }
 
@@ -1729,6 +2004,29 @@ mod tests {
 
         assert_sql_lowers_to("a LIKE 'x' ESCAPE '!'", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::LikeWithEscape { .. }));
+        });
+
+        assert_sql_lowers_to("array_filter([1], x -> x > 0)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::LambdaFunction { .. }));
+        });
+
+        assert_sql_lowers_to("score()", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::SearchFunction { .. }));
+        });
+
+        assert_sql_lowers_to("nextval(seq)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::AsyncFunction { .. }));
+        });
+
+        assert_sql_lowers_to("unnest([1, 2])", |arena, root| {
+            assert!(matches!(
+                arena.get(root),
+                CoreExpr::SetReturningFunction { .. }
+            ));
+        });
+
+        assert_sql_lowers_to("abs(DISTINCT 1)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::ScalarFunction { .. }));
         });
     }
 
