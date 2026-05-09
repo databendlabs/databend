@@ -246,7 +246,7 @@ impl<'a> CoreExprArena<'a> {
             )?,
             expr @ Expr::CountAll { span, window, .. } => {
                 let call = self.aggregate_call(
-                    expr,
+                    format!("{:#}", expr),
                     *span,
                     "count",
                     false,
@@ -294,7 +294,7 @@ impl<'a> CoreExprArena<'a> {
     #[allow(clippy::too_many_arguments)]
     fn aggregate_call(
         &mut self,
-        original_expr: &'a Expr,
+        display_name: String,
         span: Span,
         func_name: impl Into<String>,
         distinct: bool,
@@ -303,7 +303,7 @@ impl<'a> CoreExprArena<'a> {
         order_by: &'a [OrderByExpr],
     ) -> CoreAggregateCall<'a> {
         CoreAggregateCall {
-            original_expr,
+            display_name,
             span,
             func_name: func_name.into(),
             distinct,
@@ -417,7 +417,7 @@ impl<'a> CoreExprArena<'a> {
         if lambda.is_none() && GENERAL_WINDOW_FUNCTIONS.contains(&Ascii::new(func_name.as_str())) {
             return Ok(match window.as_ref() {
                 Some(window) => self.window_function(CoreWindowFunction::General {
-                    original_expr,
+                    display_name: format!("{:#}", original_expr),
                     span,
                     func_name,
                     args: args.iter().collect(),
@@ -430,7 +430,7 @@ impl<'a> CoreExprArena<'a> {
 
         if lambda.is_none() && AggregateFunctionFactory::instance().contains(&func_name) {
             let call = self.aggregate_call(
-                original_expr,
+                format!("{:#}", original_expr),
                 span,
                 func_name,
                 *distinct,
@@ -717,7 +717,7 @@ pub(super) enum CoreExpr<'a> {
 }
 
 pub(super) struct CoreAggregateCall<'a> {
-    original_expr: &'a Expr,
+    display_name: String,
     span: Span,
     func_name: String,
     distinct: bool,
@@ -738,7 +738,7 @@ pub(super) enum CoreWindowFunction<'a> {
         window: CoreAggregateWindow<'a>,
     },
     General {
-        original_expr: &'a Expr,
+        display_name: String,
         span: Span,
         func_name: String,
         args: AstExprArgs<'a>,
@@ -881,7 +881,6 @@ impl<'a> TypeChecker<'a> {
         match function {
             CoreWindowFunction::Aggregate { call, window } => {
                 let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(call, true)?;
-                let display_name = format!("{:#}", call.original_expr);
                 let window = match window {
                     CoreAggregateWindow::CountAll(window) => *window,
                     CoreAggregateWindow::Function(window_desc) => {
@@ -896,10 +895,10 @@ impl<'a> TypeChecker<'a> {
                     }
                 };
                 let func = WindowFuncType::Aggregate(new_agg_func);
-                self.resolve_window(call.span, display_name, window, func)
+                self.resolve_window(call.span, call.display_name.clone(), window, func)
             }
             CoreWindowFunction::General {
-                original_expr,
+                display_name,
                 span,
                 func_name,
                 args,
@@ -927,8 +926,7 @@ impl<'a> TypeChecker<'a> {
                     args,
                     &window.ignore_nulls,
                 )?;
-                let display_name = format!("{:#}", original_expr);
-                self.resolve_window(*span, display_name, &window.window, func)
+                self.resolve_window(*span, display_name.clone(), &window.window, func)
             }
         }
     }
@@ -954,7 +952,7 @@ impl<'a> TypeChecker<'a> {
         let result = self.resolve_aggregate_function(
             call.span,
             &call.func_name,
-            call.original_expr,
+            call.display_name.clone(),
             call.distinct,
             new_params,
             &call.args,

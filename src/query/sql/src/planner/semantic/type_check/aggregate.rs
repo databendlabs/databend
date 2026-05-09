@@ -38,7 +38,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func_name: &str,
-        expr: &Expr,
+        display_name: String,
         distinct: bool,
         params: Vec<Scalar>,
         args: &[&Expr],
@@ -67,7 +67,7 @@ impl<'a> TypeChecker<'a> {
                 return Err(ErrorCode::SemanticError(
                     "aggregate function calls cannot be nested".to_string(),
                 )
-                .set_span(expr.span()));
+                .set_span(span));
             }
         }
 
@@ -186,7 +186,6 @@ impl<'a> TypeChecker<'a> {
             arguments
         };
 
-        let display_name = format!("{:#}", expr);
         let new_agg_func = AggregateFunction {
             span,
             display_name,
