@@ -4,10 +4,12 @@ http://localhost:8181
 WAREHOUSE
 s3://warehouse/demo/
 default
+3
 0	0	0	true	0.5
 1	1	1	false	1.5
 2	2	2	true	2.5
 t
+3
 3	3	0	false	3.5
 4	4	1	true	4.5
 5	5	2	false	5.5
@@ -21,10 +23,12 @@ http://localhost:5000
 WAREHOUSE
 s3a://warehouse/glue/
 default
+3
 0	0	0	true	0.5
 1	1	1	false	1.5
 2	2	2	true	2.5
 t
+3
 3	3	0	false	3.5
 4	4	1	true	4.5
 5	5	2	false	5.5
