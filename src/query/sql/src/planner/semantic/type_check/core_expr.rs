@@ -16,6 +16,7 @@ use std::collections::VecDeque;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
@@ -23,6 +24,8 @@ use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::OrderByExpr;
+use databend_common_ast::ast::Query;
+use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::ast::Window;
@@ -87,6 +90,7 @@ impl<'a> CoreExprArena<'a> {
     #[recursive::recursive]
     pub(super) fn lower_ast_expr(&mut self, expr: &'a Expr) -> Result<CoreExprId> {
         Ok(match expr {
+            Expr::ColumnRef { span, column } => self.column_ref(*span, column),
             Expr::Literal { span, value } => self.literal(*span, value.clone()),
             Expr::IsNull {
                 span,
@@ -118,6 +122,12 @@ impl<'a> CoreExprArena<'a> {
                     left, right
                 ])
             }
+            Expr::BinaryOp {
+                span,
+                op,
+                left,
+                right,
+            } => self.binary_op(*span, op, left, right),
             Expr::JsonOp {
                 span,
                 op,
@@ -128,11 +138,11 @@ impl<'a> CoreExprArena<'a> {
                 let right = self.lower_ast_expr(right)?;
                 self.call(*span, json_op_core_function(op), smallvec![left, right])
             }
-            expr @ Expr::UnaryOp {
+            Expr::UnaryOp {
                 span,
                 op,
                 expr: child,
-            } => self.lower_unary_op_expr(expr, *span, op, child)?,
+            } => self.lower_unary_op_expr(*span, op, child)?,
             Expr::Substring {
                 span,
                 expr,
@@ -160,9 +170,7 @@ impl<'a> CoreExprArena<'a> {
             } => {
                 self.lower_call_expr(*span, "locate", [substr_expr.as_ref(), str_expr.as_ref()])?
             }
-            Expr::Extract { span, kind, expr } | Expr::DatePart { span, kind, expr }
-                if can_lower_extract(kind) =>
-            {
+            Expr::Extract { span, kind, expr } | Expr::DatePart { span, kind, expr } => {
                 self.lower_extract_expr(*span, kind, expr)?
             }
             Expr::Interval { span, expr, unit } => self.lower_interval_expr(*span, expr, unit)?,
@@ -204,9 +212,7 @@ impl<'a> CoreExprArena<'a> {
             )?,
             Expr::DateTrunc {
                 span, unit, date, ..
-            } if can_lower_date_trunc(unit) => {
-                self.lower_date_trunc_expr(*span, unit, date, self.week_start)?
-            }
+            } => self.lower_date_trunc_expr(*span, unit, date, self.week_start)?,
             Expr::DateSub {
                 span,
                 unit,
@@ -219,12 +225,12 @@ impl<'a> CoreExprArena<'a> {
                 date,
                 slice_length,
                 start_or_end,
-            } if can_lower_time_slice(*slice_length, unit, start_or_end) => {
+            } => {
                 self.lower_time_slice_expr(*span, date, *slice_length, unit, start_or_end.clone())?
             }
             Expr::LastDay {
                 span, unit, date, ..
-            } if can_lower_last_day(unit) => self.lower_last_day_expr(*span, date, unit)?,
+            } => self.lower_last_day_expr(*span, date, unit)?,
             Expr::PreviousDay {
                 span, unit, date, ..
             } => self.lower_previous_or_next_day_expr(
@@ -242,6 +248,40 @@ impl<'a> CoreExprArena<'a> {
             Expr::Array { span, exprs } => self.array(*span, exprs)?,
             Expr::Map { span, kvs } => self.map(*span, kvs)?,
             Expr::Tuple { span, exprs } => self.tuple(*span, exprs)?,
+            Expr::InList {
+                span,
+                expr,
+                list,
+                not,
+            } => self.in_list(*span, expr, list, *not),
+            Expr::Exists { subquery, not, .. } => self.exists(subquery, *not),
+            Expr::Subquery { subquery, .. } => self.scalar_subquery(subquery),
+            Expr::InSubquery {
+                span,
+                expr,
+                subquery,
+                not,
+            } => self.in_subquery(*span, expr, subquery, *not),
+            Expr::LikeSubquery {
+                span,
+                expr,
+                subquery,
+                modifier,
+                escape,
+            } => self.like_subquery(*span, expr, subquery, modifier, escape),
+            Expr::LikeAnyWithEscape {
+                span,
+                left,
+                right,
+                escape,
+            } => self.like_any_with_escape(*span, left, right, escape),
+            Expr::LikeWithEscape {
+                span,
+                left,
+                right,
+                is_not,
+                escape,
+            } => self.like_with_escape(*span, left, right, *is_not, escape),
             Expr::Case {
                 span,
                 operand,
@@ -278,8 +318,13 @@ impl<'a> CoreExprArena<'a> {
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
             }
-            _ => self.legacy_ast(expr),
+            Expr::Hole { span, .. } | Expr::Placeholder { span } => self.impossible_expr(*span),
+            Expr::StageLocation { span, location } => self.stage_location(*span, location),
         })
+    }
+
+    fn column_ref(&mut self, span: Span, column: &'a ColumnRef) -> CoreExprId {
+        self.alloc(CoreExpr::ColumnRef { span, column })
     }
 
     pub(super) fn literal(&mut self, span: Span, value: Literal) -> CoreExprId {
@@ -518,9 +563,8 @@ impl<'a> CoreExprArena<'a> {
 
     fn lower_unary_op_expr(
         &mut self,
-        original_expr: &'a Expr,
         span: Span,
-        op: &UnaryOperator,
+        op: &'a UnaryOperator,
         child: &'a Expr,
     ) -> Result<CoreExprId> {
         if matches!(op, UnaryOperator::Plus) {
@@ -539,7 +583,7 @@ impl<'a> CoreExprArena<'a> {
             return Ok(self.call(span, func_name, smallvec![child]));
         }
 
-        Ok(self.legacy_ast(original_expr))
+        Ok(self.unary_op(span, op, child))
     }
 
     pub(super) fn lower_call_expr(
@@ -705,6 +749,114 @@ impl<'a> CoreExprArena<'a> {
         self.alloc(CoreExpr::RuntimeCall { span, name, args })
     }
 
+    fn binary_op(
+        &mut self,
+        span: Span,
+        op: &'a BinaryOperator,
+        left: &'a Expr,
+        right: &'a Expr,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::BinaryOp {
+            span,
+            op,
+            left,
+            right,
+        })
+    }
+
+    fn unary_op(&mut self, span: Span, op: &'a UnaryOperator, expr: &'a Expr) -> CoreExprId {
+        self.alloc(CoreExpr::UnaryOp { span, op, expr })
+    }
+
+    fn in_list(&mut self, span: Span, expr: &'a Expr, list: &'a [Expr], not: bool) -> CoreExprId {
+        self.alloc(CoreExpr::InList {
+            span,
+            expr,
+            list,
+            not,
+        })
+    }
+
+    fn exists(&mut self, subquery: &'a Query, not: bool) -> CoreExprId {
+        self.alloc(CoreExpr::Exists { subquery, not })
+    }
+
+    fn scalar_subquery(&mut self, subquery: &'a Query) -> CoreExprId {
+        self.alloc(CoreExpr::ScalarSubquery { subquery })
+    }
+
+    fn in_subquery(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        subquery: &'a Query,
+        not: bool,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::InSubquery {
+            span,
+            expr,
+            subquery,
+            not,
+        })
+    }
+
+    fn like_subquery(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        subquery: &'a Query,
+        modifier: &'a SubqueryModifier,
+        escape: &'a Option<String>,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::LikeSubquery {
+            span,
+            expr,
+            subquery,
+            modifier,
+            escape,
+        })
+    }
+
+    fn like_any_with_escape(
+        &mut self,
+        span: Span,
+        left: &'a Expr,
+        right: &'a Expr,
+        escape: &'a str,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::LikeAnyWithEscape {
+            span,
+            left,
+            right,
+            escape,
+        })
+    }
+
+    fn like_with_escape(
+        &mut self,
+        span: Span,
+        left: &'a Expr,
+        right: &'a Expr,
+        is_not: bool,
+        escape: &'a str,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::LikeWithEscape {
+            span,
+            left,
+            right,
+            is_not,
+            escape,
+        })
+    }
+
+    fn impossible_expr(&mut self, span: Span) -> CoreExprId {
+        self.alloc(CoreExpr::ImpossibleExpr { span })
+    }
+
+    fn stage_location(&mut self, span: Span, location: &'a str) -> CoreExprId {
+        self.alloc(CoreExpr::StageLocation { span, location })
+    }
+
     fn alloc(&mut self, expr: CoreExpr<'a>) -> CoreExprId {
         let index = self.nodes.len();
         self.nodes.push(expr);
@@ -718,6 +870,10 @@ impl<'a> CoreExprArena<'a> {
 
 pub(super) enum CoreExpr<'a> {
     LegacyAst(&'a Expr),
+    ColumnRef {
+        span: Span,
+        column: &'a ColumnRef,
+    },
     Literal {
         span: Span,
         value: Scalar,
@@ -750,6 +906,56 @@ pub(super) enum CoreExpr<'a> {
         name: &'a Identifier,
         args: &'a [Expr],
     },
+    BinaryOp {
+        span: Span,
+        op: &'a BinaryOperator,
+        left: &'a Expr,
+        right: &'a Expr,
+    },
+    UnaryOp {
+        span: Span,
+        op: &'a UnaryOperator,
+        expr: &'a Expr,
+    },
+    InList {
+        span: Span,
+        expr: &'a Expr,
+        list: &'a [Expr],
+        not: bool,
+    },
+    Exists {
+        subquery: &'a Query,
+        not: bool,
+    },
+    ScalarSubquery {
+        subquery: &'a Query,
+    },
+    InSubquery {
+        span: Span,
+        expr: &'a Expr,
+        subquery: &'a Query,
+        not: bool,
+    },
+    LikeSubquery {
+        span: Span,
+        expr: &'a Expr,
+        subquery: &'a Query,
+        modifier: &'a SubqueryModifier,
+        escape: &'a Option<String>,
+    },
+    LikeAnyWithEscape {
+        span: Span,
+        left: &'a Expr,
+        right: &'a Expr,
+        escape: &'a str,
+    },
+    LikeWithEscape {
+        span: Span,
+        left: &'a Expr,
+        right: &'a Expr,
+        is_not: bool,
+        escape: &'a str,
+    },
     Cast {
         span: Span,
         is_try: bool,
@@ -766,6 +972,13 @@ pub(super) enum CoreExpr<'a> {
     },
     WindowFunction {
         function: CoreWindowFunction<'a>,
+    },
+    ImpossibleExpr {
+        span: Span,
+    },
+    StageLocation {
+        span: Span,
+        location: &'a str,
     },
 }
 
@@ -816,6 +1029,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match arena.get(id) {
             CoreExpr::LegacyAst(expr) => self.resolve_legacy_ast(expr),
+            CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::Literal { span, value } => {
                 let (value, data_type) = infer_literal_data_type(value.clone());
                 Ok(Box::new((
@@ -861,6 +1075,78 @@ impl<'a> TypeChecker<'a> {
             CoreExpr::RuntimeCall { span, name, args } => {
                 self.resolve_core_runtime_call(*span, name, args)
             }
+            CoreExpr::BinaryOp {
+                span,
+                op,
+                left,
+                right,
+            } => self.resolve_binary_op_or_subquery(span, op, left, right),
+            CoreExpr::UnaryOp { span, op, expr } => self.resolve_unary_op(*span, op, expr),
+            CoreExpr::InList {
+                span,
+                expr,
+                list,
+                not,
+            } => self.resolve_in_list(*span, expr, list, *not),
+            CoreExpr::Exists { subquery, not } => self.resolve_subquery(
+                if !*not {
+                    SubqueryType::Exists
+                } else {
+                    SubqueryType::NotExists
+                },
+                subquery,
+                None,
+                None,
+            ),
+            CoreExpr::ScalarSubquery { subquery } => {
+                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None)
+            }
+            CoreExpr::InSubquery {
+                span,
+                expr,
+                subquery,
+                not,
+            } => self.resolve_in_subquery(*span, expr, subquery, *not),
+            CoreExpr::LikeSubquery {
+                span,
+                expr,
+                subquery,
+                modifier,
+                escape,
+            } => self.resolve_scalar_subquery(
+                subquery,
+                expr,
+                span,
+                span,
+                modifier,
+                &BinaryOperator::Like((*escape).clone()),
+            ),
+            CoreExpr::LikeAnyWithEscape {
+                span,
+                left,
+                right,
+                escape,
+            } => self.resolve_binary_op_or_subquery(
+                span,
+                &BinaryOperator::LikeAny(Some((*escape).to_string())),
+                left,
+                right,
+            ),
+            CoreExpr::LikeWithEscape {
+                span,
+                left,
+                right,
+                is_not,
+                escape,
+            } => {
+                let like_op = if *is_not {
+                    BinaryOperator::NotLike(Some((*escape).to_string()))
+                } else {
+                    BinaryOperator::Like(Some((*escape).to_string()))
+                };
+
+                self.resolve_binary_op_or_subquery(span, &like_op, left, right)
+            }
             CoreExpr::Cast {
                 span,
                 is_try,
@@ -875,6 +1161,13 @@ impl<'a> TypeChecker<'a> {
             }
             CoreExpr::WindowFunction { function } => {
                 self.resolve_core_window_function(arena, function)
+            }
+            CoreExpr::ImpossibleExpr { span } => Err(ErrorCode::SemanticError(
+                "Hole or Placeholder expression is impossible in trivial query".to_string(),
+            )
+            .set_span(*span)),
+            CoreExpr::StageLocation { span, location } => {
+                self.resolve_stage_location(*span, location)
             }
         }
     }
@@ -1315,71 +1608,6 @@ pub(super) fn unary_op_core_function(op: &UnaryOperator) -> Option<&'static str>
     Some(func_name)
 }
 
-fn can_lower_date_trunc(kind: &ASTIntervalKind) -> bool {
-    matches!(
-        kind,
-        ASTIntervalKind::Year
-            | ASTIntervalKind::ISOYear
-            | ASTIntervalKind::Quarter
-            | ASTIntervalKind::Month
-            | ASTIntervalKind::Week
-            | ASTIntervalKind::ISOWeek
-            | ASTIntervalKind::Day
-            | ASTIntervalKind::Hour
-            | ASTIntervalKind::Minute
-            | ASTIntervalKind::Second
-    )
-}
-
-fn can_lower_extract(kind: &ASTIntervalKind) -> bool {
-    matches!(
-        kind,
-        ASTIntervalKind::ISOYear
-            | ASTIntervalKind::Year
-            | ASTIntervalKind::Quarter
-            | ASTIntervalKind::Month
-            | ASTIntervalKind::Day
-            | ASTIntervalKind::Hour
-            | ASTIntervalKind::Minute
-            | ASTIntervalKind::Second
-            | ASTIntervalKind::Doy
-            | ASTIntervalKind::Dow
-            | ASTIntervalKind::Week
-            | ASTIntervalKind::Epoch
-            | ASTIntervalKind::MicroSecond
-            | ASTIntervalKind::ISODow
-            | ASTIntervalKind::YearWeek
-            | ASTIntervalKind::Millennium
-    )
-}
-
-fn can_lower_time_slice(slice_length: u64, kind: &ASTIntervalKind, start_or_end: &str) -> bool {
-    slice_length >= 1
-        && (start_or_end.eq_ignore_ascii_case("start") || start_or_end.eq_ignore_ascii_case("end"))
-        && matches!(
-            kind,
-            ASTIntervalKind::Year
-                | ASTIntervalKind::Quarter
-                | ASTIntervalKind::Month
-                | ASTIntervalKind::Week
-                | ASTIntervalKind::ISOWeek
-                | ASTIntervalKind::Day
-                | ASTIntervalKind::Hour
-                | ASTIntervalKind::Minute
-                | ASTIntervalKind::Second
-        )
-}
-
-fn can_lower_last_day(kind: &ASTIntervalKind) -> bool {
-    matches!(
-        kind,
-        ASTIntervalKind::Year
-            | ASTIntervalKind::Quarter
-            | ASTIntervalKind::Month
-            | ASTIntervalKind::Week
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use databend_common_ast::ast::Identifier;
@@ -1470,6 +1698,37 @@ mod tests {
                 panic!("map access should lower to CoreExpr::MapAccess");
             };
             assert!(matches!(arena.get(*expr), CoreExpr::Literal { .. }));
+        });
+    }
+
+    #[test]
+    fn lowers_dependency_boundaries_without_legacy_ast() {
+        assert_sql_lowers_to("a", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::ColumnRef { .. }));
+        });
+
+        assert_sql_lowers_to("a IN (1, 2)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::InList { .. }));
+        });
+
+        assert_sql_lowers_to("EXISTS (SELECT 1)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::Exists { .. }));
+        });
+
+        assert_sql_lowers_to("(SELECT 1)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::ScalarSubquery { .. }));
+        });
+
+        assert_sql_lowers_to("a IN (SELECT 1)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::InSubquery { .. }));
+        });
+
+        assert_sql_lowers_to("a = ANY (SELECT 1)", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::BinaryOp { .. }));
+        });
+
+        assert_sql_lowers_to("a LIKE 'x' ESCAPE '!'", |arena, root| {
+            assert!(matches!(arena.get(root), CoreExpr::LikeWithEscape { .. }));
         });
     }
 

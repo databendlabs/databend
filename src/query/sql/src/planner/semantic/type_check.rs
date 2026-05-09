@@ -197,176 +197,7 @@ impl<'a> TypeChecker<'a> {
         expr: &Expr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match expr {
-            Expr::ColumnRef {
-                span,
-                column:
-                    ColumnRef {
-                        database,
-                        table,
-                        column: ident,
-                    },
-            } => {
-                let database = database
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-                let table = table
-                    .as_ref()
-                    .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-                let result = match ident {
-                    ColumnID::Name(ident) => {
-                        let column = normalize_identifier(ident, self.name_resolution_ctx);
-                        self.bind_context.resolve_name(
-                            database.as_deref(),
-                            table.as_deref(),
-                            &column,
-                            self.aliases,
-                            self.name_resolution_ctx,
-                        )?
-                    }
-                    ColumnID::Position(pos) => self.bind_context.search_column_position(
-                        pos.span,
-                        database.as_deref(),
-                        table.as_deref(),
-                        pos.pos,
-                    )?,
-                };
-
-                let (scalar, data_type) = match result {
-                    NameResolutionResult::Column(column) => {
-                        if let Some(virtual_expr) = column.virtual_expr {
-                            let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, self.dialect)?;
-                            return self.resolve(&expr);
-                        } else {
-                            // Fast path: Check if table has any masking policies at all before doing expensive async work
-                            // BUT: skip masking policy application if we're already resolving a masking policy expression
-                            // to prevent infinite recursion (e.g., policy references the masked column itself)
-                            let has_masking_policy = !self.in_masking_policy
-                                // First check: is DataMask feature enabled? (cheapest check)
-                                && LicenseManagerSwitch::instance()
-                                    .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
-                                    .is_ok()
-                                // Second check: does this column reference a table with masking policy?
-                                && column
-                                    .table_index
-                                    .and_then(|table_index| {
-                                        // IMPORTANT: Extract all needed data before releasing the lock
-                                        // to avoid holding the lock during fallback resolution
-                                        let (table_entry_opt, db_name, tbl_name) = {
-                                            let metadata = self.metadata.read();
-                                            let entry = metadata.tables().get(table_index);
-                                            (
-                                                entry.is_some(),
-                                                column.database_name.clone(),
-                                                column.table_name.clone(),
-                                            )
-                                        }; // metadata lock is released here
-
-                                        // Now handle the fallback case without holding the lock
-                                        let final_table_index = if table_entry_opt {
-                                            Some(table_index)
-                                        } else {
-                                            // table_index invalid - try fallback by name
-                                            // This can happen in complex queries (e.g., REPLACE INTO with source columns)
-                                            // where metadata context differs between binding phases
-                                            if let (Some(db), Some(tbl)) = (db_name.as_ref(), tbl_name.as_ref()) {
-                                                // Re-acquire lock for lookup
-                                                let metadata = self.metadata.read();
-                                                metadata.get_table_index(Some(db), tbl)
-                                            } else {
-                                                None
-                                            }
-                                        };
-
-                                        // Re-acquire lock to get table info
-                                        final_table_index.and_then(|idx| {
-                                            let metadata = self.metadata.read();
-                                            let table_entry = metadata.tables().get(idx)?;
-                                            let table_ref = table_entry.table();
-                                            let table_info = table_ref.get_table_info();
-                                            let table_schema = table_ref.schema();
-
-                                            if table_info.meta.column_mask_policy_columns_ids.is_empty()
-                                            {
-                                                return None;
-                                            }
-                                            table_schema
-                                                .fields()
-                                                .iter()
-                                                .find(|f| f.name == column.column_name)
-                                                .and_then(|field| {
-                                                    table_info
-                                                        .meta
-                                                        .column_mask_policy_columns_ids
-                                                        .contains_key(&field.column_id)
-                                                        .then_some(())
-                                                })
-                                        })
-                                    })
-                                    .is_some();
-
-                            if has_masking_policy {
-                                // Only do expensive async work if we know there's a policy
-                                let mask_expr = databend_common_base::runtime::block_on(async {
-                                    self.get_masking_policy_expr_for_column(
-                                        &column,
-                                        database.as_deref(),
-                                        table.as_deref(),
-                                    )
-                                    .await
-                                })?;
-
-                                if let Some(mask_expr) = mask_expr {
-                                    // Set flag to prevent recursive masking policy application
-                                    let old_in_masking_policy = self.in_masking_policy;
-                                    self.in_masking_policy = true;
-
-                                    // Recursively resolve the masking policy expression
-                                    let result = self.resolve(&mask_expr);
-
-                                    // Restore flag
-                                    self.in_masking_policy = old_in_masking_policy;
-
-                                    return result;
-                                }
-                            }
-
-                            let data_type = *column.data_type.clone();
-                            (
-                                BoundColumnRef {
-                                    span: *span,
-                                    column,
-                                }
-                                .into(),
-                                data_type,
-                            )
-                        }
-                    }
-                    NameResolutionResult::InternalColumn(column) => {
-                        // add internal column binding into `BindContext`
-                        let column = self.bind_context.add_internal_column_binding(
-                            &column,
-                            self.metadata.clone(),
-                            None,
-                            true,
-                        )?;
-                        let data_type = *column.data_type.clone();
-                        (
-                            BoundColumnRef {
-                                span: *span,
-                                column,
-                            }
-                            .into(),
-                            data_type,
-                        )
-                    }
-                    NameResolutionResult::Alias { scalar, .. } => {
-                        (scalar.clone(), scalar.data_type()?)
-                    }
-                };
-
-                Ok(Box::new((scalar, data_type)))
-            }
+            Expr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
 
             Expr::InList {
                 span,
@@ -374,82 +205,7 @@ impl<'a> TypeChecker<'a> {
                 list,
                 not,
                 ..
-            } => {
-                if list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
-                    if *not {
-                        return self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InList {
-                            span: *span,
-                            expr: expr.clone(),
-                            list: list.clone(),
-                            not: false,
-                        });
-                    }
-                    return self.convert_inlist_to_subquery(expr, list);
-                }
-
-                let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
-                if list.len() > get_max_inlist_to_or && list.iter().all(like::satisfy_contain_func)
-                {
-                    let array_expr = Expr::Array {
-                        span: *span,
-                        exprs: list.clone(),
-                    };
-                    // Deduplicate the array.
-                    let array_expr = Expr::FunctionCall {
-                        span: *span,
-                        func: ASTFunctionCall {
-                            name: Identifier::from_name(*span, "array_distinct"),
-                            args: vec![array_expr],
-                            params: vec![],
-                            order_by: vec![],
-                            window: None,
-                            lambda: None,
-                            distinct: false,
-                        },
-                    };
-                    let args = vec![&array_expr, expr.as_ref()];
-                    if *not {
-                        self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::FunctionCall {
-                            span: *span,
-                            func: ASTFunctionCall {
-                                distinct: false,
-                                name: Identifier::from_name(*span, "contains"),
-                                args: args.iter().copied().cloned().collect(),
-                                params: vec![],
-                                order_by: vec![],
-                                window: None,
-                                lambda: None,
-                            },
-                        })
-                    } else {
-                        self.resolve_function(*span, "contains", vec![], &args)
-                    }
-                } else {
-                    let mut predicate_levels =
-                        Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
-
-                    for item in list {
-                        let (predicate, _) = *self.resolve_binary_op_or_subquery(
-                            span,
-                            &BinaryOperator::Eq,
-                            expr.as_ref(),
-                            item,
-                        )?;
-                        self.merge_or_level(*span, &mut predicate_levels, predicate)?;
-                    }
-
-                    let result = self
-                        .fold_or_levels(*span, predicate_levels)?
-                        .expect("IN list should not be empty");
-                    let data_type = result.data_type()?;
-
-                    if *not {
-                        self.resolve_scalar_function_call(*span, "not", vec![], vec![result])
-                    } else {
-                        Ok(Box::new((result, data_type)))
-                    }
-                }
-            }
+            } => self.resolve_in_list(*span, expr, list, *not),
 
             Expr::BinaryOp {
                 span,
@@ -594,24 +350,7 @@ impl<'a> TypeChecker<'a> {
                 not,
                 expr,
                 span,
-            } => {
-                // Not in subquery will be transformed to not(Expr = Any(...))
-                if *not {
-                    return self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::InSubquery {
-                        subquery: subquery.clone(),
-                        not: false,
-                        expr: expr.clone(),
-                        span: *span,
-                    });
-                }
-                // InSubquery will be transformed to Expr = Any(...)
-                self.resolve_subquery(
-                    SubqueryType::Any,
-                    subquery,
-                    Some(*expr.clone()),
-                    Some(SubqueryComparisonOp::Equal),
-                )
-            }
+            } => self.resolve_in_subquery(*span, expr, subquery, *not),
 
             Expr::LikeSubquery {
                 subquery,
@@ -720,6 +459,265 @@ impl<'a> TypeChecker<'a> {
                 "expression should have been lowered into CoreExpr",
             )),
         }
+    }
+
+    pub(super) fn resolve_column_ref(
+        &mut self,
+        span: Span,
+        column_ref: &ColumnRef,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let ColumnRef {
+            database,
+            table,
+            column: ident,
+        } = column_ref;
+        let database = database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+        let table = table
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
+        let result = match ident {
+            ColumnID::Name(ident) => {
+                let column = normalize_identifier(ident, self.name_resolution_ctx);
+                self.bind_context.resolve_name(
+                    database.as_deref(),
+                    table.as_deref(),
+                    &column,
+                    self.aliases,
+                    self.name_resolution_ctx,
+                )?
+            }
+            ColumnID::Position(pos) => self.bind_context.search_column_position(
+                pos.span,
+                database.as_deref(),
+                table.as_deref(),
+                pos.pos,
+            )?,
+        };
+
+        let (scalar, data_type) = match result {
+            NameResolutionResult::Column(column) => {
+                if let Some(virtual_expr) = column.virtual_expr {
+                    let sql_tokens = tokenize_sql(virtual_expr.as_str())?;
+                    let expr = parse_expr(&sql_tokens, self.dialect)?;
+                    return self.resolve(&expr);
+                } else {
+                    // Fast path: Check if table has any masking policies at all before doing expensive async work
+                    // BUT: skip masking policy application if we're already resolving a masking policy expression
+                    // to prevent infinite recursion (e.g., policy references the masked column itself)
+                    let has_masking_policy = !self.in_masking_policy
+                        // First check: is DataMask feature enabled? (cheapest check)
+                        && LicenseManagerSwitch::instance()
+                            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                            .is_ok()
+                        // Second check: does this column reference a table with masking policy?
+                        && column
+                            .table_index
+                            .and_then(|table_index| {
+                                // IMPORTANT: Extract all needed data before releasing the lock
+                                // to avoid holding the lock during fallback resolution
+                                let (table_entry_opt, db_name, tbl_name) = {
+                                    let metadata = self.metadata.read();
+                                    let entry = metadata.tables().get(table_index);
+                                    (
+                                        entry.is_some(),
+                                        column.database_name.clone(),
+                                        column.table_name.clone(),
+                                    )
+                                }; // metadata lock is released here
+
+                                // Now handle the fallback case without holding the lock
+                                let final_table_index = if table_entry_opt {
+                                    Some(table_index)
+                                } else {
+                                    // table_index invalid - try fallback by name
+                                    // This can happen in complex queries (e.g., REPLACE INTO with source columns)
+                                    // where metadata context differs between binding phases
+                                    if let (Some(db), Some(tbl)) =
+                                        (db_name.as_ref(), tbl_name.as_ref())
+                                    {
+                                        // Re-acquire lock for lookup
+                                        let metadata = self.metadata.read();
+                                        metadata.get_table_index(Some(db), tbl)
+                                    } else {
+                                        None
+                                    }
+                                };
+
+                                // Re-acquire lock to get table info
+                                final_table_index.and_then(|idx| {
+                                    let metadata = self.metadata.read();
+                                    let table_entry = metadata.tables().get(idx)?;
+                                    let table_ref = table_entry.table();
+                                    let table_info = table_ref.get_table_info();
+                                    let table_schema = table_ref.schema();
+
+                                    if table_info.meta.column_mask_policy_columns_ids.is_empty() {
+                                        return None;
+                                    }
+                                    table_schema
+                                        .fields()
+                                        .iter()
+                                        .find(|f| f.name == column.column_name)
+                                        .and_then(|field| {
+                                            table_info
+                                                .meta
+                                                .column_mask_policy_columns_ids
+                                                .contains_key(&field.column_id)
+                                                .then_some(())
+                                        })
+                                })
+                            })
+                            .is_some();
+
+                    if has_masking_policy {
+                        // Only do expensive async work if we know there's a policy
+                        let mask_expr = databend_common_base::runtime::block_on(async {
+                            self.get_masking_policy_expr_for_column(
+                                &column,
+                                database.as_deref(),
+                                table.as_deref(),
+                            )
+                            .await
+                        })?;
+
+                        if let Some(mask_expr) = mask_expr {
+                            // Set flag to prevent recursive masking policy application
+                            let old_in_masking_policy = self.in_masking_policy;
+                            self.in_masking_policy = true;
+
+                            // Recursively resolve the masking policy expression
+                            let result = self.resolve(&mask_expr);
+
+                            // Restore flag
+                            self.in_masking_policy = old_in_masking_policy;
+
+                            return result;
+                        }
+                    }
+
+                    let data_type = *column.data_type.clone();
+                    (BoundColumnRef { span, column }.into(), data_type)
+                }
+            }
+            NameResolutionResult::InternalColumn(column) => {
+                // add internal column binding into `BindContext`
+                let column = self.bind_context.add_internal_column_binding(
+                    &column,
+                    self.metadata.clone(),
+                    None,
+                    true,
+                )?;
+                let data_type = *column.data_type.clone();
+                (BoundColumnRef { span, column }.into(), data_type)
+            }
+            NameResolutionResult::Alias { scalar, .. } => (scalar.clone(), scalar.data_type()?),
+        };
+
+        Ok(Box::new((scalar, data_type)))
+    }
+
+    pub(super) fn resolve_in_list(
+        &mut self,
+        span: Span,
+        expr: &Expr,
+        list: &[Expr],
+        not: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
+            if not {
+                return self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::InList {
+                    span,
+                    expr: Box::new(expr.clone()),
+                    list: list.to_vec(),
+                    not: false,
+                });
+            }
+            return self.convert_inlist_to_subquery(expr, list);
+        }
+
+        let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
+        if list.len() > get_max_inlist_to_or && list.iter().all(like::satisfy_contain_func) {
+            let array_expr = Expr::Array {
+                span,
+                exprs: list.to_vec(),
+            };
+            // Deduplicate the array.
+            let array_expr = Expr::FunctionCall {
+                span,
+                func: ASTFunctionCall {
+                    name: Identifier::from_name(span, "array_distinct"),
+                    args: vec![array_expr],
+                    params: vec![],
+                    order_by: vec![],
+                    window: None,
+                    lambda: None,
+                    distinct: false,
+                },
+            };
+            let args = vec![&array_expr, expr];
+            if not {
+                self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
+                    span,
+                    func: ASTFunctionCall {
+                        distinct: false,
+                        name: Identifier::from_name(span, "contains"),
+                        args: args.iter().copied().cloned().collect(),
+                        params: vec![],
+                        order_by: vec![],
+                        window: None,
+                        lambda: None,
+                    },
+                })
+            } else {
+                self.resolve_function(span, "contains", vec![], &args)
+            }
+        } else {
+            let mut predicate_levels = Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
+
+            for item in list {
+                let (predicate, _) =
+                    *self.resolve_binary_op_or_subquery(&span, &BinaryOperator::Eq, expr, item)?;
+                self.merge_or_level(span, &mut predicate_levels, predicate)?;
+            }
+
+            let result = self
+                .fold_or_levels(span, predicate_levels)?
+                .expect("IN list should not be empty");
+            let data_type = result.data_type()?;
+
+            if not {
+                self.resolve_scalar_function_call(span, "not", vec![], vec![result])
+            } else {
+                Ok(Box::new((result, data_type)))
+            }
+        }
+    }
+
+    pub(super) fn resolve_in_subquery(
+        &mut self,
+        span: Span,
+        expr: &Expr,
+        subquery: &Query,
+        not: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // Not in subquery will be transformed to not(Expr = Any(...))
+        if not {
+            return self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::InSubquery {
+                subquery: Box::new(subquery.clone()),
+                not: false,
+                expr: Box::new(expr.clone()),
+                span,
+            });
+        }
+        // InSubquery will be transformed to Expr = Any(...)
+        self.resolve_subquery(
+            SubqueryType::Any,
+            subquery,
+            Some(expr.clone()),
+            Some(SubqueryComparisonOp::Equal),
+        )
     }
 
     fn resolve_binary_op_or_subquery(
