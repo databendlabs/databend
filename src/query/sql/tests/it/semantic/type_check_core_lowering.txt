@@ -1,0 +1,56 @@
+=== minus_literal_is_resolved_during_lowering ===
+description: Unary minus on a literal should become a negative literal before scalar function resolution.
+sql: -1
+status: ok
+scalar: -1
+type: Decimal(76, 0)
+
+=== minus_non_literal_remains_scalar_operator ===
+description: Unary minus on a non-literal should still resolve through the scalar operator path.
+sql: -number
+status: ok
+scalar: minus(number (#0))
+type: Int64 NULL
+
+=== is_null_wrapper_lowers_as_boolean_expression ===
+description: IS NULL carries its own wrapper semantics and should not collapse to the child expression.
+sql: number IS NULL
+status: ok
+scalar: not(is_not_null(number (#0)))
+type: Boolean
+
+=== between_expression_lowers_to_comparison_core ===
+description: BETWEEN should type check after lowering into comparison expressions.
+sql: number BETWEEN 1 AND 5
+status: ok
+scalar: and(gte(number (#0), 1), lte(number (#0), 5))
+type: Boolean NULL
+
+=== aggregate_function_uses_aggregate_core_path ===
+description: A plain aggregate call should be separated from scalar calls during CoreExpr lowering.
+sql: sum(number)
+status: ok
+scalar: sum(number)
+type: Int64 NULL
+
+=== aggregate_window_function_uses_window_core_path ===
+description: An aggregate with OVER should resolve as a window expression, not as a grouped aggregate.
+sql: sum(number) OVER ()
+status: ok
+scalar: sum(number) OVER ()
+type: Int64 NULL
+
+=== general_window_function_uses_window_core_path ===
+description: A general window function with OVER should resolve through the window CoreExpr branch.
+sql: row_number() OVER ()
+status: ok
+scalar: row_number() OVER ()
+type: UInt64
+
+=== general_window_function_without_over_errors_early ===
+description: A general window function without OVER should fail from the CoreExpr window split.
+sql: row_number()
+status: error
+code: 1065
+message: window function row_number can only be used in window clause
+
