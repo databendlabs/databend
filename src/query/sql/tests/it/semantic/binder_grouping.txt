@@ -68,7 +68,7 @@ Sort
 
 
 === group_by_prefers_select_alias_over_same_name_base_column ===
-description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.
+description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.
 sql: SELECT a AS b, count(*) FROM t GROUP BY b
 status: ok
 EvalScalar

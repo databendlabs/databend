@@ -145,6 +145,14 @@ impl MetaEventSubscriber {
 
                 _ = timeout_fu.fuse() => {
                     warn!("{}: process_meta_event_loop timeout waiting for an event", self.watcher_name);
+
+                    let conn_error = ConnectionClosed::new_str("timeout").context(&self.watcher_name);
+                    self.processor
+                        .tx_to_acquirer
+                        .send(Err(conn_error))
+                        .await
+                        .ok();
+
                     return Err(ProcessorError::ConnectionClosed(
                         ConnectionClosed::new_str("timeout").context(&self.watcher_name)
                     ));
@@ -190,6 +198,14 @@ impl MetaEventSubscriber {
 
             let Some(watch_response) = watch_response else {
                 warn!("watch-stream closed: {}", self.watcher_name);
+
+                let conn_error =
+                    ConnectionClosed::new_str("watch-stream closed").context(&self.watcher_name);
+                self.processor
+                    .tx_to_acquirer
+                    .send(Err(conn_error))
+                    .await
+                    .ok();
 
                 return Err(ProcessorError::ConnectionClosed(
                     ConnectionClosed::new_str("watch-stream closed").context(&self.watcher_name),

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 
@@ -45,6 +46,15 @@ export function merge(state1, state2) {
 }
 export function finish(state) {
     return state.sum / state.weight;
+}
+$$
+"#;
+
+const TEST_SCRIPT_UDF_SQL: &str = r#"
+CREATE OR REPLACE FUNCTION add_one (INT) RETURNS INT
+LANGUAGE javascript HANDLER = 'add_one' AS $$
+export function add_one(v) {
+    return v + 1;
 }
 $$
 "#;
@@ -223,6 +233,46 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
     ];
 
     run_binder_cases("binder_clauses.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_mutation_udf() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "update_where_accepts_script_udf",
+            description: "A mutation filter should allow script UDFs and rewrite them before the filter is evaluated.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "UPDATE t SET b = a WHERE add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "delete_where_accepts_script_udf",
+            description: "DELETE should allow script UDFs in the mutation filter.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "DELETE FROM t WHERE add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "merge_matched_condition_accepts_script_udf",
+            description: "MERGE matched conditions should allow script UDFs.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE TABLE s(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+            ],
+            sql: "MERGE INTO t USING s ON t.a = s.a WHEN MATCHED AND add_one(s.b) > 1 THEN UPDATE SET b = add_one(s.b)",
+        },
+        SqlTestCase {
+            name: "merge_unmatched_accepts_script_udf",
+            description: "MERGE unmatched conditions and insert values should allow script UDFs.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE TABLE s(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+            ],
+            sql: "MERGE INTO t USING s ON t.a = s.a WHEN NOT MATCHED AND add_one(s.b) > 1 THEN INSERT (a, b) VALUES (s.a, add_one(s.b))",
+        },
+    ];
+
+    run_binder_cases("binder_mutation_udf.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -470,7 +520,7 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
         },
         SqlTestCase {
             name: "group_by_prefers_select_alias_over_same_name_base_column",
-            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.",
+            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
             sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
         },
@@ -573,6 +623,59 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
     ];
 
     run_binder_cases("binder_grouping.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_enable_group_by_column_first_setting() -> Result<()> {
+    let case = SqlTestCase {
+        name: "group_by_column_first_disabled_prefers_alias",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "0".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [1 AS"),
+        "GROUP BY should bind the SELECT alias when enable_group_by_column_first=0:\n{plan}"
+    );
+
+    let case = SqlTestCase {
+        name: "enable_group_by_column_first_setting_prefers_column",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "1".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [t.i (#0) AS (#0)]"),
+        "GROUP BY should bind the input column when enable_group_by_column_first=1:\n{plan}"
+    );
+
+    let case = SqlTestCase {
+        name: "group_by_column_first_enabled_keeps_alias_fallback",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT i % 2 AS k, sum(i) FROM t GROUP BY k",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "1".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [modulo(t.i (#0), 2) AS"),
+        "GROUP BY should still bind non-conflicting aliases when enable_group_by_column_first=1:\n{plan}"
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

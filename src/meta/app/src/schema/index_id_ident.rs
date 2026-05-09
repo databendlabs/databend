@@ -51,7 +51,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::IndexId;
     use super::IndexIdIdent;
@@ -61,11 +62,7 @@ mod tests {
     fn test_index_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = IndexIdIdent::new_generic(tenant, IndexId::new(3));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_index_by_id/3");
-
-        assert_eq!(ident, IndexIdIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_index_by_id/3");
     }
 
     #[test]

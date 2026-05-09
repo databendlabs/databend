@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
+use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::InternalColumn;
@@ -154,6 +155,8 @@ impl ToReadDataSourcePlan for dyn Table {
             start.elapsed()
         ));
 
+        let query_internal_columns = internal_columns.is_some();
+
         Ok(DataSourcePlan {
             source_info,
             output_schema,
@@ -164,7 +167,9 @@ impl ToReadDataSourcePlan for dyn Table {
             push_downs,
             internal_columns,
             base_block_ids,
-            update_stream_columns,
+            block_meta_options: BlockMetaOptions::default()
+                .set_update_stream_columns(update_stream_columns)
+                .set_query_internal_columns(query_internal_columns),
             // Set a dummy id, will be set real id later
             table_index: usize::MAX,
             scan_id: usize::MAX,

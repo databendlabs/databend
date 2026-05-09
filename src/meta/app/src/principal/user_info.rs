@@ -363,6 +363,11 @@ impl UserOption {
             UserOptionItem::MustChangePassword(v) => self.must_change_password = Some(*v),
             UserOptionItem::SetWorkloadGroup(v) => self.workload_group = Some(v.clone()),
             UserOptionItem::UnsetWorkloadGroup => self.workload_group = None,
+            UserOptionItem::AddPublicKey(_, _)
+            | UserOptionItem::RemovePublicKeyByLabel(_)
+            | UserOptionItem::RemovePublicKeyByFingerprint(_) => {
+                // Handled in the binder layer via AuthInfo methods
+            }
         }
     }
 }

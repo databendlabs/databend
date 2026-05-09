@@ -48,7 +48,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::MarkedDeletedIndexIdIdent;
     use crate::schema::marked_deleted_index_ident::MarkedDeletedIndexId;
@@ -58,13 +59,6 @@ mod tests {
     fn test_index_id_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = MarkedDeletedIndexIdIdent::new_generic(tenant, MarkedDeletedIndexId::new(3, 4));
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_marked_deleted_index/3/4");
-
-        assert_eq!(
-            ident,
-            MarkedDeletedIndexIdIdent::from_str_key(&key).unwrap()
-        );
+        assert_round_trip(ident, "__fd_marked_deleted_index/3/4");
     }
 }

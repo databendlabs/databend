@@ -223,6 +223,7 @@ impl FromToProto for mt::TableMeta {
             drop_on: p.drop_on.from_pb_opt()?,
             comment: p.comment,
             field_comments: p.field_comments,
+            field_stats_truncate_len: p.field_stats_truncate_len.into_iter().collect(),
             statistics: p
                 .statistics
                 .map(FromToProto::from_pb)
@@ -287,6 +288,7 @@ impl FromToProto for mt::TableMeta {
             drop_on: self.drop_on.to_pb_opt()?,
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
+            field_stats_truncate_len: self.field_stats_truncate_len.clone(),
             statistics: Some(self.statistics.to_pb()?),
             column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
             row_access_policy: self.row_access_policy.clone(),

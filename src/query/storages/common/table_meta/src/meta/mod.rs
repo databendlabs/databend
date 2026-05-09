@@ -18,6 +18,7 @@ pub mod column_oriented_segment;
 pub mod compression;
 mod current;
 pub mod format;
+mod histogram_serde;
 mod statistics;
 mod utils;
 mod v0;

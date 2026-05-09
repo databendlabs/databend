@@ -253,6 +253,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("enable_group_by_column_first", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Resolve GROUP BY names to input columns before SELECT aliases. Disabled by default for compatibility.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
                     desc: "Sets the maximum number of concurrent storage I/O requests.",
@@ -497,6 +504,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("spill_writer_memory_pool_size_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(20),
+                    desc: "Set the memory pool size (MB) for each spill writer.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("spilling_file_format", DefaultSettingValue {
                     value: UserSettingValue::String("parquet".to_string()),
@@ -1446,6 +1460,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: None,
+                }),
+                ("max_public_keys_per_user", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Maximum number of public keys allowed per user for key-pair authentication",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(2..=100)),
                 }),
                 ("stream_consume_batch_size_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

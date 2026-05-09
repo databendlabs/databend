@@ -422,6 +422,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_buffer_threshold_per_proc_mb")? as usize)
     }
 
+    pub fn get_spill_writer_memory_pool_size_mb(&self) -> Result<usize> {
+        Ok(self.try_get_u64("spill_writer_memory_pool_size_mb")? as usize)
+    }
+
     pub fn get_spilling_file_format(&self) -> Result<SpillFileFormat> {
         self.try_get_string("spilling_file_format")?.parse()
     }
@@ -593,6 +597,10 @@ impl Settings {
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
+    }
+
+    pub fn get_enable_group_by_column_first(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_group_by_column_first")? != 0)
     }
 
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
@@ -1039,6 +1047,10 @@ impl Settings {
 
     pub fn get_network_policy(&self) -> Result<String> {
         self.try_get_string("network_policy")
+    }
+
+    pub fn get_max_public_keys_per_user(&self) -> Result<u64> {
+        self.try_get_u64("max_public_keys_per_user")
     }
 
     pub fn get_stream_consume_batch_size_hint(&self) -> Result<Option<u64>> {

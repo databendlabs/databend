@@ -46,9 +46,6 @@ pub struct BlockReader {
     pub(crate) project_column_nodes: Arc<Vec<ColumnNode>>,
     pub(crate) default_vals: Vec<Scalar>,
     pub(crate) all_field_default_vals: Vec<Scalar>,
-    pub query_internal_columns: bool,
-    // used for mutation to update stream columns.
-    pub update_stream_columns: bool,
     pub put_cache: bool,
 
     pub original_schema: TableSchemaRef,
@@ -131,8 +128,6 @@ impl BlockReader {
         original_schema: TableSchemaRef,
         all_field_default_vals: Vec<Scalar>,
         projection: Projection,
-        query_internal_columns: bool,
-        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let arrow_schema = Arc::new(original_schema.as_ref().into());
@@ -160,8 +155,6 @@ impl BlockReader {
             project_column_nodes,
             default_vals,
             all_field_default_vals,
-            query_internal_columns,
-            update_stream_columns,
             put_cache,
             original_schema,
             native_columns_reader: NativeColumnsReader::new()?,
@@ -173,8 +166,6 @@ impl BlockReader {
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
-        query_internal_columns: bool,
-        update_stream_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let mut all_field_default_vals = Vec::with_capacity(schema.fields().len());
@@ -189,8 +180,6 @@ impl BlockReader {
             schema,
             all_field_default_vals,
             projection,
-            query_internal_columns,
-            update_stream_columns,
             put_cache,
         )
     }
@@ -202,8 +191,6 @@ impl BlockReader {
             self.original_schema.clone(),
             self.all_field_default_vals.clone(),
             projection,
-            self.query_internal_columns,
-            self.update_stream_columns,
             self.put_cache,
         )
     }
@@ -227,14 +214,6 @@ impl BlockReader {
             }
         }
         indices
-    }
-
-    pub fn query_internal_columns(&self) -> bool {
-        self.query_internal_columns
-    }
-
-    pub fn update_stream_columns(&self) -> bool {
-        self.update_stream_columns
     }
 
     pub fn schema(&self) -> TableSchemaRef {

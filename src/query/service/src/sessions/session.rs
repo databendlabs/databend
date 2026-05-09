@@ -372,10 +372,15 @@ impl Session {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         self.privilege_mgr()
             .get_visibility_checker(ignore_ownership, object)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr().get_db_table_grant_checker().await
     }
 
     pub fn get_settings(&self) -> Arc<Settings> {

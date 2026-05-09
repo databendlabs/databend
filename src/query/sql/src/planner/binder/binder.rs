@@ -74,6 +74,7 @@ use crate::plans::Plan;
 use crate::plans::RewriteKind;
 use crate::plans::ShowConnectionsPlan;
 use crate::plans::ShowFileFormatsPlan;
+use crate::plans::ShowPublicKeysPlan;
 use crate::plans::UseCatalogPlan;
 use crate::plans::UseDatabasePlan;
 use crate::plans::Visitor;
@@ -386,6 +387,11 @@ impl Binder {
             Statement::DescribeUser { user } => Plan::DescUser(Box::new(DescUserPlan {
                 user: user.clone().into(),
             })),
+            Statement::ShowPublicKeys { user } => {
+                Plan::ShowPublicKeys(Box::new(ShowPublicKeysPlan {
+                    user: user.clone().into(),
+                }))
+            }
 
             // Roles
             Statement::ShowRoles { show_options } => {
@@ -1058,21 +1064,6 @@ impl Binder {
             matches!(
                 scalar,
                 ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::SubqueryExpr(_)
-                    | ScalarExpr::AsyncFunctionCall(_)
-            ) || scalar.is_aggregate()
-        };
-        let mut finder = Finder::new(&f);
-        finder.visit(scalar)?;
-        Ok(finder.scalars().is_empty())
-    }
-
-    pub(crate) fn check_allowed_scalar_expr(&self, scalar: &ScalarExpr) -> Result<bool> {
-        let f = |scalar: &ScalarExpr| {
-            matches!(
-                scalar,
-                ScalarExpr::WindowFunction(_)
-                    | ScalarExpr::UDFCall(_)
                     | ScalarExpr::SubqueryExpr(_)
                     | ScalarExpr::AsyncFunctionCall(_)
             ) || scalar.is_aggregate()

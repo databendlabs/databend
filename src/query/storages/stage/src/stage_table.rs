@@ -153,6 +153,10 @@ impl Table for StageTable {
         DataSourceInfo::StageSource(self.table_info.clone())
     }
 
+    fn is_stage_table(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,

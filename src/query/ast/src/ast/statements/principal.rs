@@ -80,6 +80,7 @@ pub enum AuthType {
     Sha256Password,
     DoubleSha1Password,
     JWT,
+    KeyPair,
 }
 
 impl Display for AuthType {
@@ -89,6 +90,7 @@ impl Display for AuthType {
             AuthType::Sha256Password => "sha256_password",
             AuthType::DoubleSha1Password => "double_sha1_password",
             AuthType::JWT => "jwt",
+            AuthType::KeyPair => "key_pair",
         })
     }
 }

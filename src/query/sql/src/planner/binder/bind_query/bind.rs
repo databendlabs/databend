@@ -285,6 +285,7 @@ impl Binder {
                             expr: None,
                             check: None,
                             comment: None,
+                            stats_truncate_len: None,
                         }
                     })
                     .collect(),
