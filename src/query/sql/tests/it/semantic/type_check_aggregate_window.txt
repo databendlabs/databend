@@ -19,6 +19,13 @@ status: ok
 scalar: sum(DISTINCT number)
 type: Int64 NULL
 
+=== aggregate_display_name_preserves_original_call ===
+description: Aggregate display names should keep the original SQL spelling while resolving arguments.
+sql: SUM(number + delta)
+status: ok
+scalar: SUM(number + delta)
+type: Int64 NULL
+
 === string_agg_delimiter_becomes_param ===
 description: string_agg with a constant delimiter should move the delimiter into aggregate params.
 sql: string_agg(text, '|')
@@ -73,6 +80,13 @@ description: lag(value, offset, default) should cast the default and build a pre
 sql: lag(number, 2, 0) OVER (PARTITION BY delta ORDER BY number)
 status: ok
 scalar: lag(number, 2, 0) OVER (PARTITION BY delta ORDER BY number)
+type: Int64 NULL
+
+=== window_display_name_preserves_original_call ===
+description: Window display names should keep the original SQL spelling while resolving arguments.
+sql: LAG(number, 1, 0) OVER (ORDER BY delta)
+status: ok
+scalar: LAG(number, 1, 0) OVER (ORDER BY delta)
 type: Int64 NULL
 
 === lead_negative_offset_flips_direction ===

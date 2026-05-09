@@ -471,6 +471,12 @@ async fn test_type_check_aggregate_and_window_rewrites() -> Result<()> {
             sql: "sum(distinct number)",
         },
         SqlTestCase {
+            name: "aggregate_display_name_preserves_original_call",
+            description: "Aggregate display names should keep the original SQL spelling while resolving arguments.",
+            setup_sqls: &[],
+            sql: "SUM(number + delta)",
+        },
+        SqlTestCase {
             name: "string_agg_delimiter_becomes_param",
             description: "string_agg with a constant delimiter should move the delimiter into aggregate params.",
             setup_sqls: &[],
@@ -517,6 +523,12 @@ async fn test_type_check_aggregate_and_window_rewrites() -> Result<()> {
             description: "lag(value, offset, default) should cast the default and build a preceding frame.",
             setup_sqls: &[],
             sql: "lag(number, 2, 0) OVER (PARTITION BY delta ORDER BY number)",
+        },
+        SqlTestCase {
+            name: "window_display_name_preserves_original_call",
+            description: "Window display names should keep the original SQL spelling while resolving arguments.",
+            setup_sqls: &[],
+            sql: "LAG(number, 1, 0) OVER (ORDER BY delta)",
         },
         SqlTestCase {
             name: "lead_negative_offset_flips_direction",
