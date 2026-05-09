@@ -488,6 +488,9 @@ impl Domain {
             Domain::Timestamp(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::Timestamp(*min))
             }
+            Domain::TimestampTz(SimpleDomain { min, max }) if min == max => {
+                Some(Scalar::TimestampTz(*min))
+            }
             Domain::Date(SimpleDomain { min, max }) if min == max => Some(Scalar::Date(*min)),
             Domain::Interval(SimpleDomain { min, max }) if min == max => {
                 Some(Scalar::Interval(*min))
