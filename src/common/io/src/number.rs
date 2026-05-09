@@ -132,6 +132,8 @@ enum NumFlag {
     PlusPost,
     MinusPost,
     Eeee,
+    ThUpper,
+    ThLower,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -362,6 +364,16 @@ impl NumDesc {
                     }
 
                     self.flag.insert(NumFlag::Eeee);
+                    Ok(())
+                }
+
+                NumPoz::TkTH => {
+                    self.flag.insert(NumFlag::ThUpper);
+                    Ok(())
+                }
+
+                NumPoz::Tkth => {
+                    self.flag.insert(NumFlag::ThLower);
                     Ok(())
                 }
 
@@ -857,6 +869,23 @@ impl FmtCacheEntry {
     }
 }
 
+/// Returns the ordinal suffix for a number: "st", "nd", "rd", or "th".
+/// Follows PostgreSQL rules: teens (11-19) always get "th";
+/// otherwise 1 => "st", 2 => "nd", 3 => "rd", everything else => "th".
+fn ordinal_suffix(value: i64) -> &'static str {
+    let abs = value.unsigned_abs();
+    let last_two = (abs % 100) as u8;
+    if (11..=13).contains(&last_two) {
+        return "th";
+    }
+    match last_two % 10 {
+        1 => "st",
+        2 => "nd",
+        3 => "rd",
+        _ => "th",
+    }
+}
+
 fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Result<String> {
     let NumPart {
         sign,
@@ -1039,6 +1068,9 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
                 NumPoz::TkPR => (),
                 NumPoz::TkFM => (),
+                NumPoz::TkTH | NumPoz::Tkth => {
+                    // Ordinal suffix is appended at end of processing
+                }
                 _ => unimplemented!(),
             },
             FormatNode::End => break,
@@ -1049,6 +1081,33 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
             }
             FormatNode::Space => np.inout.push(' '),
             _ => unimplemented!(),
+        }
+    }
+
+    // Append ordinal suffix (TH/th) if requested
+    if np
+        .desc
+        .flag
+        .intersects(NumFlag::ThUpper | NumFlag::ThLower)
+    {
+        // Extract the last contiguous run of digits from the formatted output
+        // to determine which ordinal suffix to use.
+        let trailing_digits: String = np
+            .inout
+            .chars()
+            .rev()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect();
+
+        let last_num = trailing_digits.parse::<i64>().unwrap_or(0);
+        let suffix = ordinal_suffix(last_num);
+        if np.desc.flag.contains(NumFlag::ThUpper) {
+            np.inout.push_str(&suffix.to_uppercase());
+        } else {
+            np.inout.push_str(suffix);
         }
     }
 
@@ -1192,6 +1251,37 @@ mod tests {
         assert_eq!("###############", i64_to_char(4000, "FMRN")?);
         assert_eq!("###############", i64_to_char(-1, "FMRN")?);
 
+        // TH / th ordinal suffix
+        assert_eq!(" 0TH", i64_to_char(0, "9TH")?);
+        assert_eq!(" 1ST", i64_to_char(1, "9TH")?);
+        assert_eq!(" 2ND", i64_to_char(2, "9TH")?);
+        assert_eq!(" 3RD", i64_to_char(3, "9TH")?);
+        assert_eq!(" 4TH", i64_to_char(4, "9TH")?);
+        assert_eq!(" 11TH", i64_to_char(11, "99TH")?);
+        assert_eq!(" 12TH", i64_to_char(12, "99TH")?);
+        assert_eq!(" 13TH", i64_to_char(13, "99TH")?);
+        assert_eq!(" 21ST", i64_to_char(21, "99TH")?);
+        assert_eq!(" 22ND", i64_to_char(22, "99TH")?);
+        assert_eq!(" 23RD", i64_to_char(23, "99TH")?);
+        assert_eq!(" 111TH", i64_to_char(111, "999TH")?);
+        assert_eq!(" 112TH", i64_to_char(112, "999TH")?);
+        assert_eq!(" 113TH", i64_to_char(113, "999TH")?);
+
+        // lowercase ordinal
+        assert_eq!(" 1st", i64_to_char(1, "9th")?);
+        assert_eq!(" 2nd", i64_to_char(2, "9th")?);
+        assert_eq!(" 3rd", i64_to_char(3, "9th")?);
+        assert_eq!(" 4th", i64_to_char(4, "9th")?);
+        assert_eq!(" 12th", i64_to_char(12, "99th")?);
+
+        // ordinal with FM (fill mode)
+        assert_eq!("1st", i64_to_char(1, "FM9th")?);
+        assert_eq!("12th", i64_to_char(12, "FM99th")?);
+
+        // negative ordinal
+        assert_eq!("-1st", i64_to_char(-1, "9th")?);
+        assert_eq!(" -12th", i64_to_char(-12, "999th")?);
+
         Ok(())
     }
 
@@ -1249,7 +1339,7 @@ mod tests {
         assert_eq!("cdlxxxv", f64_to_char(485.0, "FMrn")?);
         assert_eq!("V", f64_to_char(5.2, "FMRN")?);
 
-        // assert_eq!(" 482nd", f64_to_char(482, "999th")?);
+        assert_eq!(" 482nd", f64_to_char(482.0, "999th")?);
 
         // assert_eq!(" 12000", f64_to_char(12, "99V999")?);
         // assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
