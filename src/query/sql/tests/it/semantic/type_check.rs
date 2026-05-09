@@ -489,6 +489,12 @@ async fn test_type_check_aggregate_and_window_rewrites() -> Result<()> {
             sql: "listagg(text, '|') WITHIN GROUP (ORDER BY number DESC NULLS LAST)",
         },
         SqlTestCase {
+            name: "listagg_within_group_lowers_order_expression",
+            description: "WITHIN GROUP order expressions should keep resolving through aggregate sort descriptors.",
+            setup_sqls: &[],
+            sql: "listagg(text, '|') WITHIN GROUP (ORDER BY number + delta DESC NULLS LAST)",
+        },
+        SqlTestCase {
             name: "histogram_bucket_argument_becomes_param",
             description: "histogram(expr, buckets) should fold the bucket count into aggregate params.",
             setup_sqls: &[],

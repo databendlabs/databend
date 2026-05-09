@@ -40,6 +40,13 @@ status: ok
 scalar: listagg(text, '|') WITHIN GROUP ( ORDER BY number DESC NULLS LAST )
 type: String NULL
 
+=== listagg_within_group_lowers_order_expression ===
+description: WITHIN GROUP order expressions should keep resolving through aggregate sort descriptors.
+sql: listagg(text, '|') WITHIN GROUP (ORDER BY number + delta DESC NULLS LAST)
+status: ok
+scalar: listagg(text, '|') WITHIN GROUP ( ORDER BY number + delta DESC NULLS LAST )
+type: String NULL
+
 === histogram_bucket_argument_becomes_param ===
 description: histogram(expr, buckets) should fold the bucket count into aggregate params.
 sql: histogram(number, 10)
