@@ -38,6 +38,7 @@ use unicase::Ascii;
 use super::TypeChecker;
 use super::date::AdjacentDayFunction;
 use super::date::DateArithmeticFunction;
+use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
 use crate::plans::ScalarExpr;
@@ -660,14 +661,13 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match arena.get(id) {
             CoreExpr::LegacyAst(expr) => self.resolve_legacy_ast(expr),
-            CoreExpr::Literal { span, value } => Ok(Box::new((
-                crate::plans::ConstantExpr {
-                    span: *span,
-                    value: value.clone(),
-                }
-                .into(),
-                value.as_ref().infer_data_type(),
-            ))),
+            CoreExpr::Literal { span, value } => {
+                let (value, data_type) = infer_literal_data_type(value.clone());
+                Ok(Box::new((
+                    crate::plans::ConstantExpr { span: *span, value }.into(),
+                    data_type,
+                )))
+            }
             CoreExpr::SugarFunction {
                 span,
                 func_name,

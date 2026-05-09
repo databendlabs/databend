@@ -251,7 +251,7 @@ pub(super) fn minus_literal_scalar(
     Ok(shrink_scalar(value))
 }
 
-fn infer_literal_data_type(value: Scalar) -> (Scalar, DataType) {
+pub(super) fn infer_literal_data_type(value: Scalar) -> (Scalar, DataType) {
     let value = shrink_scalar(value);
     let data_type = value.as_ref().infer_data_type();
     (value, data_type)
