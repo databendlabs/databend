@@ -1117,7 +1117,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
                     };
                     let last_two: u64 = {
                         let len = int_part.len();
-                        let start = if len > 2 { len - 2 } else { 0 };
+                        let start = len.saturating_sub(2);
                         int_part[start..]
                             .iter()
                             .filter(|c| c.is_ascii_digit())
