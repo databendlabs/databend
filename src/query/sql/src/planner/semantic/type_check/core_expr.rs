@@ -332,13 +332,6 @@ impl<'a> CoreExprArena<'a> {
         self.alloc(CoreExpr::WindowFunction { function })
     }
 
-    fn missing_window_function(&mut self, span: Span, func_name: impl Into<String>) -> CoreExprId {
-        self.alloc(CoreExpr::MissingWindowFunction {
-            span,
-            func_name: func_name.into(),
-        })
-    }
-
     fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
         let exprs = self.lower_expr_args(exprs)?;
         Ok(self.alloc(CoreExpr::Array { span, exprs }))
@@ -449,18 +442,23 @@ impl<'a> CoreExprArena<'a> {
         } = func;
         let func_name = normalized_func_name(&name.name);
 
-        if lambda.is_none() && GENERAL_WINDOW_FUNCTIONS.contains(&Ascii::new(func_name.as_str())) {
-            return Ok(match window.as_ref() {
-                Some(window) => self.window_function(CoreWindowFunction::General {
+        if lambda.is_none()
+            && let Some(func_name) = general_window_function_name(&func_name)
+        {
+            return match window.as_ref() {
+                Some(window) => Ok(self.window_function(CoreWindowFunction::General {
                     display_name: format!("{:#}", original_expr),
                     span,
                     func_name,
                     args: args.iter().collect(),
                     order_by,
                     window,
-                }),
-                None => self.missing_window_function(span, func_name),
-            });
+                })),
+                None => Err(ErrorCode::SemanticError(format!(
+                    "window function {func_name} can only be used in window clause"
+                ))
+                .set_span(span)),
+            };
         }
 
         if lambda.is_none() && AggregateFunctionFactory::instance().contains(&func_name) {
@@ -766,10 +764,6 @@ pub(super) enum CoreExpr<'a> {
     WindowFunction {
         function: CoreWindowFunction<'a>,
     },
-    MissingWindowFunction {
-        span: Span,
-        func_name: String,
-    },
 }
 
 pub(super) struct CoreAggregateCall {
@@ -803,7 +797,7 @@ pub(super) enum CoreWindowFunction<'a> {
     General {
         display_name: String,
         span: Span,
-        func_name: String,
+        func_name: &'static str,
         args: AstExprArgs<'a>,
         order_by: &'a [OrderByExpr],
         window: &'a WindowDesc,
@@ -881,10 +875,6 @@ impl<'a> TypeChecker<'a> {
             CoreExpr::WindowFunction { function } => {
                 self.resolve_core_window_function(arena, function)
             }
-            CoreExpr::MissingWindowFunction { span, func_name } => Err(ErrorCode::SemanticError(
-                format!("window function {func_name} can only be used in window clause"),
-            )
-            .set_span(*span)),
         }
     }
 
@@ -989,9 +979,7 @@ impl<'a> TypeChecker<'a> {
                     )
                     .set_span(*span));
                 }
-                if !RANK_WINDOW_FUNCTIONS.contains(&func_name.as_str())
-                    && window.ignore_nulls.is_some()
-                {
+                if !RANK_WINDOW_FUNCTIONS.contains(func_name) && window.ignore_nulls.is_some() {
                     return Err(ErrorCode::SemanticError(format!(
                         "window function {} not support IGNORE/RESPECT NULLS option",
                         func_name
@@ -1165,6 +1153,15 @@ fn normalized_func_name(func_name: &str) -> String {
     } else {
         func_name.to_string()
     }
+}
+
+fn general_window_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    GENERAL_WINDOW_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
 }
 
 fn can_remove_count_args(func_name: &str, distinct: bool, args: &[Expr]) -> bool {
@@ -1458,6 +1455,16 @@ mod tests {
                 panic!("AST function lower should keep the runtime function path");
             };
             assert_eq!(func_name, "abs");
+        });
+
+        assert_sql_lowers_to("ROW_NUMBER() OVER ()", |arena, root| {
+            let CoreExpr::WindowFunction {
+                function: CoreWindowFunction::General { func_name, .. },
+            } = arena.get(root)
+            else {
+                panic!("general window function should lower to CoreWindowFunction::General");
+            };
+            assert_eq!(*func_name, "row_number");
         });
 
         assert_sql_lowers_to("date_add(day, 1, date)", |arena, root| {
