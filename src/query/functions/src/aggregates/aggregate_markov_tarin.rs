@@ -174,10 +174,16 @@ impl AggregateFunction for MarkovTarin {
     fn merge_result(
         &self,
         place: AggrState,
-        _read_only: bool,
+        read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
-        let model = place.get::<MarkovModel>();
+        let mut model;
+        let model = if read_only {
+            model = place.get::<MarkovModel>().clone();
+            &mut model
+        } else {
+            place.get::<MarkovModel>()
+        };
         model.finalize(&self.params);
 
         let ColumnBuilder::Array(box array_builder) = builder else {
@@ -303,7 +309,7 @@ impl Histogram {
     }
 }
 
-#[derive(Default, BorshSerialize, BorshDeserialize)]
+#[derive(Clone, Default, BorshSerialize, BorshDeserialize)]
 struct MarkovModel {
     table: BTreeMap<NGramHash, Histogram>,
 }
