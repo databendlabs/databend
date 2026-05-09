@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -24,7 +23,6 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TypeName;
@@ -713,44 +711,6 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_binary_op_or_subquery(span, &like_op, left, right)
             }
 
-            expr @ Expr::MapAccess { span, .. } => {
-                let mut expr = expr;
-                let mut paths = VecDeque::new();
-                while let Expr::MapAccess {
-                    span,
-                    expr: inner_expr,
-                    accessor,
-                } = expr
-                {
-                    expr = &**inner_expr;
-                    let path = match accessor {
-                        MapAccessor::Bracket {
-                            key: box Expr::Literal { value, .. },
-                        } => {
-                            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
-                                return Err(ErrorCode::SemanticError(format!(
-                                    "Unsupported accessor: {:?}",
-                                    value
-                                ))
-                                .set_span(*span));
-                            }
-                            value.clone()
-                        }
-                        MapAccessor::Colon { key } => Literal::String(key.name.clone()),
-                        MapAccessor::DotNumber { key } => Literal::UInt64(*key),
-                        _ => {
-                            return Err(ErrorCode::SemanticError(format!(
-                                "Unsupported accessor: {:?}",
-                                accessor
-                            ))
-                            .set_span(*span));
-                        }
-                    };
-                    paths.push_front((*span, path));
-                }
-                self.resolve_map_access(*span, expr, paths)
-            }
-
             Expr::Extract {
                 span, kind, expr, ..
             } => {
@@ -805,12 +765,6 @@ impl<'a> TypeChecker<'a> {
                 let root = arena.lower_last_day_expr(*span, date, unit)?;
                 self.resolve_core(&arena, root)
             }
-
-            Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs),
-
-            Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs),
-
-            Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs),
 
             Expr::Hole { span, .. } | Expr::Placeholder { span } => Err(ErrorCode::SemanticError(
                 "Hole or Placeholder expression is impossible in trivial query".to_string(),

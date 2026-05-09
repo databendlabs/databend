@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -33,6 +32,9 @@ use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreMapEntries;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
@@ -66,22 +68,20 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new(infer_literal_data_type(value)))
     }
 
-    // Fast path for constant arrays so we don't need to go through the scalar `array()` function
-    // (which performs full type-checking and constant-folding). Non-constant elements still use
-    // the generic resolver to preserve the previous behaviour.
-    pub(super) fn resolve_array(
+    pub(super) fn resolve_core_array(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        exprs: &[Expr],
+        exprs: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut elems = Vec::with_capacity(exprs.len());
         let mut constant_values: Option<Vec<(Scalar, DataType)>> =
             Some(Vec::with_capacity(exprs.len()));
         let mut element_type: Option<DataType> = None;
-
         let mut data_type_set = HashSet::with_capacity(2);
+
         for expr in exprs {
-            let box (arg, data_type) = self.resolve(expr)?;
+            let box (arg, data_type) = self.resolve_core(arena, *expr)?;
             if let Some(values) = constant_values.as_mut() {
                 let maybe_constant = match &arg {
                     ScalarExpr::ConstantExpr(constant) => Some(constant.value.clone()),
@@ -89,8 +89,6 @@ impl<'a> TypeChecker<'a> {
                     _ => None,
                 };
                 if let Some(value) = maybe_constant {
-                    // If the data type has already been computed,
-                    // we don't need to compute the common type again.
                     if data_type_set.contains(&data_type) {
                         elems.push(arg);
                         values.push((value, data_type));
@@ -130,13 +128,13 @@ impl<'a> TypeChecker<'a> {
                     casted.push(cast_scalar(span, value, &element_ty, &BUILTIN_FUNCTIONS)?);
                 }
             }
-            return Ok(Self::build_constant_array(span, element_ty, casted));
+            return Ok(Self::build_core_constant_array(span, element_ty, casted));
         }
 
         self.resolve_scalar_function_call(span, "array", vec![], elems)
     }
 
-    fn build_constant_array(
+    fn build_core_constant_array(
         span: Span,
         element_ty: DataType,
         values: Vec<Scalar>,
@@ -147,47 +145,47 @@ impl<'a> TypeChecker<'a> {
         }
         let scalar = Scalar::Array(builder.build());
         Box::new((
-            ScalarExpr::ConstantExpr(ConstantExpr {
+            ConstantExpr {
                 span,
                 value: scalar,
-            }),
+            }
+            .into(),
             DataType::Array(Box::new(element_ty)),
         ))
     }
 
-    pub(super) fn resolve_map(
+    pub(super) fn resolve_core_map(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        kvs: &[(Literal, Expr)],
+        kvs: &CoreMapEntries,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
             let box (key_arg, _data_type) = self.resolve_literal(span, key_expr)?;
             keys.push(key_arg);
-            let box (val_arg, _data_type) = self.resolve(val_expr)?;
+            let box (val_arg, _data_type) = self.resolve_core(arena, *val_expr)?;
             vals.push(val_arg);
         }
         let box (key_arg, _data_type) =
             self.resolve_scalar_function_call(span, "array", vec![], keys)?;
         let box (val_arg, _data_type) =
             self.resolve_scalar_function_call(span, "array", vec![], vals)?;
-        let args = vec![key_arg, val_arg];
-
-        self.resolve_scalar_function_call(span, "map", vec![], args)
+        self.resolve_scalar_function_call(span, "map", vec![], vec![key_arg, val_arg])
     }
 
-    pub(super) fn resolve_tuple(
+    pub(super) fn resolve_core_tuple(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        exprs: &[Expr],
+        exprs: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut args = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            let box (arg, _data_type) = self.resolve(expr)?;
+            let box (arg, _data_type) = self.resolve_core(arena, *expr)?;
             args.push(arg);
         }
-
         self.resolve_scalar_function_call(span, "tuple", vec![], args)
     }
 }

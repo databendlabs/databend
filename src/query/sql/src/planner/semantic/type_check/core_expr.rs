@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::VecDeque;
+
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
@@ -51,6 +54,7 @@ pub(super) struct CoreExprId {
 }
 
 pub(super) type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
+pub(super) type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
 pub(super) type AstExprArgs<'a> = SmallVec<[&'a Expr; 4]>;
 pub(super) type SugarFunctionArgs<'a> = AstExprArgs<'a>;
 
@@ -223,6 +227,10 @@ impl<'a> CoreExprArena<'a> {
             } => {
                 self.lower_previous_or_next_day_expr(*span, date, unit, AdjacentDayFunction::Next)?
             }
+            expr @ Expr::MapAccess { span, .. } => self.lower_map_access_expr(expr, *span)?,
+            Expr::Array { span, exprs } => self.array(*span, exprs)?,
+            Expr::Map { span, kvs } => self.map(*span, kvs)?,
+            Expr::Tuple { span, exprs } => self.tuple(*span, exprs)?,
             Expr::Case {
                 span,
                 operand,
@@ -318,6 +326,75 @@ impl<'a> CoreExprArena<'a> {
             span,
             func_name: func_name.into(),
         })
+    }
+
+    fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
+        let exprs = exprs
+            .iter()
+            .map(|expr| self.lower_ast_expr(expr))
+            .collect::<Result<_>>()?;
+        Ok(self.alloc(CoreExpr::Array { span, exprs }))
+    }
+
+    fn map(&mut self, span: Span, kvs: &'a [(Literal, Expr)]) -> Result<CoreExprId> {
+        let kvs = kvs
+            .iter()
+            .map(|(key, value)| Ok((key.clone(), self.lower_ast_expr(value)?)))
+            .collect::<Result<_>>()?;
+        Ok(self.alloc(CoreExpr::Map { span, kvs }))
+    }
+
+    fn tuple(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
+        let exprs = exprs
+            .iter()
+            .map(|expr| self.lower_ast_expr(expr))
+            .collect::<Result<_>>()?;
+        Ok(self.alloc(CoreExpr::Tuple { span, exprs }))
+    }
+
+    fn lower_map_access_expr(&mut self, expr: &'a Expr, root_span: Span) -> Result<CoreExprId> {
+        let mut expr = expr;
+        let mut paths = VecDeque::new();
+        while let Expr::MapAccess {
+            span,
+            expr: inner_expr,
+            accessor,
+        } = expr
+        {
+            expr = &**inner_expr;
+            let path = match accessor {
+                MapAccessor::Bracket {
+                    key: box Expr::Literal { value, .. },
+                } => {
+                    if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Unsupported accessor: {:?}",
+                            value
+                        ))
+                        .set_span(*span));
+                    }
+                    value.clone()
+                }
+                MapAccessor::Colon { key } => Literal::String(key.name.clone()),
+                MapAccessor::DotNumber { key } => Literal::UInt64(*key),
+                _ => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Unsupported accessor: {:?}",
+                        accessor
+                    ))
+                    .set_span(*span));
+                }
+            };
+            paths.push_front((*span, path));
+        }
+        let expr_span = expr.span();
+        let expr = self.lower_ast_expr(expr)?;
+        Ok(self.alloc(CoreExpr::MapAccess {
+            span: root_span,
+            expr_span,
+            expr,
+            paths,
+        }))
     }
 
     fn lower_function_call_expr(
@@ -593,6 +670,24 @@ pub(super) enum CoreExpr<'a> {
         span: Span,
         value: Scalar,
     },
+    Array {
+        span: Span,
+        exprs: CoreExprArgs,
+    },
+    Map {
+        span: Span,
+        kvs: CoreMapEntries,
+    },
+    Tuple {
+        span: Span,
+        exprs: CoreExprArgs,
+    },
+    MapAccess {
+        span: Span,
+        expr_span: Span,
+        expr: CoreExprId,
+        paths: VecDeque<(Span, Literal)>,
+    },
     Call {
         span: Span,
         func_name: String,
@@ -667,6 +762,24 @@ impl<'a> TypeChecker<'a> {
                     crate::plans::ConstantExpr { span: *span, value }.into(),
                     data_type,
                 )))
+            }
+            CoreExpr::Array { span, exprs } => self.resolve_core_array(arena, *span, exprs),
+            CoreExpr::Map { span, kvs } => self.resolve_core_map(arena, *span, kvs),
+            CoreExpr::Tuple { span, exprs } => self.resolve_core_tuple(arena, *span, exprs),
+            CoreExpr::MapAccess {
+                span,
+                expr_span,
+                expr,
+                paths,
+            } => {
+                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
+                self.resolve_map_access_from_scalar(
+                    *span,
+                    *expr_span,
+                    scalar,
+                    data_type,
+                    paths.clone(),
+                )
             }
             CoreExpr::SugarFunction {
                 span,
@@ -949,4 +1062,83 @@ fn can_lower_last_day(kind: &ASTIntervalKind) -> bool {
             | ASTIntervalKind::Month
             | ASTIntervalKind::Week
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::Identifier;
+    use databend_common_ast::parser::Dialect;
+    use databend_common_ast::parser::parse_expr;
+    use databend_common_ast::parser::tokenize_sql;
+
+    use super::*;
+
+    fn assert_sql_lowers_to(sql: &str, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
+        let tokens = tokenize_sql(sql).unwrap();
+        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let mut arena = CoreExprArena::new(0);
+        let root = arena.lower_ast_expr(&expr).unwrap();
+        check(&arena, root);
+    }
+
+    fn assert_expr_lowers_to(expr: &Expr, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
+        let mut arena = CoreExprArena::new(0);
+        let root = arena.lower_ast_expr(expr).unwrap();
+        check(&arena, root);
+    }
+
+    #[test]
+    fn lowers_collection_exprs_without_legacy_ast() {
+        assert_sql_lowers_to("[1, 2, 3]", |arena, root| {
+            let CoreExpr::Array { exprs, .. } = arena.get(root) else {
+                panic!("array should lower to CoreExpr::Array");
+            };
+            assert!(
+                exprs
+                    .iter()
+                    .all(|expr| matches!(arena.get(*expr), CoreExpr::Literal { .. }))
+            );
+        });
+
+        assert_sql_lowers_to("{'k1': 1, 'k2': 2}", |arena, root| {
+            let CoreExpr::Map { kvs, .. } = arena.get(root) else {
+                panic!("map should lower to CoreExpr::Map");
+            };
+            assert!(
+                kvs.iter()
+                    .all(|(_key, value)| matches!(arena.get(*value), CoreExpr::Literal { .. }))
+            );
+        });
+
+        assert_sql_lowers_to("(1, 'a', true)", |arena, root| {
+            let CoreExpr::Tuple { exprs, .. } = arena.get(root) else {
+                panic!("tuple should lower to CoreExpr::Tuple");
+            };
+            assert!(
+                exprs
+                    .iter()
+                    .all(|expr| matches!(arena.get(*expr), CoreExpr::Literal { .. }))
+            );
+        });
+    }
+
+    #[test]
+    fn lowers_map_access_without_legacy_ast() {
+        let expr = Expr::MapAccess {
+            span: None,
+            expr: Box::new(Expr::Literal {
+                span: None,
+                value: Literal::String("{\"k1\":1}".to_string()),
+            }),
+            accessor: MapAccessor::Colon {
+                key: Identifier::from_name(None, "k1"),
+            },
+        };
+        assert_expr_lowers_to(&expr, |arena, root| {
+            let CoreExpr::MapAccess { expr, .. } = arena.get(root) else {
+                panic!("map access should lower to CoreExpr::MapAccess");
+            };
+            assert!(matches!(arena.get(*expr), CoreExpr::Literal { .. }));
+        });
+    }
 }

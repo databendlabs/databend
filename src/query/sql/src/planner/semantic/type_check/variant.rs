@@ -218,9 +218,20 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         expr: &Expr,
+        paths: VecDeque<(Span, Literal)>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (scalar, data_type) = self.resolve(expr)?;
+        self.resolve_map_access_from_scalar(span, expr.span(), scalar, data_type, paths)
+    }
+
+    pub(super) fn resolve_map_access_from_scalar(
+        &mut self,
+        span: Span,
+        expr_span: Span,
+        mut scalar: ScalarExpr,
+        data_type: DataType,
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (mut scalar, data_type) = self.resolve(expr)?;
         // Variant type can be converted to `get_by_keypath` function.
         if data_type.remove_nullable() == DataType::Variant {
             return self.resolve_variant_map_access(span, scalar, &mut paths);
@@ -240,7 +251,7 @@ impl<'a> TypeChecker<'a> {
                     if let TableDataType::Tuple { .. } = table_data_type.remove_nullable() {
                         let box (inner_scalar, _inner_data_type) = self
                             .resolve_tuple_map_access_pushdown(
-                                expr.span(),
+                                expr_span,
                                 column.clone(),
                                 &mut table_data_type,
                                 &mut paths,
@@ -288,7 +299,7 @@ impl<'a> TypeChecker<'a> {
                 };
                 table_data_type = fields_type.get(idx).unwrap().clone();
                 scalar = FunctionCall {
-                    span: expr.span(),
+                    span: expr_span,
                     func_name: "get".to_string(),
                     params: vec![Scalar::Number(NumberScalar::Int64((idx + 1) as i64))],
                     arguments: vec![scalar.clone()],
