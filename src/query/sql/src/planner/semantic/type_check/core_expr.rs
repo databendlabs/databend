@@ -31,6 +31,10 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowDesc;
+use databend_common_ast::ast::WindowFrame;
+use databend_common_ast::ast::WindowFrameBound;
+use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::ast::WindowSpec;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -57,6 +61,7 @@ use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::ScalarExpr;
+use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryType;
 
 #[derive(Clone, Copy)]
@@ -68,8 +73,53 @@ pub(super) type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
 pub(super) type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
 pub(super) type CoreFunctionParams = SmallVec<[(String, CoreExprId); 4]>;
 pub(super) type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
-pub(super) type AstExprArgs<'a> = SmallVec<[&'a Expr; 4]>;
-pub(super) type SugarFunctionArgs<'a> = AstExprArgs<'a>;
+pub(super) type CoreSearchFunctionArgs = SmallVec<[(String, CoreExprId); 4]>;
+pub(super) type CoreRuntimeCallArgs = SmallVec<[(String, CoreExprId); 4]>;
+
+pub(super) enum CoreAsyncFunction<'a> {
+    NextVal {
+        sequence: &'a ColumnRef,
+    },
+    DictGet {
+        dictionary: &'a ColumnRef,
+        field: CoreExprId,
+        field_display: String,
+        key: CoreExprId,
+        key_display: String,
+    },
+    Args {
+        args: CoreSearchFunctionArgs,
+    },
+}
+
+pub(super) struct CoreWindowDesc<'a> {
+    pub(super) ignore_nulls: Option<bool>,
+    pub(super) window: CoreWindow<'a>,
+}
+
+pub(super) enum CoreWindow<'a> {
+    WindowReference(&'a Identifier),
+    WindowSpec(CoreWindowSpec<'a>),
+}
+
+pub(super) struct CoreWindowSpec<'a> {
+    pub(super) existing_window_name: Option<&'a Identifier>,
+    pub(super) partition_by: CoreExprArgs,
+    pub(super) order_by: CoreOrderByExprs,
+    pub(super) window_frame: Option<CoreWindowFrame>,
+}
+
+pub(super) struct CoreWindowFrame {
+    pub(super) units: WindowFrameUnits,
+    pub(super) start_bound: CoreWindowFrameBound,
+    pub(super) end_bound: CoreWindowFrameBound,
+}
+
+pub(super) enum CoreWindowFrameBound {
+    CurrentRow,
+    Preceding(Option<CoreExprId>),
+    Following(Option<CoreExprId>),
+}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct CoreExprContextDependencies {
@@ -110,16 +160,8 @@ impl CoreExprContextDependencies {
         }
     }
 
-    fn require_udf(&mut self) {
-        self.udf = true;
-    }
-
-    fn require_async_function(&mut self) {
-        self.async_function = true;
-    }
-
     fn require_sugar_function(&mut self, func_name: &str) {
-        match func_name.to_ascii_lowercase().as_str() {
+        match func_name {
             "current_catalog"
             | "database"
             | "currentdatabase"
@@ -267,7 +309,7 @@ impl<'a> CoreExprArena<'a> {
                 op,
                 left,
                 right,
-            } => self.binary_op(*span, op, left, right),
+            } => self.lower_binary_op_expr(*span, op, left, right)?,
             Expr::JsonOp {
                 span,
                 op,
@@ -295,7 +337,6 @@ impl<'a> CoreExprArena<'a> {
                 span,
                 expr,
                 trim_where,
-                ..
             } => self.lower_trim_expr(*span, expr, trim_where)?,
             Expr::Cast {
                 expr, target_type, ..
@@ -304,9 +345,9 @@ impl<'a> CoreExprArena<'a> {
                 expr, target_type, ..
             } => self.cast(expr.span(), expr, target_type.clone(), true)?,
             Expr::Position {
+                span,
                 substr_expr,
                 str_expr,
-                span,
             } => {
                 self.lower_call_expr(*span, "locate", [substr_expr.as_ref(), str_expr.as_ref()])?
             }
@@ -384,7 +425,11 @@ impl<'a> CoreExprArena<'a> {
             } => {
                 self.lower_previous_or_next_day_expr(*span, date, unit, AdjacentDayFunction::Next)?
             }
-            expr @ Expr::MapAccess { span, .. } => self.lower_map_access_expr(expr, *span)?,
+            Expr::MapAccess {
+                span,
+                expr,
+                accessor,
+            } => self.lower_map_access_expr(*span, expr, accessor)?,
             Expr::Array { span, exprs } => self.array(*span, exprs)?,
             Expr::Map { span, kvs } => self.map(*span, kvs)?,
             Expr::Tuple { span, exprs } => self.tuple(*span, exprs)?,
@@ -393,22 +438,52 @@ impl<'a> CoreExprArena<'a> {
                 expr,
                 list,
                 not,
-            } => self.in_list(*span, expr, list, *not),
-            Expr::Exists { subquery, not, .. } => self.exists(subquery, *not),
-            Expr::Subquery { subquery, .. } => self.scalar_subquery(subquery),
+            } => self.in_list(*span, expr, list, *not)?,
+            Expr::Exists {
+                span,
+                subquery,
+                not,
+            } => self.subquery(
+                *span,
+                subquery,
+                if *not {
+                    SubqueryType::NotExists
+                } else {
+                    SubqueryType::Exists
+                },
+                None,
+                None,
+            ),
+            Expr::Subquery { span, subquery, .. } => {
+                self.subquery(*span, subquery, SubqueryType::Scalar, None, None)
+            }
             Expr::InSubquery {
                 span,
                 expr,
                 subquery,
                 not,
-            } => self.in_subquery(*span, expr, subquery, *not),
+            } => {
+                let child_expr = self.lower_ast_expr(expr)?;
+                let subquery = self.subquery(
+                    *span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(SubqueryComparisonOp::Equal),
+                );
+                if *not {
+                    self.call(*span, "not", smallvec![subquery])
+                } else {
+                    subquery
+                }
+            }
             Expr::LikeSubquery {
                 span,
                 expr,
                 subquery,
                 modifier,
                 escape,
-            } => self.like_subquery(*span, expr, subquery, modifier, escape),
+            } => self.like_subquery(*span, expr, subquery, modifier, escape)?,
             Expr::LikeAnyWithEscape {
                 span,
                 left,
@@ -449,7 +524,7 @@ impl<'a> CoreExprArena<'a> {
             )?,
             expr @ Expr::CountAll { span, window, .. } => {
                 if let Some(window) = window.as_ref() {
-                    self.count_all_window_function(format!("{:#}", expr), *span, window)
+                    self.count_all_window_function(format!("{:#}", expr), *span, window)?
                 } else {
                     self.aggregate_function(
                         format!("{:#}", expr),
@@ -493,14 +568,15 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn sugar_function(
         &mut self,
         span: Span,
-        func_name: impl Into<String>,
-        args: AstExprArgs<'a>,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::SugarFunction {
+        func_name: &'static str,
+        args: &'a [Expr],
+    ) -> Result<CoreExprId> {
+        let args = self.lower_display_expr_args(args)?;
+        Ok(self.alloc(CoreExpr::SugarFunction {
             span,
-            func_name: func_name.into(),
+            func_name,
             args,
-        })
+        }))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -539,8 +615,9 @@ impl<'a> CoreExprArena<'a> {
         remove_count_args: bool,
         order_by: CoreOrderByExprs,
         window: &'a WindowDesc,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::AggregateWindowFunction {
+    ) -> Result<CoreExprId> {
+        let window = self.lower_window_desc(window)?;
+        Ok(self.alloc(CoreExpr::AggregateWindowFunction {
             display_name,
             span,
             func_name: func_name.into(),
@@ -550,7 +627,7 @@ impl<'a> CoreExprArena<'a> {
             remove_count_args,
             order_by,
             window,
-        })
+        }))
     }
 
     fn count_all_window_function(
@@ -558,12 +635,13 @@ impl<'a> CoreExprArena<'a> {
         display_name: String,
         span: Span,
         window: &'a Window,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::CountAllWindowFunction {
+    ) -> Result<CoreExprId> {
+        let window = self.lower_window(window)?;
+        Ok(self.alloc(CoreExpr::CountAllWindowFunction {
             display_name,
             span,
             window,
-        })
+        }))
     }
 
     fn general_window_function(
@@ -574,15 +652,17 @@ impl<'a> CoreExprArena<'a> {
         args: CoreExprArgs,
         order_by: &'a [OrderByExpr],
         window: &'a WindowDesc,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::GeneralWindowFunction {
+    ) -> Result<CoreExprId> {
+        let order_by = self.lower_order_by_exprs(order_by)?;
+        let window = self.lower_window_desc(window)?;
+        Ok(self.alloc(CoreExpr::GeneralWindowFunction {
             display_name,
             span,
             func_name,
             args,
             order_by,
             window,
-        })
+        }))
     }
 
     fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
@@ -614,6 +694,18 @@ impl<'a> CoreExprArena<'a> {
             .collect()
     }
 
+    fn lower_display_expr_args(&mut self, args: &'a [Expr]) -> Result<CoreSearchFunctionArgs> {
+        args.iter()
+            .map(|arg| Ok((format!("{:#}", arg), self.lower_ast_expr(arg)?)))
+            .collect()
+    }
+
+    fn lower_runtime_call_args(&mut self, args: &'a [Expr]) -> Result<CoreRuntimeCallArgs> {
+        args.iter()
+            .map(|arg| Ok((format!("{}", arg), self.lower_ast_expr(arg)?)))
+            .collect()
+    }
+
     fn lower_order_by_exprs(&mut self, order_by: &'a [OrderByExpr]) -> Result<CoreOrderByExprs> {
         order_by
             .iter()
@@ -632,16 +724,61 @@ impl<'a> CoreExprArena<'a> {
             )
             .collect()
     }
-    fn lower_map_access_expr(&mut self, expr: &'a Expr, root_span: Span) -> Result<CoreExprId> {
-        let mut expr = expr;
+
+    fn lower_window_desc(&mut self, window: &'a WindowDesc) -> Result<CoreWindowDesc<'a>> {
+        Ok(CoreWindowDesc {
+            ignore_nulls: window.ignore_nulls,
+            window: self.lower_window(&window.window)?,
+        })
+    }
+
+    fn lower_window(&mut self, window: &'a Window) -> Result<CoreWindow<'a>> {
+        Ok(match window {
+            Window::WindowReference(window_ref) => {
+                CoreWindow::WindowReference(&window_ref.window_name)
+            }
+            Window::WindowSpec(spec) => CoreWindow::WindowSpec(self.lower_window_spec(spec)?),
+        })
+    }
+
+    fn lower_window_frame(&mut self, frame: &'a WindowFrame) -> Result<CoreWindowFrame> {
+        Ok(CoreWindowFrame {
+            units: frame.units.clone(),
+            start_bound: self.lower_window_frame_bound(&frame.start_bound)?,
+            end_bound: self.lower_window_frame_bound(&frame.end_bound)?,
+        })
+    }
+
+    fn lower_window_frame_bound(
+        &mut self,
+        bound: &'a WindowFrameBound,
+    ) -> Result<CoreWindowFrameBound> {
+        Ok(match bound {
+            WindowFrameBound::CurrentRow => CoreWindowFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(expr) => CoreWindowFrameBound::Preceding(
+                expr.as_ref()
+                    .map(|expr| self.lower_ast_expr(expr))
+                    .transpose()?,
+            ),
+            WindowFrameBound::Following(expr) => CoreWindowFrameBound::Following(
+                expr.as_ref()
+                    .map(|expr| self.lower_ast_expr(expr))
+                    .transpose()?,
+            ),
+        })
+    }
+
+    fn lower_map_access_expr(
+        &mut self,
+        root_span: Span,
+        root_expr: &'a Expr,
+        root_accessor: &'a MapAccessor,
+    ) -> Result<CoreExprId> {
+        let mut current_span = root_span;
+        let mut expr = root_expr;
+        let mut accessor = root_accessor;
         let mut paths = VecDeque::new();
-        while let Expr::MapAccess {
-            span,
-            expr: inner_expr,
-            accessor,
-        } = expr
-        {
-            expr = &**inner_expr;
+        loop {
             let path = match accessor {
                 MapAccessor::Bracket {
                     key: box Expr::Literal { value, .. },
@@ -651,7 +788,7 @@ impl<'a> CoreExprArena<'a> {
                             "Unsupported accessor: {:?}",
                             value
                         ))
-                        .set_span(*span));
+                        .set_span(current_span));
                     }
                     value.clone()
                 }
@@ -662,10 +799,23 @@ impl<'a> CoreExprArena<'a> {
                         "Unsupported accessor: {:?}",
                         accessor
                     ))
-                    .set_span(*span));
+                    .set_span(current_span));
                 }
             };
-            paths.push_front((*span, path));
+            paths.push_front((current_span, path));
+
+            let Expr::MapAccess {
+                span,
+                expr: inner_expr,
+                accessor: inner_accessor,
+                ..
+            } = expr
+            else {
+                break;
+            };
+            current_span = *span;
+            expr = inner_expr;
+            accessor = inner_accessor;
         }
         let expr_span = expr.span();
         let expr = self.lower_ast_expr(expr)?;
@@ -698,7 +848,7 @@ impl<'a> CoreExprArena<'a> {
             && !TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
                 .contains(&Ascii::new(func_name.as_str()))
         {
-            return Ok(self.runtime_call(span, name, args));
+            return self.runtime_call(span, name, args);
         }
 
         if lambda.is_none()
@@ -707,14 +857,14 @@ impl<'a> CoreExprArena<'a> {
             return match window.as_ref() {
                 Some(window) => {
                     let args = self.lower_expr_args(args)?;
-                    Ok(self.general_window_function(
+                    self.general_window_function(
                         format!("{:#}", original_expr),
                         span,
                         func_name,
                         args,
                         order_by,
                         window,
-                    ))
+                    )
                 }
                 None => Err(ErrorCode::SemanticError(format!(
                     "window function {func_name} can only be used in window clause"
@@ -739,7 +889,7 @@ impl<'a> CoreExprArena<'a> {
                     remove_count_args,
                     order_by,
                     window,
-                )
+                )?
             } else {
                 self.aggregate_function(
                     format!("{:#}", original_expr),
@@ -779,9 +929,7 @@ impl<'a> CoreExprArena<'a> {
 
         if let Some(func_name) = general_lambda_function_name(&func_name) {
             return match lambda.as_ref() {
-                Some(lambda) => {
-                    Ok(self.lambda_function(span, func_name, args.iter().collect(), lambda))
-                }
+                Some(lambda) => self.lambda_function(span, func_name, args, lambda),
                 None => Err(ErrorCode::SemanticError(format!(
                     "function {func_name} must have a lambda expression",
                 ))
@@ -790,11 +938,11 @@ impl<'a> CoreExprArena<'a> {
         }
 
         if let Some(func_name) = general_search_function_name(&func_name) {
-            return Ok(self.search_function(span, func_name, args.iter().collect()));
+            return self.search_function(span, func_name, args);
         }
 
         if let Some(func_name) = async_function_name(&func_name) {
-            return Ok(self.async_function(span, func_name, args.iter().collect()));
+            return self.async_function(span, func_name, args);
         }
 
         if let Some(func_name) = set_returning_function_name(&func_name) {
@@ -808,15 +956,13 @@ impl<'a> CoreExprArena<'a> {
             && window.is_none()
             && lambda.is_none()
         {
-            if TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
-                .contains(&Ascii::new(func_name.as_str()))
-            {
+            if let Some(func_name) = sugar_function_name(&func_name) {
                 return if TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_sugar_function(
-                    &func_name,
+                    func_name,
                 ) {
-                    self.lower_sugar_function(span, &func_name, args.iter().collect())
+                    self.lower_sugar_function(span, func_name, args)
                 } else {
-                    Ok(self.sugar_function(span, func_name, args.iter().collect()))
+                    self.sugar_function(span, func_name, args)
                 };
             }
 
@@ -1015,54 +1161,85 @@ impl<'a> CoreExprArena<'a> {
         span: Span,
         name: &'a Identifier,
         args: &'a [Expr],
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::RuntimeCall { span, name, args })
+    ) -> Result<CoreExprId> {
+        let args = self.lower_runtime_call_args(args)?;
+        Ok(self.alloc(CoreExpr::RuntimeCall { span, name, args }))
     }
 
-    fn binary_op(
+    fn lower_binary_op_expr(
         &mut self,
         span: Span,
         op: &'a BinaryOperator,
         left: &'a Expr,
         right: &'a Expr,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::BinaryOp {
-            span,
-            op,
-            left,
-            right,
-        })
+    ) -> Result<CoreExprId> {
+        let Expr::Subquery {
+            subquery,
+            modifier: Some(modifier),
+            ..
+        } = right
+        else {
+            return self.lower_special_binary_op_expr(span, op, left, right);
+        };
+
+        let child_expr = self.lower_ast_expr(left)?;
+        match modifier {
+            SubqueryModifier::Any | SubqueryModifier::Some => {
+                let compare_op = SubqueryComparisonOp::try_from(op)?;
+                Ok(self.subquery(
+                    span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(compare_op),
+                ))
+            }
+            SubqueryModifier::All => {
+                let contrary_op = op.to_contrary()?;
+                let compare_op = SubqueryComparisonOp::try_from(&contrary_op)?;
+                let subquery = self.subquery(
+                    span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(compare_op),
+                );
+                Ok(self.call(span, "not", smallvec![subquery]))
+            }
+        }
     }
 
-    fn in_list(&mut self, span: Span, expr: &'a Expr, list: &'a [Expr], not: bool) -> CoreExprId {
-        self.alloc(CoreExpr::InList {
+    fn in_list(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        list: &'a [Expr],
+        not: bool,
+    ) -> Result<CoreExprId> {
+        let expr = self.lower_ast_expr(expr)?;
+        let list = self.lower_expr_args(list)?;
+        Ok(self.alloc(CoreExpr::InList {
             span,
             expr,
             list,
             not,
-        })
+        }))
     }
 
-    fn exists(&mut self, subquery: &'a Query, not: bool) -> CoreExprId {
-        self.alloc(CoreExpr::Exists { subquery, not })
-    }
-
-    fn scalar_subquery(&mut self, subquery: &'a Query) -> CoreExprId {
-        self.alloc(CoreExpr::ScalarSubquery { subquery })
-    }
-
-    fn in_subquery(
+    fn subquery(
         &mut self,
         span: Span,
-        expr: &'a Expr,
         subquery: &'a Query,
-        not: bool,
+        typ: SubqueryType,
+        child_expr: Option<CoreExprId>,
+        compare_op: Option<SubqueryComparisonOp>,
     ) -> CoreExprId {
-        self.alloc(CoreExpr::InSubquery {
+        self.alloc(CoreExpr::Subquery {
             span,
-            expr,
             subquery,
-            not,
+            typ,
+            child_expr,
+            compare_op,
         })
     }
 
@@ -1073,14 +1250,30 @@ impl<'a> CoreExprArena<'a> {
         subquery: &'a Query,
         modifier: &'a SubqueryModifier,
         escape: &'a Option<String>,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::LikeSubquery {
-            span,
-            expr,
-            subquery,
-            modifier,
-            escape,
-        })
+    ) -> Result<CoreExprId> {
+        let child_expr = self.lower_ast_expr(expr)?;
+        match modifier {
+            SubqueryModifier::Any | SubqueryModifier::Some => Ok(self.subquery(
+                span,
+                subquery,
+                SubqueryType::Any,
+                Some(child_expr),
+                Some(SubqueryComparisonOp::Like(escape.clone())),
+            )),
+            SubqueryModifier::All => {
+                let op = BinaryOperator::Like(escape.clone());
+                let contrary_op = op.to_contrary()?;
+                let compare_op = SubqueryComparisonOp::try_from(&contrary_op)?;
+                let subquery = self.subquery(
+                    span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(compare_op),
+                );
+                Ok(self.call(span, "not", smallvec![subquery]))
+            }
+        }
     }
 
     fn stage_location(&mut self, span: Span, location: &'a str) -> CoreExprId {
@@ -1091,41 +1284,83 @@ impl<'a> CoreExprArena<'a> {
         &mut self,
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
+        args: &'a [Expr],
         lambda: &'a Lambda,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::LambdaFunction {
+    ) -> Result<CoreExprId> {
+        let args = self.lower_expr_args(args)?;
+        let lambda_expr = self.lower_ast_expr(&lambda.expr)?;
+        Ok(self.alloc(CoreExpr::LambdaFunction {
             span,
             func_name,
             args,
-            lambda,
-        })
+            lambda_params: &lambda.params,
+            lambda_expr,
+        }))
     }
 
     fn search_function(
         &mut self,
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::SearchFunction {
+        args: &'a [Expr],
+    ) -> Result<CoreExprId> {
+        let args = self.lower_display_expr_args(args)?;
+        Ok(self.alloc(CoreExpr::SearchFunction {
             span,
             func_name,
             args,
-        })
+        }))
     }
 
     fn async_function(
         &mut self,
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::AsyncFunction {
+        args: &'a [Expr],
+    ) -> Result<CoreExprId> {
+        let function = match func_name {
+            "nextval" => {
+                let [Expr::ColumnRef { column, .. }] = args else {
+                    let args = self.lower_display_expr_args(args)?;
+                    return Ok(self.alloc(CoreExpr::AsyncFunction {
+                        span,
+                        func_name,
+                        function: CoreAsyncFunction::Args { args },
+                    }));
+                };
+                CoreAsyncFunction::NextVal { sequence: column }
+            }
+            "dict_get" => {
+                let [Expr::ColumnRef { column, .. }, field, key] = args else {
+                    let args = self.lower_display_expr_args(args)?;
+                    return Ok(self.alloc(CoreExpr::AsyncFunction {
+                        span,
+                        func_name,
+                        function: CoreAsyncFunction::Args { args },
+                    }));
+                };
+                CoreAsyncFunction::DictGet {
+                    dictionary: column,
+                    field: self.lower_ast_expr(field)?,
+                    field_display: format!("{:#}", field),
+                    key: self.lower_ast_expr(key)?,
+                    key_display: format!("{:#}", key),
+                }
+            }
+            "read_file" => CoreAsyncFunction::Args {
+                args: self.lower_display_expr_args(args)?,
+            },
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "async function {func_name} should have been classified before lowering",
+                )));
+            }
+        };
+        Ok(self.alloc(CoreExpr::AsyncFunction {
             span,
             func_name,
-            args,
-        })
+            function,
+        }))
     }
 
     fn set_returning_function(
@@ -1165,6 +1400,19 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn get(&self, id: CoreExprId) -> &CoreExpr<'a> {
         &self.nodes[id.index]
     }
+
+    pub(super) fn lower_window_spec(&mut self, spec: &'a WindowSpec) -> Result<CoreWindowSpec<'a>> {
+        Ok(CoreWindowSpec {
+            existing_window_name: spec.existing_window_name.as_ref(),
+            partition_by: self.lower_expr_args(&spec.partition_by)?,
+            order_by: self.lower_order_by_exprs(&spec.order_by)?,
+            window_frame: spec
+                .window_frame
+                .as_ref()
+                .map(|frame| self.lower_window_frame(frame))
+                .transpose()?,
+        })
+    }
 }
 
 pub(super) enum CoreExpr<'a> {
@@ -1202,23 +1450,24 @@ pub(super) enum CoreExpr<'a> {
     RuntimeCall {
         span: Span,
         name: &'a Identifier,
-        args: &'a [Expr],
+        args: CoreRuntimeCallArgs,
     },
     LambdaFunction {
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
-        lambda: &'a Lambda,
+        args: CoreExprArgs,
+        lambda_params: &'a [Identifier],
+        lambda_expr: CoreExprId,
     },
     SearchFunction {
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
+        args: CoreSearchFunctionArgs,
     },
     AsyncFunction {
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
+        function: CoreAsyncFunction<'a>,
     },
     SetReturningFunction {
         span: Span,
@@ -1231,37 +1480,18 @@ pub(super) enum CoreExpr<'a> {
         params: CoreFunctionParams,
         args: CoreExprArgs,
     },
-    BinaryOp {
-        span: Span,
-        op: &'a BinaryOperator,
-        left: &'a Expr,
-        right: &'a Expr,
-    },
     InList {
         span: Span,
-        expr: &'a Expr,
-        list: &'a [Expr],
+        expr: CoreExprId,
+        list: CoreExprArgs,
         not: bool,
     },
-    Exists {
-        subquery: &'a Query,
-        not: bool,
-    },
-    ScalarSubquery {
-        subquery: &'a Query,
-    },
-    InSubquery {
+    Subquery {
         span: Span,
-        expr: &'a Expr,
         subquery: &'a Query,
-        not: bool,
-    },
-    LikeSubquery {
-        span: Span,
-        expr: &'a Expr,
-        subquery: &'a Query,
-        modifier: &'a SubqueryModifier,
-        escape: &'a Option<String>,
+        typ: SubqueryType,
+        child_expr: Option<CoreExprId>,
+        compare_op: Option<SubqueryComparisonOp>,
     },
     Cast {
         span: Span,
@@ -1271,8 +1501,8 @@ pub(super) enum CoreExpr<'a> {
     },
     SugarFunction {
         span: Span,
-        func_name: String,
-        args: AstExprArgs<'a>,
+        func_name: &'static str,
+        args: CoreSearchFunctionArgs,
     },
     AggregateFunction {
         display_name: String,
@@ -1293,20 +1523,20 @@ pub(super) enum CoreExpr<'a> {
         args: CoreExprArgs,
         remove_count_args: bool,
         order_by: CoreOrderByExprs,
-        window: &'a WindowDesc,
+        window: CoreWindowDesc<'a>,
     },
     CountAllWindowFunction {
         display_name: String,
         span: Span,
-        window: &'a Window,
+        window: CoreWindow<'a>,
     },
     GeneralWindowFunction {
         display_name: String,
         span: Span,
         func_name: &'static str,
         args: CoreExprArgs,
-        order_by: &'a [OrderByExpr],
-        window: &'a WindowDesc,
+        order_by: CoreOrderByExprs,
+        window: CoreWindowDesc<'a>,
     },
     StageLocation {
         span: Span,
@@ -1337,31 +1567,35 @@ impl<'a> CoreExpr<'a> {
                 dependencies.scalar_evaluation = true;
             }
             CoreExpr::RuntimeCall { .. } => {
-                dependencies.require_udf();
+                dependencies.udf = true;
             }
             CoreExpr::LambdaFunction { .. } => {
                 dependencies.column_resolution = true;
             }
-            CoreExpr::SearchFunction { .. } => {}
+            CoreExpr::SearchFunction { .. } => {
+                dependencies.column_resolution = true;
+            }
             CoreExpr::AsyncFunction { .. } => {
-                dependencies.require_async_function();
+                dependencies.async_function = true;
             }
             CoreExpr::SetReturningFunction { .. } => {}
-            CoreExpr::BinaryOp { .. }
-            | CoreExpr::InList { .. }
-            | CoreExpr::InSubquery { .. }
-            | CoreExpr::LikeSubquery { .. } => {
-                dependencies.column_resolution = true;
-                dependencies.subquery = true;
+            CoreExpr::InList { .. } => {
+                dependencies.scalar_evaluation = true;
             }
-            CoreExpr::Exists { .. } | CoreExpr::ScalarSubquery { .. } => {
+            CoreExpr::Subquery { child_expr, .. } => {
+                if child_expr.is_some() {
+                    dependencies.column_resolution = true;
+                }
                 dependencies.subquery = true;
             }
             CoreExpr::SugarFunction { func_name, .. } => {
                 dependencies.require_sugar_function(func_name);
             }
-            CoreExpr::AggregateWindowFunction { .. } | CoreExpr::GeneralWindowFunction { .. } => {}
-            CoreExpr::CountAllWindowFunction { .. } => {}
+            CoreExpr::AggregateWindowFunction { .. }
+            | CoreExpr::GeneralWindowFunction { .. }
+            | CoreExpr::CountAllWindowFunction { .. } => {
+                dependencies.column_resolution = true;
+            }
             CoreExpr::StageLocation { .. } => {}
             CoreExpr::Literal { .. } => {}
         }
@@ -1453,31 +1687,32 @@ where P: super::TypeCheckPolicy
                 span,
                 func_name,
                 args,
-            } => {
-                if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
-                    self.try_rewrite_sugar_function(*span, func_name.as_str(), args.as_slice()),
-                ) {
-                    return rewritten_func_result;
-                }
-                self.resolve_function(*span, func_name.as_str(), vec![], args.as_slice())
-            }
+            } => self.resolve_core_sugar_function(arena, *span, func_name, args),
             CoreExpr::RuntimeCall { span, name, args } => {
-                self.resolve_core_runtime_call(*span, name, args)
+                self.resolve_core_runtime_call(arena, *span, name, args)
             }
             CoreExpr::LambdaFunction {
                 span,
                 func_name,
                 args,
-                lambda,
-            } => self.resolve_lambda_function(*span, func_name, args.as_slice(), lambda),
+                lambda_params,
+                lambda_expr,
+            } => self.resolve_core_lambda_function(
+                arena,
+                *span,
+                func_name,
+                args,
+                lambda_params,
+                *lambda_expr,
+            ),
             CoreExpr::SearchFunction {
                 span,
                 func_name,
                 args,
             } => match *func_name {
-                "score" => self.resolve_score_search_function(*span, func_name, args.as_slice()),
-                "match" => self.resolve_match_search_function(*span, func_name, args.as_slice()),
-                "query" => self.resolve_query_search_function(*span, func_name, args.as_slice()),
+                "score" => self.resolve_core_score_search_function(*span, func_name, args),
+                "match" => self.resolve_core_match_search_function(arena, *span, func_name, args),
+                "query" => self.resolve_core_query_search_function(arena, *span, func_name, args),
                 _ => Err(ErrorCode::SemanticError(format!(
                     "cannot find search function {}",
                     func_name
@@ -1487,53 +1722,27 @@ where P: super::TypeCheckPolicy
             CoreExpr::AsyncFunction {
                 span,
                 func_name,
-                args,
-            } => self.resolve_async_function(*span, func_name, args.as_slice()),
-            CoreExpr::BinaryOp {
-                span,
-                op,
-                left,
-                right,
-            } => self.resolve_binary_op_or_subquery(span, op, left, right),
+                function,
+            } => self.resolve_async_function(arena, *span, func_name, function),
             CoreExpr::InList {
                 span,
                 expr,
                 list,
                 not,
-            } => self.resolve_in_list(*span, expr, list, *not),
-            CoreExpr::Exists { subquery, not } => self.resolve_subquery(
-                if !not {
-                    SubqueryType::Exists
-                } else {
-                    SubqueryType::NotExists
-                },
+            } => self.resolve_core_in_list(arena, *span, *expr, list, *not),
+            CoreExpr::Subquery {
+                span,
                 subquery,
-                None,
-                None,
-            ),
-            CoreExpr::ScalarSubquery { subquery } => {
-                self.resolve_subquery(SubqueryType::Scalar, subquery, None, None)
+                typ,
+                child_expr,
+                compare_op,
+            } => {
+                let child_expr = child_expr
+                    .map(|child_expr| self.resolve_core(arena, child_expr))
+                    .transpose()?
+                    .map(|resolved| *resolved);
+                self.resolve_subquery(*span, *typ, subquery, child_expr, compare_op.clone())
             }
-            CoreExpr::InSubquery {
-                span,
-                expr,
-                subquery,
-                not,
-            } => self.resolve_in_subquery(*span, expr, subquery, *not),
-            CoreExpr::LikeSubquery {
-                span,
-                expr,
-                subquery,
-                modifier,
-                escape,
-            } => self.resolve_scalar_subquery(
-                subquery,
-                expr,
-                span,
-                span,
-                modifier,
-                &BinaryOperator::Like((*escape).clone()),
-            ),
             CoreExpr::AggregateWindowFunction {
                 display_name,
                 span,
@@ -1560,7 +1769,7 @@ where P: super::TypeCheckPolicy
                 display_name,
                 span,
                 window,
-            } => self.resolve_core_count_all_window_function(*span, display_name, window),
+            } => self.resolve_core_count_all_window_function(arena, *span, display_name, window),
             CoreExpr::GeneralWindowFunction {
                 display_name,
                 span,
@@ -1638,12 +1847,13 @@ where P: super::TypeCheckPolicy
 
     pub(super) fn resolve_core_runtime_call(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         name: &Identifier,
-        args: &[Expr],
+        args: &CoreRuntimeCallArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
-        if let Some(udf) = self.resolve_udf(span, &udf_name, args)? {
+        if let Some(udf) = self.resolve_udf(arena, span, &udf_name, args)? {
             return Ok(udf);
         }
         Err(self.unknown_function_error(span, &udf_name))
@@ -1701,6 +1911,68 @@ where P: super::TypeCheckPolicy
             data_types.push(data_type);
         }
         Ok((scalars, data_types))
+    }
+
+    fn resolve_core_in_list(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        expr: CoreExprId,
+        list: &CoreExprArgs,
+        not: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let box (expr_scalar, _) = self.resolve_core(arena, expr)?;
+        let max_inlist_to_or = self.policy.settings().get_max_inlist_to_or()? as usize;
+
+        if list.len() > max_inlist_to_or
+            && list
+                .iter()
+                .all(|item| satisfy_core_contain_func(arena, *item))
+        {
+            let (list_scalars, _) = self.resolve_core_expr_args(arena, list)?;
+            let box (array, _) =
+                self.resolve_scalar_function_call(span, "array", vec![], list_scalars)?;
+            let box (array, _) =
+                self.resolve_scalar_function_call(span, "array_distinct", vec![], vec![array])?;
+            let box (contains, data_type) =
+                self.resolve_scalar_function_call(span, "contains", vec![], vec![
+                    array,
+                    expr_scalar,
+                ])?;
+            return if not {
+                self.resolve_scalar_function_call(span, "not", vec![], vec![contains])
+            } else {
+                Ok(Box::new((contains, data_type)))
+            };
+        }
+
+        let mut result = None;
+        for item in list {
+            let box (item, _) = self.resolve_core(arena, *item)?;
+            let box (predicate, _) =
+                self.resolve_scalar_function_call(span, "eq", vec![], vec![
+                    expr_scalar.clone(),
+                    item,
+                ])?;
+            result = Some(match result {
+                None => predicate,
+                Some(acc) => {
+                    let box (or_predicate, _) =
+                        self.resolve_scalar_function_call(span, "or", vec![], vec![
+                            acc, predicate,
+                        ])?;
+                    or_predicate
+                }
+            });
+        }
+
+        let result = result.expect("IN list should not be empty");
+        let data_type = result.data_type()?;
+        if not {
+            self.resolve_scalar_function_call(span, "not", vec![], vec![result])
+        } else {
+            Ok(Box::new((result, data_type)))
+        }
     }
 
     pub(super) fn resolve_core_function_params(
@@ -1774,6 +2046,15 @@ fn async_function_name(func_name: &str) -> Option<&'static str> {
         .map(Ascii::into_inner)
 }
 
+fn sugar_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
+
 fn builtin_scalar_function_name(func_name: &str) -> Option<&'static str> {
     if !TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_scalar_function(func_name) {
         return None;
@@ -1812,6 +2093,16 @@ fn set_returning_function_name(func_name: &str) -> Option<&'static str> {
         return Some(alias.as_str());
     }
     None
+}
+
+fn satisfy_core_contain_func(arena: &CoreExprArena<'_>, expr: CoreExprId) -> bool {
+    match arena.get(expr) {
+        CoreExpr::Literal { value, .. } => !matches!(value, Scalar::Null),
+        CoreExpr::Tuple { exprs, .. } | CoreExpr::Array { exprs, .. } => exprs
+            .iter()
+            .all(|expr| satisfy_core_contain_func(arena, *expr)),
+        _ => false,
+    }
 }
 
 fn can_remove_count_args(func_name: &str, distinct: bool, args: &[Expr]) -> bool {
@@ -2063,23 +2354,122 @@ mod tests {
         });
 
         assert_sql_lowers_to("a IN (1, 2)", |arena, root| {
-            assert!(matches!(arena.get(root), CoreExpr::InList { .. }));
+            let CoreExpr::InList { expr, list, .. } = arena.get(root) else {
+                panic!("IN list should lower to CoreExpr::InList");
+            };
+            assert!(matches!(arena.get(*expr), CoreExpr::ColumnRef { .. }));
+            assert!(
+                list.iter()
+                    .all(|item| matches!(arena.get(*item), CoreExpr::Literal { .. }))
+            );
         });
 
         assert_sql_lowers_to("EXISTS (SELECT 1)", |arena, root| {
-            assert!(matches!(arena.get(root), CoreExpr::Exists { .. }));
+            let CoreExpr::Subquery { typ, .. } = arena.get(root) else {
+                panic!("EXISTS should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Exists);
         });
 
         assert_sql_lowers_to("(SELECT 1)", |arena, root| {
-            assert!(matches!(arena.get(root), CoreExpr::ScalarSubquery { .. }));
+            let CoreExpr::Subquery { typ, .. } = arena.get(root) else {
+                panic!("scalar subquery should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Scalar);
         });
 
         assert_sql_lowers_to("a IN (SELECT 1)", |arena, root| {
-            assert!(matches!(arena.get(root), CoreExpr::InSubquery { .. }));
+            let CoreExpr::Subquery {
+                typ,
+                child_expr,
+                compare_op,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("IN subquery should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Any);
+            assert!(child_expr.is_some());
+            assert_eq!(compare_op, &Some(SubqueryComparisonOp::Equal));
+        });
+
+        assert_sql_lowers_to("a NOT IN (SELECT 1)", |arena, root| {
+            let CoreExpr::Call {
+                func_name: "not",
+                args,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("NOT IN subquery should lower to a not call");
+            };
+            let CoreExpr::Subquery {
+                typ,
+                child_expr,
+                compare_op,
+                ..
+            } = arena.get(args[0])
+            else {
+                panic!("NOT IN child should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Any);
+            assert!(child_expr.is_some());
+            assert_eq!(compare_op, &Some(SubqueryComparisonOp::Equal));
         });
 
         assert_sql_lowers_to("a = ANY (SELECT 1)", |arena, root| {
-            assert!(matches!(arena.get(root), CoreExpr::BinaryOp { .. }));
+            let CoreExpr::Subquery {
+                typ,
+                child_expr,
+                compare_op,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("= ANY should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Any);
+            assert!(child_expr.is_some());
+            assert_eq!(compare_op, &Some(SubqueryComparisonOp::Equal));
+        });
+
+        assert_sql_lowers_to("a = ALL (SELECT 1)", |arena, root| {
+            let CoreExpr::Call {
+                func_name: "not",
+                args,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("= ALL should lower to a not call");
+            };
+            let CoreExpr::Subquery {
+                typ,
+                child_expr,
+                compare_op,
+                ..
+            } = arena.get(args[0])
+            else {
+                panic!("= ALL child should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Any);
+            assert!(child_expr.is_some());
+            assert_eq!(compare_op, &Some(SubqueryComparisonOp::NotEqual));
+        });
+
+        assert_sql_lowers_to("a LIKE ANY (SELECT 'x') ESCAPE '!'", |arena, root| {
+            let CoreExpr::Subquery {
+                typ,
+                child_expr,
+                compare_op,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("LIKE ANY should lower to CoreExpr::Subquery");
+            };
+            assert_eq!(typ, &SubqueryType::Any);
+            assert!(child_expr.is_some());
+            assert_eq!(
+                compare_op,
+                &Some(SubqueryComparisonOp::Like(Some("!".to_string())))
+            );
         });
 
         assert_sql_lowers_to("a LIKE 'x' ESCAPE '!'", |arena, root| {
@@ -2137,7 +2527,8 @@ mod tests {
         assert_sql_lowers_to("a IN (1, 2)", |arena, _root| {
             let dependencies = arena.context_dependencies();
             assert!(dependencies.column_resolution);
-            assert!(dependencies.subquery);
+            assert!(dependencies.scalar_evaluation);
+            assert!(!dependencies.subquery);
         });
 
         assert_sql_lowers_to("current_database()", |arena, _root| {
@@ -2178,7 +2569,10 @@ mod tests {
         });
 
         assert_sql_policy_error_contains("a", &scalar_only, "column_resolution");
-        assert_sql_policy_error_contains("a IN (1, 2)", &scalar_only, "subquery");
+        assert_sql_lowers_to("1 IN (2, 3)", |arena, _root| {
+            assert!(scalar_only.allowed.contains(arena.context_dependencies()));
+        });
+        assert_sql_policy_error_contains("a IN (1, 2)", &scalar_only, "column_resolution");
         assert_sql_policy_error_contains("current_database()", &scalar_only, "session_function");
         assert_sql_policy_error_contains("nextval(seq)", &scalar_only, "async_function");
         assert_sql_policy_error_contains("potential_udf(1)", &scalar_only, "udf");

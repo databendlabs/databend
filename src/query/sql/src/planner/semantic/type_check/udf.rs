@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::parser::parse_expr;
@@ -48,14 +46,17 @@ use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
 use databend_common_users::UserApiProvider;
-use derive_visitor::DriveMut;
 use itertools::Itertools;
 use serde_json::json;
 use serde_json::to_string;
 
 use super::StageLocationParam;
 use super::TypeChecker;
-use crate::UDFArgVisitor;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreRuntimeCallArgs;
+use crate::BindContext;
+use crate::ColumnBindingBuilder;
+use crate::Visibility;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
@@ -264,11 +265,54 @@ fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy
 {
+    fn resolve_udf_definition_with_arguments(
+        &mut self,
+        definition: &str,
+        parameters: Vec<(String, DataType, ScalarExpr)>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let settings = self.table_ctx().get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let sql_tokens = tokenize_sql(definition)?;
+        let expr = parse_expr(&sql_tokens, sql_dialect)?;
+
+        let mut udf_context = BindContext::with_parent(self.bind_context.clone())?;
+        let mut replacements = Vec::with_capacity(parameters.len());
+        for (name, data_type, scalar) in parameters {
+            let column_index = udf_context.next_column_index();
+            udf_context.add_column_binding(
+                ColumnBindingBuilder::new(
+                    name,
+                    column_index,
+                    Box::new(data_type),
+                    Visibility::Visible,
+                )
+                .build(),
+            );
+            replacements.push((column_index, scalar));
+        }
+
+        let box (mut scalar, data_type) = TypeChecker::try_create(
+            &mut udf_context,
+            self.table_ctx().clone(),
+            self.name_resolution_ctx,
+            self.metadata.clone(),
+            self.aliases,
+            self.forbid_udf,
+        )?
+        .resolve(&expr)?;
+
+        for (column_index, arg) in replacements {
+            scalar.replace_column_with_scalar(column_index, &arg)?;
+        }
+        Ok(Box::new((scalar, data_type)))
+    }
+
     pub(super) fn resolve_udf(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         udf_name: &str,
-        arguments: &[Expr],
+        arguments: &CoreRuntimeCallArgs,
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         if self.forbid_udf {
             return Ok(None);
@@ -295,40 +339,42 @@ where P: super::TypeCheckPolicy
 
         match udf.definition {
             UDFDefinition::LambdaUDF(udf_def) => Ok(Some(
-                self.resolve_lambda_udf(span, name, arguments, udf_def)?,
+                self.resolve_lambda_udf(arena, span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
-                self.resolve_udf_server(span, name, arguments, udf_def)?,
+                self.resolve_udf_server(arena, span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDFScript(udf_def) => Ok(Some(
-                self.resolve_udf_script(span, name, arguments, udf_def)?,
+                self.resolve_udf_script(arena, span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDAFScript(udf_def) => Ok(Some(
-                self.resolve_udaf_script(span, name, arguments, udf_def)?,
+                self.resolve_udaf_script(arena, span, name, arguments, udf_def)?,
             )),
             UDFDefinition::UDTF(_) => unreachable!(),
             UDFDefinition::UDTFServer(_) => unreachable!(),
             UDFDefinition::ScalarUDF(udf_def) => Ok(Some(
-                self.resolve_scalar_udf(span, name, arguments, udf_def)?,
+                self.resolve_scalar_udf(arena, span, name, arguments, udf_def)?,
             )),
         }
     }
 
     fn resolve_udf_server(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        arguments: &[Expr],
+        arguments: &CoreRuntimeCallArgs,
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.resolve_udf_server_internal(span, name, arguments, udf_definition, true)
+        self.resolve_udf_server_internal(arena, span, name, arguments, udf_definition, true)
     }
 
     fn resolve_udf_server_internal(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        arguments: &[Expr],
+        arguments: &CoreRuntimeCallArgs,
         mut udf_definition: UDFServer,
         validate_address: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -347,12 +393,12 @@ where P: super::TypeCheckPolicy
         let mut all_args_const = true;
         let mut args = Vec::with_capacity(arguments.len());
         let mut stage_locations = Vec::new();
-        for (i, (argument, dest_type)) in arguments
+        for (i, ((display_name, argument), dest_type)) in arguments
             .iter()
             .zip(udf_definition.arg_types.iter())
             .enumerate()
         {
-            let box (arg, ty) = self.resolve(argument)?;
+            let box (arg, ty) = self.resolve_core(arena, *argument)?;
             // TODO: support cast constant
             if !matches!(arg, ScalarExpr::ConstantExpr(_))
                 || (ty != dest_type.remove_nullable()
@@ -373,6 +419,7 @@ where P: super::TypeCheckPolicy
                 else {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid parameter {argument} for udf function, expected constant string",
+                        argument = display_name
                     ))
                     .set_span(span));
                 };
@@ -440,7 +487,7 @@ where P: super::TypeCheckPolicy
             )));
         }
 
-        let arg_names = arguments.iter().map(|arg| format!("{arg}")).join(", ");
+        let arg_names = arguments.iter().map(|(arg, _)| arg.as_str()).join(", ");
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.bind_context.have_udf_server = true;
@@ -731,9 +778,10 @@ where P: super::TypeCheckPolicy
 
     fn resolve_udf_script(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        args: &[Expr],
+        args: &CoreRuntimeCallArgs,
         udf_definition: UDFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let UDFScript {
@@ -757,8 +805,8 @@ where P: super::TypeCheckPolicy
             UDFValidator::is_udf_script_allowed(&language)?;
         }
         let mut arguments = Vec::with_capacity(args.len());
-        for (argument, dest_type) in args.iter().zip(arg_types.iter()) {
-            let box (arg, ty) = self.resolve(argument)?;
+        for ((_, argument), dest_type) in args.iter().zip(arg_types.iter()) {
+            let box (arg, ty) = self.resolve_core(arena, *argument)?;
             if ty != *dest_type {
                 arguments.push(wrap_cast(&arg, dest_type));
             } else {
@@ -798,7 +846,14 @@ where P: super::TypeCheckPolicy
                 return_type,
                 immutable,
             };
-            return self.resolve_udf_server_internal(span, name, args, udf_definition, false);
+            return self.resolve_udf_server_internal(
+                arena,
+                span,
+                name,
+                args,
+                udf_definition,
+                false,
+            );
         }
 
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
@@ -821,7 +876,7 @@ where P: super::TypeCheckPolicy
             packages,
         }));
 
-        let arg_names = args.iter().map(|arg| format!("{arg}")).join(", ");
+        let arg_names = args.iter().map(|(arg, _)| arg.as_str()).join(", ");
         let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
@@ -845,9 +900,10 @@ where P: super::TypeCheckPolicy
 
     fn resolve_udaf_script(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        args: &[Expr],
+        args: &CoreRuntimeCallArgs,
         udf_definition: UDAFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let UDAFScript {
@@ -883,8 +939,8 @@ where P: super::TypeCheckPolicy
         let arguments = args
             .iter()
             .zip(arg_types.iter())
-            .map(|(argument, dest_type)| {
-                let box (arg, ty) = self.resolve(argument)?;
+            .map(|((_, argument), dest_type)| {
+                let box (arg, ty) = self.resolve_core(arena, *argument)?;
                 Ok(if ty == *dest_type {
                     arg
                 } else {
@@ -895,7 +951,7 @@ where P: super::TypeCheckPolicy
 
         let display_name = format!(
             "{name}({})",
-            args.iter().map(|arg| format!("{:#}", arg)).join(", ")
+            args.iter().map(|(arg, _)| arg.as_str()).join(", ")
         );
 
         self.bind_context.have_udf_script = true;
@@ -924,9 +980,10 @@ where P: super::TypeCheckPolicy
 
     fn resolve_lambda_udf(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func_name: String,
-        arguments: &[Expr],
+        arguments: &CoreRuntimeCallArgs,
         udf_definition: LambdaUDF,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let parameters = udf_definition.parameters;
@@ -938,43 +995,40 @@ where P: super::TypeCheckPolicy
             ))
             .set_span(span));
         }
-        let settings = self.table_ctx().get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
-        let expr = parse_expr(&sql_tokens, sql_dialect)?;
-        let mut args_map = HashMap::new();
-        arguments.iter().enumerate().for_each(|(idx, argument)| {
-            if let Some(parameter) = parameters.get(idx) {
-                args_map.insert(parameter.as_str(), (*argument).clone());
-            }
-        });
-
-        let udf_expr = Self::clone_expr_with_replacement(&expr, |nest_expr| {
-            if let Expr::ColumnRef { column, .. } = nest_expr {
-                if let Some(arg) = args_map.get(column.column.name()) {
-                    return Ok(Some(arg.clone()));
-                }
-            }
-            Ok(None)
-        })
-        .map_err(|e| e.set_span(span))?;
-        let scalar = self.resolve(&udf_expr)?;
+        let mut resolved_arguments = Vec::with_capacity(arguments.len());
+        let mut arg_types = Vec::with_capacity(arguments.len());
+        for (_, argument) in arguments {
+            let box (arg, ty) = self.resolve_core(arena, *argument)?;
+            resolved_arguments.push(arg);
+            arg_types.push(ty);
+        }
+        let parameters = parameters
+            .into_iter()
+            .zip(arg_types)
+            .zip(resolved_arguments)
+            .map(|((name, data_type), scalar)| (name, data_type, scalar))
+            .collect();
+        let box (scalar, data_type) = self.resolve_udf_definition_with_arguments(
+            udf_definition.definition.as_str(),
+            parameters,
+        )?;
         Ok(Box::new((
             UDFLambdaCall {
                 span,
                 func_name,
-                scalar: Box::new(scalar.0),
+                scalar: Box::new(scalar),
             }
             .into(),
-            scalar.1,
+            data_type,
         )))
     }
 
     fn resolve_scalar_udf(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func_name: String,
-        arguments: &[Expr],
+        arguments: &CoreRuntimeCallArgs,
         udf_definition: ScalarUDF,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let arg_types = udf_definition.arg_types;
@@ -986,23 +1040,20 @@ where P: super::TypeCheckPolicy
             ))
             .set_span(span));
         }
-        let settings = self.table_ctx().get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
-        let mut udf_expr = parse_expr(&sql_tokens, sql_dialect)?;
-        let mut visitor = UDFArgVisitor::new(&arg_types, arguments);
-        udf_expr.drive_mut(&mut visitor);
-
-        // Use current binding context so column references inside arguments can be resolved.
-        let box (expr, _) = TypeChecker::try_create(
-            self.bind_context,
-            self.table_ctx().clone(),
-            self.name_resolution_ctx,
-            self.metadata.clone(),
-            self.aliases,
-            self.forbid_udf,
-        )?
-        .resolve(&udf_expr)?;
+        let mut parameters = Vec::with_capacity(arg_types.len());
+        for ((arg_name, dest_type), (_, argument)) in arg_types.iter().zip(arguments.iter()) {
+            let box (arg, ty) = self.resolve_core(arena, *argument)?;
+            let arg = if ty != *dest_type {
+                wrap_cast(&arg, dest_type)
+            } else {
+                arg
+            };
+            parameters.push((arg_name.clone(), dest_type.clone(), arg));
+        }
+        let box (expr, _) = self.resolve_udf_definition_with_arguments(
+            udf_definition.definition.as_str(),
+            parameters,
+        )?;
         let return_ty = udf_definition.return_type;
         let expr = CastExpr {
             span,

@@ -13,12 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::OrderByExpr;
-use databend_common_ast::ast::Window;
-use databend_common_ast::ast::WindowDesc;
-use databend_common_ast::ast::WindowFrame;
-use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -35,10 +29,16 @@ use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use smallvec::SmallVec;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
 use super::core_expr::CoreFunctionParams;
 use super::core_expr::CoreOrderByExprs;
+use super::core_expr::CoreWindow;
+use super::core_expr::CoreWindowDesc;
+use super::core_expr::CoreWindowFrame;
+use super::core_expr::CoreWindowFrameBound;
+use super::core_expr::CoreWindowSpec;
 use crate::plans::CastExpr;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
@@ -66,7 +66,7 @@ where P: super::TypeCheckPolicy
         args: &CoreExprArgs,
         remove_count_args: bool,
         order_by: &CoreOrderByExprs,
-        window: &WindowDesc,
+        window: &CoreWindowDesc<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(
             arena,
@@ -88,21 +88,22 @@ where P: super::TypeCheckPolicy
             .set_span(span));
         }
         let func = WindowFuncType::Aggregate(new_agg_func);
-        self.resolve_window(span, display_name.to_string(), &window.window, func)
+        self.resolve_window(arena, span, display_name.to_string(), &window.window, func)
     }
 
     pub(super) fn resolve_core_count_all_window_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         display_name: &str,
-        window: &Window,
+        window: &CoreWindow<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let arena = CoreExprArena::new(self.func_ctx.week_start as u64);
+        let aggregate_arena = CoreExprArena::new(self.func_ctx.week_start as u64);
         let params = SmallVec::new();
         let args = SmallVec::new();
         let order_by = SmallVec::new();
         let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(
-            &arena,
+            &aggregate_arena,
             display_name,
             span,
             "count",
@@ -114,7 +115,7 @@ where P: super::TypeCheckPolicy
             true,
         )?;
         let func = WindowFuncType::Aggregate(new_agg_func);
-        self.resolve_window(span, display_name.to_string(), window, func)
+        self.resolve_window(arena, span, display_name.to_string(), window, func)
     }
 
     pub(super) fn resolve_core_general_window_function(
@@ -124,8 +125,8 @@ where P: super::TypeCheckPolicy
         display_name: &str,
         func_name: &str,
         args: &CoreExprArgs,
-        order_by: &[OrderByExpr],
-        window: &WindowDesc,
+        order_by: &CoreOrderByExprs,
+        window: &CoreWindowDesc<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !order_by.is_empty() {
             return Err(ErrorCode::SemanticError(
@@ -142,6 +143,7 @@ where P: super::TypeCheckPolicy
         }
         if let Ok(window_func) = WindowFuncType::from_name(func_name) {
             return self.resolve_window(
+                arena,
                 span,
                 display_name.to_string(),
                 &window.window,
@@ -182,14 +184,15 @@ where P: super::TypeCheckPolicy
                 )));
             }
         };
-        self.resolve_window(span, display_name.to_string(), &window.window, func)
+        self.resolve_window(arena, span, display_name.to_string(), &window.window, func)
     }
 
     pub(super) fn resolve_window(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         display_name: String,
-        window: &Window,
+        window: &CoreWindow<'_>,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if self.in_aggregate_function {
@@ -210,31 +213,59 @@ where P: super::TypeCheckPolicy
         }
 
         let spec = match window {
-            Window::WindowSpec(spec) => spec.clone(),
-            Window::WindowReference(w) => self
-                .bind_context
-                .window_definitions
-                .get(&w.window_name.name)
-                .ok_or_else(|| {
-                    ErrorCode::SyntaxException(format!(
-                        "Window definition {} not found",
-                        w.window_name.name
-                    ))
-                })?
-                .value()
-                .clone(),
+            CoreWindow::WindowSpec(spec) => spec,
+            CoreWindow::WindowReference(window_name) => {
+                let spec = self
+                    .bind_context
+                    .window_definitions
+                    .get(&window_name.name)
+                    .ok_or_else(|| {
+                        ErrorCode::SyntaxException(format!(
+                            "Window definition {} not found",
+                            window_name.name
+                        ))
+                    })?
+                    .value()
+                    .clone();
+                let mut named_arena = self.core_expr_arena();
+                let named_spec = named_arena.lower_window_spec(&spec)?;
+                return self.resolve_window_spec(
+                    &named_arena,
+                    span,
+                    display_name,
+                    &named_spec,
+                    func,
+                );
+            }
         };
+        self.resolve_window_spec(arena, span, display_name, spec, func)
+    }
+
+    fn resolve_window_spec(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        display_name: String,
+        spec: &CoreWindowSpec<'_>,
+        func: WindowFuncType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if spec.existing_window_name.is_some() {
+            return Err(ErrorCode::Unimplemented(
+                "existing window name in window specification is not supported in type check core expression",
+            )
+            .set_span(span));
+        }
 
         self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in &spec.partition_by {
-            let box (part, _part_type) = self.resolve(p)?;
+            let box (part, _part_type) = self.resolve_core(arena, *p)?;
             partitions.push(part);
         }
 
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in &spec.order_by {
-            let box (order, _) = self.resolve(&o.expr)?;
+            let box (order, _) = self.resolve_core(arena, o.expr)?;
 
             if matches!(order, ScalarExpr::ConstantExpr(_)) {
                 continue;
@@ -249,7 +280,7 @@ where P: super::TypeCheckPolicy
         self.in_window_function = false;
 
         let frame =
-            self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
+            self.resolve_window_frame(arena, span, &func, &mut order_by, &spec.window_frame)?;
 
         if matches!(&frame.start_bound, WindowFuncFrameBound::Following(None)) {
             return Err(ErrorCode::SemanticError(
@@ -277,22 +308,24 @@ where P: super::TypeCheckPolicy
         Ok(Box::new((window_func.into(), data_type)))
     }
 
-    // just support integer
-    #[inline]
-    fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
-        if let Expr::Literal { value, .. } = expr {
-            let box (value, _) = self.resolve_literal_scalar(value)?;
+    fn resolve_rows_offset(
+        &self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        expr: super::core_expr::CoreExprId,
+    ) -> Result<Scalar> {
+        if let CoreExpr::Literal { value, .. } = arena.get(expr) {
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
-                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                    return Ok(Scalar::Number(NumberScalar::UInt64(*v as u64)));
                 }
                 Scalar::Number(NumberScalar::UInt16(v)) => {
-                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                    return Ok(Scalar::Number(NumberScalar::UInt64(*v as u64)));
                 }
                 Scalar::Number(NumberScalar::UInt32(v)) => {
-                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                    return Ok(Scalar::Number(NumberScalar::UInt64(*v as u64)));
                 }
-                Scalar::Number(NumberScalar::UInt64(_)) => return Ok(value),
+                Scalar::Number(NumberScalar::UInt64(_)) => return Ok(value.clone()),
                 _ => {}
             }
         }
@@ -300,47 +333,40 @@ where P: super::TypeCheckPolicy
         Err(ErrorCode::SemanticError(
             "Only unsigned numbers are allowed in ROWS offset".to_string(),
         )
-        .set_span(expr.span()))
+        .set_span(span))
     }
 
-    fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
-        let units = match frame.units {
+    fn resolve_window_rows_frame(
+        &self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        frame: &CoreWindowFrame,
+    ) -> Result<WindowFuncFrame> {
+        let units = match &frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
         };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Preceding(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Following(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
+        let start = match &frame.start_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(expr) => WindowFuncFrameBound::Preceding(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
+            CoreWindowFrameBound::Following(expr) => WindowFuncFrameBound::Following(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
         };
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Preceding(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Following(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
+        let end = match &frame.end_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(expr) => WindowFuncFrameBound::Preceding(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
+            CoreWindowFrameBound::Following(expr) => WindowFuncFrameBound::Following(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
         };
 
         Ok(WindowFuncFrame {
@@ -350,11 +376,15 @@ where P: super::TypeCheckPolicy
         })
     }
 
-    fn resolve_range_offset(&mut self, bound: &WindowFrameBound) -> Result<Option<Scalar>> {
+    fn resolve_range_offset(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        bound: &CoreWindowFrameBound,
+    ) -> Result<Option<Scalar>> {
         match bound {
-            WindowFrameBound::Following(Some(box expr))
-            | WindowFrameBound::Preceding(Some(box expr)) => {
-                let box (expr, _) = self.resolve(expr)?;
+            CoreWindowFrameBound::Following(Some(expr))
+            | CoreWindowFrameBound::Preceding(Some(expr)) => {
+                let box (expr, _) = self.resolve_core(arena, *expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 match expr.into_constant() {
@@ -369,23 +399,27 @@ where P: super::TypeCheckPolicy
         }
     }
 
-    fn resolve_window_range_frame(&mut self, frame: WindowFrame) -> Result<WindowFuncFrame> {
-        let start_offset = self.resolve_range_offset(&frame.start_bound)?;
-        let end_offset = self.resolve_range_offset(&frame.end_bound)?;
+    fn resolve_window_range_frame(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        frame: &CoreWindowFrame,
+    ) -> Result<WindowFuncFrame> {
+        let start_offset = self.resolve_range_offset(arena, &frame.start_bound)?;
+        let end_offset = self.resolve_range_offset(arena, &frame.end_bound)?;
 
-        let units = match frame.units {
+        let units = match &frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
         };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(start_offset),
-            WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(start_offset),
+        let start = match &frame.start_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(start_offset),
+            CoreWindowFrameBound::Following(_) => WindowFuncFrameBound::Following(start_offset),
         };
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
-            WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
+        let end = match &frame.end_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
+            CoreWindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
         };
 
         Ok(WindowFuncFrame {
@@ -397,10 +431,11 @@ where P: super::TypeCheckPolicy
 
     fn resolve_window_frame(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func: &WindowFuncType,
         order_by: &mut [WindowOrderBy],
-        window_frame: Option<WindowFrame>,
+        window_frame: &Option<CoreWindowFrame>,
     ) -> Result<WindowFuncFrame> {
         match func {
             WindowFuncType::PercentRank => {
@@ -456,9 +491,9 @@ where P: super::TypeCheckPolicy
                         order_by.len()
                     )).set_span(span));
                 }
-                self.resolve_window_range_frame(frame)
+                self.resolve_window_range_frame(arena, frame)
             } else {
-                self.resolve_window_rows_frame(frame)
+                self.resolve_window_rows_frame(arena, span, frame)
             }
         } else if order_by.is_empty() {
             Ok(WindowFuncFrame {

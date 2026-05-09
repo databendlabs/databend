@@ -45,9 +45,10 @@ where P: super::TypeCheckPolicy
 {
     pub fn resolve_subquery(
         &mut self,
+        span: databend_common_ast::Span,
         typ: SubqueryType,
         subquery: &Query,
-        child_expr: Option<Expr>,
+        child_expr: Option<(ScalarExpr, DataType)>,
         compare_op: Option<SubqueryComparisonOp>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -307,13 +308,12 @@ where P: super::TypeCheckPolicy
                 "unsupported scalar subquery: aggregate output references only outer columns"
                     .to_string(),
             )
-            .set_span(subquery.span));
+            .set_span(span));
         }
 
         let mut child_scalar = None;
-        if let Some(expr) = child_expr {
+        if let Some((scalar, expr_ty)) = child_expr {
             assert_eq!(output_context.columns.len(), 1);
-            let box (scalar, expr_ty) = self.resolve(&expr)?;
             child_scalar = Some(Box::new(scalar));
             // wrap nullable to make sure expr and list values have common type.
             if expr_ty.is_nullable() {
@@ -325,7 +325,7 @@ where P: super::TypeCheckPolicy
             data_type = data_type.wrap_nullable();
         }
         let subquery_expr = SubqueryExpr {
-            span: subquery.span,
+            span,
             subquery: Box::new(s_expr),
             child_expr: child_scalar,
             compare_op,

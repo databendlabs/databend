@@ -20,11 +20,8 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
-use databend_common_ast::ast::Query;
-use databend_common_ast::ast::SubqueryModifier;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::parser::Dialect;
@@ -71,18 +68,11 @@ use super::resolve_type_name;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::binder::NameResolutionResult;
-use crate::binder::bind_values;
-use crate::optimizer::ir::RelExpr;
-use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
-use crate::plans::SubqueryComparisonOp;
-use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
@@ -471,213 +461,6 @@ where P: TypeCheckPolicy
         };
 
         Ok(Box::new((scalar, data_type)))
-    }
-
-    pub(super) fn resolve_in_list(
-        &mut self,
-        span: Span,
-        expr: &Expr,
-        list: &[Expr],
-        not: bool,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if list.len() >= self.policy.settings().get_inlist_to_join_threshold()? {
-            if not {
-                return self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::InList {
-                    span,
-                    expr: Box::new(expr.clone()),
-                    list: list.to_vec(),
-                    not: false,
-                });
-            }
-            return self.convert_inlist_to_subquery(expr, list);
-        }
-
-        let get_max_inlist_to_or = self.policy.settings().get_max_inlist_to_or()? as usize;
-        if list.len() > get_max_inlist_to_or && list.iter().all(like::satisfy_contain_func) {
-            let array_expr = Expr::Array {
-                span,
-                exprs: list.to_vec(),
-            };
-            // Deduplicate the array.
-            let array_expr = Expr::FunctionCall {
-                span,
-                func: ASTFunctionCall {
-                    name: Identifier::from_name(span, "array_distinct"),
-                    args: vec![array_expr],
-                    params: vec![],
-                    order_by: vec![],
-                    window: None,
-                    lambda: None,
-                    distinct: false,
-                },
-            };
-            let args = vec![&array_expr, expr];
-            if not {
-                self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::FunctionCall {
-                    span,
-                    func: ASTFunctionCall {
-                        distinct: false,
-                        name: Identifier::from_name(span, "contains"),
-                        args: args.iter().copied().cloned().collect(),
-                        params: vec![],
-                        order_by: vec![],
-                        window: None,
-                        lambda: None,
-                    },
-                })
-            } else {
-                self.resolve_function(span, "contains", vec![], &args)
-            }
-        } else {
-            let mut predicate_levels = Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
-
-            for item in list {
-                let (predicate, _) =
-                    *self.resolve_binary_op_or_subquery(&span, &BinaryOperator::Eq, expr, item)?;
-                self.merge_or_level(span, &mut predicate_levels, predicate)?;
-            }
-
-            let result = self
-                .fold_or_levels(span, predicate_levels)?
-                .expect("IN list should not be empty");
-            let data_type = result.data_type()?;
-
-            if not {
-                self.resolve_scalar_function_call(span, "not", vec![], vec![result])
-            } else {
-                Ok(Box::new((result, data_type)))
-            }
-        }
-    }
-
-    pub(super) fn resolve_in_subquery(
-        &mut self,
-        span: Span,
-        expr: &Expr,
-        subquery: &Query,
-        not: bool,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        // Not in subquery will be transformed to not(Expr = Any(...))
-        if not {
-            return self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::InSubquery {
-                subquery: Box::new(subquery.clone()),
-                not: false,
-                expr: Box::new(expr.clone()),
-                span,
-            });
-        }
-        // InSubquery will be transformed to Expr = Any(...)
-        self.resolve_subquery(
-            SubqueryType::Any,
-            subquery,
-            Some(expr.clone()),
-            Some(SubqueryComparisonOp::Equal),
-        )
-    }
-
-    fn resolve_binary_op_or_subquery(
-        &mut self,
-        span: &Span,
-        op: &BinaryOperator,
-        left: &Expr,
-        right: &Expr,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if let Expr::Subquery {
-            subquery,
-            modifier: Some(subquery_modifier),
-            ..
-        } = right
-        {
-            self.resolve_scalar_subquery(subquery, left, span, &right.span(), subquery_modifier, op)
-        } else {
-            self.resolve_binary_op(*span, op, left, right)
-        }
-    }
-
-    fn merge_or_level(
-        &mut self,
-        span: Span,
-        predicate_levels: &mut Vec<Option<ScalarExpr>>,
-        mut predicate: ScalarExpr,
-    ) -> Result<()> {
-        let mut level = 0;
-
-        loop {
-            if predicate_levels.len() == level {
-                predicate_levels.push(Some(predicate));
-                return Ok(());
-            }
-
-            if let Some(left) = predicate_levels[level].take() {
-                let (or_predicate, _) =
-                    *self
-                        .resolve_scalar_function_call(span, "or", vec![], vec![left, predicate])?;
-                predicate = or_predicate;
-                level += 1;
-            } else {
-                predicate_levels[level] = Some(predicate);
-                return Ok(());
-            }
-        }
-    }
-
-    fn fold_or_levels(
-        &mut self,
-        span: Span,
-        predicate_levels: Vec<Option<ScalarExpr>>,
-    ) -> Result<Option<ScalarExpr>> {
-        let mut result = None;
-
-        for predicate in predicate_levels.into_iter().rev().flatten() {
-            result = Some(match result {
-                None => predicate,
-                Some(acc) => {
-                    let (or_predicate, _) =
-                        *self.resolve_scalar_function_call(span, "or", vec![], vec![
-                            acc, predicate,
-                        ])?;
-                    or_predicate
-                }
-            });
-        }
-
-        Ok(result)
-    }
-
-    fn resolve_scalar_subquery(
-        &mut self,
-        subquery: &Query,
-        expr: &Expr,
-        span: &Span,
-        right_span: &Span,
-        modifier: &SubqueryModifier,
-        op: &BinaryOperator,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        Ok(match modifier {
-            SubqueryModifier::Any | SubqueryModifier::Some => {
-                let comparison_op = SubqueryComparisonOp::try_from(op)?;
-                self.resolve_subquery(
-                    SubqueryType::Any,
-                    subquery,
-                    Some(expr.clone()),
-                    Some(comparison_op),
-                )?
-            }
-            SubqueryModifier::All => {
-                let contrary_op = op.to_contrary()?;
-                let rewritten_subquery = Expr::Subquery {
-                    span: *right_span,
-                    modifier: Some(SubqueryModifier::Any),
-                    subquery: Box::new(subquery.clone()),
-                };
-                self.resolve_unary_op(*span, &UnaryOperator::Not, &Expr::BinaryOp {
-                    span: *span,
-                    op: contrary_op,
-                    left: Box::new(expr.clone()),
-                    right: Box::new(rewritten_subquery),
-                })?
-            }
-        })
     }
 
     // TODO: remove this function
@@ -1274,65 +1057,6 @@ where P: TypeCheckPolicy
                 self.resolve_core(&arena, root)
             }
         }
-    }
-
-    fn convert_inlist_to_subquery(
-        &mut self,
-        expr: &Expr,
-        list: &[Expr],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
-        let mut values = Vec::with_capacity(list.len());
-        for val in list.iter() {
-            values.push(vec![val.clone()])
-        }
-        let (const_scan, ctx) = bind_values(
-            self.table_ctx().clone(),
-            self.name_resolution_ctx,
-            self.metadata.clone(),
-            &mut bind_context,
-            None,
-            &values,
-            None,
-        )?;
-
-        assert_eq!(ctx.columns.len(), 1);
-        // Wrap group by on `const_scan` to deduplicate values
-        let distinct_const_scan = const_scan.build_unary(Aggregate {
-            mode: AggregateMode::Initial,
-            group_items: vec![ScalarItem {
-                scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                    span: None,
-                    column: ctx.columns[0].clone(),
-                }),
-                index: ctx.columns[0].index,
-            }],
-            ..Default::default()
-        });
-
-        let box mut data_type = ctx.columns[0].data_type.clone();
-        let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
-        let rel_prop = rel_expr.derive_relational_prop()?;
-        let box (scalar, expr_ty) = self.resolve(expr)?;
-        // wrap nullable to make sure expr and list values have common type.
-        if expr_ty.is_nullable() {
-            data_type = data_type.wrap_nullable();
-        }
-        let child_scalar = Some(Box::new(scalar));
-        let subquery_expr = SubqueryExpr {
-            span: None,
-            subquery: Box::new(distinct_const_scan),
-            child_expr: child_scalar,
-            compare_op: Some(SubqueryComparisonOp::Equal),
-            output_column: ctx.columns[0].clone(),
-            projection_index: None,
-            data_type: Box::new(data_type),
-            typ: SubqueryType::Any,
-            outer_columns: rel_prop.outer_columns.clone(),
-            contain_agg: None,
-        };
-        let data_type = subquery_expr.output_data_type();
-        Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
     fn try_fold_constant<Index: ColumnIndex>(

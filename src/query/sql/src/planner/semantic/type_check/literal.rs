@@ -51,14 +51,6 @@ impl<'a, P> TypeChecker<'a, P> {
         Ok(Box::new((scalar_expr, data_type)))
     }
 
-    /// Resolve literal values.
-    pub(super) fn resolve_literal_scalar(
-        &self,
-        literal: &databend_common_ast::ast::Literal,
-    ) -> Result<Box<(Scalar, DataType)>> {
-        Ok(Box::new(literal_scalar(literal)))
-    }
-
     pub(super) fn resolve_minus_literal_scalar(
         &self,
         span: Span,

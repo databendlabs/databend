@@ -1102,7 +1102,7 @@ pub struct CastExpr {
     pub target_type: Box<DataType>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum SubqueryType {
     Any,
     All,

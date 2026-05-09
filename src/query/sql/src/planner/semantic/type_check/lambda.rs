@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 use std::mem;
+use std::sync::Arc;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Lambda;
+use databend_common_ast::ast::Identifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -34,11 +34,17 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use itertools::Itertools;
+use parking_lot::RwLock;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
 use crate::BindContext;
+use crate::ColumnBindingBuilder;
+use crate::Metadata;
+use crate::Visibility;
 use crate::binder::ExprContext;
-use crate::parse_lambda_expr;
+use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -50,6 +56,49 @@ use crate::plans::Visitor;
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy
 {
+    fn resolve_core_lambda_expr(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        lambda_context: &mut BindContext,
+        lambda_columns: &[(String, DataType)],
+        lambda_expr: super::core_expr::CoreExprId,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let metadata = if LicenseManagerSwitch::instance()
+            .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
+            .is_ok()
+        {
+            self.metadata.clone()
+        } else {
+            Arc::new(RwLock::new(Metadata::default()))
+        };
+        lambda_context.expr_context = ExprContext::InLambdaFunction;
+
+        for (lambda_column, lambda_column_type) in lambda_columns.iter() {
+            let column_index = lambda_context.next_column_index();
+            lambda_context.add_column_binding(
+                ColumnBindingBuilder::new(
+                    lambda_column.clone(),
+                    column_index,
+                    Box::new(lambda_column_type.clone()),
+                    Visibility::Visible,
+                )
+                .build(),
+            );
+        }
+
+        let settings = self.table_ctx().get_settings();
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let mut type_checker = TypeChecker::try_create(
+            lambda_context,
+            self.table_ctx().clone(),
+            &name_resolution_ctx,
+            metadata,
+            &[],
+            false,
+        )?;
+        type_checker.resolve_core(arena, lambda_expr)
+    }
+
     fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
         let max_ty = match ty.remove_nullable() {
             DataType::Number(s) => {
@@ -86,12 +135,14 @@ where P: super::TypeCheckPolicy
         }
     }
 
-    pub(super) fn resolve_lambda_function(
+    pub(super) fn resolve_core_lambda_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func_name: &str,
-        args: &[&Expr],
-        lambda: &Lambda,
+        args: &CoreExprArgs,
+        lambda_params: &[Identifier],
+        lambda_expr: super::core_expr::CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if matches!(
             self.bind_context.expr_context,
@@ -111,8 +162,28 @@ where P: super::TypeCheckPolicy
             ))
             .set_span(span));
         }
-        let box (mut arg, mut arg_type) = self.resolve(args[0])?;
+        let box (arg, arg_type) = self.resolve_core(arena, args[0])?;
+        self.resolve_lambda_function_arg(
+            arena,
+            span,
+            func_name,
+            arg,
+            arg_type,
+            lambda_params,
+            lambda_expr,
+        )
+    }
 
+    fn resolve_lambda_function_arg(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        mut arg: ScalarExpr,
+        mut arg_type: DataType,
+        lambda_params: &[Identifier],
+        lambda_expr: super::core_expr::CoreExprId,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut func_name = func_name;
         let mut is_cast_variant = false;
         if arg_type.remove_nullable() == DataType::Variant {
@@ -144,8 +215,7 @@ where P: super::TypeCheckPolicy
             is_cast_variant = true;
         }
 
-        let params = lambda
-            .params
+        let params = lambda_params
             .iter()
             .map(|param| param.name.to_lowercase())
             .collect::<Vec<_>>();
@@ -190,19 +260,11 @@ where P: super::TypeCheckPolicy
             .collect::<Vec<_>>();
 
         let mut lambda_context = self.bind_context.clone();
-        let box (lambda_expr, lambda_type) = parse_lambda_expr(
-            self.table_ctx().clone(),
+        let box (lambda_expr, lambda_type) = self.resolve_core_lambda_expr(
+            arena,
             &mut lambda_context,
             &lambda_columns,
-            &lambda.expr,
-            if LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
-                .is_ok()
-            {
-                Some(self.metadata.clone())
-            } else {
-                None
-            },
+            lambda_expr,
         )?;
 
         let return_type = if func_name == "array_filter" || func_name == "map_filter" {
