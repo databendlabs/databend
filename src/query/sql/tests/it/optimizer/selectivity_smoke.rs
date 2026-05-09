@@ -12,14 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use databend_common_expression::ColumnRef as ExprColumnRef;
+use databend_common_expression::Constant as ExprConstant;
+use databend_common_expression::Expr;
+use databend_common_expression::Function;
+use databend_common_expression::FunctionCall as ExprFunctionCall;
+use databend_common_expression::FunctionContext;
+use databend_common_expression::FunctionEval;
+use databend_common_expression::FunctionID;
 use databend_common_expression::Scalar;
+use databend_common_expression::StatEvaluator;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::number::F32;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_sql::ColumnBinding;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ScalarExpr;
 use databend_common_sql::Symbol;
@@ -30,7 +44,7 @@ use databend_common_sql::optimizer::ir::HistogramBuilder;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::ConstantExpr;
-use databend_common_sql::plans::FunctionCall;
+use databend_common_sql::plans::FunctionCall as ScalarFunctionCall;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::F64;
@@ -39,14 +53,18 @@ use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
 use proptest::prelude::*;
 
-fn column_expr(name: &str, index: usize, data_type: DataType) -> ScalarExpr {
-    let column = ColumnBindingBuilder::new(
+fn column_binding(name: &str, index: usize, data_type: DataType) -> ColumnBinding {
+    ColumnBindingBuilder::new(
         name.to_string(),
         Symbol::new(index),
         Box::new(data_type),
         Visibility::Visible,
     )
-    .build();
+    .build()
+}
+
+fn column_expr(name: &str, index: usize, data_type: DataType) -> ScalarExpr {
+    let column = column_binding(name, index, data_type);
     ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column })
 }
 
@@ -55,11 +73,15 @@ fn constant_expr(value: Scalar) -> ScalarExpr {
 }
 
 fn comparison_expr(func_name: &str, left: ScalarExpr, right: ScalarExpr) -> ScalarExpr {
-    ScalarExpr::FunctionCall(FunctionCall {
+    function_expr(func_name, vec![left, right])
+}
+
+fn function_expr(func_name: &str, arguments: Vec<ScalarExpr>) -> ScalarExpr {
+    ScalarExpr::FunctionCall(ScalarFunctionCall {
         span: None,
         func_name: func_name.to_string(),
         params: vec![],
-        arguments: vec![left, right],
+        arguments,
     })
 }
 
@@ -120,6 +142,236 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
     assert!((estimated_rows - 89.1).abs() < f64::EPSILON);
     assert_eq!(stat.min, Datum::UInt(100));
     assert_eq!(stat.max, Datum::UInt(1000));
+}
+
+#[test]
+fn all_derive_stat_functions_have_selectivity_smoke() {
+    let cases = reflected_derive_stat_smoke_cases();
+    assert!(!cases.is_empty(), "derive_stat smoke should find cases");
+
+    let mut derived_by_function = HashMap::new();
+    for case in cases {
+        let derived = case.run();
+        derived_by_function
+            .entry(case.function_name.clone())
+            .and_modify(|has_derived| *has_derived |= derived)
+            .or_insert(derived);
+    }
+    let mut functions_without_derived_stat = derived_by_function
+        .into_iter()
+        .filter_map(|(function_name, derived)| (!derived).then_some(function_name))
+        .collect::<Vec<_>>();
+    functions_without_derived_stat.sort();
+    assert!(
+        functions_without_derived_stat.is_empty(),
+        "derive_stat smoke found no derived stat for function names: {}",
+        functions_without_derived_stat.join(", ")
+    );
+}
+
+struct DeriveStatSmokeCase {
+    function_name: String,
+    display_name: String,
+    expr: Expr<ColumnBinding>,
+}
+
+impl DeriveStatSmokeCase {
+    fn run(&self) -> bool {
+        let column_stats = self
+            .expr
+            .column_refs()
+            .into_iter()
+            .map(|(binding, data_type)| {
+                let column_stat = smoke_column_stat(&data_type).unwrap_or_else(|| {
+                    panic!(
+                        "derive_stat smoke cannot build column stats for {} argument type {:?}",
+                        self.display_name, data_type
+                    )
+                });
+                (binding, data_type, column_stat)
+            })
+            .collect::<Vec<_>>();
+        let input_stats = column_stats
+            .iter()
+            .map(|(binding, data_type, column_stat)| {
+                let stat = column_stat.to_arg_stat(data_type).unwrap_or_else(|err| {
+                    panic!(
+                        "derive_stat smoke cannot convert {} argument {:?} to ArgStat: {err}",
+                        self.display_name, data_type
+                    )
+                });
+                (binding.clone(), stat)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let stat = StatEvaluator::run(
+            &self.expr,
+            &FunctionContext::default(),
+            &BUILTIN_FUNCTIONS,
+            StatCardinality::estimate(100.0),
+            &input_stats,
+        )
+        .unwrap_or_else(|err| {
+            panic!(
+                "derive_stat smoke failed for {}: {err}: {:?}",
+                self.display_name, self.expr
+            )
+        });
+        let Some(stat) = stat else {
+            return false;
+        };
+        let stat = stat.into_owned();
+
+        stat.check_consistency_with_type(Some(self.expr.data_type()))
+            .unwrap_or_else(|err| {
+                panic!(
+                    "derive_stat smoke produced invalid stat for {}: {err}",
+                    self.display_name
+                )
+            });
+        true
+    }
+}
+
+fn reflected_derive_stat_smoke_cases() -> Vec<DeriveStatSmokeCase> {
+    let mut unsupported = Vec::new();
+    let mut cases = BUILTIN_FUNCTIONS
+        .funcs
+        .values()
+        .flat_map(|funcs| funcs.iter())
+        .filter_map(|(func, id)| match &func.eval {
+            FunctionEval::Scalar {
+                derive_stat: Some(_),
+                ..
+            } => match build_derive_stat_smoke_case(func, *id) {
+                Some(case) => Some(case),
+                None => {
+                    unsupported.push(format!("{:?}", func.signature));
+                    None
+                }
+            },
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        unsupported.is_empty(),
+        "derive_stat smoke needs sample builders for: {}",
+        unsupported.join(", ")
+    );
+    cases.sort_by(|left, right| left.display_name.cmp(&right.display_name));
+    cases
+}
+
+fn build_derive_stat_smoke_case(func: &Arc<Function>, id: usize) -> Option<DeriveStatSmokeCase> {
+    let signature = &func.signature;
+    let mut args = Vec::with_capacity(signature.args_type.len());
+    for (index, data_type) in signature.args_type.iter().enumerate() {
+        if index == 0 && smoke_column_stat(data_type).is_some() {
+            let name = format!("c{index}");
+            let binding = column_binding(&name, index, data_type.clone());
+            args.push(Expr::ColumnRef(ExprColumnRef {
+                span: None,
+                id: binding,
+                data_type: data_type.clone(),
+                display_name: name,
+            }));
+        } else {
+            args.push(Expr::Constant(ExprConstant {
+                span: None,
+                scalar: smoke_scalar(data_type)?,
+                data_type: data_type.clone(),
+            }));
+        }
+    }
+    let display_name = format!(
+        "{}({}) -> {:?}",
+        signature.name,
+        signature
+            .args_type
+            .iter()
+            .map(|data_type| format!("{data_type:?}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+        signature.return_type
+    );
+    let expr = Expr::FunctionCall(ExprFunctionCall {
+        span: None,
+        id: Box::new(FunctionID::Builtin {
+            name: signature.name.clone(),
+            id,
+        }),
+        function: func.clone(),
+        generics: vec![],
+        args,
+        return_type: signature.return_type.clone(),
+    });
+    Some(DeriveStatSmokeCase {
+        function_name: signature.name.clone(),
+        display_name,
+        expr,
+    })
+}
+
+fn smoke_scalar(data_type: &DataType) -> Option<Scalar> {
+    match data_type {
+        DataType::Nullable(inner) => smoke_scalar(inner),
+        DataType::Boolean => Some(Scalar::Boolean(true)),
+        DataType::String => Some(Scalar::String("s00000000000000000020".to_string())),
+        DataType::Binary => Some(Scalar::Binary(b"s00000000000000000020".to_vec())),
+        DataType::Date => Some(Scalar::Date(20)),
+        DataType::Timestamp => Some(Scalar::Timestamp(20)),
+        DataType::TimestampTz | DataType::Interval => Some(Scalar::default_value(data_type)),
+        DataType::Number(NumberDataType::UInt8) => Some(Scalar::Number(NumberScalar::UInt8(20))),
+        DataType::Number(NumberDataType::UInt16) => Some(Scalar::Number(NumberScalar::UInt16(20))),
+        DataType::Number(NumberDataType::UInt32) => Some(Scalar::Number(NumberScalar::UInt32(20))),
+        DataType::Number(NumberDataType::UInt64) => Some(Scalar::Number(NumberScalar::UInt64(20))),
+        DataType::Number(NumberDataType::Int8) => Some(Scalar::Number(NumberScalar::Int8(20))),
+        DataType::Number(NumberDataType::Int16) => Some(Scalar::Number(NumberScalar::Int16(20))),
+        DataType::Number(NumberDataType::Int32) => Some(Scalar::Number(NumberScalar::Int32(20))),
+        DataType::Number(NumberDataType::Int64) => Some(Scalar::Number(NumberScalar::Int64(20))),
+        DataType::Number(NumberDataType::Float32) => {
+            Some(Scalar::Number(NumberScalar::Float32(F32::from(20.0))))
+        }
+        DataType::Number(NumberDataType::Float64) => {
+            Some(Scalar::Number(NumberScalar::Float64(F64::from(20.0))))
+        }
+        _ => None,
+    }
+}
+
+fn smoke_column_stat(data_type: &DataType) -> Option<ColumnStat> {
+    let inner = data_type.remove_nullable();
+    let (min, max) = match &inner {
+        DataType::Boolean => (Datum::Bool(false), Datum::Bool(true)),
+        DataType::String => (
+            Datum::Bytes(b"s00000000000000000000".to_vec()),
+            Datum::Bytes(b"s00000000000000000009".to_vec()),
+        ),
+        DataType::Binary => (
+            Datum::Bytes(b"s00000000000000000000".to_vec()),
+            Datum::Bytes(b"s00000000000000000009".to_vec()),
+        ),
+        DataType::Date | DataType::Timestamp => (Datum::Int(0), Datum::Int(9)),
+        DataType::Number(NumberDataType::UInt8)
+        | DataType::Number(NumberDataType::UInt16)
+        | DataType::Number(NumberDataType::UInt32)
+        | DataType::Number(NumberDataType::UInt64) => (Datum::UInt(0), Datum::UInt(9)),
+        DataType::Number(NumberDataType::Int8)
+        | DataType::Number(NumberDataType::Int16)
+        | DataType::Number(NumberDataType::Int32)
+        | DataType::Number(NumberDataType::Int64) => (Datum::Int(0), Datum::Int(9)),
+        DataType::Number(NumberDataType::Float32) | DataType::Number(NumberDataType::Float64) => {
+            (Datum::Float(F64::from(0.0)), Datum::Float(F64::from(9.0)))
+        }
+        _ => return None,
+    };
+    Some(ColumnStat {
+        min,
+        max,
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
