@@ -47,6 +47,13 @@ status: ok
 scalar: histogram(number, 10)
 type: String NULL
 
+=== aggregate_parameterized_call_binds ===
+description: Parameterized aggregate syntax should fold constant params and resolve aggregate arguments.
+sql: quantile_cont(0.6)(number)
+status: ok
+scalar: quantile_cont(0.6)(number)
+type: Float64 NULL
+
 === nested_aggregate_errors ===
 description: Nested grouped aggregates should be rejected while resolving aggregate arguments.
 sql: sum(count(number))

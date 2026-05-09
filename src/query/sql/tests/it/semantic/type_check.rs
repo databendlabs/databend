@@ -495,6 +495,12 @@ async fn test_type_check_aggregate_and_window_rewrites() -> Result<()> {
             sql: "histogram(number, 10)",
         },
         SqlTestCase {
+            name: "aggregate_parameterized_call_binds",
+            description: "Parameterized aggregate syntax should fold constant params and resolve aggregate arguments.",
+            setup_sqls: &[],
+            sql: "quantile_cont(0.6)(number)",
+        },
+        SqlTestCase {
             name: "nested_aggregate_errors",
             description: "Nested grouped aggregates should be rejected while resolving aggregate arguments.",
             setup_sqls: &[],
