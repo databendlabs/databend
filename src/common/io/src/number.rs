@@ -413,7 +413,29 @@ impl NumDesc {
         }
 
         if self.flag.contains(NumFlag::Multi) {
-            return Err(ErrorCode::Unimplemented("to_char V (multiplies)"));
+            // V shifts the number by `multi` decimal places (multiply by 10^multi).
+            // Total output width = pre + multi digits.
+            let abs_val = if value == i64::MIN {
+                -(i64::MIN as i128)
+            } else {
+                value.unsigned_abs() as i128
+            };
+            let multiplier = 10i128.pow(self.multi as u32);
+            let orgnum = format!("{}", abs_val * multiplier);
+            let numstr_pre_len = orgnum.len();
+            let total_width = self.pre + self.multi;
+
+            let (number, out_pre_spaces) = match numstr_pre_len.cmp(&total_width) {
+                std::cmp::Ordering::Less => (orgnum, total_width - numstr_pre_len),
+                std::cmp::Ordering::Greater => ("#".repeat(total_width), 0),
+                std::cmp::Ordering::Equal => (orgnum, 0),
+            };
+
+            return Ok(NumPart {
+                sign: value >= 0,
+                number,
+                out_pre_spaces,
+            });
         }
 
         let mut orgnum = if value == i64::MIN {
@@ -491,7 +513,26 @@ impl NumDesc {
         }
 
         if self.flag.contains(NumFlag::Multi) {
-            return Err(ErrorCode::Unimplemented("to_char V (multiplies)"));
+            // V shifts the number by `multi` decimal places (multiply by 10^multi),
+            // then rounds to the nearest integer.
+            // Total output width = pre + multi digits.
+            let multiplier = 10f64.powi(self.multi as i32);
+            let shifted = (value.abs() * multiplier).round();
+            let orgnum = format!("{:.0}", shifted);
+            let numstr_pre_len = orgnum.len();
+            let total_width = self.pre + self.multi;
+
+            let (number, out_pre_spaces) = match numstr_pre_len.cmp(&total_width) {
+                std::cmp::Ordering::Less => (orgnum, total_width - numstr_pre_len),
+                std::cmp::Ordering::Greater => ("#".repeat(total_width), 0),
+                std::cmp::Ordering::Equal => (orgnum, 0),
+            };
+
+            return Ok(NumPart {
+                sign: !value.is_sign_negative(),
+                number,
+                out_pre_spaces,
+            });
         }
 
         let orgnum = format!("{:.0}", value.abs());
@@ -974,7 +1015,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
     }
 
     // Count
-    np.num_count = np.desc.post + np.desc.pre - 1;
+    np.num_count = np.desc.post + np.desc.pre + np.desc.multi - 1;
 
     if np.desc.flag.contains(NumFlag::FillMode) && np.desc.flag.contains(NumFlag::Decimal) {
         np.calc_last_relevant_decnum();
@@ -1068,6 +1109,7 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
 
                 NumPoz::TkPR => (),
                 NumPoz::TkFM => (),
+                NumPoz::TkV => (),
                 NumPoz::TkTH | NumPoz::Tkth => {
                     // Ordinal suffix is appended at end of processing
                 }
@@ -1282,6 +1324,11 @@ mod tests {
         assert_eq!("-1st", i64_to_char(-1, "9th")?);
         assert_eq!(" -12th", i64_to_char(-12, "999th")?);
 
+        // V (shift/multiply by 10^n)
+        assert_eq!(" 12000", i64_to_char(12, "99V999")?);
+        assert_eq!("-12000", i64_to_char(-12, "99V999")?);
+        assert_eq!(" 50", i64_to_char(5, "9V9")?);
+
         Ok(())
     }
 
@@ -1341,9 +1388,9 @@ mod tests {
 
         assert_eq!(" 482nd", f64_to_char(482.0, "999th")?);
 
-        // assert_eq!(" 12000", f64_to_char(12, "99V999")?);
-        // assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
-        // assert_eq!(" 125", f64_to_char(12.45, "99V9")?);
+        assert_eq!(" 12000", f64_to_char(12.0, "99V999")?);
+        assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
+        assert_eq!(" 125", f64_to_char(12.45, "99V9")?);
 
         Ok(())
     }
