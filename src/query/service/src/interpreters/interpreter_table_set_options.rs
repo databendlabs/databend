@@ -56,6 +56,8 @@ use crate::interpreters::common::table_option_validation::is_valid_block_per_seg
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_bytes;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
@@ -101,6 +103,8 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_data_retention_period(&self.plan.set_options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
+        is_valid_data_page_rows(&self.plan.set_options)?;
+        is_valid_data_page_bytes(&self.plan.set_options)?;
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
