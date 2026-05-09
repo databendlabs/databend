@@ -13,7 +13,13 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowDesc;
+use databend_common_ast::ast::WindowFrame;
+use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::ast::WindowSpec;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -32,13 +38,9 @@ use super::TypeChecker;
 use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
 use super::core_expr::CoreFunctionParams;
 use super::core_expr::CoreOrderByExprs;
-use super::core_expr::CoreWindow;
-use super::core_expr::CoreWindowDesc;
-use super::core_expr::CoreWindowFrame;
-use super::core_expr::CoreWindowFrameBound;
-use super::core_expr::CoreWindowSpec;
 use crate::plans::CastExpr;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
@@ -50,6 +52,96 @@ use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
+
+pub(super) struct CoreWindowDesc<'a> {
+    pub(super) ignore_nulls: Option<bool>,
+    pub(super) window: CoreWindow<'a>,
+}
+
+pub(super) enum CoreWindow<'a> {
+    WindowReference(&'a Identifier),
+    WindowSpec(CoreWindowSpec<'a>),
+}
+
+pub(super) struct CoreWindowSpec<'a> {
+    pub(super) existing_window_name: Option<&'a Identifier>,
+    pub(super) partition_by: CoreExprArgs,
+    pub(super) order_by: CoreOrderByExprs,
+    pub(super) window_frame: Option<CoreWindowFrame>,
+}
+
+pub(super) struct CoreWindowFrame {
+    pub(super) units: WindowFrameUnits,
+    pub(super) start_bound: CoreWindowFrameBound,
+    pub(super) end_bound: CoreWindowFrameBound,
+}
+
+pub(super) enum CoreWindowFrameBound {
+    CurrentRow,
+    Preceding(Option<CoreExprId>),
+    Following(Option<CoreExprId>),
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_window_desc(
+        &mut self,
+        window: &'a WindowDesc,
+    ) -> Result<CoreWindowDesc<'a>> {
+        Ok(CoreWindowDesc {
+            ignore_nulls: window.ignore_nulls,
+            window: self.lower_window(&window.window)?,
+        })
+    }
+
+    pub(super) fn lower_window(&mut self, window: &'a Window) -> Result<CoreWindow<'a>> {
+        Ok(match window {
+            Window::WindowReference(window_ref) => {
+                CoreWindow::WindowReference(&window_ref.window_name)
+            }
+            Window::WindowSpec(spec) => CoreWindow::WindowSpec(self.lower_window_spec(spec)?),
+        })
+    }
+
+    pub(super) fn lower_window_spec(&mut self, spec: &'a WindowSpec) -> Result<CoreWindowSpec<'a>> {
+        Ok(CoreWindowSpec {
+            existing_window_name: spec.existing_window_name.as_ref(),
+            partition_by: self.lower_expr_args(&spec.partition_by)?,
+            order_by: self.lower_order_by_exprs(&spec.order_by)?,
+            window_frame: spec
+                .window_frame
+                .as_ref()
+                .map(|frame| self.lower_window_frame(frame))
+                .transpose()?,
+        })
+    }
+
+    fn lower_window_frame(&mut self, frame: &'a WindowFrame) -> Result<CoreWindowFrame> {
+        Ok(CoreWindowFrame {
+            units: frame.units.clone(),
+            start_bound: self.lower_window_frame_bound(&frame.start_bound)?,
+            end_bound: self.lower_window_frame_bound(&frame.end_bound)?,
+        })
+    }
+
+    fn lower_window_frame_bound(
+        &mut self,
+        bound: &'a WindowFrameBound,
+    ) -> Result<CoreWindowFrameBound> {
+        Ok(match bound {
+            WindowFrameBound::CurrentRow => CoreWindowFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(expr) => CoreWindowFrameBound::Preceding(
+                expr.as_ref()
+                    .map(|expr| self.lower_ast_expr(expr))
+                    .transpose()?,
+            ),
+            WindowFrameBound::Following(expr) => CoreWindowFrameBound::Following(
+                expr.as_ref()
+                    .map(|expr| self.lower_ast_expr(expr))
+                    .transpose()?,
+            ),
+        })
+    }
+}
 
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy

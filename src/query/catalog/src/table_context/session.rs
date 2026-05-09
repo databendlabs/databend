@@ -19,6 +19,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_settings::Settings;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManagerRef;
+use tokio::runtime::Handle;
 
 use crate::cluster_info::Cluster;
 use crate::session_type::SessionType;
@@ -45,6 +46,8 @@ pub trait TableContextSession: Send + Sync {
 
 pub trait TableContextSettings: Send + Sync {
     fn get_function_context(&self) -> Result<FunctionContext>;
+
+    fn get_async_runtime_handle(&self) -> Result<Handle>;
 
     fn get_settings(&self) -> Arc<Settings>;
 

@@ -14,11 +14,14 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
+use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Expr;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::ASYNC_FUNCTIONS;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::schema::DictionaryIdentity;
@@ -26,10 +29,13 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_users::Object;
+use unicase::Ascii;
 
 use super::TypeChecker;
-use super::core_expr::CoreAsyncFunction;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
+use super::core_expr::CoreSearchFunctionArgs;
 use crate::DefaultExprBinder;
 use crate::binder::ExprContext;
 use crate::binder::parse_stage_name;
@@ -45,6 +51,84 @@ use crate::plans::ReadFileFunctionArgument;
 use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::SqlSource;
+
+pub(super) enum CoreAsyncFunction<'a> {
+    NextVal {
+        sequence: &'a ColumnRef,
+    },
+    DictGet {
+        dictionary: &'a ColumnRef,
+        field: CoreExprId,
+        field_display: String,
+        key: CoreExprId,
+        key_display: String,
+    },
+    Args {
+        args: CoreSearchFunctionArgs,
+    },
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn async_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: &'a [Expr],
+    ) -> Result<CoreExprId> {
+        let function = match func_name {
+            "nextval" => {
+                let [Expr::ColumnRef { column, .. }] = args else {
+                    let args = self.lower_display_expr_args(args)?;
+                    return Ok(self.alloc(CoreExpr::AsyncFunction {
+                        span,
+                        func_name,
+                        function: CoreAsyncFunction::Args { args },
+                    }));
+                };
+                CoreAsyncFunction::NextVal { sequence: column }
+            }
+            "dict_get" => {
+                let [Expr::ColumnRef { column, .. }, field, key] = args else {
+                    let args = self.lower_display_expr_args(args)?;
+                    return Ok(self.alloc(CoreExpr::AsyncFunction {
+                        span,
+                        func_name,
+                        function: CoreAsyncFunction::Args { args },
+                    }));
+                };
+                CoreAsyncFunction::DictGet {
+                    dictionary: column,
+                    field: self.lower_ast_expr(field)?,
+                    field_display: format!("{:#}", field),
+                    key: self.lower_ast_expr(key)?,
+                    key_display: format!("{:#}", key),
+                }
+            }
+            "read_file" => CoreAsyncFunction::Args {
+                args: self.lower_display_expr_args(args)?,
+            },
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "async function {func_name} should have been classified before lowering",
+                )));
+            }
+        };
+        Ok(self.alloc(CoreExpr::AsyncFunction {
+            span,
+            func_name,
+            function,
+        }))
+    }
+}
+
+pub(super) fn async_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    ASYNC_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
 
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy
@@ -130,17 +214,14 @@ where P: super::TypeCheckPolicy
                 .get_settings()
                 .get_enable_experimental_sequence_privilege_check()?
             {
-                Some(databend_common_base::runtime::block_on(async move {
-                    self.table_ctx()
-                        .get_visibility_checker(false, Object::Sequence)
-                        .await
-                })?)
+                let ctx = self.table_ctx().clone();
+                Some(self.block_on(async move {
+                    ctx.get_visibility_checker(false, Object::Sequence).await
+                })??)
             } else {
                 None
             };
-            databend_common_base::runtime::block_on(
-                catalog.get_sequence(req, &visibility_checker),
-            )?;
+            self.block_on(catalog.get_sequence(req, &visibility_checker))??;
         }
 
         let return_type = DataType::Number(NumberDataType::UInt64);
@@ -206,15 +287,13 @@ where P: super::TypeCheckPolicy
             };
             (db_name, dict_name)
         };
-        let db = databend_common_base::runtime::block_on(
-            catalog.get_database(&tenant, db_name.as_str()),
-        )?;
+        let db = self.block_on(catalog.get_database(&tenant, db_name.as_str()))??;
         let db_id = db.get_db_info().database_id.db_id;
         let req = DictionaryNameIdent::new(
             tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name.clone()),
         );
-        let reply = databend_common_base::runtime::block_on(catalog.get_dictionary(req))?;
+        let reply = self.block_on(catalog.get_dictionary(req))??;
         let dictionary = if let Some(r) = reply {
             r.dictionary_meta
         } else {
@@ -383,11 +462,8 @@ where P: super::TypeCheckPolicy
                 let stage_name = parse_stage_name(stage).map_err(|err| {
                     ErrorCode::SemanticError(err.message().to_string()).set_span(span)
                 })?;
-                let stage_info = Self::resolve_stage_info_for_read_file(
-                    self.table_ctx_ref(),
-                    span,
-                    &stage_name,
-                )?;
+                let stage_info =
+                    self.resolve_stage_info_for_read_file(self.table_ctx_ref(), span, &stage_name)?;
                 read_file_arg.stage_name = Some(stage_name);
                 read_file_arg.stage_info = Some(Box::new(stage_info));
             }
@@ -421,11 +497,12 @@ where P: super::TypeCheckPolicy
     }
 
     fn resolve_stage_info_for_read_file(
+        &self,
         ctx: &dyn TableContext,
         span: Span,
         stage_name: &str,
     ) -> Result<StageInfo> {
-        databend_common_base::runtime::block_on(async move {
+        self.block_on(async move {
             let (stage_info, _) = resolve_stage_location(ctx, stage_name).await?;
             if ctx.get_settings().get_enable_experimental_rbac_check()? {
                 let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
@@ -443,6 +520,6 @@ where P: super::TypeCheckPolicy
                 }
             }
             Ok(stage_info)
-        })
+        })?
     }
 }

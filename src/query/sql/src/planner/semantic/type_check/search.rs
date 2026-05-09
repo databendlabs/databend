@@ -34,20 +34,49 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_meta_app::schema::TableIndexType;
 use itertools::Itertools;
 use tantivy_query_grammar::UserInputAst;
 use tantivy_query_grammar::UserInputLeaf;
 use tantivy_query_grammar::parse_query_lenient;
+use unicase::Ascii;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
 use super::core_expr::CoreSearchFunctionArgs;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn search_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: &'a [Expr],
+    ) -> Result<CoreExprId> {
+        let args = self.lower_display_expr_args(args)?;
+        Ok(self.alloc(CoreExpr::SearchFunction {
+            span,
+            func_name,
+            args,
+        }))
+    }
+}
+
+pub(super) fn general_search_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    GENERAL_SEARCH_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
 
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy

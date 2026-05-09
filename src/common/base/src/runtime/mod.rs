@@ -59,6 +59,7 @@ pub use runtime::Dropper;
 pub use runtime::GLOBAL_TASK;
 pub use runtime::Runtime;
 pub use runtime::block_on;
+pub use runtime::block_on_with_handle;
 pub use runtime::execute_futures_in_parallel;
 pub use runtime::spawn;
 pub use runtime::spawn_blocking;

@@ -17,13 +17,25 @@ use std::sync::Arc;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::table_context::TableContextSettings;
+use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::lock::LockTableOption;
+use databend_common_catalog::table::Table;
+use databend_common_catalog::table_context::TableContextAuthorization;
+use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::RoleInfo;
+use databend_common_meta_app::principal::UserInfo;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
+use databend_common_pipeline::core::LockGuard;
 use databend_common_settings::Settings;
+use databend_common_sql::BasicTypeCheckPolicy;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::CoreExprContextDependencies;
@@ -35,14 +47,196 @@ use databend_common_sql::TypeCheckPolicy;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
+use databend_common_storage::DataOperator;
+use databend_common_users::GrantObjectVisibilityChecker;
+use databend_common_users::Object;
 use parking_lot::RwLock;
 
 use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
 use crate::framework::golden::open_golden_file;
-use crate::framework::golden::setup_context;
 use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
+
+struct TestTypeCheckPolicy {
+    settings: Arc<Settings>,
+    func_ctx: FunctionContext,
+    async_runtime_handle: tokio::runtime::Handle,
+}
+
+impl TestTypeCheckPolicy {
+    fn new(settings: Arc<Settings>) -> Self {
+        Self {
+            settings,
+            func_ctx: FunctionContext::default(),
+            async_runtime_handle: tokio::runtime::Handle::current(),
+        }
+    }
+}
+
+impl CoreExprContextPolicy for TestTypeCheckPolicy {
+    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
+        CoreExprContextDependencies::all()
+    }
+
+    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
+        AggregateFunctionFactory::instance()
+    }
+}
+
+impl TypeCheckPolicy for TestTypeCheckPolicy {
+    fn function_context(&self) -> Result<FunctionContext> {
+        Ok(self.func_ctx.clone())
+    }
+
+    fn settings(&self) -> Arc<Settings> {
+        self.settings.clone()
+    }
+
+    fn async_runtime_handle(&self) -> Result<tokio::runtime::Handle> {
+        Ok(self.async_runtime_handle.clone())
+    }
+
+    fn fuse_version(&self) -> Result<String> {
+        Ok(String::new())
+    }
+
+    fn connection_id(&self) -> Result<String> {
+        Ok("lite-conn".to_string())
+    }
+
+    fn current_client_session_id(&self) -> Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn last_query_id(&self, _index: i32) -> Result<Option<String>> {
+        Ok(None)
+    }
+
+    fn variable(&self, _key: &str) -> Result<Option<Scalar>> {
+        Ok(None)
+    }
+
+    fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
+        Ok(self)
+    }
+
+    fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
+        Ok(self)
+    }
+
+    fn set_result_cache_uncacheable(&self) {}
+}
+
+#[async_trait::async_trait]
+impl TableContextTableAccess for TestTypeCheckPolicy {
+    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        unimplemented!()
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        unimplemented!()
+    }
+
+    fn get_current_catalog(&self) -> String {
+        "default".to_string()
+    }
+
+    fn get_current_database(&self) -> String {
+        "default".to_string()
+    }
+
+    fn get_tenant(&self) -> Tenant {
+        Tenant::new_literal("default")
+    }
+
+    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
+        unimplemented!()
+    }
+
+    async fn get_table_with_branch(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+    ) -> Result<Arc<dyn Table>> {
+        unimplemented!()
+    }
+
+    async fn resolve_data_source(
+        &self,
+        _catalog: &str,
+        _database: &str,
+        _table: &str,
+        _branch: Option<&str>,
+        _max_batch_size: Option<u64>,
+    ) -> Result<Arc<dyn Table>> {
+        unimplemented!()
+    }
+
+    async fn acquire_table_lock(
+        self: Arc<Self>,
+        _catalog_name: &str,
+        _db_name: &str,
+        _tbl_name: &str,
+        _lock_opt: &LockTableOption,
+    ) -> Result<Option<Arc<LockGuard>>> {
+        unimplemented!()
+    }
+
+    fn get_temp_table_prefix(&self) -> Result<String> {
+        unimplemented!()
+    }
+
+    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
+        false
+    }
+}
+
+#[async_trait::async_trait]
+impl TableContextAuthorization for TestTypeCheckPolicy {
+    fn get_current_user(&self) -> Result<UserInfo> {
+        Ok(UserInfo::new_no_auth("root", "%"))
+    }
+
+    fn get_current_role(&self) -> Option<RoleInfo> {
+        None
+    }
+
+    fn get_secondary_roles(&self) -> Option<Vec<String>> {
+        None
+    }
+
+    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
+        Ok(Vec::new())
+    }
+
+    async fn validate_privilege(
+        &self,
+        _object: &GrantObject,
+        _privilege: UserPrivilegeType,
+        _check_current_role_only: bool,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        Ok(Vec::new())
+    }
+
+    async fn get_visibility_checker(
+        &self,
+        _ignore_ownership: bool,
+        _object: Object,
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
+        unimplemented!()
+    }
+
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        unimplemented!()
+    }
+}
 
 fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, data_type: DataType) {
     bind_context.add_column_binding(
@@ -56,49 +250,18 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
     );
 }
 
-struct ScalarOnlyTypeCheckPolicy {
-    settings: Arc<Settings>,
-    func_ctx: FunctionContext,
-}
-
-impl ScalarOnlyTypeCheckPolicy {
-    fn new() -> Self {
-        Self {
-            settings: Settings::create(Tenant::new_literal("default")),
-            func_ctx: FunctionContext::default(),
-        }
-    }
-}
-
-impl CoreExprContextPolicy for ScalarOnlyTypeCheckPolicy {
-    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
-        CoreExprContextDependencies {
-            scalar_evaluation: true,
-            ..Default::default()
-        }
-    }
-}
-
-impl TypeCheckPolicy for ScalarOnlyTypeCheckPolicy {
-    fn function_context(&self) -> Result<FunctionContext> {
-        Ok(self.func_ctx.clone())
-    }
-
-    fn settings(&self) -> Arc<Settings> {
-        self.settings.clone()
-    }
-
-    fn set_result_cache_uncacheable(&self) {}
-}
-
 async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
-    let ctx = setup_context(case).await?;
+    assert!(
+        case.setup_sqls.is_empty(),
+        "type_check tests use a dependency-only policy and do not run setup SQL"
+    );
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let policy = TestTypeCheckPolicy::new(settings);
     let tokens = tokenize_sql(case.sql)?;
-    let dialect = ctx.get_settings().get_sql_dialect()?;
+    let dialect = policy.sql_dialect()?;
     let expr = parse_expr(&tokens, dialect)?;
 
-    let settings = ctx.get_settings();
-    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
     let mut bind_context = BindContext::new();
     add_test_column(
         &mut bind_context,
@@ -118,9 +281,9 @@ async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     add_test_column(&mut bind_context, 5, "ts", DataType::Timestamp);
     add_test_column(&mut bind_context, 6, "date", DataType::Date);
     let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let mut type_checker = TypeChecker::try_create(
+    let mut type_checker = TypeChecker::try_create_with_policy(
         &mut bind_context,
-        ctx,
+        policy,
         &name_resolution_ctx,
         metadata,
         &[],
@@ -155,7 +318,14 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
 
 #[test]
 fn test_scalar_type_check_policy_does_not_need_table_context() -> Result<()> {
-    let policy = ScalarOnlyTypeCheckPolicy::new();
+    let policy = BasicTypeCheckPolicy::new(
+        Settings::create(Tenant::new_literal("default")),
+        FunctionContext::default(),
+        CoreExprContextDependencies {
+            scalar_evaluation: true,
+            ..Default::default()
+        },
+    );
     let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = BindContext::new();
@@ -181,6 +351,56 @@ fn test_scalar_type_check_policy_does_not_need_table_context() -> Result<()> {
     assert!(
         err.message().contains("session_function"),
         "expected session_function policy error, got {}",
+        err.message()
+    );
+    Ok(())
+}
+
+#[test]
+fn test_basic_type_check_policy_resolves_columns_without_table_context() -> Result<()> {
+    let policy = BasicTypeCheckPolicy::new(
+        Settings::create(Tenant::new_literal("default")),
+        FunctionContext::default(),
+        CoreExprContextDependencies {
+            scalar_evaluation: true,
+            column_resolution: true,
+            ..Default::default()
+        },
+    );
+    let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
+    let metadata = Arc::new(RwLock::new(Metadata::default()));
+    let mut bind_context = BindContext::new();
+    add_test_column(
+        &mut bind_context,
+        0,
+        "number",
+        DataType::Number(NumberDataType::Int64),
+    );
+    let tokens = tokenize_sql("number + 1")?;
+    let expr = parse_expr(&tokens, policy.sql_dialect()?)?;
+    let mut type_checker = TypeChecker::try_create_with_policy(
+        &mut bind_context,
+        policy,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let (scalar, data_type) = *type_checker.resolve(&expr)?;
+
+    assert_eq!(format_scalar(&scalar), "plus(number (#0), 1)");
+    assert_eq!(
+        data_type,
+        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
+    );
+
+    let tokens = tokenize_sql("array_filter([1], x -> x > 0)")?;
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+    let err = type_checker.resolve(&expr).unwrap_err();
+    assert!(
+        err.message().contains("lambda_function"),
+        "expected lambda_function policy error, got {}",
         err.message()
     );
     Ok(())
@@ -395,7 +615,7 @@ async fn test_type_check_sugar_function_rewrites() -> Result<()> {
         },
         SqlTestCase {
             name: "timezone_rewrites_to_literal",
-            description: "timezone() should read settings through the existing LiteTableContext.",
+            description: "timezone() should read settings through the explicit type-check policy.",
             setup_sqls: &[],
             sql: "timezone()",
         },
@@ -503,7 +723,7 @@ async fn test_type_check_sugar_function_rewrites() -> Result<()> {
         },
         SqlTestCase {
             name: "getvariable_constant_name_rewrites_to_context_value",
-            description: "getvariable should resolve a constant variable name through TableContext.",
+            description: "getvariable should resolve a constant variable name through the explicit type-check policy.",
             setup_sqls: &[],
             sql: "getvariable('missing_var')",
         },

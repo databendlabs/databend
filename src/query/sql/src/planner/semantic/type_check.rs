@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -27,7 +28,15 @@ use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_base::runtime::block_on_with_handle;
+use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_catalog::table_context::TableContextAuthorization;
+use databend_common_catalog::table_context::TableContextSettings;
+use databend_common_catalog::table_context::TableContextTableAccess;
+use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
+use databend_common_config::GlobalConfig;
+use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnIndex;
@@ -57,9 +66,12 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_settings::Settings;
+use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use simsearch::SimSearch;
+use tokio::runtime::Handle;
 use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
@@ -143,11 +155,103 @@ pub struct TypeChecker<'a, P = FullTypeCheckPolicy> {
 
 pub struct FullTypeCheckPolicy {
     ctx: Arc<dyn TableContext>,
+    dependencies: FullTypeCheckDependencies,
+}
+
+pub struct BasicTypeCheckPolicy {
+    settings: Arc<Settings>,
+    func_ctx: FunctionContext,
+    allowed_context_dependencies: CoreExprContextDependencies,
+    aggregate_function_factory: &'static AggregateFunctionFactory,
+}
+
+pub struct FullTypeCheckDependencies {
+    async_runtime_handle: Handle,
+    aggregate_function_factory: &'static AggregateFunctionFactory,
+    license_manager: Arc<LicenseManagerSwitch>,
+    catalog_manager: Arc<CatalogManager>,
+    user_api_provider: Arc<UserApiProvider>,
+    security_policy_cache_manager: Arc<SecurityPolicyCacheManager>,
+    global_config: Arc<InnerConfig>,
+    cloud_control_api_provider: Option<Arc<CloudControlApiProvider>>,
 }
 
 impl FullTypeCheckPolicy {
-    pub fn new(ctx: Arc<dyn TableContext>) -> Self {
-        Self { ctx }
+    pub fn new(ctx: Arc<dyn TableContext>) -> Result<Self> {
+        let dependencies = FullTypeCheckDependencies::from_context(ctx.as_ref())?;
+        Ok(Self { ctx, dependencies })
+    }
+}
+
+impl FullTypeCheckDependencies {
+    pub fn from_context(ctx: &dyn TableContext) -> Result<Self> {
+        let global_config = GlobalConfig::instance();
+        let cloud_control_api_provider = if global_config
+            .query
+            .common
+            .cloud_control_grpc_server_address
+            .is_some()
+        {
+            Some(CloudControlApiProvider::instance())
+        } else {
+            None
+        };
+
+        Ok(Self {
+            async_runtime_handle: ctx.get_async_runtime_handle()?,
+            aggregate_function_factory: AggregateFunctionFactory::instance(),
+            license_manager: LicenseManagerSwitch::instance(),
+            catalog_manager: CatalogManager::instance(),
+            user_api_provider: UserApiProvider::instance(),
+            security_policy_cache_manager: SecurityPolicyCacheManager::instance(),
+            global_config,
+            cloud_control_api_provider,
+        })
+    }
+}
+
+fn missing_type_check_dependency(name: &str) -> ErrorCode {
+    ErrorCode::Internal(format!("type check policy does not provide {name}"))
+}
+
+impl BasicTypeCheckPolicy {
+    pub fn new(
+        settings: Arc<Settings>,
+        func_ctx: FunctionContext,
+        allowed_context_dependencies: CoreExprContextDependencies,
+    ) -> Self {
+        Self {
+            settings,
+            func_ctx,
+            allowed_context_dependencies,
+            aggregate_function_factory: AggregateFunctionFactory::instance(),
+        }
+    }
+
+    pub fn from_context(
+        ctx: &(impl TableContextSettings + ?Sized),
+        allowed_context_dependencies: CoreExprContextDependencies,
+    ) -> Result<Self> {
+        Ok(Self::new(
+            ctx.get_settings(),
+            ctx.get_function_context()?,
+            allowed_context_dependencies,
+        ))
+    }
+
+    pub fn scalar(ctx: &(impl TableContextSettings + ?Sized)) -> Result<Self> {
+        Self::from_context(ctx, CoreExprContextDependencies {
+            scalar_evaluation: true,
+            ..Default::default()
+        })
+    }
+
+    pub fn scalar_with_columns(ctx: &(impl TableContextSettings + ?Sized)) -> Result<Self> {
+        Self::from_context(ctx, CoreExprContextDependencies {
+            scalar_evaluation: true,
+            column_resolution: true,
+            ..Default::default()
+        })
     }
 }
 
@@ -156,11 +260,73 @@ pub trait TypeCheckPolicy: CoreExprContextPolicy {
 
     fn settings(&self) -> Arc<Settings>;
 
+    fn async_runtime_handle(&self) -> Result<Handle> {
+        Err(missing_type_check_dependency("async runtime"))
+    }
+
+    fn license_manager(&self) -> Result<Arc<LicenseManagerSwitch>> {
+        Err(missing_type_check_dependency("license manager"))
+    }
+
+    fn catalog_manager(&self) -> Result<Arc<CatalogManager>> {
+        Err(missing_type_check_dependency("catalog manager"))
+    }
+
+    fn user_api_provider(&self) -> Result<Arc<UserApiProvider>> {
+        Err(missing_type_check_dependency("user api provider"))
+    }
+
+    fn security_policy_cache_manager(&self) -> Result<Arc<SecurityPolicyCacheManager>> {
+        Err(missing_type_check_dependency(
+            "security policy cache manager",
+        ))
+    }
+
+    fn global_config(&self) -> Result<Arc<InnerConfig>> {
+        Err(missing_type_check_dependency("global config"))
+    }
+
+    fn cloud_control_api_provider(&self) -> Result<Arc<CloudControlApiProvider>> {
+        Err(missing_type_check_dependency("cloud control api provider"))
+    }
+
+    fn fuse_version(&self) -> Result<String> {
+        Err(missing_type_check_dependency("fuse version"))
+    }
+
+    fn connection_id(&self) -> Result<String> {
+        Err(missing_type_check_dependency("connection id"))
+    }
+
+    fn current_client_session_id(&self) -> Result<Option<String>> {
+        Err(missing_type_check_dependency("client session id"))
+    }
+
+    fn last_query_id(&self, _index: i32) -> Result<Option<String>> {
+        Err(missing_type_check_dependency("last query id"))
+    }
+
+    fn variable(&self, _key: &str) -> Result<Option<Scalar>> {
+        Err(missing_type_check_dependency("variable"))
+    }
+
+    fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
+        Err(missing_type_check_dependency("table access context"))
+    }
+
+    fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
+        Err(missing_type_check_dependency("authorization context"))
+    }
+
     fn sql_dialect(&self) -> Result<Dialect> {
         self.settings().get_sql_dialect()
     }
 
     fn set_result_cache_uncacheable(&self);
+
+    fn can_apply_column_masking_policy(&self) -> bool {
+        false
+    }
 
     fn table_context(&self) -> &Arc<dyn TableContext> {
         panic!("type check policy does not provide table context")
@@ -175,6 +341,20 @@ impl CoreExprContextPolicy for FullTypeCheckPolicy {
     fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
         CoreExprContextDependencies::all()
     }
+
+    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
+        self.dependencies.aggregate_function_factory
+    }
+}
+
+impl CoreExprContextPolicy for BasicTypeCheckPolicy {
+    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
+        self.allowed_context_dependencies
+    }
+
+    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
+        self.aggregate_function_factory
+    }
 }
 
 impl TypeCheckPolicy for FullTypeCheckPolicy {
@@ -186,13 +366,92 @@ impl TypeCheckPolicy for FullTypeCheckPolicy {
         self.ctx.get_settings()
     }
 
+    fn async_runtime_handle(&self) -> Result<Handle> {
+        Ok(self.dependencies.async_runtime_handle.clone())
+    }
+
+    fn license_manager(&self) -> Result<Arc<LicenseManagerSwitch>> {
+        Ok(self.dependencies.license_manager.clone())
+    }
+
+    fn catalog_manager(&self) -> Result<Arc<CatalogManager>> {
+        Ok(self.dependencies.catalog_manager.clone())
+    }
+
+    fn user_api_provider(&self) -> Result<Arc<UserApiProvider>> {
+        Ok(self.dependencies.user_api_provider.clone())
+    }
+
+    fn security_policy_cache_manager(&self) -> Result<Arc<SecurityPolicyCacheManager>> {
+        Ok(self.dependencies.security_policy_cache_manager.clone())
+    }
+
+    fn global_config(&self) -> Result<Arc<InnerConfig>> {
+        Ok(self.dependencies.global_config.clone())
+    }
+
+    fn cloud_control_api_provider(&self) -> Result<Arc<CloudControlApiProvider>> {
+        self.dependencies.cloud_control_api_provider.clone().ok_or_else(|| {
+            ErrorCode::Unimplemented(
+                "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
+            )
+        })
+    }
+
+    fn fuse_version(&self) -> Result<String> {
+        Ok(self.ctx.get_fuse_version())
+    }
+
+    fn connection_id(&self) -> Result<String> {
+        Ok(self.ctx.get_connection_id())
+    }
+
+    fn current_client_session_id(&self) -> Result<Option<String>> {
+        Ok(self.ctx.get_current_client_session_id())
+    }
+
+    fn last_query_id(&self, index: i32) -> Result<Option<String>> {
+        Ok(self.ctx.get_last_query_id(index))
+    }
+
+    fn variable(&self, key: &str) -> Result<Option<Scalar>> {
+        Ok(self.ctx.get_variable(key))
+    }
+
+    fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
+        Ok(self.ctx.as_ref())
+    }
+
+    fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
+        Ok(self.ctx.as_ref())
+    }
+
     fn set_result_cache_uncacheable(&self) {
         self.ctx.result_cache_state().set_cacheable(false);
+    }
+
+    fn can_apply_column_masking_policy(&self) -> bool {
+        self.dependencies
+            .license_manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+            .is_ok()
     }
 
     fn table_context(&self) -> &Arc<dyn TableContext> {
         &self.ctx
     }
+}
+
+impl TypeCheckPolicy for BasicTypeCheckPolicy {
+    fn function_context(&self) -> Result<FunctionContext> {
+        Ok(self.func_ctx.clone())
+    }
+
+    fn settings(&self) -> Arc<Settings> {
+        self.settings.clone()
+    }
+
+    fn set_result_cache_uncacheable(&self) {}
 }
 
 impl<'a> TypeChecker<'a, FullTypeCheckPolicy> {
@@ -206,7 +465,7 @@ impl<'a> TypeChecker<'a, FullTypeCheckPolicy> {
     ) -> Result<Self> {
         Self::try_create_with_policy(
             bind_context,
-            FullTypeCheckPolicy::new(ctx),
+            FullTypeCheckPolicy::new(ctx)?,
             name_resolution_ctx,
             metadata,
             aliases,
@@ -247,6 +506,11 @@ where P: TypeCheckPolicy
     fn core_expr_arena(&self) -> core_expr::CoreExprArena<'a> {
         core_expr::CoreExprArena::with_context_policy(self.func_ctx.week_start as u64, &self.policy)
     }
+
+    pub(super) fn block_on<F: Future>(&self, future: F) -> Result<F::Output> {
+        let handle = self.policy.async_runtime_handle()?;
+        Ok(block_on_with_handle(&handle, future))
+    }
 }
 
 impl<'a, P> TypeChecker<'a, P>
@@ -257,7 +521,9 @@ where P: TypeCheckPolicy
     }
 
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
-        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
+        if TypeChecker::<FullTypeCheckPolicy>::all_sugar_functions()
+            .contains(&Ascii::new(func_name))
+        {
             return false;
         }
         BUILTIN_FUNCTIONS
@@ -352,11 +618,8 @@ where P: TypeCheckPolicy
                     // BUT: skip masking policy application if we're already resolving a masking policy expression
                     // to prevent infinite recursion (e.g., policy references the masked column itself)
                     let has_masking_policy = !self.in_masking_policy
-                        // First check: is DataMask feature enabled? (cheapest check)
-                        && LicenseManagerSwitch::instance()
-                            .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
-                            .is_ok()
-                        // Second check: does this column reference a table with masking policy?
+                        && self.policy.can_apply_column_masking_policy()
+                        // Does this column reference a table with masking policy?
                         && column
                             .table_index
                             .and_then(|table_index| {
@@ -418,14 +681,14 @@ where P: TypeCheckPolicy
 
                     if has_masking_policy {
                         // Only do expensive async work if we know there's a policy
-                        let mask_expr = databend_common_base::runtime::block_on(async {
+                        let mask_expr = self.block_on(async {
                             self.get_masking_policy_expr_for_column(
                                 &column,
                                 database.as_deref(),
                                 table.as_deref(),
                             )
                             .await
-                        })?;
+                        })??;
 
                         if let Some(mask_expr) = mask_expr {
                             // Set flag to prevent recursive masking policy application
@@ -481,7 +744,7 @@ where P: TypeCheckPolicy
         let all_funcs = BUILTIN_FUNCTIONS
             .all_function_names()
             .into_iter()
-            .chain(AggregateFunctionFactory::instance().registered_names())
+            .chain(self.policy.aggregate_function_factory().registered_names())
             .chain(
                 GENERAL_WINDOW_FUNCTIONS
                     .iter()
@@ -507,7 +770,7 @@ where P: TypeCheckPolicy
                     .map(|ascii| ascii.into_inner().to_string()),
             )
             .chain(
-                Self::all_sugar_functions()
+                TypeChecker::<FullTypeCheckPolicy>::all_sugar_functions()
                     .iter()
                     .cloned()
                     .map(|ascii| ascii.into_inner().to_string()),
@@ -643,8 +906,12 @@ where P: TypeCheckPolicy
         arguments: &[&Expr],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
-        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
-            if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
+        if TypeChecker::<FullTypeCheckPolicy>::all_sugar_functions()
+            .contains(&Ascii::new(func_name))
+        {
+            let handle = self.policy.async_runtime_handle()?;
+            if let Some(rewritten_func_result) = block_on_with_handle(
+                &handle,
                 self.try_rewrite_sugar_function(span, func_name, arguments),
             ) {
                 return rewritten_func_result;
@@ -1101,12 +1368,8 @@ where P: TypeCheckPolicy
         table: Option<&str>,
     ) -> Result<Option<Expr>> {
         use databend_common_ast::ast;
-        use databend_common_license::license::Feature::DataMask;
-        use databend_common_license::license_manager::LicenseManagerSwitch;
-        use databend_common_users::UserApiProvider;
         use databend_common_users::security_policy_cache::PolicyType;
         use databend_common_users::security_policy_cache::RawPolicyDef;
-        use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
         use databend_enterprise_data_mask_feature::get_datamask_handler;
 
         // Check if this column has a masking policy
@@ -1130,11 +1393,7 @@ where P: TypeCheckPolicy
                         .column_mask_policy_columns_ids
                         .get(&field.column_id)
                     {
-                        // Check license
-                        if LicenseManagerSwitch::instance()
-                            .check_enterprise_enabled(self.table_ctx().get_license_key(), DataMask)
-                            .is_err()
-                        {
+                        if !self.policy.can_apply_column_masking_policy() {
                             return Ok(None);
                         }
 
@@ -1154,8 +1413,8 @@ where P: TypeCheckPolicy
 
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
                 let tenant = self.table_ctx().get_tenant();
-                let cache = SecurityPolicyCacheManager::instance();
-                let meta_api = UserApiProvider::instance().get_meta_store_client();
+                let cache = self.policy.security_policy_cache_manager()?;
+                let meta_api = self.policy.user_api_provider()?.get_meta_store_client();
                 let tenant_clone = tenant.clone();
 
                 let cached = cache

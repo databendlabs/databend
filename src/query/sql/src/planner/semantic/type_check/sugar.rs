@@ -45,7 +45,7 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a, P> TypeChecker<'a, P> {
+impl<'a> TypeChecker<'a, super::FullTypeCheckPolicy> {
     pub fn all_sugar_functions() -> &'static [Ascii<&'static str>] {
         static FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("current_catalog"),
@@ -218,44 +218,47 @@ where P: super::TypeCheckPolicy
         match (func_name, resolved_args.as_slice()) {
             ("current_catalog", []) => self.resolve_core_sugar_literal(
                 span,
-                Scalar::String(self.table_ctx().get_current_catalog()),
+                Scalar::String(self.policy.table_access_context()?.get_current_catalog()),
             ),
             ("database" | "currentdatabase" | "current_database", []) => self
                 .resolve_core_sugar_literal(
                     span,
-                    Scalar::String(self.table_ctx().get_current_database()),
+                    Scalar::String(self.policy.table_access_context()?.get_current_database()),
                 ),
-            ("version", []) => self.resolve_core_sugar_literal(
-                span,
-                Scalar::String(self.table_ctx().get_fuse_version()),
-            ),
-            ("user" | "currentuser" | "current_user", []) => {
-                let user = self.table_ctx().get_current_user()?;
-                self.resolve_core_sugar_literal(
-                    span,
-                    Scalar::String(user.identity().display().to_string()),
-                )
+            ("version", []) => {
+                self.resolve_core_sugar_literal(span, Scalar::String(self.policy.fuse_version()?))
             }
+            ("user" | "currentuser" | "current_user", []) => self.resolve_core_sugar_literal(
+                span,
+                Scalar::String(
+                    self.policy
+                        .authorization_context()?
+                        .get_current_user()?
+                        .identity()
+                        .display()
+                        .to_string(),
+                ),
+            ),
             ("current_role", []) => self.resolve_core_sugar_literal(
                 span,
                 Scalar::String(
-                    self.table_ctx()
+                    self.policy
+                        .authorization_context()?
                         .get_current_role()
                         .map(|role| role.name)
                         .unwrap_or_default(),
                 ),
             ),
             ("current_secondary_roles", []) => {
-                let mut roles = databend_common_base::runtime::block_on(
-                    self.table_ctx().get_all_effective_roles(),
-                )
-                .unwrap_or_default()
-                .iter()
-                .map(|role| role.name.clone())
-                .collect::<Vec<_>>();
+                let auth_ctx = self.policy.authorization_context()?;
+                let mut roles = self
+                    .block_on(auth_ctx.get_all_effective_roles())??
+                    .into_iter()
+                    .map(|role| role.name)
+                    .collect::<Vec<_>>();
                 roles.sort();
                 let roles_comma_separated_string = roles.iter().join(",");
-                let value = if self.table_ctx().get_secondary_roles().is_none() {
+                let value = if auth_ctx.get_secondary_roles().is_none() {
                     json!({ "roles": roles_comma_separated_string, "value": "ALL" })
                 } else {
                     json!({ "roles": roles_comma_separated_string, "value": "None" })
@@ -263,31 +266,25 @@ where P: super::TypeCheckPolicy
                 self.resolve_core_sugar_literal(span, Scalar::String(to_string(&value)?))
             }
             ("current_available_roles", []) => {
-                let mut roles = databend_common_base::runtime::block_on(
-                    self.table_ctx().get_all_available_roles(),
-                )
-                .unwrap_or_default()
-                .iter()
-                .map(|role| role.name.clone())
-                .collect::<Vec<_>>();
+                let auth_ctx = self.policy.authorization_context()?;
+                let mut roles = self
+                    .block_on(auth_ctx.get_all_available_roles())??
+                    .into_iter()
+                    .map(|role| role.name)
+                    .collect::<Vec<_>>();
                 roles.sort();
                 self.resolve_core_sugar_literal(span, Scalar::String(to_string(&roles)?))
             }
-            ("connection_id", []) => self.resolve_core_sugar_literal(
-                span,
-                Scalar::String(self.table_ctx().get_connection_id()),
-            ),
+            ("connection_id", []) => {
+                self.resolve_core_sugar_literal(span, Scalar::String(self.policy.connection_id()?))
+            }
             ("client_session_id", []) => self.resolve_core_sugar_literal(
                 span,
-                Scalar::String(
-                    self.table_ctx()
-                        .get_current_client_session_id()
-                        .unwrap_or_default(),
-                ),
+                Scalar::String(self.policy.current_client_session_id()?.unwrap_or_default()),
             ),
             ("timezone", []) => self.resolve_core_sugar_literal(
                 span,
-                Scalar::String(self.table_ctx().get_settings().get_timezone().unwrap()),
+                Scalar::String(self.policy.settings().get_timezone().unwrap()),
             ),
             ("last_query_id", args) => self.resolve_core_last_query_id(span, args),
             ("coalesce", args) => self.resolve_core_coalesce(span, args),
@@ -369,8 +366,8 @@ where P: super::TypeCheckPolicy
             check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
         };
         let value = self
-            .table_ctx()
-            .get_last_query_id(index as i32)
+            .policy
+            .last_query_id(index as i32)?
             .map(Scalar::String)
             .unwrap_or(Scalar::Null);
         self.resolve_core_sugar_literal(span, value)
@@ -536,10 +533,8 @@ where P: super::TypeCheckPolicy
                 ));
             }
         }
-        let nulls_first = nulls_first.unwrap_or_else(|| {
-            let settings = self.table_ctx().get_settings();
-            settings.get_nulls_first()(asc)
-        });
+        let nulls_first =
+            nulls_first.unwrap_or_else(|| self.policy.settings().get_nulls_first()(asc));
         let func_name = match (asc, nulls_first) {
             (true, true) => "array_sort_asc_null_first",
             (false, true) => "array_sort_desc_null_first",
@@ -619,10 +614,7 @@ where P: super::TypeCheckPolicy
         if let Ok(arg) = ConstantExpr::try_from(scalar.clone())
             && let Scalar::String(var_name) = arg.value
         {
-            let var_value = self
-                .table_ctx()
-                .get_variable(&var_name)
-                .unwrap_or(Scalar::Null);
+            let var_value = self.policy.variable(&var_name)?.unwrap_or(Scalar::Null);
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((
@@ -668,50 +660,63 @@ where P: super::TypeCheckPolicy
         match (func_name.to_lowercase().as_str(), args) {
             ("current_catalog", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
-                value: Literal::String(self.table_ctx().get_current_catalog()),
+                value: Literal::String(match self.policy.table_access_context() {
+                    Ok(ctx) => ctx.get_current_catalog(),
+                    Err(err) => return Some(Err(err)),
+                }),
             })),
             ("database" | "currentdatabase" | "current_database", &[]) => {
                 Some(self.resolve(&Expr::Literal {
                     span,
-                    value: Literal::String(self.table_ctx().get_current_database()),
+                    value: Literal::String(match self.policy.table_access_context() {
+                        Ok(ctx) => ctx.get_current_database(),
+                        Err(err) => return Some(Err(err)),
+                    }),
                 }))
             }
             ("version", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
-                value: Literal::String(self.table_ctx().get_fuse_version()),
+                value: Literal::String(match self.policy.fuse_version() {
+                    Ok(value) => value,
+                    Err(err) => return Some(Err(err)),
+                }),
             })),
             ("user" | "currentuser" | "current_user", &[]) => {
-                match self.table_ctx().get_current_user() {
-                    Ok(user) => Some(self.resolve(&Expr::Literal {
-                        span,
-                        value: Literal::String(user.identity().display().to_string()),
-                    })),
+                match self.policy.authorization_context() {
+                    Ok(ctx) => match ctx.get_current_user() {
+                        Ok(user) => Some(self.resolve(&Expr::Literal {
+                            span,
+                            value: Literal::String(user.identity().display().to_string()),
+                        })),
+                        Err(e) => Some(Err(e)),
+                    },
                     Err(e) => Some(Err(e)),
                 }
             }
             ("current_role", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
-                    value: Literal::String(
-                        self.table_ctx()
+                    value: Literal::String(match self.policy.authorization_context() {
+                        Ok(ctx) => ctx
                             .get_current_role()
-                            .map(|r| r.name)
+                            .map(|role| role.name)
                             .unwrap_or_default(),
-                    ),
+                        Err(err) => return Some(Err(err)),
+                    }),
                 }),
             ),
             ("current_secondary_roles", &[]) => {
-                let mut res = self
-                    .table_ctx()
-                    .get_all_effective_roles()
-                    .await
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<String>>();
+                let auth_ctx = match self.policy.authorization_context() {
+                    Ok(ctx) => ctx,
+                    Err(err) => return Some(Err(err)),
+                };
+                let mut res = match self.block_on(auth_ctx.get_all_effective_roles()) {
+                    Ok(Ok(roles)) => roles.into_iter().map(|role| role.name).collect::<Vec<_>>(),
+                    Ok(Err(err)) | Err(err) => return Some(Err(err)),
+                };
                 res.sort();
                 let roles_comma_separated_string = res.iter().join(",");
-                let res = if self.table_ctx().get_secondary_roles().is_none() {
+                let res = if auth_ctx.get_secondary_roles().is_none() {
                     json!({
                         "roles": roles_comma_separated_string,
                         "value": "ALL"
@@ -734,14 +739,14 @@ where P: super::TypeCheckPolicy
                 }
             }
             ("current_available_roles", &[]) => {
-                let mut res = self
-                    .table_ctx()
-                    .get_all_available_roles()
-                    .await
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<String>>();
+                let auth_ctx = match self.policy.authorization_context() {
+                    Ok(ctx) => ctx,
+                    Err(err) => return Some(Err(err)),
+                };
+                let mut res = match self.block_on(auth_ctx.get_all_available_roles()) {
+                    Ok(Ok(roles)) => roles.into_iter().map(|role| role.name).collect::<Vec<_>>(),
+                    Ok(Err(err)) | Err(err) => return Some(Err(err)),
+                };
                 res.sort();
                 match to_string(&res) {
                     Ok(res) => Some(self.resolve(&Expr::Literal {
@@ -756,20 +761,20 @@ where P: super::TypeCheckPolicy
             }
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
-                value: Literal::String(self.table_ctx().get_connection_id()),
-            })),
-            ("client_session_id", &[]) => Some(
-                self.resolve(&Expr::Literal {
-                    span,
-                    value: Literal::String(
-                        self.table_ctx()
-                            .get_current_client_session_id()
-                            .unwrap_or_default(),
-                    ),
+                value: Literal::String(match self.policy.connection_id() {
+                    Ok(value) => value,
+                    Err(err) => return Some(Err(err)),
                 }),
-            ),
+            })),
+            ("client_session_id", &[]) => Some(self.resolve(&Expr::Literal {
+                span,
+                value: Literal::String(match self.policy.current_client_session_id() {
+                    Ok(value) => value.unwrap_or_default(),
+                    Err(err) => return Some(Err(err)),
+                }),
+            })),
             ("timezone", &[]) => {
-                let tz = self.table_ctx().get_settings().get_timezone().unwrap();
+                let tz = self.policy.settings().get_timezone().unwrap();
                 Some(self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(tz),
@@ -1096,19 +1101,17 @@ where P: super::TypeCheckPolicy
                 };
 
                 Some(match res {
-                    Ok(index) => {
-                        if let Some(query_id) = self.table_ctx().get_last_query_id(index as i32) {
-                            self.resolve(&Expr::Literal {
-                                span,
-                                value: Literal::String(query_id),
-                            })
-                        } else {
-                            self.resolve(&Expr::Literal {
-                                span,
-                                value: Literal::Null,
-                            })
-                        }
-                    }
+                    Ok(index) => match self.policy.last_query_id(index as i32) {
+                        Ok(Some(query_id)) => self.resolve(&Expr::Literal {
+                            span,
+                            value: Literal::String(query_id),
+                        }),
+                        Ok(None) => self.resolve(&Expr::Literal {
+                            span,
+                            value: Literal::Null,
+                        }),
+                        Err(err) => Err(err),
+                    },
                     Err(e) => Err(e),
                 })
             }
@@ -1167,10 +1170,8 @@ where P: super::TypeCheckPolicy
                     }
                 }
 
-                let nulls_first = nulls_first.unwrap_or_else(|| {
-                    let settings = self.table_ctx().get_settings();
-                    settings.get_nulls_first()(asc)
-                });
+                let nulls_first =
+                    nulls_first.unwrap_or_else(|| self.policy.settings().get_nulls_first()(asc));
 
                 let func_name = match (asc, nulls_first) {
                     (true, true) => "array_sort_asc_null_first",
@@ -1256,10 +1257,11 @@ where P: super::TypeCheckPolicy
 
                 if let Ok(arg) = ConstantExpr::try_from(scalar) {
                     if let Scalar::String(var_name) = arg.value {
-                        let var_value = self
-                            .table_ctx()
-                            .get_variable(&var_name)
-                            .unwrap_or(Scalar::Null);
+                        let var_value = match self.policy.variable(&var_name) {
+                            Ok(Some(value)) => value,
+                            Ok(None) => Scalar::Null,
+                            Err(err) => return Some(Err(err)),
+                        };
                         let var_value = shrink_scalar(var_value);
                         let data_type = var_value.as_ref().infer_data_type();
                         return Some(Ok(Box::new((

@@ -308,6 +308,10 @@ impl TableContextSettings for QueryContext {
         })
     }
 
+    fn get_async_runtime_handle(&self) -> Result<tokio::runtime::Handle> {
+        Ok(self.shared.try_get_runtime()?.inner())
+    }
+
     fn get_settings(&self) -> Arc<Settings> {
         if self.shared.query_settings.is_changed()
             && self.shared.query_settings.query_level_change()

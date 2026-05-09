@@ -19,7 +19,6 @@ use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
-use databend_common_catalog::catalog::CatalogManager;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
@@ -240,7 +239,7 @@ where P: super::TypeCheckPolicy
 
         let mut binder = Binder::new(
             self.table_ctx().clone(),
-            CatalogManager::instance(),
+            self.policy.catalog_manager()?,
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),
         );
@@ -271,11 +270,13 @@ where P: super::TypeCheckPolicy
                     #[visitor(Expr(enter), ASTFunctionCall(enter))]
                     struct AggFuncVisitor {
                         contain_agg: bool,
+                        aggregate_function_factory: &'static AggregateFunctionFactory,
                     }
                     impl AggFuncVisitor {
                         fn enter_ast_function_call(&mut self, func: &ASTFunctionCall) {
                             self.contain_agg = self.contain_agg
-                                || AggregateFunctionFactory::instance()
+                                || self
+                                    .aggregate_function_factory
                                     .contains(func.name.to_string());
                         }
                         fn enter_expr(&mut self, expr: &Expr) {
@@ -283,7 +284,10 @@ where P: super::TypeCheckPolicy
                                 || matches!(expr, Expr::CountAll { window: None, .. });
                         }
                     }
-                    let mut visitor = AggFuncVisitor { contain_agg: false };
+                    let mut visitor = AggFuncVisitor {
+                        contain_agg: false,
+                        aggregate_function_factory: self.policy.aggregate_function_factory(),
+                    };
                     select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);
                 }

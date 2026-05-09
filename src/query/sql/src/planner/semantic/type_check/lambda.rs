@@ -32,7 +32,6 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_license::license::Feature;
-use databend_common_license::license_manager::LicenseManagerSwitch;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -63,7 +62,9 @@ where P: super::TypeCheckPolicy
         lambda_columns: &[(String, DataType)],
         lambda_expr: super::core_expr::CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let metadata = if LicenseManagerSwitch::instance()
+        let metadata = if self
+            .policy
+            .license_manager()?
             .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
             .is_ok()
         {

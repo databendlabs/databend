@@ -701,6 +701,10 @@ impl TableContextSettings for CtxDelegation {
         self.ctx.get_function_context()
     }
 
+    fn get_async_runtime_handle(&self) -> Result<tokio::runtime::Handle> {
+        self.ctx.get_async_runtime_handle()
+    }
+
     fn get_settings(&self) -> Arc<Settings> {
         Settings::create(Tenant::new_literal("fake_settings"))
     }

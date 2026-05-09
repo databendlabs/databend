@@ -21,13 +21,12 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
+use databend_common_base::runtime::block_on_with_handle;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
-use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_cloud_control::pb::CreateWorkerRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
-use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -45,7 +44,6 @@ use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
-use databend_common_users::UserApiProvider;
 use itertools::Itertools;
 use serde_json::json;
 use serde_json::to_string;
@@ -53,7 +51,7 @@ use serde_json::to_string;
 use super::StageLocationParam;
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
-use super::core_expr::CoreRuntimeCallArgs;
+use super::core_expr::CoreUdfCallArgs;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
@@ -312,7 +310,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         udf_name: &str,
-        arguments: &CoreRuntimeCallArgs,
+        arguments: &CoreUdfCallArgs,
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         if self.forbid_udf {
             return Ok(None);
@@ -322,8 +320,8 @@ where P: super::TypeCheckPolicy
             udf
         } else {
             let tenant = self.table_ctx().get_tenant();
-            let provider = UserApiProvider::instance();
-            let udf = databend_common_base::runtime::block_on(provider.get_udf(&tenant, udf_name))?;
+            let provider = self.policy.user_api_provider()?;
+            let udf = self.block_on(provider.get_udf(&tenant, udf_name))??;
             self.bind_context
                 .udf_cache
                 .write()
@@ -363,7 +361,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        arguments: &CoreRuntimeCallArgs,
+        arguments: &CoreUdfCallArgs,
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.resolve_udf_server_internal(arena, span, name, arguments, udf_definition, true)
@@ -374,7 +372,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        arguments: &CoreRuntimeCallArgs,
+        arguments: &CoreUdfCallArgs,
         mut udf_definition: UDFServer,
         validate_address: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -423,9 +421,8 @@ where P: super::TypeCheckPolicy
                     ))
                     .set_span(span));
                 };
-                let (stage_info, relative_path) = databend_common_base::runtime::block_on(
-                    resolve_stage_location(self.table_ctx_ref(), &location),
-                )?;
+                let (stage_info, relative_path) =
+                    self.block_on(resolve_stage_location(self.table_ctx_ref(), &location))??;
 
                 if !matches!(stage_info.stage_type, StageType::External) {
                     return Err(ErrorCode::SemanticError(format!(
@@ -476,11 +473,11 @@ where P: super::TypeCheckPolicy
                 };
                 arg_scalars.push(arg_scalar);
             }
-            let value = databend_common_base::runtime::block_on(self.fold_udf_server(
-                name.as_str(),
-                arg_scalars,
-                udf_definition.clone(),
-            ))?;
+            let handle = self.policy.async_runtime_handle()?;
+            let value = block_on_with_handle(
+                &handle,
+                self.fold_udf_server(name.as_str(), arg_scalars, udf_definition.clone()),
+            )?;
             return Ok(Box::new((
                 ConstantExpr { span, value }.into(),
                 udf_definition.return_type.clone(),
@@ -571,7 +568,9 @@ where P: super::TypeCheckPolicy
         resource_type: &str,
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
-        let Some(_) = &GlobalConfig::instance()
+        let Some(_) = &self
+            .policy
+            .global_config()?
             .query
             .common
             .cloud_control_grpc_server_address
@@ -581,7 +580,7 @@ where P: super::TypeCheckPolicy
             ));
         };
 
-        let provider = CloudControlApiProvider::instance();
+        let provider = self.policy.cloud_control_api_provider()?;
         let tenant = self.table_ctx().get_tenant();
         let user = self
             .table_ctx()
@@ -608,11 +607,11 @@ where P: super::TypeCheckPolicy
             script,
         };
 
-        let resp = databend_common_base::runtime::block_on(
+        let resp = self.block_on(
             provider
                 .get_worker_client()
                 .create_worker(make_request(req, cfg)),
-        )?;
+        )??;
 
         let endpoint = resp.endpoint;
         if endpoint.is_empty() {
@@ -638,12 +637,10 @@ where P: super::TypeCheckPolicy
             .map(|location| location.trim_start_matches('@').to_string())
             .collect::<Vec<_>>();
 
-        let stage_locations = databend_common_base::runtime::block_on(resolve_stage_locations(
-            self.table_ctx_ref(),
-            &locations,
-        ))?;
+        let stage_locations =
+            self.block_on(resolve_stage_locations(self.table_ctx_ref(), &locations))??;
 
-        databend_common_base::runtime::block_on(async move {
+        self.block_on(async move {
             let mut results = Vec::with_capacity(stage_locations.len());
             for ((stage_info, path), location) in stage_locations.into_iter().zip(imports.iter()) {
                 let op = init_stage_operator(&stage_info).map_err(|err| {
@@ -690,7 +687,7 @@ where P: super::TypeCheckPolicy
             }
 
             Ok(results)
-        })
+        })?
     }
 
     fn build_udf_cloud_script(
@@ -781,7 +778,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        args: &CoreRuntimeCallArgs,
+        args: &CoreUdfCallArgs,
         udf_definition: UDFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let UDFScript {
@@ -798,7 +795,7 @@ where P: super::TypeCheckPolicy
 
         let language = language.parse()?;
         let use_cloud = matches!(language, UDFLanguage::Python)
-            && GlobalConfig::instance().query.common.enable_udf_sandbox;
+            && self.policy.global_config()?.query.common.enable_udf_sandbox;
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed(&language)?;
         } else {
@@ -815,8 +812,8 @@ where P: super::TypeCheckPolicy
         }
 
         if use_cloud {
-            let code_bytes =
-                databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?;
+            let handle = self.policy.async_runtime_handle()?;
+            let code_bytes = block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?;
             let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
                 ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
             })?;
@@ -856,16 +853,17 @@ where P: super::TypeCheckPolicy
             );
         }
 
-        let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
-            .into_boxed_slice();
+        let handle = self.policy.async_runtime_handle()?;
+        let code_blob =
+            block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
 
-        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+        let imports_stage_info = self.block_on(resolve_stage_locations(
             self.table_ctx_ref(),
             &imports
                 .iter()
                 .map(|s| s.trim_start_matches('@').to_string())
                 .collect::<Vec<String>>(),
-        ))?;
+        ))??;
 
         let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
@@ -903,7 +901,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         name: String,
-        args: &CoreRuntimeCallArgs,
+        args: &CoreUdfCallArgs,
         udf_definition: UDAFScript,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let UDAFScript {
@@ -917,15 +915,16 @@ where P: super::TypeCheckPolicy
             packages,
         } = udf_definition;
         let language = language.parse()?;
-        let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
-            .into_boxed_slice();
-        let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
+        let handle = self.policy.async_runtime_handle()?;
+        let code_blob =
+            block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
+        let imports_stage_info = self.block_on(resolve_stage_locations(
             self.table_ctx_ref(),
             &imports
                 .iter()
                 .map(|s| s.trim_start_matches('@').to_string())
                 .collect::<Vec<String>>(),
-        ))?;
+        ))??;
 
         let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
@@ -983,7 +982,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         func_name: String,
-        arguments: &CoreRuntimeCallArgs,
+        arguments: &CoreUdfCallArgs,
         udf_definition: LambdaUDF,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let parameters = udf_definition.parameters;
@@ -1028,7 +1027,7 @@ where P: super::TypeCheckPolicy
         arena: &CoreExprArena<'_>,
         span: Span,
         func_name: String,
-        arguments: &CoreRuntimeCallArgs,
+        arguments: &CoreUdfCallArgs,
         udf_definition: ScalarUDF,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let arg_types = udf_definition.arg_types;

@@ -35,6 +35,7 @@ use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
+use databend_common_sql::BasicTypeCheckPolicy;
 use databend_common_sql::ClusterKeyNormalizer;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::NameResolutionContext;
@@ -554,9 +555,10 @@ impl ReclusterTableInterpreter {
                 let settings = self.ctx.get_settings();
                 let (mut bind_context, metadata) = bind_table(tbl.clone())?;
                 let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-                let mut type_checker = TypeChecker::try_create(
+                let policy = BasicTypeCheckPolicy::scalar_with_columns(self.ctx.as_ref())?;
+                let mut type_checker = TypeChecker::try_create_with_policy(
                     &mut bind_context,
-                    self.ctx.clone(),
+                    policy,
                     &name_resolution_ctx,
                     metadata,
                     &[],

@@ -22,7 +22,6 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
-use databend_common_functions::aggregates::AggregateFunctionFactory;
 use unicase::Ascii;
 
 use super::TypeChecker;
@@ -261,7 +260,9 @@ where P: super::TypeCheckPolicy
             func_name.to_string()
         };
 
-        let agg_func = AggregateFunctionFactory::instance()
+        let agg_func = self
+            .policy
+            .aggregate_function_factory()
             .get(&func_name, params.clone(), arg_types, vec![])
             .map_err(|e| e.set_span(span))?;
 

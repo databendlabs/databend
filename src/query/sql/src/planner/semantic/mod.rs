@@ -42,6 +42,7 @@ pub use name_resolution::NameResolutionSuggest;
 pub use name_resolution::VariableNormalizer;
 pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
+pub use type_check::BasicTypeCheckPolicy;
 pub use type_check::CoreExprContextDependencies;
 pub use type_check::CoreExprContextPolicy;
 pub use type_check::FullTypeCheckPolicy;

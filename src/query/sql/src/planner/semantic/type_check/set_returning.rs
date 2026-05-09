@@ -15,16 +15,57 @@
 use databend_common_ast::Span;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionKind;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
 use crate::binder::ExprContext;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn set_returning_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::SetReturningFunction {
+            span,
+            func_name,
+            args,
+        })
+    }
+}
+
+pub(super) fn set_returning_function_name(func_name: &str) -> Option<&'static str> {
+    if !BUILTIN_FUNCTIONS
+        .get_property(func_name)
+        .map(|property| property.kind == FunctionKind::SRF)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
+    if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((name, _)) = functions.factories.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
+        return Some(alias.as_str());
+    }
+    None
+}
 
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy
