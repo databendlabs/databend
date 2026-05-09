@@ -134,8 +134,6 @@ pub trait ConstantComparisonAdapter {
     fn constant(scalar: Scalar) -> Result<Self::Value, String>;
 
     fn domain(domain: &Domain) -> Result<Self::Domain, String>;
-
-    fn compare(left: &Self::Value, right: &Self::Value) -> Ordering;
 }
 
 impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
@@ -328,10 +326,6 @@ mod tests {
         }
 
         fn domain(_domain: &Domain) -> Result<Self::Domain, String> {
-            unimplemented!()
-        }
-
-        fn compare(_left: &Self::Value, _right: &Self::Value) -> Ordering {
             unimplemented!()
         }
     }
