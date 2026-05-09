@@ -262,6 +262,24 @@ async fn test_type_check_literals_and_collections() -> Result<()> {
             setup_sqls: &[],
             sql: "(number, text, true)",
         },
+        SqlTestCase {
+            name: "array_index_access_binds",
+            description: "Array index access should preserve the existing get-function rewrite and nullable result type.",
+            setup_sqls: &[],
+            sql: "[10, 20, 30][1]",
+        },
+        SqlTestCase {
+            name: "map_key_access_binds",
+            description: "Map key access should preserve the existing get-function rewrite.",
+            setup_sqls: &[],
+            sql: "{'k1': 1, 'k2': delta}['k1']",
+        },
+        SqlTestCase {
+            name: "variant_colon_access_binds",
+            description: "Variant colon access should preserve the get_by_keypath rewrite.",
+            setup_sqls: &[],
+            sql: "to_variant({'k1': 1}):k1",
+        },
     ];
 
     run_type_check_cases("type_check_literals_collections.txt", &cases).await

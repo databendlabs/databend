@@ -47,3 +47,24 @@ status: ok
 scalar: tuple(number (#0), text (#1), true)
 type: Tuple(Int64 NULL, String NULL, Boolean)
 
+=== array_index_access_binds ===
+description: Array index access should preserve the existing get-function rewrite and nullable result type.
+sql: [10, 20, 30][1]
+status: ok
+scalar: get([10, 20, 30], 1)
+type: UInt8 NULL
+
+=== map_key_access_binds ===
+description: Map key access should preserve the existing get-function rewrite.
+sql: {'k1': 1, 'k2': delta}['k1']
+status: ok
+scalar: get(map(['k1', 'k2'], array(1, delta (#3))), 'k1')
+type: Int32 NULL
+
+=== variant_colon_access_binds ===
+description: Variant colon access should preserve the get_by_keypath rewrite.
+sql: to_variant({'k1': 1}):k1
+status: ok
+scalar: get_by_keypath('{"k1":1}', '{"k1"}')
+type: Variant NULL
+
