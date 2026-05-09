@@ -180,22 +180,7 @@ impl<'a> CoreExprArena<'a> {
         date_lhs: &'a Expr,
         function: DateArithmeticFunction,
     ) -> Result<CoreExprId> {
-        let func_name = match function {
-            DateArithmeticFunction::Diff => {
-                format!("diff_{}s", interval_kind.to_string().to_lowercase())
-            }
-            DateArithmeticFunction::Add => {
-                let interval_kind = interval_kind.to_string().to_lowercase();
-                if interval_kind == "month" {
-                    format!("date_add_{}s", interval_kind.to_string().to_lowercase())
-                } else {
-                    format!("add_{}s", interval_kind.to_string().to_lowercase())
-                }
-            }
-            DateArithmeticFunction::Between => {
-                format!("between_{}s", interval_kind.to_string().to_lowercase())
-            }
-        };
+        let func_name = date_arith_function(span, interval_kind, function)?;
         let date_lhs = self.lower_ast_expr(date_lhs)?;
         let date_rhs = self.lower_ast_expr(date_rhs)?;
         Ok(self.call(span, func_name, smallvec![date_lhs, date_rhs]))
@@ -208,12 +193,7 @@ impl<'a> CoreExprArena<'a> {
         interval: &'a Expr,
         date: &'a Expr,
     ) -> Result<CoreExprId> {
-        let interval_kind = interval_kind.to_string().to_lowercase();
-        let func_name = if interval_kind == "month" {
-            format!("date_add_{}s", interval_kind)
-        } else {
-            format!("add_{}s", interval_kind)
-        };
+        let func_name = date_sub_function(span, interval_kind)?;
         let date = self.lower_ast_expr(date)?;
         let interval = self.lower_ast_expr(interval)?;
         let interval = self.call(span, "minus", smallvec![interval]);
@@ -326,21 +306,128 @@ impl<'a> CoreExprArena<'a> {
         weekday: &ASTWeekday,
         function: AdjacentDayFunction,
     ) -> Result<CoreExprId> {
-        let prefix = match function {
-            AdjacentDayFunction::Previous => "to_previous_",
-            AdjacentDayFunction::Next => "to_next_",
-        };
-
-        let func_name = match weekday {
-            ASTWeekday::Monday => format!("{}monday", prefix),
-            ASTWeekday::Tuesday => format!("{}tuesday", prefix),
-            ASTWeekday::Wednesday => format!("{}wednesday", prefix),
-            ASTWeekday::Thursday => format!("{}thursday", prefix),
-            ASTWeekday::Friday => format!("{}friday", prefix),
-            ASTWeekday::Saturday => format!("{}saturday", prefix),
-            ASTWeekday::Sunday => format!("{}sunday", prefix),
-        };
+        let func_name = adjacent_day_function(weekday, function);
         let date = self.lower_ast_expr(date)?;
         Ok(self.call(span, func_name, smallvec![date]))
+    }
+}
+
+fn date_arith_function(
+    span: Span,
+    interval_kind: &ASTIntervalKind,
+    function: DateArithmeticFunction,
+) -> Result<&'static str> {
+    match function {
+        DateArithmeticFunction::Diff => date_diff_function(span, interval_kind),
+        DateArithmeticFunction::Add => date_sub_function(span, interval_kind),
+        DateArithmeticFunction::Between => date_between_function(span, interval_kind),
+    }
+}
+
+fn date_diff_function(span: Span, interval_kind: &ASTIntervalKind) -> Result<&'static str> {
+    Ok(match interval_kind {
+        ASTIntervalKind::ISOYear => "diff_isoyears",
+        ASTIntervalKind::Year => "diff_years",
+        ASTIntervalKind::Quarter => "diff_quarters",
+        ASTIntervalKind::Month => "diff_months",
+        ASTIntervalKind::Day => "diff_days",
+        ASTIntervalKind::Hour => "diff_hours",
+        ASTIntervalKind::Minute => "diff_minutes",
+        ASTIntervalKind::Second => "diff_seconds",
+        ASTIntervalKind::Doy => "diff_doys",
+        ASTIntervalKind::Week => "diff_weeks",
+        ASTIntervalKind::Dow => "diff_dows",
+        ASTIntervalKind::Epoch => "diff_epochs",
+        ASTIntervalKind::MicroSecond => "diff_microseconds",
+        ASTIntervalKind::ISODow => "diff_isodows",
+        ASTIntervalKind::YearWeek => "diff_yearweeks",
+        ASTIntervalKind::Millennium => "diff_millenniums",
+        ASTIntervalKind::ISOWeek | ASTIntervalKind::UnknownIntervalKind => {
+            return unsupported_date_interval(span, "date_diff", interval_kind);
+        }
+    })
+}
+
+fn date_between_function(span: Span, interval_kind: &ASTIntervalKind) -> Result<&'static str> {
+    Ok(match interval_kind {
+        ASTIntervalKind::ISOYear => "between_isoyears",
+        ASTIntervalKind::Year => "between_years",
+        ASTIntervalKind::Quarter => "between_quarters",
+        ASTIntervalKind::Month => "between_months",
+        ASTIntervalKind::Day => "between_days",
+        ASTIntervalKind::Hour => "between_hours",
+        ASTIntervalKind::Minute => "between_minutes",
+        ASTIntervalKind::Second => "between_seconds",
+        ASTIntervalKind::Doy => "between_doys",
+        ASTIntervalKind::Week => "between_weeks",
+        ASTIntervalKind::Dow => "between_dows",
+        ASTIntervalKind::Epoch => "between_epochs",
+        ASTIntervalKind::MicroSecond => "between_microseconds",
+        ASTIntervalKind::ISODow => "between_isodows",
+        ASTIntervalKind::YearWeek => "between_yearweeks",
+        ASTIntervalKind::Millennium => "between_millenniums",
+        ASTIntervalKind::ISOWeek | ASTIntervalKind::UnknownIntervalKind => {
+            return unsupported_date_interval(span, "date_between", interval_kind);
+        }
+    })
+}
+
+fn date_sub_function(span: Span, interval_kind: &ASTIntervalKind) -> Result<&'static str> {
+    Ok(match interval_kind {
+        ASTIntervalKind::Year => "add_years",
+        ASTIntervalKind::Quarter => "add_quarters",
+        ASTIntervalKind::Month => "date_add_months",
+        ASTIntervalKind::Day => "add_days",
+        ASTIntervalKind::Hour => "add_hours",
+        ASTIntervalKind::Minute => "add_minutes",
+        ASTIntervalKind::Second => "add_seconds",
+        ASTIntervalKind::Week => "add_weeks",
+        ASTIntervalKind::ISOYear
+        | ASTIntervalKind::Doy
+        | ASTIntervalKind::ISOWeek
+        | ASTIntervalKind::Dow
+        | ASTIntervalKind::Epoch
+        | ASTIntervalKind::MicroSecond
+        | ASTIntervalKind::ISODow
+        | ASTIntervalKind::YearWeek
+        | ASTIntervalKind::Millennium
+        | ASTIntervalKind::UnknownIntervalKind => {
+            return unsupported_date_interval(span, "date_add/date_sub", interval_kind);
+        }
+    })
+}
+
+fn unsupported_date_interval(
+    span: Span,
+    function_name: &str,
+    interval_kind: &ASTIntervalKind,
+) -> Result<&'static str> {
+    Err(ErrorCode::SemanticError(format!(
+        "Unsupported interval type {} for {}",
+        interval_kind, function_name
+    ))
+    .set_span(span))
+}
+
+fn adjacent_day_function(weekday: &ASTWeekday, function: AdjacentDayFunction) -> &'static str {
+    match function {
+        AdjacentDayFunction::Previous => match weekday {
+            ASTWeekday::Monday => "to_previous_monday",
+            ASTWeekday::Tuesday => "to_previous_tuesday",
+            ASTWeekday::Wednesday => "to_previous_wednesday",
+            ASTWeekday::Thursday => "to_previous_thursday",
+            ASTWeekday::Friday => "to_previous_friday",
+            ASTWeekday::Saturday => "to_previous_saturday",
+            ASTWeekday::Sunday => "to_previous_sunday",
+        },
+        AdjacentDayFunction::Next => match weekday {
+            ASTWeekday::Monday => "to_next_monday",
+            ASTWeekday::Tuesday => "to_next_tuesday",
+            ASTWeekday::Wednesday => "to_next_wednesday",
+            ASTWeekday::Thursday => "to_next_thursday",
+            ASTWeekday::Friday => "to_next_friday",
+            ASTWeekday::Saturday => "to_next_saturday",
+            ASTWeekday::Sunday => "to_next_sunday",
+        },
     }
 }

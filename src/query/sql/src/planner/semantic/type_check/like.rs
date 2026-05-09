@@ -26,6 +26,7 @@ use smallvec::smallvec;
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
+use super::core_expr::like_op_core_function;
 use crate::plans::ScalarExpr;
 
 impl<'a> TypeChecker<'a> {
@@ -97,7 +98,7 @@ impl<'a> TypeChecker<'a> {
         right: &Expr,
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let name = op.to_func_name();
+        let name = like_op_core_function(op).expect("LIKE operator should have a core function");
         let mut arena = self.core_expr_arena();
         let root = arena.lower_like_escape_expr(span, name, left, right, escape)?;
         self.resolve_core(&arena, root)
@@ -108,7 +109,7 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_like_escape_expr(
         &mut self,
         span: Span,
-        func_name: impl Into<String>,
+        func_name: &'static str,
         left: &'a Expr,
         right: &'a Expr,
         escape: &Option<String>,

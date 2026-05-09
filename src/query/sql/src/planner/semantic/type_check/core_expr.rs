@@ -111,7 +111,9 @@ impl<'a> CoreExprArena<'a> {
             } if can_lower_binary_op(op, right) => {
                 let left = self.lower_ast_expr(left)?;
                 let right = self.lower_ast_expr(right)?;
-                self.call(*span, op.to_func_name(), smallvec![left, right])
+                self.call(*span, binary_op_core_function(op).unwrap(), smallvec![
+                    left, right
+                ])
             }
             Expr::JsonOp {
                 span,
@@ -121,7 +123,7 @@ impl<'a> CoreExprArena<'a> {
             } => {
                 let left = self.lower_ast_expr(left)?;
                 let right = self.lower_ast_expr(right)?;
-                self.call(*span, op.to_func_name(), smallvec![left, right])
+                self.call(*span, json_op_core_function(op), smallvec![left, right])
             }
             expr @ Expr::UnaryOp {
                 span,
@@ -501,11 +503,8 @@ impl<'a> CoreExprArena<'a> {
             }
 
             if TypeChecker::can_lower_core_scalar_function(&func_name) {
-                let args = args
-                    .iter()
-                    .map(|arg| self.lower_ast_expr(arg))
-                    .collect::<Result<_>>()?;
-                return Ok(self.call(span, func_name, args));
+                let args = self.lower_expr_args(args)?;
+                return Ok(self.runtime_call(span, func_name, args));
             }
         }
 
@@ -528,8 +527,9 @@ impl<'a> CoreExprArena<'a> {
             return Ok(self.constant(span, value));
         }
 
-        let func_name = op.to_func_name();
-        if TypeChecker::can_lower_core_scalar_function(&func_name) {
+        if let Some(func_name) = unary_op_core_function(op)
+            && TypeChecker::can_lower_core_scalar_function(func_name)
+        {
             let child = self.lower_ast_expr(child)?;
             return Ok(self.call(span, func_name, smallvec![child]));
         }
@@ -540,7 +540,7 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_call_expr(
         &mut self,
         span: Span,
-        func_name: impl Into<String>,
+        func_name: &'static str,
         args: impl IntoIterator<Item = &'a Expr>,
     ) -> Result<CoreExprId> {
         let args = args
@@ -681,12 +681,25 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn call(
         &mut self,
         span: Span,
-        func_name: impl Into<String>,
+        func_name: &'static str,
         args: CoreExprArgs,
     ) -> CoreExprId {
         self.alloc(CoreExpr::Call {
             span,
-            func_name: func_name.into(),
+            func_name,
+            args,
+        })
+    }
+
+    pub(super) fn runtime_call(
+        &mut self,
+        span: Span,
+        func_name: String,
+        args: CoreExprArgs,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::RuntimeCall {
+            span,
+            func_name,
             args,
         })
     }
@@ -727,6 +740,11 @@ pub(super) enum CoreExpr<'a> {
         paths: VecDeque<(Span, Literal)>,
     },
     Call {
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+    },
+    RuntimeCall {
         span: Span,
         func_name: String,
         args: CoreExprArgs,
@@ -842,57 +860,12 @@ impl<'a> TypeChecker<'a> {
                 span,
                 func_name,
                 args,
-            } => {
-                if Self::all_sugar_functions().contains(&Ascii::new(func_name.as_str())) {
-                    return Err(ErrorCode::Internal(format!(
-                        "sugar function {} should not be represented as core call",
-                        func_name
-                    )));
-                }
-
-                let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
-                for arg in args {
-                    let box (scalar, _) = self.resolve_core(arena, *arg)?;
-                    scalars.push(scalar);
-                }
-
-                if self.should_try_rewrite_variant_function(func_name) {
-                    let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
-                    for scalar in &scalars {
-                        let mut data_type = scalar.data_type()?;
-                        if let ScalarExpr::SubqueryExpr(subquery) = scalar
-                            && subquery.typ == SubqueryType::Scalar
-                            && !data_type.is_nullable()
-                        {
-                            data_type = data_type.wrap_nullable();
-                        }
-                        arg_types.push(data_type);
-                    }
-                    if let Some(rewritten_variant_expr) =
-                        self.try_rewrite_variant_function(*span, func_name, &scalars, &arg_types)
-                    {
-                        return rewritten_variant_expr;
-                    }
-                }
-                if Self::is_vector_function(func_name) {
-                    if let Some(rewritten_vector_expr) =
-                        self.try_rewrite_vector_function(*span, func_name, &scalars)
-                    {
-                        return rewritten_vector_expr;
-                    }
-                }
-                let box (scalar, data_type) = self.resolve_scalar_function_call(
-                    *span,
-                    func_name,
-                    vec![],
-                    scalars.into_vec(),
-                )?;
-                if func_name == "eq" || func_name == "noteq" {
-                    self.rewrite_variant_compare_constant(scalar, data_type)
-                } else {
-                    Ok(Box::new((scalar, data_type)))
-                }
-            }
+            } => self.resolve_core_call(arena, *span, func_name, args),
+            CoreExpr::RuntimeCall {
+                span,
+                func_name,
+                args,
+            } => self.resolve_core_call(arena, *span, func_name, args),
             CoreExpr::Cast {
                 span,
                 is_try,
@@ -922,6 +895,59 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let (new_agg_func, data_type) = self.resolve_core_aggregate_call(arena, call, false)?;
         Ok(Box::new((new_agg_func.into(), data_type)))
+    }
+
+    fn resolve_core_call(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        args: &CoreExprArgs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
+            return Err(ErrorCode::Internal(format!(
+                "sugar function {} should not be represented as core call",
+                func_name
+            )));
+        }
+
+        let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
+        for arg in args {
+            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            scalars.push(scalar);
+        }
+
+        if self.should_try_rewrite_variant_function(func_name) {
+            let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
+            for scalar in &scalars {
+                let mut data_type = scalar.data_type()?;
+                if let ScalarExpr::SubqueryExpr(subquery) = scalar
+                    && subquery.typ == SubqueryType::Scalar
+                    && !data_type.is_nullable()
+                {
+                    data_type = data_type.wrap_nullable();
+                }
+                arg_types.push(data_type);
+            }
+            if let Some(rewritten_variant_expr) =
+                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+            {
+                return rewritten_variant_expr;
+            }
+        }
+        if Self::is_vector_function(func_name)
+            && let Some(rewritten_vector_expr) =
+                self.try_rewrite_vector_function(span, func_name, &scalars)
+        {
+            return rewritten_vector_expr;
+        }
+        let box (scalar, data_type) =
+            self.resolve_scalar_function_call(span, func_name, vec![], scalars.into_vec())?;
+        if func_name == "eq" || func_name == "noteq" {
+            self.rewrite_variant_compare_constant(scalar, data_type)
+        } else {
+            Ok(Box::new((scalar, data_type)))
+        }
     }
 
     fn resolve_core_window_function(
@@ -1171,7 +1197,93 @@ fn can_lower_binary_op(op: &BinaryOperator, right: &Expr) -> bool {
         return false;
     }
 
-    TypeChecker::can_lower_core_scalar_function(&op.to_func_name())
+    binary_op_core_function(op)
+        .map(TypeChecker::can_lower_core_scalar_function)
+        .unwrap_or(false)
+}
+
+pub(super) fn binary_op_core_function(op: &BinaryOperator) -> Option<&'static str> {
+    let func_name = match op {
+        BinaryOperator::Plus => "plus",
+        BinaryOperator::Minus => "minus",
+        BinaryOperator::Multiply => "multiply",
+        BinaryOperator::Div => "div",
+        BinaryOperator::Divide => "divide",
+        BinaryOperator::IntDiv => "intdiv",
+        BinaryOperator::Modulo => "modulo",
+        BinaryOperator::StringConcat => "concat",
+        BinaryOperator::Gt => "gt",
+        BinaryOperator::Lt => "lt",
+        BinaryOperator::Gte => "gte",
+        BinaryOperator::Lte => "lte",
+        BinaryOperator::Eq => "eq",
+        BinaryOperator::NotEq => "noteq",
+        BinaryOperator::Caret => "pow",
+        BinaryOperator::And => "and",
+        BinaryOperator::Or => "or",
+        BinaryOperator::Xor => "xor",
+        BinaryOperator::LikeAny(_) => "like_any",
+        BinaryOperator::Like(_) => "like",
+        BinaryOperator::Regexp => "regexp",
+        BinaryOperator::RLike => "rlike",
+        BinaryOperator::BitwiseOr => "bit_or",
+        BinaryOperator::BitwiseAnd => "bit_and",
+        BinaryOperator::BitwiseXor => "bit_xor",
+        BinaryOperator::BitwiseShiftLeft => "bit_shift_left",
+        BinaryOperator::BitwiseShiftRight => "bit_shift_right",
+        BinaryOperator::CosineDistance => "cosine_distance",
+        BinaryOperator::L1Distance => "l1_distance",
+        BinaryOperator::L2Distance => "l2_distance",
+        BinaryOperator::NotLike(_)
+        | BinaryOperator::NotRegexp
+        | BinaryOperator::NotRLike
+        | BinaryOperator::SoundsLike => return None,
+    };
+    Some(func_name)
+}
+
+pub(super) fn like_op_core_function(op: &BinaryOperator) -> Option<&'static str> {
+    match op {
+        BinaryOperator::Like(_) => Some("like"),
+        BinaryOperator::NotLike(_) => Some("notlike"),
+        BinaryOperator::LikeAny(_) => Some("like_any"),
+        BinaryOperator::Regexp => Some("regexp"),
+        BinaryOperator::RLike => Some("rlike"),
+        BinaryOperator::NotRegexp => Some("notregexp"),
+        BinaryOperator::NotRLike => Some("notrlike"),
+        _ => None,
+    }
+}
+
+fn json_op_core_function(op: &databend_common_ast::ast::JsonOperator) -> &'static str {
+    match op {
+        databend_common_ast::ast::JsonOperator::Arrow => "get",
+        databend_common_ast::ast::JsonOperator::LongArrow => "get_string",
+        databend_common_ast::ast::JsonOperator::HashArrow => "get_by_keypath",
+        databend_common_ast::ast::JsonOperator::HashLongArrow => "get_by_keypath_string",
+        databend_common_ast::ast::JsonOperator::Question => "json_exists_key",
+        databend_common_ast::ast::JsonOperator::QuestionOr => "json_exists_any_keys",
+        databend_common_ast::ast::JsonOperator::QuestionAnd => "json_exists_all_keys",
+        databend_common_ast::ast::JsonOperator::AtArrow => "json_contains_in_left",
+        databend_common_ast::ast::JsonOperator::ArrowAt => "json_contains_in_right",
+        databend_common_ast::ast::JsonOperator::AtQuestion => "json_path_exists",
+        databend_common_ast::ast::JsonOperator::AtAt => "json_path_match",
+        databend_common_ast::ast::JsonOperator::HashMinus => "delete_by_keypath",
+    }
+}
+
+pub(super) fn unary_op_core_function(op: &UnaryOperator) -> Option<&'static str> {
+    let func_name = match op {
+        UnaryOperator::Plus => return None,
+        UnaryOperator::Minus => "minus",
+        UnaryOperator::Not => "not",
+        UnaryOperator::Factorial => "factorial",
+        UnaryOperator::SquareRoot => "sqrt",
+        UnaryOperator::CubeRoot => "cbrt",
+        UnaryOperator::Abs => "abs",
+        UnaryOperator::BitwiseNot => "bit_not",
+    };
+    Some(func_name)
 }
 
 fn can_lower_date_trunc(kind: &ASTIntervalKind) -> bool {
@@ -1262,6 +1374,21 @@ mod tests {
         check(&arena, root);
     }
 
+    fn assert_sql_lower_error_contains(sql: &str, expected: &str) {
+        let tokens = tokenize_sql(sql).unwrap();
+        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let mut arena = CoreExprArena::new(0);
+        let err = match arena.lower_ast_expr(&expr) {
+            Ok(_) => panic!("expected lower to fail for `{sql}`"),
+            Err(err) => err,
+        };
+        assert!(
+            err.message().contains(expected),
+            "expected error to contain `{expected}`, got `{}`",
+            err.message()
+        );
+    }
+
     #[test]
     fn lowers_collection_exprs_without_legacy_ast() {
         assert_sql_lowers_to("[1, 2, 3]", |arena, root| {
@@ -1315,5 +1442,41 @@ mod tests {
             };
             assert!(matches!(arena.get(*expr), CoreExpr::Literal { .. }));
         });
+    }
+
+    #[test]
+    fn splits_static_and_runtime_function_names() {
+        assert_sql_lowers_to("1 + 2", |arena, root| {
+            let CoreExpr::Call { func_name, .. } = arena.get(root) else {
+                panic!("operator lower should use static CoreExpr::Call");
+            };
+            assert_eq!(*func_name, "plus");
+        });
+
+        assert_sql_lowers_to("ABS(1)", |arena, root| {
+            let CoreExpr::RuntimeCall { func_name, .. } = arena.get(root) else {
+                panic!("AST function lower should keep the runtime function path");
+            };
+            assert_eq!(func_name, "abs");
+        });
+
+        assert_sql_lowers_to("date_add(day, 1, date)", |arena, root| {
+            let CoreExpr::Call { func_name, .. } = arena.get(root) else {
+                panic!("date lower should use static CoreExpr::Call");
+            };
+            assert_eq!(*func_name, "add_days");
+        });
+    }
+
+    #[test]
+    fn rejects_unsupported_date_interval_before_function_resolution() {
+        assert_sql_lower_error_contains(
+            "date_diff(isoweek, date, date)",
+            "Unsupported interval type ISOWEEK for date_diff",
+        );
+        assert_sql_lower_error_contains(
+            "date_add(microsecond, 1, date)",
+            "Unsupported interval type MICROSECOND for date_add/date_sub",
+        );
     }
 }

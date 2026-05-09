@@ -1339,12 +1339,7 @@ impl<'a> TypeChecker<'a> {
                 let (right, _) =
                     *self.resolve_scalar_function_call(span, "soundex", vec![], vec![right])?;
 
-                self.resolve_scalar_function_call(
-                    span,
-                    &BinaryOperator::Eq.to_func_name(),
-                    vec![],
-                    vec![left, right],
-                )
+                self.resolve_scalar_function_call(span, "eq", vec![], vec![left, right])
             }
             BinaryOperator::Like(escape) => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
@@ -1361,13 +1356,15 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_like_escape(op, span, left, right, escape)
             }
             BinaryOperator::Eq | BinaryOperator::NotEq => {
-                let name = op.to_func_name();
                 let mut arena = self.core_expr_arena();
-                let root = arena.lower_call_expr(span, name, [left, right])?;
+                let root = arena.lower_call_expr(
+                    span,
+                    core_expr::binary_op_core_function(op).unwrap(),
+                    [left, right],
+                )?;
                 self.resolve_core(&arena, root)
             }
             BinaryOperator::Plus | BinaryOperator::Minus => {
-                let name = op.to_func_name();
                 let (mut left_expr, left_type) = *self.resolve(left)?;
                 let (mut right_expr, right_type) = *self.resolve(right)?;
                 self.adjust_date_interval_operands(
@@ -1377,14 +1374,20 @@ impl<'a> TypeChecker<'a> {
                     &mut right_expr,
                     &right_type,
                 )?;
-                self.resolve_scalar_function_call(span, name.as_str(), vec![], vec![
-                    left_expr, right_expr,
-                ])
+                self.resolve_scalar_function_call(
+                    span,
+                    core_expr::binary_op_core_function(op).unwrap(),
+                    vec![],
+                    vec![left_expr, right_expr],
+                )
             }
             other => {
-                let name = other.to_func_name();
                 let mut arena = self.core_expr_arena();
-                let root = arena.lower_call_expr(span, name, [left, right])?;
+                let root = arena.lower_call_expr(
+                    span,
+                    core_expr::binary_op_core_function(other).unwrap(),
+                    [left, right],
+                )?;
                 self.resolve_core(&arena, root)
             }
         }
@@ -1408,15 +1411,21 @@ impl<'a> TypeChecker<'a> {
                     let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
                     return Ok(Box::new((scalar_expr, data_type)));
                 }
-                let name = op.to_func_name();
                 let mut arena = self.core_expr_arena();
-                let root = arena.lower_call_expr(span, name, [child])?;
+                let root = arena.lower_call_expr(
+                    span,
+                    core_expr::unary_op_core_function(op).unwrap(),
+                    [child],
+                )?;
                 self.resolve_core(&arena, root)
             }
             other => {
-                let name = other.to_func_name();
                 let mut arena = self.core_expr_arena();
-                let root = arena.lower_call_expr(span, name, [child])?;
+                let root = arena.lower_call_expr(
+                    span,
+                    core_expr::unary_op_core_function(other).unwrap(),
+                    [child],
+                )?;
                 self.resolve_core(&arena, root)
             }
         }
