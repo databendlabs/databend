@@ -205,6 +205,11 @@ impl NumDesc {
                         return Err("\"0\" must be ahead of \"PR\"");
                     }
 
+                    if self.flag.contains(NumFlag::Multi) {
+                        self.multi += 1;
+                        return Ok(());
+                    }
+
                     if !self.flag.intersects(NumFlag::Zero | NumFlag::Decimal) {
                         self.flag.insert(NumFlag::Zero);
                         self.zero_start = self.pre + 1;
@@ -415,20 +420,30 @@ impl NumDesc {
         if self.flag.contains(NumFlag::Multi) {
             // V shifts the number by `multi` decimal places (multiply by 10^multi).
             // Total output width = pre + multi digits.
+            let total_width = self.pre + self.multi;
             let abs_val = if value == i64::MIN {
                 -(i64::MIN as i128)
             } else {
                 value.unsigned_abs() as i128
             };
-            let multiplier = 10i128.pow(self.multi as u32);
-            let orgnum = format!("{}", abs_val * multiplier);
-            let numstr_pre_len = orgnum.len();
-            let total_width = self.pre + self.multi;
+            let result = 10i128
+                .checked_pow(self.multi as u32)
+                .and_then(|m| abs_val.checked_mul(m));
 
-            let (number, out_pre_spaces) = match numstr_pre_len.cmp(&total_width) {
-                std::cmp::Ordering::Less => (orgnum, total_width - numstr_pre_len),
-                std::cmp::Ordering::Greater => ("#".repeat(total_width), 0),
-                std::cmp::Ordering::Equal => (orgnum, 0),
+            let (number, out_pre_spaces) = match result {
+                Some(shifted) => {
+                    let orgnum = format!("{}", shifted);
+                    let numstr_pre_len = orgnum.len();
+                    match numstr_pre_len.cmp(&total_width) {
+                        std::cmp::Ordering::Less => (orgnum, total_width - numstr_pre_len),
+                        std::cmp::Ordering::Greater => ("#".repeat(total_width), 0),
+                        std::cmp::Ordering::Equal => (orgnum, 0),
+                    }
+                }
+                None => {
+                    // Overflow: display as hashes
+                    ("#".repeat(total_width), 0)
+                }
             };
 
             return Ok(NumPart {
@@ -517,7 +532,7 @@ impl NumDesc {
             // then rounds to the nearest integer.
             // Total output width = pre + multi digits.
             let multiplier = 10f64.powi(self.multi as i32);
-            let shifted = (value.abs() * multiplier).round();
+            let shifted = (value.abs() * multiplier).round_ties_even();
             let orgnum = format!("{:.0}", shifted);
             let numstr_pre_len = orgnum.len();
             let total_width = self.pre + self.multi;
@@ -910,23 +925,6 @@ impl FmtCacheEntry {
     }
 }
 
-/// Returns the ordinal suffix for a number: "st", "nd", "rd", or "th".
-/// Follows PostgreSQL rules: teens (11-19) always get "th";
-/// otherwise 1 => "st", 2 => "nd", 3 => "rd", everything else => "th".
-fn ordinal_suffix(value: i64) -> &'static str {
-    let abs = value.unsigned_abs();
-    let last_two = (abs % 100) as u8;
-    if (11..=13).contains(&last_two) {
-        return "th";
-    }
-    match last_two % 10 {
-        1 => "st",
-        2 => "nd",
-        3 => "rd",
-        _ => "th",
-    }
-}
-
 fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Result<String> {
     let NumPart {
         sign,
@@ -1111,7 +1109,32 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
                 NumPoz::TkFM => (),
                 NumPoz::TkV => (),
                 NumPoz::TkTH | NumPoz::Tkth => {
-                    // Ordinal suffix is appended at end of processing
+                    // Extract last two digits from internal number to determine suffix.
+                    // Use only digits before any decimal point.
+                    let int_part: &[char] = match np.number.iter().position(|c| *c == '.') {
+                        Some(dot) => &np.number[..dot],
+                        None => &np.number,
+                    };
+                    let last_two: u64 = {
+                        let len = int_part.len();
+                        let start = if len > 2 { len - 2 } else { 0 };
+                        int_part[start..]
+                            .iter()
+                            .filter(|c| c.is_ascii_digit())
+                            .fold(0u64, |acc, c| acc * 10 + (*c as u64 - '0' as u64))
+                    };
+                    let suffix = match last_two % 100 {
+                        11..=13 => "th",
+                        n if n % 10 == 1 => "st",
+                        n if n % 10 == 2 => "nd",
+                        n if n % 10 == 3 => "rd",
+                        _ => "th",
+                    };
+                    if matches!(key.id, NumPoz::TkTH) {
+                        np.inout.push_str(&suffix.to_uppercase());
+                    } else {
+                        np.inout.push_str(suffix);
+                    }
                 }
                 _ => unimplemented!(),
             },
@@ -1123,33 +1146,6 @@ fn num_processor(nodes: &[FormatNode], desc: NumDesc, num_part: NumPart) -> Resu
             }
             FormatNode::Space => np.inout.push(' '),
             _ => unimplemented!(),
-        }
-    }
-
-    // Append ordinal suffix (TH/th) if requested
-    if np
-        .desc
-        .flag
-        .intersects(NumFlag::ThUpper | NumFlag::ThLower)
-    {
-        // Extract the last contiguous run of digits from the formatted output
-        // to determine which ordinal suffix to use.
-        let trailing_digits: String = np
-            .inout
-            .chars()
-            .rev()
-            .take_while(|c| c.is_ascii_digit())
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect();
-
-        let last_num = trailing_digits.parse::<i64>().unwrap_or(0);
-        let suffix = ordinal_suffix(last_num);
-        if np.desc.flag.contains(NumFlag::ThUpper) {
-            np.inout.push_str(&suffix.to_uppercase());
-        } else {
-            np.inout.push_str(suffix);
         }
     }
 
@@ -1324,6 +1320,14 @@ mod tests {
         assert_eq!("-1st", i64_to_char(-1, "9th")?);
         assert_eq!(" -12th", i64_to_char(-12, "999th")?);
 
+        // ordinal with trailing literal (suffix must appear before literal)
+        assert_eq!(" 1ST!", i64_to_char(1, "9TH\"!\"")?);
+        assert_eq!(" 3RD!", i64_to_char(3, "9TH\"!\"")?);
+
+        // ordinal with sign suffix
+        assert_eq!("1st ", i64_to_char(1, "9thMI")?);
+        assert_eq!("1st-", i64_to_char(-1, "9thMI")?);
+
         // V (shift/multiply by 10^n)
         assert_eq!(" 12000", i64_to_char(12, "99V999")?);
         assert_eq!("-12000", i64_to_char(-12, "99V999")?);
@@ -1390,7 +1394,10 @@ mod tests {
 
         assert_eq!(" 12000", f64_to_char(12.0, "99V999")?);
         assert_eq!(" 12400", f64_to_char(12.4, "99V999")?);
-        assert_eq!(" 125", f64_to_char(12.45, "99V9")?);
+        // 12.45 * 10 = 124.5, ties-to-even rounds to 124
+        assert_eq!(" 124", f64_to_char(12.45, "99V9")?);
+        // 12.55 * 10 = 125.5, ties-to-even rounds to 126
+        assert_eq!(" 126", f64_to_char(12.55, "99V9")?);
 
         Ok(())
     }
