@@ -3,7 +3,7 @@ description: Unary minus on a literal should become a negative literal before sc
 sql: -1
 status: ok
 scalar: -1
-type: Decimal(76, 0)
+type: Int8
 
 === minus_non_literal_remains_scalar_operator ===
 description: Unary minus on a non-literal should still resolve through the scalar operator path.
