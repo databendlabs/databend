@@ -472,15 +472,22 @@ fn init_obs_operator(cfg: &StorageObsConfig) -> Result<impl Builder> {
 
 /// init_oss_operator will init an opendal OSS operator with input oss config.
 fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
-    let builder = services::Oss::default()
+    let mut builder = services::Oss::default()
         .endpoint(&cfg.endpoint_url)
         .presign_endpoint(&cfg.presign_endpoint_url)
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
         .root(&cfg.root)
+        .role_arn(&cfg.role_arn)
         .server_side_encryption(&cfg.server_side_encryption)
         .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
+
+    // When role_arn is set, we should not force anonymous access so that
+    // the credential chain can assume the role.
+    if cfg.role_arn.is_empty() && cfg.access_key_id.is_empty() && cfg.access_key_secret.is_empty() {
+        builder = builder.allow_anonymous();
+    }
 
     Ok(builder)
 }

@@ -238,6 +238,7 @@ impl FromToProto for StorageOssConfig {
 
             access_key_id: p.access_key_id,
             access_key_secret: p.access_key_secret,
+            role_arn: p.role_arn,
             server_side_encryption: p.server_side_encryption,
             server_side_encryption_key_id: p.server_side_encryption_key_id,
             network_config: p.network_config.from_pb_opt()?,
@@ -253,6 +254,7 @@ impl FromToProto for StorageOssConfig {
             root: self.root.clone(),
             access_key_id: self.access_key_id.clone(),
             access_key_secret: self.access_key_secret.clone(),
+            role_arn: self.role_arn.clone(),
             server_side_encryption: self.server_side_encryption.clone(),
             server_side_encryption_key_id: self.server_side_encryption_key_id.clone(),
             network_config: self.network_config.to_pb_opt()?,
