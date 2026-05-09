@@ -1,0 +1,49 @@
+[test-groups]
+skip-memcheck = {max-threads = 1}
+
+# TODO: Investigate the failures and unmask these tests or add explainatiaon
+#       on why it is skipped.
+[[profile.memcheck.overrides]]
+filter = "test(txn::backoff::tests::test_backoff)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(grpc_semaphore::)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(test_schema_api::)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(test_auto_increment_api::test_auto_increment_api_single_node)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(http_service::)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(metrics::test_metrics)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(features::test_features)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(grpc_cache::)"
+test-group = "skip-memcheck"
+
+[[profile.memcheck.overrides]]
+filter = "test(transfer_leader::test_transfer_leader)"
+test-group = "skip-memcheck"
+
+[profile.memcheck]
+# group is not allowed in default-filter, workaround is
+# use `cargo nextest -E "not group(skip-memcheck)"`
+#default-filter = "not group(skip-memcheck)"
+
+# valgrind could be very slow, be patient
+slow-timeout = "5m"
+

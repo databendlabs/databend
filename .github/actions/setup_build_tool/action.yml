@@ -90,9 +90,9 @@ runs:
 
         cat <<EOF >>$BIN_LOCAL/build-tool
         if [[ \${script_name} == "build-tool" ]]; then
-          scripts/setup/run_build_tool.sh \$@
+          scripts/setup/run_build_tool.sh "\$@"
         else
-          scripts/setup/run_build_tool.sh \${script_name} \$@
+          scripts/setup/run_build_tool.sh \${script_name} "\$@"
         fi
         EOF
 
