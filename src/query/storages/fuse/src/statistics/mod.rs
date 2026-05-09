@@ -32,6 +32,8 @@ pub use column_statistic::Trim;
 pub use column_statistic::calc_column_distinct_of_values;
 pub use column_statistic::gen_columns_statistics;
 pub use column_statistic::scalar_min_max;
+pub use column_statistic::trim_string_max_with_len;
+pub use column_statistic::trim_string_min_with_len;
 pub use reducers::merge_statistics;
 pub use reducers::reduce_block_metas;
 pub use reducers::reduce_block_statistics;

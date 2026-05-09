@@ -1,4 +1,7 @@
 statement ok
+set max_threads = 1;
+
+statement ok
 CREATE OR REPLACE TABLE table1 (
     value INT
 );
@@ -26,7 +29,7 @@ CREATE OR REPLACE TABLE table3 (
 );
 
 statement ok
-INSERT INTO table3 (value) SELECT number from numbers(2000);
+INSERT INTO table3 (value) SELECT number from numbers(2001);
 
 statement ok
 INSERT INTO table3 (value) SELECT NULL FROM numbers(2000);
@@ -90,7 +93,7 @@ Exchange
     ├── filters: []
     ├── build join filters:
     │   └── filter id:1, build key:table3.value (#2), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
-    ├── estimated rows: 200.00
+    ├── estimated rows: 500.00
     ├── Exchange(Build)
     │   ├── output columns: [table3.value (#2), table2.value (#1)]
     │   ├── exchange type: Broadcast
@@ -122,14 +125,14 @@ Exchange
     │           ├── table: default.default.table3
     │           ├── scan id: 2
     │           ├── output columns: [value (#2)]
-    │           ├── read rows: 2000
+    │           ├── read rows: 2001
     │           ├── read size: 3.95 KiB
     │           ├── partitions total: 6
     │           ├── partitions scanned: 3
     │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
     │           ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
     │           ├── apply join filters: [#0]
-    │           └── estimated rows: 2000.00
+    │           └── estimated rows: 2001.00
     └── TableScan(Probe)
         ├── table: default.default.table1
         ├── scan id: 0

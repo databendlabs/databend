@@ -39,10 +39,11 @@ use crate::FunctionDomain;
 use crate::Scalar;
 use crate::VectorizedFn0;
 use crate::function_stat::DeriveStat;
-use crate::function_stat::ReturnStat;
-use crate::function_stat::StatBinaryArg;
-use crate::function_stat::StatUnaryArg;
 use crate::property::Domain;
+use crate::stat_distribution::ReturnStat;
+use crate::stat_distribution::StatBinaryArg;
+use crate::stat_distribution::StatCardinality;
+use crate::stat_distribution::StatUnaryArg;
 use crate::types::AccessType;
 use crate::types::AnyType;
 use crate::types::ArgType;
@@ -365,7 +366,7 @@ impl<O: ReturnType, B: ScalarFunctionCollect> TypedNullaryFunctionBuilder<O, B> 
 
     pub fn derive_stat(
         mut self,
-        func: fn(cardinality: f64, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>,
+        func: fn(StatCardinality, ctx: &FunctionContext) -> Result<Option<ReturnStat>, String>,
     ) -> Self {
         self.derive_stat = Some(DeriveStat::Nullary(func));
         self

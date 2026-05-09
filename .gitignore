@@ -55,7 +55,7 @@ test/
 tests/longrun/_*.csv
 tests/longrun/**/_*.csv
 tests/sqllogictests/data/*
-tests/nox/cache/*
+tests/nox/cache/
 
 # fuzz
 hfuzz_target/

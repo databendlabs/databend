@@ -1055,6 +1055,7 @@ pub struct ColumnDefinition {
     pub expr: Option<ColumnExpr>,
     pub check: Option<Expr>,
     pub comment: Option<String>,
+    pub stats_truncate_len: Option<u64>,
 }
 
 impl Display for ColumnDefinition {
@@ -1068,6 +1069,9 @@ impl Display for ColumnDefinition {
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT {}", QuotedString(comment, '\''))?;
+        }
+        if let Some(len) = self.stats_truncate_len {
+            write!(f, " STATS_TRUNCATE_LEN {len}")?;
         }
         Ok(())
     }

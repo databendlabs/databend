@@ -57,6 +57,7 @@ pub struct CreateTablePlan {
     pub table_properties: Option<TableOptions>,
     pub table_partition: Option<Vec<String>>,
     pub field_comments: Vec<String>,
+    pub field_stats_truncate_len: Vec<Option<u64>>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
     pub table_indexes: Option<BTreeMap<String, TableIndex>>,

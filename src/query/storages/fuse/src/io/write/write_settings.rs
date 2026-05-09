@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
+use databend_common_expression::ColumnId;
 use databend_common_io::constants::DEFAULT_BLOCK_PER_SEGMENT;
 use databend_storages_common_index::BloomIndexType;
 use databend_storages_common_table_meta::table::TableCompression;
@@ -33,6 +36,7 @@ pub struct WriteSettings {
     pub enable_parquet_dictionary: bool,
     pub data_page_rows: Option<usize>,
     pub data_page_bytes: Option<usize>,
+    pub col_stats_truncate_lens: BTreeMap<ColumnId, usize>,
 }
 
 impl Default for WriteSettings {
@@ -46,6 +50,7 @@ impl Default for WriteSettings {
             enable_parquet_dictionary: false,
             data_page_rows: None,
             data_page_bytes: None,
+            col_stats_truncate_lens: BTreeMap::new(),
         }
     }
 }

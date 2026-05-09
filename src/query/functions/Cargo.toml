@@ -19,6 +19,7 @@ databend-common-exception = { workspace = true }
 databend-common-expression = { workspace = true }
 databend-common-hashtable = { workspace = true }
 databend-common-io = { workspace = true }
+databend-common-statistics = { workspace = true }
 databend-common-vector = { workspace = true }
 databend-functions-scalar-arithmetic = { workspace = true }
 databend-functions-scalar-datetime = { workspace = true }

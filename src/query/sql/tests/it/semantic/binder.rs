@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 
@@ -519,7 +520,7 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
         },
         SqlTestCase {
             name: "group_by_prefers_select_alias_over_same_name_base_column",
-            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.",
+            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
             sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
         },
@@ -622,6 +623,59 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
     ];
 
     run_binder_cases("binder_grouping.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_enable_group_by_column_first_setting() -> Result<()> {
+    let case = SqlTestCase {
+        name: "group_by_column_first_disabled_prefers_alias",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "0".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [1 AS"),
+        "GROUP BY should bind the SELECT alias when enable_group_by_column_first=0:\n{plan}"
+    );
+
+    let case = SqlTestCase {
+        name: "enable_group_by_column_first_setting_prefers_column",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "1".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [t.i (#0) AS (#0)]"),
+        "GROUP BY should bind the input column when enable_group_by_column_first=1:\n{plan}"
+    );
+
+    let case = SqlTestCase {
+        name: "group_by_column_first_enabled_keeps_alias_fallback",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT i % 2 AS k, sum(i) FROM t GROUP BY k",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "1".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [modulo(t.i (#0), 2) AS"),
+        "GROUP BY should still bind non-conflicting aliases when enable_group_by_column_first=1:\n{plan}"
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
