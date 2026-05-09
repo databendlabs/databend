@@ -60,6 +60,7 @@ pub(super) struct CoreExprId {
 pub(super) type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
 pub(super) type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
 pub(super) type CoreFunctionParams = SmallVec<[(String, CoreExprId); 4]>;
+pub(super) type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
 pub(super) type AstExprArgs<'a> = SmallVec<[&'a Expr; 4]>;
 pub(super) type SugarFunctionArgs<'a> = AstExprArgs<'a>;
 
@@ -258,11 +259,11 @@ impl<'a> CoreExprArena<'a> {
                     SmallVec::new(),
                     SmallVec::new(),
                     true,
-                    &[],
+                    SmallVec::new(),
                 );
                 if let Some(window) = window.as_ref() {
                     self.window_function(CoreWindowFunction::Aggregate {
-                        call,
+                        call: Box::new(call),
                         window: CoreAggregateWindow::CountAll(window),
                     })
                 } else {
@@ -307,8 +308,8 @@ impl<'a> CoreExprArena<'a> {
         params: CoreFunctionParams,
         args: CoreExprArgs,
         remove_count_args: bool,
-        order_by: &'a [OrderByExpr],
-    ) -> CoreAggregateCall<'a> {
+        order_by: CoreOrderByExprs,
+    ) -> CoreAggregateCall {
         CoreAggregateCall {
             display_name,
             span,
@@ -321,7 +322,7 @@ impl<'a> CoreExprArena<'a> {
         }
     }
 
-    fn aggregate_function(&mut self, call: CoreAggregateCall<'a>) -> CoreExprId {
+    fn aggregate_function(&mut self, call: CoreAggregateCall) -> CoreExprId {
         self.alloc(CoreExpr::AggregateFunction { call })
     }
 
@@ -362,6 +363,25 @@ impl<'a> CoreExprArena<'a> {
         params
             .iter()
             .map(|param| Ok((format!("{:#}", param), self.lower_ast_expr(param)?)))
+            .collect()
+    }
+
+    fn lower_order_by_exprs(&mut self, order_by: &'a [OrderByExpr]) -> Result<CoreOrderByExprs> {
+        order_by
+            .iter()
+            .map(
+                |OrderByExpr {
+                     expr,
+                     asc,
+                     nulls_first,
+                 }| {
+                    Ok(CoreOrderByExpr {
+                        expr: self.lower_ast_expr(expr)?,
+                        asc: *asc,
+                        nulls_first: *nulls_first,
+                    })
+                },
+            )
             .collect()
     }
 
@@ -445,6 +465,7 @@ impl<'a> CoreExprArena<'a> {
             let remove_count_args = can_remove_count_args(&func_name, *distinct, args);
             let params = self.lower_function_params(params)?;
             let args = self.lower_expr_args(args)?;
+            let order_by = self.lower_order_by_exprs(order_by)?;
             let call = self.aggregate_call(
                 format!("{:#}", original_expr),
                 span,
@@ -457,7 +478,7 @@ impl<'a> CoreExprArena<'a> {
             );
             return Ok(if let Some(window) = window.as_ref() {
                 self.window_function(CoreWindowFunction::Aggregate {
-                    call,
+                    call: Box::new(call),
                     window: CoreAggregateWindow::Function(window),
                 })
             } else {
@@ -722,7 +743,7 @@ pub(super) enum CoreExpr<'a> {
         args: AstExprArgs<'a>,
     },
     AggregateFunction {
-        call: CoreAggregateCall<'a>,
+        call: CoreAggregateCall,
     },
     WindowFunction {
         function: CoreWindowFunction<'a>,
@@ -733,7 +754,7 @@ pub(super) enum CoreExpr<'a> {
     },
 }
 
-pub(super) struct CoreAggregateCall<'a> {
+pub(super) struct CoreAggregateCall {
     display_name: String,
     span: Span,
     func_name: String,
@@ -741,7 +762,13 @@ pub(super) struct CoreAggregateCall<'a> {
     params: CoreFunctionParams,
     args: CoreExprArgs,
     remove_count_args: bool,
-    order_by: &'a [OrderByExpr],
+    order_by: CoreOrderByExprs,
+}
+
+pub(super) struct CoreOrderByExpr {
+    expr: CoreExprId,
+    asc: Option<bool>,
+    nulls_first: Option<bool>,
 }
 
 #[derive(Clone, Copy)]
@@ -752,7 +779,7 @@ pub(super) enum CoreAggregateWindow<'a> {
 
 pub(super) enum CoreWindowFunction<'a> {
     Aggregate {
-        call: CoreAggregateCall<'a>,
+        call: Box<CoreAggregateCall>,
         window: CoreAggregateWindow<'a>,
     },
     General {
@@ -891,7 +918,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_core_aggregate_function(
         &mut self,
         arena: &CoreExprArena<'_>,
-        call: &CoreAggregateCall<'_>,
+        call: &CoreAggregateCall,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let (new_agg_func, data_type) = self.resolve_core_aggregate_call(arena, call, false)?;
         Ok(Box::new((new_agg_func.into(), data_type)))
@@ -959,7 +986,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_core_aggregate_call(
         &mut self,
         arena: &CoreExprArena<'_>,
-        call: &CoreAggregateCall<'_>,
+        call: &CoreAggregateCall,
         in_window_call: bool,
     ) -> Result<(crate::plans::AggregateFunction, DataType)> {
         if !call.order_by.is_empty()
@@ -984,7 +1011,7 @@ impl<'a> TypeChecker<'a> {
     fn resolve_core_aggregate_call_inner(
         &mut self,
         arena: &CoreExprArena<'_>,
-        call: &CoreAggregateCall<'_>,
+        call: &CoreAggregateCall,
         new_params: Vec<Scalar>,
     ) -> Result<(crate::plans::AggregateFunction, DataType)> {
         if matches!(
@@ -1032,29 +1059,23 @@ impl<'a> TypeChecker<'a> {
         let sort_descs = call
             .order_by
             .iter()
-            .map(
-                |OrderByExpr {
-                     expr,
-                     asc,
-                     nulls_first,
-                 }| {
-                    if disallow_alias_resolution {
-                        self.bind_context.expr_context = ExprContext::InAggregateFunction;
-                    }
-                    let result = self.resolve(expr);
-                    if disallow_alias_resolution {
-                        self.bind_context.expr_context = original_context;
-                    }
-                    let box (scalar_expr, _) = result?;
+            .map(|order_by| {
+                if disallow_alias_resolution {
+                    self.bind_context.expr_context = ExprContext::InAggregateFunction;
+                }
+                let result = self.resolve_core(arena, order_by.expr);
+                if disallow_alias_resolution {
+                    self.bind_context.expr_context = original_context;
+                }
+                let box (scalar_expr, _) = result?;
 
-                    Ok(AggregateFunctionScalarSortDesc {
-                        expr: scalar_expr,
-                        is_reuse_index: false,
-                        nulls_first: nulls_first.unwrap_or(false),
-                        asc: asc.unwrap_or(true),
-                    })
-                },
-            )
+                Ok(AggregateFunctionScalarSortDesc {
+                    expr: scalar_expr,
+                    is_reuse_index: false,
+                    nulls_first: order_by.nulls_first.unwrap_or(false),
+                    asc: order_by.asc.unwrap_or(true),
+                })
+            })
             .collect::<Result<Vec<_>>>()?;
 
         self.resolve_aggregate_function(
