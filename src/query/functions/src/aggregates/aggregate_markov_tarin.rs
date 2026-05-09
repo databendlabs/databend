@@ -177,15 +177,29 @@ impl AggregateFunction for MarkovTarin {
         read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
-        let mut model;
-        let model = if read_only {
-            model = place.get::<MarkovModel>().clone();
-            &mut model
+        if read_only {
+            let mut model = place.get::<MarkovModel>().clone();
+            model.finalize(&self.params);
+            self.append_model_result(&model, builder)
         } else {
-            place.get::<MarkovModel>()
-        };
-        model.finalize(&self.params);
+            let model = place.get::<MarkovModel>();
+            model.finalize(&self.params);
+            self.append_model_result(model, builder)
+        }
+    }
 
+    fn need_manual_drop_state(&self) -> bool {
+        true
+    }
+
+    unsafe fn drop_state(&self, place: AggrState) {
+        let state = place.get::<MarkovModel>();
+        unsafe { std::ptr::drop_in_place(state) };
+    }
+}
+
+impl MarkovTarin {
+    fn append_model_result(&self, model: &MarkovModel, builder: &mut ColumnBuilder) -> Result<()> {
         let ColumnBuilder::Array(box array_builder) = builder else {
             unreachable!()
         };
@@ -212,15 +226,6 @@ impl AggregateFunction for MarkovTarin {
         }
         array_builder.commit_row();
         Ok(())
-    }
-
-    fn need_manual_drop_state(&self) -> bool {
-        true
-    }
-
-    unsafe fn drop_state(&self, place: AggrState) {
-        let state = place.get::<MarkovModel>();
-        unsafe { std::ptr::drop_in_place(state) };
     }
 }
 
