@@ -18,6 +18,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
@@ -36,6 +37,7 @@ use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_functions::is_builtin_function;
 use smallvec::SmallVec;
 use smallvec::smallvec;
 use unicase::Ascii;
@@ -47,6 +49,7 @@ use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
 use crate::binder::ExprContext;
+use crate::planner::semantic::normalize_identifier;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryType;
@@ -500,9 +503,13 @@ impl<'a> CoreExprArena<'a> {
                 };
             }
 
-            if TypeChecker::can_lower_core_scalar_function(&func_name) {
+            if let Some(func_name) = builtin_scalar_function_name(&func_name) {
                 let args = self.lower_expr_args(args)?;
-                return Ok(self.runtime_call(span, func_name, args));
+                return Ok(self.call(span, func_name, args));
+            }
+
+            if !is_builtin_function(&func_name) {
+                return Ok(self.runtime_call(span, name, args));
             }
         }
 
@@ -692,14 +699,10 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn runtime_call(
         &mut self,
         span: Span,
-        func_name: String,
-        args: CoreExprArgs,
+        name: &'a Identifier,
+        args: &'a [Expr],
     ) -> CoreExprId {
-        self.alloc(CoreExpr::RuntimeCall {
-            span,
-            func_name,
-            args,
-        })
+        self.alloc(CoreExpr::RuntimeCall { span, name, args })
     }
 
     fn alloc(&mut self, expr: CoreExpr<'a>) -> CoreExprId {
@@ -744,8 +747,8 @@ pub(super) enum CoreExpr<'a> {
     },
     RuntimeCall {
         span: Span,
-        func_name: String,
-        args: CoreExprArgs,
+        name: &'a Identifier,
+        args: &'a [Expr],
     },
     Cast {
         span: Span,
@@ -855,11 +858,9 @@ impl<'a> TypeChecker<'a> {
                 func_name,
                 args,
             } => self.resolve_core_call(arena, *span, func_name, args),
-            CoreExpr::RuntimeCall {
-                span,
-                func_name,
-                args,
-            } => self.resolve_core_call(arena, *span, func_name, args),
+            CoreExpr::RuntimeCall { span, name, args } => {
+                self.resolve_core_runtime_call(*span, name, args)
+            }
             CoreExpr::Cast {
                 span,
                 is_try,
@@ -938,6 +939,19 @@ impl<'a> TypeChecker<'a> {
         } else {
             Ok(Box::new((scalar, data_type)))
         }
+    }
+
+    fn resolve_core_runtime_call(
+        &mut self,
+        span: Span,
+        name: &Identifier,
+        args: &[Expr],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+        if let Some(udf) = self.resolve_udf(span, &udf_name, args)? {
+            return Ok(udf);
+        }
+        Err(self.unknown_function_error(span, &udf_name))
     }
 
     fn resolve_core_window_function(
@@ -1162,6 +1176,24 @@ fn general_window_function_name(func_name: &str) -> Option<&'static str> {
         .cloned()
         .find(|name| *name == func_name)
         .map(Ascii::into_inner)
+}
+
+fn builtin_scalar_function_name(func_name: &str) -> Option<&'static str> {
+    if !TypeChecker::can_lower_core_scalar_function(func_name) {
+        return None;
+    }
+
+    let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
+    if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((name, _)) = functions.factories.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
+        return Some(alias.as_str());
+    }
+    None
 }
 
 fn can_remove_count_args(func_name: &str, distinct: bool, args: &[Expr]) -> bool {
@@ -1451,10 +1483,17 @@ mod tests {
         });
 
         assert_sql_lowers_to("ABS(1)", |arena, root| {
-            let CoreExpr::RuntimeCall { func_name, .. } = arena.get(root) else {
-                panic!("AST function lower should keep the runtime function path");
+            let CoreExpr::Call { func_name, .. } = arena.get(root) else {
+                panic!("builtin scalar function should lower to static CoreExpr::Call");
             };
-            assert_eq!(func_name, "abs");
+            assert_eq!(*func_name, "abs");
+        });
+
+        assert_sql_lowers_to("potential_udf(1)", |arena, root| {
+            let CoreExpr::RuntimeCall { name, .. } = arena.get(root) else {
+                panic!("only potential UDF calls should keep the runtime function path");
+            };
+            assert_eq!(name.name, "potential_udf");
         });
 
         assert_sql_lowers_to("ROW_NUMBER() OVER ()", |arena, root| {

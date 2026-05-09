@@ -490,62 +490,7 @@ impl<'a> TypeChecker<'a> {
                         return Ok(udf);
                     }
 
-                    // Function not found, try to find and suggest similar function name.
-                    let all_funcs = BUILTIN_FUNCTIONS
-                        .all_function_names()
-                        .into_iter()
-                        .chain(AggregateFunctionFactory::instance().registered_names())
-                        .chain(
-                            GENERAL_WINDOW_FUNCTIONS
-                                .iter()
-                                .cloned()
-                                .map(|ascii| ascii.into_inner().to_string()),
-                        )
-                        .chain(
-                            GENERAL_LAMBDA_FUNCTIONS
-                                .iter()
-                                .cloned()
-                                .map(|ascii| ascii.into_inner().to_string()),
-                        )
-                        .chain(
-                            GENERAL_SEARCH_FUNCTIONS
-                                .iter()
-                                .cloned()
-                                .map(|ascii| ascii.into_inner().to_string()),
-                        )
-                        .chain(
-                            ASYNC_FUNCTIONS
-                                .iter()
-                                .cloned()
-                                .map(|ascii| ascii.into_inner().to_string()),
-                        )
-                        .chain(
-                            Self::all_sugar_functions()
-                                .iter()
-                                .cloned()
-                                .map(|ascii| ascii.into_inner().to_string()),
-                        );
-                    let mut engine: SimSearch<String> = SimSearch::new();
-                    for func_name in all_funcs {
-                        engine.insert(func_name.clone(), &func_name);
-                    }
-                    let possible_funcs = engine
-                        .search(func_name)
-                        .iter()
-                        .map(|name| format!("'{name}'"))
-                        .collect::<Vec<_>>();
-                    if possible_funcs.is_empty() {
-                        return Err(ErrorCode::UnknownFunction(format!(
-                            "no function matches the given name: {func_name}"
-                        ))
-                        .set_span(*span));
-                    } else {
-                        return Err(ErrorCode::UnknownFunction(format!(
-                            "no function matches the given name: '{func_name}', do you mean {}?",
-                            possible_funcs.join(", ")
-                        ))
-                        .set_span(*span));
-                    }
+                    return Err(self.unknown_function_error(*span, func_name));
                 }
 
                 // check within group legal
@@ -903,6 +848,63 @@ impl<'a> TypeChecker<'a> {
             .get_property(func_name)
             .map(|property| property.kind != FunctionKind::SRF)
             .unwrap_or(false)
+    }
+
+    pub(super) fn unknown_function_error(&self, span: Span, func_name: &str) -> ErrorCode {
+        // Function not found, try to find and suggest similar function name.
+        let all_funcs = BUILTIN_FUNCTIONS
+            .all_function_names()
+            .into_iter()
+            .chain(AggregateFunctionFactory::instance().registered_names())
+            .chain(
+                GENERAL_WINDOW_FUNCTIONS
+                    .iter()
+                    .cloned()
+                    .map(|ascii| ascii.into_inner().to_string()),
+            )
+            .chain(
+                GENERAL_LAMBDA_FUNCTIONS
+                    .iter()
+                    .cloned()
+                    .map(|ascii| ascii.into_inner().to_string()),
+            )
+            .chain(
+                GENERAL_SEARCH_FUNCTIONS
+                    .iter()
+                    .cloned()
+                    .map(|ascii| ascii.into_inner().to_string()),
+            )
+            .chain(
+                ASYNC_FUNCTIONS
+                    .iter()
+                    .cloned()
+                    .map(|ascii| ascii.into_inner().to_string()),
+            )
+            .chain(
+                Self::all_sugar_functions()
+                    .iter()
+                    .cloned()
+                    .map(|ascii| ascii.into_inner().to_string()),
+            );
+        let mut engine: SimSearch<String> = SimSearch::new();
+        for func_name in all_funcs {
+            engine.insert(func_name.clone(), &func_name);
+        }
+        let possible_funcs = engine
+            .search(func_name)
+            .iter()
+            .map(|name| format!("'{name}'"))
+            .collect::<Vec<_>>();
+        if possible_funcs.is_empty() {
+            ErrorCode::UnknownFunction(format!("no function matches the given name: {func_name}"))
+                .set_span(span)
+        } else {
+            ErrorCode::UnknownFunction(format!(
+                "no function matches the given name: '{func_name}', do you mean {}?",
+                possible_funcs.join(", ")
+            ))
+            .set_span(span)
+        }
     }
 
     pub(super) fn resolve_cast_expr(
