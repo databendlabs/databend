@@ -59,6 +59,8 @@ pub fn blocks_to_parquet(
         enable_dictionary,
         metadata,
         None,
+        None,
+        None,
     )
 }
 
@@ -80,6 +82,8 @@ pub fn blocks_to_parquet_with_stats(
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
     column_stats: Option<&StatisticsOfColumns>,
+    data_page_rows: Option<usize>,
+    data_page_bytes: Option<usize>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
 
@@ -95,8 +99,8 @@ pub fn blocks_to_parquet_with_stats(
         metadata,
         num_rows,
         table_schema,
-        None,
-        None,
+        data_page_rows,
+        data_page_bytes,
     );
 
     let batches = blocks

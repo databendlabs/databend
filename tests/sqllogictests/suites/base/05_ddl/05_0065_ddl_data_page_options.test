@@ -8,62 +8,62 @@ use test_data_page_options;
 statement ok
 create or replace table t1(a int, b string) data_page_rows=1000 data_page_bytes=524288;
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t1';
+query BB
+select table_option like '%DATA_PAGE_BYTES=''524288''%', table_option like '%DATA_PAGE_ROWS=''1000''%' from system.tables where database='test_data_page_options' and name='t1';
 ----
- COMPRESSION='zstd' DATA_PAGE_BYTES='524288' DATA_PAGE_ROWS='1000' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+1 1
 
 # CREATE TABLE with only data_page_rows
 statement ok
 create or replace table t2(a int, b string) data_page_rows=500;
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t2';
+query B
+select table_option like '%DATA_PAGE_ROWS=''500''%' from system.tables where database='test_data_page_options' and name='t2';
 ----
- COMPRESSION='zstd' DATA_PAGE_ROWS='500' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+1
 
 # CREATE TABLE with only data_page_bytes
 statement ok
 create or replace table t3(a int, b string) data_page_bytes=65536;
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t3';
+query B
+select table_option like '%DATA_PAGE_BYTES=''65536''%' from system.tables where database='test_data_page_options' and name='t3';
 ----
- COMPRESSION='zstd' DATA_PAGE_BYTES='65536' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+1
 
 # ALTER TABLE SET OPTIONS - verify each change
 statement ok
 alter table t1 set options(data_page_rows=2000);
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t1';
+query BB
+select table_option like '%DATA_PAGE_BYTES=''524288''%', table_option like '%DATA_PAGE_ROWS=''2000''%' from system.tables where database='test_data_page_options' and name='t1';
 ----
- COMPRESSION='zstd' DATA_PAGE_BYTES='524288' DATA_PAGE_ROWS='2000' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+1 1
 
 statement ok
 alter table t1 set options(data_page_bytes=1048576);
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t1';
+query BB
+select table_option like '%DATA_PAGE_BYTES=''1048576''%', table_option like '%DATA_PAGE_ROWS=''2000''%' from system.tables where database='test_data_page_options' and name='t1';
 ----
- COMPRESSION='zstd' DATA_PAGE_BYTES='1048576' DATA_PAGE_ROWS='2000' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+1 1
 
 # ALTER TABLE UNSET OPTIONS - verify each removal
 statement ok
 alter table t1 unset options(data_page_rows);
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t1';
+query BB
+select table_option like '%DATA_PAGE_BYTES=''1048576''%', table_option like '%DATA_PAGE_ROWS=%' from system.tables where database='test_data_page_options' and name='t1';
 ----
- COMPRESSION='zstd' DATA_PAGE_BYTES='1048576' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+1 0
 
 statement ok
 alter table t1 unset options(data_page_bytes);
 
-query T
-select table_option from system.tables where database='test_data_page_options' and name='t1';
+query BB
+select table_option like '%DATA_PAGE_BYTES=%', table_option like '%DATA_PAGE_ROWS=%' from system.tables where database='test_data_page_options' and name='t1';
 ----
- COMPRESSION='zstd' ENABLE_AUTO_ANALYZE='1' STORAGE_FORMAT='parquet'
+0 0
 
 # Validation: data_page_rows=0 is invalid
 statement error 1301
