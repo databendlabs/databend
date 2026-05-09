@@ -104,6 +104,8 @@ pub fn serialize_block_with_column_stats(
                 write_settings.enable_parquet_dictionary,
                 None,
                 column_stats,
+                write_settings.data_page_rows,
+                write_settings.data_page_bytes,
             )?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)

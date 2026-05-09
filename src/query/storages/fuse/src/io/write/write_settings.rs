@@ -34,6 +34,8 @@ pub struct WriteSettings {
 
     pub block_per_seg: usize,
     pub enable_parquet_dictionary: bool,
+    pub data_page_rows: Option<usize>,
+    pub data_page_bytes: Option<usize>,
     pub col_stats_truncate_lens: BTreeMap<ColumnId, usize>,
 }
 
@@ -46,6 +48,8 @@ impl Default for WriteSettings {
             max_page_size: DEFAULT_ROW_PER_PAGE,
             block_per_seg: DEFAULT_BLOCK_PER_SEGMENT,
             enable_parquet_dictionary: false,
+            data_page_rows: None,
+            data_page_bytes: None,
             col_stats_truncate_lens: BTreeMap::new(),
         }
     }
