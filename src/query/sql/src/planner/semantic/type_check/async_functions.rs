@@ -45,7 +45,9 @@ use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::SqlSource;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub(super) fn resolve_async_function(
         &mut self,
         span: Span,
@@ -121,18 +123,18 @@ impl<'a> TypeChecker<'a> {
         };
 
         if !self.skip_sequence_check {
-            let catalog = self.ctx.get_default_catalog()?;
+            let catalog = self.table_ctx().get_default_catalog()?;
             let req = GetSequenceReq {
-                ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.clone()),
+                ident: SequenceIdent::new(self.table_ctx().get_tenant(), sequence_name.clone()),
             };
 
             let visibility_checker = if self
-                .ctx
+                .table_ctx()
                 .get_settings()
                 .get_enable_experimental_sequence_privilege_check()?
             {
                 Some(databend_common_base::runtime::block_on(async move {
-                    self.ctx
+                    self.table_ctx()
                         .get_visibility_checker(false, Object::Sequence)
                         .await
                 })?)
@@ -172,8 +174,8 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_default_catalog()?;
+        let tenant = self.table_ctx().get_tenant();
+        let catalog = self.table_ctx().get_default_catalog()?;
 
         let dict_name_arg = args[0];
         let field_arg = args[1];
@@ -190,7 +192,7 @@ impl<'a> TypeChecker<'a> {
             }
             let db_name = match &column.table {
                 Some(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
-                None => self.ctx.get_current_database(),
+                None => self.table_ctx().get_current_database(),
             };
             let dict_name = match &column.column {
                 ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
@@ -245,7 +247,8 @@ impl<'a> TypeChecker<'a> {
         };
         let attr_field = dictionary.schema.field_with_name(attr_name)?;
         let attr_type: DataType = (&attr_field.data_type).into();
-        let default_value = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(attr_field)?;
+        let default_value =
+            DefaultExprBinder::try_new(self.table_ctx().clone())?.get_scalar(attr_field)?;
 
         // Get primary_key_value and check type.
         let primary_column_id = dictionary.primary_column_ids[0];
@@ -378,8 +381,11 @@ impl<'a> TypeChecker<'a> {
                 let stage_name = parse_stage_name(stage).map_err(|err| {
                     ErrorCode::SemanticError(err.message().to_string()).set_span(span)
                 })?;
-                let stage_info =
-                    Self::resolve_stage_info_for_read_file(self.ctx.as_ref(), span, &stage_name)?;
+                let stage_info = Self::resolve_stage_info_for_read_file(
+                    self.table_ctx_ref(),
+                    span,
+                    &stage_name,
+                )?;
                 read_file_arg.stage_name = Some(stage_name);
                 read_file_arg.stage_info = Some(Box::new(stage_info));
             }

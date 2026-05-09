@@ -261,7 +261,9 @@ fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
     marker
 }
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub(super) fn resolve_udf(
         &mut self,
         span: Span,
@@ -275,7 +277,7 @@ impl<'a> TypeChecker<'a> {
         let udf = if let Some(udf) = self.bind_context.udf_cache.read().get(udf_name).cloned() {
             udf
         } else {
-            let tenant = self.ctx.get_tenant();
+            let tenant = self.table_ctx().get_tenant();
             let provider = UserApiProvider::instance();
             let udf = databend_common_base::runtime::block_on(provider.get_udf(&tenant, udf_name))?;
             self.bind_context
@@ -375,7 +377,7 @@ impl<'a> TypeChecker<'a> {
                     .set_span(span));
                 };
                 let (stage_info, relative_path) = databend_common_base::runtime::block_on(
-                    resolve_stage_location(self.ctx.as_ref(), &location),
+                    resolve_stage_location(self.table_ctx_ref(), &location),
                 )?;
 
                 if !matches!(stage_info.stage_type, StageType::External) {
@@ -442,7 +444,7 @@ impl<'a> TypeChecker<'a> {
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.bind_context.have_udf_server = true;
-        self.ctx.result_cache_state().set_cacheable(false);
+        self.table_ctx().result_cache_state().set_cacheable(false);
         Ok(Box::new((
             UDFCall {
                 span,
@@ -481,7 +483,7 @@ impl<'a> TypeChecker<'a> {
             block_entries.push(entry);
         }
 
-        let settings = self.ctx.get_settings();
+        let settings = self.table_ctx().get_settings();
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
@@ -489,17 +491,17 @@ impl<'a> TypeChecker<'a> {
             &udf_definition.address,
             connect_timeout,
             request_timeout,
-            &self.ctx.get_version().udf_client_user_agent(),
+            &self.table_ctx().get_version().udf_client_user_agent(),
         )?;
 
         let num_rows = 1;
         let mut client =
             UDFFlightClient::connect(&udf_definition.handler, endpoint, connect_timeout, num_rows)
                 .await?
-                .with_tenant(self.ctx.get_tenant().tenant_name())?
+                .with_tenant(self.table_ctx().get_tenant().tenant_name())?
                 .with_func_name(name)?
                 .with_handler_name(&udf_definition.handler)?
-                .with_query_id(&self.ctx.get_id())?
+                .with_query_id(&self.table_ctx().get_id())?
                 .with_headers(udf_definition.headers)?;
 
         let result = client
@@ -533,14 +535,14 @@ impl<'a> TypeChecker<'a> {
         };
 
         let provider = CloudControlApiProvider::instance();
-        let tenant = self.ctx.get_tenant();
+        let tenant = self.table_ctx().get_tenant();
         let user = self
-            .ctx
+            .table_ctx()
             .get_current_user()?
             .identity()
             .display()
             .to_string();
-        let query_id = self.ctx.get_id();
+        let query_id = self.table_ctx().get_id();
         let mut cfg = build_client_config(
             tenant.tenant_name().to_string(),
             user,
@@ -590,7 +592,7 @@ impl<'a> TypeChecker<'a> {
             .collect::<Vec<_>>();
 
         let stage_locations = databend_common_base::runtime::block_on(resolve_stage_locations(
-            self.ctx.as_ref(),
+            self.table_ctx_ref(),
             &locations,
         ))?;
 
@@ -674,7 +676,7 @@ impl<'a> TypeChecker<'a> {
             }
         };
 
-        let (stage_info, module_path) = resolve_file_location(self.ctx.as_ref(), &file_location)
+        let (stage_info, module_path) = resolve_file_location(self.table_ctx_ref(), &file_location)
             .await
             .map_err(|err| {
                 ErrorCode::SemanticError(format!(
@@ -770,7 +772,7 @@ impl<'a> TypeChecker<'a> {
             let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
                 ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
             })?;
-            let settings = self.ctx.get_settings();
+            let settings = self.table_ctx().get_settings();
             let import_assets = self.build_udf_cloud_imports(
                 &imports,
                 Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
@@ -803,7 +805,7 @@ impl<'a> TypeChecker<'a> {
             .into_boxed_slice();
 
         let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
-            self.ctx.as_ref(),
+            self.table_ctx_ref(),
             &imports
                 .iter()
                 .map(|s| s.trim_start_matches('@').to_string())
@@ -823,7 +825,7 @@ impl<'a> TypeChecker<'a> {
         let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
-        self.ctx.result_cache_state().set_cacheable(false);
+        self.table_ctx().result_cache_state().set_cacheable(false);
         Ok(Box::new((
             UDFCall {
                 span,
@@ -862,7 +864,7 @@ impl<'a> TypeChecker<'a> {
         let code_blob = databend_common_base::runtime::block_on(self.resolve_udf_with_stage(code))?
             .into_boxed_slice();
         let imports_stage_info = databend_common_base::runtime::block_on(resolve_stage_locations(
-            self.ctx.as_ref(),
+            self.table_ctx_ref(),
             &imports
                 .iter()
                 .map(|s| s.trim_start_matches('@').to_string())
@@ -897,7 +899,7 @@ impl<'a> TypeChecker<'a> {
         );
 
         self.bind_context.have_udf_script = true;
-        self.ctx.result_cache_state().set_cacheable(false);
+        self.table_ctx().result_cache_state().set_cacheable(false);
         Ok(Box::new((
             UDAFCall {
                 span,
@@ -936,7 +938,7 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let settings = self.ctx.get_settings();
+        let settings = self.table_ctx().get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
         let expr = parse_expr(&sql_tokens, sql_dialect)?;
@@ -984,7 +986,7 @@ impl<'a> TypeChecker<'a> {
             ))
             .set_span(span));
         }
-        let settings = self.ctx.get_settings();
+        let settings = self.table_ctx().get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
         let mut udf_expr = parse_expr(&sql_tokens, sql_dialect)?;
@@ -994,7 +996,7 @@ impl<'a> TypeChecker<'a> {
         // Use current binding context so column references inside arguments can be resolved.
         let box (expr, _) = TypeChecker::try_create(
             self.bind_context,
-            self.ctx.clone(),
+            self.table_ctx().clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,

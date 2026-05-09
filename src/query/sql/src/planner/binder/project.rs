@@ -862,15 +862,18 @@ impl Binder {
             .collect::<Result<_>>()?;
 
         // Replace parameters in the masking policy expression
-        let replaced_expr = TypeChecker::clone_expr_with_replacement(&cached.expr, |nest_expr| {
-            if let Expr::ColumnRef { column, .. } = nest_expr {
-                // Parameter names are already normalized to lowercase at policy creation
-                if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
-                    return Ok(Some(arg.clone()));
+        let replaced_expr = TypeChecker::<crate::FullTypeCheckPolicy>::clone_expr_with_replacement(
+            &cached.expr,
+            |nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    // Parameter names are already normalized to lowercase at policy creation
+                    if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
+                        return Ok(Some(arg.clone()));
+                    }
                 }
-            }
-            Ok(None)
-        })?;
+                Ok(None)
+            },
+        )?;
 
         // Now resolve the replaced expression using TypeChecker
         // IMPORTANT: Use the provided bind_context which has all the necessary column information

@@ -32,7 +32,9 @@ use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     fn vector_functions() -> &'static [Ascii<&'static str>] {
         static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("cosine_distance"),

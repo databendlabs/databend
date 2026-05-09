@@ -29,7 +29,9 @@ use super::core_expr::CoreExprId;
 use super::core_expr::like_op_core_function;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub(super) fn resolve_like(
         &mut self,
         op: &BinaryOperator,

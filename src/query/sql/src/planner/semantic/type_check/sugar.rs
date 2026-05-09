@@ -45,7 +45,7 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P> {
     pub fn all_sugar_functions() -> &'static [Ascii<&'static str>] {
         static FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("current_catalog"),
@@ -195,7 +195,9 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub(super) async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
@@ -205,30 +207,32 @@ impl<'a> TypeChecker<'a> {
         match (func_name.to_lowercase().as_str(), args) {
             ("current_catalog", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
-                value: Literal::String(self.ctx.get_current_catalog()),
+                value: Literal::String(self.table_ctx().get_current_catalog()),
             })),
             ("database" | "currentdatabase" | "current_database", &[]) => {
                 Some(self.resolve(&Expr::Literal {
                     span,
-                    value: Literal::String(self.ctx.get_current_database()),
+                    value: Literal::String(self.table_ctx().get_current_database()),
                 }))
             }
             ("version", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
-                value: Literal::String(self.ctx.get_fuse_version()),
+                value: Literal::String(self.table_ctx().get_fuse_version()),
             })),
-            ("user" | "currentuser" | "current_user", &[]) => match self.ctx.get_current_user() {
-                Ok(user) => Some(self.resolve(&Expr::Literal {
-                    span,
-                    value: Literal::String(user.identity().display().to_string()),
-                })),
-                Err(e) => Some(Err(e)),
-            },
+            ("user" | "currentuser" | "current_user", &[]) => {
+                match self.table_ctx().get_current_user() {
+                    Ok(user) => Some(self.resolve(&Expr::Literal {
+                        span,
+                        value: Literal::String(user.identity().display().to_string()),
+                    })),
+                    Err(e) => Some(Err(e)),
+                }
+            }
             ("current_role", &[]) => Some(
                 self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(
-                        self.ctx
+                        self.table_ctx()
                             .get_current_role()
                             .map(|r| r.name)
                             .unwrap_or_default(),
@@ -237,7 +241,7 @@ impl<'a> TypeChecker<'a> {
             ),
             ("current_secondary_roles", &[]) => {
                 let mut res = self
-                    .ctx
+                    .table_ctx()
                     .get_all_effective_roles()
                     .await
                     .unwrap_or_default()
@@ -246,7 +250,7 @@ impl<'a> TypeChecker<'a> {
                     .collect::<Vec<String>>();
                 res.sort();
                 let roles_comma_separated_string = res.iter().join(",");
-                let res = if self.ctx.get_secondary_roles().is_none() {
+                let res = if self.table_ctx().get_secondary_roles().is_none() {
                     json!({
                         "roles": roles_comma_separated_string,
                         "value": "ALL"
@@ -270,7 +274,7 @@ impl<'a> TypeChecker<'a> {
             }
             ("current_available_roles", &[]) => {
                 let mut res = self
-                    .ctx
+                    .table_ctx()
                     .get_all_available_roles()
                     .await
                     .unwrap_or_default()
@@ -291,16 +295,20 @@ impl<'a> TypeChecker<'a> {
             }
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,
-                value: Literal::String(self.ctx.get_connection_id()),
+                value: Literal::String(self.table_ctx().get_connection_id()),
             })),
-            ("client_session_id", &[]) => Some(self.resolve(&Expr::Literal {
-                span,
-                value: Literal::String(
-                    self.ctx.get_current_client_session_id().unwrap_or_default(),
-                ),
-            })),
+            ("client_session_id", &[]) => Some(
+                self.resolve(&Expr::Literal {
+                    span,
+                    value: Literal::String(
+                        self.table_ctx()
+                            .get_current_client_session_id()
+                            .unwrap_or_default(),
+                    ),
+                }),
+            ),
             ("timezone", &[]) => {
-                let tz = self.ctx.get_settings().get_timezone().unwrap();
+                let tz = self.table_ctx().get_settings().get_timezone().unwrap();
                 Some(self.resolve(&Expr::Literal {
                     span,
                     value: Literal::String(tz),
@@ -628,7 +636,7 @@ impl<'a> TypeChecker<'a> {
 
                 Some(match res {
                     Ok(index) => {
-                        if let Some(query_id) = self.ctx.get_last_query_id(index as i32) {
+                        if let Some(query_id) = self.table_ctx().get_last_query_id(index as i32) {
                             self.resolve(&Expr::Literal {
                                 span,
                                 value: Literal::String(query_id),
@@ -699,7 +707,7 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let nulls_first = nulls_first.unwrap_or_else(|| {
-                    let settings = self.ctx.get_settings();
+                    let settings = self.table_ctx().get_settings();
                     settings.get_nulls_first()(asc)
                 });
 
@@ -787,7 +795,10 @@ impl<'a> TypeChecker<'a> {
 
                 if let Ok(arg) = ConstantExpr::try_from(scalar) {
                     if let Scalar::String(var_name) = arg.value {
-                        let var_value = self.ctx.get_variable(&var_name).unwrap_or(Scalar::Null);
+                        let var_value = self
+                            .table_ctx()
+                            .get_variable(&var_name)
+                            .unwrap_or(Scalar::Null);
                         let var_value = shrink_scalar(var_value);
                         let data_type = var_value.as_ref().infer_data_type();
                         return Some(Ok(Box::new((

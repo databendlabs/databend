@@ -555,16 +555,19 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&res.expr, |nest_expr| {
-            if let Expr::ColumnRef { column, .. } = nest_expr {
-                // Parameter names are normalized to lowercase in row_access_policy.rs
-                // So we need to normalize the lookup key to match
-                if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
-                    return Ok(Some(arg.clone()));
+        let expr = TypeChecker::<crate::FullTypeCheckPolicy>::clone_expr_with_replacement(
+            &res.expr,
+            |nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    // Parameter names are normalized to lowercase in row_access_policy.rs
+                    // So we need to normalize the lookup key to match
+                    if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
+                        return Ok(Some(arg.clone()));
+                    }
                 }
-            }
-            Ok(None)
-        })?;
+                Ok(None)
+            },
+        )?;
 
         let res = self.bind_secure_filter(bind_context, &[], &expr, table_index, scan_s_expr)?;
 

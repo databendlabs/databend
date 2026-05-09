@@ -43,7 +43,6 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
-use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use smallvec::SmallVec;
@@ -56,15 +55,12 @@ use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
-use crate::binder::ExprContext;
 use crate::planner::semantic::normalize_identifier;
-use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryType;
-use crate::plans::WindowFuncType;
 
 #[derive(Clone, Copy)]
-pub(super) struct CoreExprId {
+pub struct CoreExprId {
     index: usize,
 }
 
@@ -75,9 +71,117 @@ pub(super) type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
 pub(super) type AstExprArgs<'a> = SmallVec<[&'a Expr; 4]>;
 pub(super) type SugarFunctionArgs<'a> = AstExprArgs<'a>;
 
-pub(super) struct CoreExprArena<'a> {
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CoreExprContextDependencies {
+    /// Pure expression evaluation plus builtin scalar resolution.
+    ///
+    /// Typical callers: default/constraint expressions, statement settings,
+    /// expression parser helpers, and scalar binder paths that do not need
+    /// catalog, subquery, async, or UDF behavior.
+    pub scalar_evaluation: bool,
+
+    /// Name resolution against the current bind context, including virtual
+    /// columns and masking-policy fallback.
+    pub column_resolution: bool,
+
+    /// Session/catalog/user/version/variable sugar functions.
+    pub session_function: bool,
+
+    /// Subquery and IN-list-to-subquery lowering paths that need binder-style
+    /// planning support.
+    pub subquery: bool,
+
+    /// Builtin async functions such as sequence, dictionary, and read_file.
+    pub async_function: bool,
+
+    /// Potential UDF resolution and UDF execution metadata.
+    pub udf: bool,
+}
+
+impl CoreExprContextDependencies {
+    pub fn all() -> Self {
+        Self {
+            scalar_evaluation: true,
+            column_resolution: true,
+            session_function: true,
+            subquery: true,
+            async_function: true,
+            udf: true,
+        }
+    }
+
+    fn require_udf(&mut self) {
+        self.udf = true;
+    }
+
+    fn require_async_function(&mut self) {
+        self.async_function = true;
+    }
+
+    fn require_sugar_function(&mut self, func_name: &str) {
+        match func_name.to_ascii_lowercase().as_str() {
+            "current_catalog"
+            | "database"
+            | "currentdatabase"
+            | "current_database"
+            | "version"
+            | "user"
+            | "currentuser"
+            | "current_user"
+            | "current_role"
+            | "current_secondary_roles"
+            | "current_available_roles"
+            | "connection_id"
+            | "client_session_id"
+            | "timezone"
+            | "last_query_id"
+            | "array_sort"
+            | "getvariable" => self.session_function = true,
+            _ => {}
+        }
+    }
+
+    fn contains(self, required: Self) -> bool {
+        (!required.scalar_evaluation || self.scalar_evaluation)
+            && (!required.column_resolution || self.column_resolution)
+            && (!required.session_function || self.session_function)
+            && (!required.subquery || self.subquery)
+            && (!required.async_function || self.async_function)
+            && (!required.udf || self.udf)
+    }
+
+    fn missing_from(self, allowed: Self) -> Vec<&'static str> {
+        let mut missing = Vec::new();
+        if self.scalar_evaluation && !allowed.scalar_evaluation {
+            missing.push("scalar_evaluation");
+        }
+        if self.column_resolution && !allowed.column_resolution {
+            missing.push("column_resolution");
+        }
+        if self.session_function && !allowed.session_function {
+            missing.push("session_function");
+        }
+        if self.subquery && !allowed.subquery {
+            missing.push("subquery");
+        }
+        if self.async_function && !allowed.async_function {
+            missing.push("async_function");
+        }
+        if self.udf && !allowed.udf {
+            missing.push("udf");
+        }
+        missing
+    }
+}
+
+pub trait CoreExprContextPolicy {
+    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies;
+}
+
+pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
+    allowed_context_dependencies: CoreExprContextDependencies,
 }
 
 impl<'a> CoreExprArena<'a> {
@@ -85,12 +189,47 @@ impl<'a> CoreExprArena<'a> {
         Self {
             nodes: Vec::new(),
             week_start,
+            allowed_context_dependencies: CoreExprContextDependencies::all(),
         }
+    }
+
+    pub(super) fn with_context_policy<P>(week_start: u64, context_policy: &P) -> Self
+    where P: CoreExprContextPolicy + ?Sized {
+        Self {
+            nodes: Vec::new(),
+            week_start,
+            allowed_context_dependencies: context_policy.allowed_core_expr_context_dependencies(),
+        }
+    }
+
+    pub(super) fn context_dependencies(&self) -> CoreExprContextDependencies {
+        let mut dependencies = CoreExprContextDependencies::default();
+        for node in &self.nodes {
+            node.add_context_dependencies(&mut dependencies);
+        }
+        dependencies
+    }
+
+    pub(super) fn check_context_policy(&self) -> Result<()> {
+        if self.allowed_context_dependencies == CoreExprContextDependencies::all() {
+            return Ok(());
+        }
+
+        let required = self.context_dependencies();
+        if self.allowed_context_dependencies.contains(required) {
+            return Ok(());
+        }
+
+        let missing = required.missing_from(self.allowed_context_dependencies);
+        Err(ErrorCode::SemanticError(format!(
+            "type check context does not allow required capabilities: {}",
+            missing.join(", ")
+        )))
     }
 
     #[recursive::recursive]
     pub(super) fn lower_ast_expr(&mut self, expr: &'a Expr) -> Result<CoreExprId> {
-        Ok(match expr {
+        let id = match expr {
             Expr::ColumnRef { span, column } => self.column_ref(*span, column),
             Expr::Literal { span, value } => self.literal(*span, value.clone()),
             Expr::IsNull {
@@ -275,14 +414,26 @@ impl<'a> CoreExprArena<'a> {
                 left,
                 right,
                 escape,
-            } => self.like_any_with_escape(*span, left, right, escape),
+            } => {
+                let escape = Some(escape.clone());
+                self.lower_like_escape_expr(*span, "like_any", left, right, &escape)?
+            }
             Expr::LikeWithEscape {
                 span,
                 left,
                 right,
                 is_not,
                 escape,
-            } => self.like_with_escape(*span, left, right, *is_not, escape),
+            } => {
+                let escape = Some(escape.clone());
+                self.lower_like_escape_expr(
+                    *span,
+                    if *is_not { "notlike" } else { "like" },
+                    left,
+                    right,
+                    &escape,
+                )?
+            }
             Expr::Case {
                 span,
                 operand,
@@ -297,31 +448,34 @@ impl<'a> CoreExprArena<'a> {
                 else_result.as_deref(),
             )?,
             expr @ Expr::CountAll { span, window, .. } => {
-                let call = self.aggregate_call(
-                    format!("{:#}", expr),
-                    *span,
-                    "count",
-                    false,
-                    SmallVec::new(),
-                    SmallVec::new(),
-                    true,
-                    SmallVec::new(),
-                );
                 if let Some(window) = window.as_ref() {
-                    self.window_function(CoreWindowFunction::Aggregate {
-                        call: Box::new(call),
-                        window: CoreAggregateWindow::CountAll(window),
-                    })
+                    self.count_all_window_function(format!("{:#}", expr), *span, window)
                 } else {
-                    self.aggregate_function(call)
+                    self.aggregate_function(
+                        format!("{:#}", expr),
+                        *span,
+                        "count",
+                        false,
+                        SmallVec::new(),
+                        SmallVec::new(),
+                        true,
+                        SmallVec::new(),
+                    )
                 }
             }
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
             }
-            Expr::Hole { span, .. } | Expr::Placeholder { span } => self.impossible_expr(*span),
+            Expr::Hole { span, .. } | Expr::Placeholder { span } => {
+                return Err(ErrorCode::SemanticError(
+                    "Hole or Placeholder expression is impossible in trivial query".to_string(),
+                )
+                .set_span(*span));
+            }
             Expr::StageLocation { span, location } => self.stage_location(*span, location),
-        })
+        };
+        self.check_context_policy()?;
+        Ok(id)
     }
 
     fn column_ref(&mut self, span: Span, column: &'a ColumnRef) -> CoreExprId {
@@ -350,7 +504,7 @@ impl<'a> CoreExprArena<'a> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn aggregate_call(
+    fn aggregate_function(
         &mut self,
         display_name: String,
         span: Span,
@@ -360,8 +514,8 @@ impl<'a> CoreExprArena<'a> {
         args: CoreExprArgs,
         remove_count_args: bool,
         order_by: CoreOrderByExprs,
-    ) -> CoreAggregateCall {
-        CoreAggregateCall {
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::AggregateFunction {
             display_name,
             span,
             func_name: func_name.into(),
@@ -370,15 +524,65 @@ impl<'a> CoreExprArena<'a> {
             args,
             remove_count_args,
             order_by,
-        }
+        })
     }
 
-    fn aggregate_function(&mut self, call: CoreAggregateCall) -> CoreExprId {
-        self.alloc(CoreExpr::AggregateFunction { call })
+    #[allow(clippy::too_many_arguments)]
+    fn aggregate_window_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: impl Into<String>,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+        window: &'a WindowDesc,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::AggregateWindowFunction {
+            display_name,
+            span,
+            func_name: func_name.into(),
+            distinct,
+            params,
+            args,
+            remove_count_args,
+            order_by,
+            window,
+        })
     }
 
-    fn window_function(&mut self, function: CoreWindowFunction<'a>) -> CoreExprId {
-        self.alloc(CoreExpr::WindowFunction { function })
+    fn count_all_window_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        window: &'a Window,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::CountAllWindowFunction {
+            display_name,
+            span,
+            window,
+        })
+    }
+
+    fn general_window_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+        order_by: &'a [OrderByExpr],
+        window: &'a WindowDesc,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::GeneralWindowFunction {
+            display_name,
+            span,
+            func_name,
+            args,
+            order_by,
+            window,
+        })
     }
 
     fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
@@ -428,7 +632,6 @@ impl<'a> CoreExprArena<'a> {
             )
             .collect()
     }
-
     fn lower_map_access_expr(&mut self, expr: &'a Expr, root_span: Span) -> Result<CoreExprId> {
         let mut expr = expr;
         let mut paths = VecDeque::new();
@@ -492,7 +695,8 @@ impl<'a> CoreExprArena<'a> {
         let func_name = normalized_func_name(&name.name);
 
         if !is_builtin_function(&func_name)
-            && !TypeChecker::all_sugar_functions().contains(&Ascii::new(func_name.as_str()))
+            && !TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
+                .contains(&Ascii::new(func_name.as_str()))
         {
             return Ok(self.runtime_call(span, name, args));
         }
@@ -501,14 +705,17 @@ impl<'a> CoreExprArena<'a> {
             && let Some(func_name) = general_window_function_name(&func_name)
         {
             return match window.as_ref() {
-                Some(window) => Ok(self.window_function(CoreWindowFunction::General {
-                    display_name: format!("{:#}", original_expr),
-                    span,
-                    func_name,
-                    args: args.iter().collect(),
-                    order_by,
-                    window,
-                })),
+                Some(window) => {
+                    let args = self.lower_expr_args(args)?;
+                    Ok(self.general_window_function(
+                        format!("{:#}", original_expr),
+                        span,
+                        func_name,
+                        args,
+                        order_by,
+                        window,
+                    ))
+                }
                 None => Err(ErrorCode::SemanticError(format!(
                     "window function {func_name} can only be used in window clause"
                 ))
@@ -521,23 +728,29 @@ impl<'a> CoreExprArena<'a> {
             let params = self.lower_function_params(params)?;
             let args = self.lower_expr_args(args)?;
             let order_by = self.lower_order_by_exprs(order_by)?;
-            let call = self.aggregate_call(
-                format!("{:#}", original_expr),
-                span,
-                func_name,
-                *distinct,
-                params,
-                args,
-                remove_count_args,
-                order_by,
-            );
             return Ok(if let Some(window) = window.as_ref() {
-                self.window_function(CoreWindowFunction::Aggregate {
-                    call: Box::new(call),
-                    window: CoreAggregateWindow::Function(window),
-                })
+                self.aggregate_window_function(
+                    format!("{:#}", original_expr),
+                    span,
+                    func_name,
+                    *distinct,
+                    params,
+                    args,
+                    remove_count_args,
+                    order_by,
+                    window,
+                )
             } else {
-                self.aggregate_function(call)
+                self.aggregate_function(
+                    format!("{:#}", original_expr),
+                    span,
+                    func_name,
+                    *distinct,
+                    params,
+                    args,
+                    remove_count_args,
+                    order_by,
+                )
             });
         }
 
@@ -585,7 +798,8 @@ impl<'a> CoreExprArena<'a> {
         }
 
         if let Some(func_name) = set_returning_function_name(&func_name) {
-            return Ok(self.set_returning_function(span, func_name, args.iter().collect()));
+            let args = self.lower_expr_args(args)?;
+            return Ok(self.set_returning_function(span, func_name, args));
         }
 
         if !*distinct
@@ -594,8 +808,12 @@ impl<'a> CoreExprArena<'a> {
             && window.is_none()
             && lambda.is_none()
         {
-            if TypeChecker::all_sugar_functions().contains(&Ascii::new(func_name.as_str())) {
-                return if TypeChecker::can_lower_core_sugar_function(&func_name) {
+            if TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
+                .contains(&Ascii::new(func_name.as_str()))
+            {
+                return if TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_sugar_function(
+                    &func_name,
+                ) {
                     self.lower_sugar_function(span, &func_name, args.iter().collect())
                 } else {
                     Ok(self.sugar_function(span, func_name, args.iter().collect()))
@@ -633,14 +851,9 @@ impl<'a> CoreExprArena<'a> {
             return Ok(self.constant(span, value));
         }
 
-        if let Some(func_name) = unary_op_core_function(op)
-            && TypeChecker::can_lower_core_scalar_function(func_name)
-        {
-            let child = self.lower_ast_expr(child)?;
-            return Ok(self.call(span, func_name, smallvec![child]));
-        }
-
-        Ok(self.unary_op(span, op, child))
+        let func_name = unary_op_core_function(op).expect("unary plus should have returned");
+        let child = self.lower_ast_expr(child)?;
+        Ok(self.call(span, func_name, smallvec![child]))
     }
 
     pub(super) fn lower_call_expr(
@@ -821,10 +1034,6 @@ impl<'a> CoreExprArena<'a> {
         })
     }
 
-    fn unary_op(&mut self, span: Span, op: &'a UnaryOperator, expr: &'a Expr) -> CoreExprId {
-        self.alloc(CoreExpr::UnaryOp { span, op, expr })
-    }
-
     fn in_list(&mut self, span: Span, expr: &'a Expr, list: &'a [Expr], not: bool) -> CoreExprId {
         self.alloc(CoreExpr::InList {
             span,
@@ -872,42 +1081,6 @@ impl<'a> CoreExprArena<'a> {
             modifier,
             escape,
         })
-    }
-
-    fn like_any_with_escape(
-        &mut self,
-        span: Span,
-        left: &'a Expr,
-        right: &'a Expr,
-        escape: &'a str,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::LikeAnyWithEscape {
-            span,
-            left,
-            right,
-            escape,
-        })
-    }
-
-    fn like_with_escape(
-        &mut self,
-        span: Span,
-        left: &'a Expr,
-        right: &'a Expr,
-        is_not: bool,
-        escape: &'a str,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::LikeWithEscape {
-            span,
-            left,
-            right,
-            is_not,
-            escape,
-        })
-    }
-
-    fn impossible_expr(&mut self, span: Span) -> CoreExprId {
-        self.alloc(CoreExpr::ImpossibleExpr { span })
     }
 
     fn stage_location(&mut self, span: Span, location: &'a str) -> CoreExprId {
@@ -959,7 +1132,7 @@ impl<'a> CoreExprArena<'a> {
         &mut self,
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
+        args: CoreExprArgs,
     ) -> CoreExprId {
         self.alloc(CoreExpr::SetReturningFunction {
             span,
@@ -989,7 +1162,7 @@ impl<'a> CoreExprArena<'a> {
         CoreExprId { index }
     }
 
-    fn get(&self, id: CoreExprId) -> &CoreExpr<'a> {
+    pub(super) fn get(&self, id: CoreExprId) -> &CoreExpr<'a> {
         &self.nodes[id.index]
     }
 }
@@ -1050,7 +1223,7 @@ pub(super) enum CoreExpr<'a> {
     SetReturningFunction {
         span: Span,
         func_name: &'static str,
-        args: AstExprArgs<'a>,
+        args: CoreExprArgs,
     },
     ScalarFunction {
         span: Span,
@@ -1063,11 +1236,6 @@ pub(super) enum CoreExpr<'a> {
         op: &'a BinaryOperator,
         left: &'a Expr,
         right: &'a Expr,
-    },
-    UnaryOp {
-        span: Span,
-        op: &'a UnaryOperator,
-        expr: &'a Expr,
     },
     InList {
         span: Span,
@@ -1095,19 +1263,6 @@ pub(super) enum CoreExpr<'a> {
         modifier: &'a SubqueryModifier,
         escape: &'a Option<String>,
     },
-    LikeAnyWithEscape {
-        span: Span,
-        left: &'a Expr,
-        right: &'a Expr,
-        escape: &'a str,
-    },
-    LikeWithEscape {
-        span: Span,
-        left: &'a Expr,
-        right: &'a Expr,
-        is_not: bool,
-        escape: &'a str,
-    },
     Cast {
         span: Span,
         is_try: bool,
@@ -1120,13 +1275,38 @@ pub(super) enum CoreExpr<'a> {
         args: AstExprArgs<'a>,
     },
     AggregateFunction {
-        call: CoreAggregateCall,
-    },
-    WindowFunction {
-        function: CoreWindowFunction<'a>,
-    },
-    ImpossibleExpr {
+        display_name: String,
         span: Span,
+        func_name: String,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+    },
+    AggregateWindowFunction {
+        display_name: String,
+        span: Span,
+        func_name: String,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+        window: &'a WindowDesc,
+    },
+    CountAllWindowFunction {
+        display_name: String,
+        span: Span,
+        window: &'a Window,
+    },
+    GeneralWindowFunction {
+        display_name: String,
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+        order_by: &'a [OrderByExpr],
+        window: &'a WindowDesc,
     },
     StageLocation {
         span: Span,
@@ -1134,45 +1314,63 @@ pub(super) enum CoreExpr<'a> {
     },
 }
 
-pub(super) struct CoreAggregateCall {
-    display_name: String,
-    span: Span,
-    func_name: String,
-    distinct: bool,
-    params: CoreFunctionParams,
-    args: CoreExprArgs,
-    remove_count_args: bool,
-    order_by: CoreOrderByExprs,
-}
-
 pub(super) struct CoreOrderByExpr {
-    expr: CoreExprId,
-    asc: Option<bool>,
-    nulls_first: Option<bool>,
+    pub(super) expr: CoreExprId,
+    pub(super) asc: Option<bool>,
+    pub(super) nulls_first: Option<bool>,
 }
 
-#[derive(Clone, Copy)]
-pub(super) enum CoreAggregateWindow<'a> {
-    CountAll(&'a Window),
-    Function(&'a WindowDesc),
+impl<'a> CoreExpr<'a> {
+    fn add_context_dependencies(&self, dependencies: &mut CoreExprContextDependencies) {
+        match self {
+            CoreExpr::ColumnRef { .. } => {
+                dependencies.column_resolution = true;
+            }
+            CoreExpr::Call { .. }
+            | CoreExpr::ScalarFunction { .. }
+            | CoreExpr::AggregateFunction { .. }
+            | CoreExpr::Array { .. }
+            | CoreExpr::Map { .. }
+            | CoreExpr::Tuple { .. }
+            | CoreExpr::MapAccess { .. }
+            | CoreExpr::Cast { .. } => {
+                dependencies.scalar_evaluation = true;
+            }
+            CoreExpr::RuntimeCall { .. } => {
+                dependencies.require_udf();
+            }
+            CoreExpr::LambdaFunction { .. } => {
+                dependencies.column_resolution = true;
+            }
+            CoreExpr::SearchFunction { .. } => {}
+            CoreExpr::AsyncFunction { .. } => {
+                dependencies.require_async_function();
+            }
+            CoreExpr::SetReturningFunction { .. } => {}
+            CoreExpr::BinaryOp { .. }
+            | CoreExpr::InList { .. }
+            | CoreExpr::InSubquery { .. }
+            | CoreExpr::LikeSubquery { .. } => {
+                dependencies.column_resolution = true;
+                dependencies.subquery = true;
+            }
+            CoreExpr::Exists { .. } | CoreExpr::ScalarSubquery { .. } => {
+                dependencies.subquery = true;
+            }
+            CoreExpr::SugarFunction { func_name, .. } => {
+                dependencies.require_sugar_function(func_name);
+            }
+            CoreExpr::AggregateWindowFunction { .. } | CoreExpr::GeneralWindowFunction { .. } => {}
+            CoreExpr::CountAllWindowFunction { .. } => {}
+            CoreExpr::StageLocation { .. } => {}
+            CoreExpr::Literal { .. } => {}
+        }
+    }
 }
 
-pub(super) enum CoreWindowFunction<'a> {
-    Aggregate {
-        call: Box<CoreAggregateCall>,
-        window: CoreAggregateWindow<'a>,
-    },
-    General {
-        display_name: String,
-        span: Span,
-        func_name: &'static str,
-        args: AstExprArgs<'a>,
-        order_by: &'a [OrderByExpr],
-        window: &'a WindowDesc,
-    },
-}
-
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     #[recursive::recursive]
     pub(super) fn resolve_core(
         &mut self,
@@ -1180,7 +1378,6 @@ impl<'a> TypeChecker<'a> {
         id: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match arena.get(id) {
-            CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::Literal { span, value } => {
                 let (value, data_type) = infer_literal_data_type(value.clone());
                 Ok(Box::new((
@@ -1206,23 +1403,64 @@ impl<'a> TypeChecker<'a> {
                     paths.clone(),
                 )
             }
+            CoreExpr::Call {
+                span,
+                func_name,
+                args,
+            } => self.resolve_core_call(arena, *span, func_name, args),
+            CoreExpr::SetReturningFunction {
+                span,
+                func_name,
+                args,
+            } => self.resolve_core_set_returning_function(arena, *span, func_name, args),
+            CoreExpr::ScalarFunction {
+                span,
+                func_name,
+                params,
+                args,
+            } => self.resolve_core_scalar_function(arena, *span, func_name, params, args),
+            CoreExpr::Cast {
+                span,
+                is_try,
+                expr,
+                target_type,
+            } => {
+                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
+                self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
+            }
+            CoreExpr::AggregateFunction {
+                display_name,
+                span,
+                func_name,
+                distinct,
+                params,
+                args,
+                remove_count_args,
+                order_by,
+            } => self.resolve_core_aggregate_function(
+                arena,
+                display_name,
+                *span,
+                func_name,
+                *distinct,
+                params,
+                args,
+                *remove_count_args,
+                order_by,
+            ),
+            CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::SugarFunction {
                 span,
                 func_name,
                 args,
             } => {
                 if let Some(rewritten_func_result) = databend_common_base::runtime::block_on(
-                    self.try_rewrite_sugar_function(*span, func_name, args),
+                    self.try_rewrite_sugar_function(*span, func_name.as_str(), args.as_slice()),
                 ) {
                     return rewritten_func_result;
                 }
-                self.resolve_function(*span, func_name, vec![], args)
+                self.resolve_function(*span, func_name.as_str(), vec![], args.as_slice())
             }
-            CoreExpr::Call {
-                span,
-                func_name,
-                args,
-            } => self.resolve_core_call(arena, *span, func_name, args),
             CoreExpr::RuntimeCall { span, name, args } => {
                 self.resolve_core_runtime_call(*span, name, args)
             }
@@ -1231,15 +1469,15 @@ impl<'a> TypeChecker<'a> {
                 func_name,
                 args,
                 lambda,
-            } => self.resolve_lambda_function(*span, func_name, args, lambda),
+            } => self.resolve_lambda_function(*span, func_name, args.as_slice(), lambda),
             CoreExpr::SearchFunction {
                 span,
                 func_name,
                 args,
             } => match *func_name {
-                "score" => self.resolve_score_search_function(*span, func_name, args),
-                "match" => self.resolve_match_search_function(*span, func_name, args),
-                "query" => self.resolve_query_search_function(*span, func_name, args),
+                "score" => self.resolve_score_search_function(*span, func_name, args.as_slice()),
+                "match" => self.resolve_match_search_function(*span, func_name, args.as_slice()),
+                "query" => self.resolve_query_search_function(*span, func_name, args.as_slice()),
                 _ => Err(ErrorCode::SemanticError(format!(
                     "cannot find search function {}",
                     func_name
@@ -1250,25 +1488,13 @@ impl<'a> TypeChecker<'a> {
                 span,
                 func_name,
                 args,
-            } => self.resolve_async_function(*span, func_name, args),
-            CoreExpr::SetReturningFunction {
-                span,
-                func_name,
-                args,
-            } => self.resolve_set_returning_function(*span, func_name, args),
-            CoreExpr::ScalarFunction {
-                span,
-                func_name,
-                params,
-                args,
-            } => self.resolve_core_scalar_function(arena, *span, func_name, params, args),
+            } => self.resolve_async_function(*span, func_name, args.as_slice()),
             CoreExpr::BinaryOp {
                 span,
                 op,
                 left,
                 right,
             } => self.resolve_binary_op_or_subquery(span, op, left, right),
-            CoreExpr::UnaryOp { span, op, expr } => self.resolve_unary_op(*span, op, expr),
             CoreExpr::InList {
                 span,
                 expr,
@@ -1276,7 +1502,7 @@ impl<'a> TypeChecker<'a> {
                 not,
             } => self.resolve_in_list(*span, expr, list, *not),
             CoreExpr::Exists { subquery, not } => self.resolve_subquery(
-                if !*not {
+                if !not {
                     SubqueryType::Exists
                 } else {
                     SubqueryType::NotExists
@@ -1308,64 +1534,53 @@ impl<'a> TypeChecker<'a> {
                 modifier,
                 &BinaryOperator::Like((*escape).clone()),
             ),
-            CoreExpr::LikeAnyWithEscape {
+            CoreExpr::AggregateWindowFunction {
+                display_name,
                 span,
-                left,
-                right,
-                escape,
-            } => self.resolve_binary_op_or_subquery(
-                span,
-                &BinaryOperator::LikeAny(Some((*escape).to_string())),
-                left,
-                right,
+                func_name,
+                distinct,
+                params,
+                args,
+                remove_count_args,
+                order_by,
+                window,
+            } => self.resolve_core_aggregate_window_function(
+                arena,
+                display_name,
+                *span,
+                func_name,
+                *distinct,
+                params,
+                args,
+                *remove_count_args,
+                order_by,
+                window,
             ),
-            CoreExpr::LikeWithEscape {
+            CoreExpr::CountAllWindowFunction {
+                display_name,
                 span,
-                left,
-                right,
-                is_not,
-                escape,
-            } => {
-                let like_op = if *is_not {
-                    BinaryOperator::NotLike(Some((*escape).to_string()))
-                } else {
-                    BinaryOperator::Like(Some((*escape).to_string()))
-                };
-
-                self.resolve_binary_op_or_subquery(span, &like_op, left, right)
-            }
-            CoreExpr::Cast {
+                window,
+            } => self.resolve_core_count_all_window_function(*span, display_name, window),
+            CoreExpr::GeneralWindowFunction {
+                display_name,
                 span,
-                is_try,
-                expr,
-                target_type,
-            } => {
-                let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
-                self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
-            }
-            CoreExpr::AggregateFunction { call } => {
-                self.resolve_core_aggregate_function(arena, call)
-            }
-            CoreExpr::WindowFunction { function } => {
-                self.resolve_core_window_function(arena, function)
-            }
-            CoreExpr::ImpossibleExpr { span } => Err(ErrorCode::SemanticError(
-                "Hole or Placeholder expression is impossible in trivial query".to_string(),
-            )
-            .set_span(*span)),
+                func_name,
+                args,
+                order_by,
+                window,
+            } => self.resolve_core_general_window_function(
+                arena,
+                *span,
+                display_name,
+                func_name,
+                args,
+                order_by,
+                window,
+            ),
             CoreExpr::StageLocation { span, location } => {
                 self.resolve_stage_location(*span, location)
             }
         }
-    }
-
-    fn resolve_core_aggregate_function(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        call: &CoreAggregateCall,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (new_agg_func, data_type) = self.resolve_core_aggregate_call(arena, call, false)?;
-        Ok(Box::new((new_agg_func.into(), data_type)))
     }
 
     fn resolve_core_call(
@@ -1421,7 +1636,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn resolve_core_runtime_call(
+    pub(super) fn resolve_core_runtime_call(
         &mut self,
         span: Span,
         name: &Identifier,
@@ -1473,172 +1688,7 @@ impl<'a> TypeChecker<'a> {
         self.resolve_scalar_function_call(span, func_name, params, scalars)
     }
 
-    fn resolve_core_window_function(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        function: &CoreWindowFunction<'_>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        match function {
-            CoreWindowFunction::Aggregate { call, window } => {
-                let (new_agg_func, _data_type) =
-                    self.resolve_core_aggregate_call(arena, call, true)?;
-                let window = match window {
-                    CoreAggregateWindow::CountAll(window) => *window,
-                    CoreAggregateWindow::Function(window_desc) => {
-                        if window_desc.ignore_nulls.is_some() {
-                            return Err(ErrorCode::SemanticError(format!(
-                                "window function {} not support IGNORE/RESPECT NULLS option",
-                                call.func_name
-                            ))
-                            .set_span(call.span));
-                        }
-                        &window_desc.window
-                    }
-                };
-                let func = WindowFuncType::Aggregate(new_agg_func);
-                self.resolve_window(call.span, call.display_name.clone(), window, func)
-            }
-            CoreWindowFunction::General {
-                display_name,
-                span,
-                func_name,
-                args,
-                order_by,
-                window,
-            } => {
-                if !order_by.is_empty() {
-                    return Err(ErrorCode::SemanticError(
-                        "only aggregate functions allowed in within group syntax",
-                    )
-                    .set_span(*span));
-                }
-                if !RANK_WINDOW_FUNCTIONS.contains(func_name) && window.ignore_nulls.is_some() {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "window function {} not support IGNORE/RESPECT NULLS option",
-                        func_name
-                    ))
-                    .set_span(*span));
-                }
-                let func = self.resolve_general_window_function(
-                    *span,
-                    func_name,
-                    args,
-                    &window.ignore_nulls,
-                )?;
-                self.resolve_window(*span, display_name.clone(), &window.window, func)
-            }
-        }
-    }
-
-    fn resolve_core_aggregate_call(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        call: &CoreAggregateCall,
-        in_window_call: bool,
-    ) -> Result<(crate::plans::AggregateFunction, DataType)> {
-        if !call.order_by.is_empty()
-            && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(call.func_name.as_str()))
-        {
-            return Err(ErrorCode::SemanticError(
-                "only aggregate functions allowed in within group syntax",
-            )
-            .set_span(call.span));
-        }
-        let new_params =
-            self.resolve_core_function_params(arena, call.span, &call.params, "aggregate")?;
-        let in_window = self.in_window_function;
-        self.in_window_function = self.in_window_function || in_window_call;
-        let in_aggregate_function = self.in_aggregate_function;
-        let result = self.resolve_core_aggregate_call_inner(arena, call, new_params);
-        self.in_window_function = in_window;
-        self.in_aggregate_function = in_aggregate_function;
-        result
-    }
-
-    fn resolve_core_aggregate_call_inner(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        call: &CoreAggregateCall,
-        new_params: Vec<Scalar>,
-    ) -> Result<(crate::plans::AggregateFunction, DataType)> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "aggregate functions can not be used in lambda function".to_string(),
-            )
-            .set_span(call.span));
-        }
-
-        if self.in_aggregate_function {
-            if self.in_window_function {
-                // An aggregate may appear as the argument of a window aggregate,
-                // but grouped aggregates cannot be nested.
-                self.in_window_function = false;
-            } else {
-                self.in_aggregate_function = false;
-                return Err(ErrorCode::SemanticError(
-                    "aggregate function calls cannot be nested".to_string(),
-                )
-                .set_span(call.span));
-            }
-        }
-
-        // Only force aggregate arguments to skip alias resolution in contexts
-        // that would otherwise prefer aliases over input columns, such as
-        // HAVING or ORDER BY. In the SELECT list we still want the existing
-        // column-first fallback so `sum(c1)` can bind a same-select alias when
-        // there is no real `c1` column.
-        self.in_aggregate_function = true;
-        let original_context = self.bind_context.expr_context;
-        let disallow_alias_resolution = original_context.prefer_resolve_alias();
-        if disallow_alias_resolution {
-            self.bind_context.expr_context = ExprContext::InAggregateFunction;
-        }
-        let arguments_result = self.resolve_core_expr_args(arena, &call.args);
-        if disallow_alias_resolution {
-            self.bind_context.expr_context = original_context;
-        }
-        self.in_aggregate_function = false;
-        let (arguments, arg_types) = arguments_result?;
-
-        let sort_descs = call
-            .order_by
-            .iter()
-            .map(|order_by| {
-                if disallow_alias_resolution {
-                    self.bind_context.expr_context = ExprContext::InAggregateFunction;
-                }
-                let result = self.resolve_core(arena, order_by.expr);
-                if disallow_alias_resolution {
-                    self.bind_context.expr_context = original_context;
-                }
-                let box (scalar_expr, _) = result?;
-
-                Ok(AggregateFunctionScalarSortDesc {
-                    expr: scalar_expr,
-                    is_reuse_index: false,
-                    nulls_first: order_by.nulls_first.unwrap_or(false),
-                    asc: order_by.asc.unwrap_or(true),
-                })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        self.resolve_aggregate_function(
-            call.span,
-            &call.func_name,
-            call.display_name.clone(),
-            call.distinct,
-            new_params,
-            arguments,
-            arg_types,
-            sort_descs,
-            call.remove_count_args,
-        )
-    }
-
-    fn resolve_core_expr_args(
+    pub(super) fn resolve_core_expr_args(
         &mut self,
         arena: &CoreExprArena<'_>,
         args: &CoreExprArgs,
@@ -1653,7 +1703,7 @@ impl<'a> TypeChecker<'a> {
         Ok((scalars, data_types))
     }
 
-    fn resolve_core_function_params(
+    pub(super) fn resolve_core_function_params(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -1725,7 +1775,7 @@ fn async_function_name(func_name: &str) -> Option<&'static str> {
 }
 
 fn builtin_scalar_function_name(func_name: &str) -> Option<&'static str> {
-    if !TypeChecker::can_lower_core_scalar_function(func_name) {
+    if !TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_scalar_function(func_name) {
         return None;
     }
 
@@ -1795,7 +1845,7 @@ fn can_lower_binary_op(op: &BinaryOperator, right: &Expr) -> bool {
     }
 
     binary_op_core_function(op)
-        .map(TypeChecker::can_lower_core_scalar_function)
+        .map(TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_scalar_function)
         .unwrap_or(false)
 }
 
@@ -1892,6 +1942,17 @@ mod tests {
 
     use super::*;
 
+    #[derive(Clone, Copy)]
+    struct StaticCoreExprContextPolicy {
+        allowed: CoreExprContextDependencies,
+    }
+
+    impl CoreExprContextPolicy for StaticCoreExprContextPolicy {
+        fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
+            self.allowed
+        }
+    }
+
     fn assert_sql_lowers_to(sql: &str, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
         let tokens = tokenize_sql(sql).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
@@ -1912,6 +1973,25 @@ mod tests {
         let mut arena = CoreExprArena::new(0);
         let err = match arena.lower_ast_expr(&expr) {
             Ok(_) => panic!("expected lower to fail for `{sql}`"),
+            Err(err) => err,
+        };
+        assert!(
+            err.message().contains(expected),
+            "expected error to contain `{expected}`, got `{}`",
+            err.message()
+        );
+    }
+
+    fn assert_sql_policy_error_contains(
+        sql: &str,
+        policy: &impl CoreExprContextPolicy,
+        expected: &str,
+    ) {
+        let tokens = tokenize_sql(sql).unwrap();
+        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
+        let mut arena = CoreExprArena::with_context_policy(0, policy);
+        let err = match arena.lower_ast_expr(&expr) {
+            Ok(_) => panic!("expected context policy violation"),
             Err(err) => err,
         };
         assert!(
@@ -2003,7 +2083,10 @@ mod tests {
         });
 
         assert_sql_lowers_to("a LIKE 'x' ESCAPE '!'", |arena, root| {
-            assert!(matches!(arena.get(root), CoreExpr::LikeWithEscape { .. }));
+            assert!(matches!(arena.get(root), CoreExpr::Call {
+                func_name: "like",
+                ..
+            }));
         });
 
         assert_sql_lowers_to("array_filter([1], x -> x > 0)", |arena, root| {
@@ -2031,6 +2114,77 @@ mod tests {
     }
 
     #[test]
+    fn collects_context_dependencies_from_flat_nodes() {
+        assert_sql_lowers_to("1", |arena, _root| {
+            assert_eq!(
+                arena.context_dependencies(),
+                CoreExprContextDependencies::default()
+            );
+        });
+
+        assert_sql_lowers_to("a", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.column_resolution);
+            assert!(!dependencies.scalar_evaluation);
+        });
+
+        assert_sql_lowers_to("1 + 2", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.scalar_evaluation);
+            assert!(!dependencies.column_resolution);
+        });
+
+        assert_sql_lowers_to("a IN (1, 2)", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.column_resolution);
+            assert!(dependencies.subquery);
+        });
+
+        assert_sql_lowers_to("current_database()", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.session_function);
+            assert!(!dependencies.subquery);
+        });
+
+        assert_sql_lowers_to("getvariable('x')", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.session_function);
+        });
+
+        assert_sql_lowers_to("nextval(seq)", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.async_function);
+            assert!(!dependencies.udf);
+        });
+
+        assert_sql_lowers_to("potential_udf(1)", |arena, _root| {
+            let dependencies = arena.context_dependencies();
+            assert!(dependencies.udf);
+            assert!(!dependencies.async_function);
+        });
+    }
+
+    #[test]
+    fn rejects_context_policy_violations_after_lower() {
+        let scalar_only = StaticCoreExprContextPolicy {
+            allowed: CoreExprContextDependencies {
+                scalar_evaluation: true,
+                ..Default::default()
+            },
+        };
+
+        assert_sql_lowers_to("1 + 2", |arena, _root| {
+            assert!(scalar_only.allowed.contains(arena.context_dependencies()));
+        });
+
+        assert_sql_policy_error_contains("a", &scalar_only, "column_resolution");
+        assert_sql_policy_error_contains("a IN (1, 2)", &scalar_only, "subquery");
+        assert_sql_policy_error_contains("current_database()", &scalar_only, "session_function");
+        assert_sql_policy_error_contains("nextval(seq)", &scalar_only, "async_function");
+        assert_sql_policy_error_contains("potential_udf(1)", &scalar_only, "udf");
+    }
+
+    #[test]
     fn splits_static_and_runtime_function_names() {
         assert_sql_lowers_to("1 + 2", |arena, root| {
             let CoreExpr::Call { func_name, .. } = arena.get(root) else {
@@ -2054,11 +2208,8 @@ mod tests {
         });
 
         assert_sql_lowers_to("ROW_NUMBER() OVER ()", |arena, root| {
-            let CoreExpr::WindowFunction {
-                function: CoreWindowFunction::General { func_name, .. },
-            } = arena.get(root)
-            else {
-                panic!("general window function should lower to CoreWindowFunction::General");
+            let CoreExpr::GeneralWindowFunction { func_name, .. } = arena.get(root) else {
+                panic!("general window function should lower to CoreExpr::GeneralWindowFunction");
             };
             assert_eq!(*func_name, "row_number");
         });

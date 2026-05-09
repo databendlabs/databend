@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -21,17 +20,21 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
 use crate::binder::ExprContext;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
-    /// Resolve set returning function.
-    pub(super) fn resolve_set_returning_function(
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
+    pub(super) fn resolve_core_set_returning_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func_name: &str,
-        args: &[&Expr],
+        args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match self.bind_context.expr_context {
             ExprContext::InSetReturningFunction => {
@@ -71,15 +74,9 @@ impl<'a> TypeChecker<'a> {
         let original_context = self
             .bind_context
             .replace_expr_context(ExprContext::InSetReturningFunction);
-
-        let mut arguments = Vec::with_capacity(args.len());
-        for arg in args.iter() {
-            let box (scalar, _) = self.resolve(arg)?;
-            arguments.push(scalar);
-        }
-
-        // Restore the original context
+        let arguments_result = self.resolve_core_expr_args(arena, args);
         self.bind_context.expr_context = original_context;
+        let (arguments, _) = arguments_result?;
 
         let srf_scalar = ScalarExpr::FunctionCall(FunctionCall {
             span,
@@ -95,8 +92,6 @@ impl<'a> TypeChecker<'a> {
             ))
         })?;
 
-        // If tuple has more than one field, return the tuple column,
-        // otherwise, extract the tuple field to top level column.
         let (return_scalar, return_type) = if srf_tuple_types.len() > 1 {
             (srf_scalar, srf_expr.data_type().clone())
         } else {

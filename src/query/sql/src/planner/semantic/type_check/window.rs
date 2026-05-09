@@ -14,7 +14,9 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Window;
+use databend_common_ast::ast::WindowDesc;
 use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
@@ -29,9 +31,14 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::RANK_WINDOW_FUNCTIONS;
+use smallvec::SmallVec;
 
 use super::TypeChecker;
-use crate::binder::ExprContext;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreFunctionParams;
+use super::core_expr::CoreOrderByExprs;
 use crate::plans::CastExpr;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
@@ -44,7 +51,140 @@ use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn resolve_core_aggregate_window_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        display_name: &str,
+        span: Span,
+        func_name: &str,
+        distinct: bool,
+        params: &CoreFunctionParams,
+        args: &CoreExprArgs,
+        remove_count_args: bool,
+        order_by: &CoreOrderByExprs,
+        window: &WindowDesc,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(
+            arena,
+            display_name,
+            span,
+            func_name,
+            distinct,
+            params,
+            args,
+            remove_count_args,
+            order_by,
+            true,
+        )?;
+        if window.ignore_nulls.is_some() {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {} not support IGNORE/RESPECT NULLS option",
+                func_name
+            ))
+            .set_span(span));
+        }
+        let func = WindowFuncType::Aggregate(new_agg_func);
+        self.resolve_window(span, display_name.to_string(), &window.window, func)
+    }
+
+    pub(super) fn resolve_core_count_all_window_function(
+        &mut self,
+        span: Span,
+        display_name: &str,
+        window: &Window,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let arena = CoreExprArena::new(self.func_ctx.week_start as u64);
+        let params = SmallVec::new();
+        let args = SmallVec::new();
+        let order_by = SmallVec::new();
+        let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(
+            &arena,
+            display_name,
+            span,
+            "count",
+            false,
+            &params,
+            &args,
+            true,
+            &order_by,
+            true,
+        )?;
+        let func = WindowFuncType::Aggregate(new_agg_func);
+        self.resolve_window(span, display_name.to_string(), window, func)
+    }
+
+    pub(super) fn resolve_core_general_window_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        display_name: &str,
+        func_name: &str,
+        args: &CoreExprArgs,
+        order_by: &[OrderByExpr],
+        window: &WindowDesc,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !order_by.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        if !RANK_WINDOW_FUNCTIONS.contains(&func_name) && window.ignore_nulls.is_some() {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {} not support IGNORE/RESPECT NULLS option",
+                func_name
+            ))
+            .set_span(span));
+        }
+        if let Ok(window_func) = WindowFuncType::from_name(func_name) {
+            return self.resolve_window(
+                span,
+                display_name.to_string(),
+                &window.window,
+                window_func,
+            );
+        }
+
+        if self.in_window_function {
+            self.in_window_function = false;
+            return Err(ErrorCode::SemanticError(
+                "window function calls cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+
+        self.in_window_function = true;
+        let arguments_result = self.resolve_core_expr_args(arena, args);
+        self.in_window_function = false;
+        let (arguments, arg_types) = arguments_result?;
+
+        let ignore_null = window.ignore_nulls.unwrap_or(false);
+
+        let func = match func_name {
+            "lag" | "lead" => {
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)?
+            }
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => self
+                .resolve_nth_value_window_function(
+                    func_name,
+                    &arguments,
+                    &arg_types,
+                    ignore_null,
+                )?,
+            "ntile" => self.resolve_ntile_window_function(&arguments)?,
+            _ => {
+                return Err(ErrorCode::UnknownFunction(format!(
+                    "Unknown window function: {func_name}"
+                )));
+            }
+        };
+        self.resolve_window(span, display_name.to_string(), &window.window, func)
+    }
+
     pub(super) fn resolve_window(
         &mut self,
         span: Span,
@@ -335,77 +475,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    /// Resolve general window function call.
-    pub(super) fn resolve_general_window_function(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &[&Expr],
-        window_ignore_null: &Option<bool>,
-    ) -> Result<WindowFuncType> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InSetReturningFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in set-returning function".to_string(),
-            )
-            .set_span(span));
-        }
-        // try to resolve window function without arguments first
-        if let Ok(window_func) = WindowFuncType::from_name(func_name) {
-            return Ok(window_func);
-        }
-
-        if self.in_window_function {
-            self.in_window_function = false;
-            return Err(ErrorCode::SemanticError(
-                "window function calls cannot be nested".to_string(),
-            )
-            .set_span(span));
-        }
-
-        self.in_window_function = true;
-        let mut arguments = vec![];
-        let mut arg_types = vec![];
-        for arg in args.iter() {
-            let box (argument, arg_type) = self.resolve(arg)?;
-            arguments.push(argument);
-            arg_types.push(arg_type);
-        }
-        self.in_window_function = false;
-
-        // If { IGNORE | RESPECT } NULLS is not specified, the default is RESPECT NULLS
-        // (i.e. a NULL value will be returned if the expression contains a NULL value, and it is the first value in the expression).
-        let ignore_null = if let Some(ignore_null) = window_ignore_null {
-            *ignore_null
-        } else {
-            false
-        };
-
-        match func_name {
-            "lag" | "lead" => {
-                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
-            }
-            "first_value" | "first" | "last_value" | "last" | "nth_value" => self
-                .resolve_nth_value_window_function(func_name, &arguments, &arg_types, ignore_null),
-            "ntile" => self.resolve_ntile_window_function(&arguments),
-            _ => Err(ErrorCode::UnknownFunction(format!(
-                "Unknown window function: {func_name}"
-            ))),
-        }
-    }
-
-    fn resolve_lag_lead_window_function(
+    pub(super) fn resolve_lag_lead_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],
@@ -472,7 +542,7 @@ impl<'a> TypeChecker<'a> {
         }))
     }
 
-    fn resolve_nth_value_window_function(
+    pub(super) fn resolve_nth_value_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],
@@ -548,7 +618,10 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    fn resolve_ntile_window_function(&mut self, args: &[ScalarExpr]) -> Result<WindowFuncType> {
+    pub(super) fn resolve_ntile_window_function(
+        &mut self,
+        args: &[ScalarExpr],
+    ) -> Result<WindowFuncType> {
         if args.len() != 1 {
             return Err(ErrorCode::InvalidArgument(
                 "Function ntile can only take one argument".to_string(),

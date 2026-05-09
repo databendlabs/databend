@@ -14,17 +14,24 @@
 
 use std::sync::Arc;
 
+use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
+use databend_common_expression::FunctionContext;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
+use databend_common_meta_app::tenant::Tenant;
+use databend_common_settings::Settings;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
+use databend_common_sql::CoreExprContextDependencies;
+use databend_common_sql::CoreExprContextPolicy;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Symbol;
+use databend_common_sql::TypeCheckPolicy;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
@@ -47,6 +54,41 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
         )
         .build(),
     );
+}
+
+struct ScalarOnlyTypeCheckPolicy {
+    settings: Arc<Settings>,
+    func_ctx: FunctionContext,
+}
+
+impl ScalarOnlyTypeCheckPolicy {
+    fn new() -> Self {
+        Self {
+            settings: Settings::create(Tenant::new_literal("default")),
+            func_ctx: FunctionContext::default(),
+        }
+    }
+}
+
+impl CoreExprContextPolicy for ScalarOnlyTypeCheckPolicy {
+    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
+        CoreExprContextDependencies {
+            scalar_evaluation: true,
+            ..Default::default()
+        }
+    }
+}
+
+impl TypeCheckPolicy for ScalarOnlyTypeCheckPolicy {
+    fn function_context(&self) -> Result<FunctionContext> {
+        Ok(self.func_ctx.clone())
+    }
+
+    fn settings(&self) -> Arc<Settings> {
+        self.settings.clone()
+    }
+
+    fn set_result_cache_uncacheable(&self) {}
 }
 
 async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
@@ -108,6 +150,39 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
         write_case_outcome(&mut file, &outcome)?;
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_scalar_type_check_policy_does_not_need_table_context() -> Result<()> {
+    let policy = ScalarOnlyTypeCheckPolicy::new();
+    let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
+    let metadata = Arc::new(RwLock::new(Metadata::default()));
+    let mut bind_context = BindContext::new();
+    let tokens = tokenize_sql("1 + 2")?;
+    let expr = parse_expr(&tokens, policy.sql_dialect()?)?;
+    let mut type_checker = TypeChecker::try_create_with_policy(
+        &mut bind_context,
+        policy,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        true,
+    )?;
+
+    let (scalar, data_type) = *type_checker.resolve(&expr)?;
+
+    assert_eq!(format_scalar(&scalar), "3");
+    assert_eq!(data_type, DataType::Number(NumberDataType::UInt8));
+
+    let tokens = tokenize_sql("current_database()")?;
+    let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+    let err = type_checker.resolve(&expr).unwrap_err();
+    assert!(
+        err.message().contains("session_function"),
+        "expected session_function policy error, got {}",
+        err.message()
+    );
     Ok(())
 }
 

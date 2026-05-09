@@ -38,7 +38,7 @@ use super::core_expr::CoreMapEntries;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P> {
     #[inline]
     pub(super) fn resolve_literal(
         &self,
@@ -67,7 +67,11 @@ impl<'a> TypeChecker<'a> {
         let value = minus_literal_scalar(span, literal)?;
         Ok(Box::new(infer_literal_data_type(value)))
     }
+}
 
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub(super) fn resolve_core_array(
         &mut self,
         arena: &CoreExprArena<'_>,

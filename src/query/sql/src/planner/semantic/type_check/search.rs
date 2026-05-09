@@ -47,7 +47,9 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub(super) fn resolve_score_search_function(
         &mut self,
         span: Span,

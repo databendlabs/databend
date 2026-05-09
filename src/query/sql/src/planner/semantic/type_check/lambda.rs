@@ -47,7 +47,9 @@ use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     fn transform_to_max_type(&self, ty: &DataType) -> Result<DataType> {
         let max_ty = match ty.remove_nullable() {
             DataType::Number(s) => {
@@ -189,12 +191,12 @@ impl<'a> TypeChecker<'a> {
 
         let mut lambda_context = self.bind_context.clone();
         let box (lambda_expr, lambda_type) = parse_lambda_expr(
-            self.ctx.clone(),
+            self.table_ctx().clone(),
             &mut lambda_context,
             &lambda_columns,
             &lambda.expr,
             if LicenseManagerSwitch::instance()
-                .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
                 .is_ok()
             {
                 Some(self.metadata.clone())

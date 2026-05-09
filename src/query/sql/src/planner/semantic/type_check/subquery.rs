@@ -40,7 +40,9 @@ use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
     pub fn resolve_subquery(
         &mut self,
         typ: SubqueryType,
@@ -236,7 +238,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let mut binder = Binder::new(
-            self.ctx.clone(),
+            self.table_ctx().clone(),
             CatalogManager::instance(),
             self.name_resolution_ctx.clone(),
             self.metadata.clone(),

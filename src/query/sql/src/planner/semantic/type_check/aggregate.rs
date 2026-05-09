@@ -21,15 +21,182 @@ use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use unicase::Ascii;
 
 use super::TypeChecker;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreFunctionParams;
+use super::core_expr::CoreOrderByExprs;
+use crate::binder::ExprContext;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: super::TypeCheckPolicy
+{
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn resolve_core_aggregate_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        display_name: &str,
+        span: Span,
+        func_name: &str,
+        distinct: bool,
+        params: &CoreFunctionParams,
+        args: &CoreExprArgs,
+        remove_count_args: bool,
+        order_by: &CoreOrderByExprs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let (new_agg_func, data_type) = self.resolve_core_aggregate_call(
+            arena,
+            display_name,
+            span,
+            func_name,
+            distinct,
+            params,
+            args,
+            remove_count_args,
+            order_by,
+            false,
+        )?;
+        Ok(Box::new((new_agg_func.into(), data_type)))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn resolve_core_aggregate_call(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        display_name: &str,
+        span: Span,
+        func_name: &str,
+        distinct: bool,
+        params: &CoreFunctionParams,
+        args: &CoreExprArgs,
+        remove_count_args: bool,
+        order_by: &CoreOrderByExprs,
+        in_window_call: bool,
+    ) -> Result<(AggregateFunction, DataType)> {
+        if !order_by.is_empty() && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name))
+        {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        let new_params = self.resolve_core_function_params(arena, span, params, "aggregate")?;
+        let in_window = self.in_window_function;
+        self.in_window_function = self.in_window_function || in_window_call;
+        let in_aggregate_function = self.in_aggregate_function;
+        let result = self.resolve_core_aggregate_call_inner(
+            arena,
+            display_name,
+            span,
+            func_name,
+            distinct,
+            args,
+            remove_count_args,
+            order_by,
+            new_params,
+        );
+        self.in_window_function = in_window;
+        self.in_aggregate_function = in_aggregate_function;
+        result
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn resolve_core_aggregate_call_inner(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        display_name: &str,
+        span: Span,
+        func_name: &str,
+        distinct: bool,
+        args: &CoreExprArgs,
+        remove_count_args: bool,
+        order_by: &CoreOrderByExprs,
+        new_params: Vec<Scalar>,
+    ) -> Result<(AggregateFunction, DataType)> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InLambdaFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "aggregate functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
+
+        if self.in_aggregate_function {
+            if self.in_window_function {
+                // An aggregate may appear as the argument of a window aggregate,
+                // but grouped aggregates cannot be nested.
+                self.in_window_function = false;
+            } else {
+                self.in_aggregate_function = false;
+                return Err(ErrorCode::SemanticError(
+                    "aggregate function calls cannot be nested".to_string(),
+                )
+                .set_span(span));
+            }
+        }
+
+        // Only force aggregate arguments to skip alias resolution in contexts
+        // that would otherwise prefer aliases over input columns, such as
+        // HAVING or ORDER BY. In the SELECT list we still want the existing
+        // column-first fallback so `sum(c1)` can bind a same-select alias when
+        // there is no real `c1` column.
+        self.in_aggregate_function = true;
+        let original_context = self.bind_context.expr_context;
+        let disallow_alias_resolution = original_context.prefer_resolve_alias();
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = ExprContext::InAggregateFunction;
+        }
+        let arguments_result = self.resolve_core_expr_args(arena, args);
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = original_context;
+        }
+        self.in_aggregate_function = false;
+        let (arguments, arg_types) = arguments_result?;
+
+        let sort_descs = order_by
+            .iter()
+            .map(|order_by| {
+                if disallow_alias_resolution {
+                    self.bind_context.expr_context = ExprContext::InAggregateFunction;
+                }
+                let result = self.resolve_core(arena, order_by.expr);
+                if disallow_alias_resolution {
+                    self.bind_context.expr_context = original_context;
+                }
+                let box (scalar_expr, _) = result?;
+
+                Ok(AggregateFunctionScalarSortDesc {
+                    expr: scalar_expr,
+                    is_reuse_index: false,
+                    nulls_first: order_by.nulls_first.unwrap_or(false),
+                    asc: order_by.asc.unwrap_or(true),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        self.resolve_aggregate_function(
+            span,
+            func_name,
+            display_name.to_string(),
+            distinct,
+            new_params,
+            arguments,
+            arg_types,
+            sort_descs,
+            remove_count_args,
+        )
+    }
+
     /// Resolve aggregation function call.
     pub(super) fn resolve_aggregate_function(
         &mut self,

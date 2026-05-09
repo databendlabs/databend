@@ -59,6 +59,7 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_settings::Settings;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use simsearch::SimSearch;
@@ -104,6 +105,9 @@ mod variant;
 mod vector;
 mod window;
 
+pub use core_expr::CoreExprContextDependencies;
+pub use core_expr::CoreExprContextPolicy;
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct StageLocationParam {
     pub param_name: String,
@@ -120,9 +124,9 @@ pub struct StageLocationParam {
 ///
 /// If failed, a `SemanticError` will be raised. This may caused by incompatible
 /// argument types of expressions, or unresolvable columns.
-pub struct TypeChecker<'a> {
+pub struct TypeChecker<'a, P = FullTypeCheckPolicy> {
     bind_context: &'a mut BindContext,
-    ctx: Arc<dyn TableContext>,
+    policy: P,
     dialect: Dialect,
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
@@ -147,7 +151,61 @@ pub struct TypeChecker<'a> {
     skip_sequence_check: bool,
 }
 
-impl<'a> TypeChecker<'a> {
+pub struct FullTypeCheckPolicy {
+    ctx: Arc<dyn TableContext>,
+}
+
+impl FullTypeCheckPolicy {
+    pub fn new(ctx: Arc<dyn TableContext>) -> Self {
+        Self { ctx }
+    }
+}
+
+pub trait TypeCheckPolicy: CoreExprContextPolicy {
+    fn function_context(&self) -> Result<FunctionContext>;
+
+    fn settings(&self) -> Arc<Settings>;
+
+    fn sql_dialect(&self) -> Result<Dialect> {
+        self.settings().get_sql_dialect()
+    }
+
+    fn set_result_cache_uncacheable(&self);
+
+    fn table_context(&self) -> &Arc<dyn TableContext> {
+        panic!("type check policy does not provide table context")
+    }
+
+    fn table_context_ref(&self) -> &dyn TableContext {
+        self.table_context().as_ref()
+    }
+}
+
+impl CoreExprContextPolicy for FullTypeCheckPolicy {
+    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
+        CoreExprContextDependencies::all()
+    }
+}
+
+impl TypeCheckPolicy for FullTypeCheckPolicy {
+    fn function_context(&self) -> Result<FunctionContext> {
+        self.ctx.get_function_context()
+    }
+
+    fn settings(&self) -> Arc<Settings> {
+        self.ctx.get_settings()
+    }
+
+    fn set_result_cache_uncacheable(&self) {
+        self.ctx.result_cache_state().set_cacheable(false);
+    }
+
+    fn table_context(&self) -> &Arc<dyn TableContext> {
+        &self.ctx
+    }
+}
+
+impl<'a> TypeChecker<'a, FullTypeCheckPolicy> {
     pub fn try_create(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
@@ -156,11 +214,33 @@ impl<'a> TypeChecker<'a> {
         aliases: &'a [(String, ScalarExpr)],
         forbid_udf: bool,
     ) -> Result<Self> {
-        let func_ctx = ctx.get_function_context()?;
-        let dialect = ctx.get_settings().get_sql_dialect()?;
+        Self::try_create_with_policy(
+            bind_context,
+            FullTypeCheckPolicy::new(ctx),
+            name_resolution_ctx,
+            metadata,
+            aliases,
+            forbid_udf,
+        )
+    }
+}
+
+impl<'a, P> TypeChecker<'a, P>
+where P: TypeCheckPolicy
+{
+    pub fn try_create_with_policy(
+        bind_context: &'a mut BindContext,
+        policy: P,
+        name_resolution_ctx: &'a NameResolutionContext,
+        metadata: MetadataRef,
+        aliases: &'a [(String, ScalarExpr)],
+        forbid_udf: bool,
+    ) -> Result<Self> {
+        let func_ctx = policy.function_context()?;
+        let dialect = policy.sql_dialect()?;
         Ok(Self {
             bind_context,
-            ctx,
+            policy,
             dialect,
             func_ctx,
             name_resolution_ctx,
@@ -174,12 +254,59 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
+    fn core_expr_arena(&self) -> core_expr::CoreExprArena<'a> {
+        core_expr::CoreExprArena::with_context_policy(self.func_ctx.week_start as u64, &self.policy)
+    }
+}
+
+impl<'a, P> TypeChecker<'a, P>
+where P: TypeCheckPolicy
+{
     pub fn set_skip_sequence_check(&mut self, skip: bool) {
         self.skip_sequence_check = skip;
     }
 
-    fn core_expr_arena(&self) -> core_expr::CoreExprArena<'a> {
-        core_expr::CoreExprArena::new(self.func_ctx.week_start as u64)
+    pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
+        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
+            return false;
+        }
+        BUILTIN_FUNCTIONS
+            .get_property(func_name)
+            .map(|property| property.kind != FunctionKind::SRF)
+            .unwrap_or(false)
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
+    where F: Fn(&Expr) -> Result<Option<Expr>> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter))]
+        struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
+
+        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                let replacement_opt = (self.0)(expr);
+                if let Ok(Some(replacement)) = replacement_opt {
+                    *expr = replacement;
+                }
+            }
+        }
+        let mut visitor = ReplacerVisitor(replacement_fn);
+        let mut expr = original_expr.clone();
+        expr.drive_mut(&mut visitor);
+        Ok(expr)
+    }
+}
+
+impl<'a, P> TypeChecker<'a, P>
+where P: TypeCheckPolicy
+{
+    fn table_ctx(&self) -> &Arc<dyn TableContext> {
+        self.policy.table_context()
+    }
+
+    fn table_ctx_ref(&self) -> &dyn TableContext {
+        self.policy.table_context_ref()
     }
 
     #[recursive::recursive]
@@ -237,7 +364,7 @@ impl<'a> TypeChecker<'a> {
                     let has_masking_policy = !self.in_masking_policy
                         // First check: is DataMask feature enabled? (cheapest check)
                         && LicenseManagerSwitch::instance()
-                            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
+                            .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
                             .is_ok()
                         // Second check: does this column reference a table with masking policy?
                         && column
@@ -353,7 +480,7 @@ impl<'a> TypeChecker<'a> {
         list: &[Expr],
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if list.len() >= self.ctx.get_settings().get_inlist_to_join_threshold()? {
+        if list.len() >= self.policy.settings().get_inlist_to_join_threshold()? {
             if not {
                 return self.resolve_unary_op(span, &UnaryOperator::Not, &Expr::InList {
                     span,
@@ -365,7 +492,7 @@ impl<'a> TypeChecker<'a> {
             return self.convert_inlist_to_subquery(expr, list);
         }
 
-        let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
+        let get_max_inlist_to_or = self.policy.settings().get_max_inlist_to_or()? as usize;
         if list.len() > get_max_inlist_to_or && list.iter().all(like::satisfy_contain_func) {
             let array_expr = Expr::Array {
                 span,
@@ -564,16 +691,6 @@ impl<'a> TypeChecker<'a> {
                 .into();
             }
         }
-    }
-
-    pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
-        if Self::all_sugar_functions().contains(&Ascii::new(func_name)) {
-            return false;
-        }
-        BUILTIN_FUNCTIONS
-            .get_property(func_name)
-            .map(|property| property.kind != FunctionKind::SRF)
-            .unwrap_or(false)
     }
 
     pub(super) fn unknown_function_error(&self, span: Span, func_name: &str) -> ErrorCode {
@@ -797,8 +914,8 @@ impl<'a> TypeChecker<'a> {
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
         if (func_name == "substr" || func_name == "substring")
             && self
-                .ctx
-                .get_settings()
+                .policy
+                .settings()
                 .get_sql_dialect()
                 .unwrap()
                 .substr_index_zero_literal_as_one()
@@ -901,7 +1018,7 @@ impl<'a> TypeChecker<'a> {
                     arguments.len()
                 )));
             }
-            let func_ctx = self.ctx.get_function_context()?;
+            let func_ctx = self.policy.function_context()?;
             let arg_fn = |args: &[ScalarExpr],
                           index: usize,
                           arg_name: &str,
@@ -988,7 +1105,7 @@ impl<'a> TypeChecker<'a> {
         };
 
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            self.ctx.result_cache_state().set_cacheable(false);
+            self.policy.set_result_cache_uncacheable();
         }
 
         if let Some(constant) = self.try_fold_constant(&expr, true) {
@@ -1170,7 +1287,7 @@ impl<'a> TypeChecker<'a> {
             values.push(vec![val.clone()])
         }
         let (const_scan, ctx) = bind_values(
-            self.ctx.clone(),
+            self.table_ctx().clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
             &mut bind_context,
@@ -1218,27 +1335,6 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
-    where F: Fn(&Expr) -> Result<Option<Expr>> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter))]
-        struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
-
-        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
-                let replacement_opt = (self.0)(expr);
-                if let Ok(Some(replacement)) = replacement_opt {
-                    *expr = replacement;
-                }
-            }
-        }
-        let mut visitor = ReplacerVisitor(replacement_fn);
-        let mut expr = original_expr.clone();
-        expr.drive_mut(&mut visitor);
-        Ok(expr)
-    }
-
     fn try_fold_constant<Index: ColumnIndex>(
         &self,
         expr: &EExpr<Index>,
@@ -1269,7 +1365,9 @@ impl<'a> TypeChecker<'a> {
     }
 }
 
-impl<'a> TypeChecker<'a> {
+impl<'a, P> TypeChecker<'a, P>
+where P: TypeCheckPolicy
+{
     /// Get masking policy expression for a column reference
     /// This is the ONLY place where masking policy is applied - unifying all paths (SELECT/WHERE/HAVING)
     async fn get_masking_policy_expr_for_column(
@@ -1310,7 +1408,7 @@ impl<'a> TypeChecker<'a> {
                     {
                         // Check license
                         if LicenseManagerSwitch::instance()
-                            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)
+                            .check_enterprise_enabled(self.table_ctx().get_license_key(), DataMask)
                             .is_err()
                         {
                             return Ok(None);
@@ -1331,7 +1429,7 @@ impl<'a> TypeChecker<'a> {
             }; // metadata lock is released here
 
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
-                let tenant = self.ctx.get_tenant();
+                let tenant = self.table_ctx().get_tenant();
                 let cache = SecurityPolicyCacheManager::instance();
                 let meta_api = UserApiProvider::instance().get_meta_store_client();
                 let tenant_clone = tenant.clone();
