@@ -25,6 +25,7 @@ use smallvec::smallvec;
 
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
 use crate::plans::ScalarExpr;
 
 impl<'a> TypeChecker<'a> {
@@ -97,13 +98,26 @@ impl<'a> TypeChecker<'a> {
         escape: &Option<String>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let name = op.to_func_name();
-        let mut arena = CoreExprArena::new();
-        let mut arguments = smallvec![arena.lower_ast_expr(left), arena.lower_ast_expr(right)];
-        if let Some(escape) = escape {
-            arguments.push(arena.literal(span, Literal::String(escape.clone())));
-        }
-        let root = arena.call(span, name, arguments);
+        let mut arena = self.core_expr_arena();
+        let root = arena.lower_like_escape_expr(span, name, left, right, escape)?;
         self.resolve_core(&arena, root)
+    }
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_like_escape_expr(
+        &mut self,
+        span: Span,
+        func_name: impl Into<String>,
+        left: &'a Expr,
+        right: &'a Expr,
+        escape: &Option<String>,
+    ) -> Result<CoreExprId> {
+        let mut arguments = smallvec![self.lower_ast_expr(left)?, self.lower_ast_expr(right)?];
+        if let Some(escape) = escape {
+            arguments.push(self.literal(span, Literal::String(escape.clone())));
+        }
+        Ok(self.call(span, func_name, arguments))
     }
 }
 

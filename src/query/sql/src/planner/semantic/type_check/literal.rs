@@ -43,7 +43,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (value, data_type) = self.resolve_literal_scalar(literal)?;
+        let (value, data_type) = literal_scalar(literal);
 
         let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
         Ok(Box::new((scalar_expr, data_type)))
@@ -54,25 +54,7 @@ impl<'a> TypeChecker<'a> {
         &self,
         literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(Scalar, DataType)>> {
-        let value = match literal {
-            Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
-            Literal::Decimal256 {
-                value,
-                precision,
-                scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(
-                i256(*value),
-                DecimalSize::new_unchecked(*precision, *scale),
-            )),
-            Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
-            Literal::String(string) => Scalar::String(string.clone()),
-            Literal::Binary(bytes) => Scalar::Binary(bytes.clone()),
-            Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
-            Literal::Null => Scalar::Null,
-        };
-        let value = shrink_scalar(value);
-        let data_type = value.as_ref().infer_data_type();
-        Ok(Box::new((value, data_type)))
+        Ok(Box::new(literal_scalar(literal)))
     }
 
     pub(super) fn resolve_minus_literal_scalar(
@@ -80,38 +62,8 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         literal: &databend_common_ast::ast::Literal,
     ) -> Result<Box<(Scalar, DataType)>> {
-        let value = match literal {
-            Literal::UInt64(v) => {
-                if *v <= i64::MAX as u64 {
-                    Scalar::Number(NumberScalar::Int64(-(*v as i64)))
-                } else {
-                    Scalar::Decimal(DecimalScalar::Decimal128(
-                        -(*v as i128),
-                        DecimalSize::new_unchecked(i128::MAX_PRECISION, 0),
-                    ))
-                }
-            }
-            Literal::Decimal256 {
-                value,
-                precision,
-                scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal256(
-                i256(*value).checked_mul(i256::minus_one()).unwrap(),
-                DecimalSize::new_unchecked(*precision, *scale),
-            )),
-            Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
-            Literal::Null => Scalar::Null,
-            Literal::String(_) | Literal::Binary(_) | Literal::Boolean(_) => {
-                return Err(ErrorCode::InvalidArgument(format!(
-                    "Invalid minus operator for {}",
-                    literal
-                ))
-                .set_span(span));
-            }
-        };
-        let value = shrink_scalar(value);
-        let data_type = value.as_ref().infer_data_type();
-        Ok(Box::new((value, data_type)))
+        let value = minus_literal_scalar(span, literal)?;
+        Ok(Box::new(infer_literal_data_type(value)))
     }
 
     // Fast path for constant arrays so we don't need to go through the scalar `array()` function
@@ -238,4 +190,69 @@ impl<'a> TypeChecker<'a> {
 
         self.resolve_scalar_function_call(span, "tuple", vec![], args)
     }
+}
+
+pub(super) fn literal_scalar(literal: &databend_common_ast::ast::Literal) -> (Scalar, DataType) {
+    infer_literal_data_type(literal_value(literal))
+}
+
+pub(super) fn literal_value(literal: &databend_common_ast::ast::Literal) -> Scalar {
+    match literal {
+        Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
+        Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => Scalar::Decimal(DecimalScalar::Decimal256(
+            i256(*value),
+            DecimalSize::new_unchecked(*precision, *scale),
+        )),
+        Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
+        Literal::String(string) => Scalar::String(string.clone()),
+        Literal::Binary(bytes) => Scalar::Binary(bytes.clone()),
+        Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
+        Literal::Null => Scalar::Null,
+    }
+}
+
+pub(super) fn minus_literal_scalar(
+    span: Span,
+    literal: &databend_common_ast::ast::Literal,
+) -> Result<Scalar> {
+    let value = match literal {
+        Literal::UInt64(v) => {
+            if *v <= i64::MAX as u64 {
+                Scalar::Number(NumberScalar::Int64(-(*v as i64)))
+            } else {
+                Scalar::Decimal(DecimalScalar::Decimal128(
+                    -(*v as i128),
+                    DecimalSize::new_unchecked(i128::MAX_PRECISION, 0),
+                ))
+            }
+        }
+        Literal::Decimal256 {
+            value,
+            precision,
+            scale,
+        } => Scalar::Decimal(DecimalScalar::Decimal256(
+            i256(*value).checked_mul(i256::minus_one()).unwrap(),
+            DecimalSize::new_unchecked(*precision, *scale),
+        )),
+        Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
+        Literal::Null => Scalar::Null,
+        Literal::String(_) | Literal::Binary(_) | Literal::Boolean(_) => {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Invalid minus operator for {}",
+                literal
+            ))
+            .set_span(span));
+        }
+    };
+    Ok(shrink_scalar(value))
+}
+
+fn infer_literal_data_type(value: Scalar) -> (Scalar, DataType) {
+    let value = shrink_scalar(value);
+    let data_type = value.as_ref().infer_data_type();
+    (value, data_type)
 }

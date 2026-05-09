@@ -27,7 +27,6 @@ use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SubqueryModifier;
-use databend_common_ast::ast::TrimWhere;
 use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::UnaryOperator;
 use databend_common_ast::parser::Dialect;
@@ -59,7 +58,6 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
-use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_functions::is_builtin_function;
 use databend_common_license::license::Feature;
@@ -69,7 +67,6 @@ use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 use simsearch::SimSearch;
 use smallvec::SmallVec;
-use smallvec::smallvec;
 use unicase::Ascii;
 
 use super::name_resolution::NameResolutionContext;
@@ -91,7 +88,6 @@ use crate::plans::ScalarItem;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
-use crate::plans::WindowFuncType;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -105,6 +101,7 @@ mod like;
 mod literal;
 mod search;
 mod set_returning;
+mod string;
 mod subquery;
 mod sugar;
 mod udf;
@@ -121,10 +118,10 @@ pub struct StageLocationParam {
 
 /// A helper for type checking.
 ///
-/// `TypeChecker::resolve` will resolve types of `Expr` and transform `Expr` into
-/// a typed expression `Scalar`. At the same time, name resolution will be performed,
-/// which check validity of unbound `ColumnRef` and try to replace it with qualified
-/// `BoundColumnRef`.
+/// `TypeChecker::resolve` first lowers an AST `Expr` into a core expression tree,
+/// then resolves the lowered tree into a typed expression `Scalar`. At the same
+/// time, name resolution will be performed, which check validity of unbound
+/// `ColumnRef` and try to replace it with qualified `BoundColumnRef`.
 ///
 /// If failed, a `SemanticError` will be raised. This may caused by incompatible
 /// argument types of expressions, or unresolvable columns.
@@ -186,8 +183,21 @@ impl<'a> TypeChecker<'a> {
         self.skip_sequence_check = skip;
     }
 
+    fn core_expr_arena(&self) -> core_expr::CoreExprArena<'a> {
+        core_expr::CoreExprArena::new(self.func_ctx.week_start as u64)
+    }
+
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
+        let mut arena = self.core_expr_arena();
+        let root = arena.lower_ast_expr(expr)?;
+        self.resolve_core(&arena, root)
+    }
+
+    pub(super) fn resolve_legacy_ast(
+        &mut self,
+        expr: &Expr,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         match expr {
             Expr::ColumnRef {
                 span,
@@ -360,71 +370,6 @@ impl<'a> TypeChecker<'a> {
                 Ok(Box::new((scalar, data_type)))
             }
 
-            Expr::IsNull {
-                span, expr, not, ..
-            } => {
-                let args = &[expr.as_ref()];
-                if *not {
-                    self.resolve_function(*span, "is_not_null", vec![], args)
-                } else {
-                    let (is_not_null, _) =
-                        *self.resolve_function(*span, "is_not_null", vec![], args)?;
-                    self.resolve_scalar_function_call(*span, "not", vec![], vec![is_not_null])
-                }
-            }
-
-            Expr::IsDistinctFrom {
-                span,
-                left,
-                right,
-                not,
-            } => {
-                let left_null_expr = Box::new(Expr::IsNull {
-                    span: *span,
-                    expr: left.clone(),
-                    not: false,
-                });
-                let right_null_expr = Box::new(Expr::IsNull {
-                    span: *span,
-                    expr: right.clone(),
-                    not: false,
-                });
-                let op = if *not {
-                    BinaryOperator::Eq
-                } else {
-                    BinaryOperator::NotEq
-                };
-                let (scalar, _) = *self.resolve_function(*span, "if", vec![], &[
-                    &Expr::BinaryOp {
-                        span: *span,
-                        op: BinaryOperator::And,
-                        left: left_null_expr.clone(),
-                        right: right_null_expr.clone(),
-                    },
-                    &Expr::Literal {
-                        span: *span,
-                        value: Literal::Boolean(*not),
-                    },
-                    &Expr::BinaryOp {
-                        span: *span,
-                        op: BinaryOperator::Or,
-                        left: left_null_expr.clone(),
-                        right: right_null_expr.clone(),
-                    },
-                    &Expr::Literal {
-                        span: *span,
-                        value: Literal::Boolean(!*not),
-                    },
-                    &Expr::BinaryOp {
-                        span: *span,
-                        op,
-                        left: left.clone(),
-                        right: right.clone(),
-                    },
-                ])?;
-                self.resolve_scalar_function_call(*span, "assume_not_null", vec![], vec![scalar])
-            }
-
             Expr::InList {
                 span,
                 expr,
@@ -508,54 +453,6 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::Between {
-                span,
-                expr,
-                low,
-                high,
-                not,
-                ..
-            } => {
-                if !*not {
-                    // Rewrite `expr BETWEEN low AND high`
-                    // into `expr >= low AND expr <= high`
-                    let (ge_func, _left_type) = *self.resolve_binary_op(
-                        *span,
-                        &BinaryOperator::Gte,
-                        expr.as_ref(),
-                        low.as_ref(),
-                    )?;
-                    let (le_func, _right_type) = *self.resolve_binary_op(
-                        *span,
-                        &BinaryOperator::Lte,
-                        expr.as_ref(),
-                        high.as_ref(),
-                    )?;
-
-                    self.resolve_scalar_function_call(*span, "and", vec![], vec![
-                        ge_func.clone(),
-                        le_func.clone(),
-                    ])
-                } else {
-                    // Rewrite `expr NOT BETWEEN low AND high`
-                    // into `expr < low OR expr > high`
-                    let (lt_func, _left_type) = *self.resolve_binary_op(
-                        *span,
-                        &BinaryOperator::Lt,
-                        expr.as_ref(),
-                        low.as_ref(),
-                    )?;
-                    let (gt_func, _right_type) = *self.resolve_binary_op(
-                        *span,
-                        &BinaryOperator::Gt,
-                        expr.as_ref(),
-                        high.as_ref(),
-                    )?;
-
-                    self.resolve_scalar_function_call(*span, "or", vec![], vec![lt_func, gt_func])
-                }
-            }
-
             Expr::BinaryOp {
                 span,
                 op,
@@ -564,178 +461,13 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => self.resolve_binary_op_or_subquery(span, op, left, right),
 
-            Expr::JsonOp {
-                span,
-                op,
-                left,
-                right,
-            } => {
-                let func_name = op.to_func_name();
-                self.resolve_core_function(*span, func_name.as_str(), &[left, right])
-            }
-
             Expr::UnaryOp { span, op, expr, .. } => self.resolve_unary_op(*span, op, expr.as_ref()),
-
-            Expr::Cast {
-                expr, target_type, ..
-            } => {
-                let box (scalar, data_type) = self.resolve(expr)?;
-                if target_type == &TypeName::Variant {
-                    if let Some(result) =
-                        self.resolve_cast_to_variant(expr.span(), &data_type, &scalar, false)
-                    {
-                        return result;
-                    }
-                }
-
-                let raw_expr = RawExpr::Cast {
-                    span: expr.span(),
-                    is_try: false,
-                    expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: DataType::from(&resolve_type_name(target_type, true)?),
-                };
-                let registry = &BUILTIN_FUNCTIONS;
-                let checked_expr = type_check::check(&raw_expr, registry)?;
-
-                if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
-                    return Ok(constant);
-                }
-
-                // cast variant to other type should nest wrap nullable,
-                // as we cast JSON null to SQL NULL.
-                let target_type = if data_type.remove_nullable() == DataType::Variant {
-                    let target_type = checked_expr.data_type().nest_wrap_nullable();
-                    target_type
-                // if the source type is nullable, cast target type should also be nullable.
-                } else if data_type.is_nullable_or_null() {
-                    checked_expr.data_type().wrap_nullable()
-                } else {
-                    checked_expr.data_type().clone()
-                };
-
-                Ok(Box::new((
-                    CastExpr {
-                        span: expr.span(),
-                        is_try: false,
-                        argument: Box::new(scalar),
-                        target_type: Box::new(target_type.clone()),
-                    }
-                    .into(),
-                    target_type,
-                )))
-            }
-
-            Expr::TryCast {
-                expr, target_type, ..
-            } => {
-                let box (scalar, data_type) = self.resolve(expr)?;
-                if target_type == &TypeName::Variant {
-                    if let Some(result) =
-                        self.resolve_cast_to_variant(expr.span(), &data_type, &scalar, true)
-                    {
-                        return result;
-                    }
-                }
-
-                let raw_expr = RawExpr::Cast {
-                    span: expr.span(),
-                    is_try: true,
-                    expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: DataType::from(&resolve_type_name(target_type, true)?),
-                };
-                let registry = &BUILTIN_FUNCTIONS;
-                let checked_expr = type_check::check(&raw_expr, registry)?;
-
-                if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
-                    return Ok(constant);
-                }
-
-                // cast variant to other type should nest wrap nullable,
-                // as we cast JSON null to SQL NULL.
-                let target_type = if data_type.remove_nullable() == DataType::Variant {
-                    let target_type = checked_expr.data_type().nest_wrap_nullable();
-                    target_type
-                } else {
-                    checked_expr.data_type().clone()
-                };
-                Ok(Box::new((
-                    CastExpr {
-                        span: expr.span(),
-                        is_try: true,
-                        argument: Box::new(scalar),
-                        target_type: Box::new(target_type.clone()),
-                    }
-                    .into(),
-                    target_type,
-                )))
-            }
-
-            Expr::Case {
-                span,
-                operand,
-                conditions,
-                results,
-                else_result,
-            } => {
-                let mut arguments = Vec::with_capacity(conditions.len() * 2 + 1);
-                for (c, r) in conditions.iter().zip(results.iter()) {
-                    match operand {
-                        Some(operand) => {
-                            // compare case operand with each conditions until one of them is equal
-                            let equal_expr = Expr::FunctionCall {
-                                span: *span,
-                                func: ASTFunctionCall {
-                                    distinct: false,
-                                    name: Identifier::from_name(*span, "eq"),
-                                    args: vec![*operand.clone(), c.clone()],
-                                    params: vec![],
-                                    order_by: vec![],
-                                    window: None,
-                                    lambda: None,
-                                },
-                            };
-                            arguments.push(equal_expr)
-                        }
-                        None => arguments.push(c.clone()),
-                    }
-                    arguments.push(r.clone());
-                }
-                let null_arg = Expr::Literal {
-                    span: None,
-                    value: Literal::Null,
-                };
-
-                if let Some(expr) = else_result {
-                    arguments.push(*expr.clone());
-                } else {
-                    arguments.push(null_arg)
-                }
-                let args_ref: Vec<&Expr> = arguments.iter().collect();
-
-                self.resolve_function(*span, "if", vec![], &args_ref)
-            }
-
-            Expr::Substring {
-                span,
-                expr,
-                substring_from,
-                substring_for,
-                ..
-            } => {
-                let mut arguments = vec![expr.as_ref(), substring_from.as_ref()];
-                if let Some(substring_for) = substring_for {
-                    arguments.push(substring_for.as_ref());
-                }
-                self.resolve_core_function(*span, "substring", &arguments)
-            }
-
-            Expr::Literal { span, value } => self.resolve_literal(*span, value),
 
             Expr::FunctionCall {
                 span,
                 func:
                     ASTFunctionCall {
-                        distinct,
+                        distinct: _,
                         name,
                         args,
                         params,
@@ -847,73 +579,7 @@ impl<'a> TypeChecker<'a> {
 
                 let args = args.iter().collect::<SmallVec<[&Expr; 4]>>();
 
-                if GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name) {
-                    // general window function
-                    if window.is_none() {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "window function {func_name} can only be used in window clause"
-                        ))
-                        .set_span(*span));
-                    }
-                    let window = window.as_ref().unwrap();
-                    if !RANK_WINDOW_FUNCTIONS.contains(&func_name) && window.ignore_nulls.is_some()
-                    {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "window function {func_name} not support IGNORE/RESPECT NULLS option"
-                        ))
-                        .set_span(*span));
-                    }
-                    let func = self.resolve_general_window_function(
-                        *span,
-                        func_name,
-                        &args,
-                        &window.ignore_nulls,
-                    )?;
-                    let display_name = format!("{:#}", expr);
-                    self.resolve_window(*span, display_name, &window.window, func)
-                } else if AggregateFunctionFactory::instance().contains(func_name) {
-                    let mut new_params = Vec::with_capacity(params.len());
-                    for param in params {
-                        let box (scalar, _data_type) = self.resolve(param)?;
-                        let expr = scalar.as_expr()?;
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        let constant = expr
-                            .into_constant()
-                            .map_err(|_| {
-                                ErrorCode::SemanticError(format!(
-                                    "invalid parameter {param} for aggregate function, expected constant",
-                                ))
-                                    .set_span(*span)
-                            })?
-                            .scalar;
-                        new_params.push(constant);
-                    }
-                    let in_window = self.in_window_function;
-                    self.in_window_function = self.in_window_function || window.is_some();
-                    let in_aggregate_function = self.in_aggregate_function;
-                    let (new_agg_func, data_type) = self.resolve_aggregate_function(
-                        *span, func_name, expr, *distinct, new_params, &args, order_by,
-                    )?;
-                    self.in_window_function = in_window;
-                    self.in_aggregate_function = in_aggregate_function;
-                    if let Some(window) = window {
-                        // aggregate window function
-                        let display_name = format!("{:#}", expr);
-                        if window.ignore_nulls.is_some() {
-                            return Err(ErrorCode::SemanticError(format!(
-                                "window function {func_name} not support IGNORE/RESPECT NULLS option"
-                            ))
-                                .set_span(*span));
-                        }
-                        // general window function
-                        let func = WindowFuncType::Aggregate(new_agg_func);
-                        self.resolve_window(*span, display_name, &window.window, func)
-                    } else {
-                        // aggregate function
-                        Ok(Box::new((new_agg_func.into(), data_type)))
-                    }
-                } else if GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
+                if GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     if lambda.is_none() {
                         return Err(ErrorCode::SemanticError(format!(
                             "function {func_name} must have a lambda expression",
@@ -927,13 +593,11 @@ impl<'a> TypeChecker<'a> {
                         "score" => self.resolve_score_search_function(*span, func_name, &args),
                         "match" => self.resolve_match_search_function(*span, func_name, &args),
                         "query" => self.resolve_query_search_function(*span, func_name, &args),
-                        _ => {
-                            return Err(ErrorCode::SemanticError(format!(
-                                "cannot find search function {}",
-                                func_name
-                            ))
-                            .set_span(*span));
-                        }
+                        _ => Err(ErrorCode::SemanticError(format!(
+                            "cannot find search function {}",
+                            func_name
+                        ))
+                        .set_span(*span)),
                     }
                 } else if ASYNC_FUNCTIONS.contains(&uni_case_func_name) {
                     self.resolve_async_function(*span, func_name, &args)
@@ -964,21 +628,6 @@ impl<'a> TypeChecker<'a> {
                         new_params.push(constant);
                     }
                     self.resolve_function(*span, func_name, new_params, &args)
-                }
-            }
-
-            Expr::CountAll { span, window, .. } => {
-                let (new_agg_func, data_type) =
-                    self.resolve_aggregate_function(*span, "count", expr, false, vec![], &[], &[])?;
-
-                if let Some(window) = window {
-                    // aggregate window function
-                    let display_name = format!("{:#}", expr);
-                    let func = WindowFuncType::Aggregate(new_agg_func);
-                    self.resolve_window(*span, display_name, window, func)
-                } else {
-                    // aggregate function
-                    Ok(Box::new((new_agg_func.into(), data_type)))
                 }
             }
 
@@ -1105,7 +754,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Extract {
                 span, kind, expr, ..
             } => {
-                let mut arena = core_expr::CoreExprArena::new();
+                let mut arena = self.core_expr_arena();
                 let root = arena.lower_extract_expr(*span, kind, expr)?;
                 self.resolve_core(&arena, root)
             }
@@ -1113,100 +762,15 @@ impl<'a> TypeChecker<'a> {
             Expr::DatePart {
                 span, kind, expr, ..
             } => {
-                let mut arena = core_expr::CoreExprArena::new();
+                let mut arena = self.core_expr_arena();
                 let root = arena.lower_extract_expr(*span, kind, expr)?;
                 self.resolve_core(&arena, root)
             }
 
-            Expr::Interval { span, expr, unit } => {
-                let ex = Expr::Cast {
-                    span: *span,
-                    expr: Box::new(expr.as_ref().clone()),
-                    target_type: TypeName::String,
-                    pg_style: false,
-                };
-                let ex = Expr::FunctionCall {
-                    span: *span,
-                    func: ASTFunctionCall {
-                        name: Identifier::from_name(None, "concat".to_string()),
-                        args: vec![ex, Expr::Literal {
-                            span: *span,
-                            value: Literal::String(format!(" {}", unit)),
-                        }],
-                        params: vec![],
-                        distinct: false,
-                        order_by: vec![],
-                        window: None,
-                        lambda: None,
-                    },
-                };
-                let ex = Expr::FunctionCall {
-                    span: *span,
-                    func: ASTFunctionCall {
-                        name: Identifier::from_name(None, "to_interval".to_string()),
-                        args: vec![ex],
-                        params: vec![],
-                        distinct: false,
-                        order_by: vec![],
-                        window: None,
-                        lambda: None,
-                    },
-                };
-                self.resolve(&ex)
-            }
-            Expr::DateAdd {
-                span,
-                unit,
-                interval,
-                date,
-                ..
-            } => {
-                let mut arena = core_expr::CoreExprArena::new();
-                let root = arena.lower_date_arith_expr(*span, unit, interval, date, expr)?;
-                self.resolve_core(&arena, root)
-            }
-            Expr::DateDiff {
-                span,
-                unit,
-                date_start,
-                date_end,
-                ..
-            } => {
-                let mut arena = core_expr::CoreExprArena::new();
-                let root = arena.lower_date_arith_expr(*span, unit, date_start, date_end, expr)?;
-                self.resolve_core(&arena, root)
-            }
-            Expr::DateBetween {
-                span,
-                unit,
-                date_start,
-                date_end,
-                ..
-            } => {
-                let mut arena = core_expr::CoreExprArena::new();
-                let root = arena.lower_date_arith_expr(*span, unit, date_start, date_end, expr)?;
-                self.resolve_core(&arena, root)
-            }
-            Expr::DateSub {
-                span,
-                unit,
-                interval,
-                date,
-                ..
-            } => {
-                let date_rhs = Expr::UnaryOp {
-                    span: *span,
-                    op: UnaryOperator::Minus,
-                    expr: interval.clone(),
-                };
-                let mut arena = core_expr::CoreExprArena::new();
-                let root = arena.lower_date_arith_expr(*span, unit, &date_rhs, date, expr)?;
-                self.resolve_core(&arena, root)
-            }
             Expr::DateTrunc {
                 span, unit, date, ..
             } => {
-                let mut arena = core_expr::CoreExprArena::new();
+                let mut arena = self.core_expr_arena();
                 let root = arena.lower_date_trunc_expr(
                     *span,
                     unit,
@@ -1215,6 +779,7 @@ impl<'a> TypeChecker<'a> {
                 )?;
                 self.resolve_core(&arena, root)
             }
+
             Expr::TimeSlice {
                 span,
                 unit,
@@ -1222,7 +787,7 @@ impl<'a> TypeChecker<'a> {
                 slice_length,
                 start_or_end,
             } => {
-                let mut arena = core_expr::CoreExprArena::new();
+                let mut arena = self.core_expr_arena();
                 let root = arena.lower_time_slice_expr(
                     *span,
                     date,
@@ -1232,55 +797,29 @@ impl<'a> TypeChecker<'a> {
                 )?;
                 self.resolve_core(&arena, root)
             }
+
             Expr::LastDay {
                 span, unit, date, ..
             } => {
-                let mut arena = core_expr::CoreExprArena::new();
+                let mut arena = self.core_expr_arena();
                 let root = arena.lower_last_day_expr(*span, date, unit)?;
                 self.resolve_core(&arena, root)
             }
-            Expr::PreviousDay {
-                span, unit, date, ..
-            } => {
-                let mut arena = core_expr::CoreExprArena::new();
-                let root = arena.lower_previous_or_next_day_expr(*span, date, unit, true);
-                self.resolve_core(&arena, root)
-            }
-            Expr::NextDay {
-                span, unit, date, ..
-            } => {
-                let mut arena = core_expr::CoreExprArena::new();
-                let root = arena.lower_previous_or_next_day_expr(*span, date, unit, false);
-                self.resolve_core(&arena, root)
-            }
-            Expr::Trim {
-                span,
-                expr,
-                trim_where,
-                ..
-            } => self.resolve_trim_function(*span, expr, trim_where),
 
             Expr::Array { span, exprs, .. } => self.resolve_array(*span, exprs),
-
-            Expr::Position {
-                substr_expr,
-                str_expr,
-                span,
-                ..
-            } => self
-                .resolve_core_function(*span, "locate", &[substr_expr.as_ref(), str_expr.as_ref()]),
 
             Expr::Map { span, kvs, .. } => self.resolve_map(*span, kvs),
 
             Expr::Tuple { span, exprs, .. } => self.resolve_tuple(*span, exprs),
 
-            Expr::Hole { span, .. } | Expr::Placeholder { span } => {
-                return Err(ErrorCode::SemanticError(
-                    "Hole or Placeholder expression is impossible in trivial query".to_string(),
-                )
-                .set_span(*span));
-            }
+            Expr::Hole { span, .. } | Expr::Placeholder { span } => Err(ErrorCode::SemanticError(
+                "Hole or Placeholder expression is impossible in trivial query".to_string(),
+            )
+            .set_span(*span)),
             Expr::StageLocation { span, location } => self.resolve_stage_location(*span, location),
+            _ => Err(ErrorCode::Internal(
+                "expression should have been lowered into CoreExpr",
+            )),
         }
     }
 
@@ -1410,6 +949,81 @@ impl<'a> TypeChecker<'a> {
             .get_property(func_name)
             .map(|property| property.kind != FunctionKind::SRF)
             .unwrap_or(false)
+    }
+
+    pub(super) fn resolve_cast_expr(
+        &mut self,
+        span: Span,
+        scalar: ScalarExpr,
+        data_type: DataType,
+        target_type: &TypeName,
+        is_try: bool,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if target_type == &TypeName::Variant {
+            if let Some(result) = self.resolve_cast_to_variant(span, &data_type, &scalar, is_try) {
+                return result;
+            }
+        }
+
+        let raw_expr = RawExpr::Cast {
+            span,
+            is_try,
+            expr: Box::new(scalar.as_raw_expr()),
+            dest_type: DataType::from(&resolve_type_name(target_type, true)?),
+        };
+        let checked_expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+
+        if let Some(constant) = self.try_fold_constant(&checked_expr, false) {
+            return Ok(constant);
+        }
+
+        // cast variant to other type should nest wrap nullable,
+        // as we cast JSON null to SQL NULL.
+        let target_type = if data_type.remove_nullable() == DataType::Variant {
+            checked_expr.data_type().nest_wrap_nullable()
+        // if the source type is nullable, cast target type should also be nullable.
+        } else if !is_try && data_type.is_nullable_or_null() {
+            checked_expr.data_type().wrap_nullable()
+        } else {
+            checked_expr.data_type().clone()
+        };
+
+        Ok(Box::new((
+            CastExpr {
+                span,
+                is_try,
+                argument: Box::new(scalar),
+                target_type: Box::new(target_type.clone()),
+            }
+            .into(),
+            target_type,
+        )))
+    }
+
+    pub(super) fn resolve_function_params(
+        &mut self,
+        span: Span,
+        _func_name: &str,
+        params: &[&Expr],
+        kind: &str,
+    ) -> Result<Vec<Scalar>> {
+        let mut new_params = Vec::with_capacity(params.len());
+        for param in params {
+            let box (scalar, _) = self.resolve(param)?;
+            let expr = scalar.as_expr()?;
+            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let constant = expr
+                .into_constant()
+                .map_err(|_| {
+                    ErrorCode::SemanticError(format!(
+                        "invalid parameter {param} for {kind} function, expected constant",
+                    ))
+                    .set_span(span)
+                })?
+                .scalar;
+            new_params.push(constant);
+        }
+        Ok(new_params)
     }
 
     pub(super) fn rewrite_variant_compare_constant(
@@ -1820,56 +1434,9 @@ impl<'a> TypeChecker<'a> {
             }
             BinaryOperator::Eq | BinaryOperator::NotEq => {
                 let name = op.to_func_name();
-                let box (res, ty) =
-                    self.resolve_core_function(span, name.as_str(), &[left, right])?;
-                // When a variant type column is compared with a scalar string value,
-                // we try to cast the scalar string value to variant type,
-                // because casting variant column data is a time-consuming operation.
-                if let ScalarExpr::FunctionCall(ref func) = res {
-                    if func.arguments.len() != 2 {
-                        return Ok(Box::new((res, ty)));
-                    }
-                    let arg0 = &func.arguments[0];
-                    let arg1 = &func.arguments[1];
-                    let (constant_arg_index, constant_arg) = match (arg0, arg1) {
-                        (ScalarExpr::ConstantExpr(_), _)
-                            if arg1.data_type()?.remove_nullable() == DataType::Variant
-                                && !arg1.used_columns().is_empty()
-                                && arg0.data_type()? == DataType::String =>
-                        {
-                            (0, arg0)
-                        }
-                        (_, ScalarExpr::ConstantExpr(_))
-                            if arg0.data_type()?.remove_nullable() == DataType::Variant
-                                && !arg0.used_columns().is_empty()
-                                && arg1.data_type()? == DataType::String =>
-                        {
-                            (1, arg1)
-                        }
-                        _ => {
-                            return Ok(Box::new((res, ty)));
-                        }
-                    };
-
-                    let wrap_new_arg = ScalarExpr::FunctionCall(FunctionCall {
-                        span: func.span,
-                        func_name: "to_variant".to_string(),
-                        params: vec![],
-                        arguments: vec![constant_arg.clone()],
-                    });
-                    let mut new_arguments = func.arguments.clone();
-                    new_arguments[constant_arg_index] = wrap_new_arg;
-
-                    let new_func = ScalarExpr::FunctionCall(FunctionCall {
-                        span: func.span,
-                        func_name: func.func_name.clone(),
-                        params: func.params.clone(),
-                        arguments: new_arguments,
-                    });
-
-                    return Ok(Box::new((new_func, ty)));
-                }
-                Ok(Box::new((res, ty)))
+                let mut arena = self.core_expr_arena();
+                let root = arena.lower_call_expr(span, name, [left, right])?;
+                self.resolve_core(&arena, root)
             }
             BinaryOperator::Plus | BinaryOperator::Minus => {
                 let name = op.to_func_name();
@@ -1888,7 +1455,9 @@ impl<'a> TypeChecker<'a> {
             }
             other => {
                 let name = other.to_func_name();
-                self.resolve_core_function(span, name.as_str(), &[left, right])
+                let mut arena = self.core_expr_arena();
+                let root = arena.lower_call_expr(span, name, [left, right])?;
+                self.resolve_core(&arena, root)
             }
         }
     }
@@ -1912,36 +1481,17 @@ impl<'a> TypeChecker<'a> {
                     return Ok(Box::new((scalar_expr, data_type)));
                 }
                 let name = op.to_func_name();
-                self.resolve_core_function(span, name.as_str(), &[child])
+                let mut arena = self.core_expr_arena();
+                let root = arena.lower_call_expr(span, name, [child])?;
+                self.resolve_core(&arena, root)
             }
             other => {
                 let name = other.to_func_name();
-                self.resolve_core_function(span, name.as_str(), &[child])
+                let mut arena = self.core_expr_arena();
+                let root = arena.lower_call_expr(span, name, [child])?;
+                self.resolve_core(&arena, root)
             }
         }
-    }
-
-    fn resolve_trim_function(
-        &mut self,
-        span: Span,
-        expr: &Expr,
-        trim_where: &Option<(TrimWhere, Box<Expr>)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut arena = core_expr::CoreExprArena::new();
-        let (func_name, trim_arg) = if let Some((trim_type, trim_expr)) = trim_where {
-            let func_name = match trim_type {
-                TrimWhere::Leading => "trim_leading",
-                TrimWhere::Trailing => "trim_trailing",
-                TrimWhere::Both => "trim_both",
-            };
-            (func_name, arena.lower_ast_expr(trim_expr.as_ref()))
-        } else {
-            let trim_arg = arena.literal(span, Literal::String(" ".to_string()));
-            ("trim_both", trim_arg)
-        };
-        let expr = arena.lower_ast_expr(expr);
-        let root = arena.call(span, func_name, smallvec![expr, trim_arg]);
-        self.resolve_core(&arena, root)
     }
 
     fn convert_inlist_to_subquery(

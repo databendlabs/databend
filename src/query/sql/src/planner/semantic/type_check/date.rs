@@ -34,6 +34,17 @@ use crate::binder::wrap_cast;
 use crate::planner::semantic::type_check::core_expr::CoreExprId;
 use crate::plans::ScalarExpr;
 
+pub(super) enum DateArithmeticFunction {
+    Add,
+    Diff,
+    Between,
+}
+
+pub(super) enum AdjacentDayFunction {
+    Previous,
+    Next,
+}
+
 impl<'a> TypeChecker<'a> {
     pub(super) fn adjust_date_interval_operands(
         &self,
@@ -157,7 +168,7 @@ impl<'a> CoreExprArena<'a> {
             )
             .set_span(span))?,
         };
-        let arg = self.lower_ast_expr(arg);
+        let arg = self.lower_ast_expr(arg)?;
         Ok(self.call(span, func_name, smallvec![arg]))
     }
 
@@ -167,11 +178,13 @@ impl<'a> CoreExprArena<'a> {
         interval_kind: &ASTIntervalKind,
         date_rhs: &'a Expr,
         date_lhs: &'a Expr,
-        is_diff: &Expr,
+        function: DateArithmeticFunction,
     ) -> Result<CoreExprId> {
-        let func_name = match is_diff {
-            Expr::DateDiff { .. } => format!("diff_{}s", interval_kind.to_string().to_lowercase()),
-            Expr::DateSub { .. } | Expr::DateAdd { .. } => {
+        let func_name = match function {
+            DateArithmeticFunction::Diff => {
+                format!("diff_{}s", interval_kind.to_string().to_lowercase())
+            }
+            DateArithmeticFunction::Add => {
                 let interval_kind = interval_kind.to_string().to_lowercase();
                 if interval_kind == "month" {
                     format!("date_add_{}s", interval_kind.to_string().to_lowercase())
@@ -179,18 +192,32 @@ impl<'a> CoreExprArena<'a> {
                     format!("add_{}s", interval_kind.to_string().to_lowercase())
                 }
             }
-            Expr::DateBetween { .. } => {
+            DateArithmeticFunction::Between => {
                 format!("between_{}s", interval_kind.to_string().to_lowercase())
             }
-            _ => {
-                return Err(ErrorCode::Internal(
-                    "Only support resolve datesub, date_sub, date_diff, date_add",
-                ));
-            }
         };
-        let date_lhs = self.lower_ast_expr(date_lhs);
-        let date_rhs = self.lower_ast_expr(date_rhs);
+        let date_lhs = self.lower_ast_expr(date_lhs)?;
+        let date_rhs = self.lower_ast_expr(date_rhs)?;
         Ok(self.call(span, func_name, smallvec![date_lhs, date_rhs]))
+    }
+
+    pub(super) fn lower_date_sub_expr(
+        &mut self,
+        span: Span,
+        interval_kind: &ASTIntervalKind,
+        interval: &'a Expr,
+        date: &'a Expr,
+    ) -> Result<CoreExprId> {
+        let interval_kind = interval_kind.to_string().to_lowercase();
+        let func_name = if interval_kind == "month" {
+            format!("date_add_{}s", interval_kind)
+        } else {
+            format!("add_{}s", interval_kind)
+        };
+        let date = self.lower_ast_expr(date)?;
+        let interval = self.lower_ast_expr(interval)?;
+        let interval = self.call(span, "minus", smallvec![interval]);
+        Ok(self.call(span, func_name, smallvec![date, interval]))
     }
 
     pub(super) fn lower_date_trunc_expr(
@@ -206,7 +233,7 @@ impl<'a> CoreExprArena<'a> {
             ASTIntervalKind::Quarter => "to_start_of_quarter",
             ASTIntervalKind::Month => "to_start_of_month",
             ASTIntervalKind::Week => {
-                let date = self.lower_ast_expr(date);
+                let date = self.lower_ast_expr(date)?;
                 let week_start = self.literal(None, Literal::UInt64(week_start));
                 return Ok(self.call(span, "to_start_of_week", smallvec![date, week_start]));
             }
@@ -219,7 +246,7 @@ impl<'a> CoreExprArena<'a> {
                 return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span));
             }
         };
-        let date = self.lower_ast_expr(date);
+        let date = self.lower_ast_expr(date)?;
         Ok(self.call(span, func_name, smallvec![date]))
     }
 
@@ -257,7 +284,7 @@ impl<'a> CoreExprArena<'a> {
             | ASTIntervalKind::Second => kind.to_string(),
             _ => return Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second, week]".to_string()).set_span(span)),
         };
-        let date = self.lower_ast_expr(date);
+        let date = self.lower_ast_expr(date)?;
         let slice_length = self.literal(None, Literal::UInt64(slice_length));
         let start_or_end = self.literal(None, Literal::String(start_or_end));
         let kind = self.literal(None, Literal::String(kind));
@@ -288,7 +315,7 @@ impl<'a> CoreExprArena<'a> {
                 .set_span(span));
             }
         };
-        let date = self.lower_ast_expr(date);
+        let date = self.lower_ast_expr(date)?;
         Ok(self.call(span, func_name, smallvec![date]))
     }
 
@@ -297,12 +324,11 @@ impl<'a> CoreExprArena<'a> {
         span: Span,
         date: &'a Expr,
         weekday: &ASTWeekday,
-        is_previous: bool,
-    ) -> CoreExprId {
-        let prefix = if is_previous {
-            "to_previous_"
-        } else {
-            "to_next_"
+        function: AdjacentDayFunction,
+    ) -> Result<CoreExprId> {
+        let prefix = match function {
+            AdjacentDayFunction::Previous => "to_previous_",
+            AdjacentDayFunction::Next => "to_next_",
         };
 
         let func_name = match weekday {
@@ -314,7 +340,7 @@ impl<'a> CoreExprArena<'a> {
             ASTWeekday::Saturday => format!("{}saturday", prefix),
             ASTWeekday::Sunday => format!("{}sunday", prefix),
         };
-        let date = self.lower_ast_expr(date);
-        self.call(span, func_name, smallvec![date])
+        let date = self.lower_ast_expr(date)?;
+        Ok(self.call(span, func_name, smallvec![date]))
     }
 }
