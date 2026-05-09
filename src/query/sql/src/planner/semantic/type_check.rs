@@ -954,32 +954,6 @@ impl<'a> TypeChecker<'a> {
         )))
     }
 
-    pub(super) fn resolve_function_params(
-        &mut self,
-        span: Span,
-        _func_name: &str,
-        params: &[&Expr],
-        kind: &str,
-    ) -> Result<Vec<Scalar>> {
-        let mut new_params = Vec::with_capacity(params.len());
-        for param in params {
-            let box (scalar, _) = self.resolve(param)?;
-            let expr = scalar.as_expr()?;
-            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-            let constant = expr
-                .into_constant()
-                .map_err(|_| {
-                    ErrorCode::SemanticError(format!(
-                        "invalid parameter {param} for {kind} function, expected constant",
-                    ))
-                    .set_span(span)
-                })?
-                .scalar;
-            new_params.push(constant);
-        }
-        Ok(new_params)
-    }
-
     pub(super) fn rewrite_variant_compare_constant(
         &self,
         scalar: ScalarExpr,

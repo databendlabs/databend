@@ -28,8 +28,10 @@ use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowDesc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ConstantFolder;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
+use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
@@ -44,6 +46,8 @@ use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
+use crate::binder::ExprContext;
+use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryType;
 use crate::plans::WindowFuncType;
@@ -55,6 +59,7 @@ pub(super) struct CoreExprId {
 
 pub(super) type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
 pub(super) type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
+pub(super) type CoreFunctionParams = SmallVec<[(String, CoreExprId); 4]>;
 pub(super) type AstExprArgs<'a> = SmallVec<[&'a Expr; 4]>;
 pub(super) type SugarFunctionArgs<'a> = AstExprArgs<'a>;
 
@@ -252,6 +257,7 @@ impl<'a> CoreExprArena<'a> {
                     false,
                     SmallVec::new(),
                     SmallVec::new(),
+                    true,
                     &[],
                 );
                 if let Some(window) = window.as_ref() {
@@ -298,8 +304,9 @@ impl<'a> CoreExprArena<'a> {
         span: Span,
         func_name: impl Into<String>,
         distinct: bool,
-        params: AstExprArgs<'a>,
-        args: AstExprArgs<'a>,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
         order_by: &'a [OrderByExpr],
     ) -> CoreAggregateCall<'a> {
         CoreAggregateCall {
@@ -309,6 +316,7 @@ impl<'a> CoreExprArena<'a> {
             distinct,
             params,
             args,
+            remove_count_args,
             order_by,
         }
     }
@@ -329,10 +337,7 @@ impl<'a> CoreExprArena<'a> {
     }
 
     fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
-        let exprs = exprs
-            .iter()
-            .map(|expr| self.lower_ast_expr(expr))
-            .collect::<Result<_>>()?;
+        let exprs = self.lower_expr_args(exprs)?;
         Ok(self.alloc(CoreExpr::Array { span, exprs }))
     }
 
@@ -345,11 +350,19 @@ impl<'a> CoreExprArena<'a> {
     }
 
     fn tuple(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
-        let exprs = exprs
-            .iter()
-            .map(|expr| self.lower_ast_expr(expr))
-            .collect::<Result<_>>()?;
+        let exprs = self.lower_expr_args(exprs)?;
         Ok(self.alloc(CoreExpr::Tuple { span, exprs }))
+    }
+
+    fn lower_expr_args(&mut self, exprs: &'a [Expr]) -> Result<CoreExprArgs> {
+        exprs.iter().map(|expr| self.lower_ast_expr(expr)).collect()
+    }
+
+    fn lower_function_params(&mut self, params: &'a [Expr]) -> Result<CoreFunctionParams> {
+        params
+            .iter()
+            .map(|param| Ok((format!("{:#}", param), self.lower_ast_expr(param)?)))
+            .collect()
     }
 
     fn lower_map_access_expr(&mut self, expr: &'a Expr, root_span: Span) -> Result<CoreExprId> {
@@ -429,13 +442,17 @@ impl<'a> CoreExprArena<'a> {
         }
 
         if lambda.is_none() && AggregateFunctionFactory::instance().contains(&func_name) {
+            let remove_count_args = can_remove_count_args(&func_name, *distinct, args);
+            let params = self.lower_function_params(params)?;
+            let args = self.lower_expr_args(args)?;
             let call = self.aggregate_call(
                 format!("{:#}", original_expr),
                 span,
                 func_name,
                 *distinct,
-                params.iter().collect(),
-                args.iter().collect(),
+                params,
+                args,
+                remove_count_args,
                 order_by,
             );
             return Ok(if let Some(window) = window.as_ref() {
@@ -721,8 +738,9 @@ pub(super) struct CoreAggregateCall<'a> {
     span: Span,
     func_name: String,
     distinct: bool,
-    params: AstExprArgs<'a>,
-    args: AstExprArgs<'a>,
+    params: CoreFunctionParams,
+    args: CoreExprArgs,
+    remove_count_args: bool,
     order_by: &'a [OrderByExpr],
 }
 
@@ -857,8 +875,12 @@ impl<'a> TypeChecker<'a> {
                 let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
                 self.resolve_cast_expr(*span, scalar, data_type, target_type, *is_try)
             }
-            CoreExpr::AggregateFunction { call } => self.resolve_core_aggregate_function(call),
-            CoreExpr::WindowFunction { function } => self.resolve_core_window_function(function),
+            CoreExpr::AggregateFunction { call } => {
+                self.resolve_core_aggregate_function(arena, call)
+            }
+            CoreExpr::WindowFunction { function } => {
+                self.resolve_core_window_function(arena, function)
+            }
             CoreExpr::MissingWindowFunction { span, func_name } => Err(ErrorCode::SemanticError(
                 format!("window function {func_name} can only be used in window clause"),
             )
@@ -868,19 +890,22 @@ impl<'a> TypeChecker<'a> {
 
     fn resolve_core_aggregate_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         call: &CoreAggregateCall<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (new_agg_func, data_type) = self.resolve_core_aggregate_call(call, false)?;
+        let (new_agg_func, data_type) = self.resolve_core_aggregate_call(arena, call, false)?;
         Ok(Box::new((new_agg_func.into(), data_type)))
     }
 
     fn resolve_core_window_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         function: &CoreWindowFunction<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match function {
             CoreWindowFunction::Aggregate { call, window } => {
-                let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(call, true)?;
+                let (new_agg_func, _data_type) =
+                    self.resolve_core_aggregate_call(arena, call, true)?;
                 let window = match window {
                     CoreAggregateWindow::CountAll(window) => *window,
                     CoreAggregateWindow::Function(window_desc) => {
@@ -933,6 +958,7 @@ impl<'a> TypeChecker<'a> {
 
     fn resolve_core_aggregate_call(
         &mut self,
+        arena: &CoreExprArena<'_>,
         call: &CoreAggregateCall<'_>,
         in_window_call: bool,
     ) -> Result<(crate::plans::AggregateFunction, DataType)> {
@@ -945,22 +971,144 @@ impl<'a> TypeChecker<'a> {
             .set_span(call.span));
         }
         let new_params =
-            self.resolve_function_params(call.span, &call.func_name, &call.params, "aggregate")?;
+            self.resolve_core_function_params(arena, call.span, &call.params, "aggregate")?;
         let in_window = self.in_window_function;
         self.in_window_function = self.in_window_function || in_window_call;
         let in_aggregate_function = self.in_aggregate_function;
-        let result = self.resolve_aggregate_function(
+        let result = self.resolve_core_aggregate_call_inner(arena, call, new_params);
+        self.in_window_function = in_window;
+        self.in_aggregate_function = in_aggregate_function;
+        result
+    }
+
+    fn resolve_core_aggregate_call_inner(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        call: &CoreAggregateCall<'_>,
+        new_params: Vec<Scalar>,
+    ) -> Result<(crate::plans::AggregateFunction, DataType)> {
+        if matches!(
+            self.bind_context.expr_context,
+            ExprContext::InLambdaFunction
+        ) {
+            return Err(ErrorCode::SemanticError(
+                "aggregate functions can not be used in lambda function".to_string(),
+            )
+            .set_span(call.span));
+        }
+
+        if self.in_aggregate_function {
+            if self.in_window_function {
+                // An aggregate may appear as the argument of a window aggregate,
+                // but grouped aggregates cannot be nested.
+                self.in_window_function = false;
+            } else {
+                self.in_aggregate_function = false;
+                return Err(ErrorCode::SemanticError(
+                    "aggregate function calls cannot be nested".to_string(),
+                )
+                .set_span(call.span));
+            }
+        }
+
+        // Only force aggregate arguments to skip alias resolution in contexts
+        // that would otherwise prefer aliases over input columns, such as
+        // HAVING or ORDER BY. In the SELECT list we still want the existing
+        // column-first fallback so `sum(c1)` can bind a same-select alias when
+        // there is no real `c1` column.
+        self.in_aggregate_function = true;
+        let original_context = self.bind_context.expr_context;
+        let disallow_alias_resolution = original_context.prefer_resolve_alias();
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = ExprContext::InAggregateFunction;
+        }
+        let arguments_result = self.resolve_core_expr_args(arena, &call.args);
+        if disallow_alias_resolution {
+            self.bind_context.expr_context = original_context;
+        }
+        self.in_aggregate_function = false;
+        let (arguments, arg_types) = arguments_result?;
+
+        let sort_descs = call
+            .order_by
+            .iter()
+            .map(
+                |OrderByExpr {
+                     expr,
+                     asc,
+                     nulls_first,
+                 }| {
+                    if disallow_alias_resolution {
+                        self.bind_context.expr_context = ExprContext::InAggregateFunction;
+                    }
+                    let result = self.resolve(expr);
+                    if disallow_alias_resolution {
+                        self.bind_context.expr_context = original_context;
+                    }
+                    let box (scalar_expr, _) = result?;
+
+                    Ok(AggregateFunctionScalarSortDesc {
+                        expr: scalar_expr,
+                        is_reuse_index: false,
+                        nulls_first: nulls_first.unwrap_or(false),
+                        asc: asc.unwrap_or(true),
+                    })
+                },
+            )
+            .collect::<Result<Vec<_>>>()?;
+
+        self.resolve_aggregate_function(
             call.span,
             &call.func_name,
             call.display_name.clone(),
             call.distinct,
             new_params,
-            &call.args,
-            call.order_by,
-        );
-        self.in_window_function = in_window;
-        self.in_aggregate_function = in_aggregate_function;
-        result
+            arguments,
+            arg_types,
+            sort_descs,
+            call.remove_count_args,
+        )
+    }
+
+    fn resolve_core_expr_args(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        args: &CoreExprArgs,
+    ) -> Result<(Vec<ScalarExpr>, Vec<DataType>)> {
+        let mut scalars = Vec::with_capacity(args.len());
+        let mut data_types = Vec::with_capacity(args.len());
+        for arg in args {
+            let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+            scalars.push(scalar);
+            data_types.push(data_type);
+        }
+        Ok((scalars, data_types))
+    }
+
+    fn resolve_core_function_params(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        params: &CoreFunctionParams,
+        kind: &str,
+    ) -> Result<Vec<Scalar>> {
+        let mut new_params = Vec::with_capacity(params.len());
+        for (display_name, param) in params {
+            let box (scalar, _) = self.resolve_core(arena, *param)?;
+            let expr = scalar.as_expr()?;
+            let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            let constant = expr
+                .into_constant()
+                .map_err(|_| {
+                    ErrorCode::SemanticError(format!(
+                        "invalid parameter {display_name} for {kind} function, expected constant",
+                    ))
+                    .set_span(span)
+                })?
+                .scalar;
+            new_params.push(constant);
+        }
+        Ok(new_params)
     }
 }
 
@@ -970,6 +1118,14 @@ fn normalized_func_name(func_name: &str) -> String {
     } else {
         func_name.to_string()
     }
+}
+
+fn can_remove_count_args(func_name: &str, distinct: bool, args: &[Expr]) -> bool {
+    func_name.eq_ignore_ascii_case("count")
+        && !distinct
+        && args
+            .iter()
+            .all(|expr| matches!(expr, Expr::Literal { value, .. } if *value != Literal::Null))
 }
 
 fn can_lower_binary_op(op: &BinaryOperator, right: &Expr) -> bool {
