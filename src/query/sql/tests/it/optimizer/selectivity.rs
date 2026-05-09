@@ -573,6 +573,36 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             StatCardinality::estimate(100.0),
         )?;
     }
+    let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(-9),
+        max: Datum::Int(9),
+        ndv: StatEstimate::exact(19.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in ["i % 4 = -1", "i % 4 = 5", "i % -4 = -1", "i % -4 = 5"] {
+        run_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[("i", Int64Type::data_type())],
+            signed_mod_stats.clone(),
+            StatCardinality::estimate(100.0),
+        )?;
+    }
+    let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(i64::MIN),
+        max: Datum::Int(9),
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["i % -1 = 0"],
+        &[("i", Int64Type::data_type())],
+        signed_min_mod_stats,
+        StatCardinality::estimate(100.0),
+    )?;
 
     write_case_title(
         &mut file,
