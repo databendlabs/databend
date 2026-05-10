@@ -16,19 +16,11 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::ASYNC_FUNCTIONS;
-use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::schema::DictionaryIdentity;
-use databend_common_meta_app::schema::GetSequenceReq;
-use databend_common_meta_app::schema::SequenceIdent;
-use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
-use databend_common_users::Object;
 use unicase::Ascii;
 
 use super::TypeChecker;
@@ -36,21 +28,15 @@ use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
 use super::core_expr::CoreSearchFunctionArgs;
-use crate::DefaultExprBinder;
 use crate::binder::ExprContext;
 use crate::binder::parse_stage_name;
-use crate::binder::resolve_stage_location;
 use crate::binder::wrap_cast;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AsyncFunctionArgument;
 use crate::plans::AsyncFunctionCall;
 use crate::plans::ConstantExpr;
-use crate::plans::DictGetFunctionArgument;
-use crate::plans::DictionarySource;
 use crate::plans::ReadFileFunctionArgument;
-use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
-use crate::plans::SqlSource;
 
 pub(super) enum CoreAsyncFunction<'a> {
     NextVal {
@@ -203,30 +189,7 @@ where A: super::TypeCheckAdapter
             }
         };
 
-        if !self.adapter.skip_sequence_check() {
-            let catalog = self.adapter.table_context().get_default_catalog()?;
-            let req = GetSequenceReq {
-                ident: SequenceIdent::new(
-                    self.adapter.table_context().get_tenant(),
-                    sequence_name.clone(),
-                ),
-            };
-
-            let visibility_checker = if self
-                .adapter
-                .table_context()
-                .get_settings()
-                .get_enable_experimental_sequence_privilege_check()?
-            {
-                let ctx = self.adapter.table_context().clone();
-                Some(self.block_on(async move {
-                    ctx.get_visibility_checker(false, Object::Sequence).await
-                })??)
-            } else {
-                None
-            };
-            self.block_on(catalog.get_sequence(req, &visibility_checker))??;
-        }
+        self.adapter.validate_sequence(&sequence_name)?;
 
         let return_type = DataType::Number(NumberDataType::UInt64);
         let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
@@ -263,9 +226,6 @@ where A: super::TypeCheckAdapter
             )
             .set_span(span));
         };
-        let tenant = self.adapter.table_context().get_tenant();
-        let catalog = self.adapter.table_context().get_default_catalog()?;
-
         // Get dict_name and dict_meta.
         let (db_name, dict_name) = {
             if dictionary.database.is_some() {
@@ -275,10 +235,10 @@ where A: super::TypeCheckAdapter
                 )
                 .set_span(span));
             }
-            let db_name = match &dictionary.table {
-                Some(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
-                None => self.adapter.table_context().get_current_database(),
-            };
+            let db_name = dictionary
+                .table
+                .as_ref()
+                .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
             let dict_name = match &dictionary.column {
                 ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
                 ColumnID::Position(pos) => {
@@ -290,21 +250,6 @@ where A: super::TypeCheckAdapter
                 }
             };
             (db_name, dict_name)
-        };
-        let db = self.block_on(catalog.get_database(&tenant, db_name.as_str()))??;
-        let db_id = db.get_db_info().database_id.db_id;
-        let req = DictionaryNameIdent::new(
-            tenant.clone(),
-            DictionaryIdentity::new(db_id, dict_name.clone()),
-        );
-        let reply = self.block_on(catalog.get_dictionary(req))??;
-        let dictionary = if let Some(r) = reply {
-            r.dictionary_meta
-        } else {
-            return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown dictionary {}",
-                dict_name,
-            )));
         };
 
         // Get attr_name, attr_type and return_type.
@@ -323,90 +268,32 @@ where A: super::TypeCheckAdapter
             ))
             .set_span(field_scalar.span()));
         };
-        let attr_field = dictionary.schema.field_with_name(attr_name)?;
-        let attr_type: DataType = (&attr_field.data_type).into();
-        let default_value = DefaultExprBinder::try_new(self.adapter.table_context().clone())?
-            .get_scalar(attr_field)?;
-
-        // Get primary_key_value and check type.
-        let primary_column_id = dictionary.primary_column_ids[0];
-        let primary_field = dictionary.schema.field_of_column_id(primary_column_id)?;
-        let primary_type: DataType = (&primary_field.data_type).into();
+        let dictionary =
+            self.adapter
+                .resolve_dictionary(db_name.as_deref(), &dict_name, attr_name)?;
 
         let mut args = Vec::with_capacity(1);
         let box (key_scalar, key_type) = self.resolve_core(arena, *key)?;
 
-        if primary_type != key_type.remove_nullable() {
-            args.push(wrap_cast(&key_scalar, &primary_type));
+        if dictionary.primary_type != key_type.remove_nullable() {
+            args.push(wrap_cast(&key_scalar, &dictionary.primary_type));
         } else {
             args.push(key_scalar);
         }
-        let dict_source = match dictionary.source.as_str() {
-            "mysql" => {
-                let connection_url = dictionary.build_sql_connection_url()?;
-                let table = dictionary
-                    .options
-                    .get("table")
-                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `table`"))?;
-                DictionarySource::Mysql(SqlSource {
-                    connection_url,
-                    table: table.to_string(),
-                    key_field: primary_field.name.clone(),
-                    value_field: attr_field.name.clone(),
-                })
-            }
-            "redis" => {
-                let host = dictionary
-                    .options
-                    .get("host")
-                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
-                let port_str = dictionary
-                    .options
-                    .get("port")
-                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
-                let port = port_str
-                    .parse()
-                    .expect("Failed to parse String port to u16");
-                let username = dictionary.options.get("username").cloned();
-                let password = dictionary.options.get("password").cloned();
-                let db_index = dictionary
-                    .options
-                    .get("db_index")
-                    .map(|i| i.parse::<i64>().unwrap());
-                DictionarySource::Redis(RedisSource {
-                    host: host.to_string(),
-                    port,
-                    username,
-                    password,
-                    db_index,
-                })
-            }
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "Unsupported source {}",
-                    dictionary.source
-                )));
-            }
-        };
-
-        let dict_get_func_arg = DictGetFunctionArgument {
-            dict_source,
-            default_value,
-        };
         let display_name = format!(
             "{}({}.{}, {}, {})",
-            func_name, db_name, dict_name, field_display, key_display,
+            func_name, dictionary.db_name, dict_name, field_display, key_display,
         );
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
                 func_name: func_name.to_string(),
                 display_name,
-                return_type: Box::new(attr_type.clone()),
+                return_type: Box::new(dictionary.attr_type.clone()),
                 arguments: args,
-                func_arg: AsyncFunctionArgument::DictGetFunction(dict_get_func_arg),
+                func_arg: AsyncFunctionArgument::DictGetFunction(dictionary.func_arg),
             }),
-            attr_type,
+            dictionary.attr_type,
         )))
     }
 
@@ -466,11 +353,9 @@ where A: super::TypeCheckAdapter
                 let stage_name = parse_stage_name(stage).map_err(|err| {
                     ErrorCode::SemanticError(err.message().to_string()).set_span(span)
                 })?;
-                let stage_info = self.resolve_stage_info_for_read_file(
-                    self.adapter.table_context().as_ref(),
-                    span,
-                    &stage_name,
-                )?;
+                let stage_info = self
+                    .adapter
+                    .resolve_read_file_stage_info(span, &stage_name)?;
                 read_file_arg.stage_name = Some(stage_name);
                 read_file_arg.stage_info = Some(Box::new(stage_info));
             }
@@ -501,32 +386,5 @@ where A: super::TypeCheckAdapter
             }),
             return_type,
         )))
-    }
-
-    fn resolve_stage_info_for_read_file(
-        &self,
-        ctx: &dyn TableContext,
-        span: Span,
-        stage_name: &str,
-    ) -> Result<StageInfo> {
-        self.block_on(async move {
-            let (stage_info, _) = resolve_stage_location(ctx, stage_name).await?;
-            if ctx.get_settings().get_enable_experimental_rbac_check()? {
-                let visibility_checker = ctx.get_visibility_checker(false, Object::Stage).await?;
-                if !(stage_info.is_temporary
-                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
-                    || stage_info.stage_type == StageType::User
-                        && stage_info.stage_name == ctx.get_current_user()?.name)
-                {
-                    return Err(ErrorCode::PermissionDenied(format!(
-                        "Permission denied: privilege READ is required on stage {} for user {}",
-                        stage_info.stage_name.clone(),
-                        &ctx.get_current_user()?.identity().display(),
-                    ))
-                    .set_span(span));
-                }
-            }
-            Ok(stage_info)
-        })?
     }
 }

@@ -65,8 +65,14 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::StageType;
 use databend_common_meta_app::principal::UserDefinedFunction;
+use databend_common_meta_app::schema::DictionaryIdentity;
+use databend_common_meta_app::schema::GetSequenceReq;
+use databend_common_meta_app::schema::SequenceIdent;
+use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_settings::Settings;
+use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
 use databend_common_users::security_policy_cache::PolicyType;
@@ -86,14 +92,20 @@ use super::name_resolution::NameResolutionContext;
 use super::normalize_identifier;
 use super::resolve_type_name;
 use crate::BindContext;
+use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::binder::NameResolutionResult;
+use crate::binder::resolve_stage_location;
 use crate::optimizer::ir::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
+use crate::plans::DictGetFunctionArgument;
+use crate::plans::DictionarySource;
 use crate::plans::FunctionCall;
+use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
+use crate::plans::SqlSource;
 
 const DEFAULT_DECIMAL_PRECISION: i64 = 38;
 const DEFAULT_DECIMAL_SCALE: i64 = 0;
@@ -269,6 +281,13 @@ pub struct FullTypeCheckAdapterDependencies {
 pub struct TypeCheckSubqueryPlan {
     pub s_expr: SExpr,
     pub output_context: BindContext,
+}
+
+pub struct TypeCheckDictionary {
+    pub db_name: String,
+    pub attr_type: DataType,
+    pub primary_type: DataType,
+    pub func_arg: DictGetFunctionArgument,
 }
 
 impl FullTypeCheckAdapter {
@@ -447,12 +466,25 @@ pub trait TypeCheckAdapter: Clone {
         false
     }
 
-    fn skip_sequence_check(&self) -> bool {
-        false
-    }
-
     fn async_runtime_handle(&self) -> Result<Handle> {
         Err(missing_type_check_adapter_dependency("async runtime"))
+    }
+
+    fn validate_sequence(&self, _sequence_name: &str) -> Result<()> {
+        Err(missing_type_check_adapter_dependency("sequence resolver"))
+    }
+
+    fn resolve_dictionary(
+        &self,
+        _db_name: Option<&str>,
+        _dict_name: &str,
+        _attr_name: &str,
+    ) -> Result<TypeCheckDictionary> {
+        Err(missing_type_check_adapter_dependency("dictionary resolver"))
+    }
+
+    fn resolve_read_file_stage_info(&self, _span: Span, _stage_name: &str) -> Result<StageInfo> {
+        Err(missing_type_check_adapter_dependency("stage resolver"))
     }
 
     fn bind_subquery(
@@ -527,12 +559,168 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.forbid_udf
     }
 
-    fn skip_sequence_check(&self) -> bool {
-        self.skip_sequence_check
-    }
-
     fn async_runtime_handle(&self) -> Result<Handle> {
         Ok(self.dependencies.async_runtime_handle.clone())
+    }
+
+    fn validate_sequence(&self, sequence_name: &str) -> Result<()> {
+        if self.skip_sequence_check {
+            return Ok(());
+        }
+
+        let catalog = self.ctx.get_default_catalog()?;
+        let req = GetSequenceReq {
+            ident: SequenceIdent::new(self.ctx.get_tenant(), sequence_name.to_string()),
+        };
+
+        let visibility_checker = if self
+            .ctx
+            .get_settings()
+            .get_enable_experimental_sequence_privilege_check()?
+        {
+            let ctx = self.ctx.clone();
+            Some(block_on_with_handle(
+                &self.dependencies.async_runtime_handle,
+                async move { ctx.get_visibility_checker(false, Object::Sequence).await },
+            )?)
+        } else {
+            None
+        };
+        let _ = block_on_with_handle(
+            &self.dependencies.async_runtime_handle,
+            catalog.get_sequence(req, &visibility_checker),
+        )?;
+        Ok(())
+    }
+
+    fn resolve_dictionary(
+        &self,
+        db_name: Option<&str>,
+        dict_name: &str,
+        attr_name: &str,
+    ) -> Result<TypeCheckDictionary> {
+        let tenant = self.ctx.get_tenant();
+        let catalog = self.ctx.get_default_catalog()?;
+        let db_name = db_name
+            .map(ToString::to_string)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+
+        let db = block_on_with_handle(
+            &self.dependencies.async_runtime_handle,
+            catalog.get_database(&tenant, db_name.as_str()),
+        )?;
+        let db_id = db.get_db_info().database_id.db_id;
+        let req = DictionaryNameIdent::new(
+            tenant.clone(),
+            DictionaryIdentity::new(db_id, dict_name.to_string()),
+        );
+        let reply = block_on_with_handle(
+            &self.dependencies.async_runtime_handle,
+            catalog.get_dictionary(req),
+        )?;
+        let dictionary = if let Some(r) = reply {
+            r.dictionary_meta
+        } else {
+            return Err(ErrorCode::UnknownDictionary(format!(
+                "Unknown dictionary {}",
+                dict_name,
+            )));
+        };
+
+        let attr_field = dictionary.schema.field_with_name(attr_name)?;
+        let attr_type: DataType = (&attr_field.data_type).into();
+        let default_value = DefaultExprBinder::try_new(self.ctx.clone())?.get_scalar(attr_field)?;
+
+        let primary_column_id = dictionary.primary_column_ids[0];
+        let primary_field = dictionary.schema.field_of_column_id(primary_column_id)?;
+        let primary_type: DataType = (&primary_field.data_type).into();
+
+        let dict_source = match dictionary.source.as_str() {
+            "mysql" => {
+                let connection_url = dictionary.build_sql_connection_url()?;
+                let table = dictionary
+                    .options
+                    .get("table")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `table`"))?;
+                DictionarySource::Mysql(SqlSource {
+                    connection_url,
+                    table: table.to_string(),
+                    key_field: primary_field.name.clone(),
+                    value_field: attr_field.name.clone(),
+                })
+            }
+            "redis" => {
+                let host = dictionary
+                    .options
+                    .get("host")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `host`"))?;
+                let port_str = dictionary
+                    .options
+                    .get("port")
+                    .ok_or_else(|| ErrorCode::BadArguments("Miss option `port`"))?;
+                let port = port_str
+                    .parse()
+                    .expect("Failed to parse String port to u16");
+                let username = dictionary.options.get("username").cloned();
+                let password = dictionary.options.get("password").cloned();
+                let db_index = dictionary
+                    .options
+                    .get("db_index")
+                    .map(|i| i.parse::<i64>().unwrap());
+                DictionarySource::Redis(RedisSource {
+                    host: host.to_string(),
+                    port,
+                    username,
+                    password,
+                    db_index,
+                })
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(format!(
+                    "Unsupported source {}",
+                    dictionary.source
+                )));
+            }
+        };
+
+        Ok(TypeCheckDictionary {
+            db_name,
+            attr_type,
+            primary_type,
+            func_arg: DictGetFunctionArgument {
+                dict_source,
+                default_value,
+            },
+        })
+    }
+
+    fn resolve_read_file_stage_info(&self, span: Span, stage_name: &str) -> Result<StageInfo> {
+        block_on_with_handle(&self.dependencies.async_runtime_handle, async move {
+            let (stage_info, _) = resolve_stage_location(self.ctx.as_ref(), stage_name).await?;
+            if self
+                .ctx
+                .get_settings()
+                .get_enable_experimental_rbac_check()?
+            {
+                let visibility_checker = self
+                    .ctx
+                    .get_visibility_checker(false, Object::Stage)
+                    .await?;
+                if !(stage_info.is_temporary
+                    || visibility_checker.check_stage_read_visibility(&stage_info.stage_name)
+                    || stage_info.stage_type == StageType::User
+                        && stage_info.stage_name == self.ctx.get_current_user()?.name)
+                {
+                    return Err(ErrorCode::PermissionDenied(format!(
+                        "Permission denied: privilege READ is required on stage {} for user {}",
+                        stage_info.stage_name.clone(),
+                        &self.ctx.get_current_user()?.identity().display(),
+                    ))
+                    .set_span(span));
+                }
+            }
+            Ok(stage_info)
+        })
     }
 
     fn bind_subquery(
@@ -736,8 +924,12 @@ impl TypeCheckAdapter for BasicTypeCheckAdapter {
         true
     }
 
-    fn skip_sequence_check(&self) -> bool {
-        self.skip_sequence_check
+    fn validate_sequence(&self, _sequence_name: &str) -> Result<()> {
+        if self.skip_sequence_check {
+            Ok(())
+        } else {
+            Err(missing_type_check_adapter_dependency("sequence resolver"))
+        }
     }
 
     fn set_result_cache_uncacheable(&self) {}
