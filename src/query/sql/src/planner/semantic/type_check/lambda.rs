@@ -14,7 +14,6 @@
 
 use std::collections::HashSet;
 use std::mem;
-use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Identifier;
@@ -31,16 +30,13 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_license::license::Feature;
 use itertools::Itertools;
-use parking_lot::RwLock;
 
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
-use crate::Metadata;
 use crate::Visibility;
 use crate::binder::ExprContext;
 use crate::planner::semantic::NameResolutionContext;
@@ -62,16 +58,7 @@ where A: super::TypeCheckAdapter
         lambda_columns: &[(String, DataType)],
         lambda_expr: super::core_expr::CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let metadata = if self
-            .adapter
-            .license_manager()?
-            .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
-            .is_ok()
-        {
-            self.metadata.clone()
-        } else {
-            Arc::new(RwLock::new(Metadata::default()))
-        };
+        let metadata = self.metadata.clone();
         lambda_context.expr_context = ExprContext::InLambdaFunction;
 
         for (lambda_column, lambda_column_type) in lambda_columns.iter() {

@@ -319,9 +319,7 @@ where A: super::TypeCheckAdapter
         let udf = if let Some(udf) = self.bind_context.udf_cache.read().get(udf_name).cloned() {
             udf
         } else {
-            let tenant = self.table_ctx().get_tenant();
-            let provider = self.adapter.user_api_provider()?;
-            let udf = self.block_on(provider.get_udf(&tenant, udf_name))??;
+            let udf = self.adapter.resolve_udf(udf_name)?;
             self.bind_context
                 .udf_cache
                 .write()

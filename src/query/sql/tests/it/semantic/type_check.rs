@@ -17,23 +17,14 @@ use std::sync::Arc;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::catalog::Catalog;
-use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use databend_common_meta_app::principal::GrantObject;
-use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
-use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
-use databend_common_pipeline::core::LockGuard;
 use databend_common_settings::Settings;
 use databend_common_sql::BasicTypeCheckAdapter;
 use databend_common_sql::BindContext;
@@ -42,12 +33,12 @@ use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheckAdapter;
+use databend_common_sql::TypeCheckAuthorizationFunction;
+use databend_common_sql::TypeCheckNamespaceFunction;
+use databend_common_sql::TypeCheckSessionFunction;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
-use databend_common_storage::DataOperator;
-use databend_common_users::GrantObjectVisibilityChecker;
-use databend_common_users::Object;
 use parking_lot::RwLock;
 
 use crate::framework::golden::SqlTestCase;
@@ -59,7 +50,6 @@ use crate::framework::golden::write_case_outcome;
 struct TestTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
-    async_runtime_handle: tokio::runtime::Handle,
 }
 
 impl TestTypeCheckAdapter {
@@ -67,7 +57,6 @@ impl TestTypeCheckAdapter {
         Self {
             settings,
             func_ctx: FunctionContext::default(),
-            async_runtime_handle: tokio::runtime::Handle::current(),
         }
     }
 }
@@ -85,149 +74,48 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         AggregateFunctionFactory::instance()
     }
 
-    fn async_runtime_handle(&self) -> Result<tokio::runtime::Handle> {
-        Ok(self.async_runtime_handle.clone())
+    fn resolve_namespace_function(&self, function: TypeCheckNamespaceFunction) -> Result<Scalar> {
+        match function {
+            TypeCheckNamespaceFunction::CurrentCatalog
+            | TypeCheckNamespaceFunction::CurrentDatabase => {
+                Ok(Scalar::String("default".to_string()))
+            }
+        }
     }
 
-    fn fuse_version(&self) -> Result<String> {
-        Ok(String::new())
+    fn resolve_session_function(&self, function: TypeCheckSessionFunction<'_>) -> Result<Scalar> {
+        match function {
+            TypeCheckSessionFunction::Version => Ok(Scalar::String(String::new())),
+            TypeCheckSessionFunction::ConnectionId => Ok(Scalar::String("lite-conn".to_string())),
+            TypeCheckSessionFunction::ClientSessionId => Ok(Scalar::String(String::new())),
+            TypeCheckSessionFunction::LastQueryId(_) | TypeCheckSessionFunction::Variable(_) => {
+                Ok(Scalar::Null)
+            }
+        }
     }
 
-    fn connection_id(&self) -> Result<String> {
-        Ok("lite-conn".to_string())
-    }
-
-    fn current_client_session_id(&self) -> Result<Option<String>> {
-        Ok(None)
-    }
-
-    fn last_query_id(&self, _index: i32) -> Result<Option<String>> {
-        Ok(None)
-    }
-
-    fn variable(&self, _key: &str) -> Result<Option<Scalar>> {
-        Ok(None)
-    }
-
-    fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
-        Ok(self)
-    }
-
-    fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
-        Ok(self)
+    fn resolve_authorization_function(
+        &self,
+        function: TypeCheckAuthorizationFunction,
+    ) -> Result<Scalar> {
+        match function {
+            TypeCheckAuthorizationFunction::CurrentUser => Ok(Scalar::String(
+                UserInfo::new_no_auth("root", "%")
+                    .identity()
+                    .display()
+                    .to_string(),
+            )),
+            TypeCheckAuthorizationFunction::CurrentRole => Ok(Scalar::String(String::new())),
+            TypeCheckAuthorizationFunction::CurrentSecondaryRoles => Ok(Scalar::String(
+                serde_json::json!({ "roles": "", "value": "ALL" }).to_string(),
+            )),
+            TypeCheckAuthorizationFunction::CurrentAvailableRoles => {
+                Ok(Scalar::String("[]".to_string()))
+            }
+        }
     }
 
     fn set_result_cache_uncacheable(&self) {}
-}
-
-#[async_trait::async_trait]
-impl TableContextTableAccess for TestTypeCheckAdapter {
-    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
-        unimplemented!()
-    }
-
-    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
-        unimplemented!()
-    }
-
-    fn get_current_catalog(&self) -> String {
-        "default".to_string()
-    }
-
-    fn get_current_database(&self) -> String {
-        "default".to_string()
-    }
-
-    fn get_tenant(&self) -> Tenant {
-        Tenant::new_literal("default")
-    }
-
-    fn get_application_level_data_operator(&self) -> Result<DataOperator> {
-        unimplemented!()
-    }
-
-    async fn get_table_with_branch(
-        &self,
-        _catalog: &str,
-        _database: &str,
-        _table: &str,
-        _branch: Option<&str>,
-    ) -> Result<Arc<dyn Table>> {
-        unimplemented!()
-    }
-
-    async fn resolve_data_source(
-        &self,
-        _catalog: &str,
-        _database: &str,
-        _table: &str,
-        _branch: Option<&str>,
-        _max_batch_size: Option<u64>,
-    ) -> Result<Arc<dyn Table>> {
-        unimplemented!()
-    }
-
-    async fn acquire_table_lock(
-        self: Arc<Self>,
-        _catalog_name: &str,
-        _db_name: &str,
-        _tbl_name: &str,
-        _lock_opt: &LockTableOption,
-    ) -> Result<Option<Arc<LockGuard>>> {
-        unimplemented!()
-    }
-
-    fn get_temp_table_prefix(&self) -> Result<String> {
-        unimplemented!()
-    }
-
-    fn is_temp_table(&self, _catalog_name: &str, _database_name: &str, _table_name: &str) -> bool {
-        false
-    }
-}
-
-#[async_trait::async_trait]
-impl TableContextAuthorization for TestTypeCheckAdapter {
-    fn get_current_user(&self) -> Result<UserInfo> {
-        Ok(UserInfo::new_no_auth("root", "%"))
-    }
-
-    fn get_current_role(&self) -> Option<RoleInfo> {
-        None
-    }
-
-    fn get_secondary_roles(&self) -> Option<Vec<String>> {
-        None
-    }
-
-    async fn get_all_effective_roles(&self) -> Result<Vec<RoleInfo>> {
-        Ok(Vec::new())
-    }
-
-    async fn validate_privilege(
-        &self,
-        _object: &GrantObject,
-        _privilege: UserPrivilegeType,
-        _check_current_role_only: bool,
-    ) -> Result<()> {
-        unimplemented!()
-    }
-
-    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        Ok(Vec::new())
-    }
-
-    async fn get_visibility_checker(
-        &self,
-        _ignore_ownership: bool,
-        _object: Object,
-    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
-        unimplemented!()
-    }
-
-    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
-        unimplemented!()
-    }
 }
 
 fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, data_type: DataType) {

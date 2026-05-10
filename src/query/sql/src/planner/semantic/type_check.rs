@@ -65,11 +65,19 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::CachedSecurityPolicy;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
+use databend_enterprise_data_mask_feature::get_datamask_handler;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
+use itertools::Itertools;
+use serde_json::json;
+use serde_json::to_string;
 use simsearch::SimSearch;
 use tokio::runtime::Handle;
 use unicase::Ascii;
@@ -112,6 +120,26 @@ pub struct StageLocationParam {
     pub param_name: String,
     pub relative_path: String,
     pub stage_info: StageInfo,
+}
+
+pub enum TypeCheckNamespaceFunction {
+    CurrentCatalog,
+    CurrentDatabase,
+}
+
+pub enum TypeCheckSessionFunction<'a> {
+    Version,
+    ConnectionId,
+    ClientSessionId,
+    LastQueryId(i32),
+    Variable(&'a str),
+}
+
+pub enum TypeCheckAuthorizationFunction {
+    CurrentUser,
+    CurrentRole,
+    CurrentSecondaryRoles,
+    CurrentAvailableRoles,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -424,10 +452,6 @@ pub trait TypeCheckAdapter {
         Err(missing_type_check_adapter_dependency("async runtime"))
     }
 
-    fn license_manager(&self) -> Result<Arc<LicenseManagerSwitch>> {
-        Err(missing_type_check_adapter_dependency("license manager"))
-    }
-
     fn bind_subquery(
         &self,
         _parent_context: &BindContext,
@@ -436,16 +460,6 @@ pub trait TypeCheckAdapter {
         _subquery: &Query,
     ) -> Result<TypeCheckSubqueryPlan> {
         Err(missing_type_check_adapter_dependency("subquery planner"))
-    }
-
-    fn user_api_provider(&self) -> Result<Arc<UserApiProvider>> {
-        Err(missing_type_check_adapter_dependency("user api provider"))
-    }
-
-    fn security_policy_cache_manager(&self) -> Result<Arc<SecurityPolicyCacheManager>> {
-        Err(missing_type_check_adapter_dependency(
-            "security policy cache manager",
-        ))
     }
 
     fn global_config(&self) -> Result<Arc<InnerConfig>> {
@@ -458,35 +472,20 @@ pub trait TypeCheckAdapter {
         ))
     }
 
-    fn fuse_version(&self) -> Result<String> {
-        Err(missing_type_check_adapter_dependency("fuse version"))
+    fn resolve_namespace_function(&self, _function: TypeCheckNamespaceFunction) -> Result<Scalar> {
+        Err(missing_type_check_adapter_dependency("namespace function"))
     }
 
-    fn connection_id(&self) -> Result<String> {
-        Err(missing_type_check_adapter_dependency("connection id"))
+    fn resolve_session_function(&self, _function: TypeCheckSessionFunction<'_>) -> Result<Scalar> {
+        Err(missing_type_check_adapter_dependency("session function"))
     }
 
-    fn current_client_session_id(&self) -> Result<Option<String>> {
-        Err(missing_type_check_adapter_dependency("client session id"))
-    }
-
-    fn last_query_id(&self, _index: i32) -> Result<Option<String>> {
-        Err(missing_type_check_adapter_dependency("last query id"))
-    }
-
-    fn variable(&self, _key: &str) -> Result<Option<Scalar>> {
-        Err(missing_type_check_adapter_dependency("variable"))
-    }
-
-    fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
+    fn resolve_authorization_function(
+        &self,
+        _function: TypeCheckAuthorizationFunction,
+    ) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency(
-            "table access context",
-        ))
-    }
-
-    fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
-        Err(missing_type_check_adapter_dependency(
-            "authorization context",
+            "authorization function",
         ))
     }
 
@@ -496,8 +495,15 @@ pub trait TypeCheckAdapter {
 
     fn set_result_cache_uncacheable(&self);
 
-    fn can_apply_column_masking_policy(&self) -> bool {
-        false
+    fn resolve_data_mask_policy(
+        &self,
+        _policy_id: u64,
+    ) -> Result<Option<Arc<CachedSecurityPolicy>>> {
+        Ok(None)
+    }
+
+    fn resolve_udf(&self, _udf_name: &str) -> Result<Option<UserDefinedFunction>> {
+        Err(missing_type_check_adapter_dependency("udf resolver"))
     }
 
     fn table_context(&self) -> &Arc<dyn TableContext> {
@@ -538,10 +544,6 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         Ok(self.dependencies.async_runtime_handle.clone())
     }
 
-    fn license_manager(&self) -> Result<Arc<LicenseManagerSwitch>> {
-        Ok(self.dependencies.license_manager.clone())
-    }
-
     fn bind_subquery(
         &self,
         parent_context: &BindContext,
@@ -558,14 +560,6 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         )
     }
 
-    fn user_api_provider(&self) -> Result<Arc<UserApiProvider>> {
-        Ok(self.dependencies.user_api_provider.clone())
-    }
-
-    fn security_policy_cache_manager(&self) -> Result<Arc<SecurityPolicyCacheManager>> {
-        Ok(self.dependencies.security_policy_cache_manager.clone())
-    }
-
     fn global_config(&self) -> Result<Arc<InnerConfig>> {
         Ok(self.dependencies.global_config.clone())
     }
@@ -578,43 +572,138 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         })
     }
 
-    fn fuse_version(&self) -> Result<String> {
-        Ok(self.ctx.get_fuse_version())
+    fn resolve_namespace_function(&self, function: TypeCheckNamespaceFunction) -> Result<Scalar> {
+        let table_access: &dyn TableContextTableAccess = self.ctx.as_ref();
+        match function {
+            TypeCheckNamespaceFunction::CurrentCatalog => {
+                Ok(Scalar::String(table_access.get_current_catalog()))
+            }
+            TypeCheckNamespaceFunction::CurrentDatabase => {
+                Ok(Scalar::String(table_access.get_current_database()))
+            }
+        }
     }
 
-    fn connection_id(&self) -> Result<String> {
-        Ok(self.ctx.get_connection_id())
+    fn resolve_session_function(&self, function: TypeCheckSessionFunction<'_>) -> Result<Scalar> {
+        match function {
+            TypeCheckSessionFunction::Version => Ok(Scalar::String(self.ctx.get_fuse_version())),
+            TypeCheckSessionFunction::ConnectionId => {
+                Ok(Scalar::String(self.ctx.get_connection_id()))
+            }
+            TypeCheckSessionFunction::ClientSessionId => Ok(Scalar::String(
+                self.ctx.get_current_client_session_id().unwrap_or_default(),
+            )),
+            TypeCheckSessionFunction::LastQueryId(index) => Ok(self
+                .ctx
+                .get_last_query_id(index)
+                .map(Scalar::String)
+                .unwrap_or(Scalar::Null)),
+            TypeCheckSessionFunction::Variable(key) => {
+                Ok(self.ctx.get_variable(key).unwrap_or(Scalar::Null))
+            }
+        }
     }
 
-    fn current_client_session_id(&self) -> Result<Option<String>> {
-        Ok(self.ctx.get_current_client_session_id())
-    }
-
-    fn last_query_id(&self, index: i32) -> Result<Option<String>> {
-        Ok(self.ctx.get_last_query_id(index))
-    }
-
-    fn variable(&self, key: &str) -> Result<Option<Scalar>> {
-        Ok(self.ctx.get_variable(key))
-    }
-
-    fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
-        Ok(self.ctx.as_ref())
-    }
-
-    fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
-        Ok(self.ctx.as_ref())
+    fn resolve_authorization_function(
+        &self,
+        function: TypeCheckAuthorizationFunction,
+    ) -> Result<Scalar> {
+        let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
+        match function {
+            TypeCheckAuthorizationFunction::CurrentUser => Ok(Scalar::String(
+                authorization
+                    .get_current_user()?
+                    .identity()
+                    .display()
+                    .to_string(),
+            )),
+            TypeCheckAuthorizationFunction::CurrentRole => Ok(Scalar::String(
+                authorization
+                    .get_current_role()
+                    .map(|role| role.name)
+                    .unwrap_or_default(),
+            )),
+            TypeCheckAuthorizationFunction::CurrentSecondaryRoles => {
+                let mut roles = block_on_with_handle(
+                    &self.dependencies.async_runtime_handle,
+                    authorization.get_all_effective_roles(),
+                )?
+                .into_iter()
+                .map(|role| role.name)
+                .collect::<Vec<_>>();
+                roles.sort();
+                let roles_comma_separated_string = roles.iter().join(",");
+                let value = if authorization.get_secondary_roles().is_none() {
+                    json!({ "roles": roles_comma_separated_string, "value": "ALL" })
+                } else {
+                    json!({ "roles": roles_comma_separated_string, "value": "None" })
+                };
+                Ok(Scalar::String(to_string(&value)?))
+            }
+            TypeCheckAuthorizationFunction::CurrentAvailableRoles => {
+                let mut roles = block_on_with_handle(
+                    &self.dependencies.async_runtime_handle,
+                    authorization.get_all_available_roles(),
+                )?
+                .into_iter()
+                .map(|role| role.name)
+                .collect::<Vec<_>>();
+                roles.sort();
+                Ok(Scalar::String(to_string(&roles)?))
+            }
+        }
     }
 
     fn set_result_cache_uncacheable(&self) {
         self.ctx.result_cache_state().set_cacheable(false);
     }
 
-    fn can_apply_column_masking_policy(&self) -> bool {
-        self.dependencies
+    fn resolve_data_mask_policy(
+        &self,
+        policy_id: u64,
+    ) -> Result<Option<Arc<CachedSecurityPolicy>>> {
+        if self
+            .dependencies
             .license_manager
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::DataMask)
-            .is_ok()
+            .is_err()
+        {
+            return Ok(None);
+        }
+
+        let tenant = self.ctx.get_tenant();
+        let meta_api = self.dependencies.user_api_provider.get_meta_store_client();
+        let tenant_clone = tenant.clone();
+        let policy = block_on_with_handle(
+            &self.dependencies.async_runtime_handle,
+            self.dependencies.security_policy_cache_manager.get_or_load(
+                PolicyType::DataMask,
+                &tenant,
+                policy_id,
+                || async move {
+                    let handler = get_datamask_handler();
+                    let seq_v = handler
+                        .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
+                        .await?;
+                    let meta = seq_v.data;
+                    Ok(RawPolicyDef {
+                        body: meta.body,
+                        args: meta.args,
+                    })
+                },
+            ),
+        )?;
+        Ok(Some(policy))
+    }
+
+    fn resolve_udf(&self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
+        let tenant = self.ctx.get_tenant();
+        Ok(block_on_with_handle(
+            &self.dependencies.async_runtime_handle,
+            self.dependencies
+                .user_api_provider
+                .get_udf(&tenant, udf_name),
+        )?)
     }
 
     fn table_context(&self) -> &Arc<dyn TableContext> {
@@ -831,7 +920,6 @@ where A: TypeCheckAdapter
                     // BUT: skip masking policy application if we're already resolving a masking policy expression
                     // to prevent infinite recursion (e.g., policy references the masked column itself)
                     let has_masking_policy = !self.in_masking_policy
-                        && self.adapter.can_apply_column_masking_policy()
                         // Does this column reference a table with masking policy?
                         && column
                             .table_index
@@ -893,15 +981,13 @@ where A: TypeCheckAdapter
                             .is_some();
 
                     if has_masking_policy {
-                        // Only do expensive async work if we know there's a policy
-                        let mask_expr = self.block_on(async {
-                            self.get_masking_policy_expr_for_column(
-                                &column,
-                                database.as_deref(),
-                                table.as_deref(),
-                            )
-                            .await
-                        })??;
+                        // Only load the policy definition after table metadata proves this
+                        // column has an attached masking policy.
+                        let mask_expr = self.get_masking_policy_expr_for_column(
+                            &column,
+                            database.as_deref(),
+                            table.as_deref(),
+                        )?;
 
                         if let Some(mask_expr) = mask_expr {
                             // Set flag to prevent recursive masking policy application
@@ -1421,20 +1507,18 @@ where A: TypeCheckAdapter
 {
     /// Get masking policy expression for a column reference
     /// This is the ONLY place where masking policy is applied - unifying all paths (SELECT/WHERE/HAVING)
-    async fn get_masking_policy_expr_for_column(
+    fn get_masking_policy_expr_for_column(
         &self,
         column_binding: &crate::ColumnBinding,
         database: Option<&str>,
         table: Option<&str>,
     ) -> Result<Option<Expr>> {
         use databend_common_ast::ast;
-        use databend_common_users::security_policy_cache::PolicyType;
-        use databend_common_users::security_policy_cache::RawPolicyDef;
-        use databend_enterprise_data_mask_feature::get_datamask_handler;
 
         // Check if this column has a masking policy
         if let Some(table_index) = column_binding.table_index {
-            // Extract all needed data before the await point to avoid holding the mutex lock
+            // Extract all needed data before loading the policy definition to avoid
+            // holding the metadata lock across cache or metastore access.
             let policy_data = {
                 let metadata = self.metadata.read();
                 let table_entry = metadata.table(table_index);
@@ -1448,59 +1532,35 @@ where A: TypeCheckAdapter
                     .iter()
                     .find(|f| f.name == column_binding.column_name)
                 {
-                    if let Some(policy_info) = table_info_ref
+                    table_info_ref
                         .meta
                         .column_mask_policy_columns_ids
                         .get(&field.column_id)
-                    {
-                        if !self.adapter.can_apply_column_masking_policy() {
-                            return Ok(None);
-                        }
-
-                        // Extract data needed after await
-                        Some((
-                            policy_info.policy_id,
-                            policy_info.columns_ids.clone(),
-                            table_schema,
-                        ))
-                    } else {
-                        None
-                    }
+                        .map(|policy_info| {
+                            // Extract data needed after the metadata lock is released.
+                            (
+                                policy_info.policy_id,
+                                policy_info.columns_ids.clone(),
+                                table_schema,
+                            )
+                        })
                 } else {
                     None
                 }
             }; // metadata lock is released here
 
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
-                let tenant = self.table_ctx().get_tenant();
-                let cache = self.adapter.security_policy_cache_manager()?;
-                let meta_api = self.adapter.user_api_provider()?.get_meta_store_client();
-                let tenant_clone = tenant.clone();
-
-                let cached = cache
-                    .get_or_load(
-                        PolicyType::DataMask,
-                        &tenant,
-                        policy_id,
-                        || async move {
-                            let handler = get_datamask_handler();
-                            let seq_v = handler
-                                .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
-                                .await?;
-                            let meta = seq_v.data;
-                            Ok(RawPolicyDef {
-                                body: meta.body,
-                                args: meta.args,
-                            })
-                        },
-                    )
-                    .await
-                    .map_err(|err| {
+                let Some(cached) = self.adapter.resolve_data_mask_policy(policy_id).map_err(
+                    |err| {
                         ErrorCode::UnknownMaskPolicy(format!(
                             "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
                             policy_id, column_binding.column_name, err
                         ))
-                    })?;
+                    },
+                )?
+                else {
+                    return Ok(None);
+                };
 
                 let args = &cached.args;
 

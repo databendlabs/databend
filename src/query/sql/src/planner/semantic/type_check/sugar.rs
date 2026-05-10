@@ -22,12 +22,12 @@ use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use itertools::Itertools;
-use serde_json::json;
-use serde_json::to_string;
 use smallvec::smallvec;
 use unicase::Ascii;
 
+use super::TypeCheckAuthorizationFunction;
+use super::TypeCheckNamespaceFunction;
+use super::TypeCheckSessionFunction;
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
@@ -208,76 +208,36 @@ where A: super::TypeCheckAdapter
         }
 
         match (func_name, resolved_args.as_slice()) {
-            ("current_catalog", []) => self.resolve_core_sugar_literal(
-                span,
-                Scalar::String(self.adapter.table_access_context()?.get_current_catalog()),
-            ),
+            ("current_catalog", []) => self
+                .resolve_core_namespace_function(span, TypeCheckNamespaceFunction::CurrentCatalog),
             ("database" | "currentdatabase" | "current_database", []) => self
-                .resolve_core_sugar_literal(
-                    span,
-                    Scalar::String(self.adapter.table_access_context()?.get_current_database()),
-                ),
+                .resolve_core_namespace_function(span, TypeCheckNamespaceFunction::CurrentDatabase),
             ("version", []) => {
-                self.resolve_core_sugar_literal(span, Scalar::String(self.adapter.fuse_version()?))
+                self.resolve_core_session_function(span, TypeCheckSessionFunction::Version)
             }
-            ("user" | "currentuser" | "current_user", []) => self.resolve_core_sugar_literal(
-                span,
-                Scalar::String(
-                    self.adapter
-                        .authorization_context()?
-                        .get_current_user()?
-                        .identity()
-                        .display()
-                        .to_string(),
+            ("user" | "currentuser" | "current_user", []) => self
+                .resolve_core_authorization_function(
+                    span,
+                    TypeCheckAuthorizationFunction::CurrentUser,
                 ),
-            ),
-            ("current_role", []) => self.resolve_core_sugar_literal(
+            ("current_role", []) => self.resolve_core_authorization_function(
                 span,
-                Scalar::String(
-                    self.adapter
-                        .authorization_context()?
-                        .get_current_role()
-                        .map(|role| role.name)
-                        .unwrap_or_default(),
-                ),
+                TypeCheckAuthorizationFunction::CurrentRole,
             ),
-            ("current_secondary_roles", []) => {
-                let auth_ctx = self.adapter.authorization_context()?;
-                let mut roles = self
-                    .block_on(auth_ctx.get_all_effective_roles())??
-                    .into_iter()
-                    .map(|role| role.name)
-                    .collect::<Vec<_>>();
-                roles.sort();
-                let roles_comma_separated_string = roles.iter().join(",");
-                let value = if auth_ctx.get_secondary_roles().is_none() {
-                    json!({ "roles": roles_comma_separated_string, "value": "ALL" })
-                } else {
-                    json!({ "roles": roles_comma_separated_string, "value": "None" })
-                };
-                self.resolve_core_sugar_literal(span, Scalar::String(to_string(&value)?))
-            }
-            ("current_available_roles", []) => {
-                let auth_ctx = self.adapter.authorization_context()?;
-                let mut roles = self
-                    .block_on(auth_ctx.get_all_available_roles())??
-                    .into_iter()
-                    .map(|role| role.name)
-                    .collect::<Vec<_>>();
-                roles.sort();
-                self.resolve_core_sugar_literal(span, Scalar::String(to_string(&roles)?))
-            }
+            ("current_secondary_roles", []) => self.resolve_core_authorization_function(
+                span,
+                TypeCheckAuthorizationFunction::CurrentSecondaryRoles,
+            ),
+            ("current_available_roles", []) => self.resolve_core_authorization_function(
+                span,
+                TypeCheckAuthorizationFunction::CurrentAvailableRoles,
+            ),
             ("connection_id", []) => {
-                self.resolve_core_sugar_literal(span, Scalar::String(self.adapter.connection_id()?))
+                self.resolve_core_session_function(span, TypeCheckSessionFunction::ConnectionId)
             }
-            ("client_session_id", []) => self.resolve_core_sugar_literal(
-                span,
-                Scalar::String(
-                    self.adapter
-                        .current_client_session_id()?
-                        .unwrap_or_default(),
-                ),
-            ),
+            ("client_session_id", []) => {
+                self.resolve_core_session_function(span, TypeCheckSessionFunction::ClientSessionId)
+            }
             ("timezone", []) => self.resolve_core_sugar_literal(
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
@@ -337,6 +297,33 @@ where A: super::TypeCheckAdapter
         )))
     }
 
+    fn resolve_core_namespace_function(
+        &self,
+        span: Span,
+        function: TypeCheckNamespaceFunction,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        self.resolve_core_sugar_literal(span, self.adapter.resolve_namespace_function(function)?)
+    }
+
+    fn resolve_core_session_function(
+        &self,
+        span: Span,
+        function: TypeCheckSessionFunction<'_>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        self.resolve_core_sugar_literal(span, self.adapter.resolve_session_function(function)?)
+    }
+
+    fn resolve_core_authorization_function(
+        &self,
+        span: Span,
+        function: TypeCheckAuthorizationFunction,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        self.resolve_core_sugar_literal(
+            span,
+            self.adapter.resolve_authorization_function(function)?,
+        )
+    }
+
     fn resolve_core_last_query_id(
         &mut self,
         span: Span,
@@ -361,12 +348,10 @@ where A: super::TypeCheckAdapter
             }
             check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
         };
-        let value = self
-            .adapter
-            .last_query_id(index as i32)?
-            .map(Scalar::String)
-            .unwrap_or(Scalar::Null);
-        self.resolve_core_sugar_literal(span, value)
+        self.resolve_core_session_function(
+            span,
+            TypeCheckSessionFunction::LastQueryId(index as i32),
+        )
     }
 
     fn resolve_core_coalesce(
@@ -610,7 +595,9 @@ where A: super::TypeCheckAdapter
         if let Ok(arg) = ConstantExpr::try_from(scalar.clone())
             && let Scalar::String(var_name) = arg.value
         {
-            let var_value = self.adapter.variable(&var_name)?.unwrap_or(Scalar::Null);
+            let var_value = self
+                .adapter
+                .resolve_session_function(TypeCheckSessionFunction::Variable(&var_name))?;
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((
