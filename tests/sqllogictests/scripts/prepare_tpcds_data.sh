@@ -38,10 +38,10 @@ tables=(
 
 force=${2:-"1"}
 if [ "$force" == "0" ]; then
-    table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'call_center'" | $BENDSQL_CLIENT_CONNECT --output tsv --quote-style never)
+    table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'call_center'" | $BENDSQL_CLIENT_CONNECT --output tsv)
     table_exists=$(echo "$table_exists" | tr -d '\r\n[:space:]')
     if [ -n "$table_exists" ] && [ "$table_exists" -gt 0 ]; then
-        res=$(echo "SELECT COUNT() from ${db}.call_center" | $BENDSQL_CLIENT_CONNECT --output tsv --quote-style never)
+        res=$(echo "SELECT COUNT() from ${db}.call_center" | $BENDSQL_CLIENT_CONNECT --output tsv)
         res=$(echo "$res" | tr -d '\r\n[:space:]')
         if [ -n "$res" ] && [ "$res" -gt 0 ]; then
             echo "Table $db.call_center already exists and is not empty, size: ${res}. Use force=1 to override it."
