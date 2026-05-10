@@ -140,6 +140,26 @@ fn trim_props(
         .collect()
 }
 
+fn validate_s3_credentials(props: &std::collections::HashMap<String, String>) -> Result<()> {
+    let has_access_key = props.contains_key("s3.access-key-id");
+    let has_secret_key = props.contains_key("s3.secret-access-key");
+    let has_session_token = props.contains_key("s3.session-token");
+
+    if has_access_key != has_secret_key {
+        return Err(ErrorCode::BadArguments(
+            "s3.access-key-id and s3.secret-access-key must be configured together",
+        ));
+    }
+
+    if has_session_token && !(has_access_key && has_secret_key) {
+        return Err(ErrorCode::BadArguments(
+            "s3.session-token requires s3.access-key-id and s3.secret-access-key",
+        ));
+    }
+
+    Ok(())
+}
+
 /// Add iceberg s3 FileIO credential keys from AWS SDK style keys while keeping
 /// the original AWS keys for catalog clients such as S3Tables.
 ///
@@ -147,8 +167,9 @@ fn trim_props(
 /// keys, don't mix in AWS catalog credentials such as Glue session tokens.
 fn with_s3_file_io_aliases(
     raw: &std::collections::HashMap<String, String>,
-) -> std::collections::HashMap<String, String> {
+) -> Result<std::collections::HashMap<String, String>> {
     let mut out = trim_props(raw);
+    validate_s3_credentials(&out)?;
     let has_s3_credentials = out.contains_key("s3.access-key-id")
         || out.contains_key("s3.secret-access-key")
         || out.contains_key("s3.session-token");
@@ -174,7 +195,7 @@ fn with_s3_file_io_aliases(
         }
     }
 
-    out
+    Ok(out)
 }
 
 /// - Instances of `Database` are created from reading subdirectories of
@@ -256,7 +277,7 @@ impl IcebergMutableCatalog {
                 // S3Tables uses aws_* keys for the AWS SDK client, while its
                 // FileIO path expects iceberg s3.* keys. Keep the AWS keys and
                 // add missing s3.* aliases for file access.
-                let mut props = with_s3_file_io_aliases(&s.props);
+                let mut props = with_s3_file_io_aliases(&s.props)?;
                 props.insert("endpoint_url".to_string(), s.address.clone());
                 props.insert("table_bucket_arn".to_string(), s.table_bucket_arn.clone());
 
@@ -815,10 +836,12 @@ impl Catalog for IcebergMutableCatalog {
 mod tests {
     use std::collections::HashMap;
 
+    use databend_common_exception::Result;
+
     use super::with_s3_file_io_aliases;
 
     #[test]
-    fn storage_catalog_keeps_aws_keys_and_adds_missing_s3_aliases() {
+    fn storage_catalog_keeps_aws_keys_and_adds_missing_s3_aliases() -> Result<()> {
         let props = with_s3_file_io_aliases(&HashMap::from([
             ("aws_access_key_id".to_string(), "aws_access".to_string()),
             (
@@ -827,7 +850,7 @@ mod tests {
             ),
             ("aws_session_token".to_string(), "aws_token".to_string()),
             ("region_name".to_string(), "us-east-1".to_string()),
-        ]));
+        ]))?;
 
         assert_eq!(
             props.get("aws_access_key_id"),
@@ -855,21 +878,23 @@ mod tests {
             Some(&"aws_token".to_string())
         );
         assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn storage_catalog_keeps_aws_region_and_adds_missing_s3_region() {
+    fn storage_catalog_keeps_aws_region_and_adds_missing_s3_region() -> Result<()> {
         let props = with_s3_file_io_aliases(&HashMap::from([(
             "aws_region".to_string(),
             "us-east-1".to_string(),
-        )]));
+        )]))?;
 
         assert_eq!(props.get("aws_region"), Some(&"us-east-1".to_string()));
         assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn storage_catalog_does_not_mix_aws_session_token_with_explicit_s3_credentials() {
+    fn storage_catalog_does_not_mix_aws_session_token_with_explicit_s3_credentials() -> Result<()> {
         let props = with_s3_file_io_aliases(&HashMap::from([
             ("aws_access_key_id".to_string(), "aws_access".to_string()),
             (
@@ -880,7 +905,7 @@ mod tests {
             ("region_name".to_string(), "us-east-1".to_string()),
             ("s3.access-key-id".to_string(), "s3_access".to_string()),
             ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
-        ]));
+        ]))?;
 
         assert_eq!(
             props.get("s3.access-key-id"),
@@ -892,10 +917,11 @@ mod tests {
         );
         assert!(!props.contains_key("s3.session-token"));
         assert_eq!(props.get("s3.region"), Some(&"us-east-1".to_string()));
+        Ok(())
     }
 
     #[test]
-    fn storage_catalog_does_not_override_explicit_s3_aliases() {
+    fn storage_catalog_does_not_override_explicit_s3_aliases() -> Result<()> {
         let props = with_s3_file_io_aliases(&HashMap::from([
             ("aws_access_key_id".to_string(), "aws_access".to_string()),
             (
@@ -908,7 +934,7 @@ mod tests {
             ("s3.secret-access-key".to_string(), "s3_secret".to_string()),
             ("s3.session-token".to_string(), "s3_token".to_string()),
             ("s3.region".to_string(), "us-west-2".to_string()),
-        ]));
+        ]))?;
 
         assert_eq!(
             props.get("s3.access-key-id"),
@@ -920,5 +946,34 @@ mod tests {
         );
         assert_eq!(props.get("s3.session-token"), Some(&"s3_token".to_string()));
         assert_eq!(props.get("s3.region"), Some(&"us-west-2".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn storage_catalog_rejects_partial_explicit_s3_credentials() {
+        let err = with_s3_file_io_aliases(&HashMap::from([(
+            "s3.access-key-id".to_string(),
+            "s3_access".to_string(),
+        )]))
+        .unwrap_err();
+
+        assert!(
+            err.message()
+                .contains("s3.access-key-id and s3.secret-access-key must be configured together")
+        );
+    }
+
+    #[test]
+    fn storage_catalog_rejects_session_token_without_explicit_s3_key_pair() {
+        let err = with_s3_file_io_aliases(&HashMap::from([(
+            "s3.session-token".to_string(),
+            "s3_token".to_string(),
+        )]))
+        .unwrap_err();
+
+        assert!(
+            err.message()
+                .contains("s3.session-token requires s3.access-key-id and s3.secret-access-key")
+        );
     }
 }

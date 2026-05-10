@@ -686,6 +686,28 @@ impl IcebergFileIO {
         Self { scheme, props }
     }
 
+    fn validate_s3_credentials(&self) -> Result<()> {
+        let has_access_key = self.props.contains_key("s3.access-key-id");
+        let has_secret_key = self.props.contains_key("s3.secret-access-key");
+        let has_session_token = self.props.contains_key("s3.session-token");
+
+        if has_access_key != has_secret_key {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "s3.access-key-id and s3.secret-access-key must be configured together",
+            ));
+        }
+
+        if has_session_token && !(has_access_key && has_secret_key) {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "s3.session-token requires s3.access-key-id and s3.secret-access-key",
+            ));
+        }
+
+        Ok(())
+    }
+
     fn build_operator(&self, location: &str) -> Result<(Operator, usize)> {
         let url = url::Url::parse(location)
             .map_err(|e| Error::new(ErrorKind::InvalidInput, e.to_string()))?;
@@ -723,6 +745,8 @@ impl IcebergFileIO {
         if let Some(bucket) = bucket {
             opendal_config.insert("bucket".to_string(), bucket.to_string());
         }
+
+        self.validate_s3_credentials()?;
 
         let has_s3_credentials = self.props.contains_key("s3.access-key-id")
             || self.props.contains_key("s3.secret-access-key")
@@ -863,5 +887,46 @@ mod tests {
         assert!(res.is_ok(), "operator build failed: {:?}", res.err());
         let (_, path_pos) = res.unwrap();
         assert_eq!(path_pos, "s3://bucket/".len());
+    }
+
+    #[test]
+    fn iceberg_file_io_rejects_partial_explicit_s3_credentials() {
+        let file_io = IcebergFileIO {
+            scheme: "s3".to_string(),
+            props: HashMap::from([
+                ("aws_access_key_id".to_string(), "glue_access".to_string()),
+                (
+                    "aws_secret_access_key".to_string(),
+                    "glue_secret".to_string(),
+                ),
+                ("s3.access-key-id".to_string(), "s3_access".to_string()),
+            ]),
+        };
+
+        let err = file_io
+            .build_operator("s3://bucket/path/to/file.parquet")
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("s3.access-key-id and s3.secret-access-key must be configured together"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn iceberg_file_io_rejects_session_token_without_explicit_s3_key_pair() {
+        let file_io = IcebergFileIO {
+            scheme: "s3".to_string(),
+            props: HashMap::from([("s3.session-token".to_string(), "s3_token".to_string())]),
+        };
+
+        let err = file_io
+            .build_operator("s3://bucket/path/to/file.parquet")
+            .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("s3.session-token requires s3.access-key-id and s3.secret-access-key"),
+            "unexpected error: {err}"
+        );
     }
 }
