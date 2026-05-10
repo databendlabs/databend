@@ -84,6 +84,7 @@ use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
 use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::BasicTypeCheckPolicy;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::DummyTableScan;
@@ -698,9 +699,10 @@ impl Binder {
         bind_context: &mut BindContext,
         expr: &Expr,
     ) -> Result<databend_common_expression::Expr<crate::ColumnBinding>> {
-        let mut type_checker = TypeChecker::try_create(
+        let policy = BasicTypeCheckPolicy::scalar(self.ctx.as_ref())?;
+        let mut type_checker = TypeChecker::try_create_with_policy(
             bind_context,
-            self.ctx.clone(),
+            policy,
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],

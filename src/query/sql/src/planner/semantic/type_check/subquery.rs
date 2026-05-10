@@ -27,17 +27,44 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
+use super::FullTypeCheckPolicy;
+use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
 use crate::ColumnSet;
+use crate::MetadataRef;
 use crate::binder::Binder;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::NameResolutionContext;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+
+pub(super) fn bind_subquery(
+    policy: &FullTypeCheckPolicy,
+    parent_context: &BindContext,
+    name_resolution_ctx: &NameResolutionContext,
+    metadata: MetadataRef,
+    subquery: &Query,
+) -> Result<TypeCheckSubqueryPlan> {
+    let mut binder = Binder::new(
+        policy.ctx.clone(),
+        policy.dependencies.catalog_manager.clone(),
+        name_resolution_ctx.clone(),
+        metadata,
+    );
+
+    // Use the current bind context as the parent so the subquery can resolve outer columns.
+    let mut bind_context = BindContext::with_parent(parent_context.clone())?;
+    let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
+    Ok(TypeCheckSubqueryPlan {
+        s_expr,
+        output_context,
+    })
+}
 
 impl<'a, P> TypeChecker<'a, P>
 where P: super::TypeCheckPolicy
@@ -237,16 +264,15 @@ where P: super::TypeCheckPolicy
             )
         }
 
-        let mut binder = Binder::new(
-            self.table_ctx().clone(),
-            self.policy.catalog_manager()?,
-            self.name_resolution_ctx.clone(),
+        let TypeCheckSubqueryPlan {
+            s_expr,
+            output_context,
+        } = self.policy.bind_subquery(
+            self.bind_context,
+            self.name_resolution_ctx,
             self.metadata.clone(),
-        );
-
-        // Create new `BindContext` with current `bind_context` as its parent, so we can resolve outer columns.
-        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
-        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
+            subquery,
+        )?;
         self.bind_context
             .cte_context
             .set_cte_context_and_name(output_context.cte_context);

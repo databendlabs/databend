@@ -39,7 +39,6 @@ use databend_common_sql::BasicTypeCheckPolicy;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::CoreExprContextDependencies;
-use databend_common_sql::CoreExprContextPolicy;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Symbol;
@@ -74,16 +73,6 @@ impl TestTypeCheckPolicy {
     }
 }
 
-impl CoreExprContextPolicy for TestTypeCheckPolicy {
-    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
-        CoreExprContextDependencies::all()
-    }
-
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        AggregateFunctionFactory::instance()
-    }
-}
-
 impl TypeCheckPolicy for TestTypeCheckPolicy {
     fn function_context(&self) -> Result<FunctionContext> {
         Ok(self.func_ctx.clone())
@@ -91,6 +80,10 @@ impl TypeCheckPolicy for TestTypeCheckPolicy {
 
     fn settings(&self) -> Arc<Settings> {
         self.settings.clone()
+    }
+
+    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
+        AggregateFunctionFactory::instance()
     }
 
     fn async_runtime_handle(&self) -> Result<tokio::runtime::Handle> {

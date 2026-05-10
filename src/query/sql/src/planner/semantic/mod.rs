@@ -44,7 +44,6 @@ pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use type_check::BasicTypeCheckPolicy;
 pub use type_check::CoreExprContextDependencies;
-pub use type_check::CoreExprContextPolicy;
 pub use type_check::FullTypeCheckPolicy;
 pub use type_check::StageLocationParam;
 pub use type_check::TypeCheckPolicy;

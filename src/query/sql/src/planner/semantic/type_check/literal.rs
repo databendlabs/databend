@@ -50,15 +50,6 @@ impl<'a, P> TypeChecker<'a, P> {
         let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
         Ok(Box::new((scalar_expr, data_type)))
     }
-
-    pub(super) fn resolve_minus_literal_scalar(
-        &self,
-        span: Span,
-        literal: &databend_common_ast::ast::Literal,
-    ) -> Result<Box<(Scalar, DataType)>> {
-        let value = minus_literal_scalar(span, literal)?;
-        Ok(Box::new(infer_literal_data_type(value)))
-    }
 }
 
 impl<'a, P> TypeChecker<'a, P>

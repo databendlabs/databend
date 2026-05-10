@@ -21,93 +21,12 @@ use databend_common_ast::ast::Literal;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::type_check::convert_escape_pattern;
-use databend_common_expression::types::DataType;
 use smallvec::smallvec;
 
-use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
 use super::core_expr::binary_op_core_function;
 use super::core_expr::like_op_core_function;
-use crate::plans::ScalarExpr;
-
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
-{
-    pub(super) fn resolve_like(
-        &mut self,
-        op: &BinaryOperator,
-        span: Span,
-        left: &Expr,
-        right: &Expr,
-        like_str: &str,
-        escape: &Option<String>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let new_like_str = match escape.as_ref() {
-            Some(escape_literal) => {
-                let mut chars = escape_literal.chars();
-                let Some(escape_char) = chars.next() else {
-                    // Empty escape literals must stay on the builtin path to match runtime behavior.
-                    return self.resolve_like_escape(op, span, left, right, escape);
-                };
-
-                if chars.next().is_some() {
-                    // Preserve existing builtin behavior for non-single-character escape literals.
-                    return self.resolve_like_escape(op, span, left, right, escape);
-                }
-
-                Cow::Owned(convert_escape_pattern(like_str, escape_char))
-            }
-            None => Cow::Borrowed(like_str),
-        };
-        if check_percent(&new_like_str) {
-            // Convert to `a is not null`
-            let is_not_null = Expr::IsNull {
-                span: None,
-                expr: Box::new(left.clone()),
-                not: true,
-            };
-            self.resolve(&is_not_null)
-        } else if check_const(&new_like_str) {
-            // Convert to equal comparison
-            self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
-        } else if check_prefix(&new_like_str) {
-            // Convert to `a >= like_str and a < like_str + 1`
-            let mut char_vec: Vec<char> = new_like_str[0..new_like_str.len() - 1].chars().collect();
-            let len = char_vec.len();
-            let ascii_val = *char_vec.last().unwrap() as u8 + 1;
-            char_vec[len - 1] = ascii_val as char;
-            let like_str_plus: String = char_vec.iter().collect();
-            let (new_left, _) =
-                *self.resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
-                    span: None,
-                    value: Literal::String(new_like_str[..new_like_str.len() - 1].to_owned()),
-                })?;
-            let (new_right, _) =
-                *self.resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
-                    span: None,
-                    value: Literal::String(like_str_plus),
-                })?;
-            self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
-        } else {
-            self.resolve_like_escape(op, span, left, right, escape)
-        }
-    }
-
-    pub(super) fn resolve_like_escape(
-        &mut self,
-        op: &BinaryOperator,
-        span: Span,
-        left: &Expr,
-        right: &Expr,
-        escape: &Option<String>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let name = like_op_core_function(op).expect("LIKE operator should have a core function");
-        let mut arena = self.core_expr_arena();
-        let root = arena.lower_like_escape_expr(span, name, left, right, escape)?;
-        self.resolve_core(&arena, root)
-    }
-}
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_special_binary_op_expr(

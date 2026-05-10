@@ -75,142 +75,9 @@ pub(super) type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
 pub(super) type CoreSearchFunctionArgs = SmallVec<[(String, CoreExprId); 4]>;
 pub(super) type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct CoreExprContextDependencies {
-    /// Pure expression evaluation plus builtin scalar resolution.
-    ///
-    /// Typical callers: default/constraint expressions, statement settings,
-    /// expression parser helpers, and scalar binder paths that do not need
-    /// catalog, subquery, async, or UDF behavior.
-    pub scalar_evaluation: bool,
-
-    /// Name resolution against the current bind context, including virtual columns.
-    pub column_resolution: bool,
-
-    /// Lambda functions need a nested type check scope.
-    pub lambda_function: bool,
-
-    /// Search functions use search-specific semantic checks.
-    pub search_function: bool,
-
-    /// Set-returning functions need clause-specific semantic checks.
-    pub set_returning_function: bool,
-
-    /// Window functions need window-specific semantic checks.
-    pub window_function: bool,
-
-    /// Session/catalog/user/version/variable sugar functions.
-    pub session_function: bool,
-
-    /// Subquery and IN-list-to-subquery lowering paths that need binder-style
-    /// planning support.
-    pub subquery: bool,
-
-    /// Builtin async functions such as sequence, dictionary, and read_file.
-    pub async_function: bool,
-
-    /// Potential UDF resolution and UDF execution metadata.
-    pub udf: bool,
-}
-
-impl CoreExprContextDependencies {
-    pub fn all() -> Self {
-        Self {
-            scalar_evaluation: true,
-            column_resolution: true,
-            lambda_function: true,
-            search_function: true,
-            set_returning_function: true,
-            window_function: true,
-            session_function: true,
-            subquery: true,
-            async_function: true,
-            udf: true,
-        }
-    }
-
-    fn require_sugar_function(&mut self, func_name: &str) {
-        match func_name {
-            "current_catalog"
-            | "database"
-            | "currentdatabase"
-            | "current_database"
-            | "version"
-            | "user"
-            | "currentuser"
-            | "current_user"
-            | "current_role"
-            | "current_secondary_roles"
-            | "current_available_roles"
-            | "connection_id"
-            | "client_session_id"
-            | "timezone"
-            | "last_query_id"
-            | "array_sort"
-            | "getvariable" => self.session_function = true,
-            _ => {}
-        }
-    }
-
-    fn contains(self, required: Self) -> bool {
-        (!required.scalar_evaluation || self.scalar_evaluation)
-            && (!required.column_resolution || self.column_resolution)
-            && (!required.lambda_function || self.lambda_function)
-            && (!required.search_function || self.search_function)
-            && (!required.set_returning_function || self.set_returning_function)
-            && (!required.window_function || self.window_function)
-            && (!required.session_function || self.session_function)
-            && (!required.subquery || self.subquery)
-            && (!required.async_function || self.async_function)
-            && (!required.udf || self.udf)
-    }
-
-    fn missing_from(self, allowed: Self) -> Vec<&'static str> {
-        let mut missing = Vec::new();
-        if self.scalar_evaluation && !allowed.scalar_evaluation {
-            missing.push("scalar_evaluation");
-        }
-        if self.column_resolution && !allowed.column_resolution {
-            missing.push("column_resolution");
-        }
-        if self.lambda_function && !allowed.lambda_function {
-            missing.push("lambda_function");
-        }
-        if self.search_function && !allowed.search_function {
-            missing.push("search_function");
-        }
-        if self.set_returning_function && !allowed.set_returning_function {
-            missing.push("set_returning_function");
-        }
-        if self.window_function && !allowed.window_function {
-            missing.push("window_function");
-        }
-        if self.session_function && !allowed.session_function {
-            missing.push("session_function");
-        }
-        if self.subquery && !allowed.subquery {
-            missing.push("subquery");
-        }
-        if self.async_function && !allowed.async_function {
-            missing.push("async_function");
-        }
-        if self.udf && !allowed.udf {
-            missing.push("udf");
-        }
-        missing
-    }
-}
-
-pub trait CoreExprContextPolicy {
-    fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies;
-
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
-}
-
 pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
-    allowed_context_dependencies: CoreExprContextDependencies,
     aggregate_function_factory: &'static AggregateFunctionFactory,
 }
 
@@ -219,44 +86,23 @@ impl<'a> CoreExprArena<'a> {
         Self {
             nodes: Vec::new(),
             week_start,
-            allowed_context_dependencies: CoreExprContextDependencies::all(),
             aggregate_function_factory: AggregateFunctionFactory::instance(),
         }
     }
 
-    pub(super) fn with_context_policy<P>(week_start: u64, context_policy: &P) -> Self
-    where P: CoreExprContextPolicy + ?Sized {
+    pub(super) fn with_aggregate_function_factory(
+        week_start: u64,
+        aggregate_function_factory: &'static AggregateFunctionFactory,
+    ) -> Self {
         Self {
             nodes: Vec::new(),
             week_start,
-            allowed_context_dependencies: context_policy.allowed_core_expr_context_dependencies(),
-            aggregate_function_factory: context_policy.aggregate_function_factory(),
+            aggregate_function_factory,
         }
     }
 
-    pub(super) fn context_dependencies(&self) -> CoreExprContextDependencies {
-        let mut dependencies = CoreExprContextDependencies::default();
-        for node in &self.nodes {
-            node.add_context_dependencies(&mut dependencies);
-        }
-        dependencies
-    }
-
-    pub(super) fn check_context_policy(&self) -> Result<()> {
-        if self.allowed_context_dependencies == CoreExprContextDependencies::all() {
-            return Ok(());
-        }
-
-        let required = self.context_dependencies();
-        if self.allowed_context_dependencies.contains(required) {
-            return Ok(());
-        }
-
-        let missing = required.missing_from(self.allowed_context_dependencies);
-        Err(ErrorCode::SemanticError(format!(
-            "type check context does not allow required capabilities: {}",
-            missing.join(", ")
-        )))
+    pub(super) fn iter(&self) -> impl Iterator<Item = &CoreExpr<'a>> {
+        self.nodes.iter()
     }
 
     #[recursive::recursive]
@@ -539,7 +385,6 @@ impl<'a> CoreExprArena<'a> {
             }
             Expr::StageLocation { span, location } => self.stage_location(*span, location),
         };
-        self.check_context_policy()?;
         Ok(id)
     }
 
@@ -935,7 +780,7 @@ impl<'a> CoreExprArena<'a> {
         Ok(self.scalar_function(span, func_name, params, args))
     }
 
-    fn lower_unary_op_expr(
+    pub(super) fn lower_unary_op_expr(
         &mut self,
         span: Span,
         op: &'a UnaryOperator,
@@ -1119,7 +964,7 @@ impl<'a> CoreExprArena<'a> {
         Ok(self.alloc(CoreExpr::UdfCall { span, name, args }))
     }
 
-    fn lower_binary_op_expr(
+    pub(super) fn lower_binary_op_expr(
         &mut self,
         span: Span,
         op: &'a BinaryOperator,
@@ -1410,60 +1255,6 @@ pub(super) struct CoreOrderByExpr {
     pub(super) expr: CoreExprId,
     pub(super) asc: Option<bool>,
     pub(super) nulls_first: Option<bool>,
-}
-
-impl<'a> CoreExpr<'a> {
-    fn add_context_dependencies(&self, dependencies: &mut CoreExprContextDependencies) {
-        match self {
-            CoreExpr::ColumnRef { .. } => {
-                dependencies.column_resolution = true;
-            }
-            CoreExpr::Call { .. }
-            | CoreExpr::ScalarFunction { .. }
-            | CoreExpr::AggregateFunction { .. }
-            | CoreExpr::Array { .. }
-            | CoreExpr::Map { .. }
-            | CoreExpr::Tuple { .. }
-            | CoreExpr::MapAccess { .. }
-            | CoreExpr::Cast { .. } => {
-                dependencies.scalar_evaluation = true;
-            }
-            CoreExpr::UdfCall { .. } => {
-                dependencies.udf = true;
-            }
-            CoreExpr::LambdaFunction { .. } => {
-                dependencies.lambda_function = true;
-            }
-            CoreExpr::SearchFunction { .. } => {
-                dependencies.search_function = true;
-            }
-            CoreExpr::AsyncFunction { .. } => {
-                dependencies.async_function = true;
-            }
-            CoreExpr::SetReturningFunction { .. } => {
-                dependencies.set_returning_function = true;
-            }
-            CoreExpr::InList { .. } => {
-                dependencies.scalar_evaluation = true;
-            }
-            CoreExpr::Subquery { child_expr, .. } => {
-                if child_expr.is_some() {
-                    dependencies.column_resolution = true;
-                }
-                dependencies.subquery = true;
-            }
-            CoreExpr::SugarFunction { func_name, .. } => {
-                dependencies.require_sugar_function(func_name);
-            }
-            CoreExpr::AggregateWindowFunction { .. }
-            | CoreExpr::GeneralWindowFunction { .. }
-            | CoreExpr::CountAllWindowFunction { .. } => {
-                dependencies.window_function = true;
-            }
-            CoreExpr::StageLocation { .. } => {}
-            CoreExpr::Literal { .. } => {}
-        }
-    }
 }
 
 impl<'a, P> TypeChecker<'a, P>
@@ -2059,21 +1850,6 @@ mod tests {
 
     use super::*;
 
-    #[derive(Clone, Copy)]
-    struct StaticCoreExprContextPolicy {
-        allowed: CoreExprContextDependencies,
-    }
-
-    impl CoreExprContextPolicy for StaticCoreExprContextPolicy {
-        fn allowed_core_expr_context_dependencies(&self) -> CoreExprContextDependencies {
-            self.allowed
-        }
-
-        fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-            AggregateFunctionFactory::instance()
-        }
-    }
-
     fn assert_sql_lowers_to(sql: &str, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
         let tokens = tokenize_sql(sql).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
@@ -2094,25 +1870,6 @@ mod tests {
         let mut arena = CoreExprArena::new(0);
         let err = match arena.lower_ast_expr(&expr) {
             Ok(_) => panic!("expected lower to fail for `{sql}`"),
-            Err(err) => err,
-        };
-        assert!(
-            err.message().contains(expected),
-            "expected error to contain `{expected}`, got `{}`",
-            err.message()
-        );
-    }
-
-    fn assert_sql_policy_error_contains(
-        sql: &str,
-        policy: &impl CoreExprContextPolicy,
-        expected: &str,
-    ) {
-        let tokens = tokenize_sql(sql).unwrap();
-        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let mut arena = CoreExprArena::with_context_policy(0, policy);
-        let err = match arena.lower_ast_expr(&expr) {
-            Ok(_) => panic!("expected context policy violation"),
             Err(err) => err,
         };
         assert!(
@@ -2331,117 +2088,6 @@ mod tests {
         assert_sql_lowers_to("abs(DISTINCT 1)", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::ScalarFunction { .. }));
         });
-    }
-
-    #[test]
-    fn collects_context_dependencies_from_flat_nodes() {
-        assert_sql_lowers_to("1", |arena, _root| {
-            assert_eq!(
-                arena.context_dependencies(),
-                CoreExprContextDependencies::default()
-            );
-        });
-
-        assert_sql_lowers_to("a", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.column_resolution);
-            assert!(!dependencies.scalar_evaluation);
-        });
-
-        assert_sql_lowers_to("1 + 2", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.scalar_evaluation);
-            assert!(!dependencies.column_resolution);
-        });
-
-        assert_sql_lowers_to("a IN (1, 2)", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.column_resolution);
-            assert!(dependencies.scalar_evaluation);
-            assert!(!dependencies.subquery);
-        });
-
-        assert_sql_lowers_to("current_database()", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.session_function);
-            assert!(!dependencies.subquery);
-        });
-
-        assert_sql_lowers_to("getvariable('x')", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.session_function);
-        });
-
-        assert_sql_lowers_to("array_filter([1], x -> x > 0)", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.lambda_function);
-            assert!(dependencies.column_resolution);
-        });
-
-        assert_sql_lowers_to("score()", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.search_function);
-        });
-
-        assert_sql_lowers_to("unnest([1, 2])", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.set_returning_function);
-        });
-
-        assert_sql_lowers_to("row_number() over ()", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.window_function);
-        });
-
-        assert_sql_lowers_to("nextval(seq)", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.async_function);
-            assert!(!dependencies.udf);
-        });
-
-        assert_sql_lowers_to("potential_udf(1)", |arena, _root| {
-            let dependencies = arena.context_dependencies();
-            assert!(dependencies.udf);
-            assert!(!dependencies.async_function);
-        });
-    }
-
-    #[test]
-    fn rejects_context_policy_violations_after_lower() {
-        let scalar_only = StaticCoreExprContextPolicy {
-            allowed: CoreExprContextDependencies {
-                scalar_evaluation: true,
-                ..Default::default()
-            },
-        };
-        let scalar_with_columns = StaticCoreExprContextPolicy {
-            allowed: CoreExprContextDependencies {
-                scalar_evaluation: true,
-                column_resolution: true,
-                ..Default::default()
-            },
-        };
-
-        assert_sql_lowers_to("1 + 2", |arena, _root| {
-            assert!(scalar_only.allowed.contains(arena.context_dependencies()));
-        });
-
-        assert_sql_policy_error_contains("a", &scalar_only, "column_resolution");
-        assert_sql_lowers_to("1 IN (2, 3)", |arena, _root| {
-            assert!(scalar_only.allowed.contains(arena.context_dependencies()));
-        });
-        assert_sql_policy_error_contains("a IN (1, 2)", &scalar_only, "column_resolution");
-        assert_sql_policy_error_contains("current_database()", &scalar_only, "session_function");
-        assert_sql_policy_error_contains(
-            "array_filter([1], x -> x > 0)",
-            &scalar_with_columns,
-            "lambda_function",
-        );
-        assert_sql_policy_error_contains("score()", &scalar_only, "search_function");
-        assert_sql_policy_error_contains("unnest([1, 2])", &scalar_only, "set_returning_function");
-        assert_sql_policy_error_contains("row_number() over ()", &scalar_only, "window_function");
-        assert_sql_policy_error_contains("nextval(seq)", &scalar_only, "async_function");
-        assert_sql_policy_error_contains("potential_udf(1)", &scalar_only, "udf");
     }
 
     #[test]

@@ -15,7 +15,6 @@
 use std::collections::VecDeque;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_exception::ErrorCode;
@@ -214,16 +213,6 @@ where P: super::TypeCheckPolicy
                 .into()
             }
         }
-    }
-
-    pub(super) fn resolve_map_access(
-        &mut self,
-        span: Span,
-        expr: &Expr,
-        paths: VecDeque<(Span, Literal)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (scalar, data_type) = self.resolve(expr)?;
-        self.resolve_map_access_from_scalar(span, expr.span(), scalar, data_type, paths)
     }
 
     pub(super) fn resolve_map_access_from_scalar(
