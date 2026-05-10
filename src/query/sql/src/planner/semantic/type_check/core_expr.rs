@@ -1173,7 +1173,6 @@ pub(super) enum CoreExpr<'a> {
     },
     AsyncFunction {
         span: Span,
-        func_name: &'static str,
         function: CoreAsyncFunction<'a>,
     },
     SetReturningFunction {
@@ -1374,11 +1373,9 @@ where A: super::TypeCheckAdapter
                 ))
                 .set_span(*span)),
             },
-            CoreExpr::AsyncFunction {
-                span,
-                func_name,
-                function,
-            } => self.resolve_async_function(arena, *span, func_name, function),
+            CoreExpr::AsyncFunction { span, function } => {
+                self.resolve_async_function(arena, *span, function)
+            }
             CoreExpr::InList {
                 span,
                 expr,

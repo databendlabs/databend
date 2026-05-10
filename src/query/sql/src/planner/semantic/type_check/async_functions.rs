@@ -49,7 +49,7 @@ pub(super) enum CoreAsyncFunction<'a> {
         key: CoreExprId,
         key_display: String,
     },
-    Args {
+    ReadFile {
         args: CoreSearchFunctionArgs,
     },
 }
@@ -64,23 +64,19 @@ impl<'a> CoreExprArena<'a> {
         let function = match func_name {
             "nextval" => {
                 let [Expr::ColumnRef { column, .. }] = args else {
-                    let args = self.lower_display_expr_args(args)?;
-                    return Ok(self.alloc(CoreExpr::AsyncFunction {
-                        span,
-                        func_name,
-                        function: CoreAsyncFunction::Args { args },
-                    }));
+                    return Err(ErrorCode::SemanticError(
+                        "nextval function argument don't support expr".to_string(),
+                    )
+                    .set_span(span));
                 };
                 CoreAsyncFunction::NextVal { sequence: column }
             }
             "dict_get" => {
                 let [Expr::ColumnRef { column, .. }, field, key] = args else {
-                    let args = self.lower_display_expr_args(args)?;
-                    return Ok(self.alloc(CoreExpr::AsyncFunction {
-                        span,
-                        func_name,
-                        function: CoreAsyncFunction::Args { args },
-                    }));
+                    return Err(ErrorCode::SemanticError(
+                        "async function can only used as column".to_string(),
+                    )
+                    .set_span(span));
                 };
                 CoreAsyncFunction::DictGet {
                     dictionary: column,
@@ -90,20 +86,25 @@ impl<'a> CoreExprArena<'a> {
                     key_display: format!("{:#}", key),
                 }
             }
-            "read_file" => CoreAsyncFunction::Args {
-                args: self.lower_display_expr_args(args)?,
-            },
+            "read_file" => {
+                if args.len() != 1 && args.len() != 2 {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "read_file function need one or two arguments but got {}",
+                        args.len()
+                    ))
+                    .set_span(span));
+                }
+                CoreAsyncFunction::ReadFile {
+                    args: self.lower_display_expr_args(args)?,
+                }
+            }
             _ => {
                 return Err(ErrorCode::Internal(format!(
                     "async function {func_name} should have been classified before lowering",
                 )));
             }
         };
-        Ok(self.alloc(CoreExpr::AsyncFunction {
-            span,
-            func_name,
-            function,
-        }))
+        Ok(self.alloc(CoreExpr::AsyncFunction { span, function }))
     }
 }
 
@@ -123,7 +124,6 @@ where A: super::TypeCheckAdapter
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
         function: &CoreAsyncFunction<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if matches!(self.bind_context.expr_context, ExprContext::InAsyncFunction) {
@@ -135,18 +135,27 @@ where A: super::TypeCheckAdapter
         let original_context = self
             .bind_context
             .replace_expr_context(ExprContext::InAsyncFunction);
-        let result = match func_name {
-            "nextval" => self.resolve_nextval_async_function(span, func_name, function)?,
-            "dict_get" => self.resolve_dict_get_async_function(arena, span, func_name, function)?,
-            "read_file" => {
-                self.resolve_read_file_async_function(arena, span, func_name, function)?
+        let result = match function {
+            CoreAsyncFunction::NextVal { sequence } => {
+                self.resolve_nextval_async_function(span, sequence)?
             }
-            _ => {
-                return Err(ErrorCode::SemanticError(format!(
-                    "cannot find async function {}",
-                    func_name
-                ))
-                .set_span(span));
+            CoreAsyncFunction::DictGet {
+                dictionary,
+                field,
+                field_display,
+                key,
+                key_display,
+            } => self.resolve_dict_get_async_function(
+                arena,
+                span,
+                dictionary,
+                *field,
+                field_display,
+                *key,
+                key_display,
+            )?,
+            CoreAsyncFunction::ReadFile { args } => {
+                self.resolve_read_file_async_function(arena, span, args)?
             }
         };
         // Restore the original context
@@ -158,15 +167,8 @@ where A: super::TypeCheckAdapter
     fn resolve_nextval_async_function(
         &mut self,
         span: Span,
-        func_name: &str,
-        function: &CoreAsyncFunction<'_>,
+        sequence: &ColumnRef,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let CoreAsyncFunction::NextVal { sequence } = function else {
-            return Err(ErrorCode::SemanticError(format!(
-                "nextval function argument don't support expr"
-            ))
-            .set_span(span));
-        };
         let (sequence_name, display_name) = {
             if sequence.database.is_some() || sequence.table.is_some() {
                 return Err(ErrorCode::SemanticError(
@@ -177,7 +179,7 @@ where A: super::TypeCheckAdapter
             match &sequence.column {
                 ColumnID::Name(ident) => {
                     let ident = normalize_identifier(ident, self.name_resolution_ctx);
-                    (ident.name.to_string(), format!("{}({})", func_name, ident))
+                    (ident.name.to_string(), format!("nextval({})", ident))
                 }
                 ColumnID::Position(pos) => {
                     return Err(ErrorCode::SemanticError(format!(
@@ -196,7 +198,7 @@ where A: super::TypeCheckAdapter
 
         let async_func = AsyncFunctionCall {
             span,
-            func_name: func_name.to_string(),
+            func_name: "nextval".to_string(),
             display_name,
             return_type: Box::new(return_type.clone()),
             arguments: vec![],
@@ -210,22 +212,12 @@ where A: super::TypeCheckAdapter
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
-        function: &CoreAsyncFunction<'_>,
+        dictionary: &ColumnRef,
+        field: CoreExprId,
+        field_display: &str,
+        key: CoreExprId,
+        key_display: &str,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let CoreAsyncFunction::DictGet {
-            dictionary,
-            field,
-            field_display,
-            key,
-            key_display,
-        } = function
-        else {
-            return Err(ErrorCode::SemanticError(
-                "async function can only used as column".to_string(),
-            )
-            .set_span(span));
-        };
         // Get dict_name and dict_meta.
         let (db_name, dict_name) = {
             if dictionary.database.is_some() {
@@ -253,7 +245,7 @@ where A: super::TypeCheckAdapter
         };
 
         // Get attr_name, attr_type and return_type.
-        let box (field_scalar, _field_data_type) = self.resolve_core(arena, *field)?;
+        let box (field_scalar, _field_data_type) = self.resolve_core(arena, field)?;
         let Ok(field_expr) = ConstantExpr::try_from(field_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for dict_get function, attr_name must be a constant string, but got {}",
@@ -273,7 +265,7 @@ where A: super::TypeCheckAdapter
                 .resolve_dictionary(db_name.as_deref(), &dict_name, attr_name)?;
 
         let mut args = Vec::with_capacity(1);
-        let box (key_scalar, key_type) = self.resolve_core(arena, *key)?;
+        let box (key_scalar, key_type) = self.resolve_core(arena, key)?;
 
         if dictionary.primary_type != key_type.remove_nullable() {
             args.push(wrap_cast(&key_scalar, &dictionary.primary_type));
@@ -282,12 +274,12 @@ where A: super::TypeCheckAdapter
         }
         let display_name = format!(
             "{}({}.{}, {}, {})",
-            func_name, dictionary.db_name, dict_name, field_display, key_display,
+            "dict_get", dictionary.db_name, dict_name, field_display, key_display,
         );
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
-                func_name: func_name.to_string(),
+                func_name: "dict_get".to_string(),
                 display_name,
                 return_type: Box::new(dictionary.attr_type.clone()),
                 arguments: args,
@@ -301,23 +293,8 @@ where A: super::TypeCheckAdapter
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
-        function: &CoreAsyncFunction<'_>,
+        args: &CoreSearchFunctionArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let CoreAsyncFunction::Args { args } = function else {
-            return Err(ErrorCode::SemanticError(format!(
-                "read_file function need one or two arguments but got 0"
-            ))
-            .set_span(span));
-        };
-        if args.len() != 1 && args.len() != 2 {
-            return Err(ErrorCode::SemanticError(format!(
-                "read_file function need one or two arguments but got {}",
-                args.len()
-            ))
-            .set_span(span));
-        }
-
         let mut resolved_args = Vec::with_capacity(args.len());
         let mut arg_types = Vec::with_capacity(args.len());
         for (_, arg) in args {
@@ -371,14 +348,14 @@ where A: super::TypeCheckAdapter
         };
 
         let display_name = if args.len() == 1 {
-            format!("{}({})", func_name, args[0].0)
+            format!("read_file({})", args[0].0)
         } else {
-            format!("{}({}, {})", func_name, args[0].0, args[1].0)
+            format!("read_file({}, {})", args[0].0, args[1].0)
         };
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
                 span,
-                func_name: func_name.to_string(),
+                func_name: "read_file".to_string(),
                 display_name,
                 return_type: Box::new(return_type.clone()),
                 arguments: resolved_args,
