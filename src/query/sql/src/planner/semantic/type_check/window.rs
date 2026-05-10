@@ -161,7 +161,7 @@ where A: super::TypeCheckAdapter
         order_by: &CoreOrderByExprs,
         window: &CoreWindowDesc<'_>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(
+        let (new_agg_func, _) = self.resolve_aggregate_call(
             arena,
             display_name,
             span,
@@ -195,7 +195,7 @@ where A: super::TypeCheckAdapter
         let params = SmallVec::new();
         let args = SmallVec::new();
         let order_by = SmallVec::new();
-        let (new_agg_func, _data_type) = self.resolve_core_aggregate_call(
+        let (new_agg_func, _data_type) = self.resolve_aggregate_call(
             &aggregate_arena,
             display_name,
             span,
@@ -253,7 +253,7 @@ where A: super::TypeCheckAdapter
         }
 
         self.in_window_function = true;
-        let arguments_result = self.resolve_core_expr_args(arena, args);
+        let arguments_result = self.resolve_expr_args(arena, args);
         self.in_window_function = false;
         let (arguments, arg_types) = arguments_result?;
 

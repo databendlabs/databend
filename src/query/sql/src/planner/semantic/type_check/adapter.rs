@@ -108,7 +108,7 @@ pub struct FullTypeCheckAdapter {
 }
 
 #[derive(Clone)]
-struct FullTypeCheckAdapterDependencies {
+pub(super) struct FullTypeCheckAdapterDependencies {
     async_runtime_handle: Handle,
     aggregate_function_factory: &'static AggregateFunctionFactory,
     license_manager: Arc<LicenseManagerSwitch>,
@@ -121,7 +121,7 @@ struct FullTypeCheckAdapterDependencies {
 
 impl FullTypeCheckAdapter {
     pub fn new(ctx: Arc<dyn TableContext>) -> Result<Self> {
-        let dependencies = FullTypeCheckAdapterDependencies::from_context(ctx.as_ref())?;
+        let dependencies = FullTypeCheckAdapterDependencies::from_global();
         Ok(Self {
             ctx,
             dependencies,
@@ -142,7 +142,7 @@ impl FullTypeCheckAdapter {
 }
 
 impl FullTypeCheckAdapterDependencies {
-    fn from_context(ctx: &dyn TableContext) -> Result<Self> {
+    fn from_global() -> Self {
         let global_config = GlobalConfig::instance();
         let cloud_control_api_provider = if global_config
             .query
@@ -155,8 +155,8 @@ impl FullTypeCheckAdapterDependencies {
             None
         };
 
-        Ok(Self {
-            async_runtime_handle: ctx.get_async_runtime_handle()?,
+        Self {
+            async_runtime_handle: tokio::runtime::Handle::current(),
             aggregate_function_factory: AggregateFunctionFactory::instance(),
             license_manager: LicenseManagerSwitch::instance(),
             catalog_manager: CatalogManager::instance(),
@@ -164,7 +164,7 @@ impl FullTypeCheckAdapterDependencies {
             security_policy_cache_manager: SecurityPolicyCacheManager::instance(),
             global_config,
             cloud_control_api_provider,
-        })
+        }
     }
 }
 

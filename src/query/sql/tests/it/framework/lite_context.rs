@@ -1121,10 +1121,6 @@ impl TableContextSettings for LiteTableContext {
         Ok(FunctionContext::default())
     }
 
-    fn get_async_runtime_handle(&self) -> Result<tokio::runtime::Handle> {
-        Ok(tokio::runtime::Handle::current())
-    }
-
     fn get_settings(&self) -> Arc<Settings> {
         self.settings.clone()
     }

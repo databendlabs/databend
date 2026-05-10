@@ -864,13 +864,14 @@ impl Binder {
         // Replace parameters in the masking policy expression
         let replaced_expr =
             TypeChecker::<()>::clone_expr_with_replacement(&cached.expr, |nest_expr| {
-                if let Expr::ColumnRef { column, .. } = nest_expr {
-                    // Parameter names are already normalized to lowercase at policy creation
-                    if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
-                        return Ok(Some(arg.clone()));
-                    }
+                // Parameter names are already normalized to lowercase at policy creation
+                if let Expr::ColumnRef { column, .. } = nest_expr
+                    && let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str())
+                {
+                    Ok(Some(arg.clone()))
+                } else {
+                    Ok(None)
                 }
-                Ok(None)
             })?;
 
         // Now resolve the replaced expression using TypeChecker

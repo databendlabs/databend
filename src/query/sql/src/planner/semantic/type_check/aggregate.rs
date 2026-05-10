@@ -39,35 +39,7 @@ impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn resolve_core_aggregate_function(
-        &mut self,
-        arena: &CoreExprArena<'_>,
-        display_name: &str,
-        span: Span,
-        func_name: &str,
-        distinct: bool,
-        params: &CoreFunctionParams,
-        args: &CoreExprArgs,
-        remove_count_args: bool,
-        order_by: &CoreOrderByExprs,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (new_agg_func, data_type) = self.resolve_core_aggregate_call(
-            arena,
-            display_name,
-            span,
-            func_name,
-            distinct,
-            params,
-            args,
-            remove_count_args,
-            order_by,
-            false,
-        )?;
-        Ok(Box::new((new_agg_func.into(), data_type)))
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn resolve_core_aggregate_call(
+    pub(super) fn resolve_aggregate_call(
         &mut self,
         arena: &CoreExprArena<'_>,
         display_name: &str,
@@ -155,7 +127,7 @@ where A: super::TypeCheckAdapter
         if disallow_alias_resolution {
             self.bind_context.expr_context = ExprContext::InAggregateFunction;
         }
-        let arguments_result = self.resolve_core_expr_args(arena, args);
+        let arguments_result = self.resolve_expr_args(arena, args);
         if disallow_alias_resolution {
             self.bind_context.expr_context = original_context;
         }

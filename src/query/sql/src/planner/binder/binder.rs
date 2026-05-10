@@ -904,7 +904,7 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            true,
+            false,
         )?;
         let (scalar, _) = *type_checker.resolve(expr)?;
         Ok(scalar)

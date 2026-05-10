@@ -149,7 +149,7 @@ fn parse_ast_exprs(
         &name_resolution_ctx,
         metadata,
         &[],
-        true,
+        false,
     )?;
 
     let exprs = ast_exprs
@@ -244,7 +244,7 @@ pub fn parse_computed_expr(
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        true,
+        false,
     )?;
 
     let tokens = tokenize_sql(sql)?;
@@ -308,7 +308,7 @@ pub fn parse_computed_expr_to_string(
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        true,
+        false,
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
@@ -393,7 +393,7 @@ pub fn parse_cluster_keys(
         &name_resolution_ctx,
         metadata,
         &[],
-        true,
+        false,
     )?;
 
     let exprs: Vec<Expr> = ast_exprs

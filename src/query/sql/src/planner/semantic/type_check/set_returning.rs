@@ -72,7 +72,7 @@ impl<'a> CoreExprArena<'a> {
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    pub(super) fn resolve_core_set_returning_function(
+    pub(super) fn resolve_set_returning_function(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -117,7 +117,7 @@ where A: super::TypeCheckAdapter
         let original_context = self
             .bind_context
             .replace_expr_context(ExprContext::InSetReturningFunction);
-        let arguments_result = self.resolve_core_expr_args(arena, args);
+        let arguments_result = self.resolve_expr_args(arena, args);
         self.bind_context.expr_context = original_context;
         let (arguments, _) = arguments_result?;
 

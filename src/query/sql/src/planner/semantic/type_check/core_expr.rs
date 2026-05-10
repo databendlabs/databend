@@ -1349,18 +1349,18 @@ where A: super::TypeCheckAdapter
                 span,
                 func_name,
                 args,
-            } => self.resolve_core_call(arena, *span, func_name, args),
+            } => self.resolve_call(arena, *span, func_name, args),
             CoreExpr::SetReturningFunction {
                 span,
                 func_name,
                 args,
-            } => self.resolve_core_set_returning_function(arena, *span, func_name, args),
+            } => self.resolve_set_returning_function(arena, *span, func_name, args),
             CoreExpr::ScalarFunction {
                 span,
                 func_name,
                 params,
                 args,
-            } => self.resolve_core_scalar_function(arena, *span, func_name, params, args),
+            } => self.resolve_scalar_function(arena, *span, func_name, params, args),
             CoreExpr::Cast {
                 span,
                 is_try,
@@ -1379,21 +1379,25 @@ where A: super::TypeCheckAdapter
                 args,
                 remove_count_args,
                 order_by,
-            } => self.resolve_core_aggregate_function(
-                arena,
-                display_name,
-                *span,
-                func_name,
-                *distinct,
-                params,
-                args,
-                *remove_count_args,
-                order_by,
-            ),
+            } => {
+                let (agg_func, data_type) = self.resolve_aggregate_call(
+                    arena,
+                    display_name,
+                    *span,
+                    func_name,
+                    *distinct,
+                    params,
+                    args,
+                    *remove_count_args,
+                    order_by,
+                    false,
+                )?;
+                Ok(Box::new((agg_func.into(), data_type)))
+            }
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
             CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
             CoreExpr::UdfCall { span, name, args } => {
-                self.resolve_core_udf_call(arena, *span, name, args)
+                self.resolve_udf_call(arena, *span, name, args)
             }
             CoreExpr::LambdaFunction {
                 span,
@@ -1420,7 +1424,7 @@ where A: super::TypeCheckAdapter
                 expr,
                 list,
                 not,
-            } => self.resolve_core_in_list(arena, *span, *expr, list, *not),
+            } => self.resolve_in_list(arena, *span, *expr, list, *not),
             CoreExpr::Subquery {
                 span,
                 subquery,
@@ -1483,7 +1487,7 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    fn resolve_core_call(
+    fn resolve_call(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -1538,7 +1542,7 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    pub(super) fn resolve_core_udf_call(
+    pub(super) fn resolve_udf_call(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -1552,7 +1556,7 @@ where A: super::TypeCheckAdapter
         Err(self.unknown_function_error(span, &udf_name))
     }
 
-    fn resolve_core_scalar_function(
+    fn resolve_scalar_function(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -1561,7 +1565,7 @@ where A: super::TypeCheckAdapter
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
-        let (scalars, _) = self.resolve_core_expr_args(arena, args)?;
+        let (scalars, _) = self.resolve_expr_args(arena, args)?;
 
         if self.should_try_rewrite_variant_function(func_name) {
             let mut arg_types = Vec::with_capacity(scalars.len());
@@ -1591,7 +1595,7 @@ where A: super::TypeCheckAdapter
         self.resolve_scalar_function_call(span, func_name, params, scalars)
     }
 
-    pub(super) fn resolve_core_expr_args(
+    pub(super) fn resolve_expr_args(
         &mut self,
         arena: &CoreExprArena<'_>,
         args: &CoreExprArgs,
@@ -1606,7 +1610,7 @@ where A: super::TypeCheckAdapter
         Ok((scalars, data_types))
     }
 
-    fn resolve_core_in_list(
+    fn resolve_in_list(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -1618,7 +1622,7 @@ where A: super::TypeCheckAdapter
         if list.len() >= inlist_to_join_threshold {
             let box (expr_scalar, expr_ty) = self.resolve_core(arena, expr)?;
             let box (subquery, data_type) =
-                self.resolve_core_in_list_as_subquery(arena, span, expr_scalar, expr_ty, list)?;
+                self.resolve_in_list_as_subquery(arena, span, expr_scalar, expr_ty, list)?;
             return if not {
                 self.resolve_scalar_function_call(span, "not", vec![], vec![subquery])
             } else {
@@ -1634,7 +1638,7 @@ where A: super::TypeCheckAdapter
                 .iter()
                 .all(|item| satisfy_core_contain_func(arena, *item))
         {
-            let (list_scalars, _) = self.resolve_core_expr_args(arena, list)?;
+            let (list_scalars, _) = self.resolve_expr_args(arena, list)?;
             let box (array, _) =
                 self.resolve_scalar_function_call(span, "array", vec![], list_scalars)?;
             let box (array, _) =
@@ -1673,7 +1677,7 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    fn resolve_core_in_list_as_subquery(
+    fn resolve_in_list_as_subquery(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -1681,7 +1685,7 @@ where A: super::TypeCheckAdapter
         child_type: DataType,
         list: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (list_scalars, list_types) = self.resolve_core_expr_args(arena, list)?;
+        let (list_scalars, list_types) = self.resolve_expr_args(arena, list)?;
         let common_type = list_types
             .iter()
             .cloned()
