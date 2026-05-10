@@ -70,9 +70,19 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn async_function(
         &mut self,
         span: Span,
-        func_name: &'static str,
+        func_name: &str,
         args: &'a [Expr],
-    ) -> Result<CoreExprId> {
+    ) -> Result<Option<CoreExprId>> {
+        let func_name = Ascii::new(func_name);
+        let Some(func_name) = ASYNC_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == func_name)
+            .map(Ascii::into_inner)
+        else {
+            return Ok(None);
+        };
+
         let function = match func_name {
             "nextval" => {
                 let [Expr::ColumnRef { column, .. }] = args else {
@@ -119,17 +129,8 @@ impl<'a> CoreExprArena<'a> {
                 )));
             }
         };
-        Ok(self.alloc(CoreExpr::AsyncFunction { span, function }))
+        Ok(Some(self.alloc(CoreExpr::AsyncFunction { span, function })))
     }
-}
-
-pub(super) fn async_function_name(func_name: &str) -> Option<&'static str> {
-    let func_name = Ascii::new(func_name);
-    ASYNC_FUNCTIONS
-        .iter()
-        .cloned()
-        .find(|name| *name == func_name)
-        .map(Ascii::into_inner)
 }
 
 impl<'a, A> TypeChecker<'a, A>

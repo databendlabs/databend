@@ -48,13 +48,11 @@ use unicase::Ascii;
 
 use super::TypeChecker;
 use super::async_functions::CoreAsyncFunction;
-use super::async_functions::async_function_name;
 use super::date::AdjacentDayFunction;
 use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
-use super::search::general_search_function_name;
 use super::set_returning::set_returning_function_name;
 use super::window::CoreWindow;
 use super::window::CoreWindowDesc;
@@ -735,12 +733,12 @@ impl<'a> CoreExprArena<'a> {
             };
         }
 
-        if let Some(func_name) = general_search_function_name(&func_name) {
-            return self.search_function(span, func_name, args);
+        if let Some(expr) = self.search_function(span, &func_name, args)? {
+            return Ok(expr);
         }
 
-        if let Some(func_name) = async_function_name(&func_name) {
-            return self.async_function(span, func_name, args);
+        if let Some(expr) = self.async_function(span, &func_name, args)? {
+            return Ok(expr);
         }
 
         if let Some(func_name) = set_returning_function_name(&func_name) {

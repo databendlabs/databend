@@ -57,25 +57,26 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn search_function(
         &mut self,
         span: Span,
-        func_name: &'static str,
+        func_name: &str,
         args: &'a [Expr],
-    ) -> Result<CoreExprId> {
+    ) -> Result<Option<CoreExprId>> {
+        let func_name = Ascii::new(func_name);
+        let Some(func_name) = GENERAL_SEARCH_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == func_name)
+            .map(Ascii::into_inner)
+        else {
+            return Ok(None);
+        };
+
         let args = self.lower_display_expr_args(args)?;
-        Ok(self.alloc(CoreExpr::SearchFunction {
+        Ok(Some(self.alloc(CoreExpr::SearchFunction {
             span,
             func_name,
             args,
-        }))
+        })))
     }
-}
-
-pub(super) fn general_search_function_name(func_name: &str) -> Option<&'static str> {
-    let func_name = Ascii::new(func_name);
-    GENERAL_SEARCH_FUNCTIONS
-        .iter()
-        .cloned()
-        .find(|name| *name == func_name)
-        .map(Ascii::into_inner)
 }
 
 impl<'a, A> TypeChecker<'a, A>
