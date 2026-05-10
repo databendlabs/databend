@@ -54,6 +54,7 @@ use super::core_expr::CoreExprArena;
 use super::core_expr::CoreUdfCallArgs;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
+use crate::NameResolutionContext;
 use crate::Visibility;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
@@ -289,13 +290,17 @@ where A: super::TypeCheckAdapter
             replacements.push((column_index, scalar));
         }
 
-        let box (mut scalar, data_type) = TypeChecker::try_create(
+        let name_resolution_ctx = &NameResolutionContext {
+            deny_column_reference: false,
+            ..self.name_resolution_ctx.clone()
+        };
+
+        let box (mut scalar, data_type) = TypeChecker::try_create_with_adapter(
             &mut udf_context,
-            self.adapter.table_context().clone(),
-            self.name_resolution_ctx,
+            self.adapter.clone(),
+            name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
-            self.adapter.forbid_udf(),
         )?
         .resolve(&expr)?;
 

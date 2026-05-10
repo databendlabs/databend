@@ -254,6 +254,15 @@ async fn test_lambda_udf_resolves_own_parameters() -> Result<()> {
         .await?;
 
     ctx.bind_sql("SELECT f1(1)").await?;
+    for sql in [
+        "SELECT 1 FROM (SELECT f2(f1(10)))",
+        "SELECT * FROM t WHERE f2(f1(1))",
+        "SELECT i, nth_value(i, f2(f1(2))) OVER (PARTITION BY i) fv FROM t",
+        "SELECT CASE WHEN i > f2(f1(100)) THEN 200 ELSE 100 END FROM t",
+    ] {
+        let plan = ctx.bind_sql(sql).await?;
+        ctx.optimize_plan(plan).await?;
+    }
     ctx.bind_sql("INSERT INTO t VALUES (f2(f1(1)))").await?;
     ctx.bind_sql("UPDATE t SET i=f2(f1(2)) WHERE i=f2(f1(1))")
         .await?;

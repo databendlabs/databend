@@ -627,6 +627,63 @@ impl<'a> CoreExprArena<'a> {
         }))
     }
 
+    fn lower_get_function_as_map_access(
+        &mut self,
+        root_span: Span,
+        args: &'a [Expr],
+    ) -> Result<Option<CoreExprId>> {
+        let [expr, path_expr] = args else {
+            return Ok(None);
+        };
+        let mut expr: &'a Expr = expr;
+        let mut path_expr: &'a Expr = path_expr;
+
+        let mut paths = VecDeque::new();
+        loop {
+            let Expr::Literal { value, .. } = path_expr else {
+                return Ok(None);
+            };
+            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
+                return Ok(None);
+            }
+            paths.push_front((path_expr.span(), value.clone()));
+
+            let Expr::FunctionCall { func, .. } = expr else {
+                break;
+            };
+            let ASTFunctionCall {
+                distinct,
+                name,
+                args,
+                params,
+                order_by,
+                window,
+                lambda,
+            } = func;
+            if *distinct
+                || !name.name.eq_ignore_ascii_case("get")
+                || args.len() != 2
+                || !params.is_empty()
+                || !order_by.is_empty()
+                || window.is_some()
+                || lambda.is_some()
+            {
+                break;
+            }
+            expr = &args[0];
+            path_expr = &args[1];
+        }
+
+        let expr_span = expr.span();
+        let expr = self.lower_ast_expr(expr)?;
+        Ok(Some(self.alloc(CoreExpr::MapAccess {
+            span: root_span,
+            expr_span,
+            expr,
+            paths,
+        })))
+    }
+
     fn lower_function_call_expr(
         &mut self,
         original_expr: &'a Expr,
@@ -759,6 +816,12 @@ impl<'a> CoreExprArena<'a> {
             }
 
             if let Some(expr) = self.special_function(span, &func_name, args)? {
+                return Ok(expr);
+            }
+
+            if func_name == "get"
+                && let Some(expr) = self.lower_get_function_as_map_access(span, args)?
+            {
                 return Ok(expr);
             }
 
@@ -2047,6 +2110,20 @@ mod tests {
                 panic!("map access should lower to CoreExpr::MapAccess");
             };
             assert!(matches!(arena.get(*expr), CoreExpr::Literal { .. }));
+        });
+    }
+
+    #[test]
+    fn lowers_nested_get_function_as_single_map_access() {
+        assert_sql_lowers_to("get(get(v, 'a'), 0)", |arena, root| {
+            let CoreExpr::MapAccess { expr, paths, .. } = arena.get(root) else {
+                panic!("nested get should lower to CoreExpr::MapAccess");
+            };
+            assert!(matches!(arena.get(*expr), CoreExpr::ColumnRef { .. }));
+            assert_eq!(
+                paths.iter().map(|(_, value)| value).collect::<Vec<_>>(),
+                vec![&Literal::String("a".to_string()), &Literal::UInt64(0)]
+            );
         });
     }
 
