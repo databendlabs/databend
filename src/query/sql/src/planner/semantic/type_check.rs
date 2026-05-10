@@ -237,6 +237,7 @@ pub struct TypeChecker<'a, A = FullTypeCheckAdapter> {
     in_masking_policy: bool,
 }
 
+#[derive(Clone)]
 pub struct FullTypeCheckAdapter {
     ctx: Arc<dyn TableContext>,
     dependencies: FullTypeCheckAdapterDependencies,
@@ -244,6 +245,7 @@ pub struct FullTypeCheckAdapter {
     skip_sequence_check: bool,
 }
 
+#[derive(Clone)]
 pub struct BasicTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
@@ -252,6 +254,7 @@ pub struct BasicTypeCheckAdapter {
     skip_sequence_check: bool,
 }
 
+#[derive(Clone)]
 pub struct FullTypeCheckAdapterDependencies {
     async_runtime_handle: Handle,
     aggregate_function_factory: &'static AggregateFunctionFactory,
@@ -429,7 +432,7 @@ impl BasicTypeCheckAdapter {
     }
 }
 
-pub trait TypeCheckAdapter {
+pub trait TypeCheckAdapter: Clone {
     fn function_context(&self) -> Result<FunctionContext>;
 
     fn settings(&self) -> Arc<Settings>;

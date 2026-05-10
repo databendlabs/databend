@@ -39,7 +39,6 @@ use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
 use crate::binder::ExprContext;
-use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::lowering::TypeCheck;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
@@ -58,7 +57,6 @@ where A: super::TypeCheckAdapter
         lambda_columns: &[(String, DataType)],
         lambda_expr: super::core_expr::CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let metadata = self.metadata.clone();
         lambda_context.expr_context = ExprContext::InLambdaFunction;
 
         for (lambda_column, lambda_column_type) in lambda_columns.iter() {
@@ -74,15 +72,12 @@ where A: super::TypeCheckAdapter
             );
         }
 
-        let settings = self.adapter.table_context().get_settings();
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let mut type_checker = TypeChecker::try_create(
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             lambda_context,
-            self.adapter.table_context().clone(),
-            &name_resolution_ctx,
-            metadata,
+            self.adapter.clone(),
+            self.name_resolution_ctx,
+            self.metadata.clone(),
             &[],
-            false,
         )?;
         type_checker.resolve_core(arena, lambda_expr)
     }

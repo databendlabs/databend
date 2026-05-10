@@ -47,6 +47,7 @@ use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
 
+#[derive(Clone)]
 struct TestTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
