@@ -41,6 +41,7 @@ use super::core_expr::CoreExprArgs;
 use super::core_expr::CoreExprId;
 use super::core_expr::CoreFunctionParams;
 use super::core_expr::CoreOrderByExprs;
+use crate::binder::ExprContext;
 use crate::plans::CastExpr;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
@@ -287,6 +288,12 @@ where A: super::TypeCheckAdapter
         window: &CoreWindow<'_>,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if self.bind_context.expr_context == ExprContext::InSetReturningFunction {
+            return Err(ErrorCode::SemanticError(
+                "window functions cannot be used as set-returning function arguments".to_string(),
+            )
+            .set_span(span));
+        }
         if self.in_aggregate_function {
             // Reset the state
             self.in_aggregate_function = false;

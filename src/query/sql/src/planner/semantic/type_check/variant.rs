@@ -28,6 +28,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use jsonb::keypath::KeyPath;
 use jsonb::keypath::KeyPaths;
+use jsonb::keypath::OwnedKeyPath;
+use jsonb::keypath::OwnedKeyPaths;
 use jsonb::keypath::parse_key_paths;
 use unicase::Ascii;
 
@@ -50,6 +52,7 @@ where A: super::TypeCheckAdapter
 {
     fn rewritable_variant_functions() -> &'static [Ascii<&'static str>] {
         static VARIANT_FUNCTIONS: &[Ascii<&'static str>] = &[
+            Ascii::new("get"),
             Ascii::new("get_by_keypath"),
             Ascii::new("get_by_keypath_string"),
         ];
@@ -80,43 +83,76 @@ where A: super::TypeCheckAdapter
         if column.index.as_usize() >= self.metadata.read().columns().len() {
             return None;
         }
-        // only rewrite when arg[1] is path
-        let ScalarExpr::ConstantExpr(ConstantExpr {
-            value: Scalar::String(path),
-            ..
-        }) = &args[1]
-        else {
+        if args.len() != 2 {
             return None;
-        };
-        let Ok(keypaths) = parse_key_paths(path.as_bytes()) else {
-            return None;
+        }
+        let keypaths = match func_name {
+            "get" => Self::get_function_keypaths(&args[1])?,
+            _ => {
+                let ScalarExpr::ConstantExpr(ConstantExpr {
+                    value: Scalar::String(path),
+                    ..
+                }) = &args[1]
+                else {
+                    return None;
+                };
+                parse_key_paths(path.as_bytes()).ok()?.to_owned()
+            }
         };
 
         // try rewrite as virtual column and pushdown to storage layer.
         let column_entry = self.metadata.read().column(column.index).clone();
-        if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-            if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
+        let rewritten = match column_entry {
+            ColumnEntry::BaseTableColumn(base_column) => self.try_rewrite_owned_virtual_column(
                 span,
                 base_column.table_index,
                 base_column.column_id,
                 &base_column.column_name,
-                &keypaths,
-            ) {
-                if func_name == "get_by_keypath_string" {
-                    let target_type = DataType::Nullable(Box::new(DataType::String));
-                    let new_scalar = ScalarExpr::CastExpr(CastExpr {
-                        span: scalar.span(),
-                        is_try: false,
-                        argument: Box::new(scalar),
-                        target_type: Box::new(target_type.clone()),
-                    });
-                    return Some(Ok(Box::new((new_scalar, target_type))));
-                } else {
-                    return Some(Ok(Box::new((scalar, data_type))));
-                }
+                keypaths,
+            ),
+            ColumnEntry::VirtualColumn(virtual_column) => {
+                let mut owned_keypaths = virtual_column.key_paths.clone();
+                owned_keypaths.paths.extend(keypaths.paths);
+                self.try_rewrite_owned_virtual_column(
+                    span,
+                    virtual_column.table_index,
+                    virtual_column.source_column_id,
+                    &virtual_column.source_column_name,
+                    owned_keypaths,
+                )
+            }
+            _ => None,
+        };
+        if let Some(box (scalar, data_type)) = rewritten {
+            if func_name == "get_by_keypath_string" {
+                let target_type = DataType::Nullable(Box::new(DataType::String));
+                let new_scalar = ScalarExpr::CastExpr(CastExpr {
+                    span: scalar.span(),
+                    is_try: false,
+                    argument: Box::new(scalar),
+                    target_type: Box::new(target_type.clone()),
+                });
+                return Some(Ok(Box::new((new_scalar, target_type))));
+            } else {
+                return Some(Ok(Box::new((scalar, data_type))));
             }
         }
         None
+    }
+
+    fn get_function_keypaths(arg: &ScalarExpr) -> Option<OwnedKeyPaths> {
+        let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = arg else {
+            return None;
+        };
+        let path = match value {
+            Scalar::String(path) => OwnedKeyPath::QuotedName(path.clone()),
+            Scalar::Number(number) => {
+                let index = i32::try_from(number.integer_to_i128()?).ok()?;
+                OwnedKeyPath::Index(index)
+            }
+            _ => return None,
+        };
+        Some(OwnedKeyPaths { paths: vec![path] })
     }
 
     pub(super) fn resolve_cast_to_variant(
@@ -411,19 +447,18 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    pub(super) fn try_rewrite_virtual_column(
+    fn try_rewrite_owned_virtual_column(
         &mut self,
         span: Span,
         table_index: IndexType,
         column_id: ColumnId,
         column_name: &str,
-        keypaths: &KeyPaths,
+        owned_keypaths: OwnedKeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if !self.bind_context.allow_virtual_column {
             return None;
         }
-        let owned_keypaths = keypaths.to_owned();
-        let key_name = Self::keypaths_to_name(column_name, keypaths);
+        let key_name = Self::owned_keypaths_to_name(column_name, &owned_keypaths);
         let virtual_column_name = VirtualColumnName {
             table_index,
             source_column_id: column_id,
@@ -445,15 +480,15 @@ where A: super::TypeCheckAdapter
         )))
     }
 
-    fn keypaths_to_name(column_name: &str, keypaths: &KeyPaths) -> String {
+    fn owned_keypaths_to_name(column_name: &str, keypaths: &OwnedKeyPaths) -> String {
         let mut name = column_name.to_string();
         for path in &keypaths.paths {
             name.push('[');
             match path {
-                KeyPath::Index(idx) => {
+                OwnedKeyPath::Index(idx) => {
                     name.push_str(&idx.to_string());
                 }
-                KeyPath::QuotedName(field) | KeyPath::Name(field) => {
+                OwnedKeyPath::QuotedName(field) | OwnedKeyPath::Name(field) => {
                     name.push('\'');
                     name.push_str(field.as_ref());
                     name.push('\'');
@@ -499,12 +534,12 @@ where A: super::TypeCheckAdapter
             if column.index.as_usize() < self.metadata.read().columns().len() {
                 let column_entry = self.metadata.read().column(column.index).clone();
                 if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                    if let Some(box (scalar, data_type)) = self.try_rewrite_virtual_column(
+                    if let Some(box (scalar, data_type)) = self.try_rewrite_owned_virtual_column(
                         span,
                         base_column.table_index,
                         base_column.column_id,
                         &base_column.column_name,
-                        &keypaths,
+                        keypaths.to_owned(),
                     ) {
                         return Ok(Box::new((scalar, data_type)));
                     }

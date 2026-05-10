@@ -207,6 +207,59 @@ async fn test_time_travel_binds_session_variable_snapshot() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_rewrite_boundaries_preserve_legacy_function_forms() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    ctx.bind_sql("SELECT IFNULL(1, 2), IFNULL(NULL), NVL(NULL)")
+        .await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_large_inlist_threshold_binds_constant_values() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE TABLE t1(a int, b int)")
+        .await?;
+
+    let values = (0..=1300)
+        .map(|value| value.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!("SELECT * FROM t1 WHERE a NOT IN ({values})");
+    ctx.bind_sql(&sql).await?;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_srf_rejects_window_argument_before_project_set_binding() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+
+    let err = ctx
+        .bind_sql("SELECT unnest(first_value('aa') OVER (PARTITION BY 'bb'))")
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), 1065, "unexpected error: {err:?}");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_lambda_udf_resolves_own_parameters() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql("CREATE FUNCTION f1 AS (p) -> (p)")
+        .await?;
+    ctx.register_setup_sql("CREATE FUNCTION f2 AS (p) -> (p)")
+        .await?;
+    ctx.register_setup_sql("CREATE TABLE t(i UInt8 NOT NULL)")
+        .await?;
+
+    ctx.bind_sql("SELECT f1(1)").await?;
+    ctx.bind_sql("INSERT INTO t VALUES (f2(f1(1)))").await?;
+    ctx.bind_sql("UPDATE t SET i=f2(f1(2)) WHERE i=f2(f1(1))")
+        .await?;
+    Ok(())
+}
+
 async fn setup_tables(ctx: &Arc<LiteTableContext>, case: &TestCase) -> Result<()> {
     for sql in case.tables.values() {
         for statement in sql.split(';').filter(|s| !s.trim().is_empty()) {

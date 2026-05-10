@@ -139,6 +139,7 @@ impl<'a> CoreExprArena<'a> {
                 new_args.push(self.literal(span, Literal::Null));
                 Some(self.call(span, "if", new_args))
             }
+            ("ifnull" | "nvl", [arg]) => Some(self.lower_ast_expr(arg)?),
             ("nullif", _) | ("equal_null", _) | ("ifnull" | "nvl", _) => {
                 check_function_arity(span, func_name, args.len(), 2, Some(2))?;
                 None
