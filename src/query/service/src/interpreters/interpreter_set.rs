@@ -34,6 +34,7 @@ use futures::TryStreamExt;
 
 use super::SelectInterpreter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryAffect;
 use crate::sessions::QueryContext;
@@ -204,7 +205,9 @@ impl Interpreter for SetInterpreter {
                     false,
                 )?;
 
-                let stream = select_interpreter.execute(self.ctx.clone()).await?;
+                let stream = select_interpreter
+                    .execute_with_hooks(self.ctx.clone(), QueryFinishHooks::nested())
+                    .await?;
                 let datablocks: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
                 let datablock = DataBlock::concat(&datablocks)?;
 

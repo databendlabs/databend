@@ -64,6 +64,7 @@ use crate::history_tables::external::get_external_storage_connection;
 use crate::history_tables::meta::HistoryMetaHandle;
 use crate::history_tables::session::create_session;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::sessions::BuildInfoRef;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextLicense;
@@ -220,7 +221,9 @@ impl GlobalHistoryLog {
         let mut planner = Planner::new(context.clone());
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let stream = executor.execute(context).await?;
+        let stream = executor
+            .execute_with_hooks(context, QueryFinishHooks::nested_with_hooks())
+            .await?;
         let _: Vec<DataBlock> = stream.try_collect::<Vec<_>>().await?;
         Ok(())
     }
