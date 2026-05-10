@@ -501,10 +501,7 @@ pub trait TypeCheckAdapter: Clone {
         Err(missing_type_check_adapter_dependency("session function"))
     }
 
-    fn resolve_authorization_function(
-        &self,
-        _function: AuthFunction,
-    ) -> Result<Scalar> {
+    fn resolve_authorization_function(&self, _function: AuthFunction) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency(
             "authorization function",
         ))
@@ -752,9 +749,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     fn resolve_session_function(&self, function: SessionFunction<'_>) -> Result<Scalar> {
         match function {
             SessionFunction::Version => Ok(Scalar::String(self.ctx.get_fuse_version())),
-            SessionFunction::ConnectionId => {
-                Ok(Scalar::String(self.ctx.get_connection_id()))
-            }
+            SessionFunction::ConnectionId => Ok(Scalar::String(self.ctx.get_connection_id())),
             SessionFunction::ClientSessionId => Ok(Scalar::String(
                 self.ctx.get_current_client_session_id().unwrap_or_default(),
             )),
@@ -769,10 +764,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         }
     }
 
-    fn resolve_authorization_function(
-        &self,
-        function: AuthFunction,
-    ) -> Result<Scalar> {
+    fn resolve_authorization_function(&self, function: AuthFunction) -> Result<Scalar> {
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
         match function {
             AuthFunction::CurrentUser => Ok(Scalar::String(

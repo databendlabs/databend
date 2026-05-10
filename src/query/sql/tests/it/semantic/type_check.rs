@@ -27,16 +27,16 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
+use databend_common_sql::AuthFunction;
 use databend_common_sql::BasicTypeCheckAdapter;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
-use databend_common_sql::Symbol;
-use databend_common_sql::TypeCheckAdapter;
-use databend_common_sql::AuthFunction;
 use databend_common_sql::NamespaceFunction;
 use databend_common_sql::SessionFunction;
+use databend_common_sql::Symbol;
+use databend_common_sql::TypeCheckAdapter;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
@@ -79,8 +79,7 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
 
     fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
         match function {
-            NamespaceFunction::CurrentCatalog
-            | NamespaceFunction::CurrentDatabase => {
+            NamespaceFunction::CurrentCatalog | NamespaceFunction::CurrentDatabase => {
                 Ok(Scalar::String("default".to_string()))
             }
         }
@@ -91,16 +90,11 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
             SessionFunction::Version => Ok(Scalar::String(String::new())),
             SessionFunction::ConnectionId => Ok(Scalar::String("lite-conn".to_string())),
             SessionFunction::ClientSessionId => Ok(Scalar::String(String::new())),
-            SessionFunction::LastQueryId(_) | SessionFunction::Variable(_) => {
-                Ok(Scalar::Null)
-            }
+            SessionFunction::LastQueryId(_) | SessionFunction::Variable(_) => Ok(Scalar::Null),
         }
     }
 
-    fn resolve_authorization_function(
-        &self,
-        function: AuthFunction,
-    ) -> Result<Scalar> {
+    fn resolve_authorization_function(&self, function: AuthFunction) -> Result<Scalar> {
         match function {
             AuthFunction::CurrentUser => Ok(Scalar::String(
                 UserInfo::new_no_auth("root", "%")
@@ -112,9 +106,7 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
             AuthFunction::CurrentSecondaryRoles => Ok(Scalar::String(
                 serde_json::json!({ "roles": "", "value": "ALL" }).to_string(),
             )),
-            AuthFunction::CurrentAvailableRoles => {
-                Ok(Scalar::String("[]".to_string()))
-            }
+            AuthFunction::CurrentAvailableRoles => Ok(Scalar::String("[]".to_string())),
         }
     }
 
