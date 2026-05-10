@@ -244,160 +244,142 @@ impl<'a> CoreExprArena<'a> {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
                 CoreSpecialFunction::Timezone
             }
-            "last_query_id" => CoreSpecialFunction::LastQueryId {
-                arg: self.lower_optional_special_arg(span, func_name, args)?,
-            },
-            "coalesce" => CoreSpecialFunction::Coalesce {
-                args: self.lower_checked_special_args(span, func_name, args, 1, None)?,
-            },
-            "decode" => CoreSpecialFunction::Decode {
-                args: self.lower_checked_special_args(span, func_name, args, 3, None)?,
-            },
-            "array_sort" => CoreSpecialFunction::ArraySort {
-                array: self.lower_nth_bounded_special_arg(span, func_name, args, 0, 1, 3)?,
-                sort_order: self.lower_nth_optional_special_arg(span, func_name, args, 1, 3)?,
-                nulls_order: self.lower_nth_optional_special_arg(span, func_name, args, 2, 3)?,
-            },
-            "array_aggregate" => CoreSpecialFunction::ArrayAggregate {
-                array: self.lower_nth_required_special_arg(span, func_name, args, 0, 2)?,
-                function: self.lower_nth_required_special_arg(span, func_name, args, 1, 2)?,
-            },
-            "to_variant" => CoreSpecialFunction::CastToVariant {
-                func_name: "to_variant",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-                is_try: false,
-            },
-            "try_to_variant" => CoreSpecialFunction::CastToVariant {
-                func_name: "try_to_variant",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-                is_try: true,
-            },
-            "greatest" => CoreSpecialFunction::GreatestOrLeast {
-                func_name: "greatest",
-                args: self.lower_checked_special_args(span, func_name, args, 1, None)?,
-                ignore_nulls: false,
-            },
-            "least" => CoreSpecialFunction::GreatestOrLeast {
-                func_name: "least",
-                args: self.lower_checked_special_args(span, func_name, args, 1, None)?,
-                ignore_nulls: false,
-            },
-            "greatest_ignore_nulls" => CoreSpecialFunction::GreatestOrLeast {
-                func_name: "greatest_ignore_nulls",
-                args: self.lower_checked_special_args(span, func_name, args, 1, None)?,
-                ignore_nulls: true,
-            },
-            "least_ignore_nulls" => CoreSpecialFunction::GreatestOrLeast {
-                func_name: "least_ignore_nulls",
-                args: self.lower_checked_special_args(span, func_name, args, 1, None)?,
-                ignore_nulls: true,
-            },
-            "getvariable" => CoreSpecialFunction::GetVariable {
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-            },
-            "hex_decode_string" => CoreSpecialFunction::DecodeString {
-                func_name: "hex_decode_string",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-            },
-            "try_hex_decode_string" => CoreSpecialFunction::DecodeString {
-                func_name: "try_hex_decode_string",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-            },
-            "base64_decode_string" => CoreSpecialFunction::DecodeString {
-                func_name: "base64_decode_string",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-            },
-            "try_base64_decode_string" => CoreSpecialFunction::DecodeString {
-                func_name: "try_base64_decode_string",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-            },
-            "stream_has_data" => CoreSpecialFunction::Scalar {
-                func_name: "stream_has_data",
-                arg: self.lower_required_special_arg(span, func_name, args)?,
-            },
+            "last_query_id" => {
+                check_function_arity(span, func_name, args.len(), 0, Some(1))?;
+                CoreSpecialFunction::LastQueryId {
+                    arg: args
+                        .first()
+                        .map(|arg| self.lower_display_expr_arg(arg))
+                        .transpose()?,
+                }
+            }
+            "coalesce" => {
+                check_function_arity(span, func_name, args.len(), 1, None)?;
+                CoreSpecialFunction::Coalesce {
+                    args: self.lower_display_expr_args(args)?,
+                }
+            }
+            "decode" => {
+                check_function_arity(span, func_name, args.len(), 3, None)?;
+                CoreSpecialFunction::Decode {
+                    args: self.lower_display_expr_args(args)?,
+                }
+            }
+            "array_sort" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(3))?;
+                CoreSpecialFunction::ArraySort {
+                    array: self.lower_display_expr_arg(&args[0])?,
+                    sort_order: args
+                        .get(1)
+                        .map(|arg| self.lower_display_expr_arg(arg))
+                        .transpose()?,
+                    nulls_order: args
+                        .get(2)
+                        .map(|arg| self.lower_display_expr_arg(arg))
+                        .transpose()?,
+                }
+            }
+            "array_aggregate" => {
+                check_function_arity(span, func_name, args.len(), 2, Some(2))?;
+                CoreSpecialFunction::ArrayAggregate {
+                    array: self.lower_display_expr_arg(&args[0])?,
+                    function: self.lower_display_expr_arg(&args[1])?,
+                }
+            }
+            "to_variant" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::CastToVariant {
+                    func_name: "to_variant",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                    is_try: false,
+                }
+            }
+            "try_to_variant" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::CastToVariant {
+                    func_name: "try_to_variant",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                    is_try: true,
+                }
+            }
+            "greatest" => {
+                check_function_arity(span, func_name, args.len(), 1, None)?;
+                CoreSpecialFunction::GreatestOrLeast {
+                    func_name: "greatest",
+                    args: self.lower_display_expr_args(args)?,
+                    ignore_nulls: false,
+                }
+            }
+            "least" => {
+                check_function_arity(span, func_name, args.len(), 1, None)?;
+                CoreSpecialFunction::GreatestOrLeast {
+                    func_name: "least",
+                    args: self.lower_display_expr_args(args)?,
+                    ignore_nulls: false,
+                }
+            }
+            "greatest_ignore_nulls" => {
+                check_function_arity(span, func_name, args.len(), 1, None)?;
+                CoreSpecialFunction::GreatestOrLeast {
+                    func_name: "greatest_ignore_nulls",
+                    args: self.lower_display_expr_args(args)?,
+                    ignore_nulls: true,
+                }
+            }
+            "least_ignore_nulls" => {
+                check_function_arity(span, func_name, args.len(), 1, None)?;
+                CoreSpecialFunction::GreatestOrLeast {
+                    func_name: "least_ignore_nulls",
+                    args: self.lower_display_expr_args(args)?,
+                    ignore_nulls: true,
+                }
+            }
+            "getvariable" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::GetVariable {
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                }
+            }
+            "hex_decode_string" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::DecodeString {
+                    func_name: "hex_decode_string",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                }
+            }
+            "try_hex_decode_string" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::DecodeString {
+                    func_name: "try_hex_decode_string",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                }
+            }
+            "base64_decode_string" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::DecodeString {
+                    func_name: "base64_decode_string",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                }
+            }
+            "try_base64_decode_string" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::DecodeString {
+                    func_name: "try_base64_decode_string",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                }
+            }
+            "stream_has_data" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                CoreSpecialFunction::Scalar {
+                    func_name: "stream_has_data",
+                    arg: self.lower_display_expr_arg(&args[0])?,
+                }
+            }
             _ => return Ok(None),
         };
         Ok(Some(
             self.alloc(CoreExpr::SpecialFunction { span, function }),
         ))
-    }
-
-    fn lower_checked_special_args(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-        min_args: usize,
-        max_args: Option<usize>,
-    ) -> Result<CoreDisplayExprArgs> {
-        check_function_arity(span, func_name, args.len(), min_args, max_args)?;
-        self.lower_display_expr_args(args)
-    }
-
-    fn lower_optional_special_arg(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-    ) -> Result<Option<CoreDisplayExprArg>> {
-        check_function_arity(span, func_name, args.len(), 0, Some(1))?;
-        args.first()
-            .map(|arg| self.lower_display_expr_arg(arg))
-            .transpose()
-    }
-
-    fn lower_required_special_arg(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-    ) -> Result<CoreDisplayExprArg> {
-        self.lower_nth_required_special_arg(span, func_name, args, 0, 1)
-    }
-
-    fn lower_nth_required_special_arg(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-        index: usize,
-        expected_len: usize,
-    ) -> Result<CoreDisplayExprArg> {
-        check_function_arity(
-            span,
-            func_name,
-            args.len(),
-            expected_len,
-            Some(expected_len),
-        )?;
-        self.lower_display_expr_arg(&args[index])
-    }
-
-    fn lower_nth_bounded_special_arg(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-        index: usize,
-        min_len: usize,
-        max_len: usize,
-    ) -> Result<CoreDisplayExprArg> {
-        check_function_arity(span, func_name, args.len(), min_len, Some(max_len))?;
-        self.lower_display_expr_arg(&args[index])
-    }
-
-    fn lower_nth_optional_special_arg(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-        index: usize,
-        max_len: usize,
-    ) -> Result<Option<CoreDisplayExprArg>> {
-        check_function_arity(span, func_name, args.len(), 1, Some(max_len))?;
-        args.get(index)
-            .map(|arg| self.lower_display_expr_arg(arg))
-            .transpose()
     }
 }
 
