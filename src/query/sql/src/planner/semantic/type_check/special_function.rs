@@ -27,10 +27,11 @@ use super::TypeCheckAuthorizationFunction;
 use super::TypeCheckNamespaceFunction;
 use super::TypeCheckSessionFunction;
 use super::TypeChecker;
+use super::core_expr::CoreDisplayExprArg;
+use super::core_expr::CoreDisplayExprArgs;
 use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
-use super::core_expr::CoreSearchFunctionArgs;
 use super::function_arity::check_function_arity;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -42,40 +43,43 @@ pub(super) enum CoreSpecialFunction {
     Authorization(CoreAuthorizationSpecialFunction),
     Timezone,
     LastQueryId {
-        args: CoreSearchFunctionArgs,
+        arg: Option<CoreDisplayExprArg>,
     },
     Coalesce {
-        args: CoreSearchFunctionArgs,
+        args: CoreDisplayExprArgs,
     },
     Decode {
-        args: CoreSearchFunctionArgs,
+        args: CoreDisplayExprArgs,
     },
     ArraySort {
-        args: CoreSearchFunctionArgs,
+        array: CoreDisplayExprArg,
+        sort_order: Option<CoreDisplayExprArg>,
+        nulls_order: Option<CoreDisplayExprArg>,
     },
     ArrayAggregate {
-        args: CoreSearchFunctionArgs,
+        array: CoreDisplayExprArg,
+        function: CoreDisplayExprArg,
     },
     CastToVariant {
         func_name: &'static str,
-        args: CoreSearchFunctionArgs,
+        arg: CoreDisplayExprArg,
         is_try: bool,
     },
     GreatestOrLeast {
         func_name: &'static str,
-        args: CoreSearchFunctionArgs,
+        args: CoreDisplayExprArgs,
         ignore_nulls: bool,
     },
     GetVariable {
-        args: CoreSearchFunctionArgs,
+        arg: CoreDisplayExprArg,
     },
     DecodeString {
         func_name: &'static str,
-        args: CoreSearchFunctionArgs,
+        arg: CoreDisplayExprArg,
     },
     Scalar {
         func_name: &'static str,
-        args: CoreSearchFunctionArgs,
+        arg: CoreDisplayExprArg,
     },
 }
 
@@ -241,7 +245,7 @@ impl<'a> CoreExprArena<'a> {
                 CoreSpecialFunction::Timezone
             }
             "last_query_id" => CoreSpecialFunction::LastQueryId {
-                args: self.lower_checked_special_args(span, func_name, args, 0, Some(1))?,
+                arg: self.lower_optional_special_arg(span, func_name, args)?,
             },
             "coalesce" => CoreSpecialFunction::Coalesce {
                 args: self.lower_checked_special_args(span, func_name, args, 1, None)?,
@@ -250,19 +254,22 @@ impl<'a> CoreExprArena<'a> {
                 args: self.lower_checked_special_args(span, func_name, args, 3, None)?,
             },
             "array_sort" => CoreSpecialFunction::ArraySort {
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(3))?,
+                array: self.lower_nth_bounded_special_arg(span, func_name, args, 0, 1, 3)?,
+                sort_order: self.lower_nth_optional_special_arg(span, func_name, args, 1, 3)?,
+                nulls_order: self.lower_nth_optional_special_arg(span, func_name, args, 2, 3)?,
             },
             "array_aggregate" => CoreSpecialFunction::ArrayAggregate {
-                args: self.lower_checked_special_args(span, func_name, args, 2, Some(2))?,
+                array: self.lower_nth_required_special_arg(span, func_name, args, 0, 2)?,
+                function: self.lower_nth_required_special_arg(span, func_name, args, 1, 2)?,
             },
             "to_variant" => CoreSpecialFunction::CastToVariant {
                 func_name: "to_variant",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
                 is_try: false,
             },
             "try_to_variant" => CoreSpecialFunction::CastToVariant {
                 func_name: "try_to_variant",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
                 is_try: true,
             },
             "greatest" => CoreSpecialFunction::GreatestOrLeast {
@@ -286,27 +293,27 @@ impl<'a> CoreExprArena<'a> {
                 ignore_nulls: true,
             },
             "getvariable" => CoreSpecialFunction::GetVariable {
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
             },
             "hex_decode_string" => CoreSpecialFunction::DecodeString {
                 func_name: "hex_decode_string",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
             },
             "try_hex_decode_string" => CoreSpecialFunction::DecodeString {
                 func_name: "try_hex_decode_string",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
             },
             "base64_decode_string" => CoreSpecialFunction::DecodeString {
                 func_name: "base64_decode_string",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
             },
             "try_base64_decode_string" => CoreSpecialFunction::DecodeString {
                 func_name: "try_base64_decode_string",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
             },
             "stream_has_data" => CoreSpecialFunction::Scalar {
                 func_name: "stream_has_data",
-                args: self.lower_checked_special_args(span, func_name, args, 1, Some(1))?,
+                arg: self.lower_required_special_arg(span, func_name, args)?,
             },
             _ => return Ok(None),
         };
@@ -322,16 +329,76 @@ impl<'a> CoreExprArena<'a> {
         args: &'a [Expr],
         min_args: usize,
         max_args: Option<usize>,
-    ) -> Result<CoreSearchFunctionArgs> {
+    ) -> Result<CoreDisplayExprArgs> {
         check_function_arity(span, func_name, args.len(), min_args, max_args)?;
         self.lower_display_expr_args(args)
     }
-}
 
-fn invalid_lowered_special_function(func_name: &str) -> ErrorCode {
-    ErrorCode::Internal(format!(
-        "special function {func_name} should have been validated before resolving"
-    ))
+    fn lower_optional_special_arg(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &'a [Expr],
+    ) -> Result<Option<CoreDisplayExprArg>> {
+        check_function_arity(span, func_name, args.len(), 0, Some(1))?;
+        args.first()
+            .map(|arg| self.lower_display_expr_arg(arg))
+            .transpose()
+    }
+
+    fn lower_required_special_arg(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &'a [Expr],
+    ) -> Result<CoreDisplayExprArg> {
+        self.lower_nth_required_special_arg(span, func_name, args, 0, 1)
+    }
+
+    fn lower_nth_required_special_arg(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &'a [Expr],
+        index: usize,
+        expected_len: usize,
+    ) -> Result<CoreDisplayExprArg> {
+        check_function_arity(
+            span,
+            func_name,
+            args.len(),
+            expected_len,
+            Some(expected_len),
+        )?;
+        self.lower_display_expr_arg(&args[index])
+    }
+
+    fn lower_nth_bounded_special_arg(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &'a [Expr],
+        index: usize,
+        min_len: usize,
+        max_len: usize,
+    ) -> Result<CoreDisplayExprArg> {
+        check_function_arity(span, func_name, args.len(), min_len, Some(max_len))?;
+        self.lower_display_expr_arg(&args[index])
+    }
+
+    fn lower_nth_optional_special_arg(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &'a [Expr],
+        index: usize,
+        max_len: usize,
+    ) -> Result<Option<CoreDisplayExprArg>> {
+        check_function_arity(span, func_name, args.len(), 1, Some(max_len))?;
+        args.get(index)
+            .map(|arg| self.lower_display_expr_arg(arg))
+            .transpose()
+    }
 }
 
 impl CoreSpecialFunction {
@@ -390,9 +457,15 @@ where A: super::TypeCheckAdapter
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
             ),
-            CoreSpecialFunction::LastQueryId { args } => {
-                let args = self.resolve_special_args(arena, args)?;
-                self.resolve_last_query_id(span, &args)
+            CoreSpecialFunction::LastQueryId { arg } => {
+                let scalar = match arg {
+                    Some((_, arg)) => {
+                        let box (scalar, _) = self.resolve_core(arena, *arg)?;
+                        Some(scalar)
+                    }
+                    None => None,
+                };
+                self.resolve_last_query_id(span, scalar.as_ref())
             }
             CoreSpecialFunction::Coalesce { args } => {
                 let args = self.resolve_special_args(arena, args)?;
@@ -402,24 +475,28 @@ where A: super::TypeCheckAdapter
                 let args = self.resolve_special_args(arena, args)?;
                 self.resolve_decode(span, &args)
             }
-            CoreSpecialFunction::ArraySort { args } => {
-                let args = self.resolve_special_args(arena, args)?;
-                self.resolve_array_sort(span, &args)
+            CoreSpecialFunction::ArraySort {
+                array,
+                sort_order,
+                nulls_order,
+            } => {
+                let (_, array, _) = self.resolve_display_arg(arena, array)?;
+                let sort_order = self.resolve_optional_display_arg(arena, sort_order.as_ref())?;
+                let nulls_order = self.resolve_optional_display_arg(arena, nulls_order.as_ref())?;
+                self.resolve_array_sort(span, &array, sort_order.as_ref(), nulls_order.as_ref())
             }
-            CoreSpecialFunction::ArrayAggregate { args } => {
-                let args = self.resolve_special_args(arena, args)?;
-                self.resolve_array_aggregate(span, &args)
+            CoreSpecialFunction::ArrayAggregate { array, function } => {
+                let (_, array, _) = self.resolve_display_arg(arena, array)?;
+                let (_, function, _) = self.resolve_display_arg(arena, function)?;
+                self.resolve_array_aggregate(span, &array, &function)
             }
             CoreSpecialFunction::CastToVariant {
                 func_name,
-                args,
+                arg,
                 is_try,
             } => {
-                let args = self.resolve_special_args(arena, args)?;
-                let [(_, scalar, data_type)] = args.as_slice() else {
-                    return Err(invalid_lowered_special_function(func_name));
-                };
-                self.resolve_cast_to_variant(span, data_type, scalar, *is_try)
+                let (_, scalar, data_type) = self.resolve_display_arg(arena, arg)?;
+                self.resolve_cast_to_variant(span, &data_type, &scalar, *is_try)
                     .unwrap_or_else(|| {
                         self.resolve_scalar_function_call(span, func_name, vec![], vec![
                             scalar.clone(),
@@ -434,31 +511,47 @@ where A: super::TypeCheckAdapter
                 let args = self.resolve_special_args(arena, args)?;
                 self.resolve_greatest_or_least(span, func_name, &args, *ignore_nulls)
             }
-            CoreSpecialFunction::GetVariable { args } => {
-                let args = self.resolve_special_args(arena, args)?;
-                let [(_, scalar, _)] = args.as_slice() else {
-                    return Err(invalid_lowered_special_function("getvariable"));
-                };
-                self.resolve_get_variable(span, scalar)
+            CoreSpecialFunction::GetVariable { arg } => {
+                let (_, scalar, _) = self.resolve_display_arg(arena, arg)?;
+                self.resolve_get_variable(span, &scalar)
             }
-            CoreSpecialFunction::DecodeString { func_name, args } => {
-                let args = self.resolve_special_args(arena, args)?;
-                let [(_, scalar, _)] = args.as_slice() else {
-                    return Err(invalid_lowered_special_function(func_name));
-                };
-                self.resolve_decode_string(span, func_name, scalar)
+            CoreSpecialFunction::DecodeString { func_name, arg } => {
+                let (_, scalar, _) = self.resolve_display_arg(arena, arg)?;
+                self.resolve_decode_string(span, func_name, &scalar)
             }
-            CoreSpecialFunction::Scalar { func_name, args } => {
-                let args = self.resolve_special_args(arena, args)?;
-                self.resolve_special_scalar_function(span, func_name, &args)
+            CoreSpecialFunction::Scalar { func_name, arg } => {
+                let (_, scalar, _) = self.resolve_display_arg(arena, arg)?;
+                self.resolve_scalar_function_call(span, func_name, vec![], vec![scalar])
             }
         }
+    }
+
+    fn resolve_display_arg<'f>(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        arg: &'f CoreDisplayExprArg,
+    ) -> Result<(&'f str, ScalarExpr, DataType)> {
+        let (display, arg) = arg;
+        let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
+        Ok((display.as_str(), scalar, data_type))
+    }
+
+    fn resolve_optional_display_arg(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        arg: Option<&CoreDisplayExprArg>,
+    ) -> Result<Option<ScalarExpr>> {
+        arg.map(|arg| {
+            self.resolve_display_arg(arena, arg)
+                .map(|(_, scalar, _)| scalar)
+        })
+        .transpose()
     }
 
     fn resolve_special_args<'f>(
         &mut self,
         arena: &CoreExprArena<'_>,
-        args: &'f CoreSearchFunctionArgs,
+        args: &'f CoreDisplayExprArgs,
     ) -> Result<Vec<(&'f str, ScalarExpr, DataType)>> {
         let mut resolved_args = Vec::with_capacity(args.len());
         for (display, arg) in args {
@@ -466,16 +559,6 @@ where A: super::TypeCheckAdapter
             resolved_args.push((display.as_str(), scalar, data_type));
         }
         Ok(resolved_args)
-    }
-
-    fn resolve_special_scalar_function(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &[(&str, ScalarExpr, DataType)],
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let scalars = args.iter().map(|(_, scalar, _)| scalar.clone()).collect();
-        self.resolve_scalar_function_call(span, func_name, vec![], scalars)
     }
 
     fn resolve_special_literal(
@@ -493,18 +576,9 @@ where A: super::TypeCheckAdapter
     fn resolve_last_query_id(
         &mut self,
         span: Span,
-        args: &[(&str, ScalarExpr, DataType)],
+        scalar: Option<&ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if args.len() > 1 {
-            return Err(ErrorCode::BadArguments(
-                "last_query_id needs at most one integer argument",
-            )
-            .set_span(span));
-        }
-        let index = if args.is_empty() {
-            -1
-        } else {
-            let scalar = &args[0].1;
+        let index = if let Some(scalar) = scalar {
             let expr = scalar.as_expr()?;
             if expr.as_constant().is_none() {
                 return Err(ErrorCode::BadArguments(
@@ -513,6 +587,8 @@ where A: super::TypeCheckAdapter
                 .set_span(span));
             }
             check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
+        } else {
+            -1
         };
         self.resolve_special_literal(
             span,
@@ -627,20 +703,14 @@ where A: super::TypeCheckAdapter
     fn resolve_array_sort(
         &mut self,
         span: Span,
-        args: &[(&str, ScalarExpr, DataType)],
+        array: &ScalarExpr,
+        sort_order: Option<&ScalarExpr>,
+        nulls_order: Option<&ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if args.is_empty() || args.len() > 3 {
-            return self.resolve_scalar_function_call(
-                span,
-                "array_sort",
-                vec![],
-                args.iter().map(|(_, scalar, _)| scalar.clone()).collect(),
-            );
-        }
         let mut asc = true;
         let mut nulls_first = None;
-        if args.len() >= 2 {
-            let Ok(arg) = ConstantExpr::try_from(args[1].1.clone()) else {
+        if let Some(sort_order) = sort_order {
+            let Ok(arg) = ConstantExpr::try_from(sort_order.clone()) else {
                 return Err(ErrorCode::SemanticError(
                     "Sorting order must be a constant string",
                 ));
@@ -660,8 +730,8 @@ where A: super::TypeCheckAdapter
                 ));
             }
         }
-        if args.len() == 3 {
-            let Ok(arg) = ConstantExpr::try_from(args[2].1.clone()) else {
+        if let Some(nulls_order) = nulls_order {
+            let Ok(arg) = ConstantExpr::try_from(nulls_order.clone()) else {
                 return Err(ErrorCode::SemanticError(
                     "Null sorting order must be a constant string",
                 ));
@@ -689,23 +759,16 @@ where A: super::TypeCheckAdapter
             (true, false) => "array_sort_asc_null_last",
             (false, false) => "array_sort_desc_null_last",
         };
-        self.resolve_scalar_function_call(span, func_name, vec![], vec![args[0].1.clone()])
+        self.resolve_scalar_function_call(span, func_name, vec![], vec![array.clone()])
     }
 
     fn resolve_array_aggregate(
         &mut self,
         span: Span,
-        args: &[(&str, ScalarExpr, DataType)],
+        array: &ScalarExpr,
+        function: &ScalarExpr,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if args.len() != 2 {
-            return self.resolve_scalar_function_call(
-                span,
-                "array_aggregate",
-                vec![],
-                args.iter().map(|(_, scalar, _)| scalar.clone()).collect(),
-            );
-        }
-        let Ok(arg) = ConstantExpr::try_from(args[1].1.clone()) else {
+        let Ok(arg) = ConstantExpr::try_from(function.clone()) else {
             return Err(ErrorCode::SemanticError(
                 "Array aggregate function name be must a constant string",
             ));
@@ -716,7 +779,7 @@ where A: super::TypeCheckAdapter
             ));
         };
         let func_name = format!("array_{}", aggr_func_name);
-        self.resolve_scalar_function_call(span, &func_name, vec![], vec![args[0].1.clone()])
+        self.resolve_scalar_function_call(span, &func_name, vec![], vec![array.clone()])
     }
 
     fn resolve_greatest_or_least(

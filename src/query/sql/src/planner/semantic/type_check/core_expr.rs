@@ -90,7 +90,8 @@ pub(super) type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
 pub(super) type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
 pub(super) type CoreFunctionParams = SmallVec<[(String, CoreExprId); 4]>;
 pub(super) type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
-pub(super) type CoreSearchFunctionArgs = SmallVec<[(String, CoreExprId); 4]>;
+pub(super) type CoreDisplayExprArg = (String, CoreExprId);
+pub(super) type CoreDisplayExprArgs = SmallVec<[CoreDisplayExprArg; 4]>;
 pub(super) type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
 
 pub struct CoreExprArena<'a> {
@@ -536,10 +537,14 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_display_expr_args(
         &mut self,
         args: &'a [Expr],
-    ) -> Result<CoreSearchFunctionArgs> {
+    ) -> Result<CoreDisplayExprArgs> {
         args.iter()
-            .map(|arg| Ok((format!("{:#}", arg), self.lower_ast_expr(arg)?)))
+            .map(|arg| self.lower_display_expr_arg(arg))
             .collect()
+    }
+
+    pub(super) fn lower_display_expr_arg(&mut self, arg: &'a Expr) -> Result<CoreDisplayExprArg> {
+        Ok((format!("{:#}", arg), self.lower_ast_expr(arg)?))
     }
 
     fn lower_runtime_call_args(&mut self, args: &'a [Expr]) -> Result<CoreUdfCallArgs> {

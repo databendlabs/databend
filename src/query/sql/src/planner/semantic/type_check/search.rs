@@ -43,10 +43,10 @@ use tantivy_query_grammar::parse_query_lenient;
 use unicase::Ascii;
 
 use super::TypeChecker;
+use super::core_expr::CoreDisplayExprArgs;
 use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
-use super::core_expr::CoreSearchFunctionArgs;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;
@@ -55,8 +55,8 @@ use crate::plans::ScalarExpr;
 
 pub(super) enum CoreSearchFunction {
     Score,
-    Match { args: CoreSearchFunctionArgs },
-    Query { args: CoreSearchFunctionArgs },
+    Match { args: CoreDisplayExprArgs },
+    Query { args: CoreDisplayExprArgs },
 }
 
 impl<'a> CoreExprArena<'a> {
@@ -159,7 +159,7 @@ where A: super::TypeCheckAdapter
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        args: &CoreSearchFunctionArgs,
+        args: &CoreDisplayExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
             return Err(ErrorCode::SemanticError(
@@ -293,7 +293,7 @@ where A: super::TypeCheckAdapter
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        args: &CoreSearchFunctionArgs,
+        args: &CoreDisplayExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
             return Err(ErrorCode::SemanticError(
