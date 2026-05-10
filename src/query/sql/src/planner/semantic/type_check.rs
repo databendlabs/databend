@@ -136,12 +136,14 @@ pub struct StageLocationParam {
     pub stage_info: StageInfo,
 }
 
-pub enum TypeCheckNamespaceFunction {
+#[derive(Clone, Copy)]
+pub enum NamespaceFunction {
     CurrentCatalog,
     CurrentDatabase,
 }
 
-pub enum TypeCheckSessionFunction<'a> {
+#[derive(Clone, Copy)]
+pub enum SessionFunction<'a> {
     Version,
     ConnectionId,
     ClientSessionId,
@@ -149,7 +151,8 @@ pub enum TypeCheckSessionFunction<'a> {
     Variable(&'a str),
 }
 
-pub enum TypeCheckAuthorizationFunction {
+#[derive(Clone, Copy)]
+pub enum AuthFunction {
     CurrentUser,
     CurrentRole,
     CurrentSecondaryRoles,
@@ -490,17 +493,17 @@ pub trait TypeCheckAdapter: Clone {
         ))
     }
 
-    fn resolve_namespace_function(&self, _function: TypeCheckNamespaceFunction) -> Result<Scalar> {
+    fn resolve_namespace_function(&self, _function: NamespaceFunction) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency("namespace function"))
     }
 
-    fn resolve_session_function(&self, _function: TypeCheckSessionFunction<'_>) -> Result<Scalar> {
+    fn resolve_session_function(&self, _function: SessionFunction<'_>) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency("session function"))
     }
 
     fn resolve_authorization_function(
         &self,
-        _function: TypeCheckAuthorizationFunction,
+        _function: AuthFunction,
     ) -> Result<Scalar> {
         Err(missing_type_check_adapter_dependency(
             "authorization function",
@@ -734,33 +737,33 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         })
     }
 
-    fn resolve_namespace_function(&self, function: TypeCheckNamespaceFunction) -> Result<Scalar> {
+    fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
         let table_access: &dyn TableContextTableAccess = self.ctx.as_ref();
         match function {
-            TypeCheckNamespaceFunction::CurrentCatalog => {
+            NamespaceFunction::CurrentCatalog => {
                 Ok(Scalar::String(table_access.get_current_catalog()))
             }
-            TypeCheckNamespaceFunction::CurrentDatabase => {
+            NamespaceFunction::CurrentDatabase => {
                 Ok(Scalar::String(table_access.get_current_database()))
             }
         }
     }
 
-    fn resolve_session_function(&self, function: TypeCheckSessionFunction<'_>) -> Result<Scalar> {
+    fn resolve_session_function(&self, function: SessionFunction<'_>) -> Result<Scalar> {
         match function {
-            TypeCheckSessionFunction::Version => Ok(Scalar::String(self.ctx.get_fuse_version())),
-            TypeCheckSessionFunction::ConnectionId => {
+            SessionFunction::Version => Ok(Scalar::String(self.ctx.get_fuse_version())),
+            SessionFunction::ConnectionId => {
                 Ok(Scalar::String(self.ctx.get_connection_id()))
             }
-            TypeCheckSessionFunction::ClientSessionId => Ok(Scalar::String(
+            SessionFunction::ClientSessionId => Ok(Scalar::String(
                 self.ctx.get_current_client_session_id().unwrap_or_default(),
             )),
-            TypeCheckSessionFunction::LastQueryId(index) => Ok(self
+            SessionFunction::LastQueryId(index) => Ok(self
                 .ctx
                 .get_last_query_id(index)
                 .map(Scalar::String)
                 .unwrap_or(Scalar::Null)),
-            TypeCheckSessionFunction::Variable(key) => {
+            SessionFunction::Variable(key) => {
                 Ok(self.ctx.get_variable(key).unwrap_or(Scalar::Null))
             }
         }
@@ -768,24 +771,24 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
 
     fn resolve_authorization_function(
         &self,
-        function: TypeCheckAuthorizationFunction,
+        function: AuthFunction,
     ) -> Result<Scalar> {
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
         match function {
-            TypeCheckAuthorizationFunction::CurrentUser => Ok(Scalar::String(
+            AuthFunction::CurrentUser => Ok(Scalar::String(
                 authorization
                     .get_current_user()?
                     .identity()
                     .display()
                     .to_string(),
             )),
-            TypeCheckAuthorizationFunction::CurrentRole => Ok(Scalar::String(
+            AuthFunction::CurrentRole => Ok(Scalar::String(
                 authorization
                     .get_current_role()
                     .map(|role| role.name)
                     .unwrap_or_default(),
             )),
-            TypeCheckAuthorizationFunction::CurrentSecondaryRoles => {
+            AuthFunction::CurrentSecondaryRoles => {
                 let mut roles = block_on_with_handle(
                     &self.dependencies.async_runtime_handle,
                     authorization.get_all_effective_roles(),
@@ -802,7 +805,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                 };
                 Ok(Scalar::String(to_string(&value)?))
             }
-            TypeCheckAuthorizationFunction::CurrentAvailableRoles => {
+            AuthFunction::CurrentAvailableRoles => {
                 let mut roles = block_on_with_handle(
                     &self.dependencies.async_runtime_handle,
                     authorization.get_all_available_roles(),

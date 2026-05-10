@@ -60,7 +60,7 @@ use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
 use super::rewrite_function::rewrite_function_name;
 use super::search::CoreSearchFunction;
-use super::special_function::CoreSpecialFunction;
+use super::special_function::SpecialFunction;
 use super::window::CoreWindow;
 use super::window::CoreWindowDesc;
 use crate::ColumnBindingBuilder;
@@ -1213,7 +1213,7 @@ pub(super) enum CoreExpr<'a> {
     },
     SpecialFunction {
         span: Span,
-        function: CoreSpecialFunction,
+        function: SpecialFunction,
     },
     AggregateFunction {
         display_name: String,

@@ -23,9 +23,9 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use unicase::Ascii;
 
-use super::TypeCheckAuthorizationFunction;
-use super::TypeCheckNamespaceFunction;
-use super::TypeCheckSessionFunction;
+use super::AuthFunction;
+use super::NamespaceFunction;
+use super::SessionFunction;
 use super::TypeChecker;
 use super::core_expr::CoreDisplayExprArg;
 use super::core_expr::CoreDisplayExprArgs;
@@ -37,10 +37,10 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-pub(super) enum CoreSpecialFunction {
-    Namespace(CoreNamespaceSpecialFunction),
-    Session(CoreSessionSpecialFunction),
-    Authorization(CoreAuthorizationSpecialFunction),
+pub(super) enum SpecialFunction {
+    Namespace(NamespaceFunction),
+    Session(SessionFunction<'static>),
+    Auth(AuthFunction),
     Timezone,
     LastQueryId {
         arg: Option<CoreDisplayExprArg>,
@@ -81,64 +81,6 @@ pub(super) enum CoreSpecialFunction {
         func_name: &'static str,
         arg: CoreDisplayExprArg,
     },
-}
-
-pub(super) enum CoreNamespaceSpecialFunction {
-    CurrentCatalog,
-    CurrentDatabase,
-}
-
-pub(super) enum CoreSessionSpecialFunction {
-    Version,
-    ConnectionId,
-    ClientSessionId,
-}
-
-pub(super) enum CoreAuthorizationSpecialFunction {
-    User,
-    Role,
-    SecondaryRoles,
-    AvailableRoles,
-}
-
-impl CoreNamespaceSpecialFunction {
-    fn type_check_function(&self) -> TypeCheckNamespaceFunction {
-        match self {
-            CoreNamespaceSpecialFunction::CurrentCatalog => {
-                TypeCheckNamespaceFunction::CurrentCatalog
-            }
-            CoreNamespaceSpecialFunction::CurrentDatabase => {
-                TypeCheckNamespaceFunction::CurrentDatabase
-            }
-        }
-    }
-}
-
-impl CoreSessionSpecialFunction {
-    fn type_check_function(&self) -> TypeCheckSessionFunction<'static> {
-        match self {
-            CoreSessionSpecialFunction::Version => TypeCheckSessionFunction::Version,
-            CoreSessionSpecialFunction::ConnectionId => TypeCheckSessionFunction::ConnectionId,
-            CoreSessionSpecialFunction::ClientSessionId => {
-                TypeCheckSessionFunction::ClientSessionId
-            }
-        }
-    }
-}
-
-impl CoreAuthorizationSpecialFunction {
-    fn type_check_function(&self) -> TypeCheckAuthorizationFunction {
-        match self {
-            CoreAuthorizationSpecialFunction::User => TypeCheckAuthorizationFunction::CurrentUser,
-            CoreAuthorizationSpecialFunction::Role => TypeCheckAuthorizationFunction::CurrentRole,
-            CoreAuthorizationSpecialFunction::SecondaryRoles => {
-                TypeCheckAuthorizationFunction::CurrentSecondaryRoles
-            }
-            CoreAuthorizationSpecialFunction::AvailableRoles => {
-                TypeCheckAuthorizationFunction::CurrentAvailableRoles
-            }
-        }
-    }
 }
 
 impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
@@ -190,63 +132,63 @@ impl<'a> CoreExprArena<'a> {
         let function = match func_name {
             "current_catalog" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Namespace(CoreNamespaceSpecialFunction::CurrentCatalog)
+                SpecialFunction::Namespace(NamespaceFunction::CurrentCatalog)
             }
             "database" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase)
+                SpecialFunction::Namespace(NamespaceFunction::CurrentDatabase)
             }
             "currentdatabase" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase)
+                SpecialFunction::Namespace(NamespaceFunction::CurrentDatabase)
             }
             "current_database" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase)
+                SpecialFunction::Namespace(NamespaceFunction::CurrentDatabase)
             }
             "version" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Session(CoreSessionSpecialFunction::Version)
+                SpecialFunction::Session(SessionFunction::Version)
             }
             "connection_id" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Session(CoreSessionSpecialFunction::ConnectionId)
+                SpecialFunction::Session(SessionFunction::ConnectionId)
             }
             "client_session_id" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Session(CoreSessionSpecialFunction::ClientSessionId)
+                SpecialFunction::Session(SessionFunction::ClientSessionId)
             }
             "user" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Authorization(CoreAuthorizationSpecialFunction::User)
+                SpecialFunction::Auth(AuthFunction::CurrentUser)
             }
             "currentuser" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Authorization(CoreAuthorizationSpecialFunction::User)
+                SpecialFunction::Auth(AuthFunction::CurrentUser)
             }
             "current_user" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Authorization(CoreAuthorizationSpecialFunction::User)
+                SpecialFunction::Auth(AuthFunction::CurrentUser)
             }
             "current_role" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Authorization(CoreAuthorizationSpecialFunction::Role)
+                SpecialFunction::Auth(AuthFunction::CurrentRole)
             }
             "current_secondary_roles" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Authorization(CoreAuthorizationSpecialFunction::SecondaryRoles)
+                SpecialFunction::Auth(AuthFunction::CurrentSecondaryRoles)
             }
             "current_available_roles" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Authorization(CoreAuthorizationSpecialFunction::AvailableRoles)
+                SpecialFunction::Auth(AuthFunction::CurrentAvailableRoles)
             }
             "timezone" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
-                CoreSpecialFunction::Timezone
+                SpecialFunction::Timezone
             }
             "last_query_id" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(1))?;
-                CoreSpecialFunction::LastQueryId {
+                SpecialFunction::LastQueryId {
                     arg: args
                         .first()
                         .map(|arg| self.lower_display_expr_arg(arg))
@@ -255,19 +197,19 @@ impl<'a> CoreExprArena<'a> {
             }
             "coalesce" => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
-                CoreSpecialFunction::Coalesce {
+                SpecialFunction::Coalesce {
                     args: self.lower_display_expr_args(args)?,
                 }
             }
             "decode" => {
                 check_function_arity(span, func_name, args.len(), 3, None)?;
-                CoreSpecialFunction::Decode {
+                SpecialFunction::Decode {
                     args: self.lower_display_expr_args(args)?,
                 }
             }
             "array_sort" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(3))?;
-                CoreSpecialFunction::ArraySort {
+                SpecialFunction::ArraySort {
                     array: self.lower_display_expr_arg(&args[0])?,
                     sort_order: args
                         .get(1)
@@ -281,14 +223,14 @@ impl<'a> CoreExprArena<'a> {
             }
             "array_aggregate" => {
                 check_function_arity(span, func_name, args.len(), 2, Some(2))?;
-                CoreSpecialFunction::ArrayAggregate {
+                SpecialFunction::ArrayAggregate {
                     array: self.lower_display_expr_arg(&args[0])?,
                     function: self.lower_display_expr_arg(&args[1])?,
                 }
             }
             "to_variant" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::CastToVariant {
+                SpecialFunction::CastToVariant {
                     func_name: "to_variant",
                     arg: self.lower_display_expr_arg(&args[0])?,
                     is_try: false,
@@ -296,7 +238,7 @@ impl<'a> CoreExprArena<'a> {
             }
             "try_to_variant" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::CastToVariant {
+                SpecialFunction::CastToVariant {
                     func_name: "try_to_variant",
                     arg: self.lower_display_expr_arg(&args[0])?,
                     is_try: true,
@@ -304,7 +246,7 @@ impl<'a> CoreExprArena<'a> {
             }
             "greatest" => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
-                CoreSpecialFunction::GreatestOrLeast {
+                SpecialFunction::GreatestOrLeast {
                     func_name: "greatest",
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: false,
@@ -312,7 +254,7 @@ impl<'a> CoreExprArena<'a> {
             }
             "least" => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
-                CoreSpecialFunction::GreatestOrLeast {
+                SpecialFunction::GreatestOrLeast {
                     func_name: "least",
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: false,
@@ -320,7 +262,7 @@ impl<'a> CoreExprArena<'a> {
             }
             "greatest_ignore_nulls" => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
-                CoreSpecialFunction::GreatestOrLeast {
+                SpecialFunction::GreatestOrLeast {
                     func_name: "greatest_ignore_nulls",
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: true,
@@ -328,7 +270,7 @@ impl<'a> CoreExprArena<'a> {
             }
             "least_ignore_nulls" => {
                 check_function_arity(span, func_name, args.len(), 1, None)?;
-                CoreSpecialFunction::GreatestOrLeast {
+                SpecialFunction::GreatestOrLeast {
                     func_name: "least_ignore_nulls",
                     args: self.lower_display_expr_args(args)?,
                     ignore_nulls: true,
@@ -336,41 +278,41 @@ impl<'a> CoreExprArena<'a> {
             }
             "getvariable" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::GetVariable {
+                SpecialFunction::GetVariable {
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
             "hex_decode_string" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::DecodeString {
+                SpecialFunction::DecodeString {
                     func_name: "hex_decode_string",
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
             "try_hex_decode_string" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::DecodeString {
+                SpecialFunction::DecodeString {
                     func_name: "try_hex_decode_string",
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
             "base64_decode_string" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::DecodeString {
+                SpecialFunction::DecodeString {
                     func_name: "base64_decode_string",
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
             "try_base64_decode_string" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::DecodeString {
+                SpecialFunction::DecodeString {
                     func_name: "try_base64_decode_string",
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
             }
             "stream_has_data" => {
                 check_function_arity(span, func_name, args.len(), 1, Some(1))?;
-                CoreSpecialFunction::Scalar {
+                SpecialFunction::Scalar {
                     func_name: "stream_has_data",
                     arg: self.lower_display_expr_arg(&args[0])?,
                 }
@@ -383,15 +325,15 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-impl CoreSpecialFunction {
+impl SpecialFunction {
     pub(super) fn requires_full_context(&self) -> bool {
         matches!(
             self,
-            CoreSpecialFunction::Namespace(_)
-                | CoreSpecialFunction::Session(_)
-                | CoreSpecialFunction::Authorization(_)
-                | CoreSpecialFunction::LastQueryId { .. }
-                | CoreSpecialFunction::GetVariable { .. }
+            SpecialFunction::Namespace(_)
+                | SpecialFunction::Session(_)
+                | SpecialFunction::Auth(_)
+                | SpecialFunction::LastQueryId { .. }
+                | SpecialFunction::GetVariable { .. }
         )
     }
 
@@ -415,31 +357,28 @@ where A: super::TypeCheckAdapter
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        function: &CoreSpecialFunction,
+        function: &SpecialFunction,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         match function {
-            CoreSpecialFunction::Namespace(namespace_function) => self.resolve_special_literal(
+            SpecialFunction::Namespace(namespace_function) => self.resolve_special_literal(
                 span,
                 self.adapter
-                    .resolve_namespace_function(namespace_function.type_check_function())?,
+                    .resolve_namespace_function(*namespace_function)?,
             ),
-            CoreSpecialFunction::Session(session_function) => self.resolve_special_literal(
+            SpecialFunction::Session(session_function) => self.resolve_special_literal(
+                span,
+                self.adapter.resolve_session_function(*session_function)?,
+            ),
+            SpecialFunction::Auth(authorization_function) => self.resolve_special_literal(
                 span,
                 self.adapter
-                    .resolve_session_function(session_function.type_check_function())?,
+                    .resolve_authorization_function(*authorization_function)?,
             ),
-            CoreSpecialFunction::Authorization(authorization_function) => self
-                .resolve_special_literal(
-                    span,
-                    self.adapter.resolve_authorization_function(
-                        authorization_function.type_check_function(),
-                    )?,
-                ),
-            CoreSpecialFunction::Timezone => self.resolve_special_literal(
+            SpecialFunction::Timezone => self.resolve_special_literal(
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
             ),
-            CoreSpecialFunction::LastQueryId { arg } => {
+            SpecialFunction::LastQueryId { arg } => {
                 let scalar = match arg {
                     Some((_, arg)) => {
                         let box (scalar, _) = self.resolve_core(arena, *arg)?;
@@ -449,15 +388,15 @@ where A: super::TypeCheckAdapter
                 };
                 self.resolve_last_query_id(span, scalar.as_ref())
             }
-            CoreSpecialFunction::Coalesce { args } => {
+            SpecialFunction::Coalesce { args } => {
                 let args = self.resolve_special_args(arena, args)?;
                 self.resolve_coalesce(span, &args)
             }
-            CoreSpecialFunction::Decode { args } => {
+            SpecialFunction::Decode { args } => {
                 let args = self.resolve_special_args(arena, args)?;
                 self.resolve_decode(span, &args)
             }
-            CoreSpecialFunction::ArraySort {
+            SpecialFunction::ArraySort {
                 array,
                 sort_order,
                 nulls_order,
@@ -467,12 +406,12 @@ where A: super::TypeCheckAdapter
                 let nulls_order = self.resolve_optional_display_arg(arena, nulls_order.as_ref())?;
                 self.resolve_array_sort(span, &array, sort_order.as_ref(), nulls_order.as_ref())
             }
-            CoreSpecialFunction::ArrayAggregate { array, function } => {
+            SpecialFunction::ArrayAggregate { array, function } => {
                 let (_, array, _) = self.resolve_display_arg(arena, array)?;
                 let (_, function, _) = self.resolve_display_arg(arena, function)?;
                 self.resolve_array_aggregate(span, &array, &function)
             }
-            CoreSpecialFunction::CastToVariant {
+            SpecialFunction::CastToVariant {
                 func_name,
                 arg,
                 is_try,
@@ -485,7 +424,7 @@ where A: super::TypeCheckAdapter
                         ])
                     })
             }
-            CoreSpecialFunction::GreatestOrLeast {
+            SpecialFunction::GreatestOrLeast {
                 func_name,
                 args,
                 ignore_nulls,
@@ -493,15 +432,15 @@ where A: super::TypeCheckAdapter
                 let args = self.resolve_special_args(arena, args)?;
                 self.resolve_greatest_or_least(span, func_name, &args, *ignore_nulls)
             }
-            CoreSpecialFunction::GetVariable { arg } => {
+            SpecialFunction::GetVariable { arg } => {
                 let (_, scalar, _) = self.resolve_display_arg(arena, arg)?;
                 self.resolve_get_variable(span, &scalar)
             }
-            CoreSpecialFunction::DecodeString { func_name, arg } => {
+            SpecialFunction::DecodeString { func_name, arg } => {
                 let (_, scalar, _) = self.resolve_display_arg(arena, arg)?;
                 self.resolve_decode_string(span, func_name, &scalar)
             }
-            CoreSpecialFunction::Scalar { func_name, arg } => {
+            SpecialFunction::Scalar { func_name, arg } => {
                 let (_, scalar, _) = self.resolve_display_arg(arena, arg)?;
                 self.resolve_scalar_function_call(span, func_name, vec![], vec![scalar])
             }
@@ -575,7 +514,7 @@ where A: super::TypeCheckAdapter
         self.resolve_special_literal(
             span,
             self.adapter
-                .resolve_session_function(TypeCheckSessionFunction::LastQueryId(index as i32))?,
+                .resolve_session_function(SessionFunction::LastQueryId(index as i32))?,
         )
     }
 
@@ -809,7 +748,7 @@ where A: super::TypeCheckAdapter
         {
             let var_value = self
                 .adapter
-                .resolve_session_function(TypeCheckSessionFunction::Variable(&var_name))?;
+                .resolve_session_function(SessionFunction::Variable(&var_name))?;
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((

@@ -34,9 +34,9 @@ use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheckAdapter;
-use databend_common_sql::TypeCheckAuthorizationFunction;
-use databend_common_sql::TypeCheckNamespaceFunction;
-use databend_common_sql::TypeCheckSessionFunction;
+use databend_common_sql::AuthFunction;
+use databend_common_sql::NamespaceFunction;
+use databend_common_sql::SessionFunction;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
@@ -77,21 +77,21 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         AggregateFunctionFactory::instance()
     }
 
-    fn resolve_namespace_function(&self, function: TypeCheckNamespaceFunction) -> Result<Scalar> {
+    fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
         match function {
-            TypeCheckNamespaceFunction::CurrentCatalog
-            | TypeCheckNamespaceFunction::CurrentDatabase => {
+            NamespaceFunction::CurrentCatalog
+            | NamespaceFunction::CurrentDatabase => {
                 Ok(Scalar::String("default".to_string()))
             }
         }
     }
 
-    fn resolve_session_function(&self, function: TypeCheckSessionFunction<'_>) -> Result<Scalar> {
+    fn resolve_session_function(&self, function: SessionFunction<'_>) -> Result<Scalar> {
         match function {
-            TypeCheckSessionFunction::Version => Ok(Scalar::String(String::new())),
-            TypeCheckSessionFunction::ConnectionId => Ok(Scalar::String("lite-conn".to_string())),
-            TypeCheckSessionFunction::ClientSessionId => Ok(Scalar::String(String::new())),
-            TypeCheckSessionFunction::LastQueryId(_) | TypeCheckSessionFunction::Variable(_) => {
+            SessionFunction::Version => Ok(Scalar::String(String::new())),
+            SessionFunction::ConnectionId => Ok(Scalar::String("lite-conn".to_string())),
+            SessionFunction::ClientSessionId => Ok(Scalar::String(String::new())),
+            SessionFunction::LastQueryId(_) | SessionFunction::Variable(_) => {
                 Ok(Scalar::Null)
             }
         }
@@ -99,20 +99,20 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
 
     fn resolve_authorization_function(
         &self,
-        function: TypeCheckAuthorizationFunction,
+        function: AuthFunction,
     ) -> Result<Scalar> {
         match function {
-            TypeCheckAuthorizationFunction::CurrentUser => Ok(Scalar::String(
+            AuthFunction::CurrentUser => Ok(Scalar::String(
                 UserInfo::new_no_auth("root", "%")
                     .identity()
                     .display()
                     .to_string(),
             )),
-            TypeCheckAuthorizationFunction::CurrentRole => Ok(Scalar::String(String::new())),
-            TypeCheckAuthorizationFunction::CurrentSecondaryRoles => Ok(Scalar::String(
+            AuthFunction::CurrentRole => Ok(Scalar::String(String::new())),
+            AuthFunction::CurrentSecondaryRoles => Ok(Scalar::String(
                 serde_json::json!({ "roles": "", "value": "ALL" }).to_string(),
             )),
-            TypeCheckAuthorizationFunction::CurrentAvailableRoles => {
+            AuthFunction::CurrentAvailableRoles => {
                 Ok(Scalar::String("[]".to_string()))
             }
         }
