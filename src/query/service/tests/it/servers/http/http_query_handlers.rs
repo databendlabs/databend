@@ -312,6 +312,23 @@ impl TestHttpQueryRequest {
     }
 }
 
+async fn wait_query_counts(req: &mut TestHttpQueryRequest, expected: (u64, u64)) {
+    let mut last = None;
+
+    for _ in 0..100 {
+        let status = req.status().await;
+        let counts = (status.running_queries_count, status.inflight_queries_count);
+        if counts == expected {
+            return;
+        }
+
+        last = Some(counts);
+        sleep(Duration::from_millis(50)).await;
+    }
+
+    assert_eq!(last.unwrap(), expected);
+}
+
 fn decode_arrow_query_response(body: &[u8]) -> anyhow::Result<TestArrowQueryResponse> {
     let mut reader = StreamReader::try_new(Cursor::new(body), None)?;
     let schema = reader.schema();
@@ -769,15 +786,57 @@ async fn test_result_timeout() -> anyhow::Result<()> {
         "session": { "settings": {"http_handler_result_timeout_secs": "1"}}}
     );
     let mut req = TestHttpQueryRequest::new(json);
-    assert_eq!(req.status().await.running_queries_count, 0);
+    let status = req.status().await;
+    assert_eq!(
+        (status.running_queries_count, status.inflight_queries_count),
+        (0, 0)
+    );
     let (status, result, _) = req.fetch_begin().await?;
-    assert_eq!(req.status().await.running_queries_count, 1);
+    let query_status = req.status().await;
+    assert_eq!(query_status.inflight_queries_count, 1);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1);
 
     sleep(std::time::Duration::from_secs(6)).await;
     let status = req.status().await;
-    assert_eq!(status.running_queries_count, 0);
+    assert_eq!(
+        (status.running_queries_count, status.inflight_queries_count),
+        (0, 0)
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 5)]
+async fn test_final_releases_inflight_query() -> anyhow::Result<()> {
+    let config = ConfigBuilder::create()
+        .http_handler_result_timeout(60u64)
+        .build();
+    let _fixture = TestFixture::setup_with_config(&config).await?;
+
+    let json = serde_json::json!({
+        "sql": "SELECT * from numbers(5)",
+        "pagination": {"wait_time_secs": 5, "max_rows_per_page": 1},
+        "session": { "settings": {"http_handler_result_timeout_secs": "60"}}}
+    );
+    let mut req = TestHttpQueryRequest::new(json);
+    let (status, result, _) = req.fetch_begin().await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(result.data.len(), 1);
+    let final_uri = result.final_uri.clone().unwrap();
+
+    wait_query_counts(&mut req, (0, 1)).await;
+
+    let (status, result, _) = req.do_request(Method::GET, &final_uri).await?;
+    let result = result.unwrap();
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
+
+    let status = req.status().await;
+    assert_eq!(
+        (status.running_queries_count, status.inflight_queries_count),
+        (0, 0)
+    );
     Ok(())
 }
 
