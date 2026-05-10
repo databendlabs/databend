@@ -65,7 +65,7 @@ use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::semantic::BasicTypeCheckAdapter;
-use crate::planner::semantic::CoreExprContextDependencies;
+use crate::planner::semantic::CoreExprContextRequirements;
 use crate::planner::semantic::GroupingChecker;
 use crate::planner::semantic::compare_table_name;
 use crate::planner::semantic::normalize_identifier;
@@ -678,13 +678,12 @@ impl Binder {
             let mut temp_ctx = BindContext::new();
             let adapter = BasicTypeCheckAdapter::from_context(
                 self.ctx.as_ref(),
-                CoreExprContextDependencies {
-                    scalar_evaluation: true,
+                CoreExprContextRequirements {
+                    column_resolution: true,
                     lambda_function: true,
                     ..Default::default()
                 },
-            )?
-            .with_forbid_udf(true);
+            )?;
             let mut type_checker = TypeChecker::try_create_with_adapter(
                 &mut temp_ctx,
                 adapter,

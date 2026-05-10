@@ -38,7 +38,6 @@ use databend_common_settings::Settings;
 use databend_common_sql::BasicTypeCheckAdapter;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
-use databend_common_sql::CoreExprContextDependencies;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Symbol;
@@ -310,15 +309,10 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
 
 #[test]
 fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
-    let adapter = BasicTypeCheckAdapter::new(
+    let adapter = BasicTypeCheckAdapter::scalar_from_settings(
         Settings::create(Tenant::new_literal("default")),
         FunctionContext::default(),
-        CoreExprContextDependencies {
-            scalar_evaluation: true,
-            ..Default::default()
-        },
-    )
-    .with_forbid_udf(true);
+    );
     let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = BindContext::new();
@@ -341,8 +335,8 @@ fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
     let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
     let err = type_checker.resolve(&expr).unwrap_err();
     assert!(
-        err.message().contains("session_function"),
-        "expected session_function adapter error, got {}",
+        err.message().contains("full_context"),
+        "expected full_context adapter error, got {}",
         err.message()
     );
     Ok(())
@@ -350,16 +344,10 @@ fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
 
 #[test]
 fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Result<()> {
-    let adapter = BasicTypeCheckAdapter::new(
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns_from_settings(
         Settings::create(Tenant::new_literal("default")),
         FunctionContext::default(),
-        CoreExprContextDependencies {
-            scalar_evaluation: true,
-            column_resolution: true,
-            ..Default::default()
-        },
-    )
-    .with_forbid_udf(true);
+    );
     let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = BindContext::new();

@@ -115,56 +115,23 @@ pub struct StageLocationParam {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct CoreExprContextDependencies {
-    /// Pure expression evaluation plus builtin scalar resolution.
-    ///
-    /// Typical callers: default/constraint expressions, statement settings,
-    /// expression parser helpers, and scalar binder paths that do not need
-    /// catalog, subquery, async, or UDF behavior.
-    pub scalar_evaluation: bool,
-
+pub(crate) struct CoreExprContextRequirements {
     /// Name resolution against the current bind context, including virtual columns.
     pub column_resolution: bool,
 
     /// Lambda functions need a nested type check scope.
     pub lambda_function: bool,
 
-    /// Search functions use search-specific semantic checks.
-    pub search_function: bool,
-
-    /// Set-returning functions need clause-specific semantic checks.
-    pub set_returning_function: bool,
-
-    /// Window functions need window-specific semantic checks.
-    pub window_function: bool,
-
-    /// Session/catalog/user/version/variable sugar functions.
-    pub session_function: bool,
-
-    /// Subquery and IN-list-to-subquery lowering paths that need binder-style
-    /// planning support.
-    pub subquery: bool,
-
-    /// Builtin async functions such as sequence, dictionary, and read_file.
-    pub async_function: bool,
-
-    /// Potential UDF resolution and UDF execution metadata.
-    pub udf: bool,
+    /// Requires the full query adapter instead of the basic scalar adapter.
+    pub full_context: bool,
 }
 
-impl CoreExprContextDependencies {
+impl CoreExprContextRequirements {
     pub fn all() -> Self {
         Self {
-            scalar_evaluation: true,
             column_resolution: true,
             lambda_function: true,
-            search_function: true,
-            set_returning_function: true,
-            window_function: true,
-            session_function: true,
-            subquery: true,
-            async_function: true,
-            udf: true,
+            full_context: true,
         }
     }
 
@@ -183,58 +150,28 @@ impl CoreExprContextDependencies {
             | "current_available_roles"
             | "connection_id"
             | "client_session_id"
-            | "timezone"
             | "last_query_id"
-            | "array_sort"
-            | "getvariable" => self.session_function = true,
+            | "getvariable" => self.full_context = true,
             _ => {}
         }
     }
 
     fn contains(self, required: Self) -> bool {
-        (!required.scalar_evaluation || self.scalar_evaluation)
-            && (!required.column_resolution || self.column_resolution)
+        (!required.column_resolution || self.column_resolution)
             && (!required.lambda_function || self.lambda_function)
-            && (!required.search_function || self.search_function)
-            && (!required.set_returning_function || self.set_returning_function)
-            && (!required.window_function || self.window_function)
-            && (!required.session_function || self.session_function)
-            && (!required.subquery || self.subquery)
-            && (!required.async_function || self.async_function)
-            && (!required.udf || self.udf)
+            && (!required.full_context || self.full_context)
     }
 
     fn missing_from(self, allowed: Self) -> Vec<&'static str> {
         let mut missing = Vec::new();
-        if self.scalar_evaluation && !allowed.scalar_evaluation {
-            missing.push("scalar_evaluation");
-        }
         if self.column_resolution && !allowed.column_resolution {
             missing.push("column_resolution");
         }
         if self.lambda_function && !allowed.lambda_function {
             missing.push("lambda_function");
         }
-        if self.search_function && !allowed.search_function {
-            missing.push("search_function");
-        }
-        if self.set_returning_function && !allowed.set_returning_function {
-            missing.push("set_returning_function");
-        }
-        if self.window_function && !allowed.window_function {
-            missing.push("window_function");
-        }
-        if self.session_function && !allowed.session_function {
-            missing.push("session_function");
-        }
-        if self.subquery && !allowed.subquery {
-            missing.push("subquery");
-        }
-        if self.async_function && !allowed.async_function {
-            missing.push("async_function");
-        }
-        if self.udf && !allowed.udf {
-            missing.push("udf");
+        if self.full_context && !allowed.full_context {
+            missing.push("full_context");
         }
         missing
     }
@@ -282,9 +219,8 @@ pub struct FullTypeCheckAdapter {
 pub struct BasicTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
-    allowed_context_dependencies: CoreExprContextDependencies,
+    allowed_context_requirements: CoreExprContextRequirements,
     aggregate_function_factory: &'static AggregateFunctionFactory,
-    forbid_udf: bool,
     skip_sequence_check: bool,
 }
 
@@ -326,14 +262,14 @@ impl FullTypeCheckAdapter {
     }
 }
 
-fn core_expr_context_dependencies(
+fn core_expr_context_requirements(
     arena: &core_expr::CoreExprArena<'_>,
-) -> CoreExprContextDependencies {
-    let mut dependencies = CoreExprContextDependencies::default();
+) -> CoreExprContextRequirements {
+    let mut requirements = CoreExprContextRequirements::default();
     for node in arena.iter() {
         match node {
             core_expr::CoreExpr::ColumnRef { .. } => {
-                dependencies.column_resolution = true;
+                requirements.column_resolution = true;
             }
             core_expr::CoreExpr::Call { .. }
             | core_expr::CoreExpr::ScalarFunction { .. }
@@ -342,45 +278,39 @@ fn core_expr_context_dependencies(
             | core_expr::CoreExpr::Map { .. }
             | core_expr::CoreExpr::Tuple { .. }
             | core_expr::CoreExpr::MapAccess { .. }
-            | core_expr::CoreExpr::Cast { .. } => {
-                dependencies.scalar_evaluation = true;
-            }
-            core_expr::CoreExpr::UdfCall { .. } => {
-                dependencies.udf = true;
-            }
+            | core_expr::CoreExpr::Cast { .. }
+            | core_expr::CoreExpr::InList { .. }
+            | core_expr::CoreExpr::UdfCall { .. } => {}
             core_expr::CoreExpr::LambdaFunction { .. } => {
-                dependencies.lambda_function = true;
+                requirements.lambda_function = true;
             }
             core_expr::CoreExpr::SearchFunction { .. } => {
-                dependencies.search_function = true;
+                requirements.full_context = true;
             }
             core_expr::CoreExpr::AsyncFunction { .. } => {
-                dependencies.async_function = true;
+                requirements.full_context = true;
             }
             core_expr::CoreExpr::SetReturningFunction { .. } => {
-                dependencies.set_returning_function = true;
-            }
-            core_expr::CoreExpr::InList { .. } => {
-                dependencies.scalar_evaluation = true;
+                requirements.full_context = true;
             }
             core_expr::CoreExpr::Subquery { child_expr, .. } => {
                 if child_expr.is_some() {
-                    dependencies.column_resolution = true;
+                    requirements.column_resolution = true;
                 }
-                dependencies.subquery = true;
+                requirements.full_context = true;
             }
             core_expr::CoreExpr::SugarFunction { func_name, .. } => {
-                dependencies.require_sugar_function(func_name);
+                requirements.require_sugar_function(func_name);
             }
             core_expr::CoreExpr::AggregateWindowFunction { .. }
             | core_expr::CoreExpr::GeneralWindowFunction { .. }
             | core_expr::CoreExpr::CountAllWindowFunction { .. } => {
-                dependencies.window_function = true;
+                requirements.full_context = true;
             }
             core_expr::CoreExpr::StageLocation { .. } | core_expr::CoreExpr::Literal { .. } => {}
         }
     }
-    dependencies
+    requirements
 }
 
 impl FullTypeCheckAdapterDependencies {
@@ -415,24 +345,32 @@ fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
 }
 
 impl BasicTypeCheckAdapter {
-    pub fn new(
+    pub(crate) fn new(
         settings: Arc<Settings>,
         func_ctx: FunctionContext,
-        allowed_context_dependencies: CoreExprContextDependencies,
+        allowed_context_requirements: CoreExprContextRequirements,
     ) -> Self {
         Self {
             settings,
             func_ctx,
-            allowed_context_dependencies,
+            allowed_context_requirements,
             aggregate_function_factory: AggregateFunctionFactory::instance(),
-            forbid_udf: false,
             skip_sequence_check: false,
         }
     }
 
-    pub fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
-        self.forbid_udf = forbid_udf;
-        self
+    pub fn scalar_from_settings(settings: Arc<Settings>, func_ctx: FunctionContext) -> Self {
+        Self::new(settings, func_ctx, CoreExprContextRequirements::default())
+    }
+
+    pub fn scalar_with_columns_from_settings(
+        settings: Arc<Settings>,
+        func_ctx: FunctionContext,
+    ) -> Self {
+        Self::new(settings, func_ctx, CoreExprContextRequirements {
+            column_resolution: true,
+            ..Default::default()
+        })
     }
 
     pub fn with_skip_sequence_check(mut self, skip_sequence_check: bool) -> Self {
@@ -440,27 +378,23 @@ impl BasicTypeCheckAdapter {
         self
     }
 
-    pub fn from_context(
+    pub(crate) fn from_context(
         ctx: &(impl TableContextSettings + ?Sized),
-        allowed_context_dependencies: CoreExprContextDependencies,
+        allowed_context_requirements: CoreExprContextRequirements,
     ) -> Result<Self> {
         Ok(Self::new(
             ctx.get_settings(),
             ctx.get_function_context()?,
-            allowed_context_dependencies,
+            allowed_context_requirements,
         ))
     }
 
     pub fn scalar(ctx: &(impl TableContextSettings + ?Sized)) -> Result<Self> {
-        Self::from_context(ctx, CoreExprContextDependencies {
-            scalar_evaluation: true,
-            ..Default::default()
-        })
+        Self::from_context(ctx, CoreExprContextRequirements::default())
     }
 
     pub fn scalar_with_columns(ctx: &(impl TableContextSettings + ?Sized)) -> Result<Self> {
-        Self::from_context(ctx, CoreExprContextDependencies {
-            scalar_evaluation: true,
+        Self::from_context(ctx, CoreExprContextRequirements {
             column_resolution: true,
             ..Default::default()
         })
@@ -702,16 +636,16 @@ impl TypeCheckAdapter for BasicTypeCheckAdapter {
     }
 
     fn check_core_expr_context(&self, arena: &core_expr::CoreExprArena<'_>) -> Result<()> {
-        if self.allowed_context_dependencies == CoreExprContextDependencies::all() {
+        if self.allowed_context_requirements == CoreExprContextRequirements::all() {
             return Ok(());
         }
 
-        let required = core_expr_context_dependencies(arena);
-        if self.allowed_context_dependencies.contains(required) {
+        let required = core_expr_context_requirements(arena);
+        if self.allowed_context_requirements.contains(required) {
             return Ok(());
         }
 
-        let missing = required.missing_from(self.allowed_context_dependencies);
+        let missing = required.missing_from(self.allowed_context_requirements);
         Err(ErrorCode::SemanticError(format!(
             "type check context does not allow required capabilities: {}",
             missing.join(", ")
@@ -719,7 +653,7 @@ impl TypeCheckAdapter for BasicTypeCheckAdapter {
     }
 
     fn forbid_udf(&self) -> bool {
-        self.forbid_udf
+        true
     }
 
     fn skip_sequence_check(&self) -> bool {
@@ -1655,7 +1589,7 @@ mod tests {
 
     fn assert_sql_adapter_error_contains(
         sql: &str,
-        allowed: CoreExprContextDependencies,
+        allowed: CoreExprContextRequirements,
         expected: &str,
     ) {
         let tokens = tokenize_sql(sql).unwrap();
@@ -1681,109 +1615,105 @@ mod tests {
     }
 
     #[test]
-    fn collects_context_dependencies_from_flat_nodes() {
+    fn collects_context_requirements_from_flat_nodes() {
         assert_sql_lowers_to("1", |arena, _root| {
             assert_eq!(
-                core_expr_context_dependencies(arena),
-                CoreExprContextDependencies::default()
+                core_expr_context_requirements(arena),
+                CoreExprContextRequirements::default()
             );
         });
 
         assert_sql_lowers_to("a", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.column_resolution);
-            assert!(!dependencies.scalar_evaluation);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.column_resolution);
         });
 
         assert_sql_lowers_to("1 + 2", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.scalar_evaluation);
-            assert!(!dependencies.column_resolution);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(!requirements.column_resolution);
+            assert!(!requirements.lambda_function);
+            assert!(!requirements.full_context);
         });
 
         assert_sql_lowers_to("a IN (1, 2)", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.column_resolution);
-            assert!(dependencies.scalar_evaluation);
-            assert!(!dependencies.subquery);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.column_resolution);
+            assert!(!requirements.full_context);
         });
 
         assert_sql_lowers_to("current_database()", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.session_function);
-            assert!(!dependencies.subquery);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.full_context);
         });
 
         assert_sql_lowers_to("getvariable('x')", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.session_function);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.full_context);
+        });
+
+        assert_sql_lowers_to("timezone()", |arena, _root| {
+            let requirements = core_expr_context_requirements(arena);
+            assert!(!requirements.full_context);
         });
 
         assert_sql_lowers_to("array_filter([1], x -> x > 0)", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.lambda_function);
-            assert!(dependencies.column_resolution);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.lambda_function);
+            assert!(requirements.column_resolution);
         });
 
         assert_sql_lowers_to("score()", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.search_function);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.full_context);
         });
 
         assert_sql_lowers_to("unnest([1, 2])", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.set_returning_function);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.full_context);
         });
 
         assert_sql_lowers_to("row_number() over ()", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.window_function);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.full_context);
         });
 
         assert_sql_lowers_to("nextval(seq)", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.async_function);
-            assert!(!dependencies.udf);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(requirements.full_context);
         });
 
         assert_sql_lowers_to("potential_udf(1)", |arena, _root| {
-            let dependencies = core_expr_context_dependencies(arena);
-            assert!(dependencies.udf);
-            assert!(!dependencies.async_function);
+            let requirements = core_expr_context_requirements(arena);
+            assert!(!requirements.full_context);
         });
     }
 
     #[test]
     fn rejects_context_adapter_violations_after_lower() {
-        let scalar_only = CoreExprContextDependencies {
-            scalar_evaluation: true,
-            ..Default::default()
-        };
-        let scalar_with_columns = CoreExprContextDependencies {
-            scalar_evaluation: true,
+        let scalar_only = CoreExprContextRequirements::default();
+        let scalar_with_columns = CoreExprContextRequirements {
             column_resolution: true,
             ..Default::default()
         };
 
         assert_sql_lowers_to("1 + 2", |arena, _root| {
-            assert!(scalar_only.contains(core_expr_context_dependencies(arena)));
+            assert!(scalar_only.contains(core_expr_context_requirements(arena)));
         });
 
         assert_sql_adapter_error_contains("a", scalar_only, "column_resolution");
         assert_sql_lowers_to("1 IN (2, 3)", |arena, _root| {
-            assert!(scalar_only.contains(core_expr_context_dependencies(arena)));
+            assert!(scalar_only.contains(core_expr_context_requirements(arena)));
         });
         assert_sql_adapter_error_contains("a IN (1, 2)", scalar_only, "column_resolution");
-        assert_sql_adapter_error_contains("current_database()", scalar_only, "session_function");
+        assert_sql_adapter_error_contains("current_database()", scalar_only, "full_context");
         assert_sql_adapter_error_contains(
             "array_filter([1], x -> x > 0)",
             scalar_with_columns,
             "lambda_function",
         );
-        assert_sql_adapter_error_contains("score()", scalar_only, "search_function");
-        assert_sql_adapter_error_contains("unnest([1, 2])", scalar_only, "set_returning_function");
-        assert_sql_adapter_error_contains("row_number() over ()", scalar_only, "window_function");
-        assert_sql_adapter_error_contains("nextval(seq)", scalar_only, "async_function");
-        assert_sql_adapter_error_contains("potential_udf(1)", scalar_only, "udf");
+        assert_sql_adapter_error_contains("score()", scalar_only, "full_context");
+        assert_sql_adapter_error_contains("unnest([1, 2])", scalar_only, "full_context");
+        assert_sql_adapter_error_contains("row_number() over ()", scalar_only, "full_context");
+        assert_sql_adapter_error_contains("nextval(seq)", scalar_only, "full_context");
     }
 }

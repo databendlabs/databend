@@ -43,7 +43,7 @@ pub use name_resolution::VariableNormalizer;
 pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use type_check::BasicTypeCheckAdapter;
-pub use type_check::CoreExprContextDependencies;
+pub(crate) use type_check::CoreExprContextRequirements;
 pub use type_check::FullTypeCheckAdapter;
 pub use type_check::StageLocationParam;
 pub use type_check::TypeCheckAdapter;

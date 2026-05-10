@@ -97,8 +97,7 @@ impl ConstraintExprBinder {
     }
 
     pub(crate) fn bind(&mut self, ast: &AExpr) -> Result<ScalarExpr> {
-        let adapter =
-            BasicTypeCheckAdapter::scalar_with_columns(self.ctx.as_ref())?.with_forbid_udf(true);
+        let adapter = BasicTypeCheckAdapter::scalar_with_columns(self.ctx.as_ref())?;
         let mut type_checker = TypeChecker::try_create_with_adapter(
             &mut self.bind_context,
             adapter,

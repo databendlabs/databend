@@ -459,7 +459,7 @@ pub fn analyze_cluster_keys(
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?.with_forbid_udf(true);
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?;
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
         adapter,
