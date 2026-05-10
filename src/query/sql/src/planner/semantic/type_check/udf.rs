@@ -16,24 +16,10 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::FileLocation;
-use databend_common_ast::ast::UriLocation;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_base::runtime::block_on_with_handle;
-use databend_common_cloud_control::client_config::build_client_config;
-use databend_common_cloud_control::client_config::make_request;
-use databend_common_cloud_control::pb::CreateWorkerRequest;
-use databend_common_compress::CompressAlgorithm;
-use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::ConstantFolder;
-use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
-use databend_common_expression::udf_client::UDFFlightClient;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
@@ -52,13 +38,6 @@ use super::StageLocationParam;
 use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreUdfCallArgs;
-use crate::BindContext;
-use crate::ColumnBindingBuilder;
-use crate::NameResolutionContext;
-use crate::Visibility;
-use crate::binder::resolve_file_location;
-use crate::binder::resolve_stage_location;
-use crate::binder::resolve_stage_locations;
 use crate::binder::wrap_cast;
 use crate::planner::expression::UDFValidator;
 use crate::plans::CastExpr;
@@ -264,52 +243,6 @@ fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    fn resolve_udf_definition_with_arguments(
-        &mut self,
-        definition: &str,
-        parameters: Vec<(String, DataType, ScalarExpr)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let settings = self.adapter.table_context().get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let sql_tokens = tokenize_sql(definition)?;
-        let expr = parse_expr(&sql_tokens, sql_dialect)?;
-
-        let mut udf_context = BindContext::with_parent(self.bind_context.clone())?;
-        let mut replacements = Vec::with_capacity(parameters.len());
-        for (name, data_type, scalar) in parameters {
-            let column_index = udf_context.next_column_index();
-            udf_context.add_column_binding(
-                ColumnBindingBuilder::new(
-                    name,
-                    column_index,
-                    Box::new(data_type),
-                    Visibility::Visible,
-                )
-                .build(),
-            );
-            replacements.push((column_index, scalar));
-        }
-
-        let name_resolution_ctx = &NameResolutionContext {
-            deny_column_reference: false,
-            ..self.name_resolution_ctx.clone()
-        };
-
-        let box (mut scalar, data_type) = TypeChecker::try_create_with_adapter(
-            &mut udf_context,
-            self.adapter.clone(),
-            name_resolution_ctx,
-            self.metadata.clone(),
-            self.aliases,
-        )?
-        .resolve(&expr)?;
-
-        for (column_index, arg) in replacements {
-            scalar.replace_column_with_scalar(column_index, &arg)?;
-        }
-        Ok(Box::new((scalar, data_type)))
-    }
-
     pub(super) fn resolve_udf(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -424,10 +357,10 @@ where A: super::TypeCheckAdapter
                     ))
                     .set_span(span));
                 };
-                let (stage_info, relative_path) = self.block_on(resolve_stage_location(
-                    self.adapter.table_context().as_ref(),
-                    &location,
-                ))??;
+                let mut resolved = self
+                    .adapter
+                    .resolve_udf_stage_locations(std::slice::from_ref(&location))?;
+                let (stage_info, relative_path) = resolved.pop().unwrap();
 
                 if !matches!(stage_info.stage_type, StageType::External) {
                     return Err(ErrorCode::SemanticError(format!(
@@ -478,11 +411,9 @@ where A: super::TypeCheckAdapter
                 };
                 arg_scalars.push(arg_scalar);
             }
-            let handle = self.adapter.async_runtime_handle()?;
-            let value = block_on_with_handle(
-                &handle,
-                self.fold_udf_server(name.as_str(), arg_scalars, udf_definition.clone()),
-            )?;
+            let value =
+                self.adapter
+                    .fold_udf_server(name.as_str(), arg_scalars, udf_definition.clone())?;
             return Ok(Box::new((
                 ConstantExpr { span, value }.into(),
                 udf_definition.return_type.clone(),
@@ -493,10 +424,7 @@ where A: super::TypeCheckAdapter
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.bind_context.have_udf_server = true;
-        self.adapter
-            .table_context()
-            .result_cache_state()
-            .set_cacheable(false);
+        self.adapter.set_result_cache_uncacheable();
         Ok(Box::new((
             UDFCall {
                 span,
@@ -514,128 +442,6 @@ where A: super::TypeCheckAdapter
         )))
     }
 
-    #[async_backtrace::framed]
-    pub async fn fold_udf_server(
-        &mut self,
-        name: &str,
-        args: Vec<Scalar>,
-        udf_definition: UDFServer,
-    ) -> Result<Scalar> {
-        let mut block_entries = Vec::with_capacity(args.len());
-        for (arg, dest_type) in args.into_iter().zip(
-            udf_definition
-                .arg_types
-                .iter()
-                .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
-        ) {
-            if matches!(dest_type, DataType::StageLocation) {
-                continue;
-            }
-            let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
-            block_entries.push(entry);
-        }
-
-        let settings = self.adapter.table_context().get_settings();
-        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
-        let request_timeout = settings.get_external_server_request_timeout_secs()?;
-
-        let endpoint = UDFFlightClient::build_endpoint(
-            &udf_definition.address,
-            connect_timeout,
-            request_timeout,
-            &self
-                .adapter
-                .table_context()
-                .get_version()
-                .udf_client_user_agent(),
-        )?;
-
-        let num_rows = 1;
-        let mut client =
-            UDFFlightClient::connect(&udf_definition.handler, endpoint, connect_timeout, num_rows)
-                .await?
-                .with_tenant(self.adapter.table_context().get_tenant().tenant_name())?
-                .with_func_name(name)?
-                .with_handler_name(&udf_definition.handler)?
-                .with_query_id(&self.adapter.table_context().get_id())?
-                .with_headers(udf_definition.headers)?;
-
-        let result = client
-            .do_exchange(
-                name,
-                &udf_definition.handler,
-                Some(num_rows),
-                block_entries,
-                &udf_definition.return_type,
-            )
-            .await?;
-
-        let value = unsafe { result.get_by_offset(0).index_unchecked(0) };
-        Ok(value.to_owned())
-    }
-
-    fn apply_udf_cloud_resource(
-        &self,
-        resource_name: &str,
-        resource_type: &str,
-        script: String,
-    ) -> Result<(String, BTreeMap<String, String>)> {
-        let Some(_) = &self
-            .adapter
-            .global_config()?
-            .query
-            .common
-            .cloud_control_grpc_server_address
-        else {
-            return Err(ErrorCode::Unimplemented(
-                "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        };
-
-        let provider = self.adapter.cloud_control_api_provider()?;
-        let tenant = self.adapter.table_context().get_tenant();
-        let user = self
-            .adapter
-            .table_context()
-            .get_current_user()?
-            .identity()
-            .display()
-            .to_string();
-        let query_id = self.adapter.table_context().get_id();
-        let mut cfg = build_client_config(
-            tenant.tenant_name().to_string(),
-            user,
-            query_id,
-            provider.get_timeout(),
-        );
-        cfg.add_worker_version_info();
-
-        let req = CreateWorkerRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            name: resource_name.to_string(),
-            if_not_exists: true,
-            tags: Default::default(),
-            options: Default::default(),
-            r#type: resource_type.to_string(),
-            script,
-        };
-
-        let resp = self.block_on(
-            provider
-                .get_worker_client()
-                .create_worker(make_request(req, cfg)),
-        )??;
-
-        let endpoint = resp.endpoint;
-        if endpoint.is_empty() {
-            return Err(ErrorCode::CloudControlConnectError(
-                "UDF cloud resource endpoint is empty".to_string(),
-            ));
-        }
-
-        Ok((endpoint, resp.headers))
-    }
-
     fn build_udf_cloud_imports(
         &self,
         imports: &[String],
@@ -645,15 +451,7 @@ where A: super::TypeCheckAdapter
             return Ok(Vec::new());
         }
 
-        let locations = imports
-            .iter()
-            .map(|location| location.trim_start_matches('@').to_string())
-            .collect::<Vec<_>>();
-
-        let stage_locations = self.block_on(resolve_stage_locations(
-            self.adapter.table_context().as_ref(),
-            &locations,
-        ))??;
+        let stage_locations = self.adapter.resolve_udf_stage_locations(imports)?;
 
         self.block_on(async move {
             let mut results = Vec::with_capacity(stage_locations.len());
@@ -719,76 +517,6 @@ where A: super::TypeCheckAdapter
         build_udf_cloud_script(code, handler, imports, packages, &input_types, &result_type)
     }
 
-    async fn resolve_udf_with_stage(&mut self, code: String) -> Result<Vec<u8>> {
-        let file_location = match code.strip_prefix('@') {
-            Some(location) => FileLocation::Stage(location.to_string()),
-            None => {
-                let uri = UriLocation::from_uri(code.clone(), BTreeMap::default());
-
-                match uri {
-                    Ok(uri) => FileLocation::Uri(uri),
-                    Err(_) => {
-                        // fallback to use the code as real code
-                        return Ok(code.into());
-                    }
-                }
-            }
-        };
-
-        let (stage_info, module_path) =
-            resolve_file_location(self.adapter.table_context().as_ref(), &file_location)
-                .await
-                .map_err(|err| {
-                    ErrorCode::SemanticError(format!(
-                        "Failed to resolve code location {:?}: {}",
-                        code, err
-                    ))
-                })?;
-
-        let op = init_stage_operator(&stage_info).map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
-        })?;
-
-        let code_blob = op
-            .read(&module_path)
-            .await
-            .map_err(|err| {
-                ErrorCode::SemanticError(format!("Failed to read module {}: {}", module_path, err))
-            })?
-            .to_vec();
-
-        let compress_algo = CompressAlgorithm::from_path(&module_path);
-        log::trace!(
-            "Detecting compression algorithm for module: {}",
-            &module_path
-        );
-        log::info!("Detected compression algorithm: {:#?}", &compress_algo);
-
-        let code_blob = match compress_algo {
-            Some(algo) => {
-                log::trace!("Decompressing module using {:?} algorithm", algo);
-                if algo == CompressAlgorithm::Zip {
-                    DecompressDecoder::decompress_all_zip(
-                        &code_blob,
-                        &module_path,
-                        GLOBAL_MEM_STAT.get_limit() as usize,
-                    )
-                } else {
-                    let mut decoder = DecompressDecoder::new(algo);
-                    decoder.decompress_all(&code_blob)
-                }
-                .map_err(|err| {
-                    let error_msg = format!("Failed to decompress module {}: {}", module_path, err);
-                    log::error!("{}", error_msg);
-                    ErrorCode::SemanticError(error_msg)
-                })?
-            }
-            None => code_blob,
-        };
-
-        Ok(code_blob)
-    }
-
     fn resolve_udf_script(
         &mut self,
         arena: &CoreExprArena<'_>,
@@ -810,13 +538,8 @@ where A: super::TypeCheckAdapter
         } = udf_definition;
 
         let language = language.parse()?;
-        let use_cloud = matches!(language, UDFLanguage::Python)
-            && self
-                .adapter
-                .global_config()?
-                .query
-                .common
-                .enable_udf_sandbox;
+        let use_cloud =
+            matches!(language, UDFLanguage::Python) && self.adapter.enable_udf_sandbox()?;
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed(&language)?;
         } else {
@@ -833,12 +556,11 @@ where A: super::TypeCheckAdapter
         }
 
         if use_cloud {
-            let handle = self.adapter.async_runtime_handle()?;
-            let code_bytes = block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?;
+            let code_bytes = self.adapter.resolve_udf_code(code)?;
             let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
                 ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
             })?;
-            let settings = self.adapter.table_context().get_settings();
+            let settings = self.adapter.settings();
             let import_assets = self.build_udf_cloud_imports(
                 &imports,
                 Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
@@ -853,7 +575,9 @@ where A: super::TypeCheckAdapter
                 &arg_types,
                 &return_type,
             )?;
-            let (endpoint, headers) = self.apply_udf_cloud_resource(&name, "udf", script)?;
+            let (endpoint, headers) = self
+                .adapter
+                .apply_udf_cloud_resource(&name, "udf", script)?;
             let udf_definition = UDFServer {
                 address: endpoint,
                 handler,
@@ -874,17 +598,8 @@ where A: super::TypeCheckAdapter
             );
         }
 
-        let handle = self.adapter.async_runtime_handle()?;
-        let code_blob =
-            block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
-
-        let imports_stage_info = self.block_on(resolve_stage_locations(
-            self.adapter.table_context().as_ref(),
-            &imports
-                .iter()
-                .map(|s| s.trim_start_matches('@').to_string())
-                .collect::<Vec<String>>(),
-        ))??;
+        let code_blob = self.adapter.resolve_udf_code(code)?.into_boxed_slice();
+        let imports_stage_info = self.adapter.resolve_udf_stage_locations(&imports)?;
 
         let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
@@ -899,10 +614,7 @@ where A: super::TypeCheckAdapter
         let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
-        self.adapter
-            .table_context()
-            .result_cache_state()
-            .set_cacheable(false);
+        self.adapter.set_result_cache_uncacheable();
         Ok(Box::new((
             UDFCall {
                 span,
@@ -939,16 +651,8 @@ where A: super::TypeCheckAdapter
             packages,
         } = udf_definition;
         let language = language.parse()?;
-        let handle = self.adapter.async_runtime_handle()?;
-        let code_blob =
-            block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
-        let imports_stage_info = self.block_on(resolve_stage_locations(
-            self.adapter.table_context().as_ref(),
-            &imports
-                .iter()
-                .map(|s| s.trim_start_matches('@').to_string())
-                .collect::<Vec<String>>(),
-        ))??;
+        let code_blob = self.adapter.resolve_udf_code(code)?.into_boxed_slice();
+        let imports_stage_info = self.adapter.resolve_udf_stage_locations(&imports)?;
 
         let udf_type = UDFType::Script(Box::new(UDFScriptCode {
             language,
@@ -978,10 +682,7 @@ where A: super::TypeCheckAdapter
         );
 
         self.bind_context.have_udf_script = true;
-        self.adapter
-            .table_context()
-            .result_cache_state()
-            .set_cacheable(false);
+        self.adapter.set_result_cache_uncacheable();
         Ok(Box::new((
             UDAFCall {
                 span,
@@ -1034,7 +735,11 @@ where A: super::TypeCheckAdapter
             .zip(resolved_arguments)
             .map(|((name, data_type), scalar)| (name, data_type, scalar))
             .collect();
-        let box (scalar, data_type) = self.resolve_udf_definition_with_arguments(
+        let box (scalar, data_type) = self.adapter.resolve_udf_definition(
+            self.bind_context,
+            self.name_resolution_ctx,
+            self.metadata.clone(),
+            self.aliases,
             udf_definition.definition.as_str(),
             parameters,
         )?;
@@ -1076,7 +781,11 @@ where A: super::TypeCheckAdapter
             };
             parameters.push((arg_name.clone(), dest_type.clone(), arg));
         }
-        let box (expr, _) = self.resolve_udf_definition_with_arguments(
+        let box (expr, _) = self.adapter.resolve_udf_definition(
+            self.bind_context,
+            self.name_resolution_ctx,
+            self.metadata.clone(),
+            self.aliases,
             udf_definition.definition.as_str(),
             parameters,
         )?;

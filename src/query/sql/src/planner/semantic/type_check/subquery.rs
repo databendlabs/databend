@@ -43,27 +43,29 @@ use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 
-pub(super) fn bind_subquery(
-    adapter: &FullTypeCheckAdapter,
-    parent_context: &BindContext,
-    name_resolution_ctx: &NameResolutionContext,
-    metadata: MetadataRef,
-    subquery: &Query,
-) -> Result<TypeCheckSubqueryPlan> {
-    let mut binder = Binder::new(
-        adapter.ctx.clone(),
-        adapter.dependencies.catalog_manager.clone(),
-        name_resolution_ctx.clone(),
-        metadata,
-    );
+impl FullTypeCheckAdapter {
+    pub(super) fn bind_subquery(
+        &self,
+        parent_context: &BindContext,
+        name_resolution_ctx: &NameResolutionContext,
+        metadata: MetadataRef,
+        subquery: &Query,
+    ) -> Result<TypeCheckSubqueryPlan> {
+        let mut binder = Binder::new(
+            self.ctx.clone(),
+            self.dependencies.catalog_manager.clone(),
+            name_resolution_ctx.clone(),
+            metadata,
+        );
 
-    // Use the current bind context as the parent so the subquery can resolve outer columns.
-    let mut bind_context = BindContext::with_parent(parent_context.clone())?;
-    let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
-    Ok(TypeCheckSubqueryPlan {
-        s_expr,
-        output_context,
-    })
+        // Use the current bind context as the parent so the subquery can resolve outer columns.
+        let mut bind_context = BindContext::with_parent(parent_context.clone())?;
+        let (s_expr, output_context) = binder.bind_query(&mut bind_context, subquery)?;
+        Ok(TypeCheckSubqueryPlan {
+            s_expr,
+            output_context,
+        })
+    }
 }
 
 impl<'a, A> TypeChecker<'a, A>
