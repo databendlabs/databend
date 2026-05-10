@@ -82,6 +82,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
 use crate::interpreters::util::ScriptClient;
 use crate::meta_client_error;
 use crate::meta_service_error;
@@ -1137,7 +1138,9 @@ WHERE ta.task_name = '{task_name}'
         );
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let stream = executor.execute(context).await?;
+        let stream = executor
+            .execute_with_hooks(context, QueryFinishHooks::nested_with_hooks())
+            .await?;
         stream.try_collect::<Vec<DataBlock>>().await
     }
 
