@@ -117,10 +117,6 @@ impl<'a> CoreExprArena<'a> {
         }
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = &CoreExpr<'a>> {
-        self.nodes.iter()
-    }
-
     #[recursive::recursive]
     pub(super) fn lower_ast_expr(&mut self, expr: &'a Expr) -> Result<CoreExprId> {
         let id = match expr {
@@ -646,11 +642,9 @@ impl<'a> CoreExprArena<'a> {
             window,
             lambda,
         } = func;
-        let func_name = normalized_func_name(&name.name);
-
+        let func_name = name.name.to_ascii_lowercase();
         if !is_builtin_function(&func_name)
-            && !TypeChecker::<super::FullTypeCheckAdapter>::all_special_functions()
-                .contains(&Ascii::new(func_name.as_str()))
+            && !TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name.as_str()))
             && rewrite_function_name(&func_name).is_none()
         {
             return self.runtime_call(span, name, args);
@@ -1433,8 +1427,7 @@ where A: super::TypeCheckAdapter
         func_name: &str,
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if TypeChecker::<super::FullTypeCheckAdapter>::all_special_functions()
-            .contains(&Ascii::new(func_name))
+        if TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name))
             || rewrite_function_name(func_name).is_some()
         {
             return Err(ErrorCode::Internal(format!(
@@ -1796,14 +1789,6 @@ where A: super::TypeCheckAdapter
             new_params.push(constant);
         }
         Ok(new_params)
-    }
-}
-
-fn normalized_func_name(func_name: &str) -> String {
-    if func_name.chars().any(char::is_uppercase) {
-        func_name.to_lowercase()
-    } else {
-        func_name.to_string()
     }
 }
 

@@ -64,8 +64,6 @@ use crate::planner::binder::BindContext;
 use crate::planner::binder::Binder;
 use crate::planner::binder::ColumnBinding;
 use crate::planner::binder::scalar::ScalarBinder;
-use crate::planner::semantic::BasicTypeCheckAdapter;
-use crate::planner::semantic::CoreExprContextRequirements;
 use crate::planner::semantic::GroupingChecker;
 use crate::planner::semantic::compare_table_name;
 use crate::planner::semantic::normalize_identifier;
@@ -676,20 +674,13 @@ impl Binder {
             };
 
             let mut temp_ctx = BindContext::new();
-            let adapter = BasicTypeCheckAdapter::from_context(
-                self.ctx.as_ref(),
-                CoreExprContextRequirements {
-                    column_resolution: true,
-                    lambda_function: true,
-                    ..Default::default()
-                },
-            )?;
-            let mut type_checker = TypeChecker::try_create_with_adapter(
+            let mut type_checker = TypeChecker::try_create(
                 &mut temp_ctx,
-                adapter,
+                self.ctx.clone(),
                 &self.name_resolution_ctx,
                 self.metadata.clone(),
                 &[],
+                true,
             )?;
             let (scalar, _) = *type_checker.resolve(&expr)?;
             let expr = scalar.as_expr()?;
@@ -872,20 +863,15 @@ impl Binder {
 
         // Replace parameters in the masking policy expression
         let replaced_expr =
-            TypeChecker::<crate::FullTypeCheckAdapter>::clone_expr_with_replacement(
-                &cached.expr,
-                |nest_expr| {
-                    if let Expr::ColumnRef { column, .. } = nest_expr {
-                        // Parameter names are already normalized to lowercase at policy creation
-                        if let Some(arg) =
-                            args_map.get(column.column.name().to_lowercase().as_str())
-                        {
-                            return Ok(Some(arg.clone()));
-                        }
+            TypeChecker::<()>::clone_expr_with_replacement(&cached.expr, |nest_expr| {
+                if let Expr::ColumnRef { column, .. } = nest_expr {
+                    // Parameter names are already normalized to lowercase at policy creation
+                    if let Some(arg) = args_map.get(column.column.name().to_lowercase().as_str()) {
+                        return Ok(Some(arg.clone()));
                     }
-                    Ok(None)
-                },
-            )?;
+                }
+                Ok(None)
+            })?;
 
         // Now resolve the replaced expression using TypeChecker
         // IMPORTANT: Use the provided bind_context which has all the necessary column information

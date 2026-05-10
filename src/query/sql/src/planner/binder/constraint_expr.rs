@@ -28,7 +28,6 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::Constraint;
 use parking_lot::RwLock;
 
-use crate::BasicTypeCheckAdapter;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
@@ -97,13 +96,13 @@ impl ConstraintExprBinder {
     }
 
     pub(crate) fn bind(&mut self, ast: &AExpr) -> Result<ScalarExpr> {
-        let adapter = BasicTypeCheckAdapter::scalar_with_columns(self.ctx.as_ref())?;
-        let mut type_checker = TypeChecker::try_create_with_adapter(
+        let mut type_checker = TypeChecker::try_create(
             &mut self.bind_context,
-            adapter,
+            self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            true,
         )?;
         let (scalar, _) = *type_checker.resolve(ast)?;
         Ok(scalar)

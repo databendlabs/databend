@@ -32,7 +32,6 @@ use databend_common_base::runtime::block_on_with_handle;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
-use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_catalog::table_context::TableContextTableAccess;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
 use databend_common_config::GlobalConfig;
@@ -159,48 +158,6 @@ pub enum AuthFunction {
     CurrentAvailableRoles,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) struct CoreExprContextRequirements {
-    /// Name resolution against the current bind context, including virtual columns.
-    pub column_resolution: bool,
-
-    /// Lambda functions need a nested type check scope.
-    pub lambda_function: bool,
-
-    /// Requires the full query adapter instead of the basic scalar adapter.
-    pub full_context: bool,
-}
-
-impl CoreExprContextRequirements {
-    pub fn all() -> Self {
-        Self {
-            column_resolution: true,
-            lambda_function: true,
-            full_context: true,
-        }
-    }
-
-    fn contains(self, required: Self) -> bool {
-        (!required.column_resolution || self.column_resolution)
-            && (!required.lambda_function || self.lambda_function)
-            && (!required.full_context || self.full_context)
-    }
-
-    fn missing_from(self, allowed: Self) -> Vec<&'static str> {
-        let mut missing = Vec::new();
-        if self.column_resolution && !allowed.column_resolution {
-            missing.push("column_resolution");
-        }
-        if self.lambda_function && !allowed.lambda_function {
-            missing.push("lambda_function");
-        }
-        if self.full_context && !allowed.full_context {
-            missing.push("full_context");
-        }
-        missing
-    }
-}
-
 /// A helper for type checking.
 ///
 /// `TypeChecker::resolve` first lowers an AST `Expr` into a core expression tree,
@@ -210,7 +167,7 @@ impl CoreExprContextRequirements {
 ///
 /// If failed, a `SemanticError` will be raised. This may caused by incompatible
 /// argument types of expressions, or unresolvable columns.
-pub struct TypeChecker<'a, A = FullTypeCheckAdapter> {
+pub struct TypeChecker<'a, A> {
     bind_context: &'a mut BindContext,
     adapter: A,
     dialect: Dialect,
@@ -238,15 +195,6 @@ pub struct FullTypeCheckAdapter {
     ctx: Arc<dyn TableContext>,
     dependencies: FullTypeCheckAdapterDependencies,
     forbid_udf: bool,
-    skip_sequence_check: bool,
-}
-
-#[derive(Clone)]
-pub struct BasicTypeCheckAdapter {
-    settings: Arc<Settings>,
-    func_ctx: FunctionContext,
-    allowed_context_requirements: CoreExprContextRequirements,
-    aggregate_function_factory: &'static AggregateFunctionFactory,
     skip_sequence_check: bool,
 }
 
@@ -296,59 +244,6 @@ impl FullTypeCheckAdapter {
     }
 }
 
-fn core_expr_context_requirements(
-    arena: &core_expr::CoreExprArena<'_>,
-) -> CoreExprContextRequirements {
-    let mut requirements = CoreExprContextRequirements::default();
-    for node in arena.iter() {
-        match node {
-            core_expr::CoreExpr::ColumnRef { .. } => {
-                requirements.column_resolution = true;
-            }
-            core_expr::CoreExpr::Call { .. }
-            | core_expr::CoreExpr::ScalarFunction { .. }
-            | core_expr::CoreExpr::AggregateFunction { .. }
-            | core_expr::CoreExpr::Array { .. }
-            | core_expr::CoreExpr::Map { .. }
-            | core_expr::CoreExpr::Tuple { .. }
-            | core_expr::CoreExpr::MapAccess { .. }
-            | core_expr::CoreExpr::Cast { .. }
-            | core_expr::CoreExpr::InList { .. }
-            | core_expr::CoreExpr::UdfCall { .. } => {}
-            core_expr::CoreExpr::LambdaFunction { .. } => {
-                requirements.lambda_function = true;
-            }
-            core_expr::CoreExpr::SearchFunction { .. } => {
-                requirements.full_context = true;
-            }
-            core_expr::CoreExpr::AsyncFunction { .. } => {
-                requirements.full_context = true;
-            }
-            core_expr::CoreExpr::SetReturningFunction { .. } => {
-                requirements.full_context = true;
-            }
-            core_expr::CoreExpr::Subquery { child_expr, .. } => {
-                if child_expr.is_some() {
-                    requirements.column_resolution = true;
-                }
-                requirements.full_context = true;
-            }
-            core_expr::CoreExpr::SpecialFunction { function, .. } => {
-                if function.requires_full_context() {
-                    requirements.full_context = true;
-                }
-            }
-            core_expr::CoreExpr::AggregateWindowFunction { .. }
-            | core_expr::CoreExpr::GeneralWindowFunction { .. }
-            | core_expr::CoreExpr::CountAllWindowFunction { .. } => {
-                requirements.full_context = true;
-            }
-            core_expr::CoreExpr::StageLocation { .. } | core_expr::CoreExpr::Literal { .. } => {}
-        }
-    }
-    requirements
-}
-
 impl FullTypeCheckAdapterDependencies {
     pub fn from_context(ctx: &dyn TableContext) -> Result<Self> {
         let global_config = GlobalConfig::instance();
@@ -378,63 +273,6 @@ impl FullTypeCheckAdapterDependencies {
 
 fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
     ErrorCode::Internal(format!("type check adapter does not provide {name}"))
-}
-
-impl BasicTypeCheckAdapter {
-    pub(crate) fn new(
-        settings: Arc<Settings>,
-        func_ctx: FunctionContext,
-        allowed_context_requirements: CoreExprContextRequirements,
-    ) -> Self {
-        Self {
-            settings,
-            func_ctx,
-            allowed_context_requirements,
-            aggregate_function_factory: AggregateFunctionFactory::instance(),
-            skip_sequence_check: false,
-        }
-    }
-
-    pub fn scalar_from_settings(settings: Arc<Settings>, func_ctx: FunctionContext) -> Self {
-        Self::new(settings, func_ctx, CoreExprContextRequirements::default())
-    }
-
-    pub fn scalar_with_columns_from_settings(
-        settings: Arc<Settings>,
-        func_ctx: FunctionContext,
-    ) -> Self {
-        Self::new(settings, func_ctx, CoreExprContextRequirements {
-            column_resolution: true,
-            ..Default::default()
-        })
-    }
-
-    pub fn with_skip_sequence_check(mut self, skip_sequence_check: bool) -> Self {
-        self.skip_sequence_check = skip_sequence_check;
-        self
-    }
-
-    pub(crate) fn from_context(
-        ctx: &(impl TableContextSettings + ?Sized),
-        allowed_context_requirements: CoreExprContextRequirements,
-    ) -> Result<Self> {
-        Ok(Self::new(
-            ctx.get_settings(),
-            ctx.get_function_context()?,
-            allowed_context_requirements,
-        ))
-    }
-
-    pub fn scalar(ctx: &(impl TableContextSettings + ?Sized)) -> Result<Self> {
-        Self::from_context(ctx, CoreExprContextRequirements::default())
-    }
-
-    pub fn scalar_with_columns(ctx: &(impl TableContextSettings + ?Sized)) -> Result<Self> {
-        Self::from_context(ctx, CoreExprContextRequirements {
-            column_resolution: true,
-            ..Default::default()
-        })
-    }
 }
 
 pub trait TypeCheckAdapter: Clone {
@@ -868,51 +706,6 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     }
 }
 
-impl TypeCheckAdapter for BasicTypeCheckAdapter {
-    fn function_context(&self) -> Result<FunctionContext> {
-        Ok(self.func_ctx.clone())
-    }
-
-    fn settings(&self) -> Arc<Settings> {
-        self.settings.clone()
-    }
-
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
-        self.aggregate_function_factory
-    }
-
-    fn check_core_expr_context(&self, arena: &core_expr::CoreExprArena<'_>) -> Result<()> {
-        if self.allowed_context_requirements == CoreExprContextRequirements::all() {
-            return Ok(());
-        }
-
-        let required = core_expr_context_requirements(arena);
-        if self.allowed_context_requirements.contains(required) {
-            return Ok(());
-        }
-
-        let missing = required.missing_from(self.allowed_context_requirements);
-        Err(ErrorCode::SemanticError(format!(
-            "type check context does not allow required capabilities: {}",
-            missing.join(", ")
-        )))
-    }
-
-    fn forbid_udf(&self) -> bool {
-        true
-    }
-
-    fn validate_sequence(&self, _sequence_name: &str) -> Result<()> {
-        if self.skip_sequence_check {
-            Ok(())
-        } else {
-            Err(missing_type_check_adapter_dependency("sequence resolver"))
-        }
-    }
-
-    fn set_result_cache_uncacheable(&self) {}
-}
-
 impl<'a> TypeChecker<'a, FullTypeCheckAdapter> {
     pub fn try_create(
         bind_context: &'a mut BindContext,
@@ -978,14 +771,9 @@ where A: TypeCheckAdapter
         let handle = self.adapter.async_runtime_handle()?;
         Ok(block_on_with_handle(&handle, future))
     }
-}
 
-impl<'a, A> TypeChecker<'a, A>
-where A: TypeCheckAdapter
-{
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
-        if TypeChecker::<FullTypeCheckAdapter>::all_special_functions()
-            .contains(&Ascii::new(func_name))
+        if TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name))
             || rewrite_function::rewrite_function_name(func_name).is_some()
         {
             return false;
@@ -996,31 +784,6 @@ where A: TypeCheckAdapter
             .unwrap_or(false)
     }
 
-    #[allow(clippy::only_used_in_recursion)]
-    pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
-    where F: Fn(&Expr) -> Result<Option<Expr>> {
-        #[derive(VisitorMut)]
-        #[visitor(Expr(enter))]
-        struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
-
-        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
-            fn enter_expr(&mut self, expr: &mut Expr) {
-                let replacement_opt = (self.0)(expr);
-                if let Ok(Some(replacement)) = replacement_opt {
-                    *expr = replacement;
-                }
-            }
-        }
-        let mut visitor = ReplacerVisitor(replacement_fn);
-        let mut expr = original_expr.clone();
-        expr.drive_mut(&mut visitor);
-        Ok(expr)
-    }
-}
-
-impl<'a, A> TypeChecker<'a, A>
-where A: TypeCheckAdapter
-{
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut arena = self.core_expr_arena();
@@ -1223,7 +986,7 @@ where A: TypeCheckAdapter
                     .map(|ascii| ascii.into_inner().to_string()),
             )
             .chain(
-                TypeChecker::<FullTypeCheckAdapter>::all_special_functions()
+                TypeChecker::<()>::all_special_functions()
                     .iter()
                     .cloned()
                     .map(|ascii| ascii.into_inner().to_string()),
@@ -1660,11 +1423,7 @@ where A: TypeCheckAdapter
 
         None
     }
-}
 
-impl<'a, A> TypeChecker<'a, A>
-where A: TypeCheckAdapter
-{
     /// Get masking policy expression for a column reference
     /// This is the ONLY place where masking policy is applied - unifying all paths (SELECT/WHERE/HAVING)
     fn get_masking_policy_expr_for_column(
@@ -1790,150 +1549,24 @@ where A: TypeCheckAdapter
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use databend_common_meta_app::tenant::Tenant;
+impl<'a, A> TypeChecker<'a, A> {
+    pub fn clone_expr_with_replacement<F>(original_expr: &Expr, replacement_fn: F) -> Result<Expr>
+    where F: Fn(&Expr) -> Result<Option<Expr>> {
+        #[derive(VisitorMut)]
+        #[visitor(Expr(enter))]
+        struct ReplacerVisitor<F: Fn(&Expr) -> Result<Option<Expr>>>(F);
 
-    use super::*;
-
-    fn assert_sql_lowers_to(
-        sql: &str,
-        check: impl FnOnce(&core_expr::CoreExprArena<'_>, core_expr::CoreExprId),
-    ) {
-        let tokens = tokenize_sql(sql).unwrap();
-        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let mut arena = core_expr::CoreExprArena::new(0);
-        let root = arena.lower_ast_expr(&expr).unwrap();
-        check(&arena, root);
-    }
-
-    fn assert_sql_adapter_error_contains(
-        sql: &str,
-        allowed: CoreExprContextRequirements,
-        expected: &str,
-    ) {
-        let tokens = tokenize_sql(sql).unwrap();
-        let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let adapter = BasicTypeCheckAdapter::new(
-            Settings::create(Tenant::new_literal("default")),
-            FunctionContext::default(),
-            allowed,
-        );
-        let mut arena = core_expr::CoreExprArena::with_aggregate_function_factory(
-            0,
-            adapter.aggregate_function_factory(),
-        );
-        let _root = arena.lower_ast_expr(&expr).unwrap();
-        let err = adapter
-            .check_core_expr_context(&arena)
-            .expect_err("expected context adapter violation");
-        assert!(
-            err.message().contains(expected),
-            "expected error to contain `{expected}`, got `{}`",
-            err.message()
-        );
-    }
-
-    #[test]
-    fn collects_context_requirements_from_flat_nodes() {
-        assert_sql_lowers_to("1", |arena, _root| {
-            assert_eq!(
-                core_expr_context_requirements(arena),
-                CoreExprContextRequirements::default()
-            );
-        });
-
-        assert_sql_lowers_to("a", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.column_resolution);
-        });
-
-        assert_sql_lowers_to("1 + 2", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(!requirements.column_resolution);
-            assert!(!requirements.lambda_function);
-            assert!(!requirements.full_context);
-        });
-
-        assert_sql_lowers_to("a IN (1, 2)", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.column_resolution);
-            assert!(!requirements.full_context);
-        });
-
-        assert_sql_lowers_to("current_database()", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.full_context);
-        });
-
-        assert_sql_lowers_to("getvariable('x')", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.full_context);
-        });
-
-        assert_sql_lowers_to("timezone()", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(!requirements.full_context);
-        });
-
-        assert_sql_lowers_to("array_filter([1], x -> x > 0)", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.lambda_function);
-            assert!(requirements.column_resolution);
-        });
-
-        assert_sql_lowers_to("score()", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.full_context);
-        });
-
-        assert_sql_lowers_to("unnest([1, 2])", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.full_context);
-        });
-
-        assert_sql_lowers_to("row_number() over ()", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.full_context);
-        });
-
-        assert_sql_lowers_to("nextval(seq)", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(requirements.full_context);
-        });
-
-        assert_sql_lowers_to("potential_udf(1)", |arena, _root| {
-            let requirements = core_expr_context_requirements(arena);
-            assert!(!requirements.full_context);
-        });
-    }
-
-    #[test]
-    fn rejects_context_adapter_violations_after_lower() {
-        let scalar_only = CoreExprContextRequirements::default();
-        let scalar_with_columns = CoreExprContextRequirements {
-            column_resolution: true,
-            ..Default::default()
-        };
-
-        assert_sql_lowers_to("1 + 2", |arena, _root| {
-            assert!(scalar_only.contains(core_expr_context_requirements(arena)));
-        });
-
-        assert_sql_adapter_error_contains("a", scalar_only, "column_resolution");
-        assert_sql_lowers_to("1 IN (2, 3)", |arena, _root| {
-            assert!(scalar_only.contains(core_expr_context_requirements(arena)));
-        });
-        assert_sql_adapter_error_contains("a IN (1, 2)", scalar_only, "column_resolution");
-        assert_sql_adapter_error_contains("current_database()", scalar_only, "full_context");
-        assert_sql_adapter_error_contains(
-            "array_filter([1], x -> x > 0)",
-            scalar_with_columns,
-            "lambda_function",
-        );
-        assert_sql_adapter_error_contains("score()", scalar_only, "full_context");
-        assert_sql_adapter_error_contains("unnest([1, 2])", scalar_only, "full_context");
-        assert_sql_adapter_error_contains("row_number() over ()", scalar_only, "full_context");
-        assert_sql_adapter_error_contains("nextval(seq)", scalar_only, "full_context");
+        impl<F: Fn(&Expr) -> Result<Option<Expr>>> ReplacerVisitor<F> {
+            fn enter_expr(&mut self, expr: &mut Expr) {
+                let replacement_opt = (self.0)(expr);
+                if let Ok(Some(replacement)) = replacement_opt {
+                    *expr = replacement;
+                }
+            }
+        }
+        let mut visitor = ReplacerVisitor(replacement_fn);
+        let mut expr = original_expr.clone();
+        expr.drive_mut(&mut visitor);
+        Ok(expr)
     }
 }

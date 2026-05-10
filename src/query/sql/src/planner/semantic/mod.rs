@@ -43,8 +43,6 @@ pub use name_resolution::VariableNormalizer;
 pub use name_resolution::compare_table_name;
 pub use name_resolution::normalize_identifier;
 pub use type_check::AuthFunction;
-pub use type_check::BasicTypeCheckAdapter;
-pub(crate) use type_check::CoreExprContextRequirements;
 pub use type_check::FullTypeCheckAdapter;
 pub use type_check::NamespaceFunction;
 pub use type_check::SessionFunction;

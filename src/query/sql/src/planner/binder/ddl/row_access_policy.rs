@@ -61,9 +61,9 @@ impl Binder {
                         let func_name = func_name.as_str();
                         let uni_case_func_name = Ascii::new(func_name);
                         if !(is_builtin_function(func_name)
-                            || TypeChecker::<crate::FullTypeCheckAdapter>::all_special_functions()
+                            || TypeChecker::<()>::all_special_functions()
                                 .contains(&uni_case_func_name)
-                            || TypeChecker::<crate::FullTypeCheckAdapter>::all_rewrite_functions()
+                            || TypeChecker::<()>::all_rewrite_functions()
                                 .contains(&uni_case_func_name)
                             || func.window.is_none()
                             || func.lambda.is_none()

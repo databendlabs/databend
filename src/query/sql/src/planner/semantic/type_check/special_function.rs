@@ -33,6 +33,7 @@ use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
 use super::function_arity::check_function_arity;
+use crate::TypeCheckAdapter;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
@@ -83,7 +84,7 @@ pub(super) enum SpecialFunction {
     },
 }
 
-impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
+impl<'a, A> TypeChecker<'a, A> {
     pub fn all_special_functions() -> &'static [Ascii<&'static str>] {
         static FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("current_catalog"),
@@ -326,17 +327,6 @@ impl<'a> CoreExprArena<'a> {
 }
 
 impl SpecialFunction {
-    pub(super) fn requires_full_context(&self) -> bool {
-        matches!(
-            self,
-            SpecialFunction::Namespace(_)
-                | SpecialFunction::Session(_)
-                | SpecialFunction::Auth(_)
-                | SpecialFunction::LastQueryId { .. }
-                | SpecialFunction::GetVariable { .. }
-        )
-    }
-
     pub(super) fn resolve<'tc, A>(
         &self,
         type_checker: &mut TypeChecker<'tc, A>,
@@ -351,7 +341,7 @@ impl SpecialFunction {
 }
 
 impl<'a, A> TypeChecker<'a, A>
-where A: super::TypeCheckAdapter
+where A: TypeCheckAdapter
 {
     fn resolve_special_function(
         &mut self,

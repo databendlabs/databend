@@ -15,7 +15,6 @@
 use std::io::Write;
 use std::sync::Arc;
 
-use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::Result;
@@ -28,7 +27,6 @@ use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
 use databend_common_sql::AuthFunction;
-use databend_common_sql::BasicTypeCheckAdapter;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::Metadata;
@@ -191,87 +189,6 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
         write_case_outcome_body(&mut file, &outcome)?;
     }
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
-    init_testing_globals();
-    let adapter = BasicTypeCheckAdapter::scalar_from_settings(
-        Settings::create(Tenant::new_literal("default")),
-        FunctionContext::default(),
-    );
-    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
-    let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let mut bind_context = BindContext::new();
-    let tokens = tokenize_sql("1 + 2")?;
-    let expr = parse_expr(&tokens, adapter.settings().get_sql_dialect()?)?;
-    let mut type_checker = TypeChecker::try_create_with_adapter(
-        &mut bind_context,
-        adapter,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-    )?;
-
-    let (scalar, data_type) = *type_checker.resolve(&expr)?;
-
-    assert_eq!(format_scalar(&scalar), "3");
-    assert_eq!(data_type, DataType::Number(NumberDataType::UInt8));
-
-    let tokens = tokenize_sql("current_database()")?;
-    let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
-    let err = type_checker.resolve(&expr).unwrap_err();
-    assert!(
-        err.message().contains("full_context"),
-        "expected full_context adapter error, got {}",
-        err.message()
-    );
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Result<()> {
-    init_testing_globals();
-    let adapter = BasicTypeCheckAdapter::scalar_with_columns_from_settings(
-        Settings::create(Tenant::new_literal("default")),
-        FunctionContext::default(),
-    );
-    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
-    let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let mut bind_context = BindContext::new();
-    add_test_column(
-        &mut bind_context,
-        0,
-        "number",
-        DataType::Number(NumberDataType::Int64),
-    );
-    let tokens = tokenize_sql("number + 1")?;
-    let expr = parse_expr(&tokens, adapter.settings().get_sql_dialect()?)?;
-    let mut type_checker = TypeChecker::try_create_with_adapter(
-        &mut bind_context,
-        adapter,
-        &name_resolution_ctx,
-        metadata,
-        &[],
-    )?;
-
-    let (scalar, data_type) = *type_checker.resolve(&expr)?;
-
-    assert_eq!(format_scalar(&scalar), "plus(number (#0), 1)");
-    assert_eq!(
-        data_type,
-        DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int64)))
-    );
-
-    let tokens = tokenize_sql("array_filter([1], x -> x > 0)")?;
-    let expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
-    let err = type_checker.resolve(&expr).unwrap_err();
-    assert!(
-        err.message().contains("lambda_function"),
-        "expected lambda_function adapter error, got {}",
-        err.message()
-    );
     Ok(())
 }
 

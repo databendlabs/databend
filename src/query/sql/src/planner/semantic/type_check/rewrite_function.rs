@@ -42,7 +42,7 @@ pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
     FUNCTIONS
 }
 
-impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
+impl<'a, A> TypeChecker<'a, A> {
     pub fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
         all_rewrite_functions()
     }
