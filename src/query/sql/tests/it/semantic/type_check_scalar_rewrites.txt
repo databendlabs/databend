@@ -46,4 +46,3 @@ sql: number NOT IN (1, 2, delta)
 status: ok
 scalar: not(or(or(eq(number (#0), 1), eq(number (#0), 2)), eq(number (#0), delta (#3))))
 type: Boolean NULL
-

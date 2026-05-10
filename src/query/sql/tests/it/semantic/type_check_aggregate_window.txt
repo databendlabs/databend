@@ -158,4 +158,3 @@ sql: sum(number) OVER (ORDER BY number ROWS BETWEEN UNBOUNDED PRECEDING AND UNBO
 status: error
 code: 1065
 message: Frame end cannot be UNBOUNDED PRECEDING
-

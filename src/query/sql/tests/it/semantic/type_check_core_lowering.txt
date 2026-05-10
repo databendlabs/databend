@@ -53,4 +53,3 @@ sql: row_number()
 status: error
 code: 1065
 message: window function row_number can only be used in window clause
-

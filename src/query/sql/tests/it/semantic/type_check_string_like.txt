@@ -67,4 +67,3 @@ sql: text RLIKE pattern
 status: ok
 scalar: rlike(text (#1), pattern (#2))
 type: Boolean NULL
-

@@ -67,4 +67,3 @@ sql: to_variant({'k1': 1}):k1
 status: ok
 scalar: get_by_keypath('{"k1":1}', '{"k1"}')
 type: Variant NULL
-

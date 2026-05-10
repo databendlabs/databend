@@ -100,6 +100,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
@@ -128,7 +129,7 @@ thread_local! {
         const { std::cell::OnceCell::new() };
 }
 
-fn init_testing_globals() {
+pub(crate) fn init_testing_globals() {
     #[cfg(debug_assertions)]
     {
         INIT_TESTING_GLOBALS.with(|init| {
@@ -138,6 +139,7 @@ fn init_testing_globals() {
                 GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
                     .expect("init global config");
                 OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+                GlobalInstance::set(SecurityPolicyCacheManager::create());
             });
         });
     }

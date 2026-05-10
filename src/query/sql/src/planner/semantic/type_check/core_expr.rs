@@ -1570,7 +1570,7 @@ where A: super::TypeCheckAdapter
             };
         }
 
-        let mut result = None;
+        let mut predicate_levels = Vec::with_capacity(list.len().max(1).ilog2() as usize + 1);
         for item in list {
             let box (item, _) = self.resolve_core(arena, *item)?;
             let box (predicate, _) =
@@ -1578,6 +1578,54 @@ where A: super::TypeCheckAdapter
                     expr_scalar.clone(),
                     item,
                 ])?;
+            self.merge_or_level(span, &mut predicate_levels, predicate)?;
+        }
+
+        let result = self
+            .fold_or_levels(span, predicate_levels)?
+            .expect("IN list should not be empty");
+        let data_type = result.data_type()?;
+        if not {
+            self.resolve_scalar_function_call(span, "not", vec![], vec![result])
+        } else {
+            Ok(Box::new((result, data_type)))
+        }
+    }
+
+    fn merge_or_level(
+        &self,
+        span: Span,
+        predicate_levels: &mut Vec<Option<ScalarExpr>>,
+        mut predicate: ScalarExpr,
+    ) -> Result<()> {
+        let mut level = 0;
+
+        loop {
+            if predicate_levels.len() == level {
+                predicate_levels.push(Some(predicate));
+                return Ok(());
+            }
+
+            if let Some(left) = predicate_levels[level].take() {
+                let box (or_predicate, _) =
+                    self.resolve_scalar_function_call(span, "or", vec![], vec![left, predicate])?;
+                predicate = or_predicate;
+                level += 1;
+            } else {
+                predicate_levels[level] = Some(predicate);
+                return Ok(());
+            }
+        }
+    }
+
+    fn fold_or_levels(
+        &self,
+        span: Span,
+        predicate_levels: Vec<Option<ScalarExpr>>,
+    ) -> Result<Option<ScalarExpr>> {
+        let mut result = None;
+
+        for predicate in predicate_levels.into_iter().rev().flatten() {
             result = Some(match result {
                 None => predicate,
                 Some(acc) => {
@@ -1590,13 +1638,7 @@ where A: super::TypeCheckAdapter
             });
         }
 
-        let result = result.expect("IN list should not be empty");
-        let data_type = result.data_type()?;
-        if not {
-            self.resolve_scalar_function_call(span, "not", vec![], vec![result])
-        } else {
-            Ok(Box::new((result, data_type)))
-        }
+        Ok(result)
     }
 
     pub(super) fn resolve_core_function_params(

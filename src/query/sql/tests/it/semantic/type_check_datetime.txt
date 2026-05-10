@@ -53,4 +53,3 @@ sql: next_day(ts, friday)
 status: ok
 scalar: to_next_friday(ts (#5))
 type: Date NULL
-

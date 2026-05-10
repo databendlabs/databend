@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::sync::Arc;
 
 use databend_common_ast::parser::Dialect;
@@ -45,7 +46,8 @@ use crate::framework::golden::SqlTestCase;
 use crate::framework::golden::SqlTestOutcome;
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_header;
-use crate::framework::golden::write_case_outcome;
+use crate::framework::golden::write_case_outcome_body;
+use crate::framework::init_testing_globals;
 
 #[derive(Clone)]
 struct TestTypeCheckAdapter {
@@ -132,6 +134,7 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
 }
 
 async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
+    init_testing_globals();
     assert!(
         case.setup_sqls.is_empty(),
         "type_check tests use a dependency-only adapter and do not run setup SQL"
@@ -187,10 +190,13 @@ async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
 async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> {
     let mut file = open_golden_file("semantic", file_name)?;
 
-    for case in cases {
+    for (index, case) in cases.iter().enumerate() {
+        if index > 0 {
+            writeln!(file)?;
+        }
         write_case_header(&mut file, case)?;
         let outcome = type_check_case(case).await?;
-        write_case_outcome(&mut file, &outcome)?;
+        write_case_outcome_body(&mut file, &outcome)?;
     }
 
     Ok(())
@@ -198,6 +204,7 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
 
 #[test]
 fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
+    init_testing_globals();
     let adapter = BasicTypeCheckAdapter::scalar_from_settings(
         Settings::create(Tenant::new_literal("default")),
         FunctionContext::default(),
@@ -233,6 +240,7 @@ fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
 
 #[test]
 fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Result<()> {
+    init_testing_globals();
     let adapter = BasicTypeCheckAdapter::scalar_with_columns_from_settings(
         Settings::create(Tenant::new_literal("default")),
         FunctionContext::default(),

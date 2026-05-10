@@ -137,4 +137,3 @@ sql: try_base64_decode_string('ZGF0YQ==')
 status: ok
 scalar: CAST(64617461 AS String)
 type: String
-

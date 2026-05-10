@@ -30,6 +30,7 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::schema::TableIdent;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_sql::FullTypeCheckAdapter;
 use databend_common_sql::TypeChecker;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -55,7 +56,12 @@ impl AsyncSystemTable for FunctionsTable {
     ) -> Result<DataBlock> {
         let mut scalar_func_names: Vec<String> = BUILTIN_FUNCTIONS.registered_names();
         scalar_func_names.extend(
-            TypeChecker::all_sugar_functions()
+            TypeChecker::<FullTypeCheckAdapter>::all_special_functions()
+                .iter()
+                .map(|name| name.to_string()),
+        );
+        scalar_func_names.extend(
+            TypeChecker::<FullTypeCheckAdapter>::all_rewrite_functions()
                 .iter()
                 .map(|name| name.to_string()),
         );

@@ -19,7 +19,7 @@ use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
-use databend_common_sql::BasicTypeCheckPolicy;
+use databend_common_sql::BasicTypeCheckAdapter;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBinding;
 use databend_common_sql::Metadata;
@@ -83,14 +83,13 @@ fn resolve_expr(query_ctx: &Arc<QueryContext>, text: &str) -> Result<ScalarExpr>
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut bind_context = test_bind_context();
 
-    let policy = BasicTypeCheckPolicy::scalar_with_columns(query_ctx.as_ref())?;
-    let mut checker = TypeChecker::try_create_with_policy(
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(query_ctx.as_ref())?;
+    let mut checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        true,
     )?;
 
     let tokens = tokenize_sql(text)?;
