@@ -138,7 +138,7 @@ async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let settings = Settings::create(Tenant::new_literal("default"));
     let adapter = TestTypeCheckAdapter::new(settings);
     let tokens = tokenize_sql(case.sql)?;
-    let dialect = adapter.sql_dialect()?;
+    let dialect = adapter.settings().get_sql_dialect()?;
     let expr = parse_expr(&tokens, dialect)?;
 
     let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
@@ -205,7 +205,7 @@ fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = BindContext::new();
     let tokens = tokenize_sql("1 + 2")?;
-    let expr = parse_expr(&tokens, adapter.sql_dialect()?)?;
+    let expr = parse_expr(&tokens, adapter.settings().get_sql_dialect()?)?;
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
         adapter,
@@ -246,7 +246,7 @@ fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Res
         DataType::Number(NumberDataType::Int64),
     );
     let tokens = tokenize_sql("number + 1")?;
-    let expr = parse_expr(&tokens, adapter.sql_dialect()?)?;
+    let expr = parse_expr(&tokens, adapter.settings().get_sql_dialect()?)?;
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
         adapter,

@@ -268,7 +268,7 @@ where A: super::TypeCheckAdapter
         definition: &str,
         parameters: Vec<(String, DataType, ScalarExpr)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let settings = self.table_ctx().get_settings();
+        let settings = self.adapter.table_context().get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let sql_tokens = tokenize_sql(definition)?;
         let expr = parse_expr(&sql_tokens, sql_dialect)?;
@@ -291,7 +291,7 @@ where A: super::TypeCheckAdapter
 
         let box (mut scalar, data_type) = TypeChecker::try_create(
             &mut udf_context,
-            self.table_ctx().clone(),
+            self.adapter.table_context().clone(),
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
@@ -419,8 +419,10 @@ where A: super::TypeCheckAdapter
                     ))
                     .set_span(span));
                 };
-                let (stage_info, relative_path) =
-                    self.block_on(resolve_stage_location(self.table_ctx_ref(), &location))??;
+                let (stage_info, relative_path) = self.block_on(resolve_stage_location(
+                    self.adapter.table_context().as_ref(),
+                    &location,
+                ))??;
 
                 if !matches!(stage_info.stage_type, StageType::External) {
                     return Err(ErrorCode::SemanticError(format!(
@@ -486,7 +488,10 @@ where A: super::TypeCheckAdapter
         let display_name = format!("{}({})", udf_definition.handler, arg_names);
 
         self.bind_context.have_udf_server = true;
-        self.table_ctx().result_cache_state().set_cacheable(false);
+        self.adapter
+            .table_context()
+            .result_cache_state()
+            .set_cacheable(false);
         Ok(Box::new((
             UDFCall {
                 span,
@@ -525,7 +530,7 @@ where A: super::TypeCheckAdapter
             block_entries.push(entry);
         }
 
-        let settings = self.table_ctx().get_settings();
+        let settings = self.adapter.table_context().get_settings();
         let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
         let request_timeout = settings.get_external_server_request_timeout_secs()?;
 
@@ -533,17 +538,21 @@ where A: super::TypeCheckAdapter
             &udf_definition.address,
             connect_timeout,
             request_timeout,
-            &self.table_ctx().get_version().udf_client_user_agent(),
+            &self
+                .adapter
+                .table_context()
+                .get_version()
+                .udf_client_user_agent(),
         )?;
 
         let num_rows = 1;
         let mut client =
             UDFFlightClient::connect(&udf_definition.handler, endpoint, connect_timeout, num_rows)
                 .await?
-                .with_tenant(self.table_ctx().get_tenant().tenant_name())?
+                .with_tenant(self.adapter.table_context().get_tenant().tenant_name())?
                 .with_func_name(name)?
                 .with_handler_name(&udf_definition.handler)?
-                .with_query_id(&self.table_ctx().get_id())?
+                .with_query_id(&self.adapter.table_context().get_id())?
                 .with_headers(udf_definition.headers)?;
 
         let result = client
@@ -579,14 +588,15 @@ where A: super::TypeCheckAdapter
         };
 
         let provider = self.adapter.cloud_control_api_provider()?;
-        let tenant = self.table_ctx().get_tenant();
+        let tenant = self.adapter.table_context().get_tenant();
         let user = self
-            .table_ctx()
+            .adapter
+            .table_context()
             .get_current_user()?
             .identity()
             .display()
             .to_string();
-        let query_id = self.table_ctx().get_id();
+        let query_id = self.adapter.table_context().get_id();
         let mut cfg = build_client_config(
             tenant.tenant_name().to_string(),
             user,
@@ -635,8 +645,10 @@ where A: super::TypeCheckAdapter
             .map(|location| location.trim_start_matches('@').to_string())
             .collect::<Vec<_>>();
 
-        let stage_locations =
-            self.block_on(resolve_stage_locations(self.table_ctx_ref(), &locations))??;
+        let stage_locations = self.block_on(resolve_stage_locations(
+            self.adapter.table_context().as_ref(),
+            &locations,
+        ))??;
 
         self.block_on(async move {
             let mut results = Vec::with_capacity(stage_locations.len());
@@ -718,14 +730,15 @@ where A: super::TypeCheckAdapter
             }
         };
 
-        let (stage_info, module_path) = resolve_file_location(self.table_ctx_ref(), &file_location)
-            .await
-            .map_err(|err| {
-                ErrorCode::SemanticError(format!(
-                    "Failed to resolve code location {:?}: {}",
-                    code, err
-                ))
-            })?;
+        let (stage_info, module_path) =
+            resolve_file_location(self.adapter.table_context().as_ref(), &file_location)
+                .await
+                .map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to resolve code location {:?}: {}",
+                        code, err
+                    ))
+                })?;
 
         let op = init_stage_operator(&stage_info).map_err(|err| {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
@@ -820,7 +833,7 @@ where A: super::TypeCheckAdapter
             let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
                 ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
             })?;
-            let settings = self.table_ctx().get_settings();
+            let settings = self.adapter.table_context().get_settings();
             let import_assets = self.build_udf_cloud_imports(
                 &imports,
                 Duration::from_secs(settings.get_udf_cloud_import_presign_expire_secs()?),
@@ -861,7 +874,7 @@ where A: super::TypeCheckAdapter
             block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
 
         let imports_stage_info = self.block_on(resolve_stage_locations(
-            self.table_ctx_ref(),
+            self.adapter.table_context().as_ref(),
             &imports
                 .iter()
                 .map(|s| s.trim_start_matches('@').to_string())
@@ -881,7 +894,10 @@ where A: super::TypeCheckAdapter
         let display_name = format!("{}({})", &handler, arg_names);
 
         self.bind_context.have_udf_script = true;
-        self.table_ctx().result_cache_state().set_cacheable(false);
+        self.adapter
+            .table_context()
+            .result_cache_state()
+            .set_cacheable(false);
         Ok(Box::new((
             UDFCall {
                 span,
@@ -922,7 +938,7 @@ where A: super::TypeCheckAdapter
         let code_blob =
             block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
         let imports_stage_info = self.block_on(resolve_stage_locations(
-            self.table_ctx_ref(),
+            self.adapter.table_context().as_ref(),
             &imports
                 .iter()
                 .map(|s| s.trim_start_matches('@').to_string())
@@ -957,7 +973,10 @@ where A: super::TypeCheckAdapter
         );
 
         self.bind_context.have_udf_script = true;
-        self.table_ctx().result_cache_state().set_cacheable(false);
+        self.adapter
+            .table_context()
+            .result_cache_state()
+            .set_cacheable(false);
         Ok(Box::new((
             UDAFCall {
                 span,

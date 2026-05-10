@@ -74,11 +74,11 @@ where A: super::TypeCheckAdapter
             );
         }
 
-        let settings = self.table_ctx().get_settings();
+        let settings = self.adapter.table_context().get_settings();
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let mut type_checker = TypeChecker::try_create(
             lambda_context,
-            self.table_ctx().clone(),
+            self.adapter.table_context().clone(),
             &name_resolution_ctx,
             metadata,
             &[],

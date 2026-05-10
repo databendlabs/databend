@@ -489,10 +489,6 @@ pub trait TypeCheckAdapter {
         ))
     }
 
-    fn sql_dialect(&self) -> Result<Dialect> {
-        self.settings().get_sql_dialect()
-    }
-
     fn set_result_cache_uncacheable(&self);
 
     fn resolve_data_mask_policy(
@@ -509,10 +505,6 @@ pub trait TypeCheckAdapter {
     fn table_context(&self) -> &Arc<dyn TableContext> {
         panic!("type check adapter does not provide table context")
     }
-
-    fn table_context_ref(&self) -> &dyn TableContext {
-        self.table_context().as_ref()
-    }
 }
 
 impl TypeCheckAdapter for FullTypeCheckAdapter {
@@ -526,10 +518,6 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
         self.dependencies.aggregate_function_factory
-    }
-
-    fn check_core_expr_context(&self, _arena: &core_expr::CoreExprArena<'_>) -> Result<()> {
-        Ok(())
     }
 
     fn forbid_udf(&self) -> bool {
@@ -782,7 +770,7 @@ where A: TypeCheckAdapter
         aliases: &'a [(String, ScalarExpr)],
     ) -> Result<Self> {
         let func_ctx = adapter.function_context()?;
-        let dialect = adapter.sql_dialect()?;
+        let dialect = adapter.settings().get_sql_dialect()?;
         Ok(Self {
             bind_context,
             adapter,
@@ -859,14 +847,6 @@ where A: TypeCheckAdapter
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
-    fn table_ctx(&self) -> &Arc<dyn TableContext> {
-        self.adapter.table_context()
-    }
-
-    fn table_ctx_ref(&self) -> &dyn TableContext {
-        self.adapter.table_context_ref()
-    }
-
     #[recursive::recursive]
     pub fn resolve(&mut self, expr: &Expr) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut arena = self.core_expr_arena();

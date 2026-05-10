@@ -208,36 +208,54 @@ where A: super::TypeCheckAdapter
         }
 
         match (func_name, resolved_args.as_slice()) {
-            ("current_catalog", []) => self
-                .resolve_core_namespace_function(span, TypeCheckNamespaceFunction::CurrentCatalog),
+            ("current_catalog", []) => self.resolve_core_sugar_literal(
+                span,
+                self.adapter
+                    .resolve_namespace_function(TypeCheckNamespaceFunction::CurrentCatalog)?,
+            ),
             ("database" | "currentdatabase" | "current_database", []) => self
-                .resolve_core_namespace_function(span, TypeCheckNamespaceFunction::CurrentDatabase),
-            ("version", []) => {
-                self.resolve_core_session_function(span, TypeCheckSessionFunction::Version)
-            }
-            ("user" | "currentuser" | "current_user", []) => self
-                .resolve_core_authorization_function(
+                .resolve_core_sugar_literal(
                     span,
-                    TypeCheckAuthorizationFunction::CurrentUser,
+                    self.adapter
+                        .resolve_namespace_function(TypeCheckNamespaceFunction::CurrentDatabase)?,
                 ),
-            ("current_role", []) => self.resolve_core_authorization_function(
+            ("version", []) => self.resolve_core_sugar_literal(
                 span,
-                TypeCheckAuthorizationFunction::CurrentRole,
+                self.adapter
+                    .resolve_session_function(TypeCheckSessionFunction::Version)?,
             ),
-            ("current_secondary_roles", []) => self.resolve_core_authorization_function(
+            ("user" | "currentuser" | "current_user", []) => self.resolve_core_sugar_literal(
                 span,
-                TypeCheckAuthorizationFunction::CurrentSecondaryRoles,
+                self.adapter
+                    .resolve_authorization_function(TypeCheckAuthorizationFunction::CurrentUser)?,
             ),
-            ("current_available_roles", []) => self.resolve_core_authorization_function(
+            ("current_role", []) => self.resolve_core_sugar_literal(
                 span,
-                TypeCheckAuthorizationFunction::CurrentAvailableRoles,
+                self.adapter
+                    .resolve_authorization_function(TypeCheckAuthorizationFunction::CurrentRole)?,
             ),
-            ("connection_id", []) => {
-                self.resolve_core_session_function(span, TypeCheckSessionFunction::ConnectionId)
-            }
-            ("client_session_id", []) => {
-                self.resolve_core_session_function(span, TypeCheckSessionFunction::ClientSessionId)
-            }
+            ("current_secondary_roles", []) => self.resolve_core_sugar_literal(
+                span,
+                self.adapter.resolve_authorization_function(
+                    TypeCheckAuthorizationFunction::CurrentSecondaryRoles,
+                )?,
+            ),
+            ("current_available_roles", []) => self.resolve_core_sugar_literal(
+                span,
+                self.adapter.resolve_authorization_function(
+                    TypeCheckAuthorizationFunction::CurrentAvailableRoles,
+                )?,
+            ),
+            ("connection_id", []) => self.resolve_core_sugar_literal(
+                span,
+                self.adapter
+                    .resolve_session_function(TypeCheckSessionFunction::ConnectionId)?,
+            ),
+            ("client_session_id", []) => self.resolve_core_sugar_literal(
+                span,
+                self.adapter
+                    .resolve_session_function(TypeCheckSessionFunction::ClientSessionId)?,
+            ),
             ("timezone", []) => self.resolve_core_sugar_literal(
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
@@ -297,33 +315,6 @@ where A: super::TypeCheckAdapter
         )))
     }
 
-    fn resolve_core_namespace_function(
-        &self,
-        span: Span,
-        function: TypeCheckNamespaceFunction,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.resolve_core_sugar_literal(span, self.adapter.resolve_namespace_function(function)?)
-    }
-
-    fn resolve_core_session_function(
-        &self,
-        span: Span,
-        function: TypeCheckSessionFunction<'_>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.resolve_core_sugar_literal(span, self.adapter.resolve_session_function(function)?)
-    }
-
-    fn resolve_core_authorization_function(
-        &self,
-        span: Span,
-        function: TypeCheckAuthorizationFunction,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.resolve_core_sugar_literal(
-            span,
-            self.adapter.resolve_authorization_function(function)?,
-        )
-    }
-
     fn resolve_core_last_query_id(
         &mut self,
         span: Span,
@@ -348,9 +339,10 @@ where A: super::TypeCheckAdapter
             }
             check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
         };
-        self.resolve_core_session_function(
+        self.resolve_core_sugar_literal(
             span,
-            TypeCheckSessionFunction::LastQueryId(index as i32),
+            self.adapter
+                .resolve_session_function(TypeCheckSessionFunction::LastQueryId(index as i32))?,
         )
     }
 

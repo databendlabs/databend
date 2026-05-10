@@ -204,17 +204,21 @@ where A: super::TypeCheckAdapter
         };
 
         if !self.adapter.skip_sequence_check() {
-            let catalog = self.table_ctx().get_default_catalog()?;
+            let catalog = self.adapter.table_context().get_default_catalog()?;
             let req = GetSequenceReq {
-                ident: SequenceIdent::new(self.table_ctx().get_tenant(), sequence_name.clone()),
+                ident: SequenceIdent::new(
+                    self.adapter.table_context().get_tenant(),
+                    sequence_name.clone(),
+                ),
             };
 
             let visibility_checker = if self
-                .table_ctx()
+                .adapter
+                .table_context()
                 .get_settings()
                 .get_enable_experimental_sequence_privilege_check()?
             {
-                let ctx = self.table_ctx().clone();
+                let ctx = self.adapter.table_context().clone();
                 Some(self.block_on(async move {
                     ctx.get_visibility_checker(false, Object::Sequence).await
                 })??)
@@ -259,8 +263,8 @@ where A: super::TypeCheckAdapter
             )
             .set_span(span));
         };
-        let tenant = self.table_ctx().get_tenant();
-        let catalog = self.table_ctx().get_default_catalog()?;
+        let tenant = self.adapter.table_context().get_tenant();
+        let catalog = self.adapter.table_context().get_default_catalog()?;
 
         // Get dict_name and dict_meta.
         let (db_name, dict_name) = {
@@ -273,7 +277,7 @@ where A: super::TypeCheckAdapter
             }
             let db_name = match &dictionary.table {
                 Some(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
-                None => self.table_ctx().get_current_database(),
+                None => self.adapter.table_context().get_current_database(),
             };
             let dict_name = match &dictionary.column {
                 ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
@@ -321,8 +325,8 @@ where A: super::TypeCheckAdapter
         };
         let attr_field = dictionary.schema.field_with_name(attr_name)?;
         let attr_type: DataType = (&attr_field.data_type).into();
-        let default_value =
-            DefaultExprBinder::try_new(self.table_ctx().clone())?.get_scalar(attr_field)?;
+        let default_value = DefaultExprBinder::try_new(self.adapter.table_context().clone())?
+            .get_scalar(attr_field)?;
 
         // Get primary_key_value and check type.
         let primary_column_id = dictionary.primary_column_ids[0];
@@ -462,8 +466,11 @@ where A: super::TypeCheckAdapter
                 let stage_name = parse_stage_name(stage).map_err(|err| {
                     ErrorCode::SemanticError(err.message().to_string()).set_span(span)
                 })?;
-                let stage_info =
-                    self.resolve_stage_info_for_read_file(self.table_ctx_ref(), span, &stage_name)?;
+                let stage_info = self.resolve_stage_info_for_read_file(
+                    self.adapter.table_context().as_ref(),
+                    span,
+                    &stage_name,
+                )?;
                 read_file_arg.stage_name = Some(stage_name);
                 read_file_arg.stage_info = Some(Box::new(stage_info));
             }
