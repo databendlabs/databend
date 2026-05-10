@@ -139,7 +139,7 @@ pub(crate) fn init_testing_globals() {
                 GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
                     .expect("init global config");
                 OssLicenseManager::init("default".to_string()).expect("init oss license manager");
-                GlobalInstance::set(SecurityPolicyCacheManager::create());
+                SecurityPolicyCacheManager::init().unwrap();
             });
         });
     }

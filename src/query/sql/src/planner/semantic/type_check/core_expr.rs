@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
@@ -33,8 +34,12 @@ use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowDesc;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnBuilder;
 use databend_common_expression::ConstantFolder;
+use databend_common_expression::DataField;
+use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::Scalar;
+use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
@@ -59,9 +64,22 @@ use super::set_returning::set_returning_function_name;
 use super::special_function::CoreSpecialFunction;
 use super::window::CoreWindow;
 use super::window::CoreWindowDesc;
+use crate::ColumnBindingBuilder;
+use crate::ColumnSet;
+use crate::Visibility;
+use crate::binder::wrap_cast;
+use crate::optimizer::ir::RelExpr;
+use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::normalize_identifier;
+use crate::plans::Aggregate;
+use crate::plans::AggregateMode;
+use crate::plans::BoundColumnRef;
+use crate::plans::ConstantExpr;
+use crate::plans::ConstantTableScan;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::SubqueryComparisonOp;
+use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 
 #[derive(Clone, Copy)]
@@ -1545,6 +1563,18 @@ where A: super::TypeCheckAdapter
         list: &CoreExprArgs,
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let inlist_to_join_threshold = self.adapter.settings().get_inlist_to_join_threshold()?;
+        if list.len() >= inlist_to_join_threshold {
+            let box (expr_scalar, expr_ty) = self.resolve_core(arena, expr)?;
+            let box (subquery, data_type) =
+                self.resolve_core_in_list_as_subquery(arena, span, expr_scalar, expr_ty, list)?;
+            return if not {
+                self.resolve_scalar_function_call(span, "not", vec![], vec![subquery])
+            } else {
+                Ok(Box::new((subquery, data_type)))
+            };
+        }
+
         let box (expr_scalar, _) = self.resolve_core(arena, expr)?;
         let max_inlist_to_or = self.adapter.settings().get_max_inlist_to_or()? as usize;
 
@@ -1590,6 +1620,114 @@ where A: super::TypeCheckAdapter
         } else {
             Ok(Box::new((result, data_type)))
         }
+    }
+
+    fn resolve_core_in_list_as_subquery(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        child_scalar: ScalarExpr,
+        child_type: DataType,
+        list: &CoreExprArgs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let (list_scalars, list_types) = self.resolve_core_expr_args(arena, list)?;
+        let mut common_type = list_types[0].clone();
+        for data_type in list_types.iter().skip(1) {
+            let left_type = common_type.clone();
+            common_type = common_super_type(
+                left_type.clone(),
+                data_type.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            )
+            .ok_or_else(|| {
+                ErrorCode::SemanticError(format!(
+                    "{} and {} don't have common data type",
+                    left_type, data_type
+                ))
+                .set_span(span)
+            })?;
+        }
+
+        let mut builder = ColumnBuilder::with_capacity(&common_type, list_scalars.len());
+        for (scalar, data_type) in list_scalars.iter().zip(list_types.iter()) {
+            let scalar = if data_type != &common_type {
+                wrap_cast(scalar, &common_type)
+            } else {
+                scalar.clone()
+            };
+            let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = scalar else {
+                return Err(ErrorCode::SemanticError(
+                    "Values can't contain subquery, aggregate functions, window functions, or UDFs",
+                )
+                .set_span(span));
+            };
+            builder.push(value.as_ref());
+        }
+
+        let mut metadata = self.metadata.write();
+        let value_index = metadata.add_derived_column("col0".to_string(), common_type.clone());
+        drop(metadata);
+
+        let value_column = ColumnBindingBuilder::new(
+            "col0".to_string(),
+            value_index,
+            Box::new(common_type.clone()),
+            Visibility::Visible,
+        )
+        .build();
+        let mut columns = ColumnSet::new();
+        columns.insert(value_index);
+        let const_scan = SExpr::create_leaf(Arc::new(
+            ConstantTableScan {
+                values: vec![builder.build()],
+                num_rows: list_scalars.len(),
+                schema: DataSchemaRefExt::create(vec![DataField::new(
+                    &value_index.to_string(),
+                    common_type.clone(),
+                )]),
+                columns,
+            }
+            .into(),
+        ));
+
+        let distinct_const_scan = SExpr::create_unary(
+            Arc::new(
+                Aggregate {
+                    mode: AggregateMode::Initial,
+                    group_items: vec![ScalarItem {
+                        scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                            span: None,
+                            column: value_column.clone(),
+                        }),
+                        index: value_index,
+                    }],
+                    ..Default::default()
+                }
+                .into(),
+            ),
+            Arc::new(const_scan),
+        );
+
+        let mut data_type = common_type;
+        let rel_expr = RelExpr::with_s_expr(&distinct_const_scan);
+        let rel_prop = rel_expr.derive_relational_prop()?;
+        if child_type.is_nullable() {
+            data_type = data_type.wrap_nullable();
+        }
+        let subquery_expr = SubqueryExpr {
+            span,
+            subquery: Box::new(distinct_const_scan),
+            child_expr: Some(Box::new(child_scalar)),
+            compare_op: Some(SubqueryComparisonOp::Equal),
+            output_column: value_column,
+            projection_index: None,
+            data_type: Box::new(data_type),
+            typ: SubqueryType::Any,
+            outer_columns: rel_prop.outer_columns.clone(),
+            contain_agg: None,
+        };
+        let data_type = subquery_expr.output_data_type();
+        Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
     fn merge_or_level(

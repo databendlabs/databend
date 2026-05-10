@@ -202,8 +202,8 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
     Ok(())
 }
 
-#[test]
-fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
     init_testing_globals();
     let adapter = BasicTypeCheckAdapter::scalar_from_settings(
         Settings::create(Tenant::new_literal("default")),
@@ -238,8 +238,8 @@ fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Result<()> {
     init_testing_globals();
     let adapter = BasicTypeCheckAdapter::scalar_with_columns_from_settings(
         Settings::create(Tenant::new_literal("default")),
