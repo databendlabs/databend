@@ -117,11 +117,12 @@ mod date;
 mod lambda;
 mod like;
 mod literal;
+mod rewrite_function;
 mod search;
 mod set_returning;
+mod special_function;
 mod string;
 mod subquery;
-mod sugar;
 mod udf;
 mod variant;
 mod vector;
@@ -172,27 +173,6 @@ impl CoreExprContextRequirements {
             column_resolution: true,
             lambda_function: true,
             full_context: true,
-        }
-    }
-
-    fn require_sugar_function(&mut self, func_name: &str) {
-        match func_name {
-            "current_catalog"
-            | "database"
-            | "currentdatabase"
-            | "current_database"
-            | "version"
-            | "user"
-            | "currentuser"
-            | "current_user"
-            | "current_role"
-            | "current_secondary_roles"
-            | "current_available_roles"
-            | "connection_id"
-            | "client_session_id"
-            | "last_query_id"
-            | "getvariable" => self.full_context = true,
-            _ => {}
         }
     }
 
@@ -349,8 +329,10 @@ fn core_expr_context_requirements(
                 }
                 requirements.full_context = true;
             }
-            core_expr::CoreExpr::SugarFunction { func_name, .. } => {
-                requirements.require_sugar_function(func_name);
+            core_expr::CoreExpr::SpecialFunction { function, .. } => {
+                if function.requires_full_context() {
+                    requirements.full_context = true;
+                }
             }
             core_expr::CoreExpr::AggregateWindowFunction { .. }
             | core_expr::CoreExpr::GeneralWindowFunction { .. }
@@ -1006,8 +988,9 @@ impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
-        if TypeChecker::<FullTypeCheckAdapter>::all_sugar_functions()
+        if TypeChecker::<FullTypeCheckAdapter>::all_special_functions()
             .contains(&Ascii::new(func_name))
+            || rewrite_function::rewrite_function_name(func_name).is_some()
         {
             return false;
         }
@@ -1244,7 +1227,13 @@ where A: TypeCheckAdapter
                     .map(|ascii| ascii.into_inner().to_string()),
             )
             .chain(
-                TypeChecker::<FullTypeCheckAdapter>::all_sugar_functions()
+                TypeChecker::<FullTypeCheckAdapter>::all_special_functions()
+                    .iter()
+                    .cloned()
+                    .map(|ascii| ascii.into_inner().to_string()),
+            )
+            .chain(
+                rewrite_function::all_rewrite_functions()
                     .iter()
                     .cloned()
                     .map(|ascii| ascii.into_inner().to_string()),

@@ -450,35 +450,35 @@ async fn test_type_check_literals_and_collections() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_sugar_function_rewrites() -> Result<()> {
+async fn test_type_check_special_functions() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "current_catalog_rewrites_to_literal",
-            description: "A context sugar function should rewrite to a literal without needing full binder planning.",
+            description: "A context special function should rewrite to a literal without needing full binder planning.",
             setup_sqls: &[],
             sql: "current_catalog()",
         },
         SqlTestCase {
             name: "current_database_rewrites_to_literal",
-            description: "current_database() should use the TypeChecker sugar rewrite.",
+            description: "current_database() should use the TypeChecker special function path.",
             setup_sqls: &[],
             sql: "current_database()",
         },
         SqlTestCase {
             name: "version_rewrites_to_literal",
-            description: "version() should use the TypeChecker sugar rewrite.",
+            description: "version() should use the TypeChecker special function path.",
             setup_sqls: &[],
             sql: "version()",
         },
         SqlTestCase {
             name: "current_user_rewrites_to_literal",
-            description: "current_user() should use the TypeChecker sugar rewrite.",
+            description: "current_user() should use the TypeChecker special function path.",
             setup_sqls: &[],
             sql: "current_user()",
         },
         SqlTestCase {
             name: "current_role_rewrites_to_literal",
-            description: "current_role() should use the TypeChecker sugar rewrite.",
+            description: "current_role() should use the TypeChecker special function path.",
             setup_sqls: &[],
             sql: "current_role()",
         },
@@ -493,42 +493,6 @@ async fn test_type_check_sugar_function_rewrites() -> Result<()> {
             description: "connection_id() should rewrite from context state.",
             setup_sqls: &[],
             sql: "connection_id()",
-        },
-        SqlTestCase {
-            name: "nullif_rewrites_to_if",
-            description: "nullif(x, y) should rewrite to the IF expression shape.",
-            setup_sqls: &[],
-            sql: "nullif(number, delta)",
-        },
-        SqlTestCase {
-            name: "equal_null_rewrites_to_null_safe_if",
-            description: "equal_null(x, y) should use the explicit null-safe rewrite.",
-            setup_sqls: &[],
-            sql: "equal_null(number, delta)",
-        },
-        SqlTestCase {
-            name: "iff_alias_rewrites_to_if",
-            description: "iff(cond, x, y) should type check through the IF function.",
-            setup_sqls: &[],
-            sql: "iff(flag, text, pattern)",
-        },
-        SqlTestCase {
-            name: "ifnull_rewrites_to_if",
-            description: "ifnull(x, y) should rewrite through IS NULL and IF.",
-            setup_sqls: &[],
-            sql: "ifnull(text, pattern)",
-        },
-        SqlTestCase {
-            name: "nvl_alias_rewrites_to_if",
-            description: "nvl(x, y) should share the ifnull rewrite.",
-            setup_sqls: &[],
-            sql: "nvl(text, pattern)",
-        },
-        SqlTestCase {
-            name: "nvl2_rewrites_to_if",
-            description: "nvl2(x, y, z) should rewrite through IS NOT NULL and IF.",
-            setup_sqls: &[],
-            sql: "nvl2(text, pattern, 'fallback')",
         },
         SqlTestCase {
             name: "coalesce_rewrites_to_if_chain",
@@ -610,7 +574,51 @@ async fn test_type_check_sugar_function_rewrites() -> Result<()> {
         },
     ];
 
-    run_type_check_cases("type_check_sugar_functions.txt", &cases).await
+    run_type_check_cases("type_check_special_functions.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_rewrite_functions() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "nullif_rewrites_to_if",
+            description: "nullif(x, y) should rewrite to the IF expression shape.",
+            setup_sqls: &[],
+            sql: "nullif(number, delta)",
+        },
+        SqlTestCase {
+            name: "equal_null_rewrites_to_null_safe_if",
+            description: "equal_null(x, y) should use the explicit null-safe rewrite.",
+            setup_sqls: &[],
+            sql: "equal_null(number, delta)",
+        },
+        SqlTestCase {
+            name: "iff_alias_rewrites_to_if",
+            description: "iff(cond, x, y) should type check through the IF function.",
+            setup_sqls: &[],
+            sql: "iff(flag, text, pattern)",
+        },
+        SqlTestCase {
+            name: "ifnull_rewrites_to_if",
+            description: "ifnull(x, y) should rewrite through IS NULL and IF.",
+            setup_sqls: &[],
+            sql: "ifnull(text, pattern)",
+        },
+        SqlTestCase {
+            name: "nvl_alias_rewrites_to_if",
+            description: "nvl(x, y) should share the ifnull rewrite.",
+            setup_sqls: &[],
+            sql: "nvl(text, pattern)",
+        },
+        SqlTestCase {
+            name: "nvl2_rewrites_to_if",
+            description: "nvl2(x, y, z) should rewrite through IS NOT NULL and IF.",
+            setup_sqls: &[],
+            sql: "nvl2(text, pattern, 'fallback')",
+        },
+    ];
+
+    run_type_check_cases("type_check_rewrite_functions.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -850,7 +858,7 @@ async fn test_type_check_datetime_rewrites() -> Result<()> {
         },
         SqlTestCase {
             name: "date_trunc_month_from_sqllogictest_binds",
-            description: "The date_trunc(month, ts) form should resolve through the date truncation sugar path.",
+            description: "The date_trunc(month, ts) form should resolve through the date truncation rewrite path.",
             setup_sqls: &[],
             sql: "date_trunc(month, ts)",
         },

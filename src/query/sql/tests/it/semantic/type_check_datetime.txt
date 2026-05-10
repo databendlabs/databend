@@ -20,7 +20,7 @@ scalar: diff_days('2024-12-31', date (#6))
 type: Int64 NULL
 
 === date_trunc_month_from_sqllogictest_binds ===
-description: The date_trunc(month, ts) form should resolve through the date truncation sugar path.
+description: The date_trunc(month, ts) form should resolve through the date truncation rewrite path.
 sql: date_trunc(month, ts)
 status: ok
 scalar: to_start_of_month(ts (#5))

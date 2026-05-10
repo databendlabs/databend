@@ -1,33 +1,33 @@
 === current_catalog_rewrites_to_literal ===
-description: A context sugar function should rewrite to a literal without needing full binder planning.
+description: A context special function should rewrite to a literal without needing full binder planning.
 sql: current_catalog()
 status: ok
 scalar: 'default'
 type: String
 
 === current_database_rewrites_to_literal ===
-description: current_database() should use the TypeChecker sugar rewrite.
+description: current_database() should use the TypeChecker special function path.
 sql: current_database()
 status: ok
 scalar: 'default'
 type: String
 
 === version_rewrites_to_literal ===
-description: version() should use the TypeChecker sugar rewrite.
+description: version() should use the TypeChecker special function path.
 sql: version()
 status: ok
 scalar: ''
 type: String
 
 === current_user_rewrites_to_literal ===
-description: current_user() should use the TypeChecker sugar rewrite.
+description: current_user() should use the TypeChecker special function path.
 sql: current_user()
 status: ok
 scalar: '\'root\'@\'%\''
 type: String
 
 === current_role_rewrites_to_literal ===
-description: current_role() should use the TypeChecker sugar rewrite.
+description: current_role() should use the TypeChecker special function path.
 sql: current_role()
 status: ok
 scalar: ''
@@ -46,48 +46,6 @@ sql: connection_id()
 status: ok
 scalar: 'lite-conn'
 type: String
-
-=== nullif_rewrites_to_if ===
-description: nullif(x, y) should rewrite to the IF expression shape.
-sql: nullif(number, delta)
-status: ok
-scalar: if(eq(number (#0), delta (#3)), NULL, number (#0))
-type: Int64 NULL
-
-=== equal_null_rewrites_to_null_safe_if ===
-description: equal_null(x, y) should use the explicit null-safe rewrite.
-sql: equal_null(number, delta)
-status: ok
-scalar: if(is_not_null(eq(number (#0), delta (#3))), is_true(eq(number (#0), delta (#3))), and_filters(not(is_not_null(number (#0))), not(is_not_null(delta (#3)))))
-type: Boolean
-
-=== iff_alias_rewrites_to_if ===
-description: iff(cond, x, y) should type check through the IF function.
-sql: iff(flag, text, pattern)
-status: ok
-scalar: if(flag (#4), text (#1), pattern (#2))
-type: String NULL
-
-=== ifnull_rewrites_to_if ===
-description: ifnull(x, y) should rewrite through IS NULL and IF.
-sql: ifnull(text, pattern)
-status: ok
-scalar: if(not(is_not_null(text (#1))), pattern (#2), text (#1))
-type: String NULL
-
-=== nvl_alias_rewrites_to_if ===
-description: nvl(x, y) should share the ifnull rewrite.
-sql: nvl(text, pattern)
-status: ok
-scalar: if(not(is_not_null(text (#1))), pattern (#2), text (#1))
-type: String NULL
-
-=== nvl2_rewrites_to_if ===
-description: nvl2(x, y, z) should rewrite through IS NOT NULL and IF.
-sql: nvl2(text, pattern, 'fallback')
-status: ok
-scalar: if(is_not_null(text (#1)), pattern (#2), 'fallback')
-type: String NULL
 
 === coalesce_rewrites_to_if_chain ===
 description: coalesce should remove literal NULLs and rewrite to the IF chain.

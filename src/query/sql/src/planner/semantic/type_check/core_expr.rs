@@ -53,8 +53,10 @@ use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
+use super::rewrite_function::rewrite_function_name;
 use super::search::CoreSearchFunction;
 use super::set_returning::set_returning_function_name;
+use super::special_function::CoreSpecialFunction;
 use super::window::CoreWindow;
 use super::window::CoreWindowDesc;
 use crate::planner::semantic::normalize_identifier;
@@ -399,20 +401,6 @@ impl<'a> CoreExprArena<'a> {
         self.alloc(CoreExpr::Literal { span, value })
     }
 
-    pub(super) fn sugar_function(
-        &mut self,
-        span: Span,
-        func_name: &'static str,
-        args: &'a [Expr],
-    ) -> Result<CoreExprId> {
-        let args = self.lower_display_expr_args(args)?;
-        Ok(self.alloc(CoreExpr::SugarFunction {
-            span,
-            func_name,
-            args,
-        }))
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn aggregate_function(
         &mut self,
@@ -642,8 +630,9 @@ impl<'a> CoreExprArena<'a> {
         let func_name = normalized_func_name(&name.name);
 
         if !is_builtin_function(&func_name)
-            && !TypeChecker::<super::FullTypeCheckAdapter>::all_sugar_functions()
+            && !TypeChecker::<super::FullTypeCheckAdapter>::all_special_functions()
                 .contains(&Ascii::new(func_name.as_str()))
+            && rewrite_function_name(&func_name).is_none()
         {
             return self.runtime_call(span, name, args);
         }
@@ -753,14 +742,12 @@ impl<'a> CoreExprArena<'a> {
             && window.is_none()
             && lambda.is_none()
         {
-            if let Some(func_name) = sugar_function_name(&func_name) {
-                return if TypeChecker::<super::FullTypeCheckAdapter>::can_lower_core_sugar_function(
-                    func_name,
-                ) {
-                    self.lower_sugar_function(span, func_name, args)
-                } else {
-                    self.sugar_function(span, func_name, args)
-                };
+            if let Some(func_name) = rewrite_function_name(&func_name) {
+                return self.lower_rewrite_function(span, func_name, args);
+            }
+
+            if let Some(func_name) = special_function_name(&func_name) {
+                return self.special_function(span, func_name, args);
             }
 
             if let Some(func_name) = builtin_scalar_function_name(&func_name) {
@@ -1203,10 +1190,9 @@ pub(super) enum CoreExpr<'a> {
         expr: CoreExprId,
         target_type: TypeName,
     },
-    SugarFunction {
+    SpecialFunction {
         span: Span,
-        func_name: &'static str,
-        args: CoreSearchFunctionArgs,
+        function: CoreSpecialFunction,
     },
     AggregateFunction {
         display_name: String,
@@ -1335,11 +1321,7 @@ where A: super::TypeCheckAdapter
                 order_by,
             ),
             CoreExpr::ColumnRef { span, column } => self.resolve_column_ref(*span, column),
-            CoreExpr::SugarFunction {
-                span,
-                func_name,
-                args,
-            } => self.resolve_core_sugar_function(arena, *span, func_name, args),
+            CoreExpr::SpecialFunction { span, function } => function.resolve(self, arena, *span),
             CoreExpr::UdfCall { span, name, args } => {
                 self.resolve_core_udf_call(arena, *span, name, args)
             }
@@ -1438,11 +1420,12 @@ where A: super::TypeCheckAdapter
         func_name: &str,
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if TypeChecker::<super::FullTypeCheckAdapter>::all_sugar_functions()
+        if TypeChecker::<super::FullTypeCheckAdapter>::all_special_functions()
             .contains(&Ascii::new(func_name))
+            || rewrite_function_name(func_name).is_some()
         {
             return Err(ErrorCode::Internal(format!(
-                "sugar function {} should not be represented as core call",
+                "special function {} should not be represented as core call",
                 func_name
             )));
         }
@@ -1669,9 +1652,9 @@ fn general_lambda_function_name(func_name: &str) -> Option<&'static str> {
         .map(Ascii::into_inner)
 }
 
-fn sugar_function_name(func_name: &str) -> Option<&'static str> {
+fn special_function_name(func_name: &str) -> Option<&'static str> {
     let func_name = Ascii::new(func_name);
-    TypeChecker::<super::FullTypeCheckAdapter>::all_sugar_functions()
+    TypeChecker::<super::FullTypeCheckAdapter>::all_special_functions()
         .iter()
         .cloned()
         .find(|name| *name == func_name)

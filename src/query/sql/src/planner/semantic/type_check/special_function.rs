@@ -14,7 +14,6 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Literal;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
@@ -22,23 +21,103 @@ use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use smallvec::smallvec;
 use unicase::Ascii;
 
 use super::TypeCheckAuthorizationFunction;
 use super::TypeCheckNamespaceFunction;
 use super::TypeCheckSessionFunction;
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
 use super::core_expr::CoreExprId;
 use super::core_expr::CoreSearchFunctionArgs;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
+pub(super) struct CoreSpecialFunction {
+    func_name: &'static str,
+    kind: CoreSpecialFunctionKind,
+    args: CoreSearchFunctionArgs,
+}
+
+pub(super) enum CoreSpecialFunctionKind {
+    Namespace(CoreNamespaceSpecialFunction),
+    Session(CoreSessionSpecialFunction),
+    Authorization(CoreAuthorizationSpecialFunction),
+    Timezone,
+    LastQueryId,
+    Coalesce,
+    Decode,
+    ArraySort,
+    ArrayAggregate,
+    CastToVariant { is_try: bool },
+    GreatestOrLeast { ignore_nulls: bool },
+    GetVariable,
+    DecodeString,
+    Scalar,
+}
+
+pub(super) enum CoreNamespaceSpecialFunction {
+    CurrentCatalog,
+    CurrentDatabase,
+}
+
+pub(super) enum CoreSessionSpecialFunction {
+    Version,
+    ConnectionId,
+    ClientSessionId,
+}
+
+pub(super) enum CoreAuthorizationSpecialFunction {
+    User,
+    Role,
+    SecondaryRoles,
+    AvailableRoles,
+}
+
+impl CoreNamespaceSpecialFunction {
+    fn type_check_function(&self) -> TypeCheckNamespaceFunction {
+        match self {
+            CoreNamespaceSpecialFunction::CurrentCatalog => {
+                TypeCheckNamespaceFunction::CurrentCatalog
+            }
+            CoreNamespaceSpecialFunction::CurrentDatabase => {
+                TypeCheckNamespaceFunction::CurrentDatabase
+            }
+        }
+    }
+}
+
+impl CoreSessionSpecialFunction {
+    fn type_check_function(&self) -> TypeCheckSessionFunction<'static> {
+        match self {
+            CoreSessionSpecialFunction::Version => TypeCheckSessionFunction::Version,
+            CoreSessionSpecialFunction::ConnectionId => TypeCheckSessionFunction::ConnectionId,
+            CoreSessionSpecialFunction::ClientSessionId => {
+                TypeCheckSessionFunction::ClientSessionId
+            }
+        }
+    }
+}
+
+impl CoreAuthorizationSpecialFunction {
+    fn type_check_function(&self) -> TypeCheckAuthorizationFunction {
+        match self {
+            CoreAuthorizationSpecialFunction::User => TypeCheckAuthorizationFunction::CurrentUser,
+            CoreAuthorizationSpecialFunction::Role => TypeCheckAuthorizationFunction::CurrentRole,
+            CoreAuthorizationSpecialFunction::SecondaryRoles => {
+                TypeCheckAuthorizationFunction::CurrentSecondaryRoles
+            }
+            CoreAuthorizationSpecialFunction::AvailableRoles => {
+                TypeCheckAuthorizationFunction::CurrentAvailableRoles
+            }
+        }
+    }
+}
+
 impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
-    pub fn all_sugar_functions() -> &'static [Ascii<&'static str>] {
+    pub fn all_special_functions() -> &'static [Ascii<&'static str>] {
         static FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("current_catalog"),
             Ascii::new("database"),
@@ -54,15 +133,6 @@ impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
             Ascii::new("connection_id"),
             Ascii::new("client_session_id"),
             Ascii::new("timezone"),
-            Ascii::new("nullif"),
-            Ascii::new("iff"),
-            Ascii::new("ifnull"),
-            Ascii::new("nvl"),
-            Ascii::new("nvl2"),
-            Ascii::new("is_null"),
-            Ascii::new("isnull"),
-            Ascii::new("is_error"),
-            Ascii::new("error_or"),
             Ascii::new("coalesce"),
             Ascii::new("decode"),
             Ascii::new("last_query_id"),
@@ -76,7 +146,6 @@ impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
             Ascii::new("least_ignore_nulls"),
             Ascii::new("stream_has_data"),
             Ascii::new("getvariable"),
-            Ascii::new("equal_null"),
             Ascii::new("hex_decode_string"),
             Ascii::new("base64_decode_string"),
             Ascii::new("try_hex_decode_string"),
@@ -84,226 +153,193 @@ impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
         ];
         FUNCTIONS
     }
-
-    pub(super) fn can_lower_core_sugar_function(func_name: &str) -> bool {
-        static FUNCTIONS: &[Ascii<&'static str>] = &[
-            Ascii::new("nullif"),
-            Ascii::new("iff"),
-            Ascii::new("ifnull"),
-            Ascii::new("nvl"),
-            Ascii::new("nvl2"),
-            Ascii::new("is_null"),
-            Ascii::new("isnull"),
-            Ascii::new("is_error"),
-            Ascii::new("error_or"),
-            Ascii::new("equal_null"),
-        ];
-        FUNCTIONS.contains(&Ascii::new(func_name))
-    }
 }
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn lower_sugar_function(
+    pub(super) fn special_function(
         &mut self,
         span: Span,
         func_name: &'static str,
         args: &'a [Expr],
     ) -> Result<CoreExprId> {
-        let lowered = match (func_name, args) {
-            ("nullif", [arg_x, arg_y]) => {
-                let arg_x_eq = self.lower_ast_expr(arg_x)?;
-                let arg_y = self.lower_ast_expr(arg_y)?;
-                let eq = self.call(span, "eq", smallvec![arg_x_eq, arg_y]);
-                let null = self.literal(span, Literal::Null);
-                let arg_x = self.lower_ast_expr(arg_x)?;
-                Some(self.call(span, "if", smallvec![eq, null, arg_x]))
+        let kind = match func_name {
+            "current_catalog" => {
+                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentCatalog)
             }
-            ("equal_null", [arg_x, arg_y]) => {
-                let arg_x_eq = self.lower_ast_expr(arg_x)?;
-                let arg_y_eq = self.lower_ast_expr(arg_y)?;
-                let eq = self.call(span, "eq", smallvec![arg_x_eq, arg_y_eq]);
-                let eq_is_not_null = self.call(span, "is_not_null", smallvec![eq]);
-                let eq_is_true = self.call(span, "is_true", smallvec![eq]);
-
-                let arg_x = self.lower_ast_expr(arg_x)?;
-                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x]);
-                let arg_x_is_null = self.call(span, "not", smallvec![arg_x_is_not_null]);
-                let arg_y = self.lower_ast_expr(arg_y)?;
-                let arg_y_is_not_null = self.call(span, "is_not_null", smallvec![arg_y]);
-                let arg_y_is_null = self.call(span, "not", smallvec![arg_y_is_not_null]);
-                let both_null =
-                    self.call(span, "and_filters", smallvec![arg_x_is_null, arg_y_is_null]);
-
-                Some(self.call(span, "if", smallvec![eq_is_not_null, eq_is_true, both_null]))
+            "database" | "currentdatabase" | "current_database" => {
+                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase)
             }
-            ("iff", args) => {
-                let args = args
-                    .iter()
-                    .map(|arg| self.lower_ast_expr(arg))
-                    .collect::<Result<_>>()?;
-                Some(self.call(span, "if", args))
+            "version" => CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::Version),
+            "connection_id" => {
+                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::ConnectionId)
             }
-            ("ifnull" | "nvl", [arg_x, arg_y]) => {
-                let arg_x_null_check = self.lower_ast_expr(arg_x)?;
-                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x_null_check]);
-                let arg_x_is_null = self.call(span, "not", smallvec![arg_x_is_not_null]);
-                let arg_y = self.lower_ast_expr(arg_y)?;
-                let arg_x = self.lower_ast_expr(arg_x)?;
-                Some(self.call(span, "if", smallvec![arg_x_is_null, arg_y, arg_x]))
+            "client_session_id" => {
+                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::ClientSessionId)
             }
-            ("nvl2", [arg_x, arg_y, arg_z]) => {
-                let arg_x = self.lower_ast_expr(arg_x)?;
-                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x]);
-                let arg_y = self.lower_ast_expr(arg_y)?;
-                let arg_z = self.lower_ast_expr(arg_z)?;
-                Some(self.call(span, "if", smallvec![arg_x_is_not_null, arg_y, arg_z]))
+            "user" | "currentuser" | "current_user" => {
+                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::User)
             }
-            ("is_null" | "isnull", [arg_x]) => {
-                let arg_x = self.lower_ast_expr(arg_x)?;
-                let arg_x_is_not_null = self.call(span, "is_not_null", smallvec![arg_x]);
-                Some(self.call(span, "not", smallvec![arg_x_is_not_null]))
+            "current_role" => {
+                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::Role)
             }
-            ("is_error", [arg_x]) => {
-                let arg_x = self.lower_ast_expr(arg_x)?;
-                let arg_x_is_not_error = self.call(span, "is_not_error", smallvec![arg_x]);
-                Some(self.call(span, "not", smallvec![arg_x_is_not_error]))
+            "current_secondary_roles" => CoreSpecialFunctionKind::Authorization(
+                CoreAuthorizationSpecialFunction::SecondaryRoles,
+            ),
+            "current_available_roles" => CoreSpecialFunctionKind::Authorization(
+                CoreAuthorizationSpecialFunction::AvailableRoles,
+            ),
+            "timezone" => CoreSpecialFunctionKind::Timezone,
+            "last_query_id" => CoreSpecialFunctionKind::LastQueryId,
+            "coalesce" => CoreSpecialFunctionKind::Coalesce,
+            "decode" => CoreSpecialFunctionKind::Decode,
+            "array_sort" => CoreSpecialFunctionKind::ArraySort,
+            "array_aggregate" => CoreSpecialFunctionKind::ArrayAggregate,
+            "to_variant" => CoreSpecialFunctionKind::CastToVariant { is_try: false },
+            "try_to_variant" => CoreSpecialFunctionKind::CastToVariant { is_try: true },
+            "greatest" | "least" => CoreSpecialFunctionKind::GreatestOrLeast {
+                ignore_nulls: false,
+            },
+            "greatest_ignore_nulls" | "least_ignore_nulls" => {
+                CoreSpecialFunctionKind::GreatestOrLeast { ignore_nulls: true }
             }
-            ("error_or", args) => {
-                let mut new_args = CoreExprArgs::with_capacity(args.len() * 2 + 1);
-                for arg in args {
-                    let arg_error_check = self.lower_ast_expr(arg)?;
-                    let is_not_error = self.call(span, "is_not_error", smallvec![arg_error_check]);
-                    let arg = self.lower_ast_expr(arg)?;
-                    new_args.push(is_not_error);
-                    new_args.push(arg);
-                }
-                new_args.push(self.literal(span, Literal::Null));
-                Some(self.call(span, "if", new_args))
-            }
-            _ => None,
+            "getvariable" => CoreSpecialFunctionKind::GetVariable,
+            "hex_decode_string"
+            | "try_hex_decode_string"
+            | "base64_decode_string"
+            | "try_base64_decode_string" => CoreSpecialFunctionKind::DecodeString,
+            _ => CoreSpecialFunctionKind::Scalar,
         };
+        let function = CoreSpecialFunction {
+            func_name,
+            kind,
+            args: self.lower_display_expr_args(args)?,
+        };
+        Ok(self.alloc(CoreExpr::SpecialFunction { span, function }))
+    }
+}
 
-        lowered.ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "sugar function {func_name} should have been classified before core lowering"
-            ))
-        })
+impl CoreSpecialFunction {
+    pub(super) fn requires_full_context(&self) -> bool {
+        matches!(
+            self.kind,
+            CoreSpecialFunctionKind::Namespace(_)
+                | CoreSpecialFunctionKind::Session(_)
+                | CoreSpecialFunctionKind::Authorization(_)
+                | CoreSpecialFunctionKind::LastQueryId
+                | CoreSpecialFunctionKind::GetVariable
+        )
+    }
+
+    pub(super) fn resolve<'tc, A>(
+        &self,
+        type_checker: &mut TypeChecker<'tc, A>,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+    ) -> Result<Box<(ScalarExpr, DataType)>>
+    where
+        A: super::TypeCheckAdapter,
+    {
+        type_checker.resolve_special_function(arena, span, self)
     }
 }
 
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    pub(super) fn resolve_core_sugar_function(
+    fn resolve_special_function(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
-        args: &CoreSearchFunctionArgs,
+        function: &CoreSpecialFunction,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let mut resolved_args = Vec::with_capacity(args.len());
-        for (display, arg) in args {
+        let mut resolved_args = Vec::with_capacity(function.args.len());
+        for (display, arg) in &function.args {
             let box (scalar, data_type) = self.resolve_core(arena, *arg)?;
             resolved_args.push((display.as_str(), scalar, data_type));
         }
 
-        match (func_name, resolved_args.as_slice()) {
-            ("current_catalog", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter
-                    .resolve_namespace_function(TypeCheckNamespaceFunction::CurrentCatalog)?,
-            ),
-            ("database" | "currentdatabase" | "current_database", []) => self
-                .resolve_core_sugar_literal(
+        let args = resolved_args.as_slice();
+        match &function.kind {
+            CoreSpecialFunctionKind::Namespace(namespace_function) if args.is_empty() => self
+                .resolve_special_literal(
                     span,
                     self.adapter
-                        .resolve_namespace_function(TypeCheckNamespaceFunction::CurrentDatabase)?,
+                        .resolve_namespace_function(namespace_function.type_check_function())?,
                 ),
-            ("version", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter
-                    .resolve_session_function(TypeCheckSessionFunction::Version)?,
-            ),
-            ("user" | "currentuser" | "current_user", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter
-                    .resolve_authorization_function(TypeCheckAuthorizationFunction::CurrentUser)?,
-            ),
-            ("current_role", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter
-                    .resolve_authorization_function(TypeCheckAuthorizationFunction::CurrentRole)?,
-            ),
-            ("current_secondary_roles", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter.resolve_authorization_function(
-                    TypeCheckAuthorizationFunction::CurrentSecondaryRoles,
-                )?,
-            ),
-            ("current_available_roles", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter.resolve_authorization_function(
-                    TypeCheckAuthorizationFunction::CurrentAvailableRoles,
-                )?,
-            ),
-            ("connection_id", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter
-                    .resolve_session_function(TypeCheckSessionFunction::ConnectionId)?,
-            ),
-            ("client_session_id", []) => self.resolve_core_sugar_literal(
-                span,
-                self.adapter
-                    .resolve_session_function(TypeCheckSessionFunction::ClientSessionId)?,
-            ),
-            ("timezone", []) => self.resolve_core_sugar_literal(
+            CoreSpecialFunctionKind::Session(session_function) if args.is_empty() => self
+                .resolve_special_literal(
+                    span,
+                    self.adapter
+                        .resolve_session_function(session_function.type_check_function())?,
+                ),
+            CoreSpecialFunctionKind::Authorization(authorization_function) if args.is_empty() => {
+                self.resolve_special_literal(
+                    span,
+                    self.adapter.resolve_authorization_function(
+                        authorization_function.type_check_function(),
+                    )?,
+                )
+            }
+            CoreSpecialFunctionKind::Timezone if args.is_empty() => self.resolve_special_literal(
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
             ),
-            ("last_query_id", args) => self.resolve_core_last_query_id(span, args),
-            ("coalesce", args) => self.resolve_core_coalesce(span, args),
-            ("decode", args) => self.resolve_core_decode(span, args),
-            ("array_sort", args) => self.resolve_core_array_sort(span, args),
-            ("array_aggregate", args) => self.resolve_core_array_aggregate(span, args),
-            ("to_variant", [(_, scalar, data_type)]) => self
-                .resolve_cast_to_variant(span, data_type, scalar, false)
-                .unwrap_or_else(|| {
-                    self.resolve_scalar_function_call(span, "to_variant", vec![], vec![
-                        scalar.clone(),
-                    ])
-                }),
-            ("try_to_variant", [(_, scalar, data_type)]) => self
-                .resolve_cast_to_variant(span, data_type, scalar, true)
-                .unwrap_or_else(|| {
-                    self.resolve_scalar_function_call(span, "try_to_variant", vec![], vec![
-                        scalar.clone(),
-                    ])
-                }),
-            (name @ ("greatest" | "least"), args) => {
-                self.resolve_core_greatest_or_least(span, name, args, false)
+            CoreSpecialFunctionKind::LastQueryId => self.resolve_last_query_id(span, args),
+            CoreSpecialFunctionKind::Coalesce => self.resolve_coalesce(span, args),
+            CoreSpecialFunctionKind::Decode => self.resolve_decode(span, args),
+            CoreSpecialFunctionKind::ArraySort => self.resolve_array_sort(span, args),
+            CoreSpecialFunctionKind::ArrayAggregate => self.resolve_array_aggregate(span, args),
+            CoreSpecialFunctionKind::CastToVariant { is_try } => {
+                if let [(_, scalar, data_type)] = args {
+                    return self
+                        .resolve_cast_to_variant(span, data_type, scalar, *is_try)
+                        .unwrap_or_else(|| {
+                            self.resolve_scalar_function_call(
+                                span,
+                                function.func_name,
+                                vec![],
+                                vec![scalar.clone()],
+                            )
+                        });
+                }
+                self.resolve_special_scalar_function(span, function.func_name, args)
             }
-            (name @ ("greatest_ignore_nulls" | "least_ignore_nulls"), args) => {
-                self.resolve_core_greatest_or_least(span, name, args, true)
+            CoreSpecialFunctionKind::GreatestOrLeast { ignore_nulls } => {
+                self.resolve_greatest_or_least(span, function.func_name, args, *ignore_nulls)
             }
-            ("getvariable", [(_, scalar, _)]) => self.resolve_core_getvariable(span, scalar),
-            (
-                name @ ("hex_decode_string"
-                | "try_hex_decode_string"
-                | "base64_decode_string"
-                | "try_base64_decode_string"),
-                [(_, scalar, _)],
-            ) => self.resolve_core_decode_string_function(span, name, scalar),
-            _ => {
-                let scalars = resolved_args
-                    .into_iter()
-                    .map(|(_, scalar, _)| scalar)
-                    .collect();
-                self.resolve_scalar_function_call(span, func_name, vec![], scalars)
+            CoreSpecialFunctionKind::GetVariable => {
+                if let [(_, scalar, _)] = args {
+                    return self.resolve_get_variable(span, scalar);
+                }
+                self.resolve_special_scalar_function(span, function.func_name, args)
+            }
+            CoreSpecialFunctionKind::DecodeString => {
+                if let [(_, scalar, _)] = args {
+                    return self.resolve_decode_string(span, function.func_name, scalar);
+                }
+                self.resolve_special_scalar_function(span, function.func_name, args)
+            }
+            CoreSpecialFunctionKind::Scalar
+            | CoreSpecialFunctionKind::Namespace(_)
+            | CoreSpecialFunctionKind::Session(_)
+            | CoreSpecialFunctionKind::Authorization(_)
+            | CoreSpecialFunctionKind::Timezone => {
+                self.resolve_special_scalar_function(span, function.func_name, args)
             }
         }
     }
 
-    fn resolve_core_sugar_literal(
+    fn resolve_special_scalar_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        args: &[(&str, ScalarExpr, DataType)],
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let scalars = args.iter().map(|(_, scalar, _)| scalar.clone()).collect();
+        self.resolve_scalar_function_call(span, func_name, vec![], scalars)
+    }
+
+    fn resolve_special_literal(
         &self,
         span: Span,
         value: Scalar,
@@ -315,7 +351,7 @@ where A: super::TypeCheckAdapter
         )))
     }
 
-    fn resolve_core_last_query_id(
+    fn resolve_last_query_id(
         &mut self,
         span: Span,
         args: &[(&str, ScalarExpr, DataType)],
@@ -339,14 +375,14 @@ where A: super::TypeCheckAdapter
             }
             check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
         };
-        self.resolve_core_sugar_literal(
+        self.resolve_special_literal(
             span,
             self.adapter
                 .resolve_session_function(TypeCheckSessionFunction::LastQueryId(index as i32))?,
         )
     }
 
-    fn resolve_core_coalesce(
+    fn resolve_coalesce(
         &mut self,
         span: Span,
         args: &[(&str, ScalarExpr, DataType)],
@@ -395,7 +431,7 @@ where A: super::TypeCheckAdapter
         self.resolve_scalar_function_call(span, "if", vec![], new_args)
     }
 
-    fn resolve_core_decode(
+    fn resolve_decode(
         &mut self,
         span: Span,
         args: &[(&str, ScalarExpr, DataType)],
@@ -449,7 +485,7 @@ where A: super::TypeCheckAdapter
         self.resolve_scalar_function_call(span, "if", vec![], new_args)
     }
 
-    fn resolve_core_array_sort(
+    fn resolve_array_sort(
         &mut self,
         span: Span,
         args: &[(&str, ScalarExpr, DataType)],
@@ -517,7 +553,7 @@ where A: super::TypeCheckAdapter
         self.resolve_scalar_function_call(span, func_name, vec![], vec![args[0].1.clone()])
     }
 
-    fn resolve_core_array_aggregate(
+    fn resolve_array_aggregate(
         &mut self,
         span: Span,
         args: &[(&str, ScalarExpr, DataType)],
@@ -544,7 +580,7 @@ where A: super::TypeCheckAdapter
         self.resolve_scalar_function_call(span, &func_name, vec![], vec![args[0].1.clone()])
     }
 
-    fn resolve_core_greatest_or_least(
+    fn resolve_greatest_or_least(
         &mut self,
         span: Span,
         name: &str,
@@ -579,7 +615,7 @@ where A: super::TypeCheckAdapter
         ])
     }
 
-    fn resolve_core_getvariable(
+    fn resolve_get_variable(
         &self,
         span: Span,
         scalar: &ScalarExpr,
@@ -605,7 +641,7 @@ where A: super::TypeCheckAdapter
         ))
     }
 
-    fn resolve_core_decode_string_function(
+    fn resolve_decode_string(
         &self,
         span: Span,
         func_name: &str,
