@@ -36,6 +36,11 @@ pub struct FormatContext<'a> {
     pub profs: HashMap<u32, PlanProfile>,
     pub scan_id_to_runtime_filters: HashMap<IndexType, Vec<PhysicalRuntimeFilter>>,
     pub runtime_filter_reports: HashMap<IndexType, Vec<RuntimeFilterReport>>,
+    /// Mapping from the generated materialized-CTE temp table name
+    /// (e.g. `t$abc123`) back to the user-visible CTE name (`t`). Used by
+    /// the TableScan formatter to render `MaterializedCTERef: t` instead of
+    /// the internal temp-table scan when formatting the main query plan.
+    pub materialized_cte_temp_to_name: HashMap<String, String>,
 }
 
 pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {

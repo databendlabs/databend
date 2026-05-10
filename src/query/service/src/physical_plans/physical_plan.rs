@@ -360,6 +360,7 @@ impl PhysicalPlan {
             metadata,
             scan_id_to_runtime_filters: HashMap::new(),
             runtime_filter_reports: HashMap::new(),
+            materialized_cte_temp_to_name: HashMap::new(),
         };
 
         self.formatter()?.format(&mut context)

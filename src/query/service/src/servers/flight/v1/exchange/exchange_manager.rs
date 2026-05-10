@@ -827,20 +827,35 @@ impl DataExchangeManager {
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
+                let remote_query_profiles = statistics_receiver.query_profiles();
 
                 let statistics_receiver: Mutex<StatisticsReceiver> =
                     Mutex::new(statistics_receiver);
 
                 // Interrupting the execution of finished callback if network error
+                let query_ctx = ctx.clone();
                 build_res.main_pipeline.set_on_finished(basic_callback(
                     move |info: &ExecutionInfo| {
-                        let query_id = ctx.get_id();
+                        let query_id = query_ctx.get_id();
                         let mut statistics_receiver = statistics_receiver.lock();
 
                         statistics_receiver.shutdown(info.res.is_err());
-                        ctx.get_exchange_manager()
+                        query_ctx
+                            .get_exchange_manager()
                             .on_finished_query(&query_id, info.res.clone().err());
-                        statistics_receiver.wait_shutdown()
+                        let shutdown_res = statistics_receiver.wait_shutdown();
+                        let profiles = remote_query_profiles.read().clone();
+                        if !profiles.is_empty() {
+                            match info.profile_execution_id.as_deref() {
+                                Some(profile_execution_id) => query_ctx
+                                    .add_query_profiles_with_execution(
+                                        profile_execution_id,
+                                        &profiles,
+                                    ),
+                                None => query_ctx.add_query_profiles(&profiles),
+                            }
+                        }
+                        shutdown_res
                     },
                 ));
 

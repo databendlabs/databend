@@ -70,6 +70,7 @@ use crate::clusters::ClusterDiscovery;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::sessions::BuildInfoRef;
+use crate::sessions::QueryProfiles;
 use crate::sessions::Session;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::runtime_filter_state::RuntimeFilterState;
@@ -140,7 +141,7 @@ pub struct QueryContextShared {
     // Client User-Agent
     pub(super) user_agent: Arc<RwLock<String>>,
 
-    pub(super) query_profiles: Arc<RwLock<HashMap<Option<u32>, PlanProfile>>>,
+    query_profiles: Arc<Mutex<QueryProfiles>>,
 
     pub(super) runtime_filter_state: RuntimeFilterState,
 
@@ -172,6 +173,10 @@ pub struct QueryContextShared {
     pub(super) nodes_perf_counters: Arc<Mutex<HashMap<String, NodePerfCounters>>>,
 
     pub(super) materialized_cte_receivers: Arc<Mutex<HashMap<String, Vec<Receiver<DataBlock>>>>>,
+    // Capture slot for EXPLAIN / EXPLAIN ANALYZE of materialized CTE producers.
+    // Set by the outer explain interpreter before planning; populated by the
+    // inner CTAS interpreter; drained after formatting.
+    pub(super) materialized_cte_capture: crate::sessions::MaterializedCteCaptureSlot,
     // Temp tables created for recursive CTE cleanup.
     // This must be shared across QueryContext instances created from the same query,
     // otherwise cleanup hooks running on the parent context cannot see registrations
@@ -228,7 +233,7 @@ impl QueryContextShared {
             group_by_spill_progress: Arc::new(Progress::create()),
             window_partition_spill_progress: Arc::new(Progress::create()),
             query_cache_metrics: DataCacheMetrics::new(),
-            query_profiles: Arc::new(RwLock::new(HashMap::new())),
+            query_profiles: Arc::new(Mutex::new(QueryProfiles::default())),
             runtime_filter_state: Default::default(),
             merge_into_join: Default::default(),
             query_queued_duration: Arc::new(RwLock::new(Duration::from_secs(0))),
@@ -246,6 +251,7 @@ impl QueryContextShared {
             nodes_perf: Arc::new(Mutex::new(HashMap::new())),
             nodes_perf_counters: Arc::new(Mutex::new(HashMap::new())),
             materialized_cte_receivers: Arc::new(Mutex::new(HashMap::new())),
+            materialized_cte_capture: Default::default(),
             recursive_cte_temp_tables: Arc::new(RwLock::new(Vec::new())),
             logical_recursive_cte_runtime_ids: Arc::new(RwLock::new(HashMap::new())),
         }))
@@ -694,26 +700,56 @@ impl QueryContextShared {
     }
 
     pub fn get_query_profiles(&self) -> Vec<PlanProfile> {
-        if let Some(executor) = self.executor.read().upgrade() {
-            self.add_query_profiles(&executor.fetch_profiling(false));
+        let current_profiling = self.executor.read().upgrade().map(|executor| {
+            (
+                executor.profile_execution_id().to_string(),
+                executor.fetch_profiling(false),
+            )
+        });
+
+        let mut query_profiles = self.query_profiles.lock();
+        if let Some((profile_execution_id, profiling)) = current_profiling {
+            query_profiles.add_with_execution(&profile_execution_id, &profiling);
         }
 
-        self.query_profiles.read().values().cloned().collect()
+        query_profiles.get()
+    }
+
+    /// Return the normal EXPLAIN ANALYZE profile view for one execution,
+    /// overlaid with profiles collected in the current physical-plan namespace.
+    pub fn get_query_profiles_for_execution(
+        &self,
+        profile_execution_id: &str,
+    ) -> HashMap<u32, PlanProfile> {
+        self.query_profiles
+            .lock()
+            .get_for_execution(profile_execution_id)
+    }
+
+    /// Return only the profiles collected under a concrete execution id.
+    /// Used for materialized-CTE producer sections whose plan ids are isolated
+    /// from the outer query.
+    pub fn get_query_profiles_with_execution_id(
+        &self,
+        profile_execution_id: &str,
+    ) -> HashMap<u32, PlanProfile> {
+        self.query_profiles
+            .lock()
+            .get_with_execution_id(profile_execution_id)
     }
 
     pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
-        let mut merged_profiles = self.query_profiles.write();
+        self.query_profiles.lock().add(profiles);
+    }
 
-        for query_profile in profiles.values() {
-            match merged_profiles.entry(query_profile.id) {
-                Entry::Vacant(v) => {
-                    v.insert(query_profile.clone());
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().merge(query_profile);
-                }
-            };
-        }
+    pub fn add_query_profiles_with_execution(
+        &self,
+        profile_execution_id: &str,
+        profiles: &HashMap<u32, PlanProfile>,
+    ) {
+        self.query_profiles
+            .lock()
+            .add_with_execution(profile_execution_id, profiles);
     }
 
     pub fn get_query_execution_stats(&self) -> Option<ExecutorStatsSnapshot> {

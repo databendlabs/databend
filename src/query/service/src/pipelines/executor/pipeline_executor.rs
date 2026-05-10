@@ -199,13 +199,21 @@ impl PipelineExecutor {
                 match may_error {
                     None => {
                         let mut finished_chain = query_wrapper.on_finished_chain.lock();
-                        let info = ExecutionInfo::create(Ok(()), self.fetch_profiling(true));
+                        let info = ExecutionInfo::create_with_profile_execution_id(
+                            Ok(()),
+                            self.fetch_profiling(true),
+                            self.profile_execution_id().to_string(),
+                        );
                         finished_chain.apply(info)
                     }
                     Some(cause) => {
                         let mut finished_chain = query_wrapper.on_finished_chain.lock();
                         let profiling = self.fetch_profiling(true);
-                        let info = ExecutionInfo::create(Err(cause.clone()), profiling);
+                        let info = ExecutionInfo::create_with_profile_execution_id(
+                            Err(cause.clone()),
+                            profiling,
+                            self.profile_execution_id().to_string(),
+                        );
                         finished_chain.apply(info).and_then(|_| Err(cause))
                     }
                 }
@@ -285,6 +293,13 @@ impl PipelineExecutor {
                     .fetch_profiling(Some(v.settings.executor_node_id.clone())),
                 false => v.graph.fetch_profiling(None),
             },
+        }
+    }
+
+    pub fn profile_execution_id(&self) -> &str {
+        match self {
+            PipelineExecutor::QueryPipelineExecutor(executor) => executor.profile_execution_id(),
+            PipelineExecutor::QueriesPipelineExecutor(v) => &v.settings.profile_execution_id,
         }
     }
 

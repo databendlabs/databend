@@ -37,11 +37,33 @@ pub enum CallbackType {
 pub struct ExecutionInfo {
     pub res: Result<()>,
     pub profiling: HashMap<u32, PlanProfile>,
+    // Identifies the executor instance that produced `profiling`. When set,
+    // the finish hook routes the batch through per-execution offset remapping
+    // (see `QueryProfiles::add_with_execution`) so plan_ids from multiple
+    // executors sharing a QueryContext (outer query + nested CTAS + CTE
+    // sub-pipelines) don't collide.
+    pub profile_execution_id: Option<String>,
 }
 
 impl ExecutionInfo {
     pub fn create(res: Result<()>, profiling: HashMap<u32, PlanProfile>) -> ExecutionInfo {
-        ExecutionInfo { res, profiling }
+        ExecutionInfo {
+            res,
+            profiling,
+            profile_execution_id: None,
+        }
+    }
+
+    pub fn create_with_profile_execution_id(
+        res: Result<()>,
+        profiling: HashMap<u32, PlanProfile>,
+        profile_execution_id: String,
+    ) -> ExecutionInfo {
+        ExecutionInfo {
+            res,
+            profiling,
+            profile_execution_id: Some(profile_execution_id),
+        }
     }
 }
 

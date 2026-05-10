@@ -63,11 +63,11 @@ use crate::pipelines::executor::QueryPipelineExecutor;
 use crate::schedulers::Fragmenter;
 use crate::schedulers::QueryFragmentsActions;
 use crate::schedulers::build_query_pipeline;
+use crate::sessions::CapturedCteExecution;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextRuntimeFilter;
 use crate::sessions::TableContextSettings;
 use crate::sql::optimizer::ir::SExpr;
@@ -185,6 +185,7 @@ impl Interpreter for ExplainInterpreter {
                         metadata: &metadata,
                         scan_id_to_runtime_filters: HashMap::new(),
                         runtime_filter_reports: HashMap::new(),
+                        materialized_cte_temp_to_name: HashMap::new(),
                     };
 
                     let formatter = plan.formatter()?;
@@ -480,6 +481,11 @@ impl ExplainInterpreter {
         mutation_build_info: Option<MutationBuildInfo>,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
+        // The materialized-CTE capture slot was opened by the binder before
+        // binding the inner statement (so that producer CTAS runs executed
+        // during binding are captured). We just read it back here.
+        let capture_slot = self.ctx.materialized_cte_capture();
+
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         if let Some(build_info) = mutation_build_info {
             builder.set_mutation_build_info(build_info);
@@ -497,6 +503,18 @@ impl ExplainInterpreter {
 
         let runtime_filter_reports = self.ctx.runtime_filter_reports();
 
+        // Take all captured CTE producers BEFORE we format the main plan. We
+        // also build a temp-table -> cte-name map so the main plan renders
+        // scans of those temp tables as `MaterializedCTERef`.
+        let captured = capture_slot
+            .finish()
+            .map(|c| c.into_parts())
+            .unwrap_or_default();
+        let temp_to_name: HashMap<String, String> = captured
+            .iter()
+            .map(|c| (c.temp_table_name.clone(), c.cte_name.clone()))
+            .collect();
+
         let result = match self.partial {
             true => {
                 let metadata = metadata.read();
@@ -505,6 +523,7 @@ impl ExplainInterpreter {
                     metadata: &metadata,
                     scan_id_to_runtime_filters: HashMap::new(),
                     runtime_filter_reports: runtime_filter_reports.clone(),
+                    materialized_cte_temp_to_name: temp_to_name.clone(),
                 };
 
                 let formatter = plan.formatter()?;
@@ -518,10 +537,17 @@ impl ExplainInterpreter {
                     metadata: &metadata,
                     scan_id_to_runtime_filters: HashMap::new(),
                     runtime_filter_reports: runtime_filter_reports.clone(),
+                    materialized_cte_temp_to_name: temp_to_name.clone(),
                 };
                 let formatter = plan.formatter()?;
                 let format_node = formatter.dispatch(&mut context)?;
-                format_node.format_pretty()?
+                let mut sections = vec![format_node.format_pretty()?];
+                sections.extend(format_captured_cte_sections(
+                    &captured,
+                    &temp_to_name,
+                    Some(&self.ctx),
+                )?);
+                sections.join("")
             }
         };
 
@@ -545,6 +571,8 @@ impl ExplainInterpreter {
         let settings = self.ctx.get_settings();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
         let settings = ExecutorSettings::try_create(self.ctx.clone())?;
+
+        let profile_execution_id = settings.profile_execution_id.clone();
         let ctx = self.ctx.clone();
         build_res.main_pipeline.set_on_finished(always_callback(
             QueryFinishHooks::nested_with_hooks().into_callback(ctx.clone()),
@@ -565,11 +593,7 @@ impl ExplainInterpreter {
         }
         Ok(self
             .ctx
-            .get_query_profiles()
-            .into_iter()
-            .filter(|x| x.id.is_some())
-            .map(|x| (x.id.unwrap(), x))
-            .collect::<HashMap<_, _>>())
+            .get_query_profiles_for_execution(&profile_execution_id))
     }
 
     async fn explain_query(
@@ -580,6 +604,11 @@ impl ExplainInterpreter {
         formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
+        // If a capture slot is active, render captured materialized CTE
+        // producers alongside the main plan. Plain EXPLAIN normally has no
+        // active capture and falls back to formatting the main plan below.
+        let capture_slot = self.ctx.materialized_cte_capture();
+
         // If `formatted_ast` is Some, it means we may use query result cache.
         // If we use result cache for this query,
         // we should not use `dry_run` mode to build the physical plan.
@@ -587,8 +616,43 @@ impl ExplainInterpreter {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
         let mut plan = builder.build(s_expr, bind_context.column_set()).await?;
         self.inject_pruned_partitions_stats(&mut plan, metadata)?;
-        self.explain_physical_plan(&plan, metadata, formatted_ast)
-            .await
+
+        let captured = capture_slot
+            .finish()
+            .map(|c| c.into_parts())
+            .unwrap_or_default();
+
+        if captured.is_empty() {
+            return self
+                .explain_physical_plan(&plan, metadata, formatted_ast)
+                .await;
+        }
+
+        let temp_to_name: HashMap<String, String> = captured
+            .iter()
+            .map(|c| (c.temp_table_name.clone(), c.cte_name.clone()))
+            .collect();
+
+        let metadata_guard = metadata.read();
+        let mut main_context = FormatContext {
+            profs: HashMap::new(),
+            metadata: &metadata_guard,
+            scan_id_to_runtime_filters: HashMap::new(),
+            runtime_filter_reports: HashMap::new(),
+            materialized_cte_temp_to_name: temp_to_name.clone(),
+        };
+        let formatter = plan.formatter()?;
+        let mut sections = vec![formatter.dispatch(&mut main_context)?.format_pretty()?];
+        sections.extend(format_captured_cte_sections(
+            &captured,
+            &temp_to_name,
+            None,
+        )?);
+
+        let joined = sections.join("");
+        let line_split_result: Vec<&str> = joined.lines().collect();
+        let formatted_plan = StringType::from_data(line_split_result);
+        Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
     async fn explain_merge_fragments(
@@ -679,4 +743,43 @@ impl ExplainInterpreter {
         }
         Ok(None)
     }
+}
+
+/// Format captured materialized CTE producers into pretty-printed sections.
+///
+/// When `ctx` is `Some`, profiles are fetched per-CTE from the query context
+/// (the EXPLAIN ANALYZE path). When `None`, empty profiles are used (the plain
+/// EXPLAIN path).
+fn format_captured_cte_sections(
+    captured: &[CapturedCteExecution],
+    temp_to_name: &HashMap<String, String>,
+    ctx: Option<&Arc<QueryContext>>,
+) -> Result<Vec<String>> {
+    let mut sections = Vec::with_capacity(captured.len());
+    for cte in captured {
+        let cte_metadata = cte.metadata.read();
+        let cte_profs = match ctx {
+            Some(ctx) => cte
+                .profile_execution_id
+                .as_deref()
+                .map(|id| ctx.get_query_profiles_with_execution_id(id))
+                .unwrap_or_default(),
+            None => HashMap::new(),
+        };
+        let mut cte_context = FormatContext {
+            profs: cte_profs,
+            metadata: &cte_metadata,
+            scan_id_to_runtime_filters: HashMap::new(),
+            runtime_filter_reports: HashMap::new(),
+            materialized_cte_temp_to_name: temp_to_name.clone(),
+        };
+        let formatter = cte.plan.formatter()?;
+        let format_node = formatter.dispatch(&mut cte_context)?;
+        let tree =
+            FormatTreeNode::with_children(format!("MaterializedCTE: {}", cte.cte_name), vec![
+                format_node,
+            ]);
+        sections.push(tree.format_pretty()?);
+    }
+    Ok(sections)
 }

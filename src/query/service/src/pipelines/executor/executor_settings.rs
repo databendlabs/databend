@@ -18,12 +18,17 @@ use std::time::Duration;
 use databend_common_base::runtime::PerfEvent;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+use uuid::Uuid;
 
 use crate::sessions::TableContext;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {
     pub query_id: Arc<String>,
+    // Unique per executor instance. The finish hook carries
+    // this id along with the profile batch so QueryProfiles can map
+    // executor-local plan_ids into a disjoint global id range per execution
+    pub profile_execution_id: String,
     pub max_threads: u64,
     pub enable_queries_executor: bool,
     pub max_execute_time_in_seconds: Duration,
@@ -54,6 +59,7 @@ impl ExecutorSettings {
         Ok(ExecutorSettings {
             enable_queries_executor,
             query_id: Arc::new(query_id),
+            profile_execution_id: Uuid::new_v4().to_string(),
             max_execute_time_in_seconds: Duration::from_secs(max_execute_time_in_seconds),
             max_threads,
             executor_node_id: ctx.get_cluster().local_id.clone(),

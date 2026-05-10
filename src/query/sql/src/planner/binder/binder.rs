@@ -210,6 +210,11 @@ impl Binder {
                         "[SQL-BINDER] Invalid statement: nested EXPLAIN not supported",
                     ));
                 }
+                // Open the materialized-CTE capture slot BEFORE binding.
+                // Binding drives `m_cte_to_temp_table` → CTAS execution, so
+                // the slot must already be active when that CTAS fires,
+                // otherwise the producer plan + profile snapshots are lost.
+                self.ctx.begin_materialized_cte_capture();
                 let plan = self.bind_statement(bind_context, query).await?;
                 Plan::ExplainAnalyze {
                     partial: *partial,

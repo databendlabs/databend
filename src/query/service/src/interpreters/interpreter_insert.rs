@@ -259,9 +259,31 @@ impl Interpreter for InsertInterpreter {
                 };
 
                 insert_select_plan.adjust_plan_id(&mut 0);
+
+                let capture_slot = self.ctx.materialized_cte_capture();
+                if capture_slot.is_active() {
+                    capture_slot.set_pending(crate::sessions::PendingCtasCapture {
+                        plan: insert_select_plan.clone(),
+                        metadata: metadata.clone(),
+                        profile_execution_id: None,
+                    });
+                }
+
                 let mut build_res =
                     build_query_pipeline_without_render_result_set(&self.ctx, &insert_select_plan)
                         .await?;
+
+                if capture_slot.is_active() {
+                    let slot = capture_slot.clone();
+                    build_res.main_pipeline.lift_on_finished(
+                        move |info: &databend_common_pipeline::core::ExecutionInfo| {
+                            slot.with_pending(|p| {
+                                p.profile_execution_id = info.profile_execution_id.clone();
+                            });
+                            Ok(())
+                        },
+                    );
+                }
 
                 table.commit_insertion(
                     self.ctx.clone(),

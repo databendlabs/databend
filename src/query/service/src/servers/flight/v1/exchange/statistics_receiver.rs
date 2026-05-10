@@ -13,14 +13,17 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use databend_common_base::JoinHandle;
 use databend_common_base::runtime::Runtime;
 use databend_common_exception::Result;
+use databend_common_pipeline::core::PlanProfile;
 use futures_util::future::Either;
 use futures_util::future::select;
+use parking_lot::RwLock;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::broadcast::channel;
 
@@ -32,13 +35,13 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sessions::TableContextPartitionStats;
 use crate::sessions::TableContextPerf;
-use crate::sessions::TableContextQueryProfile;
 use crate::sessions::TableContextTelemetry;
 
 pub struct StatisticsReceiver {
     _runtime: Runtime,
     shutdown_tx: Option<Sender<bool>>,
     exchange_handler: Vec<JoinHandle<Result<()>>>,
+    query_profiles: Arc<RwLock<HashMap<u32, PlanProfile>>>,
 }
 
 impl StatisticsReceiver {
@@ -49,6 +52,7 @@ impl StatisticsReceiver {
         let (shutdown_tx, _shutdown_rx) = channel(2);
         let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
+        let query_profiles = Arc::new(RwLock::new(HashMap::new()));
 
         for (source_target, exchange) in statistics_exchanges.into_iter() {
             let rx = exchange.convert_to_receiver();
@@ -56,6 +60,7 @@ impl StatisticsReceiver {
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
                 let node_memory_updater = ctx.get_node_memory_updater(&source_target);
+                let query_profiles = query_profiles.clone();
 
                 async move {
                     let mut shutdown_rx = shutdown_rx;
@@ -73,6 +78,7 @@ impl StatisticsReceiver {
                                     &ctx,
                                     &source_target,
                                     &node_memory_updater,
+                                    &query_profiles,
                                     recv.await,
                                 ) {
                                     Ok(true) => {
@@ -87,6 +93,7 @@ impl StatisticsReceiver {
                                             &ctx,
                                             &source_target,
                                             &node_memory_updater,
+                                            &query_profiles,
                                             rx.recv().await,
                                         ) {
                                             Ok(true) => {
@@ -107,6 +114,7 @@ impl StatisticsReceiver {
                                     &ctx,
                                     &source_target,
                                     &node_memory_updater,
+                                    &query_profiles,
                                     res,
                                 ) {
                                     Ok(true) => {
@@ -132,13 +140,19 @@ impl StatisticsReceiver {
             exchange_handler,
             _runtime: runtime,
             shutdown_tx: Some(shutdown_tx),
+            query_profiles,
         })
+    }
+
+    pub fn query_profiles(&self) -> Arc<RwLock<HashMap<u32, PlanProfile>>> {
+        self.query_profiles.clone()
     }
 
     fn recv_data(
         ctx: &Arc<QueryContext>,
         source_target: &str,
         node_memory_usage: &Arc<MemoryUpdater>,
+        query_profiles: &Arc<RwLock<HashMap<u32, PlanProfile>>>,
         recv_data: Result<Option<DataPacket>>,
     ) -> Result<bool> {
         match recv_data {
@@ -167,7 +181,17 @@ impl StatisticsReceiver {
                 Ok(false)
             }
             Ok(Some(DataPacket::QueryProfiles(profiles))) => {
-                ctx.add_query_profiles(&profiles);
+                let mut merged_profiles = query_profiles.write();
+                for (id, profile) in profiles {
+                    match merged_profiles.entry(id) {
+                        Entry::Vacant(v) => {
+                            v.insert(profile);
+                        }
+                        Entry::Occupied(mut v) => {
+                            v.get_mut().merge(&profile);
+                        }
+                    };
+                }
                 Ok(false)
             }
             Ok(Some(DataPacket::CopyStatus(status))) => {

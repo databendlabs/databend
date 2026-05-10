@@ -220,6 +220,278 @@ HashJoin
     ├── apply join filters: [#0]
     └── estimated rows: 6.00
 
+query T
+explain analyze WITH RECURSIVE t(n) AS (SELECT 5 UNION ALL SELECT n + 1 FROM t WHERE n < 9) SELECT * FROM t;
+----
+UnionAll(recursive cte)
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── bytes scanned: <slt:ignore>
+├── output columns: <slt:ignore>
+├── estimated rows: <slt:ignore>
+├── EvalScalar
+│   ├── cpu time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── output columns: <slt:ignore>
+│   ├── expressions: <slt:ignore>
+│   ├── estimated rows: <slt:ignore>
+│   └── DummyTableScan
+│       ├── cpu time: <slt:ignore>
+│       ├── output rows: <slt:ignore>
+│       ├── output bytes: <slt:ignore>
+│       └── bytes scanned: <slt:ignore>
+└── EvalScalar
+    ├── cpu time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── output columns: <slt:ignore>
+    ├── expressions: <slt:ignore>
+    ├── estimated rows: <slt:ignore>
+    └── Filter
+        ├── cpu time: <slt:ignore>
+        ├── output rows: <slt:ignore>
+        ├── output bytes: <slt:ignore>
+        ├── output columns: <slt:ignore>
+        ├── filters: <slt:ignore>
+        ├── estimated rows: <slt:ignore>
+        └── RecursiveCteScan
+            ├── cpu time: <slt:ignore>
+            ├── wait time: <slt:ignore>
+            ├── output rows: <slt:ignore>
+            ├── output bytes: <slt:ignore>
+            └── bytes scanned: <slt:ignore>
+
+query T
+EXPLAIN ANALYZE WITH t1 AS ( SELECT number % 5 AS a, COUNT(*) AS cnt, SUM(number) AS total FROM numbers(100) GROUP BY number % 5 ), t2 AS ( SELECT number AS b FROM numbers(20) ORDER BY number DESC LIMIT 10 ) SELECT t1.a, t1.cnt, t1.total, t2.b FROM t1 JOIN t2 ON t1.a = t2.b ORDER BY t1.a;
+----
+Sort(Single)
+├── cpu time: <slt:ignore>
+├── output columns: <slt:ignore>
+├── sort keys: <slt:ignore>
+├── estimated rows: <slt:ignore>
+└── HashJoin
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output columns: <slt:ignore>
+    ├── join type: <slt:ignore>
+    ├── build keys: <slt:ignore>
+    ├── probe keys: <slt:ignore>
+    ├── keys is null equal: <slt:ignore>
+    ├── filters: <slt:ignore>
+    ├── estimated rows: <slt:ignore>
+    ├── Limit(Build)
+    │   ├── cpu time: <slt:ignore>
+    │   ├── output rows: <slt:ignore>
+    │   ├── output bytes: <slt:ignore>
+    │   ├── output columns: <slt:ignore>
+    │   ├── limit: <slt:ignore>
+    │   ├── offset: <slt:ignore>
+    │   ├── estimated rows: <slt:ignore>
+    │   └── Sort(Single)
+    │       ├── cpu time: <slt:ignore>
+    │       ├── output rows: <slt:ignore>
+    │       ├── output bytes: <slt:ignore>
+    │       ├── output columns: <slt:ignore>
+    │       ├── sort keys: <slt:ignore>
+    │       ├── estimated rows: <slt:ignore>
+    │       └── TableScan
+    │           ├── cpu time: <slt:ignore>
+    │           ├── output rows: <slt:ignore>
+    │           ├── output bytes: <slt:ignore>
+    │           ├── bytes scanned: <slt:ignore>
+    │           ├── table: <slt:ignore>
+    │           ├── scan id: <slt:ignore>
+    │           ├── output columns: <slt:ignore>
+    │           ├── read rows: <slt:ignore>
+    │           ├── read size: <slt:ignore>
+    │           ├── partitions total: <slt:ignore>
+    │           ├── partitions scanned: <slt:ignore>
+    │           ├── push downs: <slt:ignore>
+    │           └── estimated rows: <slt:ignore>
+    └── EvalScalar(Probe)
+        ├── cpu time: <slt:ignore>
+        ├── output rows: <slt:ignore>
+        ├── output bytes: <slt:ignore>
+        ├── output columns: <slt:ignore>
+        ├── expressions: <slt:ignore>
+        ├── estimated rows: <slt:ignore>
+        └── AggregateFinal
+            ├── cpu time: <slt:ignore>
+            ├── wait time: <slt:ignore>
+            ├── output rows: <slt:ignore>
+            ├── output bytes: <slt:ignore>
+            ├── output columns: <slt:ignore>
+            ├── group by: <slt:ignore>
+            ├── aggregate functions: <slt:ignore>
+            ├── estimated rows: <slt:ignore>
+            └── AggregatePartial
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── group by: <slt:ignore>
+                ├── aggregate functions: <slt:ignore>
+                ├── estimated rows: <slt:ignore>
+                └── EvalScalar
+                    ├── cpu time: <slt:ignore>
+                    ├── output rows: <slt:ignore>
+                    ├── output bytes: <slt:ignore>
+                    ├── output columns: <slt:ignore>
+                    ├── expressions: <slt:ignore>
+                    ├── estimated rows: <slt:ignore>
+                    └── TableScan
+                        ├── cpu time: <slt:ignore>
+                        ├── output rows: <slt:ignore>
+                        ├── output bytes: <slt:ignore>
+                        ├── bytes scanned: <slt:ignore>
+                        ├── table: <slt:ignore>
+                        ├── scan id: <slt:ignore>
+                        ├── output columns: <slt:ignore>
+                        ├── read rows: <slt:ignore>
+                        ├── read size: <slt:ignore>
+                        ├── partitions total: <slt:ignore>
+                        ├── partitions scanned: <slt:ignore>
+                        ├── push downs: <slt:ignore>
+                        └── estimated rows: <slt:ignore>
+
+query T
+EXPLAIN ANALYZE WITH t1 AS MATERIALIZED ( SELECT number % 5 AS a, COUNT(*) AS cnt, SUM(number) AS total FROM numbers(100) GROUP BY number % 5 ), t2 AS MATERIALIZED ( SELECT number AS b FROM numbers(20) ORDER BY number DESC LIMIT 10 ) SELECT t1.a, t1.cnt, t1.total, t2.b FROM t1 JOIN t2 ON t1.a = t2.b ORDER BY t1.a;
+----
+Sort(Single)
+├── cpu time: <slt:ignore>
+├── output columns: <slt:ignore>
+├── sort keys: <slt:ignore>
+├── estimated rows: <slt:ignore>
+└── HashJoin
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output columns: <slt:ignore>
+    ├── join type: <slt:ignore>
+    ├── build keys: <slt:ignore>
+    ├── probe keys: <slt:ignore>
+    ├── keys is null equal: <slt:ignore>
+    ├── filters: <slt:ignore>
+    ├── build join filters:
+    │   └── filter id:<slt:ignore>
+    ├── estimated rows: <slt:ignore>
+    ├── TableScan(Build)
+    │   ├── cpu time: <slt:ignore>
+    │   ├── wait time: <slt:ignore>
+    │   ├── output rows: <slt:ignore>
+    │   ├── output bytes: <slt:ignore>
+    │   ├── bytes scanned: <slt:ignore>
+    │   ├── read from remote: <slt:ignore>
+    │   ├── runtime filter bloom time: <slt:ignore>
+    │   ├── runtime filter inlist/min-max time: <slt:ignore>
+    │   ├── table: <slt:ignore>
+    │   ├── scan id: <slt:ignore>
+    │   ├── output columns: <slt:ignore>
+    │   ├── read rows: <slt:ignore>
+    │   ├── read size: <slt:ignore>
+    │   ├── partitions total: <slt:ignore>
+    │   ├── partitions scanned: <slt:ignore>
+    │   ├── pruning stats: <slt:ignore>
+    │   ├── push downs: <slt:ignore>
+    │   └── estimated rows: <slt:ignore>
+    └── TableScan(Probe)
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── parts pruned by runtime filter: <slt:ignore>
+        ├── runtime filter inlist/min-max time: <slt:ignore>
+        ├── table: <slt:ignore>
+        ├── scan id: <slt:ignore>
+        ├── output columns: <slt:ignore>
+        ├── read rows: <slt:ignore>
+        ├── read size: <slt:ignore>
+        ├── partitions total: <slt:ignore>
+        ├── partitions scanned: <slt:ignore>
+        ├── pruning stats: <slt:ignore>
+        ├── push downs: <slt:ignore>
+        ├── apply join filters: <slt:ignore>
+        └── estimated rows: <slt:ignore>
+MaterializedCTE: t1
+└── DistributedInsertSelect
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    └── EvalScalar
+        ├── cpu time: <slt:ignore>
+        ├── output rows: <slt:ignore>
+        ├── output bytes: <slt:ignore>
+        ├── output columns: <slt:ignore>
+        ├── expressions: <slt:ignore>
+        ├── estimated rows: <slt:ignore>
+        └── AggregateFinal
+            ├── cpu time: <slt:ignore>
+            ├── wait time: <slt:ignore>
+            ├── output rows: <slt:ignore>
+            ├── output bytes: <slt:ignore>
+            ├── output columns: <slt:ignore>
+            ├── group by: <slt:ignore>
+            ├── aggregate functions: <slt:ignore>
+            ├── estimated rows: <slt:ignore>
+            └── AggregatePartial
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── group by: <slt:ignore>
+                ├── aggregate functions: <slt:ignore>
+                ├── estimated rows: <slt:ignore>
+                └── EvalScalar
+                    ├── cpu time: <slt:ignore>
+                    ├── output rows: <slt:ignore>
+                    ├── output bytes: <slt:ignore>
+                    ├── output columns: <slt:ignore>
+                    ├── expressions: <slt:ignore>
+                    ├── estimated rows: <slt:ignore>
+                    └── TableScan
+                        ├── cpu time: <slt:ignore>
+                        ├── output rows: <slt:ignore>
+                        ├── output bytes: <slt:ignore>
+                        ├── bytes scanned: <slt:ignore>
+                        ├── table: <slt:ignore>
+                        ├── scan id: <slt:ignore>
+                        ├── output columns: <slt:ignore>
+                        ├── read rows: <slt:ignore>
+                        ├── read size: <slt:ignore>
+                        ├── partitions total: <slt:ignore>
+                        ├── partitions scanned: <slt:ignore>
+                        ├── push downs: <slt:ignore>
+                        └── estimated rows: <slt:ignore>
+MaterializedCTE: t2
+└── DistributedInsertSelect
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    └── Limit
+        ├── cpu time: <slt:ignore>
+        ├── output rows: <slt:ignore>
+        ├── output bytes: <slt:ignore>
+        ├── output columns: <slt:ignore>
+        ├── limit: <slt:ignore>
+        ├── offset: <slt:ignore>
+        ├── estimated rows: <slt:ignore>
+        └── Sort(Single)
+            ├── cpu time: <slt:ignore>
+            ├── output rows: <slt:ignore>
+            ├── output bytes: <slt:ignore>
+            ├── output columns: <slt:ignore>
+            ├── sort keys: <slt:ignore>
+            ├── estimated rows: <slt:ignore>
+            └── TableScan
+                ├── cpu time: <slt:ignore>
+                ├── output rows: <slt:ignore>
+                ├── output bytes: <slt:ignore>
+                ├── bytes scanned: <slt:ignore>
+                ├── table: <slt:ignore>
+                ├── scan id: <slt:ignore>
+                ├── output columns: <slt:ignore>
+                ├── read rows: <slt:ignore>
+                ├── read size: <slt:ignore>
+                ├── partitions total: <slt:ignore>
+                ├── partitions scanned: <slt:ignore>
+                ├── push downs: <slt:ignore>
+                └── estimated rows: <slt:ignore>
 
 statement ok
 drop table if exists article;

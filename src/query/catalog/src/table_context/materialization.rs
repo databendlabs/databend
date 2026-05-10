@@ -32,6 +32,14 @@ pub trait TableContextCte: Send + Sync {
     );
 
     async fn drop_recursive_cte_temp_table(&self) -> Result<()>;
+
+    fn begin_materialized_cte_capture(&self) {}
+
+    fn is_materialized_cte_capture_active(&self) -> bool {
+        false
+    }
+
+    fn finalize_materialized_cte_capture(&self, _cte_name: &str, _temp_table_name: &str) {}
 }
 
 pub trait TableContextStream: Send + Sync {

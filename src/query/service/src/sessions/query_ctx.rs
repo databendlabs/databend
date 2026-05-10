@@ -509,6 +509,35 @@ impl QueryContext {
         self.shared.set_executor(weak_ptr)
     }
 
+    pub fn add_query_profiles(&self, profiles: &HashMap<u32, PlanProfile>) {
+        self.shared.add_query_profiles(profiles);
+    }
+
+    pub fn add_query_profiles_with_execution(
+        &self,
+        profile_execution_id: &str,
+        profiles: &HashMap<u32, PlanProfile>,
+    ) {
+        self.shared
+            .add_query_profiles_with_execution(profile_execution_id, profiles);
+    }
+
+    pub fn get_query_profiles_for_execution(
+        &self,
+        profile_execution_id: &str,
+    ) -> HashMap<u32, PlanProfile> {
+        self.shared
+            .get_query_profiles_for_execution(profile_execution_id)
+    }
+
+    pub fn get_query_profiles_with_execution_id(
+        &self,
+        profile_execution_id: &str,
+    ) -> HashMap<u32, PlanProfile> {
+        self.shared
+            .get_query_profiles_with_execution_id(profile_execution_id)
+    }
+
     pub fn attach_stage(&self, attachment: StageAttachment) {
         self.shared.attach_stage(attachment);
     }
@@ -952,6 +981,12 @@ impl QueryContext {
         let mut receivers = self.shared.materialized_cte_receivers.lock();
         let receivers = receivers.get_mut(cte_name).unwrap();
         receivers.pop().unwrap()
+    }
+
+    /// Slot used by EXPLAIN / EXPLAIN ANALYZE to collect the physical plan
+    /// (and, for ANALYZE, the profile) of materialized-CTE producer CTAS runs.
+    pub fn materialized_cte_capture(&self) -> crate::sessions::MaterializedCteCaptureSlot {
+        self.shared.materialized_cte_capture.clone()
     }
 }
 

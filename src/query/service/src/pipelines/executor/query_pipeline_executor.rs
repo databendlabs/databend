@@ -294,7 +294,11 @@ impl QueryPipelineExecutor {
                     drop(finished_error_guard);
 
                     let profiling = self.fetch_plans_profile(true);
-                    self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
+                    self.on_finished(ExecutionInfo::create_with_profile_execution_id(
+                        Err(may_error.clone()),
+                        profiling,
+                        self.profile_execution_id().to_string(),
+                    ))?;
                     return Err(may_error);
                 }
             }
@@ -303,19 +307,31 @@ impl QueryPipelineExecutor {
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
                 let may_error = thread_res.unwrap_err();
                 let profiling = self.fetch_plans_profile(true);
-                self.on_finished(ExecutionInfo::create(Err(may_error.clone()), profiling))?;
+                self.on_finished(ExecutionInfo::create_with_profile_execution_id(
+                    Err(may_error.clone()),
+                    profiling,
+                    self.profile_execution_id().to_string(),
+                ))?;
                 return Err(may_error);
             }
         }
 
         if let Err(error) = self.graph.assert_finished_graph() {
             let profiling = self.fetch_plans_profile(true);
-            self.on_finished(ExecutionInfo::create(Err(error.clone()), profiling))?;
+            self.on_finished(ExecutionInfo::create_with_profile_execution_id(
+                Err(error.clone()),
+                profiling,
+                self.profile_execution_id().to_string(),
+            ))?;
             return Err(error);
         }
 
         let profiling = self.fetch_plans_profile(true);
-        self.on_finished(ExecutionInfo::create(Ok(()), profiling))?;
+        self.on_finished(ExecutionInfo::create_with_profile_execution_id(
+            Ok(()),
+            profiling,
+            self.profile_execution_id().to_string(),
+        ))?;
         Ok(())
     }
 
@@ -509,6 +525,10 @@ impl QueryPipelineExecutor {
         }
     }
 
+    pub fn profile_execution_id(&self) -> &str {
+        &self.settings.profile_execution_id
+    }
+
     pub fn get_query_execution_stats(&self) -> ExecutorStatsSnapshot {
         self.graph.get_query_execution_stats()
     }
@@ -531,7 +551,11 @@ impl Drop for QueryPipelineExecutor {
         let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload);
         let profiling = self.fetch_plans_profile(true);
-        let info = ExecutionInfo::create(Err(cause), profiling);
+        let info = ExecutionInfo::create_with_profile_execution_id(
+            Err(cause),
+            profiling,
+            self.profile_execution_id().to_string(),
+        );
         if let Err(cause) = on_finished_chain.apply(info) {
             warn!("Shutdown failure: {:?}", cause);
         }

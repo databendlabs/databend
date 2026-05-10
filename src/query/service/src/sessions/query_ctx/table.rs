@@ -222,6 +222,33 @@ impl TableContextCte for QueryContext {
         self.shared.recursive_cte_temp_tables.write().clear();
         Ok(())
     }
+
+    fn is_materialized_cte_capture_active(&self) -> bool {
+        self.materialized_cte_capture().is_active()
+    }
+
+    fn begin_materialized_cte_capture(&self) {
+        self.materialized_cte_capture().begin();
+    }
+
+    fn finalize_materialized_cte_capture(&self, cte_name: &str, temp_table_name: &str) {
+        let slot = self.materialized_cte_capture();
+        let Some(pending) = slot.take_pending() else {
+            log::warn!(
+                "finalize_materialized_cte_capture: no pending entry for CTE '{}' \
+                 (capture active but CTAS did not publish a plan)",
+                cte_name,
+            );
+            return;
+        };
+        slot.push_captured(crate::sessions::CapturedCteExecution {
+            cte_name: cte_name.to_string(),
+            temp_table_name: temp_table_name.to_string(),
+            plan: pending.plan,
+            metadata: pending.metadata,
+            profile_execution_id: pending.profile_execution_id,
+        });
+    }
 }
 
 #[async_trait::async_trait]

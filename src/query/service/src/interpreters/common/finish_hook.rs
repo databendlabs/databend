@@ -24,7 +24,6 @@ use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextPerf;
-use crate::sessions::TableContextQueryProfile;
 
 fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
     hook_clear_m_cte_temp_table(&query_ctx)?;
@@ -37,11 +36,14 @@ fn run_hooks(query_ctx: Arc<QueryContext>) -> Result<()> {
 /// Use [`QueryFinishHooks::top_level`] for normal user-facing queries,
 /// [`QueryFinishHooks::nested_with_hooks`] for internal sub-executions that may
 /// create temporary artifacts (e.g. EXPLAIN ANALYZE, EXPLAIN PERF inner pipelines),
-/// and [`QueryFinishHooks::nested`] for lightweight internal pipelines that don't
-/// need cleanup (e.g. recursive CTE inner pipeline).
+/// and [`QueryFinishHooks::nested`] for lightweight internal statement executions
+/// where the outer query owns cleanup and logging.
+#[derive(Clone, Copy)]
 pub struct QueryFinishHooks {
     /// Collect pipeline execution profiles into the query context.
     pub collect_profiles: bool,
+    /// Keep profile plan ids in the current physical-plan namespace.
+    pub use_profile_execution_id: bool,
     /// Run post-query cleanup hooks (CTE temp tables, spill files, disk temp dirs).
     pub run_hooks: bool,
     /// Emit the query-finish log, metrics, and profile JSON.
@@ -53,6 +55,7 @@ impl QueryFinishHooks {
     pub fn top_level() -> Self {
         Self {
             collect_profiles: true,
+            use_profile_execution_id: true,
             run_hooks: true,
             log_finished: true,
         }
@@ -64,6 +67,19 @@ impl QueryFinishHooks {
     pub fn nested() -> Self {
         Self {
             collect_profiles: true,
+            use_profile_execution_id: true,
+            run_hooks: false,
+            log_finished: false,
+        }
+    }
+
+    /// Profiles only in the current physical-plan namespace. Use for internal
+    /// pipelines whose plan ids are part of the outer plan tree (e.g. recursive
+    /// CTE step pipelines).
+    pub fn nested_in_current_profile_namespace() -> Self {
+        Self {
+            collect_profiles: true,
+            use_profile_execution_id: false,
             run_hooks: false,
             log_finished: false,
         }
@@ -76,6 +92,7 @@ impl QueryFinishHooks {
     pub fn nested_with_hooks() -> Self {
         Self {
             collect_profiles: true,
+            use_profile_execution_id: true,
             run_hooks: true,
             log_finished: false,
         }
@@ -93,7 +110,17 @@ impl QueryFinishHooks {
                 ctx.collect_local_perf_counters(node_id);
             }
             if self.collect_profiles {
-                ctx.add_query_profiles(&info.profiling);
+                if self.use_profile_execution_id {
+                    match info.profile_execution_id.as_deref() {
+                        Some(profile_execution_id) => ctx.add_query_profiles_with_execution(
+                            profile_execution_id,
+                            &info.profiling,
+                        ),
+                        None => ctx.add_query_profiles(&info.profiling),
+                    }
+                } else {
+                    ctx.add_query_profiles(&info.profiling)
+                }
             }
             let hooks_res = if self.run_hooks {
                 run_hooks(ctx.clone())

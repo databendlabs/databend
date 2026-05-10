@@ -14,9 +14,11 @@
 
 databend_common_tracing::register_module_tag!("[SESSION]");
 
+mod materialized_cte_capture;
 mod query_affect;
 pub mod query_ctx;
 mod query_ctx_shared;
+mod query_profiles;
 mod queue_mgr;
 mod runtime_filter_state;
 mod session;
@@ -30,11 +32,16 @@ mod session_status;
 
 pub use databend_common_base::base::BuildInfoRef;
 pub use databend_common_catalog::table_context::prelude::*;
+pub use materialized_cte_capture::CapturedCteExecution;
+pub use materialized_cte_capture::MaterializedCteCapture;
+pub use materialized_cte_capture::MaterializedCteCaptureSlot;
+pub use materialized_cte_capture::PendingCtasCapture;
 pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;
 pub use query_ctx::convert_query_log_timestamp;
 pub use query_ctx_shared::MemoryUpdater;
 pub use query_ctx_shared::QueryContextShared;
+pub use query_profiles::QueryProfiles;
 pub use queue_mgr::AcquireQueueGuard;
 pub use queue_mgr::QueriesQueueManager;
 pub use queue_mgr::QueryEntry;

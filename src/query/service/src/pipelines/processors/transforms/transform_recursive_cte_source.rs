@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::Engine;
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::profile::ProfileLabel;
 use databend_common_catalog::table::Table;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -37,6 +38,7 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::OutputPort;
+use databend_common_pipeline::core::PlanScope;
 use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::always_callback;
 use databend_common_pipeline::sources::AsyncSource;
@@ -52,14 +54,16 @@ use md5::Md5;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::QueryFinishHooks;
+use crate::physical_plans::IPhysicalPlan;
 use crate::physical_plans::PhysicalPlan;
 use crate::physical_plans::PhysicalPlanCast;
 use crate::physical_plans::PhysicalPlanVisitor;
 use crate::physical_plans::RecursiveCteScan;
 use crate::physical_plans::UnionAll;
+use crate::pipelines::PipelineBuilder;
+use crate::pipelines::attach_runtime_filter_logger;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelinePullingExecutor;
-use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCte;
 use crate::sessions::TableContextProgress;
@@ -207,9 +211,21 @@ impl TransformRecursiveCteSource {
             union_plan.right.clone()
         };
         ctx.clear_runtime_filter();
-        let mut build_res = build_query_pipeline_without_render_result_set(&ctx, &plan).await?;
+        let union_scope = create_union_plan_scope(&union_plan)?;
+        let mut build_res = {
+            let _guard = union_scope.enter_scope_guard();
+            let pipeline = PipelineBuilder::create(
+                ctx.get_function_context()?,
+                ctx.get_settings(),
+                ctx.clone(),
+            );
+            pipeline.finalize(&plan)?
+        };
+        let settings = ctx.get_settings();
+        build_res.set_max_threads(settings.get_max_threads()? as usize);
+        attach_runtime_filter_logger(ctx.clone(), &mut build_res.main_pipeline);
         build_res.main_pipeline.set_on_finished(always_callback(
-            QueryFinishHooks::nested().into_callback(ctx.clone()),
+            QueryFinishHooks::nested_in_current_profile_namespace().into_callback(ctx.clone()),
         ));
         let settings = ExecutorSettings::try_create(ctx.clone())?;
         let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
@@ -222,6 +238,24 @@ impl TransformRecursiveCteSource {
         let data_blocks = join_handle.await??;
         Ok((data_blocks, cte_scan_tables))
     }
+}
+
+fn create_union_plan_scope(union_plan: &UnionAll) -> Result<Arc<PlanScope>> {
+    // Recursive CTE runs anchor/recursive inputs as internal step pipelines, so
+    // they are built outside the original UnionAll scope. Re-enter that scope
+    // here to keep child plan profiles attached to the recursive UnionAll.
+    let plan_labels = union_plan.get_labels()?;
+    let mut profile_labels = Vec::with_capacity(plan_labels.len());
+    for (name, value) in plan_labels {
+        profile_labels.push(ProfileLabel::create(name, value));
+    }
+
+    Ok(PlanScope::create(
+        union_plan.get_id(),
+        union_plan.get_name(),
+        Arc::new(union_plan.get_desc()?),
+        Arc::new(profile_labels),
+    ))
 }
 
 fn make_rcte_prefix(ctx: &Arc<QueryContext>, union_plan: &UnionAll) -> Result<String> {

@@ -60,6 +60,28 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
                 table.qualified_name()
             }
         };
+
+        // If this scan is actually a read from a materialized-CTE temp table
+        // produced earlier in this query, collapse the whole TableScan into a
+        // single `MaterializedCTERef: <cte_name>` line. Matches on the bare
+        // table name suffix — the metadata stores `db.tablename`, while the
+        // capture map is keyed by `tablename`.
+        let bare_table_name = table_name
+            .rsplit_once('.')
+            .map(|(_, n)| n)
+            .unwrap_or(table_name.as_str());
+        if let Some(cte_name) = ctx
+            .materialized_cte_temp_to_name
+            .get(bare_table_name)
+            .cloned()
+        {
+            let mut children = vec![FormatTreeNode::new(format!("cte_name: {cte_name}"))];
+            append_output_rows_info(&mut children, &ctx.profs, self.inner.get_id());
+            return Ok(FormatTreeNode::with_children(
+                "MaterializedCTERef".to_string(),
+                children,
+            ));
+        }
         let filters = self
             .inner
             .source

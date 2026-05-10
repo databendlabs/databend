@@ -314,11 +314,18 @@ impl Binder {
         let create_table_sql = create_table_stmt.to_string();
         log::info!("[CTE]create_table_sql: {create_table_sql}");
         if let Some(subquery_executor) = &self.subquery_executor {
-            let _ = databend_common_base::runtime::block_on(async move {
+            let ctas_result = databend_common_base::runtime::block_on(async move {
                 subquery_executor
                     .execute_query_with_sql_string(&create_table_sql)
                     .await
-            })?;
+            });
+            if self.ctx.is_materialized_cte_capture_active() {
+                self.ctx.finalize_materialized_cte_capture(
+                    &normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name,
+                    &table_name,
+                );
+            }
+            let _ = ctas_result?;
         } else {
             return Err(ErrorCode::Internal("Binder's Subquery executor is not set"));
         };

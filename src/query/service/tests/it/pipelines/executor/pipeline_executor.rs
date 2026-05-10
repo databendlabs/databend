@@ -43,6 +43,7 @@ async fn test_always_call_on_finished() -> anyhow::Result<()> {
 
     let settings = ExecutorSettings {
         query_id: Arc::new("".to_string()),
+        profile_execution_id: String::new(),
         max_execute_time_in_seconds: Default::default(),
         enable_queries_executor: false,
         max_threads: 8,
