@@ -16,7 +16,6 @@ use std::collections::HashSet;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Literal;
-use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::Scalar;
@@ -24,7 +23,6 @@ use databend_common_expression::cast_scalar;
 use databend_common_expression::shrink_scalar;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::decimal::DecimalScalar;
 use databend_common_expression::types::decimal::DecimalSize;
@@ -198,42 +196,6 @@ pub(super) fn literal_value(literal: &databend_common_ast::ast::Literal) -> Scal
         Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
         Literal::Null => Scalar::Null,
     }
-}
-
-pub(super) fn minus_literal_scalar(
-    span: Span,
-    literal: &databend_common_ast::ast::Literal,
-) -> Result<Scalar> {
-    let value = match literal {
-        Literal::UInt64(v) => {
-            if *v <= i64::MAX as u64 {
-                Scalar::Number(NumberScalar::Int64(-(*v as i64)))
-            } else {
-                Scalar::Decimal(DecimalScalar::Decimal128(
-                    -(*v as i128),
-                    DecimalSize::new_unchecked(i128::MAX_PRECISION, 0),
-                ))
-            }
-        }
-        Literal::Decimal256 {
-            value,
-            precision,
-            scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal256(
-            i256(*value).checked_mul(i256::minus_one()).unwrap(),
-            DecimalSize::new_unchecked(*precision, *scale),
-        )),
-        Literal::Float64(v) => Scalar::Number(NumberScalar::Float64((-*v).into())),
-        Literal::Null => Scalar::Null,
-        Literal::String(_) | Literal::Binary(_) | Literal::Boolean(_) => {
-            return Err(ErrorCode::InvalidArgument(format!(
-                "Invalid minus operator for {}",
-                literal
-            ))
-            .set_span(span));
-        }
-    };
-    Ok(shrink_scalar(value))
 }
 
 pub(super) fn infer_literal_data_type(value: Scalar) -> (Scalar, DataType) {

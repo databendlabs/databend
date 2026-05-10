@@ -56,7 +56,6 @@ use super::date::AdjacentDayFunction;
 use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
-use super::literal::minus_literal_scalar;
 use super::rewrite_function::rewrite_function_name;
 use super::search::CoreSearchFunction;
 use super::special_function::SpecialFunction;
@@ -793,11 +792,6 @@ impl<'a> CoreExprArena<'a> {
     ) -> Result<CoreExprId> {
         if matches!(op, UnaryOperator::Plus) {
             return self.lower_ast_expr(child);
-        }
-
-        if let (UnaryOperator::Minus, Expr::Literal { value, .. }) = (op, child) {
-            let value = minus_literal_scalar(span, value)?;
-            return Ok(self.constant(span, value));
         }
 
         let func_name = unary_op_core_function(op).expect("unary plus should have returned");

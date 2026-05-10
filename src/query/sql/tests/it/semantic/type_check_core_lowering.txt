@@ -1,5 +1,5 @@
-=== minus_literal_is_resolved_during_lowering ===
-description: Unary minus on a literal should become a negative literal before scalar function resolution.
+=== minus_literal_is_folded_after_scalar_resolution ===
+description: Unary minus on a literal should use the normal scalar path and fold to a negative literal.
 sql: -1
 status: ok
 scalar: -1

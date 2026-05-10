@@ -279,8 +279,8 @@ async fn test_basic_type_check_adapter_resolves_columns_without_table_context() 
 async fn test_type_check_core_lowering() -> Result<()> {
     let cases = [
         SqlTestCase {
-            name: "minus_literal_is_resolved_during_lowering",
-            description: "Unary minus on a literal should become a negative literal before scalar function resolution.",
+            name: "minus_literal_is_folded_after_scalar_resolution",
+            description: "Unary minus on a literal should use the normal scalar path and fold to a negative literal.",
             setup_sqls: &[],
             sql: "-1",
         },
