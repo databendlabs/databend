@@ -35,14 +35,14 @@ use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::LockGuard;
 use databend_common_settings::Settings;
-use databend_common_sql::BasicTypeCheckPolicy;
+use databend_common_sql::BasicTypeCheckAdapter;
 use databend_common_sql::BindContext;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::CoreExprContextDependencies;
 use databend_common_sql::Metadata;
 use databend_common_sql::NameResolutionContext;
 use databend_common_sql::Symbol;
-use databend_common_sql::TypeCheckPolicy;
+use databend_common_sql::TypeCheckAdapter;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
@@ -57,13 +57,13 @@ use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_header;
 use crate::framework::golden::write_case_outcome;
 
-struct TestTypeCheckPolicy {
+struct TestTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
     async_runtime_handle: tokio::runtime::Handle,
 }
 
-impl TestTypeCheckPolicy {
+impl TestTypeCheckAdapter {
     fn new(settings: Arc<Settings>) -> Self {
         Self {
             settings,
@@ -73,7 +73,7 @@ impl TestTypeCheckPolicy {
     }
 }
 
-impl TypeCheckPolicy for TestTypeCheckPolicy {
+impl TypeCheckAdapter for TestTypeCheckAdapter {
     fn function_context(&self) -> Result<FunctionContext> {
         Ok(self.func_ctx.clone())
     }
@@ -122,7 +122,7 @@ impl TypeCheckPolicy for TestTypeCheckPolicy {
 }
 
 #[async_trait::async_trait]
-impl TableContextTableAccess for TestTypeCheckPolicy {
+impl TableContextTableAccess for TestTypeCheckAdapter {
     async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         unimplemented!()
     }
@@ -188,7 +188,7 @@ impl TableContextTableAccess for TestTypeCheckPolicy {
 }
 
 #[async_trait::async_trait]
-impl TableContextAuthorization for TestTypeCheckPolicy {
+impl TableContextAuthorization for TestTypeCheckAdapter {
     fn get_current_user(&self) -> Result<UserInfo> {
         Ok(UserInfo::new_no_auth("root", "%"))
     }
@@ -246,15 +246,15 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
 async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     assert!(
         case.setup_sqls.is_empty(),
-        "type_check tests use a dependency-only policy and do not run setup SQL"
+        "type_check tests use a dependency-only adapter and do not run setup SQL"
     );
     let settings = Settings::create(Tenant::new_literal("default"));
-    let policy = TestTypeCheckPolicy::new(settings);
+    let adapter = TestTypeCheckAdapter::new(settings);
     let tokens = tokenize_sql(case.sql)?;
-    let dialect = policy.sql_dialect()?;
+    let dialect = adapter.sql_dialect()?;
     let expr = parse_expr(&tokens, dialect)?;
 
-    let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
+    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
     let mut bind_context = BindContext::new();
     add_test_column(
         &mut bind_context,
@@ -274,13 +274,12 @@ async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     add_test_column(&mut bind_context, 5, "ts", DataType::Timestamp);
     add_test_column(&mut bind_context, 6, "date", DataType::Date);
     let metadata = Arc::new(RwLock::new(Metadata::default()));
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        false,
     )?;
 
     let outcome = match type_checker.resolve(&expr).map(|resolved| *resolved) {
@@ -310,27 +309,27 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
 }
 
 #[test]
-fn test_scalar_type_check_policy_does_not_need_table_context() -> Result<()> {
-    let policy = BasicTypeCheckPolicy::new(
+fn test_scalar_type_check_adapter_does_not_need_table_context() -> Result<()> {
+    let adapter = BasicTypeCheckAdapter::new(
         Settings::create(Tenant::new_literal("default")),
         FunctionContext::default(),
         CoreExprContextDependencies {
             scalar_evaluation: true,
             ..Default::default()
         },
-    );
-    let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
+    )
+    .with_forbid_udf(true);
+    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = BindContext::new();
     let tokens = tokenize_sql("1 + 2")?;
-    let expr = parse_expr(&tokens, policy.sql_dialect()?)?;
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let expr = parse_expr(&tokens, adapter.sql_dialect()?)?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        true,
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(&expr)?;
@@ -343,15 +342,15 @@ fn test_scalar_type_check_policy_does_not_need_table_context() -> Result<()> {
     let err = type_checker.resolve(&expr).unwrap_err();
     assert!(
         err.message().contains("session_function"),
-        "expected session_function policy error, got {}",
+        "expected session_function adapter error, got {}",
         err.message()
     );
     Ok(())
 }
 
 #[test]
-fn test_basic_type_check_policy_resolves_columns_without_table_context() -> Result<()> {
-    let policy = BasicTypeCheckPolicy::new(
+fn test_basic_type_check_adapter_resolves_columns_without_table_context() -> Result<()> {
+    let adapter = BasicTypeCheckAdapter::new(
         Settings::create(Tenant::new_literal("default")),
         FunctionContext::default(),
         CoreExprContextDependencies {
@@ -359,8 +358,9 @@ fn test_basic_type_check_policy_resolves_columns_without_table_context() -> Resu
             column_resolution: true,
             ..Default::default()
         },
-    );
-    let name_resolution_ctx = NameResolutionContext::try_from(policy.settings().as_ref())?;
+    )
+    .with_forbid_udf(true);
+    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut bind_context = BindContext::new();
     add_test_column(
@@ -370,14 +370,13 @@ fn test_basic_type_check_policy_resolves_columns_without_table_context() -> Resu
         DataType::Number(NumberDataType::Int64),
     );
     let tokens = tokenize_sql("number + 1")?;
-    let expr = parse_expr(&tokens, policy.sql_dialect()?)?;
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let expr = parse_expr(&tokens, adapter.sql_dialect()?)?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        true,
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(&expr)?;
@@ -393,7 +392,7 @@ fn test_basic_type_check_policy_resolves_columns_without_table_context() -> Resu
     let err = type_checker.resolve(&expr).unwrap_err();
     assert!(
         err.message().contains("lambda_function"),
-        "expected lambda_function policy error, got {}",
+        "expected lambda_function adapter error, got {}",
         err.message()
     );
     Ok(())
@@ -608,7 +607,7 @@ async fn test_type_check_sugar_function_rewrites() -> Result<()> {
         },
         SqlTestCase {
             name: "timezone_rewrites_to_literal",
-            description: "timezone() should read settings through the explicit type-check policy.",
+            description: "timezone() should read settings through the explicit type-check adapter.",
             setup_sqls: &[],
             sql: "timezone()",
         },
@@ -716,7 +715,7 @@ async fn test_type_check_sugar_function_rewrites() -> Result<()> {
         },
         SqlTestCase {
             name: "getvariable_constant_name_rewrites_to_context_value",
-            description: "getvariable should resolve a constant variable name through the explicit type-check policy.",
+            description: "getvariable should resolve a constant variable name through the explicit type-check adapter.",
             setup_sqls: &[],
             sql: "getvariable('missing_var')",
         },

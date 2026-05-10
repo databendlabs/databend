@@ -84,7 +84,7 @@ use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
 use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::optimizer::ir::SExpr;
-use crate::planner::semantic::BasicTypeCheckPolicy;
+use crate::planner::semantic::BasicTypeCheckAdapter;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::DummyTableScan;
@@ -556,7 +556,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::<crate::FullTypeCheckPolicy>::clone_expr_with_replacement(
+        let expr = TypeChecker::<crate::FullTypeCheckAdapter>::clone_expr_with_replacement(
             &res.expr,
             |nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
@@ -699,14 +699,13 @@ impl Binder {
         bind_context: &mut BindContext,
         expr: &Expr,
     ) -> Result<databend_common_expression::Expr<crate::ColumnBinding>> {
-        let policy = BasicTypeCheckPolicy::scalar(self.ctx.as_ref())?;
-        let mut type_checker = TypeChecker::try_create_with_policy(
+        let adapter = BasicTypeCheckAdapter::scalar(self.ctx.as_ref())?;
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             bind_context,
-            policy,
+            adapter,
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            false,
         )?;
         let box (scalar, _) = type_checker.resolve(expr)?;
         let scalar_expr = scalar.as_expr()?;

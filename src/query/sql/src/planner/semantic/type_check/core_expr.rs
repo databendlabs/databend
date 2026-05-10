@@ -643,7 +643,7 @@ impl<'a> CoreExprArena<'a> {
         let func_name = normalized_func_name(&name.name);
 
         if !is_builtin_function(&func_name)
-            && !TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
+            && !TypeChecker::<super::FullTypeCheckAdapter>::all_sugar_functions()
                 .contains(&Ascii::new(func_name.as_str()))
         {
             return self.runtime_call(span, name, args);
@@ -755,7 +755,7 @@ impl<'a> CoreExprArena<'a> {
             && lambda.is_none()
         {
             if let Some(func_name) = sugar_function_name(&func_name) {
-                return if TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_sugar_function(
+                return if TypeChecker::<super::FullTypeCheckAdapter>::can_lower_core_sugar_function(
                     func_name,
                 ) {
                     self.lower_sugar_function(span, func_name, args)
@@ -1257,8 +1257,8 @@ pub(super) struct CoreOrderByExpr {
     pub(super) nulls_first: Option<bool>,
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     #[recursive::recursive]
     pub(super) fn resolve_core(
@@ -1454,7 +1454,7 @@ where P: super::TypeCheckPolicy
         func_name: &str,
         args: &CoreExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
+        if TypeChecker::<super::FullTypeCheckAdapter>::all_sugar_functions()
             .contains(&Ascii::new(func_name))
         {
             return Err(ErrorCode::Internal(format!(
@@ -1579,7 +1579,7 @@ where P: super::TypeCheckPolicy
         not: bool,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let box (expr_scalar, _) = self.resolve_core(arena, expr)?;
-        let max_inlist_to_or = self.policy.settings().get_max_inlist_to_or()? as usize;
+        let max_inlist_to_or = self.adapter.settings().get_max_inlist_to_or()? as usize;
 
         if list.len() > max_inlist_to_or
             && list
@@ -1687,7 +1687,7 @@ fn general_lambda_function_name(func_name: &str) -> Option<&'static str> {
 
 fn sugar_function_name(func_name: &str) -> Option<&'static str> {
     let func_name = Ascii::new(func_name);
-    TypeChecker::<super::FullTypeCheckPolicy>::all_sugar_functions()
+    TypeChecker::<super::FullTypeCheckAdapter>::all_sugar_functions()
         .iter()
         .cloned()
         .find(|name| *name == func_name)
@@ -1695,7 +1695,7 @@ fn sugar_function_name(func_name: &str) -> Option<&'static str> {
 }
 
 fn builtin_scalar_function_name(func_name: &str) -> Option<&'static str> {
-    if !TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_scalar_function(func_name) {
+    if !TypeChecker::<super::FullTypeCheckAdapter>::can_lower_core_scalar_function(func_name) {
         return None;
     }
 
@@ -1753,7 +1753,7 @@ fn can_lower_binary_op(op: &BinaryOperator, right: &Expr) -> bool {
     }
 
     binary_op_core_function(op)
-        .map(TypeChecker::<super::FullTypeCheckPolicy>::can_lower_core_scalar_function)
+        .map(TypeChecker::<super::FullTypeCheckAdapter>::can_lower_core_scalar_function)
         .unwrap_or(false)
 }
 

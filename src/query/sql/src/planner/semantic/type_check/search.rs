@@ -78,8 +78,8 @@ pub(super) fn general_search_function_name(func_name: &str) -> Option<&'static s
         .map(Ascii::into_inner)
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     pub(super) fn resolve_core_score_search_function(
         &mut self,

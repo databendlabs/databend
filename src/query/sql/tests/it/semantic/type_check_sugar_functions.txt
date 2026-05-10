@@ -34,7 +34,7 @@ scalar: ''
 type: String
 
 === timezone_rewrites_to_literal ===
-description: timezone() should read settings through the explicit type-check policy.
+description: timezone() should read settings through the explicit type-check adapter.
 sql: timezone()
 status: ok
 scalar: 'UTC'
@@ -160,7 +160,7 @@ scalar: array_min(array(number (#0), delta (#3), 1))
 type: Int64 NULL
 
 === getvariable_constant_name_rewrites_to_context_value ===
-description: getvariable should resolve a constant variable name through the explicit type-check policy.
+description: getvariable should resolve a constant variable name through the explicit type-check adapter.
 sql: getvariable('missing_var')
 status: ok
 scalar: NULL

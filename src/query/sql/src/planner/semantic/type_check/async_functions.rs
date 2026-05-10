@@ -130,8 +130,8 @@ pub(super) fn async_function_name(func_name: &str) -> Option<&'static str> {
         .map(Ascii::into_inner)
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     pub(super) fn resolve_async_function(
         &mut self,
@@ -203,7 +203,7 @@ where P: super::TypeCheckPolicy
             }
         };
 
-        if !self.skip_sequence_check {
+        if !self.adapter.skip_sequence_check() {
             let catalog = self.table_ctx().get_default_catalog()?;
             let req = GetSequenceReq {
                 ident: SequenceIdent::new(self.table_ctx().get_tenant(), sequence_name.clone()),

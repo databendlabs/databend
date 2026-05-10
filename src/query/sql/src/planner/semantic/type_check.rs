@@ -249,9 +249,9 @@ impl CoreExprContextDependencies {
 ///
 /// If failed, a `SemanticError` will be raised. This may caused by incompatible
 /// argument types of expressions, or unresolvable columns.
-pub struct TypeChecker<'a, P = FullTypeCheckPolicy> {
+pub struct TypeChecker<'a, A = FullTypeCheckAdapter> {
     bind_context: &'a mut BindContext,
-    policy: P,
+    adapter: A,
     dialect: Dialect,
     func_ctx: FunctionContext,
     name_resolution_ctx: &'a NameResolutionContext,
@@ -266,29 +266,29 @@ pub struct TypeChecker<'a, P = FullTypeCheckPolicy> {
     // true if current expr is inside a window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
-    forbid_udf: bool,
 
     // true if currently resolving a masking policy expression.
     // This prevents infinite recursion when a masking policy references the masked column itself.
     in_masking_policy: bool,
+}
 
-    // Skip sequence existence checks when resolving `nextval`.
+pub struct FullTypeCheckAdapter {
+    ctx: Arc<dyn TableContext>,
+    dependencies: FullTypeCheckAdapterDependencies,
+    forbid_udf: bool,
     skip_sequence_check: bool,
 }
 
-pub struct FullTypeCheckPolicy {
-    ctx: Arc<dyn TableContext>,
-    dependencies: FullTypeCheckDependencies,
-}
-
-pub struct BasicTypeCheckPolicy {
+pub struct BasicTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
     allowed_context_dependencies: CoreExprContextDependencies,
     aggregate_function_factory: &'static AggregateFunctionFactory,
+    forbid_udf: bool,
+    skip_sequence_check: bool,
 }
 
-pub struct FullTypeCheckDependencies {
+pub struct FullTypeCheckAdapterDependencies {
     async_runtime_handle: Handle,
     aggregate_function_factory: &'static AggregateFunctionFactory,
     license_manager: Arc<LicenseManagerSwitch>,
@@ -304,10 +304,25 @@ pub struct TypeCheckSubqueryPlan {
     pub output_context: BindContext,
 }
 
-impl FullTypeCheckPolicy {
+impl FullTypeCheckAdapter {
     pub fn new(ctx: Arc<dyn TableContext>) -> Result<Self> {
-        let dependencies = FullTypeCheckDependencies::from_context(ctx.as_ref())?;
-        Ok(Self { ctx, dependencies })
+        let dependencies = FullTypeCheckAdapterDependencies::from_context(ctx.as_ref())?;
+        Ok(Self {
+            ctx,
+            dependencies,
+            forbid_udf: false,
+            skip_sequence_check: false,
+        })
+    }
+
+    pub fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
+        self.forbid_udf = forbid_udf;
+        self
+    }
+
+    pub fn with_skip_sequence_check(mut self, skip_sequence_check: bool) -> Self {
+        self.skip_sequence_check = skip_sequence_check;
+        self
     }
 }
 
@@ -368,7 +383,7 @@ fn core_expr_context_dependencies(
     dependencies
 }
 
-impl FullTypeCheckDependencies {
+impl FullTypeCheckAdapterDependencies {
     pub fn from_context(ctx: &dyn TableContext) -> Result<Self> {
         let global_config = GlobalConfig::instance();
         let cloud_control_api_provider = if global_config
@@ -395,11 +410,11 @@ impl FullTypeCheckDependencies {
     }
 }
 
-fn missing_type_check_dependency(name: &str) -> ErrorCode {
-    ErrorCode::Internal(format!("type check policy does not provide {name}"))
+fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
+    ErrorCode::Internal(format!("type check adapter does not provide {name}"))
 }
 
-impl BasicTypeCheckPolicy {
+impl BasicTypeCheckAdapter {
     pub fn new(
         settings: Arc<Settings>,
         func_ctx: FunctionContext,
@@ -410,7 +425,19 @@ impl BasicTypeCheckPolicy {
             func_ctx,
             allowed_context_dependencies,
             aggregate_function_factory: AggregateFunctionFactory::instance(),
+            forbid_udf: false,
+            skip_sequence_check: false,
         }
+    }
+
+    pub fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
+        self.forbid_udf = forbid_udf;
+        self
+    }
+
+    pub fn with_skip_sequence_check(mut self, skip_sequence_check: bool) -> Self {
+        self.skip_sequence_check = skip_sequence_check;
+        self
     }
 
     pub fn from_context(
@@ -440,7 +467,7 @@ impl BasicTypeCheckPolicy {
     }
 }
 
-pub trait TypeCheckPolicy {
+pub trait TypeCheckAdapter {
     fn function_context(&self) -> Result<FunctionContext>;
 
     fn settings(&self) -> Arc<Settings>;
@@ -451,12 +478,20 @@ pub trait TypeCheckPolicy {
         Ok(())
     }
 
+    fn forbid_udf(&self) -> bool {
+        false
+    }
+
+    fn skip_sequence_check(&self) -> bool {
+        false
+    }
+
     fn async_runtime_handle(&self) -> Result<Handle> {
-        Err(missing_type_check_dependency("async runtime"))
+        Err(missing_type_check_adapter_dependency("async runtime"))
     }
 
     fn license_manager(&self) -> Result<Arc<LicenseManagerSwitch>> {
-        Err(missing_type_check_dependency("license manager"))
+        Err(missing_type_check_adapter_dependency("license manager"))
     }
 
     fn bind_subquery(
@@ -466,53 +501,59 @@ pub trait TypeCheckPolicy {
         _metadata: MetadataRef,
         _subquery: &Query,
     ) -> Result<TypeCheckSubqueryPlan> {
-        Err(missing_type_check_dependency("subquery planner"))
+        Err(missing_type_check_adapter_dependency("subquery planner"))
     }
 
     fn user_api_provider(&self) -> Result<Arc<UserApiProvider>> {
-        Err(missing_type_check_dependency("user api provider"))
+        Err(missing_type_check_adapter_dependency("user api provider"))
     }
 
     fn security_policy_cache_manager(&self) -> Result<Arc<SecurityPolicyCacheManager>> {
-        Err(missing_type_check_dependency(
+        Err(missing_type_check_adapter_dependency(
             "security policy cache manager",
         ))
     }
 
     fn global_config(&self) -> Result<Arc<InnerConfig>> {
-        Err(missing_type_check_dependency("global config"))
+        Err(missing_type_check_adapter_dependency("global config"))
     }
 
     fn cloud_control_api_provider(&self) -> Result<Arc<CloudControlApiProvider>> {
-        Err(missing_type_check_dependency("cloud control api provider"))
+        Err(missing_type_check_adapter_dependency(
+            "cloud control api provider",
+        ))
     }
 
     fn fuse_version(&self) -> Result<String> {
-        Err(missing_type_check_dependency("fuse version"))
+        Err(missing_type_check_adapter_dependency("fuse version"))
     }
 
     fn connection_id(&self) -> Result<String> {
-        Err(missing_type_check_dependency("connection id"))
+        Err(missing_type_check_adapter_dependency("connection id"))
     }
 
     fn current_client_session_id(&self) -> Result<Option<String>> {
-        Err(missing_type_check_dependency("client session id"))
+        Err(missing_type_check_adapter_dependency("client session id"))
     }
 
     fn last_query_id(&self, _index: i32) -> Result<Option<String>> {
-        Err(missing_type_check_dependency("last query id"))
+        Err(missing_type_check_adapter_dependency("last query id"))
     }
 
     fn variable(&self, _key: &str) -> Result<Option<Scalar>> {
-        Err(missing_type_check_dependency("variable"))
+        Err(missing_type_check_adapter_dependency("variable"))
     }
 
     fn table_access_context(&self) -> Result<&dyn TableContextTableAccess> {
-        Err(missing_type_check_dependency("table access context"))
+        Err(missing_type_check_adapter_dependency(
+            "table access context",
+        ))
     }
 
     fn authorization_context(&self) -> Result<&dyn TableContextAuthorization> {
-        Err(missing_type_check_dependency("authorization context"))
+        Err(missing_type_check_adapter_dependency(
+            "authorization context",
+        ))
     }
 
     fn sql_dialect(&self) -> Result<Dialect> {
@@ -526,7 +567,7 @@ pub trait TypeCheckPolicy {
     }
 
     fn table_context(&self) -> &Arc<dyn TableContext> {
-        panic!("type check policy does not provide table context")
+        panic!("type check adapter does not provide table context")
     }
 
     fn table_context_ref(&self) -> &dyn TableContext {
@@ -534,7 +575,7 @@ pub trait TypeCheckPolicy {
     }
 }
 
-impl TypeCheckPolicy for FullTypeCheckPolicy {
+impl TypeCheckAdapter for FullTypeCheckAdapter {
     fn function_context(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
     }
@@ -549,6 +590,14 @@ impl TypeCheckPolicy for FullTypeCheckPolicy {
 
     fn check_core_expr_context(&self, _arena: &core_expr::CoreExprArena<'_>) -> Result<()> {
         Ok(())
+    }
+
+    fn forbid_udf(&self) -> bool {
+        self.forbid_udf
+    }
+
+    fn skip_sequence_check(&self) -> bool {
+        self.skip_sequence_check
     }
 
     fn async_runtime_handle(&self) -> Result<Handle> {
@@ -639,7 +688,7 @@ impl TypeCheckPolicy for FullTypeCheckPolicy {
     }
 }
 
-impl TypeCheckPolicy for BasicTypeCheckPolicy {
+impl TypeCheckAdapter for BasicTypeCheckAdapter {
     fn function_context(&self) -> Result<FunctionContext> {
         Ok(self.func_ctx.clone())
     }
@@ -669,10 +718,18 @@ impl TypeCheckPolicy for BasicTypeCheckPolicy {
         )))
     }
 
+    fn forbid_udf(&self) -> bool {
+        self.forbid_udf
+    }
+
+    fn skip_sequence_check(&self) -> bool {
+        self.skip_sequence_check
+    }
+
     fn set_result_cache_uncacheable(&self) {}
 }
 
-impl<'a> TypeChecker<'a, FullTypeCheckPolicy> {
+impl<'a> TypeChecker<'a, FullTypeCheckAdapter> {
     pub fn try_create(
         bind_context: &'a mut BindContext,
         ctx: Arc<dyn TableContext>,
@@ -681,33 +738,31 @@ impl<'a> TypeChecker<'a, FullTypeCheckPolicy> {
         aliases: &'a [(String, ScalarExpr)],
         forbid_udf: bool,
     ) -> Result<Self> {
-        Self::try_create_with_policy(
+        Self::try_create_with_adapter(
             bind_context,
-            FullTypeCheckPolicy::new(ctx)?,
+            FullTypeCheckAdapter::new(ctx)?.with_forbid_udf(forbid_udf),
             name_resolution_ctx,
             metadata,
             aliases,
-            forbid_udf,
         )
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: TypeCheckAdapter
 {
-    pub fn try_create_with_policy(
+    pub fn try_create_with_adapter(
         bind_context: &'a mut BindContext,
-        policy: P,
+        adapter: A,
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
-        forbid_udf: bool,
     ) -> Result<Self> {
-        let func_ctx = policy.function_context()?;
-        let dialect = policy.sql_dialect()?;
+        let func_ctx = adapter.function_context()?;
+        let dialect = adapter.sql_dialect()?;
         Ok(Self {
             bind_context,
-            policy,
+            adapter,
             dialect,
             func_ctx,
             name_resolution_ctx,
@@ -715,16 +770,14 @@ where P: TypeCheckPolicy
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
-            forbid_udf,
             in_masking_policy: false,
-            skip_sequence_check: false,
         })
     }
 
     fn core_expr_arena(&self) -> core_expr::CoreExprArena<'a> {
         core_expr::CoreExprArena::with_aggregate_function_factory(
             self.func_ctx.week_start as u64,
-            self.policy.aggregate_function_factory(),
+            self.adapter.aggregate_function_factory(),
         )
     }
 
@@ -733,25 +786,21 @@ where P: TypeCheckPolicy
         arena: &core_expr::CoreExprArena<'_>,
         root: core_expr::CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.policy.check_core_expr_context(arena)?;
+        self.adapter.check_core_expr_context(arena)?;
         self.resolve_core(arena, root)
     }
 
     pub(super) fn block_on<F: Future>(&self, future: F) -> Result<F::Output> {
-        let handle = self.policy.async_runtime_handle()?;
+        let handle = self.adapter.async_runtime_handle()?;
         Ok(block_on_with_handle(&handle, future))
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: TypeCheckAdapter
 {
-    pub fn set_skip_sequence_check(&mut self, skip: bool) {
-        self.skip_sequence_check = skip;
-    }
-
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {
-        if TypeChecker::<FullTypeCheckPolicy>::all_sugar_functions()
+        if TypeChecker::<FullTypeCheckAdapter>::all_sugar_functions()
             .contains(&Ascii::new(func_name))
         {
             return false;
@@ -784,15 +833,15 @@ where P: TypeCheckPolicy
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: TypeCheckAdapter
 {
     fn table_ctx(&self) -> &Arc<dyn TableContext> {
-        self.policy.table_context()
+        self.adapter.table_context()
     }
 
     fn table_ctx_ref(&self) -> &dyn TableContext {
-        self.policy.table_context_ref()
+        self.adapter.table_context_ref()
     }
 
     #[recursive::recursive]
@@ -848,7 +897,7 @@ where P: TypeCheckPolicy
                     // BUT: skip masking policy application if we're already resolving a masking policy expression
                     // to prevent infinite recursion (e.g., policy references the masked column itself)
                     let has_masking_policy = !self.in_masking_policy
-                        && self.policy.can_apply_column_masking_policy()
+                        && self.adapter.can_apply_column_masking_policy()
                         // Does this column reference a table with masking policy?
                         && column
                             .table_index
@@ -974,7 +1023,7 @@ where P: TypeCheckPolicy
         let all_funcs = BUILTIN_FUNCTIONS
             .all_function_names()
             .into_iter()
-            .chain(self.policy.aggregate_function_factory().registered_names())
+            .chain(self.adapter.aggregate_function_factory().registered_names())
             .chain(
                 GENERAL_WINDOW_FUNCTIONS
                     .iter()
@@ -1000,7 +1049,7 @@ where P: TypeCheckPolicy
                     .map(|ascii| ascii.into_inner().to_string()),
             )
             .chain(
-                TypeChecker::<FullTypeCheckPolicy>::all_sugar_functions()
+                TypeChecker::<FullTypeCheckAdapter>::all_sugar_functions()
                     .iter()
                     .cloned()
                     .map(|ascii| ascii.into_inner().to_string()),
@@ -1137,7 +1186,7 @@ where P: TypeCheckPolicy
         // rewrite substr('xx', 0, xx) -> substr('xx', 1, xx)
         if (func_name == "substr" || func_name == "substring")
             && self
-                .policy
+                .adapter
                 .settings()
                 .get_sql_dialect()
                 .unwrap()
@@ -1241,7 +1290,7 @@ where P: TypeCheckPolicy
                     arguments.len()
                 )));
             }
-            let func_ctx = self.policy.function_context()?;
+            let func_ctx = self.adapter.function_context()?;
             let arg_fn = |args: &[ScalarExpr],
                           index: usize,
                           arg_name: &str,
@@ -1328,7 +1377,7 @@ where P: TypeCheckPolicy
         };
 
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            self.policy.set_result_cache_uncacheable();
+            self.adapter.set_result_cache_uncacheable();
         }
 
         if let Some(constant) = self.try_fold_constant(&expr, true) {
@@ -1433,8 +1482,8 @@ where P: TypeCheckPolicy
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: TypeCheckAdapter
 {
     /// Get masking policy expression for a column reference
     /// This is the ONLY place where masking policy is applied - unifying all paths (SELECT/WHERE/HAVING)
@@ -1470,7 +1519,7 @@ where P: TypeCheckPolicy
                         .column_mask_policy_columns_ids
                         .get(&field.column_id)
                     {
-                        if !self.policy.can_apply_column_masking_policy() {
+                        if !self.adapter.can_apply_column_masking_policy() {
                             return Ok(None);
                         }
 
@@ -1490,8 +1539,8 @@ where P: TypeCheckPolicy
 
             if let Some((policy_id, using_columns, table_schema)) = policy_data {
                 let tenant = self.table_ctx().get_tenant();
-                let cache = self.policy.security_policy_cache_manager()?;
-                let meta_api = self.policy.user_api_provider()?.get_meta_store_client();
+                let cache = self.adapter.security_policy_cache_manager()?;
+                let meta_api = self.adapter.user_api_provider()?.get_meta_store_client();
                 let tenant_clone = tenant.clone();
 
                 let cached = cache
@@ -1604,26 +1653,26 @@ mod tests {
         check(&arena, root);
     }
 
-    fn assert_sql_policy_error_contains(
+    fn assert_sql_adapter_error_contains(
         sql: &str,
         allowed: CoreExprContextDependencies,
         expected: &str,
     ) {
         let tokens = tokenize_sql(sql).unwrap();
         let expr = parse_expr(&tokens, Dialect::PostgreSQL).unwrap();
-        let policy = BasicTypeCheckPolicy::new(
+        let adapter = BasicTypeCheckAdapter::new(
             Settings::create(Tenant::new_literal("default")),
             FunctionContext::default(),
             allowed,
         );
         let mut arena = core_expr::CoreExprArena::with_aggregate_function_factory(
             0,
-            policy.aggregate_function_factory(),
+            adapter.aggregate_function_factory(),
         );
         let _root = arena.lower_ast_expr(&expr).unwrap();
-        let err = policy
+        let err = adapter
             .check_core_expr_context(&arena)
-            .expect_err("expected context policy violation");
+            .expect_err("expected context adapter violation");
         assert!(
             err.message().contains(expected),
             "expected error to contain `{expected}`, got `{}`",
@@ -1705,7 +1754,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_context_policy_violations_after_lower() {
+    fn rejects_context_adapter_violations_after_lower() {
         let scalar_only = CoreExprContextDependencies {
             scalar_evaluation: true,
             ..Default::default()
@@ -1720,21 +1769,21 @@ mod tests {
             assert!(scalar_only.contains(core_expr_context_dependencies(arena)));
         });
 
-        assert_sql_policy_error_contains("a", scalar_only, "column_resolution");
+        assert_sql_adapter_error_contains("a", scalar_only, "column_resolution");
         assert_sql_lowers_to("1 IN (2, 3)", |arena, _root| {
             assert!(scalar_only.contains(core_expr_context_dependencies(arena)));
         });
-        assert_sql_policy_error_contains("a IN (1, 2)", scalar_only, "column_resolution");
-        assert_sql_policy_error_contains("current_database()", scalar_only, "session_function");
-        assert_sql_policy_error_contains(
+        assert_sql_adapter_error_contains("a IN (1, 2)", scalar_only, "column_resolution");
+        assert_sql_adapter_error_contains("current_database()", scalar_only, "session_function");
+        assert_sql_adapter_error_contains(
             "array_filter([1], x -> x > 0)",
             scalar_with_columns,
             "lambda_function",
         );
-        assert_sql_policy_error_contains("score()", scalar_only, "search_function");
-        assert_sql_policy_error_contains("unnest([1, 2])", scalar_only, "set_returning_function");
-        assert_sql_policy_error_contains("row_number() over ()", scalar_only, "window_function");
-        assert_sql_policy_error_contains("nextval(seq)", scalar_only, "async_function");
-        assert_sql_policy_error_contains("potential_udf(1)", scalar_only, "udf");
+        assert_sql_adapter_error_contains("score()", scalar_only, "search_function");
+        assert_sql_adapter_error_contains("unnest([1, 2])", scalar_only, "set_returning_function");
+        assert_sql_adapter_error_contains("row_number() over ()", scalar_only, "window_function");
+        assert_sql_adapter_error_contains("nextval(seq)", scalar_only, "async_function");
+        assert_sql_adapter_error_contains("potential_udf(1)", scalar_only, "udf");
     }
 }

@@ -32,8 +32,8 @@ use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     fn vector_functions() -> &'static [Ascii<&'static str>] {
         static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[

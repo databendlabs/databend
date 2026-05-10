@@ -45,8 +45,8 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     fn rewritable_variant_functions() -> &'static [Ascii<&'static str>] {
         static VARIANT_FUNCTIONS: &[Ascii<&'static str>] = &[

@@ -27,7 +27,7 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
 
-use super::FullTypeCheckPolicy;
+use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
@@ -44,15 +44,15 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 
 pub(super) fn bind_subquery(
-    policy: &FullTypeCheckPolicy,
+    adapter: &FullTypeCheckAdapter,
     parent_context: &BindContext,
     name_resolution_ctx: &NameResolutionContext,
     metadata: MetadataRef,
     subquery: &Query,
 ) -> Result<TypeCheckSubqueryPlan> {
     let mut binder = Binder::new(
-        policy.ctx.clone(),
-        policy.dependencies.catalog_manager.clone(),
+        adapter.ctx.clone(),
+        adapter.dependencies.catalog_manager.clone(),
         name_resolution_ctx.clone(),
         metadata,
     );
@@ -66,8 +66,8 @@ pub(super) fn bind_subquery(
     })
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     pub fn resolve_subquery(
         &mut self,
@@ -267,7 +267,7 @@ where P: super::TypeCheckPolicy
         let TypeCheckSubqueryPlan {
             s_expr,
             output_context,
-        } = self.policy.bind_subquery(
+        } = self.adapter.bind_subquery(
             self.bind_context,
             self.name_resolution_ctx,
             self.metadata.clone(),
@@ -312,7 +312,7 @@ where P: super::TypeCheckPolicy
                     }
                     let mut visitor = AggFuncVisitor {
                         contain_agg: false,
-                        aggregate_function_factory: self.policy.aggregate_function_factory(),
+                        aggregate_function_factory: self.adapter.aggregate_function_factory(),
                     };
                     select.drive(&mut visitor);
                     contain_agg = Some(visitor.contain_agg);

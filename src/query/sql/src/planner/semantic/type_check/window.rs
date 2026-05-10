@@ -143,8 +143,8 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn resolve_core_aggregate_window_function(

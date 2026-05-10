@@ -38,7 +38,7 @@ use super::core_expr::CoreMapEntries;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a, P> TypeChecker<'a, P> {
+impl<'a, A> TypeChecker<'a, A> {
     #[inline]
     pub(super) fn resolve_literal(
         &self,
@@ -52,8 +52,8 @@ impl<'a, P> TypeChecker<'a, P> {
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     pub(super) fn resolve_core_array(
         &mut self,

@@ -52,8 +52,8 @@ use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     fn resolve_core_lambda_expr(
         &mut self,
@@ -63,7 +63,7 @@ where P: super::TypeCheckPolicy
         lambda_expr: super::core_expr::CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let metadata = if self
-            .policy
+            .adapter
             .license_manager()?
             .check_enterprise_enabled(self.table_ctx().get_license_key(), Feature::DataMask)
             .is_ok()

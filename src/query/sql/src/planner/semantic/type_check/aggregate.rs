@@ -35,8 +35,8 @@ use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn resolve_core_aggregate_function(
@@ -261,7 +261,7 @@ where P: super::TypeCheckPolicy
         };
 
         let agg_func = self
-            .policy
+            .adapter
             .aggregate_function_factory()
             .get(&func_name, params.clone(), arg_types, vec![])
             .map_err(|e| e.set_span(span))?;

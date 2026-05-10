@@ -260,8 +260,8 @@ fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
     marker
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     fn resolve_udf_definition_with_arguments(
         &mut self,
@@ -295,7 +295,7 @@ where P: super::TypeCheckPolicy
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
-            self.forbid_udf,
+            self.adapter.forbid_udf(),
         )?
         .resolve(&expr)?;
 
@@ -312,7 +312,7 @@ where P: super::TypeCheckPolicy
         udf_name: &str,
         arguments: &CoreUdfCallArgs,
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
-        if self.forbid_udf {
+        if self.adapter.forbid_udf() {
             return Ok(None);
         }
 
@@ -320,7 +320,7 @@ where P: super::TypeCheckPolicy
             udf
         } else {
             let tenant = self.table_ctx().get_tenant();
-            let provider = self.policy.user_api_provider()?;
+            let provider = self.adapter.user_api_provider()?;
             let udf = self.block_on(provider.get_udf(&tenant, udf_name))??;
             self.bind_context
                 .udf_cache
@@ -473,7 +473,7 @@ where P: super::TypeCheckPolicy
                 };
                 arg_scalars.push(arg_scalar);
             }
-            let handle = self.policy.async_runtime_handle()?;
+            let handle = self.adapter.async_runtime_handle()?;
             let value = block_on_with_handle(
                 &handle,
                 self.fold_udf_server(name.as_str(), arg_scalars, udf_definition.clone()),
@@ -569,7 +569,7 @@ where P: super::TypeCheckPolicy
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
         let Some(_) = &self
-            .policy
+            .adapter
             .global_config()?
             .query
             .common
@@ -580,7 +580,7 @@ where P: super::TypeCheckPolicy
             ));
         };
 
-        let provider = self.policy.cloud_control_api_provider()?;
+        let provider = self.adapter.cloud_control_api_provider()?;
         let tenant = self.table_ctx().get_tenant();
         let user = self
             .table_ctx()
@@ -795,7 +795,12 @@ where P: super::TypeCheckPolicy
 
         let language = language.parse()?;
         let use_cloud = matches!(language, UDFLanguage::Python)
-            && self.policy.global_config()?.query.common.enable_udf_sandbox;
+            && self
+                .adapter
+                .global_config()?
+                .query
+                .common
+                .enable_udf_sandbox;
         if use_cloud {
             UDFValidator::is_udf_cloud_script_allowed(&language)?;
         } else {
@@ -812,7 +817,7 @@ where P: super::TypeCheckPolicy
         }
 
         if use_cloud {
-            let handle = self.policy.async_runtime_handle()?;
+            let handle = self.adapter.async_runtime_handle()?;
             let code_bytes = block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?;
             let resolved_code = String::from_utf8(code_bytes).map_err(|err| {
                 ErrorCode::SemanticError(format!("Failed to parse UDF code as utf-8: {err}"))
@@ -853,7 +858,7 @@ where P: super::TypeCheckPolicy
             );
         }
 
-        let handle = self.policy.async_runtime_handle()?;
+        let handle = self.adapter.async_runtime_handle()?;
         let code_blob =
             block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
 
@@ -915,7 +920,7 @@ where P: super::TypeCheckPolicy
             packages,
         } = udf_definition;
         let language = language.parse()?;
-        let handle = self.policy.async_runtime_handle()?;
+        let handle = self.adapter.async_runtime_handle()?;
         let code_blob =
             block_on_with_handle(&handle, self.resolve_udf_with_stage(code))?.into_boxed_slice();
         let imports_stage_info = self.block_on(resolve_stage_locations(

@@ -67,8 +67,8 @@ pub(super) fn set_returning_function_name(func_name: &str) -> Option<&'static st
     None
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     pub(super) fn resolve_core_set_returning_function(
         &mut self,

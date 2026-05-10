@@ -37,7 +37,7 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a, super::FullTypeCheckPolicy> {
+impl<'a> TypeChecker<'a, super::FullTypeCheckAdapter> {
     pub fn all_sugar_functions() -> &'static [Ascii<&'static str>] {
         static FUNCTIONS: &[Ascii<&'static str>] = &[
             Ascii::new("current_catalog"),
@@ -191,8 +191,8 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-impl<'a, P> TypeChecker<'a, P>
-where P: super::TypeCheckPolicy
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
 {
     pub(super) fn resolve_core_sugar_function(
         &mut self,
@@ -210,20 +210,20 @@ where P: super::TypeCheckPolicy
         match (func_name, resolved_args.as_slice()) {
             ("current_catalog", []) => self.resolve_core_sugar_literal(
                 span,
-                Scalar::String(self.policy.table_access_context()?.get_current_catalog()),
+                Scalar::String(self.adapter.table_access_context()?.get_current_catalog()),
             ),
             ("database" | "currentdatabase" | "current_database", []) => self
                 .resolve_core_sugar_literal(
                     span,
-                    Scalar::String(self.policy.table_access_context()?.get_current_database()),
+                    Scalar::String(self.adapter.table_access_context()?.get_current_database()),
                 ),
             ("version", []) => {
-                self.resolve_core_sugar_literal(span, Scalar::String(self.policy.fuse_version()?))
+                self.resolve_core_sugar_literal(span, Scalar::String(self.adapter.fuse_version()?))
             }
             ("user" | "currentuser" | "current_user", []) => self.resolve_core_sugar_literal(
                 span,
                 Scalar::String(
-                    self.policy
+                    self.adapter
                         .authorization_context()?
                         .get_current_user()?
                         .identity()
@@ -234,7 +234,7 @@ where P: super::TypeCheckPolicy
             ("current_role", []) => self.resolve_core_sugar_literal(
                 span,
                 Scalar::String(
-                    self.policy
+                    self.adapter
                         .authorization_context()?
                         .get_current_role()
                         .map(|role| role.name)
@@ -242,7 +242,7 @@ where P: super::TypeCheckPolicy
                 ),
             ),
             ("current_secondary_roles", []) => {
-                let auth_ctx = self.policy.authorization_context()?;
+                let auth_ctx = self.adapter.authorization_context()?;
                 let mut roles = self
                     .block_on(auth_ctx.get_all_effective_roles())??
                     .into_iter()
@@ -258,7 +258,7 @@ where P: super::TypeCheckPolicy
                 self.resolve_core_sugar_literal(span, Scalar::String(to_string(&value)?))
             }
             ("current_available_roles", []) => {
-                let auth_ctx = self.policy.authorization_context()?;
+                let auth_ctx = self.adapter.authorization_context()?;
                 let mut roles = self
                     .block_on(auth_ctx.get_all_available_roles())??
                     .into_iter()
@@ -268,15 +268,19 @@ where P: super::TypeCheckPolicy
                 self.resolve_core_sugar_literal(span, Scalar::String(to_string(&roles)?))
             }
             ("connection_id", []) => {
-                self.resolve_core_sugar_literal(span, Scalar::String(self.policy.connection_id()?))
+                self.resolve_core_sugar_literal(span, Scalar::String(self.adapter.connection_id()?))
             }
             ("client_session_id", []) => self.resolve_core_sugar_literal(
                 span,
-                Scalar::String(self.policy.current_client_session_id()?.unwrap_or_default()),
+                Scalar::String(
+                    self.adapter
+                        .current_client_session_id()?
+                        .unwrap_or_default(),
+                ),
             ),
             ("timezone", []) => self.resolve_core_sugar_literal(
                 span,
-                Scalar::String(self.policy.settings().get_timezone().unwrap()),
+                Scalar::String(self.adapter.settings().get_timezone().unwrap()),
             ),
             ("last_query_id", args) => self.resolve_core_last_query_id(span, args),
             ("coalesce", args) => self.resolve_core_coalesce(span, args),
@@ -358,7 +362,7 @@ where P: super::TypeCheckPolicy
             check_number(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
         };
         let value = self
-            .policy
+            .adapter
             .last_query_id(index as i32)?
             .map(Scalar::String)
             .unwrap_or(Scalar::Null);
@@ -526,7 +530,7 @@ where P: super::TypeCheckPolicy
             }
         }
         let nulls_first =
-            nulls_first.unwrap_or_else(|| self.policy.settings().get_nulls_first()(asc));
+            nulls_first.unwrap_or_else(|| self.adapter.settings().get_nulls_first()(asc));
         let func_name = match (asc, nulls_first) {
             (true, true) => "array_sort_asc_null_first",
             (false, true) => "array_sort_desc_null_first",
@@ -606,7 +610,7 @@ where P: super::TypeCheckPolicy
         if let Ok(arg) = ConstantExpr::try_from(scalar.clone())
             && let Scalar::String(var_name) = arg.value
         {
-            let var_value = self.policy.variable(&var_name)?.unwrap_or(Scalar::Null);
+            let var_value = self.adapter.variable(&var_name)?.unwrap_or(Scalar::Null);
             let var_value = shrink_scalar(var_value);
             let data_type = var_value.as_ref().infer_data_type();
             return Ok(Box::new((

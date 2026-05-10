@@ -46,7 +46,7 @@ use databend_storages_common_table_meta::table::is_stream_name;
 use log::warn;
 
 use super::Finder;
-use crate::BasicTypeCheckPolicy;
+use crate::BasicTypeCheckAdapter;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::MetadataRef;
@@ -899,14 +899,13 @@ impl Binder {
         expr: &databend_common_ast::ast::Expr,
     ) -> Result<ScalarExpr> {
         let mut temp_ctx = BindContext::new();
-        let policy = BasicTypeCheckPolicy::scalar(self.ctx.as_ref())?;
-        let mut type_checker = TypeChecker::try_create_with_policy(
+        let adapter = BasicTypeCheckAdapter::scalar(self.ctx.as_ref())?;
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             &mut temp_ctx,
-            policy,
+            adapter,
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            false,
         )?;
         let (scalar, _) = *type_checker.resolve(expr)?;
         Ok(scalar)

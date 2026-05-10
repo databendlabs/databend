@@ -55,7 +55,7 @@ use crate::Visibility;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ExprContext;
 use crate::planner::binder::BindContext;
-use crate::planner::semantic::BasicTypeCheckPolicy;
+use crate::planner::semantic::BasicTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 
@@ -143,15 +143,14 @@ fn parse_ast_exprs(
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let policy = BasicTypeCheckPolicy::scalar_with_columns(ctx.as_ref())?;
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?;
 
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        false,
     )?;
 
     let exprs = ast_exprs
@@ -240,14 +239,13 @@ pub fn parse_computed_expr(
 
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let policy = BasicTypeCheckPolicy::scalar_with_columns(ctx.as_ref())?;
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
     )?;
 
     let tokens = tokenize_sql(sql)?;
@@ -305,14 +303,13 @@ pub fn parse_computed_expr_to_string(
 
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let policy = BasicTypeCheckPolicy::scalar_with_columns(ctx.as_ref())?;
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         Arc::new(RwLock::new(metadata)),
         &[],
-        false,
     )?;
 
     let (scalar, data_type) = *type_checker.resolve(ast)?;
@@ -391,14 +388,13 @@ pub fn parse_cluster_keys(
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let policy = BasicTypeCheckPolicy::scalar_with_columns(ctx.as_ref())?;
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?;
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        false,
     )?;
 
     let exprs: Vec<Expr> = ast_exprs
@@ -463,14 +459,13 @@ pub fn analyze_cluster_keys(
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
-    let policy = BasicTypeCheckPolicy::scalar_with_columns(ctx.as_ref())?;
-    let mut type_checker = TypeChecker::try_create_with_policy(
+    let adapter = BasicTypeCheckAdapter::scalar_with_columns(ctx.as_ref())?.with_forbid_udf(true);
+    let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
-        policy,
+        adapter,
         &name_resolution_ctx,
         metadata,
         &[],
-        true,
     )?;
 
     let settings = ctx.get_settings();

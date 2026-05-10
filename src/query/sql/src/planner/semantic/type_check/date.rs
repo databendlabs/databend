@@ -45,7 +45,7 @@ pub(super) enum AdjacentDayFunction {
     Next,
 }
 
-impl<'a, P> TypeChecker<'a, P> {
+impl<'a, A> TypeChecker<'a, A> {
     pub(super) fn adjust_date_interval_operands(
         &self,
         op: &BinaryOperator,
