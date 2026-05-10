@@ -53,6 +53,12 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
+pub(super) enum CoreSearchFunction {
+    Score,
+    Match { args: CoreSearchFunctionArgs },
+    Query { args: CoreSearchFunctionArgs },
+}
+
 impl<'a> CoreExprArena<'a> {
     pub(super) fn search_function(
         &mut self,
@@ -70,32 +76,59 @@ impl<'a> CoreExprArena<'a> {
             return Ok(None);
         };
 
-        let args = self.lower_display_expr_args(args)?;
-        Ok(Some(self.alloc(CoreExpr::SearchFunction {
-            span,
-            func_name,
-            args,
-        })))
+        let function = match func_name {
+            "score" => {
+                if !args.is_empty() {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid arguments for search function, score expects 0 argument, but got {}",
+                        args.len()
+                    ))
+                    .set_span(span));
+                }
+                CoreSearchFunction::Score
+            }
+            "match" => CoreSearchFunction::Match {
+                args: self.lower_display_expr_args(args)?,
+            },
+            "query" => CoreSearchFunction::Query {
+                args: self.lower_display_expr_args(args)?,
+            },
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "search function {func_name} should have been classified before lowering",
+                )));
+            }
+        };
+        Ok(Some(
+            self.alloc(CoreExpr::SearchFunction { span, function }),
+        ))
     }
 }
 
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    pub(super) fn resolve_core_score_search_function(
+    pub(super) fn resolve_core_search_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        function: &CoreSearchFunction,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        match function {
+            CoreSearchFunction::Score => self.resolve_core_score_search_function(span),
+            CoreSearchFunction::Match { args } => {
+                self.resolve_core_match_search_function(arena, span, args)
+            }
+            CoreSearchFunction::Query { args } => {
+                self.resolve_core_query_search_function(arena, span, args)
+            }
+        }
+    }
+
+    fn resolve_core_score_search_function(
         &mut self,
         span: Span,
-        func_name: &str,
-        args: &CoreSearchFunctionArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if !args.is_empty() {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 0 argument, but got {}",
-                func_name,
-                args.len()
-            ))
-            .set_span(span));
-        }
         let internal_column =
             InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore);
 
@@ -122,26 +155,23 @@ where A: super::TypeCheckAdapter
     /// gives preferential weight to fields being searched in.
     /// For example: title^5, content^1.2
     /// The second argument is the query text without query syntax.
-    pub(super) fn resolve_core_match_search_function(
+    fn resolve_core_match_search_function(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
         args: &CoreSearchFunctionArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
-            return Err(ErrorCode::SemanticError(format!(
-                "search function {} can only be used in where clause",
-                func_name
-            ))
+            return Err(ErrorCode::SemanticError(
+                "search function match can only be used in where clause".to_string(),
+            )
             .set_span(span));
         }
 
         // The optional third argument is additional configuration option.
         if args.len() != 2 && args.len() != 3 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 2 or 3 arguments, but got {}",
-                func_name,
+                "invalid arguments for search function, match expects 2 or 3 arguments, but got {}",
                 args.len()
             ))
             .set_span(span));
@@ -259,26 +289,23 @@ where A: super::TypeCheckAdapter
     /// 3. must and negative operator terms, like `title:+fox -cat`
     /// 4. phrase terms, like `title:"quick brown fox"`
     /// 5. multiple field with boost terms, like `title:fox^5 content:dog^2`
-    pub(super) fn resolve_core_query_search_function(
+    fn resolve_core_query_search_function(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
         args: &CoreSearchFunctionArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
-            return Err(ErrorCode::SemanticError(format!(
-                "search function {} can only be used in where clause",
-                func_name
-            ))
+            return Err(ErrorCode::SemanticError(
+                "search function query can only be used in where clause".to_string(),
+            )
             .set_span(span));
         }
 
         // The optional second argument is additional configuration option.
         if args.len() != 1 && args.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 1 argument, but got {}",
-                func_name,
+                "invalid arguments for search function, query expects 1 argument, but got {}",
                 args.len()
             ))
             .set_span(span));

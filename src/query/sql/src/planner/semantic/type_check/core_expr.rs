@@ -53,6 +53,7 @@ use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
+use super::search::CoreSearchFunction;
 use super::set_returning::set_returning_function_name;
 use super::window::CoreWindow;
 use super::window::CoreWindowDesc;
@@ -1166,8 +1167,7 @@ pub(super) enum CoreExpr<'a> {
     },
     SearchFunction {
         span: Span,
-        func_name: &'static str,
-        args: CoreSearchFunctionArgs,
+        function: CoreSearchFunction,
     },
     AsyncFunction {
         span: Span,
@@ -1357,20 +1357,9 @@ where A: super::TypeCheckAdapter
                 lambda_params,
                 *lambda_expr,
             ),
-            CoreExpr::SearchFunction {
-                span,
-                func_name,
-                args,
-            } => match *func_name {
-                "score" => self.resolve_core_score_search_function(*span, func_name, args),
-                "match" => self.resolve_core_match_search_function(arena, *span, func_name, args),
-                "query" => self.resolve_core_query_search_function(arena, *span, func_name, args),
-                _ => Err(ErrorCode::SemanticError(format!(
-                    "cannot find search function {}",
-                    func_name
-                ))
-                .set_span(*span)),
-            },
+            CoreExpr::SearchFunction { span, function } => {
+                self.resolve_core_search_function(arena, *span, function)
+            }
             CoreExpr::AsyncFunction { span, function } => {
                 self.resolve_async_function(arena, *span, function)
             }
