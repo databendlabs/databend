@@ -60,7 +60,6 @@ use super::literal::literal_value;
 use super::literal::minus_literal_scalar;
 use super::rewrite_function::rewrite_function_name;
 use super::search::CoreSearchFunction;
-use super::set_returning::set_returning_function_name;
 use super::special_function::CoreSpecialFunction;
 use super::window::CoreWindow;
 use super::window::CoreWindowDesc;
@@ -749,9 +748,8 @@ impl<'a> CoreExprArena<'a> {
             return Ok(expr);
         }
 
-        if let Some(func_name) = set_returning_function_name(&func_name) {
-            let args = self.lower_expr_args(args)?;
-            return Ok(self.set_returning_function(span, func_name, args));
+        if let Some(expr) = self.set_returning_function(span, &func_name, args)? {
+            return Ok(expr);
         }
 
         if !*distinct
@@ -760,12 +758,12 @@ impl<'a> CoreExprArena<'a> {
             && window.is_none()
             && lambda.is_none()
         {
-            if let Some(func_name) = rewrite_function_name(&func_name) {
-                return self.lower_rewrite_function(span, func_name, args);
+            if let Some(expr) = self.lower_rewrite_function(span, &func_name, args)? {
+                return Ok(expr);
             }
 
-            if let Some(func_name) = special_function_name(&func_name) {
-                return self.special_function(span, func_name, args);
+            if let Some(expr) = self.special_function(span, &func_name, args)? {
+                return Ok(expr);
             }
 
             if let Some(func_name) = builtin_scalar_function_name(&func_name) {
@@ -1826,15 +1824,6 @@ fn general_window_function_name(func_name: &str) -> Option<&'static str> {
 fn general_lambda_function_name(func_name: &str) -> Option<&'static str> {
     let func_name = Ascii::new(func_name);
     GENERAL_LAMBDA_FUNCTIONS
-        .iter()
-        .cloned()
-        .find(|name| *name == func_name)
-        .map(Ascii::into_inner)
-}
-
-fn special_function_name(func_name: &str) -> Option<&'static str> {
-    let func_name = Ascii::new(func_name);
-    TypeChecker::<super::FullTypeCheckAdapter>::all_special_functions()
         .iter()
         .cloned()
         .find(|name| *name == func_name)

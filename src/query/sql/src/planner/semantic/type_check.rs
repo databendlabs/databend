@@ -114,6 +114,7 @@ mod aggregate;
 mod async_functions;
 mod core_expr;
 mod date;
+mod function_arity;
 mod lambda;
 mod like;
 mod literal;

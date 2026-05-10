@@ -31,6 +31,7 @@ use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
 use super::core_expr::CoreSearchFunctionArgs;
+use super::function_arity::check_function_arity;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
@@ -159,63 +160,202 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn special_function(
         &mut self,
         span: Span,
-        func_name: &'static str,
+        func_name: &str,
         args: &'a [Expr],
-    ) -> Result<CoreExprId> {
-        let kind = match func_name {
-            "current_catalog" => {
-                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentCatalog)
-            }
-            "database" | "currentdatabase" | "current_database" => {
-                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase)
-            }
-            "version" => CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::Version),
-            "connection_id" => {
-                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::ConnectionId)
-            }
-            "client_session_id" => {
-                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::ClientSessionId)
-            }
-            "user" | "currentuser" | "current_user" => {
-                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::User)
-            }
-            "current_role" => {
-                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::Role)
-            }
-            "current_secondary_roles" => CoreSpecialFunctionKind::Authorization(
-                CoreAuthorizationSpecialFunction::SecondaryRoles,
+    ) -> Result<Option<CoreExprId>> {
+        let (func_name, kind, min_args, max_args) = match func_name {
+            "current_catalog" => (
+                "current_catalog",
+                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentCatalog),
+                0,
+                Some(0),
             ),
-            "current_available_roles" => CoreSpecialFunctionKind::Authorization(
-                CoreAuthorizationSpecialFunction::AvailableRoles,
+            "database" => (
+                "database",
+                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase),
+                0,
+                Some(0),
             ),
-            "timezone" => CoreSpecialFunctionKind::Timezone,
-            "last_query_id" => CoreSpecialFunctionKind::LastQueryId,
-            "coalesce" => CoreSpecialFunctionKind::Coalesce,
-            "decode" => CoreSpecialFunctionKind::Decode,
-            "array_sort" => CoreSpecialFunctionKind::ArraySort,
-            "array_aggregate" => CoreSpecialFunctionKind::ArrayAggregate,
-            "to_variant" => CoreSpecialFunctionKind::CastToVariant { is_try: false },
-            "try_to_variant" => CoreSpecialFunctionKind::CastToVariant { is_try: true },
-            "greatest" | "least" => CoreSpecialFunctionKind::GreatestOrLeast {
-                ignore_nulls: false,
-            },
-            "greatest_ignore_nulls" | "least_ignore_nulls" => {
-                CoreSpecialFunctionKind::GreatestOrLeast { ignore_nulls: true }
-            }
-            "getvariable" => CoreSpecialFunctionKind::GetVariable,
-            "hex_decode_string"
-            | "try_hex_decode_string"
-            | "base64_decode_string"
-            | "try_base64_decode_string" => CoreSpecialFunctionKind::DecodeString,
-            _ => CoreSpecialFunctionKind::Scalar,
+            "currentdatabase" => (
+                "currentdatabase",
+                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase),
+                0,
+                Some(0),
+            ),
+            "current_database" => (
+                "current_database",
+                CoreSpecialFunctionKind::Namespace(CoreNamespaceSpecialFunction::CurrentDatabase),
+                0,
+                Some(0),
+            ),
+            "version" => (
+                "version",
+                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::Version),
+                0,
+                Some(0),
+            ),
+            "connection_id" => (
+                "connection_id",
+                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::ConnectionId),
+                0,
+                Some(0),
+            ),
+            "client_session_id" => (
+                "client_session_id",
+                CoreSpecialFunctionKind::Session(CoreSessionSpecialFunction::ClientSessionId),
+                0,
+                Some(0),
+            ),
+            "user" => (
+                "user",
+                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::User),
+                0,
+                Some(0),
+            ),
+            "currentuser" => (
+                "currentuser",
+                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::User),
+                0,
+                Some(0),
+            ),
+            "current_user" => (
+                "current_user",
+                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::User),
+                0,
+                Some(0),
+            ),
+            "current_role" => (
+                "current_role",
+                CoreSpecialFunctionKind::Authorization(CoreAuthorizationSpecialFunction::Role),
+                0,
+                Some(0),
+            ),
+            "current_secondary_roles" => (
+                "current_secondary_roles",
+                CoreSpecialFunctionKind::Authorization(
+                    CoreAuthorizationSpecialFunction::SecondaryRoles,
+                ),
+                0,
+                Some(0),
+            ),
+            "current_available_roles" => (
+                "current_available_roles",
+                CoreSpecialFunctionKind::Authorization(
+                    CoreAuthorizationSpecialFunction::AvailableRoles,
+                ),
+                0,
+                Some(0),
+            ),
+            "timezone" => ("timezone", CoreSpecialFunctionKind::Timezone, 0, Some(0)),
+            "last_query_id" => (
+                "last_query_id",
+                CoreSpecialFunctionKind::LastQueryId,
+                0,
+                Some(1),
+            ),
+            "coalesce" => ("coalesce", CoreSpecialFunctionKind::Coalesce, 1, None),
+            "decode" => ("decode", CoreSpecialFunctionKind::Decode, 3, None),
+            "array_sort" => ("array_sort", CoreSpecialFunctionKind::ArraySort, 1, Some(3)),
+            "array_aggregate" => (
+                "array_aggregate",
+                CoreSpecialFunctionKind::ArrayAggregate,
+                2,
+                Some(2),
+            ),
+            "to_variant" => (
+                "to_variant",
+                CoreSpecialFunctionKind::CastToVariant { is_try: false },
+                1,
+                Some(1),
+            ),
+            "try_to_variant" => (
+                "try_to_variant",
+                CoreSpecialFunctionKind::CastToVariant { is_try: true },
+                1,
+                Some(1),
+            ),
+            "greatest" => (
+                "greatest",
+                CoreSpecialFunctionKind::GreatestOrLeast {
+                    ignore_nulls: false,
+                },
+                1,
+                None,
+            ),
+            "least" => (
+                "least",
+                CoreSpecialFunctionKind::GreatestOrLeast {
+                    ignore_nulls: false,
+                },
+                1,
+                None,
+            ),
+            "greatest_ignore_nulls" => (
+                "greatest_ignore_nulls",
+                CoreSpecialFunctionKind::GreatestOrLeast { ignore_nulls: true },
+                1,
+                None,
+            ),
+            "least_ignore_nulls" => (
+                "least_ignore_nulls",
+                CoreSpecialFunctionKind::GreatestOrLeast { ignore_nulls: true },
+                1,
+                None,
+            ),
+            "getvariable" => (
+                "getvariable",
+                CoreSpecialFunctionKind::GetVariable,
+                1,
+                Some(1),
+            ),
+            "hex_decode_string" => (
+                "hex_decode_string",
+                CoreSpecialFunctionKind::DecodeString,
+                1,
+                Some(1),
+            ),
+            "try_hex_decode_string" => (
+                "try_hex_decode_string",
+                CoreSpecialFunctionKind::DecodeString,
+                1,
+                Some(1),
+            ),
+            "base64_decode_string" => (
+                "base64_decode_string",
+                CoreSpecialFunctionKind::DecodeString,
+                1,
+                Some(1),
+            ),
+            "try_base64_decode_string" => (
+                "try_base64_decode_string",
+                CoreSpecialFunctionKind::DecodeString,
+                1,
+                Some(1),
+            ),
+            "stream_has_data" => (
+                "stream_has_data",
+                CoreSpecialFunctionKind::Scalar,
+                1,
+                Some(1),
+            ),
+            _ => return Ok(None),
         };
+        check_function_arity(span, func_name, args.len(), min_args, max_args)?;
         let function = CoreSpecialFunction {
             func_name,
             kind,
             args: self.lower_display_expr_args(args)?,
         };
-        Ok(self.alloc(CoreExpr::SpecialFunction { span, function }))
+        Ok(Some(
+            self.alloc(CoreExpr::SpecialFunction { span, function }),
+        ))
     }
+}
+
+fn invalid_lowered_special_function(func_name: &str) -> ErrorCode {
+    ErrorCode::Internal(format!(
+        "special function {func_name} should have been validated before resolving"
+    ))
 }
 
 impl CoreSpecialFunction {
@@ -260,27 +400,24 @@ where A: super::TypeCheckAdapter
 
         let args = resolved_args.as_slice();
         match &function.kind {
-            CoreSpecialFunctionKind::Namespace(namespace_function) if args.is_empty() => self
+            CoreSpecialFunctionKind::Namespace(namespace_function) => self.resolve_special_literal(
+                span,
+                self.adapter
+                    .resolve_namespace_function(namespace_function.type_check_function())?,
+            ),
+            CoreSpecialFunctionKind::Session(session_function) => self.resolve_special_literal(
+                span,
+                self.adapter
+                    .resolve_session_function(session_function.type_check_function())?,
+            ),
+            CoreSpecialFunctionKind::Authorization(authorization_function) => self
                 .resolve_special_literal(
-                    span,
-                    self.adapter
-                        .resolve_namespace_function(namespace_function.type_check_function())?,
-                ),
-            CoreSpecialFunctionKind::Session(session_function) if args.is_empty() => self
-                .resolve_special_literal(
-                    span,
-                    self.adapter
-                        .resolve_session_function(session_function.type_check_function())?,
-                ),
-            CoreSpecialFunctionKind::Authorization(authorization_function) if args.is_empty() => {
-                self.resolve_special_literal(
                     span,
                     self.adapter.resolve_authorization_function(
                         authorization_function.type_check_function(),
                     )?,
-                )
-            }
-            CoreSpecialFunctionKind::Timezone if args.is_empty() => self.resolve_special_literal(
+                ),
+            CoreSpecialFunctionKind::Timezone => self.resolve_special_literal(
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
             ),
@@ -290,40 +427,32 @@ where A: super::TypeCheckAdapter
             CoreSpecialFunctionKind::ArraySort => self.resolve_array_sort(span, args),
             CoreSpecialFunctionKind::ArrayAggregate => self.resolve_array_aggregate(span, args),
             CoreSpecialFunctionKind::CastToVariant { is_try } => {
-                if let [(_, scalar, data_type)] = args {
-                    return self
-                        .resolve_cast_to_variant(span, data_type, scalar, *is_try)
-                        .unwrap_or_else(|| {
-                            self.resolve_scalar_function_call(
-                                span,
-                                function.func_name,
-                                vec![],
-                                vec![scalar.clone()],
-                            )
-                        });
-                }
-                self.resolve_special_scalar_function(span, function.func_name, args)
+                let [(_, scalar, data_type)] = args else {
+                    return Err(invalid_lowered_special_function(function.func_name));
+                };
+                self.resolve_cast_to_variant(span, data_type, scalar, *is_try)
+                    .unwrap_or_else(|| {
+                        self.resolve_scalar_function_call(span, function.func_name, vec![], vec![
+                            scalar.clone(),
+                        ])
+                    })
             }
             CoreSpecialFunctionKind::GreatestOrLeast { ignore_nulls } => {
                 self.resolve_greatest_or_least(span, function.func_name, args, *ignore_nulls)
             }
             CoreSpecialFunctionKind::GetVariable => {
-                if let [(_, scalar, _)] = args {
-                    return self.resolve_get_variable(span, scalar);
-                }
-                self.resolve_special_scalar_function(span, function.func_name, args)
+                let [(_, scalar, _)] = args else {
+                    return Err(invalid_lowered_special_function(function.func_name));
+                };
+                self.resolve_get_variable(span, scalar)
             }
             CoreSpecialFunctionKind::DecodeString => {
-                if let [(_, scalar, _)] = args {
-                    return self.resolve_decode_string(span, function.func_name, scalar);
-                }
-                self.resolve_special_scalar_function(span, function.func_name, args)
+                let [(_, scalar, _)] = args else {
+                    return Err(invalid_lowered_special_function(function.func_name));
+                };
+                self.resolve_decode_string(span, function.func_name, scalar)
             }
-            CoreSpecialFunctionKind::Scalar
-            | CoreSpecialFunctionKind::Namespace(_)
-            | CoreSpecialFunctionKind::Session(_)
-            | CoreSpecialFunctionKind::Authorization(_)
-            | CoreSpecialFunctionKind::Timezone => {
+            CoreSpecialFunctionKind::Scalar => {
                 self.resolve_special_scalar_function(span, function.func_name, args)
             }
         }

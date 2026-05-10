@@ -503,6 +503,12 @@ async fn test_type_check_special_functions() -> Result<()> {
             sql: "connection_id()",
         },
         SqlTestCase {
+            name: "current_database_rejects_arguments",
+            description: "context literal special functions should validate arity while lowering.",
+            setup_sqls: &[],
+            sql: "current_database(1)",
+        },
+        SqlTestCase {
             name: "coalesce_rewrites_to_if_chain",
             description: "coalesce should remove literal NULLs and rewrite to the IF chain.",
             setup_sqls: &[],
@@ -567,6 +573,12 @@ async fn test_type_check_special_functions() -> Result<()> {
             description: "getvariable should resolve a constant variable name through the explicit type-check adapter.",
             setup_sqls: &[],
             sql: "getvariable('missing_var')",
+        },
+        SqlTestCase {
+            name: "getvariable_rejects_missing_name",
+            description: "getvariable should validate its single-argument shape while lowering.",
+            setup_sqls: &[],
+            sql: "getvariable()",
         },
         SqlTestCase {
             name: "hex_decode_string_rewrites_via_binary_decode",

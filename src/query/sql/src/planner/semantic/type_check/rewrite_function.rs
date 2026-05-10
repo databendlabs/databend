@@ -24,6 +24,7 @@ use super::TypeChecker;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
 use super::core_expr::CoreExprId;
+use super::function_arity::check_function_arity;
 
 pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
     static FUNCTIONS: &[Ascii<&'static str>] = &[
@@ -60,9 +61,13 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_rewrite_function(
         &mut self,
         span: Span,
-        func_name: &'static str,
+        func_name: &str,
         args: &'a [Expr],
-    ) -> Result<CoreExprId> {
+    ) -> Result<Option<CoreExprId>> {
+        let Some(func_name) = rewrite_function_name(func_name) else {
+            return Ok(None);
+        };
+
         let lowered = match (func_name, args) {
             ("nullif", [arg_x, arg_y]) => {
                 let arg_x_eq = self.lower_ast_expr(arg_x)?;
@@ -90,12 +95,11 @@ impl<'a> CoreExprArena<'a> {
 
                 Some(self.call(span, "if", smallvec![eq_is_not_null, eq_is_true, both_null]))
             }
-            ("iff", args) => {
-                let args = args
-                    .iter()
-                    .map(|arg| self.lower_ast_expr(arg))
-                    .collect::<Result<_>>()?;
-                Some(self.call(span, "if", args))
+            ("iff", [condition, then_expr, else_expr]) => {
+                let condition = self.lower_ast_expr(condition)?;
+                let then_expr = self.lower_ast_expr(then_expr)?;
+                let else_expr = self.lower_ast_expr(else_expr)?;
+                Some(self.call(span, "if", smallvec![condition, then_expr, else_expr]))
             }
             ("ifnull" | "nvl", [arg_x, arg_y]) => {
                 let arg_x_null_check = self.lower_ast_expr(arg_x)?;
@@ -123,6 +127,7 @@ impl<'a> CoreExprArena<'a> {
                 Some(self.call(span, "not", smallvec![arg_x_is_not_error]))
             }
             ("error_or", args) => {
+                check_function_arity(span, func_name, args.len(), 1, None)?;
                 let mut new_args = CoreExprArgs::with_capacity(args.len() * 2 + 1);
                 for arg in args {
                     let arg_error_check = self.lower_ast_expr(arg)?;
@@ -134,13 +139,25 @@ impl<'a> CoreExprArena<'a> {
                 new_args.push(self.literal(span, Literal::Null));
                 Some(self.call(span, "if", new_args))
             }
-            _ => None,
+            ("nullif", _) | ("equal_null", _) | ("ifnull" | "nvl", _) => {
+                check_function_arity(span, func_name, args.len(), 2, Some(2))?;
+                None
+            }
+            ("iff", _) | ("nvl2", _) => {
+                check_function_arity(span, func_name, args.len(), 3, Some(3))?;
+                None
+            }
+            ("is_null" | "isnull" | "is_error", _) => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                None
+            }
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "rewrite function {func_name} should have been classified before lowering"
+                )));
+            }
         };
 
-        lowered.ok_or_else(|| {
-            ErrorCode::Internal(format!(
-                "rewrite function {func_name} should have been classified before lowering"
-            ))
-        })
+        Ok(lowered)
     }
 }

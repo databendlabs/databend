@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
@@ -34,37 +35,38 @@ impl<'a> CoreExprArena<'a> {
     pub(super) fn set_returning_function(
         &mut self,
         span: Span,
-        func_name: &'static str,
-        args: CoreExprArgs,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::SetReturningFunction {
+        func_name: &str,
+        args: &'a [Expr],
+    ) -> Result<Option<CoreExprId>> {
+        if !BUILTIN_FUNCTIONS
+            .get_property(func_name)
+            .map(|property| property.kind == FunctionKind::SRF)
+            .unwrap_or(false)
+        {
+            return Ok(None);
+        }
+
+        let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
+        let func_name = if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
+            Some(name.as_str())
+        } else if let Some((name, _)) = functions.factories.get_key_value(func_name) {
+            Some(name.as_str())
+        } else if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
+            Some(alias.as_str())
+        } else {
+            None
+        };
+        let Some(func_name) = func_name else {
+            return Ok(None);
+        };
+
+        let args = self.lower_expr_args(args)?;
+        Ok(Some(self.alloc(CoreExpr::SetReturningFunction {
             span,
             func_name,
             args,
-        })
+        })))
     }
-}
-
-pub(super) fn set_returning_function_name(func_name: &str) -> Option<&'static str> {
-    if !BUILTIN_FUNCTIONS
-        .get_property(func_name)
-        .map(|property| property.kind == FunctionKind::SRF)
-        .unwrap_or(false)
-    {
-        return None;
-    }
-
-    let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
-    if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
-        return Some(name.as_str());
-    }
-    if let Some((name, _)) = functions.factories.get_key_value(func_name) {
-        return Some(name.as_str());
-    }
-    if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
-        return Some(alias.as_str());
-    }
-    None
 }
 
 impl<'a, A> TypeChecker<'a, A>

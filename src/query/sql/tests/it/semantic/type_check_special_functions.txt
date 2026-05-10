@@ -47,6 +47,13 @@ status: ok
 scalar: 'lite-conn'
 type: String
 
+=== current_database_rejects_arguments ===
+description: context literal special functions should validate arity while lowering.
+sql: current_database(1)
+status: error
+code: 1065
+message: current_database expects 0 arguments, but got 1
+
 === coalesce_rewrites_to_if_chain ===
 description: coalesce should remove literal NULLs and rewrite to the IF chain.
 sql: coalesce(NULL, text, pattern)
@@ -123,6 +130,13 @@ sql: getvariable('missing_var')
 status: ok
 scalar: NULL
 type: NULL
+
+=== getvariable_rejects_missing_name ===
+description: getvariable should validate its single-argument shape while lowering.
+sql: getvariable()
+status: error
+code: 1065
+message: getvariable expects 1 argument, but got 0
 
 === hex_decode_string_rewrites_via_binary_decode ===
 description: hex_decode_string should rewrite through the binary decoder and cast back to string.
