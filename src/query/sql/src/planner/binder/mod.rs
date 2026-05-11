@@ -60,6 +60,7 @@ mod table_args;
 mod udf;
 mod util;
 mod virtual_column;
+pub(crate) mod wap_branch;
 mod window;
 
 pub use aggregate::AggregateInfo;

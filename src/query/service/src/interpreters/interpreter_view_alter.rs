@@ -57,7 +57,8 @@ impl Interpreter for AlterViewInterpreter {
             .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
             .await
         {
-            let mut planner = Planner::new(self.ctx.clone());
+            // Replay stored view SQL against base tables.
+            let mut planner = Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
             let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
 
             // Detect circular dependency: ALTER VIEW can introduce cycles

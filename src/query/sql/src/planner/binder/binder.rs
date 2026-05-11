@@ -104,6 +104,9 @@ pub struct Binder {
     pub enable_result_cache: bool,
 
     pub subquery_executor: Option<Arc<dyn QueryExecutor>>,
+
+    /// Propagates persisted-definition WAP suppression to the root `BindContext`.
+    pub suppress_wap_branch: bool,
 }
 
 impl Binder {
@@ -129,6 +132,7 @@ impl Binder {
             m_cte_table_name: HashMap::new(),
             enable_result_cache,
             subquery_executor: None,
+            suppress_wap_branch: false,
         }
     }
 
@@ -140,6 +144,12 @@ impl Binder {
         self
     }
 
+    /// Suppress session `wap_branch` while binding persisted-definition SQL.
+    pub fn with_suppress_wap_branch(mut self, suppress: bool) -> Self {
+        self.suppress_wap_branch = suppress;
+        self
+    }
+
     #[async_backtrace::framed]
     #[fastrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
@@ -147,6 +157,7 @@ impl Binder {
         self.ctx
             .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
+        bind_context.suppress_wap_branch = self.suppress_wap_branch;
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
         self.bind_query_index(&mut bind_context, &plan).await?;
         self.ctx.set_status_info(&format!(

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_ast::parser::Dialect;
 use databend_common_ast::parser::parse_comma_separated_exprs;
 use databend_common_ast::parser::tokenize_sql;
@@ -60,6 +61,22 @@ use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
+
+pub fn quoted_table_reference(
+    database_name: &str,
+    table_name: &str,
+    branch_name: Option<&str>,
+    quote: char,
+) -> String {
+    let database = QuotedIdent(database_name, quote);
+    let table = QuotedIdent(table_name, quote);
+    if let Some(branch_name) = branch_name {
+        let branch = QuotedIdent(branch_name, quote);
+        format!("{database}.{table}/{branch}")
+    } else {
+        format!("{database}.{table}")
+    }
+}
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -366,9 +383,10 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         with_options: &str,
     ) -> Result<String> {
-        let (_, _, _, _) = (ctx, database_name, table_name, with_options);
+        let (_, _, _, _, _) = (ctx, database_name, table_name, branch_name, with_options);
 
         Err(ErrorCode::Unimplemented(format!(
             "Change tracking operation is not supported for the table '{}', which uses the '{}' engine.",

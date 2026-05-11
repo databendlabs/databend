@@ -61,6 +61,7 @@ const PROBE_INSERT_INITIAL_TOKENS: usize = 128;
 pub struct Planner {
     pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) query_executor: Option<Arc<dyn QueryExecutor>>,
+    pub(crate) suppress_wap_branch: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +75,7 @@ impl Planner {
         Planner {
             ctx,
             query_executor: None,
+            suppress_wap_branch: false,
         }
     }
 
@@ -84,7 +86,15 @@ impl Planner {
         Planner {
             ctx,
             query_executor: Some(query_executor),
+            suppress_wap_branch: false,
         }
+    }
+
+    /// Suppress session `wap_branch` while replaying persisted definitions.
+    /// Stored SQL resolves base tables unless it names an explicit branch.
+    pub fn with_suppress_wap_branch(mut self, suppress: bool) -> Self {
+        self.suppress_wap_branch = suppress;
+        self
     }
 
     #[async_backtrace::framed]
@@ -250,6 +260,11 @@ impl Planner {
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let mut enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?;
+        // Persisted-definition replay must bypass planner cache because cached plans
+        // may already have resolved table refs through the session `wap_branch`.
+        if self.suppress_wap_branch {
+            enable_planner_cache = false;
+        }
         let planner_cache_key = if enable_planner_cache {
             Some(Self::planner_cache_key(&stmt.to_string()))
         } else {
@@ -281,7 +296,8 @@ impl Planner {
             name_resolution_ctx,
             metadata.clone(),
         )
-        .with_subquery_executor(self.query_executor.clone());
+        .with_subquery_executor(self.query_executor.clone())
+        .with_suppress_wap_branch(self.suppress_wap_branch);
 
         // must attach before bind, because ParquetRSTable::create used it.
         self.ctx.attach_query_str(query_kind, stmt.to_mask_sql());

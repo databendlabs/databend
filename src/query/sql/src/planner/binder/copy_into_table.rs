@@ -160,8 +160,15 @@ impl Binder {
             table_identifier.table_name(),
             table_identifier.branch_name(),
         );
+
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
+        let branch_name = self.resolve_write_branch_with_wap_branch(
+            &catalog_name,
+            &database_name,
+            &table_name,
+            branch_name,
+        )?;
         let table = self
             .ctx
             .get_table_with_branch(

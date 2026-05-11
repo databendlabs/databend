@@ -1750,12 +1750,18 @@ impl Binder {
         let catalog = table_identifier.catalog_name();
         let database = table_identifier.database_name();
         let table = table_identifier.table_name();
+        let branch = self.resolve_write_branch_with_wap_branch(
+            &catalog,
+            &database,
+            &table,
+            table_identifier.branch_name(),
+        )?;
 
         Ok(Plan::TruncateTable(Box::new(TruncateTablePlan {
             catalog,
             database,
             table,
-            branch: table_identifier.branch_name(),
+            branch,
         })))
     }
 
@@ -2395,7 +2401,9 @@ impl Binder {
 
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
-                        let mut planner = Planner::new(self.ctx.clone());
+                        // Replay stored view SQL against base tables.
+                        let mut planner =
+                            Planner::new(self.ctx.clone()).with_suppress_wap_branch(true);
                         let (plan, _) = planner.plan_sql(query).await?;
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,
