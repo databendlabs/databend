@@ -21,7 +21,6 @@ use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::WithOptions;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
-use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table_with_options::check_with_opt_valid;
 use databend_common_catalog::table_with_options::get_with_opt_consume;
@@ -147,23 +146,14 @@ impl Binder {
 
         let navigation = self.resolve_temporal_clause(bind_context, temporal)?;
         if let Some(branch_name) = branch_name.as_ref() {
-            // Branch-qualified reads are feature/license gated during table resolution in
-            // QueryContext::get_table_from_shared() before any branch table is loaded. Keep the
-            // binder-side branch handling here focused on syntax/semantic validation.
-            // Branch reads are supported in FROM, but TAG navigation stays bound to the base table
-            // namespace (`db.table AT (TAG => ...)`). Reject the mixed form early in binder.
-            if matches!(
-                navigation.as_ref(),
-                Some(TimeNavigation::TimeTravel(NavigationPoint::TableTag(_)))
-                    | Some(TimeNavigation::Changes {
-                        at: NavigationPoint::TableTag(_),
-                        ..
-                    })
-                    | Some(TimeNavigation::Changes {
-                        end: Some(NavigationPoint::TableTag(_)),
-                        ..
-                    })
-            ) {
+            // Branch-qualified reads are feature/license gated later in
+            // QueryContext::get_table_from_shared(). Here we only do syntax/semantic
+            // checks: branch reads are allowed in FROM, but TAG navigation stays on the
+            // base namespace (`db.table AT (TAG => ...)`), so reject the mixed form.
+            if navigation
+                .as_ref()
+                .is_some_and(TimeNavigation::contains_table_tag)
+            {
                 return Err(ErrorCode::Unimplemented(format!(
                     "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table_name}/{branch_name}`"
                 ))
@@ -172,22 +162,27 @@ impl Binder {
         }
 
         // Resolve table with catalog
-        let table_meta = {
+        let (table_meta, resolved_branch) = {
             let table_name = if let Some(cte_suffix_name) = cte_suffix_name.as_ref() {
                 format!("{}${}", &table_name, cte_suffix_name)
             } else {
                 table_name.clone()
             };
-            match self.resolve_data_source(
-                &self.ctx,
-                catalog.as_str(),
-                database.as_str(),
-                table_name.as_str(),
-                branch_name.as_deref(),
+            // Persisted definitions ignore session `wap_branch`; explicit branches win.
+            // `suppress_wap_branch` covers top-level definition replay.
+            let suppress_wap_branch = !bind_context.binding_views.is_empty()
+                || bind_context.planning_agg_index
+                || bind_context.suppress_wap_branch;
+            match self.resolve_read_table_with_wap_branch(
+                &catalog,
+                &database,
+                &table_name,
+                branch_name.clone(),
                 navigation.as_ref(),
                 max_batch_size,
+                suppress_wap_branch,
             ) {
-                Ok(table) => table,
+                Ok(resolved) => (resolved.table, resolved.branch),
                 Err(e) => {
                     let mut parent = bind_context.parent.as_mut();
                     loop {
@@ -233,7 +228,7 @@ impl Binder {
                     database.clone(),
                     table_name.clone(),
                     table_meta.clone(),
-                    branch_name,
+                    resolved_branch.clone(),
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,
@@ -259,6 +254,7 @@ impl Binder {
                     self.ctx.clone(),
                     database.as_str(),
                     table_name.as_str(),
+                    resolved_branch.as_deref(),
                     &with_opts_str,
                 ))?;
 
@@ -323,7 +319,7 @@ impl Binder {
                         database.clone(),
                         table_name,
                         table_meta,
-                        branch_name,
+                        resolved_branch.clone(),
                         table_name_alias,
                         false,
                         false,
@@ -359,7 +355,7 @@ impl Binder {
                     database.clone(),
                     table_name,
                     table_meta,
-                    branch_name,
+                    resolved_branch,
                     table_name_alias,
                     !bind_context.binding_views.is_empty(),
                     bind_context.planning_agg_index,

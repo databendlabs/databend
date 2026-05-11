@@ -207,6 +207,7 @@ impl Binder {
             expr_context: ExprContext::default(),
             group_by_column_first: bind_context.group_by_column_first,
             planning_agg_index: false,
+            suppress_wap_branch: bind_context.suppress_wap_branch,
             window_definitions: DashMap::new(),
         };
 

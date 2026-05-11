@@ -140,13 +140,28 @@ impl Binder {
         self
     }
 
+    /// Suppress session `wap_branch` while binding persisted-definition SQL.
+    /// Seeds the root `BindContext`; explicit `table/branch` references still win.
+    pub async fn bind_with_suppress_wap_branch(
+        self,
+        stmt: &Statement,
+        suppress_wap_branch: bool,
+    ) -> Result<Plan> {
+        self.bind_inner(stmt, suppress_wap_branch).await
+    }
+
     #[async_backtrace::framed]
     #[fastrace::trace]
-    pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
+    pub async fn bind(self, stmt: &Statement) -> Result<Plan> {
+        self.bind_inner(stmt, false).await
+    }
+
+    async fn bind_inner(mut self, stmt: &Statement, suppress_wap_branch: bool) -> Result<Plan> {
         let start = Instant::now();
         self.ctx
             .set_status_info("[SQL-BINDER] Binding SQL statement");
         let mut bind_context = BindContext::new();
+        bind_context.suppress_wap_branch = suppress_wap_branch;
         let plan = self.bind_statement(&mut bind_context, stmt).await?;
         self.bind_query_index(&mut bind_context, &plan).await?;
         self.ctx.set_status_info(&format!(
@@ -322,7 +337,7 @@ impl Binder {
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
             Statement::AlterTable(stmt) => self.bind_alter_table(bind_context, stmt).await?,
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
-            Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
+            Statement::TruncateTable(stmt) => self.bind_truncate_table(bind_context, stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
             Statement::VacuumDropTable(stmt) => {

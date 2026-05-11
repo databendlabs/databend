@@ -1,0 +1,708 @@
+## Copyright 2023 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+set enable_experimental_table_ref=1;
+
+statement ok
+DROP DATABASE IF EXISTS test_wap_branch
+
+statement ok
+CREATE DATABASE test_wap_branch
+
+statement ok
+USE test_wap_branch
+
+statement ok
+CREATE TABLE t1(a INT, b STRING)
+
+statement ok
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b')
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t1 CREATE BRANCH other
+
+statement ok
+INSERT INTO t1/dev VALUES (3, 'c')
+
+statement ok
+INSERT INTO t1/other VALUES (5, 'e')
+
+statement ok
+CREATE TABLE t_no_branch(a INT, c STRING)
+
+statement ok
+INSERT INTO t_no_branch VALUES (3, 'base_only')
+
+statement ok
+CREATE TABLE t_memory(a INT) ENGINE = Memory
+
+statement ok
+INSERT INTO t_memory VALUES (7)
+
+statement ok
+CREATE TEMP TABLE t_temp(a INT)
+
+statement ok
+INSERT INTO t_temp VALUES (8)
+
+## wap_branch empty: normal behavior.
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+
+statement ok
+SET wap_branch = 'dev'
+
+## Reads use an existing WAP branch.
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+3 c
+
+## WAP branch reads are resolved per table; missing branches fall back to base.
+query IT
+SELECT t1.a, t_no_branch.c FROM t1 JOIN t_no_branch ON t1.a = t_no_branch.a ORDER BY t1.a
+----
+3 base_only
+
+## FUSE writes use an existing WAP branch.
+statement ok
+INSERT INTO t1 VALUES (4, 'd')
+
+## Unqualified reads continue to use the WAP branch.
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+3 c
+4 d
+
+## Mutations use the existing WAP branch.
+statement ok
+UPDATE t1 SET b = 'branch_updated' WHERE a = 1
+
+query IT
+SELECT * FROM t1/dev WHERE a = 1
+----
+1 branch_updated
+
+## Base table is unchanged.
+statement ok
+UNSET wap_branch
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+
+## Explicit branch targets take precedence over wap_branch.
+statement ok
+SET wap_branch = 'dev'
+
+query IT
+SELECT * FROM t1/other ORDER BY a
+----
+1 a
+2 b
+5 e
+
+statement ok
+INSERT INTO t1/other VALUES (6, 'explicit')
+
+query IT
+SELECT * FROM t1/other ORDER BY a
+----
+1 a
+2 b
+5 e
+6 explicit
+
+## Explicit branch destructive writes take precedence over wap_branch.
+statement ok
+TRUNCATE TABLE t1/other
+
+query I
+SELECT count() FROM t1/other
+----
+0
+
+query IT
+SELECT * FROM t1/dev ORDER BY a
+----
+1 branch_updated
+2 b
+3 c
+4 d
+
+## Missing WAP branch does not affect reads and errors for writes.
+statement ok
+UNSET wap_branch
+
+statement ok
+SET wap_branch = 'nonexistent'
+
+statement error .*Unknown branch 'nonexistent'.*
+INSERT INTO t1 VALUES (99, 'fail')
+
+statement error .*Unknown branch 'nonexistent'.*
+TRUNCATE TABLE t1
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+
+## Memory reads fall back to base, but writes fail because the WAP branch is missing.
+statement ok
+UNSET wap_branch
+
+statement ok
+SET wap_branch = 'dev'
+
+statement error .*Unknown branch 'dev'.*
+INSERT INTO t_memory VALUES (8)
+
+query I
+SELECT * FROM t_memory ORDER BY a
+----
+7
+
+## Temp tables are not branch-routed.
+statement ok
+INSERT INTO t_temp VALUES (9)
+
+query I
+SELECT * FROM t_temp ORDER BY a
+----
+8
+9
+
+## Persisted definitions ignore the session wap_branch and resolve base tables; an
+## explicit `table/branch` inside a body still wins.
+statement ok
+ALTER TABLE t_no_branch CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t_no_branch/dev ADD COLUMN d INT
+
+statement ok
+UPDATE t_no_branch/dev SET d = 30 WHERE a = 3
+
+statement ok
+INSERT INTO t_no_branch/dev VALUES (4, 'branch_only', 40)
+
+statement ok
+SET wap_branch = 'dev'
+
+## CREATE/ALTER VIEW are allowed under a branch session; the body resolves to base.
+statement ok
+CREATE VIEW v_wap(a, c) AS SELECT a, c FROM t_no_branch
+
+statement ok
+ALTER VIEW v_wap(a, c) AS SELECT a, c FROM t_no_branch
+
+## CREATE/REFRESH AGGREGATING INDEX are allowed under a branch session; the index
+## query resolves base, anchoring materialized data to the base table.
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_wap_base
+
+statement ok
+CREATE AGGREGATING INDEX idx_wap_base AS SELECT SUM(a) FROM t_no_branch
+
+statement ok
+REFRESH AGGREGATING INDEX idx_wap_base
+
+## Dynamic tables stay rejected under a branch session: branch refresh semantics are
+## not defined yet.
+statement error .*wap_branch.*
+CREATE DYNAMIC TABLE dt_wap TARGET_LAG = DOWNSTREAM WAREHOUSE = 'wh' AS SELECT * FROM t_no_branch
+
+## The view body ignores the session branch and returns base data.
+query IT
+SELECT * FROM v_wap ORDER BY a
+----
+3 base_only
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx_wap_base
+
+## A base-table aggregating index must not satisfy a WAP branch query.
+statement ok
+SET enable_aggregating_index_scan = 1
+
+statement ok
+CREATE AGGREGATING INDEX idx_wap_scan AS SELECT SUM(a) FROM t_no_branch
+
+statement ok
+REFRESH AGGREGATING INDEX idx_wap_scan
+
+## No branch: base SUM(a) over base rows.
+query I
+SELECT SUM(a) FROM t_no_branch
+----
+3
+
+statement ok
+SET wap_branch = 'dev'
+
+## Branch read must reflect branch data (3 + 4 = 7), not the base index (3).
+query I
+SELECT SUM(a) FROM t_no_branch
+----
+7
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP AGGREGATING INDEX idx_wap_scan
+
+statement ok
+SET enable_aggregating_index_scan = 0
+
+## An explicit `table/branch` inside a view body is always honored, independent of
+## the session wap_branch.
+statement ok
+CREATE VIEW v_branch(a, c) AS SELECT a, c FROM t_no_branch/dev
+
+statement ok
+SET wap_branch = 'dev'
+
+query IT
+SELECT * FROM v_branch ORDER BY a
+----
+3 base_only
+4 branch_only
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP VIEW v_branch
+
+## Schema inference for a `SELECT *` view must ignore the session wap_branch and
+## resolve base (a, c), not the dev branch's extra `d`. All suppressed-planning entry
+## points must agree: system.columns, DESCRIBE VIEW, DESCRIBE <view>,
+## system.statistics, and CREATE TABLE ... LIKE view.
+statement ok
+CREATE VIEW v_star AS SELECT * FROM t_no_branch
+
+statement ok
+SET wap_branch = 'dev'
+
+## Under wap_branch=dev the body still resolves base: 2 columns, base data.
+query IT
+SELECT * FROM v_star ORDER BY a
+----
+3 base_only
+
+query I
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_star'
+----
+2
+
+query TTTTT
+DESCRIBE VIEW v_star
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+
+query TTTTT
+DESCRIBE v_star
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+
+query I
+SELECT count(*) FROM system.statistics WHERE database = 'test_wap_branch' AND `table` = 'v_star'
+----
+2
+
+## CREATE TABLE LIKE view must persist the base schema (2 columns).
+statement ok
+CREATE TABLE t_like_v_star LIKE v_star
+
+query I
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 't_like_v_star'
+----
+2
+
+statement ok
+DROP TABLE t_like_v_star
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP VIEW v_star
+
+## CREATE/ALTER VIEW validation resolves base tables, not the session branch.
+## (1) A body referencing a branch-only column is rejected: it does not exist on base.
+statement ok
+SET wap_branch = 'dev'
+
+statement error
+CREATE VIEW v_reject AS SELECT a, d FROM t_no_branch
+
+## (2) A base-valid `SELECT *` with column aliases must not be rejected by a column
+## count mismatch against the wider branch schema. Base has 2 columns.
+statement ok
+CREATE VIEW v_alias(x, y) AS SELECT * FROM t_no_branch
+
+query TTTTT
+DESCRIBE VIEW v_alias
+----
+x INT YES NULL (empty)
+y VARCHAR YES NULL (empty)
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP VIEW v_alias
+
+## Explicit branch CHANGES keeps its branch after the internal rewrite.
+statement ok
+CREATE TABLE t_changes(a INT, b STRING)
+
+statement ok
+INSERT INTO t_changes VALUES (1, 'base')
+
+statement ok
+ALTER TABLE t_changes CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t_changes CREATE BRANCH other
+
+statement ok
+INSERT INTO t_changes/dev VALUES (10, 'dev_before_stream')
+
+statement ok
+INSERT INTO t_changes/other VALUES (20, 'other_before_stream')
+
+statement ok
+CREATE STREAM s_changes_other ON TABLE t_changes/other APPEND_ONLY = true
+
+statement ok
+INSERT INTO t_changes/dev VALUES (11, 'dev_after_stream')
+
+statement ok
+INSERT INTO t_changes/other VALUES (21, 'other_after_stream')
+
+query ITTB
+SELECT a, b, change$action, change$is_update FROM t_changes/other CHANGES(INFORMATION => APPEND_ONLY) AT(STREAM => s_changes_other) ORDER BY a
+----
+21 other_after_stream INSERT 0
+
+statement ok
+SET wap_branch = 'dev'
+
+## CTAS reads through the WAP branch; metadata DDL still targets the base table.
+statement ok
+CREATE TABLE t_ctas AS SELECT * FROM t1
+
+query IT
+SELECT * FROM t_ctas ORDER BY a
+----
+1 branch_updated
+2 b
+3 c
+4 d
+
+statement ok
+ALTER TABLE t1 COMMENT='wap ddl keeps base semantics'
+
+## Branch management keeps its base-table semantics under wap_branch.
+statement ok
+ALTER TABLE t1 CREATE BRANCH another
+
+statement ok
+ALTER TABLE t1 DROP BRANCH another
+
+statement ok
+DROP TABLE t_ctas
+
+## TRUNCATE is a destructive write and uses the WAP branch.
+statement ok
+TRUNCATE TABLE t1
+
+query I
+SELECT count() FROM t1/dev
+----
+0
+
+statement ok
+UNSET wap_branch
+
+query IT
+SELECT * FROM t1 ORDER BY a
+----
+1 a
+2 b
+
+query T
+SELECT comment FROM system.tables WHERE database = 'test_wap_branch' AND name = 't1'
+----
+wap ddl keeps base semantics
+
+## Planner cache must distinguish the same SQL text across wap_branch values. The
+## cache validates session setting changes, and wap_branch is a session setting, so a
+## base-resolved plan is never reused for a branch-routed read (or vice versa).
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+CREATE TABLE t_cache(a INT)
+
+statement ok
+INSERT INTO t_cache VALUES (1)
+
+statement ok
+ALTER TABLE t_cache CREATE BRANCH dev
+
+statement ok
+INSERT INTO t_cache/dev VALUES (2)
+
+## Prime the cache with no branch: resolves to base.
+query I
+SELECT * FROM t_cache ORDER BY a
+----
+1
+
+## Same SQL text under wap_branch=dev must route to the branch, not reuse the base plan.
+statement ok
+SET wap_branch = 'dev'
+
+query I
+SELECT * FROM t_cache ORDER BY a
+----
+1
+2
+
+statement ok
+SET enable_planner_cache = 0
+
+statement ok
+DROP TABLE t_cache
+
+## Suppressed planning must bypass the planner cache: a branch-routed plan for the
+## same stored view SQL must not be reused for view schema inference.
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+CREATE VIEW v_cache_star AS SELECT * FROM t_no_branch
+
+statement ok
+SET wap_branch = 'dev'
+
+## This exact text matches the stored view body, priming the branch-routed plan
+## under the same cache key.
+query ITI rowsort
+SELECT * FROM test_wap_branch.t_no_branch
+----
+3 base_only 30
+4 branch_only 40
+
+query I
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_cache_star'
+----
+2
+
+statement ok
+UNSET wap_branch
+
+statement ok
+SET enable_planner_cache = 0
+
+statement ok
+DROP VIEW v_cache_star
+
+## Regression: an auto-materialized CTE inside a persisted definition must inherit the
+## suppression context. A CTE referenced more than once is auto-materialized; its
+## producer is bound in a fresh context that previously dropped
+## binding_views/suppress_wap_branch and read the session branch. Must resolve base.
+statement ok
+SET enable_auto_materialize_cte = 1
+
+statement ok
+CREATE VIEW v_mcte(a, c) AS WITH c AS (SELECT * FROM t_no_branch) SELECT c1.a, c1.c FROM c c1 JOIN c c2 ON c1.a = c2.a
+
+query IT
+SELECT * FROM v_mcte ORDER BY a
+----
+3 base_only
+
+statement ok
+SET wap_branch = 'dev'
+
+## Under wap_branch=dev the materialized CTE producer must still resolve base, so the
+## view returns base data (single row), not the dev branch.
+query IT
+SELECT * FROM v_mcte ORDER BY a
+----
+3 base_only
+
+## Suppressed schema inference (system.columns) must report the base schema (2).
+query I
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_mcte'
+----
+2
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP VIEW v_mcte
+
+## A view body with JOIN/WHERE subqueries must keep WAP suppression after
+## BindContext::replace(). The dev branch has a=4; the base table does not.
+statement ok
+CREATE VIEW v_join AS SELECT l.a, l.c FROM t_no_branch l JOIN t_no_branch r ON l.a = r.a WHERE EXISTS (SELECT 1 FROM t_no_branch s WHERE s.a = 4)
+
+statement ok
+SET wap_branch = 'dev'
+
+query I
+SELECT count(*) FROM v_join
+----
+0
+
+query I
+SELECT count(*) FROM system.columns WHERE database = 'test_wap_branch' AND `table` = 'v_join'
+----
+2
+
+statement ok
+UNSET wap_branch
+
+statement ok
+DROP VIEW v_join
+
+## Internal ALTER TABLE maintenance replans must target the ALTER plan table, not
+## the session wap_branch.
+statement ok
+CREATE TABLE t_ddl_replan(a INT)
+
+statement ok
+INSERT INTO t_ddl_replan VALUES (1)
+
+statement ok
+ALTER TABLE t_ddl_replan CREATE BRANCH dev
+
+statement ok
+SET wap_branch = 'dev'
+
+## The generated UPDATE for uuid() must update base, not t_ddl_replan/dev.
+statement ok
+ALTER TABLE t_ddl_replan ADD COLUMN b STRING DEFAULT uuid()
+
+statement ok
+UNSET wap_branch
+
+query IB
+SELECT a, b IS NOT NULL FROM t_ddl_replan
+----
+1 1
+
+query I
+SELECT * FROM t_ddl_replan/dev
+----
+1
+
+## Explicit branch in generated UPDATE still wins under a different session branch.
+statement ok
+ALTER TABLE t_ddl_replan CREATE BRANCH other
+
+statement ok
+SET wap_branch = 'other'
+
+statement ok
+ALTER TABLE t_ddl_replan/dev ADD COLUMN c STRING DEFAULT uuid()
+
+statement ok
+UNSET wap_branch
+
+query IB
+SELECT a, c IS NOT NULL FROM t_ddl_replan/dev
+----
+1 1
+
+query IB
+SELECT a, b IS NOT NULL FROM t_ddl_replan/other
+----
+1 1
+
+statement ok
+DROP TABLE t_ddl_replan
+
+## The generated SELECT->INSERT rewrite must also suppress session wap_branch.
+statement ok
+CREATE TABLE t_ddl_rewrite(a INT, c STRING)
+
+statement ok
+INSERT INTO t_ddl_rewrite VALUES (1, 'base')
+
+statement ok
+ALTER TABLE t_ddl_rewrite CREATE BRANCH dev
+
+statement ok
+INSERT INTO t_ddl_rewrite/dev VALUES (2, 'branch')
+
+statement ok
+SET wap_branch = 'dev'
+
+statement ok
+ALTER TABLE t_ddl_rewrite ADD COLUMN s STRING AS (concat(c, '-stored')) STORED
+
+statement ok
+UNSET wap_branch
+
+query ITT
+SELECT a, c, s FROM t_ddl_rewrite ORDER BY a
+----
+1 base base-stored
+
+query IT
+SELECT * FROM t_ddl_rewrite/dev ORDER BY a
+----
+1 base
+2 branch
+
+statement ok
+DROP TABLE t_ddl_rewrite
+
+## Guard: an explicit MATERIALIZED CTE cannot live in a persisted view body
+## (CREATE/ALTER VIEW validate with a Planner that has no subquery executor, so the
+## CTAS errors first). This is why `m_cte_to_temp_table` need not forward WAP
+## suppression. If this ever passes, restore that forwarding (see NOTE in bind.rs).
+statement error
+CREATE VIEW v_mat_cte_in_view_rejected AS WITH c AS MATERIALIZED (SELECT a, c FROM t_no_branch) SELECT a FROM c
+
+statement ok
+DROP DATABASE test_wap_branch

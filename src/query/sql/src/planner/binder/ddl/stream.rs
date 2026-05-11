@@ -74,7 +74,10 @@ impl Binder {
         };
         if table_branch.is_some() {
             check_table_ref_access(self.ctx.as_ref())?;
-            if matches!(navigation, Some(NavigationPoint::TableTag(_))) {
+            if navigation
+                .as_ref()
+                .is_some_and(NavigationPoint::is_table_tag)
+            {
                 return Err(ErrorCode::Unimplemented(format!(
                     "Unsupported TAG navigation on branch reference `{catalog}.{table_database}.{table_name}/{}`",
                     table_branch.as_ref().unwrap()

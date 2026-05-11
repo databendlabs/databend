@@ -197,6 +197,10 @@ pub struct BindContext {
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
 
+    /// If true, table refs in this scope ignore the session `wap_branch`.
+    /// Used while replaying persisted definitions against base tables.
+    pub suppress_wap_branch: bool,
+
     pub window_definitions: DashMap<String, WindowSpec>,
 }
 
@@ -276,6 +280,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             group_by_column_first: false,
             planning_agg_index: false,
+            suppress_wap_branch: false,
             window_definitions: DashMap::new(),
         }
     }
@@ -324,6 +329,7 @@ impl BindContext {
             expr_context: ExprContext::default(),
             group_by_column_first: parent.group_by_column_first,
             planning_agg_index: false,
+            suppress_wap_branch: parent.suppress_wap_branch,
             window_definitions: DashMap::new(),
         })
     }
@@ -335,6 +341,8 @@ impl BindContext {
         bind_context.cte_context = self.cte_context.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
+        // Keep WAP suppression across `replace()` (used by bind_join).
+        bind_context.suppress_wap_branch = self.suppress_wap_branch;
         bind_context.group_by_column_first = self.group_by_column_first;
         bind_context
     }
