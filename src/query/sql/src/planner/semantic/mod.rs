@@ -48,6 +48,8 @@ pub use type_check::NamespaceFunction;
 pub use type_check::SessionFunction;
 pub use type_check::StageLocationParam;
 pub use type_check::TypeCheckAdapter;
+pub use type_check::TypeCheckDictionary;
+pub use type_check::TypeCheckSubqueryPlan;
 pub use type_check::TypeChecker;
 pub use types::resolve_type_name;
 pub use types::resolve_type_name_by_str;

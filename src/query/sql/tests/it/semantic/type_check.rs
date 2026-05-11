@@ -15,14 +15,17 @@
 use std::io::Write;
 use std::sync::Arc;
 
+use databend_common_ast::Span;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
+use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
@@ -35,9 +38,13 @@ use databend_common_sql::NamespaceFunction;
 use databend_common_sql::SessionFunction;
 use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheckAdapter;
+use databend_common_sql::TypeCheckDictionary;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
 use databend_common_sql::format_scalar;
+use databend_common_sql::plans::DictGetFunctionArgument;
+use databend_common_sql::plans::DictionarySource;
+use databend_common_sql::plans::RedisSource;
 use parking_lot::RwLock;
 
 use crate::framework::golden::SqlTestCase;
@@ -73,6 +80,53 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
         AggregateFunctionFactory::instance()
+    }
+
+    fn validate_sequence(&self, sequence_name: &str) -> Result<()> {
+        if sequence_name == "seq" {
+            Ok(())
+        } else {
+            Err(ErrorCode::SemanticError(format!(
+                "unknown mock sequence {sequence_name}"
+            )))
+        }
+    }
+
+    fn resolve_dictionary(
+        &self,
+        db_name: Option<&str>,
+        dict_name: &str,
+        attr_name: &str,
+    ) -> Result<TypeCheckDictionary> {
+        if dict_name != "dict" {
+            return Err(ErrorCode::SemanticError(format!(
+                "unknown mock dictionary {dict_name}"
+            )));
+        }
+        if attr_name != "field" {
+            return Err(ErrorCode::SemanticError(format!(
+                "unknown mock dictionary attribute {attr_name}"
+            )));
+        }
+        Ok(TypeCheckDictionary {
+            db_name: db_name.unwrap_or("default").to_string(),
+            attr_type: DataType::String,
+            primary_type: DataType::Number(NumberDataType::Int64),
+            func_arg: DictGetFunctionArgument {
+                dict_source: DictionarySource::Redis(RedisSource {
+                    host: "127.0.0.1".to_string(),
+                    port: 6379,
+                    username: None,
+                    password: None,
+                    db_index: None,
+                }),
+                default_value: Scalar::String(String::new()),
+            },
+        })
+    }
+
+    fn resolve_read_file_stage_info(&self, _span: Span, stage_name: &str) -> Result<StageInfo> {
+        Ok(StageInfo::new_user_stage(stage_name))
     }
 
     fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
@@ -190,6 +244,172 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
     }
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_adapter_mock_paths() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "nextval_uses_sequence_adapter",
+            description: "nextval should validate the sequence through the type-check adapter and build an async function.",
+            setup_sqls: &[],
+            sql: "nextval(seq)",
+        },
+        SqlTestCase {
+            name: "dict_get_uses_dictionary_adapter",
+            description: "dict_get should resolve dictionary metadata through the type-check adapter.",
+            setup_sqls: &[],
+            sql: "dict_get(dict, 'field', number)",
+        },
+        SqlTestCase {
+            name: "read_file_uses_stage_adapter",
+            description: "Two-argument read_file should resolve the stage through the type-check adapter.",
+            setup_sqls: &[],
+            sql: "read_file('@stage', 'file.txt')",
+        },
+    ];
+
+    run_type_check_cases("type_check_adapter_mock_paths.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_rule_errors() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "window_function_inside_lambda_errors",
+            description: "Window functions should remain rejected while resolving lambda bodies.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> row_number() OVER ())",
+        },
+        SqlTestCase {
+            name: "read_file_rejects_invalid_arity",
+            description: "read_file should validate its one-or-two argument shape during async-function lowering.",
+            setup_sqls: &[],
+            sql: "read_file()",
+        },
+        SqlTestCase {
+            name: "read_file_requires_stage_path",
+            description: "A single-argument read_file call should require an @stage path when the location is constant.",
+            setup_sqls: &[],
+            sql: "read_file('not_stage_path')",
+        },
+        SqlTestCase {
+            name: "async_functions_cannot_be_nested",
+            description: "Async functions should remain rejected while resolving another async function argument.",
+            setup_sqls: &[],
+            sql: "read_file(read_file('@s/file.txt'))",
+        },
+        SqlTestCase {
+            name: "nextval_requires_identifier_argument",
+            description: "nextval should reject non-identifier arguments before sequence resolution.",
+            setup_sqls: &[],
+            sql: "nextval(1)",
+        },
+        SqlTestCase {
+            name: "nextval_rejects_multipart_identifier",
+            description: "nextval should accept only a one-part sequence identifier.",
+            setup_sqls: &[],
+            sql: "nextval(db.seq)",
+        },
+        SqlTestCase {
+            name: "dict_get_requires_dictionary_identifier",
+            description: "dict_get should reject a non-identifier dictionary argument before catalog resolution.",
+            setup_sqls: &[],
+            sql: "dict_get('dict', 'field', number)",
+        },
+        SqlTestCase {
+            name: "dict_get_rejects_three_part_identifier",
+            description: "dict_get should accept only one-or-two-part dictionary identifiers.",
+            setup_sqls: &[],
+            sql: "dict_get(catalog.db.dict, 'field', number)",
+        },
+        SqlTestCase {
+            name: "score_rejects_arguments",
+            description: "score should keep its zero-argument search-function contract.",
+            setup_sqls: &[],
+            sql: "score(1)",
+        },
+        SqlTestCase {
+            name: "match_requires_where_context",
+            description: "match search should remain restricted to WHERE-clause resolution.",
+            setup_sqls: &[],
+            sql: "match(text, 'needle')",
+        },
+        SqlTestCase {
+            name: "query_requires_where_context",
+            description: "query search should remain restricted to WHERE-clause resolution.",
+            setup_sqls: &[],
+            sql: "query('text:needle')",
+        },
+        SqlTestCase {
+            name: "non_window_function_rejects_over_clause",
+            description: "A scalar function should not be accepted with window syntax.",
+            setup_sqls: &[],
+            sql: "abs(number) OVER ()",
+        },
+        SqlTestCase {
+            name: "non_aggregate_function_rejects_within_group",
+            description: "WITHIN GROUP syntax should remain limited to aggregate functions.",
+            setup_sqls: &[],
+            sql: "abs(number) WITHIN GROUP (ORDER BY number)",
+        },
+        SqlTestCase {
+            name: "window_function_rejects_ignore_nulls_when_unsupported",
+            description: "Non-value window functions should reject IGNORE/RESPECT NULLS options.",
+            setup_sqls: &[],
+            sql: "row_number() IGNORE NULLS OVER ()",
+        },
+        SqlTestCase {
+            name: "non_lambda_function_rejects_lambda_syntax",
+            description: "Only lambda functions should accept lambda syntax.",
+            setup_sqls: &[],
+            sql: "abs(number, x -> x)",
+        },
+        SqlTestCase {
+            name: "lambda_function_requires_lambda_expression",
+            description: "Lambda functions should reject calls without a lambda expression.",
+            setup_sqls: &[],
+            sql: "array_transform([number])",
+        },
+        SqlTestCase {
+            name: "lambda_functions_cannot_be_nested",
+            description: "Lambda functions should remain rejected while resolving another lambda body.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> array_transform([x], y -> y))",
+        },
+        SqlTestCase {
+            name: "lambda_function_requires_collection_argument",
+            description: "Lambda functions should require an array or map input argument.",
+            setup_sqls: &[],
+            sql: "array_transform(number, x -> x)",
+        },
+        SqlTestCase {
+            name: "lambda_filter_requires_boolean_result",
+            description: "Filter-style lambda functions should require a boolean lambda result.",
+            setup_sqls: &[],
+            sql: "array_filter([number], x -> x)",
+        },
+        SqlTestCase {
+            name: "lambda_function_checks_parameter_count",
+            description: "Lambda functions should validate the number of lambda parameters for the input collection.",
+            setup_sqls: &[],
+            sql: "array_transform([number], (x, y) -> x)",
+        },
+        SqlTestCase {
+            name: "aggregate_parameter_must_be_constant",
+            description: "Parameterized aggregate arguments should be constant before aggregate resolution.",
+            setup_sqls: &[],
+            sql: "quantile_cont(number)(number)",
+        },
+        SqlTestCase {
+            name: "map_accessor_requires_literal_path",
+            description: "Map and variant accessors should reject unsupported bracket expressions during lowering.",
+            setup_sqls: &[],
+            sql: "to_variant({'k1': 1})[true]",
+        },
+    ];
+
+    run_type_check_cases("type_check_rule_errors.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

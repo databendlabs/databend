@@ -34,7 +34,6 @@ use databend_common_cloud_control::pb::CreateWorkerRequest;
 use databend_common_compress::CompressAlgorithm;
 use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
@@ -67,10 +66,14 @@ use serde_json::to_string;
 use tokio::runtime::Handle;
 
 use super::AuthFunction;
+use super::FullTypeCheckAdapter;
+use super::FullTypeCheckAdapterDependencies;
 use super::NamespaceFunction;
 use super::SessionFunction;
+use super::TypeCheckAdapter;
+use super::TypeCheckDictionary;
+use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
-use super::core_expr::CoreExprArena;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::DefaultExprBinder;
@@ -80,44 +83,11 @@ use crate::Visibility;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
 use crate::binder::resolve_stage_locations;
-use crate::optimizer::ir::SExpr;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::DictionarySource;
 use crate::plans::RedisSource;
 use crate::plans::ScalarExpr;
 use crate::plans::SqlSource;
-
-pub struct TypeCheckSubqueryPlan {
-    pub s_expr: SExpr,
-    pub output_context: BindContext,
-}
-
-pub struct TypeCheckDictionary {
-    pub db_name: String,
-    pub attr_type: DataType,
-    pub primary_type: DataType,
-    pub func_arg: DictGetFunctionArgument,
-}
-
-#[derive(Clone)]
-pub struct FullTypeCheckAdapter {
-    pub(super) ctx: Arc<dyn TableContext>,
-    pub(super) dependencies: FullTypeCheckAdapterDependencies,
-    forbid_udf: bool,
-    skip_sequence_check: bool,
-}
-
-#[derive(Clone)]
-pub(super) struct FullTypeCheckAdapterDependencies {
-    async_runtime_handle: Handle,
-    aggregate_function_factory: &'static AggregateFunctionFactory,
-    license_manager: Arc<LicenseManagerSwitch>,
-    pub(super) catalog_manager: Arc<CatalogManager>,
-    user_api_provider: Arc<UserApiProvider>,
-    security_policy_cache_manager: Arc<SecurityPolicyCacheManager>,
-    global_config: Arc<InnerConfig>,
-    cloud_control_api_provider: Option<Arc<CloudControlApiProvider>>,
-}
 
 impl FullTypeCheckAdapter {
     pub fn new(ctx: Arc<dyn TableContext>) -> Result<Self> {
@@ -165,131 +135,6 @@ impl FullTypeCheckAdapterDependencies {
             global_config,
             cloud_control_api_provider,
         }
-    }
-}
-
-fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
-    ErrorCode::Internal(format!("type check adapter does not provide {name}"))
-}
-
-pub trait TypeCheckAdapter: Clone {
-    fn function_context(&self) -> Result<FunctionContext>;
-
-    fn settings(&self) -> Arc<Settings>;
-
-    fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
-
-    fn check_core_expr_context(&self, _arena: &CoreExprArena<'_>) -> Result<()> {
-        Ok(())
-    }
-
-    fn forbid_udf(&self) -> bool {
-        false
-    }
-
-    fn async_runtime_handle(&self) -> Result<Handle> {
-        Err(missing_type_check_adapter_dependency("async runtime"))
-    }
-
-    fn validate_sequence(&self, _sequence_name: &str) -> Result<()> {
-        Err(missing_type_check_adapter_dependency("sequence resolver"))
-    }
-
-    fn resolve_dictionary(
-        &self,
-        _db_name: Option<&str>,
-        _dict_name: &str,
-        _attr_name: &str,
-    ) -> Result<TypeCheckDictionary> {
-        Err(missing_type_check_adapter_dependency("dictionary resolver"))
-    }
-
-    fn resolve_read_file_stage_info(&self, _span: Span, _stage_name: &str) -> Result<StageInfo> {
-        Err(missing_type_check_adapter_dependency("stage resolver"))
-    }
-
-    fn bind_subquery(
-        &self,
-        _parent_context: &BindContext,
-        _name_resolution_ctx: &NameResolutionContext,
-        _metadata: MetadataRef,
-        _subquery: &Query,
-    ) -> Result<TypeCheckSubqueryPlan> {
-        Err(missing_type_check_adapter_dependency("subquery planner"))
-    }
-
-    fn resolve_namespace_function(&self, _function: NamespaceFunction) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("namespace function"))
-    }
-
-    fn resolve_session_function(&self, _function: SessionFunction<'_>) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("session function"))
-    }
-
-    fn resolve_authorization_function(&self, _function: AuthFunction) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency(
-            "authorization function",
-        ))
-    }
-
-    fn set_result_cache_uncacheable(&self);
-
-    fn resolve_data_mask_policy(
-        &self,
-        _policy_id: u64,
-    ) -> Result<Option<Arc<CachedSecurityPolicy>>> {
-        Ok(None)
-    }
-
-    fn resolve_udf(&self, _udf_name: &str) -> Result<Option<UserDefinedFunction>> {
-        Err(missing_type_check_adapter_dependency("udf resolver"))
-    }
-
-    fn resolve_udf_stage_locations(
-        &self,
-        _locations: &[String],
-    ) -> Result<Vec<(StageInfo, String)>> {
-        Err(missing_type_check_adapter_dependency("udf stage resolver"))
-    }
-
-    fn resolve_udf_code(&self, _code: String) -> Result<Vec<u8>> {
-        Err(missing_type_check_adapter_dependency("udf code resolver"))
-    }
-
-    fn fold_udf_server(
-        &self,
-        _name: &str,
-        _args: Vec<Scalar>,
-        _udf_definition: UDFServer,
-    ) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("udf server folding"))
-    }
-
-    fn enable_udf_sandbox(&self) -> Result<bool> {
-        Err(missing_type_check_adapter_dependency("udf sandbox setting"))
-    }
-
-    fn apply_udf_cloud_resource(
-        &self,
-        _resource_name: &str,
-        _resource_type: &str,
-        _script: String,
-    ) -> Result<(String, BTreeMap<String, String>)> {
-        Err(missing_type_check_adapter_dependency("udf cloud resource"))
-    }
-
-    fn resolve_udf_definition(
-        &self,
-        _parent_context: &BindContext,
-        _name_resolution_ctx: &NameResolutionContext,
-        _metadata: MetadataRef,
-        _aliases: &[(String, ScalarExpr)],
-        _definition: &str,
-        _parameters: Vec<(String, DataType, ScalarExpr)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        Err(missing_type_check_adapter_dependency(
-            "udf definition resolver",
-        ))
     }
 }
 

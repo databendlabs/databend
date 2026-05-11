@@ -95,6 +95,7 @@ pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
     aggregate_function_factory: &'static AggregateFunctionFactory,
+    in_lambda_function: bool,
 }
 
 impl<'a> CoreExprArena<'a> {
@@ -103,6 +104,7 @@ impl<'a> CoreExprArena<'a> {
             nodes: Vec::new(),
             week_start,
             aggregate_function_factory: AggregateFunctionFactory::instance(),
+            in_lambda_function: false,
         }
     }
 
@@ -114,6 +116,7 @@ impl<'a> CoreExprArena<'a> {
             nodes: Vec::new(),
             week_start,
             aggregate_function_factory,
+            in_lambda_function: false,
         }
     }
 
@@ -700,6 +703,12 @@ impl<'a> CoreExprArena<'a> {
             lambda,
         } = func;
         let func_name = name.name.to_ascii_lowercase();
+        if self.in_lambda_function && window.is_some() {
+            return Err(ErrorCode::SemanticError(
+                "window functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
         if !is_builtin_function(&func_name)
             && !TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name.as_str()))
             && rewrite_function_name(&func_name).is_none()
@@ -1142,7 +1151,11 @@ impl<'a> CoreExprArena<'a> {
         lambda: &'a Lambda,
     ) -> Result<CoreExprId> {
         let args = self.lower_expr_args(args)?;
-        let lambda_expr = self.lower_ast_expr(&lambda.expr)?;
+        let previous_in_lambda_function = self.in_lambda_function;
+        self.in_lambda_function = true;
+        let lambda_expr = self.lower_ast_expr(&lambda.expr);
+        self.in_lambda_function = previous_in_lambda_function;
+        let lambda_expr = lambda_expr?;
         Ok(self.alloc(CoreExpr::LambdaFunction {
             span,
             func_name,
