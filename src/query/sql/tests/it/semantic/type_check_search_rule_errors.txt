@@ -1,0 +1,48 @@
+=== match_rejects_non_constant_query_text ===
+description: match should require constant query text after reaching WHERE-clause search resolution.
+sql: match(text, pattern)
+status: error
+code: 1065
+message: invalid arguments for search function, query text must be a constant string, but got pattern
+
+=== match_rejects_non_constant_option ===
+description: match should require constant option text after reaching WHERE-clause search resolution.
+sql: match(text, 'needle', pattern)
+status: error
+code: 1065
+message: invalid arguments for search function, option must be a constant string, but got pattern
+
+=== match_option_requires_key_value ===
+description: Search function options should keep the key=value contract.
+sql: match(text, 'needle', 'operator')
+status: error
+code: 1065
+message: invalid arguments for search function, each option must have key and value joined by equal sign, but got 'operator'
+
+=== match_rejects_unsupported_option ===
+description: Search function options should reject unsupported keys or values.
+sql: match(text, 'needle', 'operator=x')
+status: error
+code: 1065
+message: invalid arguments for search function, unsupported option: 'operator=x'
+
+=== match_rejects_invalid_boost ===
+description: match should validate boost values when the field list is supplied as a constant string.
+sql: match('text^bad', 'needle')
+status: error
+code: 1065
+message: invalid arguments for search function, boost must be a float value, but got bad
+
+=== query_rejects_non_constant_query_text ===
+description: query should require constant query text after reaching WHERE-clause search resolution.
+sql: query(pattern)
+status: error
+code: 1065
+message: invalid arguments for search function, query text must be a constant string, but got pattern
+
+=== query_option_requires_key_value ===
+description: query should share the search option parser with match.
+sql: query('text:needle', 'lenient')
+status: error
+code: 1065
+message: invalid arguments for search function, each option must have key and value joined by equal sign, but got 'lenient'

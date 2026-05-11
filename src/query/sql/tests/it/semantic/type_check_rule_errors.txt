@@ -5,6 +5,20 @@ status: error
 code: 1065
 message: window functions can not be used in lambda function
 
+=== unknown_function_keeps_suggestion ===
+description: Unknown scalar functions should keep the suggestion-oriented error.
+sql: abss(number)
+status: error
+code: 1008
+message: no function matches the given name: 'abss', do you mean 'abs'?
+
+=== scalar_parameter_must_be_constant ===
+description: Parameterized scalar functions should reject non-constant parameters before scalar resolution.
+sql: to_decimal(number, number)
+status: error
+code: 1065
+message: Invalid arguments for `to_decimal`, precision is only allowed to be a constant
+
 === read_file_rejects_invalid_arity ===
 description: read_file should validate its one-or-two argument shape during async-function lowering.
 sql: read_file()

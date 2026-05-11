@@ -26,6 +26,7 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_settings::Settings;
@@ -41,6 +42,7 @@ use databend_common_sql::TypeCheckAdapter;
 use databend_common_sql::TypeCheckDictionary;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::Visibility;
+use databend_common_sql::binder::ExprContext;
 use databend_common_sql::format_scalar;
 use databend_common_sql::plans::DictGetFunctionArgument;
 use databend_common_sql::plans::DictionarySource;
@@ -129,6 +131,10 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         Ok(StageInfo::new_user_stage(stage_name))
     }
 
+    fn resolve_udf(&self, _udf_name: &str) -> Result<Option<UserDefinedFunction>> {
+        Ok(None)
+    }
+
     fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
         match function {
             NamespaceFunction::CurrentCatalog | NamespaceFunction::CurrentDatabase => {
@@ -177,7 +183,10 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
     );
 }
 
-async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
+async fn type_check_case_in_context(
+    case: &SqlTestCase,
+    expr_context: ExprContext,
+) -> Result<SqlTestOutcome> {
     init_testing_globals();
     assert!(
         case.setup_sqls.is_empty(),
@@ -208,6 +217,7 @@ async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     add_test_column(&mut bind_context, 4, "flag", DataType::Boolean);
     add_test_column(&mut bind_context, 5, "ts", DataType::Timestamp);
     add_test_column(&mut bind_context, 6, "date", DataType::Date);
+    bind_context.expr_context = expr_context;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut type_checker = TypeChecker::try_create_with_adapter(
         &mut bind_context,
@@ -231,7 +241,11 @@ async fn type_check_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     Ok(outcome)
 }
 
-async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> {
+async fn run_type_check_cases_in_context(
+    file_name: &str,
+    cases: &[SqlTestCase],
+    expr_context: ExprContext,
+) -> Result<()> {
     let mut file = open_golden_file("semantic", file_name)?;
 
     for (index, case) in cases.iter().enumerate() {
@@ -239,11 +253,15 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
             writeln!(file)?;
         }
         write_case_header(&mut file, case)?;
-        let outcome = type_check_case(case).await?;
+        let outcome = type_check_case_in_context(case, expr_context).await?;
         write_case_outcome_body(&mut file, &outcome)?;
     }
 
     Ok(())
+}
+
+async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> {
+    run_type_check_cases_in_context(file_name, cases, ExprContext::Unknown).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -280,6 +298,18 @@ async fn test_type_check_rule_errors() -> Result<()> {
             description: "Window functions should remain rejected while resolving lambda bodies.",
             setup_sqls: &[],
             sql: "array_transform([number], x -> row_number() OVER ())",
+        },
+        SqlTestCase {
+            name: "unknown_function_keeps_suggestion",
+            description: "Unknown scalar functions should keep the suggestion-oriented error.",
+            setup_sqls: &[],
+            sql: "abss(number)",
+        },
+        SqlTestCase {
+            name: "scalar_parameter_must_be_constant",
+            description: "Parameterized scalar functions should reject non-constant parameters before scalar resolution.",
+            setup_sqls: &[],
+            sql: "to_decimal(number, number)",
         },
         SqlTestCase {
             name: "read_file_rejects_invalid_arity",
@@ -410,6 +440,61 @@ async fn test_type_check_rule_errors() -> Result<()> {
     ];
 
     run_type_check_cases("type_check_rule_errors.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_search_rule_errors() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "match_rejects_non_constant_query_text",
+            description: "match should require constant query text after reaching WHERE-clause search resolution.",
+            setup_sqls: &[],
+            sql: "match(text, pattern)",
+        },
+        SqlTestCase {
+            name: "match_rejects_non_constant_option",
+            description: "match should require constant option text after reaching WHERE-clause search resolution.",
+            setup_sqls: &[],
+            sql: "match(text, 'needle', pattern)",
+        },
+        SqlTestCase {
+            name: "match_option_requires_key_value",
+            description: "Search function options should keep the key=value contract.",
+            setup_sqls: &[],
+            sql: "match(text, 'needle', 'operator')",
+        },
+        SqlTestCase {
+            name: "match_rejects_unsupported_option",
+            description: "Search function options should reject unsupported keys or values.",
+            setup_sqls: &[],
+            sql: "match(text, 'needle', 'operator=x')",
+        },
+        SqlTestCase {
+            name: "match_rejects_invalid_boost",
+            description: "match should validate boost values when the field list is supplied as a constant string.",
+            setup_sqls: &[],
+            sql: "match('text^bad', 'needle')",
+        },
+        SqlTestCase {
+            name: "query_rejects_non_constant_query_text",
+            description: "query should require constant query text after reaching WHERE-clause search resolution.",
+            setup_sqls: &[],
+            sql: "query(pattern)",
+        },
+        SqlTestCase {
+            name: "query_option_requires_key_value",
+            description: "query should share the search option parser with match.",
+            setup_sqls: &[],
+            sql: "query('text:needle', 'lenient')",
+        },
+    ];
+
+    run_type_check_cases_in_context(
+        "type_check_search_rule_errors.txt",
+        &cases,
+        ExprContext::WhereClause,
+    )
+    .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
