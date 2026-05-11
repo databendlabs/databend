@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Write;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use databend_common_ast::Span;
 use databend_common_ast::parser::parse_expr;
@@ -26,6 +30,8 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::UDFScript;
+use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
@@ -41,12 +47,14 @@ use databend_common_sql::Symbol;
 use databend_common_sql::TypeCheckAdapter;
 use databend_common_sql::TypeCheckDictionary;
 use databend_common_sql::TypeChecker;
+use databend_common_sql::UdfAdapter;
 use databend_common_sql::Visibility;
 use databend_common_sql::binder::ExprContext;
 use databend_common_sql::format_scalar;
 use databend_common_sql::plans::DictGetFunctionArgument;
 use databend_common_sql::plans::DictionarySource;
 use databend_common_sql::plans::RedisSource;
+use databend_common_sql::plans::ScalarExpr;
 use parking_lot::RwLock;
 
 use crate::framework::golden::SqlTestCase;
@@ -60,6 +68,9 @@ use crate::framework::init_testing_globals;
 struct TestTypeCheckAdapter {
     settings: Arc<Settings>,
     func_ctx: FunctionContext,
+    udf_adapter: TestUdfAdapter,
+    forbid_udf: bool,
+    result_cache_uncacheable: Arc<AtomicBool>,
 }
 
 impl TestTypeCheckAdapter {
@@ -67,11 +78,122 @@ impl TestTypeCheckAdapter {
         Self {
             settings,
             func_ctx: FunctionContext::default(),
+            udf_adapter: TestUdfAdapter::default(),
+            forbid_udf: false,
+            result_cache_uncacheable: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    fn with_udf_adapter(mut self, udf_adapter: TestUdfAdapter) -> Self {
+        self.udf_adapter = udf_adapter;
+        self
+    }
+
+    fn with_forbid_udf(mut self, forbid_udf: bool) -> Self {
+        self.forbid_udf = forbid_udf;
+        self
+    }
+
+    fn result_cache_uncacheable(&self) -> bool {
+        self.result_cache_uncacheable.load(Ordering::Relaxed)
+    }
+}
+
+#[derive(Clone, Default)]
+struct TestUdfAdapter {
+    definitions: Arc<HashMap<String, Option<UserDefinedFunction>>>,
+    enable_udf_sandbox: bool,
+    definition_load_count: Arc<AtomicUsize>,
+    code_load_count: Arc<AtomicUsize>,
+    stage_load_count: Arc<AtomicUsize>,
+    cloud_script_count: Arc<AtomicUsize>,
+}
+
+impl TestUdfAdapter {
+    fn with_definitions(definitions: impl IntoIterator<Item = UserDefinedFunction>) -> Self {
+        Self {
+            definitions: Arc::new(
+                definitions
+                    .into_iter()
+                    .map(|udf| (udf.name.clone(), Some(udf)))
+                    .collect(),
+            ),
+            ..Default::default()
+        }
+    }
+
+    fn with_enable_udf_sandbox(mut self) -> Self {
+        self.enable_udf_sandbox = true;
+        self
+    }
+
+    fn definition_load_count(&self) -> usize {
+        self.definition_load_count.load(Ordering::Relaxed)
+    }
+
+    fn code_load_count(&self) -> usize {
+        self.code_load_count.load(Ordering::Relaxed)
+    }
+
+    fn stage_load_count(&self) -> usize {
+        self.stage_load_count.load(Ordering::Relaxed)
+    }
+
+    fn cloud_script_count(&self) -> usize {
+        self.cloud_script_count.load(Ordering::Relaxed)
+    }
+}
+
+impl UdfAdapter for TestUdfAdapter {
+    fn load_definition(&self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
+        self.definition_load_count.fetch_add(1, Ordering::Relaxed);
+        Ok(self.definitions.get(udf_name).cloned().unwrap_or(None))
+    }
+
+    fn load_stage_locations(&self, _locations: &[String]) -> Result<Vec<(StageInfo, String)>> {
+        self.stage_load_count.fetch_add(1, Ordering::Relaxed);
+        Ok(Vec::new())
+    }
+
+    fn load_udf_code(&self, code: String) -> Result<Vec<u8>> {
+        self.code_load_count.fetch_add(1, Ordering::Relaxed);
+        Ok(code.into_bytes())
+    }
+
+    fn enable_udf_sandbox(&self) -> Result<bool> {
+        Ok(self.enable_udf_sandbox)
+    }
+
+    fn apply_udf_cloud_script(
+        &self,
+        _resource_name: &str,
+        udf_definition: UDFScript,
+    ) -> Result<UDFServer> {
+        self.cloud_script_count.fetch_add(1, Ordering::Relaxed);
+        let UDFScript {
+            handler,
+            language,
+            arg_types,
+            return_type,
+            immutable,
+            ..
+        } = udf_definition;
+        Ok(UDFServer {
+            address: "http://127.0.0.1:8815".to_string(),
+            handler,
+            headers: Default::default(),
+            language,
+            arg_names: Vec::new(),
+            arg_types,
+            return_type,
+            immutable,
+        })
     }
 }
 
 impl TypeCheckAdapter for TestTypeCheckAdapter {
+    type UdfAdapter = TestUdfAdapter;
+
     fn function_context(&self) -> Result<FunctionContext> {
         Ok(self.func_ctx.clone())
     }
@@ -82,6 +204,14 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory {
         AggregateFunctionFactory::instance()
+    }
+
+    fn udf_adapter(&self) -> Self::UdfAdapter {
+        self.udf_adapter.clone()
+    }
+
+    fn forbid_udf(&self) -> bool {
+        self.forbid_udf
     }
 
     fn validate_sequence(&self, sequence_name: &str) -> Result<()> {
@@ -131,10 +261,6 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         Ok(StageInfo::new_user_stage(stage_name))
     }
 
-    fn resolve_udf(&self, _udf_name: &str) -> Result<Option<UserDefinedFunction>> {
-        Ok(None)
-    }
-
     fn resolve_namespace_function(&self, function: NamespaceFunction) -> Result<Scalar> {
         match function {
             NamespaceFunction::CurrentCatalog | NamespaceFunction::CurrentDatabase => {
@@ -168,7 +294,9 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         }
     }
 
-    fn set_result_cache_uncacheable(&self) {}
+    fn set_result_cache_uncacheable(&self) {
+        self.result_cache_uncacheable.store(true, Ordering::Relaxed);
+    }
 }
 
 fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, data_type: DataType) {
@@ -183,22 +311,7 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
     );
 }
 
-async fn type_check_case_in_context(
-    case: &SqlTestCase,
-    expr_context: ExprContext,
-) -> Result<SqlTestOutcome> {
-    init_testing_globals();
-    assert!(
-        case.setup_sqls.is_empty(),
-        "type_check tests use a dependency-only adapter and do not run setup SQL"
-    );
-    let settings = Settings::create(Tenant::new_literal("default"));
-    let adapter = TestTypeCheckAdapter::new(settings);
-    let tokens = tokenize_sql(case.sql)?;
-    let dialect = adapter.settings().get_sql_dialect()?;
-    let expr = parse_expr(&tokens, dialect)?;
-
-    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
+fn test_bind_context(expr_context: ExprContext) -> BindContext {
     let mut bind_context = BindContext::new();
     add_test_column(
         &mut bind_context,
@@ -218,16 +331,45 @@ async fn type_check_case_in_context(
     add_test_column(&mut bind_context, 5, "ts", DataType::Timestamp);
     add_test_column(&mut bind_context, 6, "date", DataType::Date);
     bind_context.expr_context = expr_context;
+    bind_context
+}
+
+fn resolve_type_check_sql(
+    sql: &str,
+    adapter: TestTypeCheckAdapter,
+    bind_context: &mut BindContext,
+) -> Result<(ScalarExpr, DataType)> {
+    init_testing_globals();
+    let tokens = tokenize_sql(sql)?;
+    let dialect = adapter.settings().get_sql_dialect()?;
+    let expr = parse_expr(&tokens, dialect)?;
+
+    let name_resolution_ctx = NameResolutionContext::try_from(adapter.settings().as_ref())?;
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let mut type_checker = TypeChecker::try_create_with_adapter(
-        &mut bind_context,
+        bind_context,
         adapter,
         &name_resolution_ctx,
         metadata,
         &[],
     )?;
+    type_checker.resolve(&expr).map(|resolved| *resolved)
+}
 
-    let outcome = match type_checker.resolve(&expr).map(|resolved| *resolved) {
+async fn type_check_case_in_context(
+    case: &SqlTestCase,
+    expr_context: ExprContext,
+) -> Result<SqlTestOutcome> {
+    init_testing_globals();
+    assert!(
+        case.setup_sqls.is_empty(),
+        "type_check tests use a dependency-only adapter and do not run setup SQL"
+    );
+    let settings = Settings::create(Tenant::new_literal("default"));
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(expr_context);
+
+    let outcome = match resolve_type_check_sql(case.sql, adapter, &mut bind_context) {
         Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
             "scalar: {}\ntype: {}",
             format_scalar(&scalar),
@@ -275,3 +417,4 @@ mod scalar_rewrites;
 mod search;
 mod special_functions;
 mod string_like;
+mod udf;

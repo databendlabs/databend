@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -35,6 +34,7 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
+use databend_common_meta_app::principal::UDFScript;
 use databend_common_meta_app::principal::UDFServer;
 use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_settings::Settings;
@@ -298,12 +298,53 @@ fn missing_type_check_adapter_dependency(name: &str) -> ErrorCode {
     ErrorCode::Internal(format!("type check adapter does not provide {name}"))
 }
 
-pub trait TypeCheckAdapter: Clone {
+pub trait UdfAdapter: Clone {
+    fn load_definition(&self, _udf_name: &str) -> Result<Option<UserDefinedFunction>> {
+        Err(missing_type_check_adapter_dependency("definition loader"))
+    }
+
+    fn load_stage_locations(&self, _locations: &[String]) -> Result<Vec<(StageInfo, String)>> {
+        Err(missing_type_check_adapter_dependency("stage loader"))
+    }
+
+    fn load_udf_code(&self, _code: String) -> Result<Vec<u8>> {
+        Err(missing_type_check_adapter_dependency("code loader"))
+    }
+
+    fn fold_udf_server(
+        &self,
+        _name: &str,
+        _args: Vec<Scalar>,
+        _udf_definition: UDFServer,
+    ) -> Result<Scalar> {
+        Err(missing_type_check_adapter_dependency("udf server folding"))
+    }
+
+    fn enable_udf_sandbox(&self) -> Result<bool> {
+        Err(missing_type_check_adapter_dependency("udf sandbox setting"))
+    }
+
+    fn apply_udf_cloud_script(
+        &self,
+        _resource_name: &str,
+        _udf_definition: UDFScript,
+    ) -> Result<UDFServer> {
+        Err(missing_type_check_adapter_dependency("udf cloud script"))
+    }
+}
+
+impl UdfAdapter for () {}
+
+pub trait TypeCheckAdapter: Clone + Sized {
+    type UdfAdapter: UdfAdapter;
+
     fn function_context(&self) -> Result<FunctionContext>;
 
     fn settings(&self) -> Arc<Settings>;
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
+
+    fn udf_adapter(&self) -> Self::UdfAdapter;
 
     fn check_core_expr_context(&self, _arena: &CoreExprArena<'_>) -> Result<()> {
         Ok(())
@@ -311,10 +352,6 @@ pub trait TypeCheckAdapter: Clone {
 
     fn forbid_udf(&self) -> bool {
         false
-    }
-
-    fn async_runtime_handle(&self) -> Result<Handle> {
-        Err(missing_type_check_adapter_dependency("async runtime"))
     }
 
     fn validate_sequence(&self, _sequence_name: &str) -> Result<()> {
@@ -365,57 +402,6 @@ pub trait TypeCheckAdapter: Clone {
         _policy_id: u64,
     ) -> Result<Option<Arc<CachedSecurityPolicy>>> {
         Ok(None)
-    }
-
-    fn resolve_udf(&self, _udf_name: &str) -> Result<Option<UserDefinedFunction>> {
-        Err(missing_type_check_adapter_dependency("udf resolver"))
-    }
-
-    fn resolve_udf_stage_locations(
-        &self,
-        _locations: &[String],
-    ) -> Result<Vec<(StageInfo, String)>> {
-        Err(missing_type_check_adapter_dependency("udf stage resolver"))
-    }
-
-    fn resolve_udf_code(&self, _code: String) -> Result<Vec<u8>> {
-        Err(missing_type_check_adapter_dependency("udf code resolver"))
-    }
-
-    fn fold_udf_server(
-        &self,
-        _name: &str,
-        _args: Vec<Scalar>,
-        _udf_definition: UDFServer,
-    ) -> Result<Scalar> {
-        Err(missing_type_check_adapter_dependency("udf server folding"))
-    }
-
-    fn enable_udf_sandbox(&self) -> Result<bool> {
-        Err(missing_type_check_adapter_dependency("udf sandbox setting"))
-    }
-
-    fn apply_udf_cloud_resource(
-        &self,
-        _resource_name: &str,
-        _resource_type: &str,
-        _script: String,
-    ) -> Result<(String, BTreeMap<String, String>)> {
-        Err(missing_type_check_adapter_dependency("udf cloud resource"))
-    }
-
-    fn resolve_udf_definition(
-        &self,
-        _parent_context: &BindContext,
-        _name_resolution_ctx: &NameResolutionContext,
-        _metadata: MetadataRef,
-        _aliases: &[(String, ScalarExpr)],
-        _definition: &str,
-        _parameters: Vec<(String, DataType, ScalarExpr)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        Err(missing_type_check_adapter_dependency(
-            "udf definition resolver",
-        ))
     }
 }
 

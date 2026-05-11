@@ -1,0 +1,69 @@
+=== unknown_udf_does_not_resolve_arguments ===
+description: Unknown UDF should report unknown function before resolving arguments.
+sql: missing_udf(missing_column)
+status: error
+code: 1008
+message: no function matches the given name: 'missing_udf', do you mean 'min'?
+
+=== forbid_udf_reports_unknown_function ===
+description: When UDFs are forbidden, a matching UDF definition should still be reported as unknown.
+sql: blocked_udf(number)
+status: error
+code: 1008
+message: no function matches the given name: blocked_udf
+
+=== cached_udf_resolves_definition ===
+description: Cached UDF definition should resolve without loading it through the adapter.
+sql: cached_udf(number)
+status: ok
+scalar: cached_udf(plus(number (#0), 1))
+type: Int64 NULL
+
+=== lambda_udf_resolves_definition ===
+description: Lambda UDF should resolve its SQL definition with the provided argument.
+sql: lambda_one(number)
+status: ok
+scalar: lambda_one(plus(number (#0), 1))
+type: Int64 NULL
+
+=== lambda_udf_checks_argument_count ===
+description: Lambda UDF should validate parameter count before resolving the body.
+sql: lambda_two(number)
+status: error
+code: 1005
+message: Require 2 parameters, but got: 1
+
+=== scalar_udf_resolves_definition_and_return_cast ===
+description: Scalar UDF should resolve its SQL definition and cast to declared return type.
+sql: scalar_to_string(number)
+status: ok
+scalar: scalar_to_string(CAST(CAST(number (#0) AS Int32 NULL) AS String))
+type: String
+
+=== server_udf_requires_config_enablement ===
+description: Server UDF should remain rejected when UDF server support is disabled.
+sql: server_udf(number)
+status: error
+code: 1002
+message: UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config
+
+=== script_udf_loads_code ===
+description: Script UDF should build a runtime UDF call from script metadata.
+sql: script_udf(text)
+status: ok
+scalar: handler(CAST(text (#1) AS String))
+type: String
+
+=== python_script_udf_cloud_path_requires_global_enablement ===
+description: Python sandbox UDF should remain rejected when global sandbox config is disabled.
+sql: cloud_udf(number)
+status: error
+code: 1002
+message: SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config
+
+=== udaf_script_loads_code ===
+description: UDAF script should build a runtime aggregate UDF call from script metadata.
+sql: udaf_script(text)
+status: ok
+scalar: udaf_script(text)
+type: String

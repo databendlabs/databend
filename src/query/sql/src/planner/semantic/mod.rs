@@ -51,6 +51,7 @@ pub use type_check::TypeCheckAdapter;
 pub use type_check::TypeCheckDictionary;
 pub use type_check::TypeCheckSubqueryPlan;
 pub use type_check::TypeChecker;
+pub use type_check::UdfAdapter;
 pub use types::resolve_type_name;
 pub use types::resolve_type_name_by_str;
 pub use types::resolve_type_name_udf;

@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
-
 use databend_common_ast::Span;
 use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::UnaryOperator;
-use databend_common_base::runtime::block_on_with_handle;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::ConstantFolder;
@@ -81,11 +78,6 @@ where A: TypeCheckAdapter
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.adapter.check_core_expr_context(arena)?;
         self.resolve_core(arena, root)
-    }
-
-    pub(super) fn block_on<F: Future>(&self, future: F) -> Result<F::Output> {
-        let handle = self.adapter.async_runtime_handle()?;
-        Ok(block_on_with_handle(&handle, future))
     }
 
     pub(super) fn can_lower_core_scalar_function(func_name: &str) -> bool {

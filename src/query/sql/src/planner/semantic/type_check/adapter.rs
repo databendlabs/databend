@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
@@ -34,8 +33,6 @@ use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_meta_app::principal::StageInfo;
 use databend_common_meta_app::principal::StageType;
-use databend_common_meta_app::principal::UDFServer;
-use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::schema::DictionaryIdentity;
 use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
@@ -51,7 +48,6 @@ use databend_enterprise_data_mask_feature::get_datamask_handler;
 use itertools::Itertools;
 use serde_json::json;
 use serde_json::to_string;
-use tokio::runtime::Handle;
 
 use super::AuthFunction;
 use super::FullTypeCheckAdapter;
@@ -123,6 +119,8 @@ impl FullTypeCheckAdapterDependencies {
 }
 
 impl TypeCheckAdapter for FullTypeCheckAdapter {
+    type UdfAdapter = FullTypeCheckAdapter;
+
     fn function_context(&self) -> Result<FunctionContext> {
         self.ctx.get_function_context()
     }
@@ -135,12 +133,12 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         self.dependencies.aggregate_function_factory
     }
 
-    fn forbid_udf(&self) -> bool {
-        self.forbid_udf
+    fn udf_adapter(&self) -> Self::UdfAdapter {
+        self.clone()
     }
 
-    fn async_runtime_handle(&self) -> Result<Handle> {
-        Ok(self.dependencies.async_runtime_handle.clone())
+    fn forbid_udf(&self) -> bool {
+        self.forbid_udf
     }
 
     fn validate_sequence(&self, sequence_name: &str) -> Result<()> {
@@ -430,62 +428,6 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             ),
         )?;
         Ok(Some(policy))
-    }
-
-    fn resolve_udf(&self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
-        self.resolve_udf(udf_name)
-    }
-
-    fn resolve_udf_stage_locations(
-        &self,
-        locations: &[String],
-    ) -> Result<Vec<(StageInfo, String)>> {
-        self.resolve_udf_stage_locations(locations)
-    }
-
-    fn resolve_udf_code(&self, code: String) -> Result<Vec<u8>> {
-        self.resolve_udf_code(code)
-    }
-
-    fn fold_udf_server(
-        &self,
-        name: &str,
-        args: Vec<Scalar>,
-        udf_definition: UDFServer,
-    ) -> Result<Scalar> {
-        self.fold_udf_server(name, args, udf_definition)
-    }
-
-    fn enable_udf_sandbox(&self) -> Result<bool> {
-        self.enable_udf_sandbox()
-    }
-
-    fn apply_udf_cloud_resource(
-        &self,
-        resource_name: &str,
-        resource_type: &str,
-        script: String,
-    ) -> Result<(String, BTreeMap<String, String>)> {
-        self.apply_udf_cloud_resource(resource_name, resource_type, script)
-    }
-
-    fn resolve_udf_definition(
-        &self,
-        parent_context: &BindContext,
-        name_resolution_ctx: &NameResolutionContext,
-        metadata: MetadataRef,
-        aliases: &[(String, ScalarExpr)],
-        definition: &str,
-        parameters: Vec<(String, DataType, ScalarExpr)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        self.resolve_udf_definition(
-            parent_context,
-            name_resolution_ctx,
-            metadata,
-            aliases,
-            definition,
-            parameters,
-        )
     }
 }
 
