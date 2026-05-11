@@ -16,7 +16,9 @@ use std::collections::HashSet;
 use std::mem;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Lambda;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -33,8 +35,10 @@ use databend_common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
@@ -46,6 +50,30 @@ use crate::plans::ConstantExpr;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lambda_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        args: &'a [Expr],
+        lambda: &'a Lambda,
+    ) -> Result<CoreExprId> {
+        let args = self.lower_expr_args(args)?;
+        let previous_in_lambda_function = self.in_lambda_function;
+        self.in_lambda_function = true;
+        let lambda_expr = self.lower_ast_expr(&lambda.expr);
+        self.in_lambda_function = previous_in_lambda_function;
+        let lambda_expr = lambda_expr?;
+        Ok(self.alloc(CoreExpr::LambdaFunction {
+            span,
+            func_name,
+            args,
+            lambda_params: &lambda.params,
+            lambda_expr,
+        }))
+    }
+}
 
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter

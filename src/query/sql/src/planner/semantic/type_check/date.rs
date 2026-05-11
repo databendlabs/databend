@@ -17,6 +17,7 @@ use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::TypeName;
 use databend_common_ast::ast::Weekday as ASTWeekday;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -170,6 +171,18 @@ impl<'a> CoreExprArena<'a> {
         };
         let arg = self.lower_ast_expr(arg)?;
         Ok(self.call(span, func_name, smallvec![arg]))
+    }
+
+    pub(super) fn lower_interval_expr(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        unit: &ASTIntervalKind,
+    ) -> Result<CoreExprId> {
+        let expr = self.cast(expr.span(), expr, TypeName::String, false)?;
+        let unit = self.literal(span, Literal::String(format!(" {}", unit)));
+        let concat = self.call(span, "concat", smallvec![expr, unit]);
+        Ok(self.call(span, "to_interval", smallvec![concat]))
     }
 
     pub(super) fn lower_date_arith_expr(

@@ -15,8 +15,11 @@
 use std::collections::VecDeque;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -34,6 +37,9 @@ use jsonb::keypath::parse_key_paths;
 use unicase::Ascii;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -46,6 +52,124 @@ use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_map_access_expr(
+        &mut self,
+        root_span: Span,
+        root_expr: &'a Expr,
+        root_accessor: &MapAccessor,
+    ) -> Result<CoreExprId> {
+        let mut current_span = root_span;
+        let mut expr = root_expr;
+        let mut accessor = root_accessor;
+        let mut paths = VecDeque::new();
+        loop {
+            let path = match accessor {
+                MapAccessor::Bracket {
+                    key: box Expr::Literal { value, .. },
+                } => {
+                    if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "Unsupported accessor: {:?}",
+                            value
+                        ))
+                        .set_span(current_span));
+                    }
+                    value.clone()
+                }
+                MapAccessor::Colon { key } => Literal::String(key.name.clone()),
+                MapAccessor::DotNumber { key } => Literal::UInt64(*key),
+                _ => {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "Unsupported accessor: {:?}",
+                        accessor
+                    ))
+                    .set_span(current_span));
+                }
+            };
+            paths.push_front((current_span, path));
+
+            let Expr::MapAccess {
+                span,
+                expr: inner_expr,
+                accessor: inner_accessor,
+                ..
+            } = expr
+            else {
+                break;
+            };
+            current_span = *span;
+            expr = inner_expr;
+            accessor = inner_accessor;
+        }
+        let expr_span = expr.span();
+        let expr = self.lower_ast_expr(expr)?;
+        Ok(self.alloc(CoreExpr::MapAccess {
+            span: root_span,
+            expr_span,
+            expr,
+            paths,
+        }))
+    }
+
+    pub(super) fn lower_get_function_as_map_access(
+        &mut self,
+        root_span: Span,
+        args: &'a [Expr],
+    ) -> Result<Option<CoreExprId>> {
+        let [expr, path_expr] = args else {
+            return Ok(None);
+        };
+        let mut expr: &'a Expr = expr;
+        let mut path_expr: &'a Expr = path_expr;
+
+        let mut paths = VecDeque::new();
+        loop {
+            let Expr::Literal { value, .. } = path_expr else {
+                return Ok(None);
+            };
+            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
+                return Ok(None);
+            }
+            paths.push_front((path_expr.span(), value.clone()));
+
+            let Expr::FunctionCall { func, .. } = expr else {
+                break;
+            };
+            let ASTFunctionCall {
+                distinct,
+                name,
+                args,
+                params,
+                order_by,
+                window,
+                lambda,
+            } = func;
+            if *distinct
+                || !name.name.eq_ignore_ascii_case("get")
+                || args.len() != 2
+                || !params.is_empty()
+                || !order_by.is_empty()
+                || window.is_some()
+                || lambda.is_some()
+            {
+                break;
+            }
+            expr = &args[0];
+            path_expr = &args[1];
+        }
+
+        let expr_span = expr.span();
+        let expr = self.lower_ast_expr(expr)?;
+        Ok(Some(self.alloc(CoreExpr::MapAccess {
+            span: root_span,
+            expr_span,
+            expr,
+            paths,
+        })))
+    }
+}
 
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter

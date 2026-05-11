@@ -20,9 +20,8 @@ use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::IntervalKind as ASTIntervalKind;
-use databend_common_ast::ast::Lambda;
 use databend_common_ast::ast::Literal;
+#[cfg(test)]
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Query;
@@ -95,7 +94,7 @@ pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
     aggregate_function_factory: &'static AggregateFunctionFactory,
-    in_lambda_function: bool,
+    pub(super) in_lambda_function: bool,
 }
 
 impl<'a> CoreExprArena<'a> {
@@ -571,122 +570,6 @@ impl<'a> CoreExprArena<'a> {
             .collect()
     }
 
-    fn lower_map_access_expr(
-        &mut self,
-        root_span: Span,
-        root_expr: &'a Expr,
-        root_accessor: &MapAccessor,
-    ) -> Result<CoreExprId> {
-        let mut current_span = root_span;
-        let mut expr = root_expr;
-        let mut accessor = root_accessor;
-        let mut paths = VecDeque::new();
-        loop {
-            let path = match accessor {
-                MapAccessor::Bracket {
-                    key: box Expr::Literal { value, .. },
-                } => {
-                    if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "Unsupported accessor: {:?}",
-                            value
-                        ))
-                        .set_span(current_span));
-                    }
-                    value.clone()
-                }
-                MapAccessor::Colon { key } => Literal::String(key.name.clone()),
-                MapAccessor::DotNumber { key } => Literal::UInt64(*key),
-                _ => {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "Unsupported accessor: {:?}",
-                        accessor
-                    ))
-                    .set_span(current_span));
-                }
-            };
-            paths.push_front((current_span, path));
-
-            let Expr::MapAccess {
-                span,
-                expr: inner_expr,
-                accessor: inner_accessor,
-                ..
-            } = expr
-            else {
-                break;
-            };
-            current_span = *span;
-            expr = inner_expr;
-            accessor = inner_accessor;
-        }
-        let expr_span = expr.span();
-        let expr = self.lower_ast_expr(expr)?;
-        Ok(self.alloc(CoreExpr::MapAccess {
-            span: root_span,
-            expr_span,
-            expr,
-            paths,
-        }))
-    }
-
-    fn lower_get_function_as_map_access(
-        &mut self,
-        root_span: Span,
-        args: &'a [Expr],
-    ) -> Result<Option<CoreExprId>> {
-        let [expr, path_expr] = args else {
-            return Ok(None);
-        };
-        let mut expr: &'a Expr = expr;
-        let mut path_expr: &'a Expr = path_expr;
-
-        let mut paths = VecDeque::new();
-        loop {
-            let Expr::Literal { value, .. } = path_expr else {
-                return Ok(None);
-            };
-            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
-                return Ok(None);
-            }
-            paths.push_front((path_expr.span(), value.clone()));
-
-            let Expr::FunctionCall { func, .. } = expr else {
-                break;
-            };
-            let ASTFunctionCall {
-                distinct,
-                name,
-                args,
-                params,
-                order_by,
-                window,
-                lambda,
-            } = func;
-            if *distinct
-                || !name.name.eq_ignore_ascii_case("get")
-                || args.len() != 2
-                || !params.is_empty()
-                || !order_by.is_empty()
-                || window.is_some()
-                || lambda.is_some()
-            {
-                break;
-            }
-            expr = &args[0];
-            path_expr = &args[1];
-        }
-
-        let expr_span = expr.span();
-        let expr = self.lower_ast_expr(expr)?;
-        Ok(Some(self.alloc(CoreExpr::MapAccess {
-            span: root_span,
-            expr_span,
-            expr,
-            paths,
-        })))
-    }
-
     fn lower_function_call_expr(
         &mut self,
         original_expr: &'a Expr,
@@ -978,18 +861,6 @@ impl<'a> CoreExprArena<'a> {
         Ok(self.call(span, "if", args))
     }
 
-    fn lower_interval_expr(
-        &mut self,
-        span: Span,
-        expr: &'a Expr,
-        unit: &ASTIntervalKind,
-    ) -> Result<CoreExprId> {
-        let expr = self.cast(expr.span(), expr, TypeName::String, false)?;
-        let unit = self.literal(span, Literal::String(format!(" {}", unit)));
-        let concat = self.call(span, "concat", smallvec![expr, unit]);
-        Ok(self.call(span, "to_interval", smallvec![concat]))
-    }
-
     pub(super) fn cast(
         &mut self,
         span: Span,
@@ -1141,28 +1012,6 @@ impl<'a> CoreExprArena<'a> {
 
     fn stage_location(&mut self, span: Span, location: &'a str) -> CoreExprId {
         self.alloc(CoreExpr::StageLocation { span, location })
-    }
-
-    fn lambda_function(
-        &mut self,
-        span: Span,
-        func_name: &'static str,
-        args: &'a [Expr],
-        lambda: &'a Lambda,
-    ) -> Result<CoreExprId> {
-        let args = self.lower_expr_args(args)?;
-        let previous_in_lambda_function = self.in_lambda_function;
-        self.in_lambda_function = true;
-        let lambda_expr = self.lower_ast_expr(&lambda.expr);
-        self.in_lambda_function = previous_in_lambda_function;
-        let lambda_expr = lambda_expr?;
-        Ok(self.alloc(CoreExpr::LambdaFunction {
-            span,
-            func_name,
-            args,
-            lambda_params: &lambda.params,
-            lambda_expr,
-        }))
     }
 
     fn scalar_function(
