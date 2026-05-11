@@ -1591,6 +1591,40 @@ async fn test_func_object_keys() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_stream_error_returns_json_error() -> anyhow::Result<()> {
+    let _fixture = TestFixture::setup().await?;
+
+    let sqls = vec![
+        "create or replace table t02(id int, c1 varchar)",
+        "create or replace table t01(id int, c1 int)",
+        "insert into t01 values(1,1),(2,2)",
+        "insert into t02 values(1,1),(2,2)",
+        "insert into t02 values(3,'a')",
+    ];
+
+    for sql in sqls {
+        let json = serde_json::json!({"sql": sql, "pagination": {"wait_time_secs": 3}});
+        let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+        assert!(
+            reply.error().is_none(),
+            "setup SQL '{sql}' failed: {:?}",
+            reply.error()
+        );
+    }
+
+    let json = serde_json::json!({
+        "sql": "select a.id from t01 a join t02 b on a.c1=b.c1",
+        "pagination": {"wait_time_secs": 3, "max_rows_per_page": 1}
+    });
+    let reply = TestHttpQueryRequest::new(json).fetch_total().await?;
+    assert_eq!(reply.state(), ExecuteStateKind::Failed);
+    let error = reply.error().expect("query should return a JSON error");
+    assert_eq!(error.code, 1006);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multi_partition() -> anyhow::Result<()> {
     let _fixture = TestFixture::setup().await?;
 
