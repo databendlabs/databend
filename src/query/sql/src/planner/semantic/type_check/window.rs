@@ -14,6 +14,7 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowDesc;
 use databend_common_ast::ast::WindowFrame;
@@ -31,8 +32,10 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use smallvec::SmallVec;
+use unicase::Ascii;
 
 use super::TypeChecker;
 use super::core_expr::CoreExpr;
@@ -84,6 +87,68 @@ pub(super) enum CoreWindowFrameBound {
 }
 
 impl<'a> CoreExprArena<'a> {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn aggregate_window_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: impl Into<String>,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+        window: &'a WindowDesc,
+    ) -> Result<CoreExprId> {
+        let window = self.lower_window_desc(window)?;
+        Ok(self.alloc(CoreExpr::AggregateWindowFunction {
+            display_name,
+            span,
+            func_name: func_name.into(),
+            distinct,
+            params,
+            args,
+            remove_count_args,
+            order_by,
+            window,
+        }))
+    }
+
+    pub(super) fn count_all_window_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        window: &'a Window,
+    ) -> Result<CoreExprId> {
+        let window = self.lower_window(window)?;
+        Ok(self.alloc(CoreExpr::CountAllWindowFunction {
+            display_name,
+            span,
+            window,
+        }))
+    }
+
+    pub(super) fn general_window_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+        order_by: &'a [OrderByExpr],
+        window: &'a WindowDesc,
+    ) -> Result<CoreExprId> {
+        let order_by = self.lower_order_by_exprs(order_by)?;
+        let window = self.lower_window_desc(window)?;
+        Ok(self.alloc(CoreExpr::GeneralWindowFunction {
+            display_name,
+            span,
+            func_name,
+            args,
+            order_by,
+            window,
+        }))
+    }
+
     pub(super) fn lower_window_desc(
         &mut self,
         window: &'a WindowDesc,
@@ -142,6 +207,15 @@ impl<'a> CoreExprArena<'a> {
             ),
         })
     }
+}
+
+pub(super) fn general_window_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    GENERAL_WINDOW_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
 }
 
 impl<'a, A> TypeChecker<'a, A>

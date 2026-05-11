@@ -16,6 +16,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -36,10 +38,13 @@ use serde_json::to_string;
 
 use super::StageLocationParam;
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
 use super::core_expr::CoreUdfCallArgs;
 use crate::binder::wrap_cast;
 use crate::planner::expression::UDFValidator;
+use crate::planner::semantic::normalize_identifier;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
@@ -56,6 +61,24 @@ struct UdfAsset {
     location: String,
     url: String,
     headers: BTreeMap<String, String>,
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn runtime_call(
+        &mut self,
+        span: Span,
+        name: &'a Identifier,
+        args: &'a [Expr],
+    ) -> Result<CoreExprId> {
+        let args = self.lower_runtime_call_args(args)?;
+        Ok(self.alloc(CoreExpr::UdfCall { span, name, args }))
+    }
+
+    fn lower_runtime_call_args(&mut self, args: &'a [Expr]) -> Result<CoreUdfCallArgs> {
+        args.iter()
+            .map(|arg| Ok((format!("{}", arg), self.lower_ast_expr(arg)?)))
+            .collect()
+    }
 }
 
 // UDF server expects unsigned types in UINT* form instead of SQL unsigned names.
@@ -243,6 +266,20 @@ fn unique_heredoc_marker(base: &str, contents: &[&str]) -> String {
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
+    pub(super) fn resolve_udf_call(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        name: &Identifier,
+        args: &CoreUdfCallArgs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let udf_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+        if let Some(udf) = self.resolve_udf(arena, span, &udf_name, args)? {
+            return Ok(udf);
+        }
+        Err(self.unknown_function_error(span, &udf_name))
+    }
+
     pub(super) fn resolve_udf(
         &mut self,
         arena: &CoreExprArena<'_>,

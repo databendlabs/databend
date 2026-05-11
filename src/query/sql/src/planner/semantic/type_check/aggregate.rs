@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Literal;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -25,8 +27,10 @@ use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use unicase::Ascii;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
 use super::core_expr::CoreFunctionParams;
 use super::core_expr::CoreOrderByExprs;
 use crate::binder::ExprContext;
@@ -34,6 +38,40 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn aggregate_function(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: impl Into<String>,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::AggregateFunction {
+            display_name,
+            span,
+            func_name: func_name.into(),
+            distinct,
+            params,
+            args,
+            remove_count_args,
+            order_by,
+        })
+    }
+}
+
+pub(super) fn can_remove_count_args(func_name: &str, distinct: bool, args: &[Expr]) -> bool {
+    func_name.eq_ignore_ascii_case("count")
+        && !distinct
+        && args
+            .iter()
+            .all(|expr| matches!(expr, Expr::Literal { value, .. } if *value != Literal::Null))
+}
 
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter

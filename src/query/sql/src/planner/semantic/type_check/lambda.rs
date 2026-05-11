@@ -32,7 +32,9 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use itertools::Itertools;
+use unicase::Ascii;
 
 use super::TypeChecker;
 use super::core_expr::CoreExpr;
@@ -73,6 +75,15 @@ impl<'a> CoreExprArena<'a> {
             lambda_expr,
         }))
     }
+}
+
+pub(super) fn general_lambda_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    GENERAL_LAMBDA_FUNCTIONS
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
 }
 
 impl<'a, A> TypeChecker<'a, A>

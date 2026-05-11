@@ -14,11 +14,14 @@
 
 use std::collections::HashSet;
 
+use databend_common_ast::Span;
+use databend_common_ast::ast::BinaryOperator;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Query;
 use databend_common_ast::ast::SelectTarget;
 use databend_common_ast::ast::SetExpr;
+use databend_common_ast::ast::SubqueryModifier;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Symbol;
@@ -26,10 +29,14 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 use derive_visitor::Drive;
 use derive_visitor::Visitor;
+use smallvec::smallvec;
 
 use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
 use crate::BindContext;
 use crate::ColumnSet;
 use crate::MetadataRef;
@@ -42,6 +49,101 @@ use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_binary_op_expr(
+        &mut self,
+        span: Span,
+        op: &'a BinaryOperator,
+        left: &'a Expr,
+        right: &'a Expr,
+    ) -> Result<CoreExprId> {
+        let Expr::Subquery {
+            subquery,
+            modifier: Some(modifier),
+            ..
+        } = right
+        else {
+            return self.lower_special_binary_op_expr(span, op, left, right);
+        };
+
+        let child_expr = self.lower_ast_expr(left)?;
+        match modifier {
+            SubqueryModifier::Any | SubqueryModifier::Some => {
+                let compare_op = SubqueryComparisonOp::try_from(op)?;
+                Ok(self.subquery(
+                    span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(compare_op),
+                ))
+            }
+            SubqueryModifier::All => {
+                let contrary_op = op.to_contrary()?;
+                let compare_op = SubqueryComparisonOp::try_from(&contrary_op)?;
+                let subquery = self.subquery(
+                    span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(compare_op),
+                );
+                Ok(self.call(span, "not", smallvec![subquery]))
+            }
+        }
+    }
+
+    pub(super) fn subquery(
+        &mut self,
+        span: Span,
+        subquery: &'a Query,
+        typ: SubqueryType,
+        child_expr: Option<CoreExprId>,
+        compare_op: Option<SubqueryComparisonOp>,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::Subquery {
+            span,
+            subquery,
+            typ,
+            child_expr,
+            compare_op,
+        })
+    }
+
+    pub(super) fn like_subquery(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        subquery: &'a Query,
+        modifier: &'a SubqueryModifier,
+        escape: &'a Option<String>,
+    ) -> Result<CoreExprId> {
+        let child_expr = self.lower_ast_expr(expr)?;
+        match modifier {
+            SubqueryModifier::Any | SubqueryModifier::Some => Ok(self.subquery(
+                span,
+                subquery,
+                SubqueryType::Any,
+                Some(child_expr),
+                Some(SubqueryComparisonOp::Like(escape.clone())),
+            )),
+            SubqueryModifier::All => {
+                let op = BinaryOperator::Like(escape.clone());
+                let contrary_op = op.to_contrary()?;
+                let compare_op = SubqueryComparisonOp::try_from(&contrary_op)?;
+                let subquery = self.subquery(
+                    span,
+                    subquery,
+                    SubqueryType::Any,
+                    Some(child_expr),
+                    Some(compare_op),
+                );
+                Ok(self.call(span, "not", smallvec![subquery]))
+            }
+        }
+    }
+}
 
 impl FullTypeCheckAdapter {
     pub(super) fn bind_subquery(

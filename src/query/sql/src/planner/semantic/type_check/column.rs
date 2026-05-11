@@ -29,10 +29,19 @@ use derive_visitor::VisitorMut;
 
 use super::TypeCheckAdapter;
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprId;
 use crate::binder::NameResolutionResult;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn column_ref(&mut self, span: Span, column: &'a ColumnRef) -> CoreExprId {
+        self.alloc(CoreExpr::ColumnRef { span, column })
+    }
+}
 
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter

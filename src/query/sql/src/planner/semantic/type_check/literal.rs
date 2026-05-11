@@ -15,6 +15,7 @@
 use std::collections::HashSet;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::Literal;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
@@ -30,11 +31,41 @@ use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
 use super::core_expr::CoreMapEntries;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn literal(&mut self, span: Span, value: Literal) -> CoreExprId {
+        self.constant(span, literal_value(&value))
+    }
+
+    fn constant(&mut self, span: Span, value: Scalar) -> CoreExprId {
+        self.alloc(CoreExpr::Literal { span, value })
+    }
+
+    pub(super) fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
+        let exprs = self.lower_expr_args(exprs)?;
+        Ok(self.alloc(CoreExpr::Array { span, exprs }))
+    }
+
+    pub(super) fn map(&mut self, span: Span, kvs: &'a [(Literal, Expr)]) -> Result<CoreExprId> {
+        let kvs = kvs
+            .iter()
+            .map(|(key, value)| Ok((key.clone(), self.lower_ast_expr(value)?)))
+            .collect::<Result<_>>()?;
+        Ok(self.alloc(CoreExpr::Map { span, kvs }))
+    }
+
+    pub(super) fn tuple(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
+        let exprs = self.lower_expr_args(exprs)?;
+        Ok(self.alloc(CoreExpr::Tuple { span, exprs }))
+    }
+}
 
 impl<'a, A> TypeChecker<'a, A> {
     #[inline]

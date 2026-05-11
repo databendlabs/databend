@@ -25,8 +25,8 @@ use smallvec::smallvec;
 
 use super::core_expr::CoreExprArena;
 use super::core_expr::CoreExprId;
-use super::core_expr::binary_op_core_function;
-use super::core_expr::like_op_core_function;
+use super::scalar_rewrite::binary_op_core_function;
+use super::scalar_rewrite::like_op_core_function;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_special_binary_op_expr(

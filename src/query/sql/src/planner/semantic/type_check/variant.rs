@@ -54,6 +54,10 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
+    pub(super) fn stage_location(&mut self, span: Span, location: &'a str) -> CoreExprId {
+        self.alloc(CoreExpr::StageLocation { span, location })
+    }
+
     pub(super) fn lower_map_access_expr(
         &mut self,
         root_span: Span,
@@ -168,6 +172,23 @@ impl<'a> CoreExprArena<'a> {
             expr,
             paths,
         })))
+    }
+}
+
+pub(super) fn json_op_core_function(op: &databend_common_ast::ast::JsonOperator) -> &'static str {
+    match op {
+        databend_common_ast::ast::JsonOperator::Arrow => "get",
+        databend_common_ast::ast::JsonOperator::LongArrow => "get_string",
+        databend_common_ast::ast::JsonOperator::HashArrow => "get_by_keypath",
+        databend_common_ast::ast::JsonOperator::HashLongArrow => "get_by_keypath_string",
+        databend_common_ast::ast::JsonOperator::Question => "json_exists_key",
+        databend_common_ast::ast::JsonOperator::QuestionOr => "json_exists_any_keys",
+        databend_common_ast::ast::JsonOperator::QuestionAnd => "json_exists_all_keys",
+        databend_common_ast::ast::JsonOperator::AtArrow => "json_contains_in_left",
+        databend_common_ast::ast::JsonOperator::ArrowAt => "json_contains_in_right",
+        databend_common_ast::ast::JsonOperator::AtQuestion => "json_path_exists",
+        databend_common_ast::ast::JsonOperator::AtAt => "json_path_match",
+        databend_common_ast::ast::JsonOperator::HashMinus => "delete_by_keypath",
     }
 }
 

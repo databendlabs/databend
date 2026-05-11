@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::TypeName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,17 +37,26 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
 use simsearch::SimSearch;
+use smallvec::SmallVec;
+use unicase::Ascii;
 
 use super::DEFAULT_DECIMAL_PRECISION;
 use super::DEFAULT_DECIMAL_SCALE;
 use super::TypeCheckAdapter;
 use super::TypeChecker;
+use super::core_expr::CoreExpr;
+use super::core_expr::CoreExprArena;
+use super::core_expr::CoreExprArgs;
+use super::core_expr::CoreExprId;
+use super::core_expr::CoreFunctionParams;
 use super::rewrite_function;
+use super::rewrite_function::rewrite_function_name;
 use crate::planner::semantic::resolve_type_name;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::SubqueryType;
 
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
@@ -125,6 +135,100 @@ where A: TypeCheckAdapter
             ))
             .set_span(span)
         }
+    }
+
+    pub(super) fn resolve_call(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        args: &CoreExprArgs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name))
+            || rewrite_function_name(func_name).is_some()
+        {
+            return Err(ErrorCode::Internal(format!(
+                "special function {} should not be represented as core call",
+                func_name
+            )));
+        }
+
+        let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
+        for arg in args {
+            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            scalars.push(scalar);
+        }
+
+        if self.should_try_rewrite_variant_function(func_name) {
+            let mut arg_types = SmallVec::<[DataType; 4]>::with_capacity(scalars.len());
+            for scalar in &scalars {
+                let mut data_type = scalar.data_type()?;
+                if let ScalarExpr::SubqueryExpr(subquery) = scalar
+                    && subquery.typ == SubqueryType::Scalar
+                    && !data_type.is_nullable()
+                {
+                    data_type = data_type.wrap_nullable();
+                }
+                arg_types.push(data_type);
+            }
+            if let Some(rewritten_variant_expr) =
+                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+            {
+                return rewritten_variant_expr;
+            }
+        }
+        if Self::is_vector_function(func_name)
+            && let Some(rewritten_vector_expr) =
+                self.try_rewrite_vector_function(span, func_name, &scalars)
+        {
+            return rewritten_vector_expr;
+        }
+        let box (scalar, data_type) =
+            self.resolve_scalar_function_call(span, func_name, vec![], scalars.into_vec())?;
+        if func_name == "eq" || func_name == "noteq" {
+            self.rewrite_variant_compare_constant(scalar, data_type)
+        } else {
+            Ok(Box::new((scalar, data_type)))
+        }
+    }
+
+    pub(super) fn resolve_scalar_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        params: &CoreFunctionParams,
+        args: &CoreExprArgs,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let params = self.resolve_core_function_params(arena, span, params, "scalar")?;
+        let (scalars, _) = self.resolve_expr_args(arena, args)?;
+
+        if self.should_try_rewrite_variant_function(func_name) {
+            let mut arg_types = Vec::with_capacity(scalars.len());
+            for scalar in &scalars {
+                let mut data_type = scalar.data_type()?;
+                if let ScalarExpr::SubqueryExpr(subquery) = scalar
+                    && subquery.typ == SubqueryType::Scalar
+                    && !data_type.is_nullable()
+                {
+                    data_type = data_type.wrap_nullable();
+                }
+                arg_types.push(data_type);
+            }
+            if let Some(rewritten_variant_expr) =
+                self.try_rewrite_variant_function(span, func_name, &scalars, &arg_types)
+            {
+                return rewritten_variant_expr;
+            }
+        }
+        if Self::is_vector_function(func_name)
+            && let Some(rewritten_vector_expr) =
+                self.try_rewrite_vector_function(span, func_name, &scalars)
+        {
+            return rewritten_vector_expr;
+        }
+
+        self.resolve_scalar_function_call(span, func_name, params, scalars)
     }
 
     pub(super) fn resolve_cast_expr(
@@ -476,4 +580,55 @@ where A: TypeCheckAdapter
             expr.data_type().clone(),
         )))
     }
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn cast(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        target_type: TypeName,
+        is_try: bool,
+    ) -> Result<CoreExprId> {
+        let expr = self.lower_ast_expr(expr)?;
+        Ok(self.alloc(CoreExpr::Cast {
+            span,
+            is_try,
+            expr,
+            target_type,
+        }))
+    }
+
+    pub(super) fn scalar_function(
+        &mut self,
+        span: Span,
+        func_name: &'static str,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+    ) -> CoreExprId {
+        self.alloc(CoreExpr::ScalarFunction {
+            span,
+            func_name,
+            params,
+            args,
+        })
+    }
+}
+
+pub(super) fn builtin_scalar_function_name(func_name: &str) -> Option<&'static str> {
+    if !TypeChecker::<super::FullTypeCheckAdapter>::can_lower_core_scalar_function(func_name) {
+        return None;
+    }
+
+    let functions: &'static databend_common_expression::FunctionRegistry = &BUILTIN_FUNCTIONS;
+    if let Some((name, _)) = functions.funcs.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((name, _)) = functions.factories.get_key_value(func_name) {
+        return Some(name.as_str());
+    }
+    if let Some((alias, _)) = functions.aliases.get_key_value(func_name) {
+        return Some(alias.as_str());
+    }
+    None
 }
