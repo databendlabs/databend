@@ -86,8 +86,8 @@ async fn gen_recluster_segments(
                 HashMap::default(),
                 Some(ClusterStatistics::new(
                     cluster_key_id,
-                    vec![Scalar::from(1i64)],
-                    vec![Scalar::from(100i64)],
+                    vec![Scalar::from(1i32)],
+                    vec![Scalar::from(100i32)],
                     0,
                     None,
                 )),
@@ -174,8 +174,8 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let mut test_block_locations = vec![];
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        vec![Scalar::from(1i64)],
-        vec![Scalar::from(3i64)],
+        vec![Scalar::from(1i32)],
+        vec![Scalar::from(3i32)],
         0,
         None,
     )))
@@ -185,8 +185,8 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        vec![Scalar::from(2i64)],
-        vec![Scalar::from(4i64)],
+        vec![Scalar::from(2i32)],
+        vec![Scalar::from(4i32)],
         0,
         None,
     )))
@@ -197,8 +197,8 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let schema = TableSchemaRef::new(TableSchema::empty());
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        vec![Scalar::from(4i64)],
-        vec![Scalar::from(5i64)],
+        vec![Scalar::from(4i32)],
+        vec![Scalar::from(5i32)],
         0,
         None,
     )))
