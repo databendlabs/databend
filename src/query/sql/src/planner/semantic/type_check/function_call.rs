@@ -189,8 +189,8 @@ impl<'a> CoreExprArena<'a> {
                 return Ok(expr);
             }
 
-            if func_name == "get"
-                && let Some(expr) = self.lower_get_function_as_map_access(span, args)?
+            if matches!(func_name.as_str(), "get" | "get_string")
+                && let Some(expr) = self.lower_get_function_as_map_access(span, &func_name, args)?
             {
                 return Ok(expr);
             }

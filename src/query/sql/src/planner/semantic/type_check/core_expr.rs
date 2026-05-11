@@ -14,8 +14,6 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
-#[cfg(test)]
-use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -468,6 +466,7 @@ where A: TypeCheckAdapter
             CoreExpr::Map { span, kvs } => self.resolve_map(arena, *span, kvs),
             CoreExpr::Tuple { span, exprs } => self.resolve_tuple(arena, *span, exprs),
             CoreExpr::MapAccess {
+                kind,
                 span,
                 expr_span,
                 expr,
@@ -475,6 +474,7 @@ where A: TypeCheckAdapter
             } => {
                 let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
                 self.resolve_map_access_from_scalar(
+                    *kind,
                     *span,
                     *expr_span,
                     scalar,
@@ -670,11 +670,13 @@ where A: TypeCheckAdapter
 mod tests {
     use databend_common_ast::ast::Identifier;
     use databend_common_ast::ast::Literal;
+    use databend_common_ast::ast::MapAccessor;
     use databend_common_ast::parser::Dialect;
     use databend_common_ast::parser::parse_expr;
     use databend_common_ast::parser::tokenize_sql;
 
     use super::*;
+    use crate::planner::semantic::type_check::CoreMapAccessKind;
 
     fn assert_sql_lowers_to(sql: &str, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
         let tokens = tokenize_sql(sql).unwrap();
@@ -761,11 +763,15 @@ mod tests {
     }
 
     #[test]
-    fn lowers_nested_get_function_as_single_map_access() {
+    fn lowers_get_function_as_semantic_map_access() {
         assert_sql_lowers_to("get(get(v, 'a'), 0)", |arena, root| {
-            let CoreExpr::MapAccess { expr, paths, .. } = arena.get(root) else {
-                panic!("nested get should lower to CoreExpr::MapAccess");
+            let CoreExpr::MapAccess {
+                kind, expr, paths, ..
+            } = arena.get(root)
+            else {
+                panic!("get should lower to CoreExpr::MapAccess");
             };
+            assert_eq!(*kind, CoreMapAccessKind::GetFunction);
             assert!(matches!(arena.get(*expr), CoreExpr::ColumnRef { .. }));
             assert_eq!(
                 paths.iter().map(|(_, value)| value).collect::<Vec<_>>(),
