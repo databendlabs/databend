@@ -1006,7 +1006,7 @@ impl DefaultSettings {
                     desc: "Sets the maximum byte size of blocks for recluster",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1024 * 1024 * 1024..=u64::MAX)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
@@ -1777,7 +1777,7 @@ impl DefaultSettings {
     fn recluster_block_size(max_memory_usage: u64) -> u64 {
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        std::cmp::min(max_memory_usage * 30 / 100, 80 * 1024 * 1024 * 1024)
+        std::cmp::min(max_memory_usage * 30 / 100, 80 * 1024 * 1024 * 1024).max(1024 * 1024 * 1024)
     }
 
     /// Converts and validates a setting value based on its key.

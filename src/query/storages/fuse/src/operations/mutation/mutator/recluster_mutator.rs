@@ -19,7 +19,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::ReclusterTask;
@@ -237,16 +236,11 @@ impl ReclusterMutator {
             blocks_map.entry(stats.level).or_default().push(idx);
         }
 
-        // Compute memory threshold and maximum number of blocks allowed for reclustering.
+        // Use the configured recluster budget as a stable scheduling target. Runtime
+        // memory usage is intentionally not folded in here because sort spill can
+        // absorb pressure and the available memory snapshot changes during execution.
         let settings = self.ctx.get_settings();
-        let avail_memory_usage =
-            settings.get_max_memory_usage()? - GLOBAL_MEM_STAT.get_memory_usage() as u64;
-        let memory_threshold = settings
-            .get_recluster_block_size()?
-            .min(avail_memory_usage * 30 / 100) as usize;
-        // specify a rather small value, so that `recluster_block_size` might be tuned to lower value.
-        let max_blocks_num =
-            (memory_threshold / self.block_thresholds.max_bytes_per_block).max(2) * self.max_tasks;
+        let memory_threshold = (settings.get_recluster_block_size()? as usize).max(1);
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Prepare task generation parameters
@@ -327,7 +321,12 @@ impl ReclusterMutator {
                 break;
             }
 
-            // Select blocks for reclustering based on depth threshold and max block size
+            let max_blocks_num_per_node =
+                self.max_blocks_num_per_node(total_bytes as usize, block_count, memory_threshold);
+            let max_blocks_num = max_blocks_num_per_node * self.max_tasks;
+            // Fetch enough candidates for all workers. The per-node quota is based
+            // on the observed block size in selected segments instead of the worst
+            // allowed block size, otherwise distributed recluster can under-select.
             let mut selected_idx =
                 self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
             if selected_idx.is_empty() {
@@ -337,19 +336,60 @@ impl ReclusterMutator {
                 selected_idx = IndexSet::from_iter(small_blocks);
             }
 
-            // Process selected blocks into recluster tasks based on memory threshold
-            let mut task_bytes = 0;
+            let max_total_bytes = memory_threshold.saturating_mul(self.max_tasks);
+            // Keep the first, highest-depth blocks within the total execution budget.
+            // This is a second-stage guard after candidate selection: the average
+            // block size is only an estimate, while task generation uses real bytes.
+            let selected_total_bytes =
+                Self::limit_selected_blocks_by_budget(&mut selected_idx, &blocks, max_total_bytes);
+            let selected_block_count = selected_idx.len();
+            if selected_block_count < 2 {
+                continue;
+            }
+
+            let min_blocks_per_task = (max_blocks_num_per_node / 2).max(2);
+            let target_tasks_by_blocks = selected_block_count / min_blocks_per_task;
+            let target_tasks_by_memory = selected_total_bytes.div_ceil(memory_threshold);
+            // A recluster task needs at least two blocks, so this caps parallelism
+            // when the selected candidate set is too small for every worker.
+            let max_tasks_by_blocks = selected_block_count / 2;
+            let target_tasks = target_tasks_by_blocks
+                .max(target_tasks_by_memory)
+                .max(1)
+                .min(self.max_tasks)
+                .min(max_tasks_by_blocks);
+            let target_task_bytes = selected_total_bytes.div_ceil(target_tasks);
+            let target_task_blocks = selected_block_count.div_ceil(target_tasks);
+
+            // Process selected blocks into recluster tasks based on memory and parallelism targets.
+            let mut task_bytes = 0usize;
             let mut task_rows = 0;
             let mut task_compressed = 0;
             let mut task_indices = Vec::new();
             let mut selected_blocks = Vec::new();
-            for idx in selected_idx {
+            for (processed_blocks, idx) in selected_idx.into_iter().enumerate() {
                 let block = blocks[idx].1.clone();
                 let block_size = block.block_size as usize;
                 let row_count = block.row_count as usize;
 
-                // If memory threshold exceeded, generate a new task and reset accumulators
-                if task_bytes + block_size > memory_threshold && selected_blocks.len() > 1 {
+                let remaining_tasks = target_tasks.saturating_sub(tasks.len() + 1);
+                let remaining_blocks = selected_block_count.saturating_sub(processed_blocks);
+                // Only split for parallelism when the remaining blocks can still
+                // satisfy the minimum task size for the tasks left to create.
+                let has_enough_remaining_blocks =
+                    remaining_blocks >= remaining_tasks * min_blocks_per_task;
+                let should_split_for_memory = task_bytes.saturating_add(block_size)
+                    > memory_threshold
+                    && selected_blocks.len() > 1;
+                // Memory split is the hard safety guard. Parallel split is a load
+                // balancing target and is allowed only while preserving task size.
+                let should_split_for_parallelism = tasks.len() + 1 < target_tasks
+                    && selected_blocks.len() >= min_blocks_per_task
+                    && has_enough_remaining_blocks
+                    && (task_bytes >= target_task_bytes
+                        || selected_blocks.len() >= target_task_blocks);
+
+                if should_split_for_memory || should_split_for_parallelism {
                     selected_blocks_idx.extend(std::mem::take(&mut task_indices));
 
                     tasks.push(self.generate_task(
@@ -487,6 +527,41 @@ impl ReclusterMutator {
             total_compressed,
             level,
         }
+    }
+
+    fn max_blocks_num_per_node(
+        &self,
+        total_bytes: usize,
+        block_count: usize,
+        memory_threshold: usize,
+    ) -> usize {
+        let avg_block_bytes = (total_bytes / block_count).max(1);
+        // Clamp the observed average to normal block thresholds so tiny fragments
+        // do not inflate the candidate count and unusually large blocks do not
+        // make the distributed selection overly conservative.
+        let target_block_bytes = avg_block_bytes
+            .max(self.block_thresholds.min_bytes_per_block)
+            .min(self.block_thresholds.max_bytes_per_block);
+        (memory_threshold / target_block_bytes).max(2)
+    }
+
+    fn limit_selected_blocks_by_budget(
+        selected_idx: &mut IndexSet<usize>,
+        blocks: &[(BlockIndex, Arc<BlockMeta>)],
+        max_total_bytes: usize,
+    ) -> usize {
+        let mut total_bytes = 0usize;
+        let mut keep_blocks = 0;
+        for idx in selected_idx.iter().copied() {
+            let block_size = blocks[idx].1.block_size as usize;
+            if keep_blocks >= 2 && total_bytes.saturating_add(block_size) > max_total_bytes {
+                break;
+            }
+            total_bytes = total_bytes.saturating_add(block_size);
+            keep_blocks += 1;
+        }
+        selected_idx.truncate(keep_blocks);
+        total_bytes
     }
 
     pub fn select_segments(
