@@ -30,12 +30,12 @@ use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
+use super::CoreMapEntries;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
-use super::core_expr::CoreExprId;
-use super::core_expr::CoreMapEntries;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 

@@ -37,13 +37,13 @@ use databend_common_functions::RANK_WINDOW_FUNCTIONS;
 use smallvec::SmallVec;
 use unicase::Ascii;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
+use super::CoreFunctionParams;
+use super::CoreOrderByExprs;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
-use super::core_expr::CoreExprId;
-use super::core_expr::CoreFunctionParams;
-use super::core_expr::CoreOrderByExprs;
 use crate::binder::ExprContext;
 use crate::plans::CastExpr;
 use crate::plans::LagLeadFunction;
@@ -485,7 +485,7 @@ where A: super::TypeCheckAdapter
         &self,
         arena: &CoreExprArena<'_>,
         span: Span,
-        expr: super::core_expr::CoreExprId,
+        expr: CoreExprId,
     ) -> Result<Scalar> {
         if let CoreExpr::Literal { value, .. } = arena.get(expr) {
             match value {

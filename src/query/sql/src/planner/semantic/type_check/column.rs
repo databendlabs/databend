@@ -27,11 +27,11 @@ use databend_common_expression::types::DataType;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::TypeCheckAdapter;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprId;
 use crate::binder::NameResolutionResult;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;

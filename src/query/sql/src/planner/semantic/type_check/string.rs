@@ -19,8 +19,8 @@ use databend_common_ast::ast::TrimWhere;
 use databend_common_exception::Result;
 use smallvec::smallvec;
 
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprId;
+use super::CoreExprArena;
+use super::CoreExprId;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_substring_expr(

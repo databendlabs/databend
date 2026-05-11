@@ -23,8 +23,8 @@ use databend_common_exception::Result;
 use databend_common_expression::type_check::convert_escape_pattern;
 use smallvec::smallvec;
 
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprId;
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::scalar_rewrite::binary_op_core_function;
 use super::scalar_rewrite::like_op_core_function;
 

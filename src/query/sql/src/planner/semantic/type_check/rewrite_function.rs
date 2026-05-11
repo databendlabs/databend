@@ -20,10 +20,10 @@ use databend_common_exception::Result;
 use smallvec::smallvec;
 use unicase::Ascii;
 
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
 use super::TypeChecker;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
-use super::core_expr::CoreExprId;
 use super::function_arity::check_function_arity;
 
 pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {

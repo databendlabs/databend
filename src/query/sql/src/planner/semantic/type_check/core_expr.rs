@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::VecDeque;
-
 use databend_common_ast::Span;
-use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::Literal;
 #[cfg(test)]
 use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::OrderByExpr;
-use databend_common_ast::ast::Query;
-use databend_common_ast::ast::TypeName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -34,41 +27,25 @@ use databend_common_functions::aggregates::AggregateFunctionFactory;
 use smallvec::SmallVec;
 use smallvec::smallvec;
 
+use super::CoreDisplayExprArg;
+use super::CoreDisplayExprArgs;
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
+use super::CoreFunctionParams;
+use super::CoreOrderByExpr;
+use super::CoreOrderByExprs;
 use super::TypeChecker;
-use super::async_functions::CoreAsyncFunction;
 use super::date::AdjacentDayFunction;
 use super::date::DateArithmeticFunction;
 use super::literal::infer_literal_data_type;
 use super::scalar_rewrite::binary_op_core_function;
 use super::scalar_rewrite::can_lower_binary_op;
-use super::search::CoreSearchFunction;
-use super::special_function::SpecialFunction;
 use super::variant::json_op_core_function;
-use super::window::CoreWindow;
-use super::window::CoreWindowDesc;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryComparisonOp;
 use crate::plans::SubqueryType;
-
-#[derive(Clone, Copy)]
-pub struct CoreExprId {
-    index: usize,
-}
-
-pub(super) type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
-pub(super) type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
-pub(super) type CoreFunctionParams = SmallVec<[(String, CoreExprId); 4]>;
-pub(super) type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
-pub(super) type CoreDisplayExprArg = (String, CoreExprId);
-pub(super) type CoreDisplayExprArgs = SmallVec<[CoreDisplayExprArg; 4]>;
-pub(super) type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
-
-pub struct CoreExprArena<'a> {
-    nodes: Vec<CoreExpr<'a>>,
-    week_start: u64,
-    pub(super) aggregate_function_factory: &'static AggregateFunctionFactory,
-    pub(super) in_lambda_function: bool,
-}
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn new(week_start: u64) -> Self {
@@ -461,138 +438,6 @@ impl<'a> CoreExprArena<'a> {
     }
 }
 
-pub(super) enum CoreExpr<'a> {
-    ColumnRef {
-        span: Span,
-        column: &'a ColumnRef,
-    },
-    Literal {
-        span: Span,
-        value: Scalar,
-    },
-    Array {
-        span: Span,
-        exprs: CoreExprArgs,
-    },
-    Map {
-        span: Span,
-        kvs: CoreMapEntries,
-    },
-    Tuple {
-        span: Span,
-        exprs: CoreExprArgs,
-    },
-    MapAccess {
-        span: Span,
-        expr_span: Span,
-        expr: CoreExprId,
-        paths: VecDeque<(Span, Literal)>,
-    },
-    Call {
-        span: Span,
-        func_name: &'static str,
-        args: CoreExprArgs,
-    },
-    UdfCall {
-        span: Span,
-        name: &'a Identifier,
-        args: CoreUdfCallArgs,
-    },
-    LambdaFunction {
-        span: Span,
-        func_name: &'static str,
-        args: CoreExprArgs,
-        lambda_params: &'a [Identifier],
-        lambda_expr: CoreExprId,
-    },
-    SearchFunction {
-        span: Span,
-        function: CoreSearchFunction,
-    },
-    AsyncFunction {
-        span: Span,
-        function: CoreAsyncFunction<'a>,
-    },
-    SetReturningFunction {
-        span: Span,
-        func_name: &'static str,
-        args: CoreExprArgs,
-    },
-    ScalarFunction {
-        span: Span,
-        func_name: &'static str,
-        params: CoreFunctionParams,
-        args: CoreExprArgs,
-    },
-    InList {
-        span: Span,
-        expr: CoreExprId,
-        list: CoreExprArgs,
-        not: bool,
-    },
-    Subquery {
-        span: Span,
-        subquery: &'a Query,
-        typ: SubqueryType,
-        child_expr: Option<CoreExprId>,
-        compare_op: Option<SubqueryComparisonOp>,
-    },
-    Cast {
-        span: Span,
-        is_try: bool,
-        expr: CoreExprId,
-        target_type: TypeName,
-    },
-    SpecialFunction {
-        span: Span,
-        function: SpecialFunction,
-    },
-    AggregateFunction {
-        display_name: String,
-        span: Span,
-        func_name: String,
-        distinct: bool,
-        params: CoreFunctionParams,
-        args: CoreExprArgs,
-        remove_count_args: bool,
-        order_by: CoreOrderByExprs,
-    },
-    AggregateWindowFunction {
-        display_name: String,
-        span: Span,
-        func_name: String,
-        distinct: bool,
-        params: CoreFunctionParams,
-        args: CoreExprArgs,
-        remove_count_args: bool,
-        order_by: CoreOrderByExprs,
-        window: CoreWindowDesc<'a>,
-    },
-    CountAllWindowFunction {
-        display_name: String,
-        span: Span,
-        window: CoreWindow<'a>,
-    },
-    GeneralWindowFunction {
-        display_name: String,
-        span: Span,
-        func_name: &'static str,
-        args: CoreExprArgs,
-        order_by: CoreOrderByExprs,
-        window: CoreWindowDesc<'a>,
-    },
-    StageLocation {
-        span: Span,
-        location: &'a str,
-    },
-}
-
-pub(super) struct CoreOrderByExpr {
-    pub(super) expr: CoreExprId,
-    pub(super) asc: Option<bool>,
-    pub(super) nulls_first: Option<bool>,
-}
-
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
@@ -815,6 +660,7 @@ where A: super::TypeCheckAdapter
 #[cfg(test)]
 mod tests {
     use databend_common_ast::ast::Identifier;
+    use databend_common_ast::ast::Literal;
     use databend_common_ast::parser::Dialect;
     use databend_common_ast::parser::parse_expr;
     use databend_common_ast::parser::tokenize_sql;

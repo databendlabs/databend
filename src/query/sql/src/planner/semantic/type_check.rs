@@ -13,10 +13,15 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::ColumnRef;
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::Query;
+use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
@@ -36,6 +41,7 @@ use databend_common_settings::Settings;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
 use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
+use smallvec::SmallVec;
 use tokio::runtime::Handle;
 
 use super::name_resolution::NameResolutionContext;
@@ -73,6 +79,158 @@ mod udf;
 mod variant;
 mod vector;
 mod window;
+
+#[derive(Clone, Copy)]
+struct CoreExprId {
+    index: usize,
+}
+
+type CoreExprArgs = SmallVec<[CoreExprId; 4]>;
+type CoreMapEntries = SmallVec<[(Literal, CoreExprId); 4]>;
+type CoreFunctionParams = SmallVec<[(String, CoreExprId); 4]>;
+type CoreOrderByExprs = SmallVec<[CoreOrderByExpr; 4]>;
+type CoreDisplayExprArg = (String, CoreExprId);
+type CoreDisplayExprArgs = SmallVec<[CoreDisplayExprArg; 4]>;
+type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
+
+pub struct CoreExprArena<'a> {
+    nodes: Vec<CoreExpr<'a>>,
+    week_start: u64,
+    pub(super) aggregate_function_factory: &'static AggregateFunctionFactory,
+    pub(super) in_lambda_function: bool,
+}
+
+enum CoreExpr<'a> {
+    ColumnRef {
+        span: Span,
+        column: &'a ColumnRef,
+    },
+    Literal {
+        span: Span,
+        value: Scalar,
+    },
+    Array {
+        span: Span,
+        exprs: CoreExprArgs,
+    },
+    Map {
+        span: Span,
+        kvs: CoreMapEntries,
+    },
+    Tuple {
+        span: Span,
+        exprs: CoreExprArgs,
+    },
+    MapAccess {
+        span: Span,
+        expr_span: Span,
+        expr: CoreExprId,
+        paths: VecDeque<(Span, Literal)>,
+    },
+    Call {
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+    },
+    UdfCall {
+        span: Span,
+        name: &'a Identifier,
+        args: CoreUdfCallArgs,
+    },
+    LambdaFunction {
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+        lambda_params: &'a [Identifier],
+        lambda_expr: CoreExprId,
+    },
+    SearchFunction {
+        span: Span,
+        function: search::CoreSearchFunction,
+    },
+    AsyncFunction {
+        span: Span,
+        function: async_functions::CoreAsyncFunction<'a>,
+    },
+    SetReturningFunction {
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+    },
+    ScalarFunction {
+        span: Span,
+        func_name: &'static str,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+    },
+    InList {
+        span: Span,
+        expr: CoreExprId,
+        list: CoreExprArgs,
+        not: bool,
+    },
+    Subquery {
+        span: Span,
+        subquery: &'a Query,
+        typ: crate::plans::SubqueryType,
+        child_expr: Option<CoreExprId>,
+        compare_op: Option<crate::plans::SubqueryComparisonOp>,
+    },
+    Cast {
+        span: Span,
+        is_try: bool,
+        expr: CoreExprId,
+        target_type: TypeName,
+    },
+    SpecialFunction {
+        span: Span,
+        function: special_function::SpecialFunction,
+    },
+    AggregateFunction {
+        display_name: String,
+        span: Span,
+        func_name: String,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+    },
+    AggregateWindowFunction {
+        display_name: String,
+        span: Span,
+        func_name: String,
+        distinct: bool,
+        params: CoreFunctionParams,
+        args: CoreExprArgs,
+        remove_count_args: bool,
+        order_by: CoreOrderByExprs,
+        window: window::CoreWindowDesc<'a>,
+    },
+    CountAllWindowFunction {
+        display_name: String,
+        span: Span,
+        window: window::CoreWindow<'a>,
+    },
+    GeneralWindowFunction {
+        display_name: String,
+        span: Span,
+        func_name: &'static str,
+        args: CoreExprArgs,
+        order_by: CoreOrderByExprs,
+        window: window::CoreWindowDesc<'a>,
+    },
+    StageLocation {
+        span: Span,
+        location: &'a str,
+    },
+}
+
+struct CoreOrderByExpr {
+    pub(super) expr: CoreExprId,
+    pub(super) asc: Option<bool>,
+    pub(super) nulls_first: Option<bool>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct StageLocationParam {
@@ -147,7 +305,7 @@ pub trait TypeCheckAdapter: Clone {
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
 
-    fn check_core_expr_context(&self, _arena: &core_expr::CoreExprArena<'_>) -> Result<()> {
+    fn check_core_expr_context(&self, _arena: &CoreExprArena<'_>) -> Result<()> {
         Ok(())
     }
 

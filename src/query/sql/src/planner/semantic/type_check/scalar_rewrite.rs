@@ -20,10 +20,10 @@ use databend_common_ast::ast::UnaryOperator;
 use databend_common_exception::Result;
 use smallvec::smallvec;
 
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
 use super::TypeChecker;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
-use super::core_expr::CoreExprId;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_unary_op_expr(

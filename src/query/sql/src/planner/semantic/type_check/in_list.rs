@@ -25,11 +25,11 @@ use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
-use super::core_expr::CoreExprId;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
 use crate::Visibility;

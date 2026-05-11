@@ -30,9 +30,10 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use unicase::Ascii;
 
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::TypeCheckAdapter;
 use super::TypeChecker;
-use super::core_expr;
 use super::rewrite_function;
 use crate::BindContext;
 use crate::MetadataRef;
@@ -66,8 +67,8 @@ where A: TypeCheckAdapter
         })
     }
 
-    pub(super) fn core_expr_arena(&self) -> core_expr::CoreExprArena<'a> {
-        core_expr::CoreExprArena::with_aggregate_function_factory(
+    pub(super) fn core_expr_arena(&self) -> CoreExprArena<'a> {
+        CoreExprArena::with_aggregate_function_factory(
             self.func_ctx.week_start as u64,
             self.adapter.aggregate_function_factory(),
         )
@@ -75,8 +76,8 @@ where A: TypeCheckAdapter
 
     pub(super) fn resolve_checked_core(
         &mut self,
-        arena: &core_expr::CoreExprArena<'_>,
-        root: core_expr::CoreExprId,
+        arena: &CoreExprArena<'_>,
+        root: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         self.adapter.check_core_expr_context(arena)?;
         self.resolve_core(arena, root)

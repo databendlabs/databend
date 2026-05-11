@@ -29,10 +29,10 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use smallvec::smallvec;
 
+use super::CoreExprArena;
 use super::TypeChecker;
-use super::core_expr::CoreExprArena;
 use crate::binder::wrap_cast;
-use crate::planner::semantic::type_check::core_expr::CoreExprId;
+use crate::planner::semantic::type_check::CoreExprId;
 use crate::plans::ScalarExpr;
 
 pub(super) enum DateArithmeticFunction {

@@ -42,11 +42,11 @@ use tantivy_query_grammar::UserInputLeaf;
 use tantivy_query_grammar::parse_query_lenient;
 use unicase::Ascii;
 
+use super::CoreDisplayExprArgs;
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::TypeChecker;
-use super::core_expr::CoreDisplayExprArgs;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprId;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
 use crate::plans::BoundColumnRef;

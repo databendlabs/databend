@@ -36,10 +36,10 @@ use jsonb::keypath::OwnedKeyPaths;
 use jsonb::keypath::parse_key_paths;
 use unicase::Ascii;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprId;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;

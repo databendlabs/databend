@@ -31,12 +31,12 @@ use derive_visitor::Drive;
 use derive_visitor::Visitor;
 use smallvec::smallvec;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::FullTypeCheckAdapter;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprId;
 use crate::BindContext;
 use crate::ColumnSet;
 use crate::MetadataRef;

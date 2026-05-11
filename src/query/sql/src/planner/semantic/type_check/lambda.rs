@@ -36,11 +36,11 @@ use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use itertools::Itertools;
 use unicase::Ascii;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
 use super::TypeChecker;
-use super::core_expr::CoreExpr;
-use super::core_expr::CoreExprArena;
-use super::core_expr::CoreExprArgs;
-use super::core_expr::CoreExprId;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::Visibility;
@@ -94,7 +94,7 @@ where A: super::TypeCheckAdapter
         arena: &CoreExprArena<'_>,
         lambda_context: &mut BindContext,
         lambda_columns: &[(String, DataType)],
-        lambda_expr: super::core_expr::CoreExprId,
+        lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         lambda_context.expr_context = ExprContext::InLambdaFunction;
 
@@ -164,7 +164,7 @@ where A: super::TypeCheckAdapter
         func_name: &str,
         args: &CoreExprArgs,
         lambda_params: &[Identifier],
-        lambda_expr: super::core_expr::CoreExprId,
+        lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if matches!(
             self.bind_context.expr_context,
@@ -204,7 +204,7 @@ where A: super::TypeCheckAdapter
         mut arg: ScalarExpr,
         mut arg_type: DataType,
         lambda_params: &[Identifier],
-        lambda_expr: super::core_expr::CoreExprId,
+        lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut func_name = func_name;
         let mut is_cast_variant = false;
