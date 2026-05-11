@@ -448,7 +448,7 @@ struct BlockPruneResult {
     block_location: String,
     // whether keep the block after pruning
     keep: bool,
-    // the page ranges should keeped in the block
+    // the page ranges should be kept in the block
     range: Option<Range<usize>>,
     // the matched rows in the block (aligned with `matched_scores` when present)
     // only used by inverted index search

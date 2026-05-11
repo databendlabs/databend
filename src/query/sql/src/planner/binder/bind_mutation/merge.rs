@@ -16,7 +16,6 @@ use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MergeIntoStmt;
 use databend_common_ast::ast::MergeOption;
-use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UnmatchedClause;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,16 +43,6 @@ impl Binder {
         let target_table_identifier =
             TableIdentifier::new_with_ref(self, &stmt.table, &stmt.target_alias);
 
-        let target_reference = TableReference::Table {
-            span: None,
-            table: stmt.table.clone(),
-            alias: stmt.target_alias.clone(),
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        };
         let source_reference = stmt.source.transform_table_reference();
 
         let (matched_clauses, unmatched_clauses) =
@@ -63,7 +52,6 @@ impl Binder {
         let mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Merge {
-                target: target_reference,
                 source: source_reference,
                 match_expr: stmt.join_expr.clone(),
                 has_star_clause: self.has_star_clause(&matched_clauses, &unmatched_clauses),

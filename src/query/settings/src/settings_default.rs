@@ -1675,6 +1675,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("wap_branch", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_string()),
+                    desc: "Branch used for writes to tables in the default catalog when the target does not explicitly specify a branch. It does not affect reads, non-DML statements, system tables, or temporary tables. A missing branch causes an error. Empty string disables.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: None,
+                }),
                 ("force_aggregate_shuffle_mode", DefaultSettingValue {
                     value: UserSettingValue::String(String::from("auto")),
                     desc: "For testing only. Shuffle mode for aggregation. Options are 'auto', 'row', 'bucket'. Default is 'auto'.",

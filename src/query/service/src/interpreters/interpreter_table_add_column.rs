@@ -237,7 +237,7 @@ impl Interpreter for AddTableColumnInterpreter {
             )?;
             let table_ref = Self::table_ref(db_name, tbl_name, self.plan.branch.as_deref());
             let query = format!(
-                "UPDATE {} SET `{}` = {};",
+                "SETTINGS (wap_branch = '') UPDATE {} SET `{}` = {};",
                 table_ref,
                 field.name(),
                 field.default_expr().unwrap()

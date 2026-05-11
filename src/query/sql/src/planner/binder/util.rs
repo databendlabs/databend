@@ -201,6 +201,10 @@ impl TableIdentifier {
         })
     }
 
+    pub(crate) fn table_alias(&self) -> Option<&TableAlias> {
+        self.table_alias.as_ref()
+    }
+
     pub fn not_found_suggest_error(&self, err: ErrorCode) -> ErrorCode {
         let Self {
             catalog,

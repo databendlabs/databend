@@ -145,6 +145,13 @@ impl Binder {
             target_table_identifier.table_name_alias(),
         );
 
+        let branch_name = self.resolve_wap_target_branch(
+            &catalog_name,
+            &database_name,
+            &table_name,
+            branch_name,
+        )?;
+
         // Add table lock before execution.
         let lock_guard = if strategy != MutationStrategy::NotMatchedOnly {
             self.ctx
@@ -180,7 +187,7 @@ impl Binder {
                 bind_context,
                 table.clone(),
                 &target_table_identifier,
-                table_schema.clone(),
+                branch_name.as_deref(),
             )
             .await?;
 

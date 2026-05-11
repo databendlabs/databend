@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_ast::ast::MatchOperation;
 use databend_common_ast::ast::MatchedClause;
 use databend_common_ast::ast::MutationUpdateExpr;
-use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::UpdateStmt;
 use databend_common_exception::Result;
 
@@ -64,17 +63,6 @@ impl Binder {
 
         let target_table_identifier = TableIdentifier::new_with_ref(self, table, table_alias);
 
-        let target_table_reference = TableReference::Table {
-            span: None,
-            table: table.clone(),
-            alias: table_alias.clone(),
-            temporal: None,
-            with_options: None,
-            pivot: None,
-            unpivot: None,
-            sample: None,
-        };
-
         let update_exprs = update_list
             .iter()
             .map(|update_expr| MutationUpdateExpr {
@@ -95,7 +83,6 @@ impl Binder {
         let mutation = Mutation {
             target_table_identifier,
             expression: MutationExpression::Update {
-                target: target_table_reference,
                 filter: selection.clone(),
                 from,
             },

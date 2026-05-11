@@ -33,6 +33,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnSet;
+use crate::IndexType;
 use crate::ScalarBinder;
 use crate::ScalarExpr;
 use crate::Visibility;
@@ -58,19 +59,16 @@ use crate::plans::Visitor;
 
 pub enum MutationExpression {
     Merge {
-        target: TableReference,
         source: TableReference,
         match_expr: Expr,
         has_star_clause: bool,
         mutation_strategy: MutationStrategy,
     },
     Update {
-        target: TableReference,
         from: Option<TableReference>,
         filter: Option<Expr>,
     },
     Delete {
-        target: TableReference,
         from: Option<TableReference>,
         filter: Option<Expr>,
     },
@@ -83,7 +81,7 @@ impl MutationExpression {
         bind_context: &mut BindContext,
         target_table: Arc<dyn Table>,
         target_table_identifier: &TableIdentifier,
-        target_table_schema: Arc<TableSchema>,
+        target_branch: Option<&str>,
     ) -> Result<MutationExpressionBindResult> {
         let mutation_type = self.mutation_type();
         let mut required_columns = ColumnSet::new();
@@ -91,7 +89,6 @@ impl MutationExpression {
 
         match self {
             MutationExpression::Merge {
-                target,
                 source,
                 match_expr,
                 has_star_clause,
@@ -101,19 +98,14 @@ impl MutationExpression {
                 let (source_s_expr, mut source_context) =
                     binder.bind_table_reference(bind_context, source)?;
 
-                // Bind target table reference.
-                let (mut target_s_expr, mut target_context) =
-                    binder.bind_table_reference(bind_context, target)?;
-
-                // Get target table index.
-                let target_table_index = binder
-                    .metadata
-                    .read()
-                    .get_table_index(
-                        Some(target_table_identifier.database_name().as_str()),
-                        target_table_identifier.table_name().as_str(),
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
+                // Bind the resolved mutation target.
+                let (mut target_s_expr, mut target_context, target_table_index) = binder
+                    .bind_mutation_target(
+                        bind_context,
+                        target_table.clone(),
+                        target_table_identifier,
+                        target_branch,
+                    )?;
 
                 // Remove stream columns in source context.
                 source_context.columns.retain(|col| {
@@ -131,7 +123,7 @@ impl MutationExpression {
                 let all_source_columns = Self::all_source_columns(
                     *has_star_clause,
                     &source_context,
-                    target_table_schema,
+                    target_table.schema(),
                 )?;
 
                 // TODO(Dousir9): do not add row_id column for insert only.
@@ -201,31 +193,16 @@ impl MutationExpression {
                     target_table_row_id_index,
                 })
             }
-            MutationExpression::Update {
-                target,
-                from,
-                filter,
-            }
-            | MutationExpression::Delete {
-                target,
-                from,
-                filter,
-            } => {
-                // Bind target table reference.
-                let (mut s_expr, mut bind_context) =
-                    binder.bind_table_reference(bind_context, target)?;
-
-                // Note: We intentionally get target table index before binding source table,
-                // because source table may contain tables with same name as target table,
-                // which could cause us to get wrong table index if we do it later.
-                let target_table_index = binder
-                    .metadata
-                    .read()
-                    .get_table_index(
-                        Some(target_table_identifier.database_name().as_str()),
-                        target_table_identifier.table_name().as_str(),
-                    )
-                    .ok_or_else(|| ErrorCode::Internal("Can't get target table index"))?;
+            MutationExpression::Update { from, filter }
+            | MutationExpression::Delete { from, filter } => {
+                // Bind the resolved mutation target.
+                let (mut s_expr, mut bind_context, target_table_index) = binder
+                    .bind_mutation_target(
+                        bind_context,
+                        target_table.clone(),
+                        target_table_identifier,
+                        target_branch,
+                    )?;
 
                 let from_s_expr = if let Some(from) = from {
                     let (from_s_expr, mut from_context) =
@@ -501,6 +478,35 @@ impl MutationExpression {
 }
 
 impl Binder {
+    fn bind_mutation_target(
+        &mut self,
+        bind_context: &BindContext,
+        target_table: Arc<dyn Table>,
+        target_table_identifier: &TableIdentifier,
+        target_branch: Option<&str>,
+    ) -> Result<(SExpr, BindContext, IndexType)> {
+        let database = target_table_identifier.database_name();
+        // Reuse the table instance resolved by `bind_mutation`. Looking it up again by name could
+        // lose an implicit WAP branch or normalize its case a second time.
+        let table_index = self.metadata.write().add_table(
+            target_table_identifier.catalog_name(),
+            database.clone(),
+            target_table_identifier.table_name(),
+            target_table,
+            target_branch.map(str::to_owned),
+            target_table_identifier.table_name_alias(),
+            !bind_context.binding_views.is_empty(),
+            bind_context.planning_agg_index,
+            false,
+        );
+        let (s_expr, mut bind_context) =
+            self.bind_base_table(bind_context, &database, table_index, None, &None, true)?;
+        if let Some(alias) = target_table_identifier.table_alias() {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+        }
+        Ok((s_expr, bind_context, table_index))
+    }
+
     fn add_row_id_column(
         &mut self,
         bind_context: &mut BindContext,
