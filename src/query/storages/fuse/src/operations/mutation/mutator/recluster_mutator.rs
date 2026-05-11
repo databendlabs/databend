@@ -240,7 +240,7 @@ impl ReclusterMutator {
         // memory usage is intentionally not folded in here because sort spill can
         // absorb pressure and the available memory snapshot changes during execution.
         let settings = self.ctx.get_settings();
-        let memory_threshold = (settings.get_recluster_block_size()? as usize).max(1);
+        let memory_threshold = settings.get_recluster_block_size()? as usize;
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Prepare task generation parameters
