@@ -59,6 +59,8 @@ pub fn blocks_to_parquet(
         enable_dictionary,
         metadata,
         None,
+        None,
+        None,
     )
 }
 
@@ -80,6 +82,8 @@ pub fn blocks_to_parquet_with_stats(
     enable_dictionary: bool,
     metadata: Option<Vec<KeyValue>>,
     column_stats: Option<&StatisticsOfColumns>,
+    data_page_rows: Option<usize>,
+    data_page_bytes: Option<usize>,
 ) -> Result<FileMetaData> {
     assert!(!blocks.is_empty());
 
@@ -95,6 +99,8 @@ pub fn blocks_to_parquet_with_stats(
         metadata,
         num_rows,
         table_schema,
+        data_page_rows,
+        data_page_bytes,
     );
 
     let batches = blocks
@@ -174,6 +180,8 @@ pub fn build_parquet_writer_properties(
     metadata: Option<Vec<KeyValue>>,
     num_rows: usize,
     table_schema: &TableSchema,
+    data_page_rows: Option<usize>,
+    data_page_bytes: Option<usize>,
 ) -> WriterProperties {
     let mut builder = WriterProperties::builder()
         .set_compression(compression.into())
@@ -183,6 +191,13 @@ pub fn build_parquet_writer_properties(
         .set_statistics_enabled(EnabledStatistics::None)
         .set_bloom_filter_enabled(false)
         .set_key_value_metadata(metadata);
+
+    if let Some(rows) = data_page_rows {
+        builder = builder.set_data_page_row_count_limit(rows);
+    }
+    if let Some(bytes) = data_page_bytes {
+        builder = builder.set_data_page_size_limit(bytes);
+    }
 
     if enable_dictionary {
         // Enable dictionary for all columns
@@ -288,6 +303,8 @@ mod tests {
             None,
             1000,
             &schema,
+            None,
+            None,
         );
 
         assert!(
@@ -324,6 +341,8 @@ mod tests {
             None,
             1000,
             &schema,
+            None,
+            None,
         );
 
         for field in schema.leaf_fields() {
