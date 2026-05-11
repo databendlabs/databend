@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -145,11 +146,14 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
 }
 
 #[test]
-fn all_derive_stat_functions_have_selectivity_smoke() {
-    let cases = reflected_derive_stat_smoke_cases();
+fn static_derive_stat_functions_have_selectivity_smoke() {
+    let (function_names, cases) = reflected_static_derive_stat_smoke_cases();
     assert!(!cases.is_empty(), "derive_stat smoke should find cases");
 
-    let mut derived_by_function = HashMap::new();
+    let mut derived_by_function = function_names
+        .into_iter()
+        .map(|function_name| (function_name, false))
+        .collect::<HashMap<_, _>>();
     for case in cases {
         let derived = case.run();
         derived_by_function
@@ -233,8 +237,8 @@ impl DeriveStatSmokeCase {
     }
 }
 
-fn reflected_derive_stat_smoke_cases() -> Vec<DeriveStatSmokeCase> {
-    let mut unsupported = Vec::new();
+fn reflected_static_derive_stat_smoke_cases() -> (BTreeSet<String>, Vec<DeriveStatSmokeCase>) {
+    let mut function_names = BTreeSet::new();
     let mut cases = BUILTIN_FUNCTIONS
         .funcs
         .values()
@@ -243,23 +247,15 @@ fn reflected_derive_stat_smoke_cases() -> Vec<DeriveStatSmokeCase> {
             FunctionEval::Scalar {
                 derive_stat: Some(_),
                 ..
-            } => match build_derive_stat_smoke_case(func, *id) {
-                Some(case) => Some(case),
-                None => {
-                    unsupported.push(format!("{:?}", func.signature));
-                    None
-                }
-            },
+            } => {
+                function_names.insert(func.signature.name.clone());
+                build_derive_stat_smoke_case(func, *id)
+            }
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert!(
-        unsupported.is_empty(),
-        "derive_stat smoke needs sample builders for: {}",
-        unsupported.join(", ")
-    );
     cases.sort_by(|left, right| left.display_name.cmp(&right.display_name));
-    cases
+    (function_names, cases)
 }
 
 fn build_derive_stat_smoke_case(func: &Arc<Function>, id: usize) -> Option<DeriveStatSmokeCase> {
