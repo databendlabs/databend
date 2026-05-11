@@ -1777,7 +1777,7 @@ impl DefaultSettings {
     fn recluster_block_size(max_memory_usage: u64) -> u64 {
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        std::cmp::min(max_memory_usage * 30 / 100, 80 * 1024 * 1024 * 1024)
+        std::cmp::min(max_memory_usage * 20 / 100, 80 * 1024 * 1024 * 1024)
     }
 
     /// Converts and validates a setting value based on its key.
