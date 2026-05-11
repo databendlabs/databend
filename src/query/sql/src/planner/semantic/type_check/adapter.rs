@@ -16,27 +16,16 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::FileLocation;
 use databend_common_ast::ast::Query;
-use databend_common_ast::ast::UriLocation;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::tokenize_sql;
-use databend_common_base::runtime::GLOBAL_MEM_STAT;
 use databend_common_base::runtime::block_on_with_handle;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_context::TableContextAuthorization;
 use databend_common_catalog::table_context::TableContextTableAccess;
-use databend_common_cloud_control::client_config::build_client_config;
-use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_cloud_control::pb::CreateWorkerRequest;
-use databend_common_compress::CompressAlgorithm;
-use databend_common_compress::DecompressDecoder;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_expression::BlockEntry;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
@@ -52,7 +41,6 @@ use databend_common_meta_app::schema::GetSequenceReq;
 use databend_common_meta_app::schema::SequenceIdent;
 use databend_common_meta_app::schema::dictionary_name_ident::DictionaryNameIdent;
 use databend_common_settings::Settings;
-use databend_common_storage::init_stage_operator;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
 use databend_common_users::security_policy_cache::CachedSecurityPolicy;
@@ -75,14 +63,10 @@ use super::TypeCheckDictionary;
 use super::TypeCheckSubqueryPlan;
 use super::TypeChecker;
 use crate::BindContext;
-use crate::ColumnBindingBuilder;
 use crate::DefaultExprBinder;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
-use crate::Visibility;
-use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_location;
-use crate::binder::resolve_stage_locations;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::DictionarySource;
 use crate::plans::RedisSource;
@@ -449,94 +433,18 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     }
 
     fn resolve_udf(&self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
-        let tenant = self.ctx.get_tenant();
-        Ok(block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            self.dependencies
-                .user_api_provider
-                .get_udf(&tenant, udf_name),
-        )?)
+        self.resolve_udf(udf_name)
     }
 
     fn resolve_udf_stage_locations(
         &self,
         locations: &[String],
     ) -> Result<Vec<(StageInfo, String)>> {
-        block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            resolve_stage_locations(self.ctx.as_ref(), locations),
-        )
+        self.resolve_udf_stage_locations(locations)
     }
 
     fn resolve_udf_code(&self, code: String) -> Result<Vec<u8>> {
-        let file_location = match code.strip_prefix('@') {
-            Some(location) => FileLocation::Stage(location.to_string()),
-            None => {
-                let uri = UriLocation::from_uri(code.clone(), BTreeMap::default());
-
-                match uri {
-                    Ok(uri) => FileLocation::Uri(uri),
-                    Err(_) => {
-                        return Ok(code.into());
-                    }
-                }
-            }
-        };
-
-        let (stage_info, module_path) = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            resolve_file_location(self.ctx.as_ref(), &file_location),
-        )
-        .map_err(|err| {
-            ErrorCode::SemanticError(format!(
-                "Failed to resolve code location {:?}: {}",
-                code, err
-            ))
-        })?;
-
-        let op = init_stage_operator(&stage_info).map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
-        })?;
-
-        let code_blob = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            op.read(&module_path),
-        )
-        .map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to read module {}: {}", module_path, err))
-        })?
-        .to_vec();
-
-        let compress_algo = CompressAlgorithm::from_path(&module_path);
-        log::trace!(
-            "Detecting compression algorithm for module: {}",
-            &module_path
-        );
-        log::info!("Detected compression algorithm: {:#?}", &compress_algo);
-
-        let code_blob = match compress_algo {
-            Some(algo) => {
-                log::trace!("Decompressing module using {:?} algorithm", algo);
-                if algo == CompressAlgorithm::Zip {
-                    DecompressDecoder::decompress_all_zip(
-                        &code_blob,
-                        &module_path,
-                        GLOBAL_MEM_STAT.get_limit() as usize,
-                    )
-                } else {
-                    let mut decoder = DecompressDecoder::new(algo);
-                    decoder.decompress_all(&code_blob)
-                }
-                .map_err(|err| {
-                    let error_msg = format!("Failed to decompress module {}: {}", module_path, err);
-                    log::error!("{}", error_msg);
-                    ErrorCode::SemanticError(error_msg)
-                })?
-            }
-            None => code_blob,
-        };
-
-        Ok(code_blob)
+        self.resolve_udf_code(code)
     }
 
     fn fold_udf_server(
@@ -545,68 +453,11 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         args: Vec<Scalar>,
         udf_definition: UDFServer,
     ) -> Result<Scalar> {
-        let mut block_entries = Vec::with_capacity(args.len());
-        for (arg, dest_type) in args.into_iter().zip(
-            udf_definition
-                .arg_types
-                .iter()
-                .filter(|ty| ty.remove_nullable() != DataType::StageLocation),
-        ) {
-            if matches!(dest_type, DataType::StageLocation) {
-                continue;
-            }
-            let entry = BlockEntry::new_const_column(dest_type.clone(), arg, 1);
-            block_entries.push(entry);
-        }
-
-        let settings = self.ctx.get_settings();
-        let connect_timeout = settings.get_external_server_connect_timeout_secs()?;
-        let request_timeout = settings.get_external_server_request_timeout_secs()?;
-
-        let handler = udf_definition.handler;
-        let return_type = udf_definition.return_type;
-        let endpoint = databend_common_expression::udf_client::UDFFlightClient::build_endpoint(
-            &udf_definition.address,
-            connect_timeout,
-            request_timeout,
-            &self.ctx.get_version().udf_client_user_agent(),
-        )?;
-
-        let tenant_name = self.ctx.get_tenant().tenant_name().to_string();
-        let query_id = self.ctx.get_id();
-        let name = name.to_string();
-        let headers = udf_definition.headers;
-        block_on_with_handle(&self.dependencies.async_runtime_handle, async move {
-            let num_rows = 1;
-            let mut client = databend_common_expression::udf_client::UDFFlightClient::connect(
-                &handler,
-                endpoint,
-                connect_timeout,
-                num_rows,
-            )
-            .await?
-            .with_tenant(&tenant_name)?
-            .with_func_name(&name)?
-            .with_handler_name(&handler)?
-            .with_query_id(&query_id)?
-            .with_headers(headers)?;
-
-            let result = client
-                .do_exchange(&name, &handler, Some(num_rows), block_entries, &return_type)
-                .await?;
-
-            let value = unsafe { result.get_by_offset(0).index_unchecked(0) };
-            Ok(value.to_owned())
-        })
+        self.fold_udf_server(name, args, udf_definition)
     }
 
     fn enable_udf_sandbox(&self) -> Result<bool> {
-        Ok(self
-            .dependencies
-            .global_config
-            .query
-            .common
-            .enable_udf_sandbox)
+        self.enable_udf_sandbox()
     }
 
     fn apply_udf_cloud_resource(
@@ -615,53 +466,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         resource_type: &str,
         script: String,
     ) -> Result<(String, BTreeMap<String, String>)> {
-        let Some(provider) = self.dependencies.cloud_control_api_provider.clone() else {
-            return Err(ErrorCode::Unimplemented(
-                "SandboxUDF requires cloud control enabled, please set cloud_control_grpc_server_address in config",
-            ));
-        };
-
-        let tenant = self.ctx.get_tenant();
-        let user = self
-            .ctx
-            .get_current_user()?
-            .identity()
-            .display()
-            .to_string();
-        let query_id = self.ctx.get_id();
-        let mut cfg = build_client_config(
-            tenant.tenant_name().to_string(),
-            user,
-            query_id,
-            provider.get_timeout(),
-        );
-        cfg.add_worker_version_info();
-
-        let req = CreateWorkerRequest {
-            tenant_id: tenant.tenant_name().to_string(),
-            name: resource_name.to_string(),
-            if_not_exists: true,
-            tags: Default::default(),
-            options: Default::default(),
-            r#type: resource_type.to_string(),
-            script,
-        };
-
-        let resp = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            provider
-                .get_worker_client()
-                .create_worker(make_request(req, cfg)),
-        )?;
-
-        let endpoint = resp.endpoint;
-        if endpoint.is_empty() {
-            return Err(ErrorCode::CloudControlConnectError(
-                "UDF cloud resource endpoint is empty".to_string(),
-            ));
-        }
-
-        Ok((endpoint, resp.headers))
+        self.apply_udf_cloud_resource(resource_name, resource_type, script)
     }
 
     fn resolve_udf_definition(
@@ -673,43 +478,14 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         definition: &str,
         parameters: Vec<(String, DataType, ScalarExpr)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let sql_tokens = tokenize_sql(definition)?;
-        let expr = parse_expr(&sql_tokens, self.settings().get_sql_dialect()?)?;
-
-        let mut bind_context = BindContext::with_parent(parent_context.clone())?;
-        let mut replacements = Vec::with_capacity(parameters.len());
-        for (name, data_type, scalar) in parameters {
-            let column_index = bind_context.next_column_index();
-            bind_context.add_column_binding(
-                ColumnBindingBuilder::new(
-                    name,
-                    column_index,
-                    Box::new(data_type),
-                    Visibility::Visible,
-                )
-                .build(),
-            );
-            replacements.push((column_index, scalar));
-        }
-
-        let name_resolution_ctx = NameResolutionContext {
-            deny_column_reference: false,
-            ..name_resolution_ctx.clone()
-        };
-        let box (mut scalar, data_type) = TypeChecker::try_create_with_adapter(
-            &mut bind_context,
-            self.clone(),
-            &name_resolution_ctx,
+        self.resolve_udf_definition(
+            parent_context,
+            name_resolution_ctx,
             metadata,
             aliases,
-        )?
-        .resolve(&expr)?;
-
-        for (column_index, arg) in replacements {
-            scalar.replace_column_with_scalar(column_index, &arg)?;
-        }
-
-        Ok(Box::new((scalar, data_type)))
+            definition,
+            parameters,
+        )
     }
 }
 
