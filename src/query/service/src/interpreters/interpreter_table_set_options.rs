@@ -26,6 +26,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
@@ -140,6 +141,10 @@ impl Interpreter for SetOptionsInterpreter {
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
+        is_valid_option_of_type::<u64>(
+            &self.plan.set_options,
+            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+        )?;
 
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
