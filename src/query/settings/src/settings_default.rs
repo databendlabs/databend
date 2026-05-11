@@ -1255,6 +1255,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_decimal_sum_widening", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Automatically widen SUM arguments from Decimal(19..38, scale) to Decimal(76, scale).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
