@@ -61,17 +61,18 @@ impl<'a> CoreExprArena<'a> {
                     ..
                 } = right
                 {
-                    return self.lower_like_expr(op, span, left, right, like_str, escape);
+                    self.lower_like_expr(op, span, left, right, like_str, escape.as_ref())
+                } else {
+                    self.lower_like_escape_expr(span, "like", left, right, escape.as_ref())
                 }
-                self.lower_like_escape_expr(span, "like", left, right, escape)
             }
             BinaryOperator::LikeAny(escape) => {
-                self.lower_like_escape_expr(span, "like_any", left, right, escape)
+                self.lower_like_escape_expr(span, "like_any", left, right, escape.as_ref())
             }
             BinaryOperator::Regexp => {
-                self.lower_like_escape_expr(span, "regexp", left, right, &None)
+                self.lower_like_escape_expr(span, "regexp", left, right, None)
             }
-            BinaryOperator::RLike => self.lower_like_escape_expr(span, "rlike", left, right, &None),
+            BinaryOperator::RLike => self.lower_like_escape_expr(span, "rlike", left, right, None),
             other => {
                 let Some(func_name) = binary_op_core_function(other) else {
                     return Err(ErrorCode::Internal(format!(
@@ -90,7 +91,7 @@ impl<'a> CoreExprArena<'a> {
         left: &'a Expr,
         right: &'a Expr,
         like_str: &str,
-        escape: &Option<String>,
+        escape: Option<&String>,
     ) -> Result<CoreExprId> {
         let new_like_str = match escape.as_ref() {
             Some(escape_literal) => {
@@ -145,7 +146,7 @@ impl<'a> CoreExprArena<'a> {
         func_name: &'static str,
         left: &'a Expr,
         right: &'a Expr,
-        escape: &Option<String>,
+        escape: Option<&String>,
     ) -> Result<CoreExprId> {
         let mut arguments = smallvec![self.lower_ast_expr(left)?, self.lower_ast_expr(right)?];
         if let Some(escape) = escape {

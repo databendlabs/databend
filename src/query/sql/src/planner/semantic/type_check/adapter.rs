@@ -200,8 +200,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             r.dictionary_meta
         } else {
             return Err(ErrorCode::UnknownDictionary(format!(
-                "Unknown dictionary {}",
-                dict_name,
+                "Unknown dictionary {dict_name}"
             )));
         };
 

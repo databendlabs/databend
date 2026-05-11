@@ -46,98 +46,6 @@ pub(super) enum AdjacentDayFunction {
     Next,
 }
 
-impl<'a, A> TypeChecker<'a, A> {
-    pub(super) fn adjust_date_interval_operands(
-        &self,
-        op: &BinaryOperator,
-        left_expr: &mut ScalarExpr,
-        left_type: &DataType,
-        right_expr: &mut ScalarExpr,
-        right_type: &DataType,
-    ) -> Result<()> {
-        match op {
-            BinaryOperator::Plus => {
-                self.adjust_single_date_interval_operand(
-                    left_expr, left_type, right_expr, right_type,
-                )?;
-                self.adjust_single_date_interval_operand(
-                    right_expr, right_type, left_expr, left_type,
-                )?;
-            }
-            BinaryOperator::Minus => {
-                self.adjust_single_date_interval_operand(
-                    left_expr, left_type, right_expr, right_type,
-                )?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub(super) fn adjust_date_interval_function_args(
-        &self,
-        func_name: &str,
-        args: &mut [ScalarExpr],
-    ) -> Result<()> {
-        if args.len() != 2 {
-            return Ok(());
-        }
-        let op = if func_name.eq_ignore_ascii_case("plus") {
-            BinaryOperator::Plus
-        } else if func_name.eq_ignore_ascii_case("minus") {
-            BinaryOperator::Minus
-        } else {
-            return Ok(());
-        };
-        let (left_slice, right_slice) = args.split_at_mut(1);
-        let left_expr = &mut left_slice[0];
-        let right_expr = &mut right_slice[0];
-        let left_type = left_expr.data_type()?;
-        let right_type = right_expr.data_type()?;
-        self.adjust_date_interval_operands(&op, left_expr, &left_type, right_expr, &right_type)
-    }
-
-    fn adjust_single_date_interval_operand(
-        &self,
-        date_expr: &mut ScalarExpr,
-        date_type: &DataType,
-        interval_expr: &ScalarExpr,
-        interval_type: &DataType,
-    ) -> Result<()> {
-        if date_type.remove_nullable() != DataType::Date
-            || interval_type.remove_nullable() != DataType::Interval
-        {
-            return Ok(());
-        }
-
-        if self.interval_contains_only_date_parts(interval_expr)? {
-            return Ok(());
-        }
-
-        // Preserve nullability when casting DATE to TIMESTAMP
-        let target_type = if date_type.is_nullable_or_null() {
-            DataType::Timestamp.wrap_nullable()
-        } else {
-            DataType::Timestamp
-        };
-        *date_expr = wrap_cast(date_expr, &target_type);
-        Ok(())
-    }
-
-    fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
-        let expr = interval_expr.as_expr()?;
-        let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        if let EExpr::Constant(Constant {
-            scalar: Scalar::Interval(value),
-            ..
-        }) = folded
-        {
-            return Ok(value.microseconds() == 0);
-        }
-        Ok(false)
-    }
-}
-
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_extract_expr(
         &mut self,
@@ -193,7 +101,69 @@ impl<'a> CoreExprArena<'a> {
         date_lhs: &'a Expr,
         function: DateArithmeticFunction,
     ) -> Result<CoreExprId> {
-        let func_name = date_arith_function(span, interval_kind, function)?;
+        let func_name = {
+            use ASTIntervalKind::*;
+            use DateArithmeticFunction::*;
+            match (function, interval_kind) {
+                (Diff, ISOYear) => "diff_isoyears",
+                (Diff, Year) => "diff_years",
+                (Diff, Quarter) => "diff_quarters",
+                (Diff, Month) => "diff_months",
+                (Diff, Day) => "diff_days",
+                (Diff, Hour) => "diff_hours",
+                (Diff, Minute) => "diff_minutes",
+                (Diff, Second) => "diff_seconds",
+                (Diff, Doy) => "diff_doys",
+                (Diff, Week) => "diff_weeks",
+                (Diff, Dow) => "diff_dows",
+                (Diff, Epoch) => "diff_epochs",
+                (Diff, MicroSecond) => "diff_microseconds",
+                (Diff, ISODow) => "diff_isodows",
+                (Diff, YearWeek) => "diff_yearweeks",
+                (Diff, Millennium) => "diff_millenniums",
+                (Diff, _) => {
+                    return Err(unsupported_date_interval(span, "date_diff", interval_kind));
+                }
+                (Add, Year) => "add_years",
+                (Add, Quarter) => "add_quarters",
+                (Add, Month) => "date_add_months",
+                (Add, Day) => "add_days",
+                (Add, Hour) => "add_hours",
+                (Add, Minute) => "add_minutes",
+                (Add, Second) => "add_seconds",
+                (Add, Week) => "add_weeks",
+                (Add, _) => {
+                    return Err(unsupported_date_interval(
+                        span,
+                        "date_add/date_sub",
+                        interval_kind,
+                    ));
+                }
+                (Between, ISOYear) => "between_isoyears",
+                (Between, Year) => "between_years",
+                (Between, Quarter) => "between_quarters",
+                (Between, Month) => "between_months",
+                (Between, Day) => "between_days",
+                (Between, Hour) => "between_hours",
+                (Between, Minute) => "between_minutes",
+                (Between, Second) => "between_seconds",
+                (Between, Doy) => "between_doys",
+                (Between, Week) => "between_weeks",
+                (Between, Dow) => "between_dows",
+                (Between, Epoch) => "between_dows",
+                (Between, MicroSecond) => "between_microseconds",
+                (Between, ISODow) => "between_isodows",
+                (Between, YearWeek) => "between_yearweeks",
+                (Between, Millennium) => "between_millenniums",
+                (Between, _) => {
+                    return Err(unsupported_date_interval(
+                        span,
+                        "date_between",
+                        interval_kind,
+                    ));
+                }
+            }
+        };
         let date_lhs = self.lower_ast_expr(date_lhs)?;
         let date_rhs = self.lower_ast_expr(date_rhs)?;
         Ok(self.call(span, func_name, smallvec![date_lhs, date_rhs]))
@@ -206,7 +176,23 @@ impl<'a> CoreExprArena<'a> {
         interval: &'a Expr,
         date: &'a Expr,
     ) -> Result<CoreExprId> {
-        let func_name = date_sub_function(span, interval_kind)?;
+        let func_name = match interval_kind {
+            ASTIntervalKind::Year => "add_years",
+            ASTIntervalKind::Quarter => "add_quarters",
+            ASTIntervalKind::Month => "date_add_months",
+            ASTIntervalKind::Day => "add_days",
+            ASTIntervalKind::Hour => "add_hours",
+            ASTIntervalKind::Minute => "add_minutes",
+            ASTIntervalKind::Second => "add_seconds",
+            ASTIntervalKind::Week => "add_weeks",
+            _ => {
+                return Err(unsupported_date_interval(
+                    span,
+                    "date_add/date_sub",
+                    interval_kind,
+                ));
+            }
+        };
         let date = self.lower_ast_expr(date)?;
         let interval = self.lower_ast_expr(interval)?;
         let interval = self.call(span, "minus", smallvec![interval]);
@@ -319,128 +305,130 @@ impl<'a> CoreExprArena<'a> {
         weekday: &ASTWeekday,
         function: AdjacentDayFunction,
     ) -> Result<CoreExprId> {
-        let func_name = adjacent_day_function(weekday, function);
+        let func_name = match function {
+            AdjacentDayFunction::Previous => match weekday {
+                ASTWeekday::Monday => "to_previous_monday",
+                ASTWeekday::Tuesday => "to_previous_tuesday",
+                ASTWeekday::Wednesday => "to_previous_wednesday",
+                ASTWeekday::Thursday => "to_previous_thursday",
+                ASTWeekday::Friday => "to_previous_friday",
+                ASTWeekday::Saturday => "to_previous_saturday",
+                ASTWeekday::Sunday => "to_previous_sunday",
+            },
+            AdjacentDayFunction::Next => match weekday {
+                ASTWeekday::Monday => "to_next_monday",
+                ASTWeekday::Tuesday => "to_next_tuesday",
+                ASTWeekday::Wednesday => "to_next_wednesday",
+                ASTWeekday::Thursday => "to_next_thursday",
+                ASTWeekday::Friday => "to_next_friday",
+                ASTWeekday::Saturday => "to_next_saturday",
+                ASTWeekday::Sunday => "to_next_sunday",
+            },
+        };
         let date = self.lower_ast_expr(date)?;
         Ok(self.call(span, func_name, smallvec![date]))
     }
-}
-
-fn date_arith_function(
-    span: Span,
-    interval_kind: &ASTIntervalKind,
-    function: DateArithmeticFunction,
-) -> Result<&'static str> {
-    match function {
-        DateArithmeticFunction::Diff => date_diff_function(span, interval_kind),
-        DateArithmeticFunction::Add => date_sub_function(span, interval_kind),
-        DateArithmeticFunction::Between => date_between_function(span, interval_kind),
-    }
-}
-
-fn date_diff_function(span: Span, interval_kind: &ASTIntervalKind) -> Result<&'static str> {
-    Ok(match interval_kind {
-        ASTIntervalKind::ISOYear => "diff_isoyears",
-        ASTIntervalKind::Year => "diff_years",
-        ASTIntervalKind::Quarter => "diff_quarters",
-        ASTIntervalKind::Month => "diff_months",
-        ASTIntervalKind::Day => "diff_days",
-        ASTIntervalKind::Hour => "diff_hours",
-        ASTIntervalKind::Minute => "diff_minutes",
-        ASTIntervalKind::Second => "diff_seconds",
-        ASTIntervalKind::Doy => "diff_doys",
-        ASTIntervalKind::Week => "diff_weeks",
-        ASTIntervalKind::Dow => "diff_dows",
-        ASTIntervalKind::Epoch => "diff_epochs",
-        ASTIntervalKind::MicroSecond => "diff_microseconds",
-        ASTIntervalKind::ISODow => "diff_isodows",
-        ASTIntervalKind::YearWeek => "diff_yearweeks",
-        ASTIntervalKind::Millennium => "diff_millenniums",
-        ASTIntervalKind::ISOWeek | ASTIntervalKind::UnknownIntervalKind => {
-            return unsupported_date_interval(span, "date_diff", interval_kind);
-        }
-    })
-}
-
-fn date_between_function(span: Span, interval_kind: &ASTIntervalKind) -> Result<&'static str> {
-    Ok(match interval_kind {
-        ASTIntervalKind::ISOYear => "between_isoyears",
-        ASTIntervalKind::Year => "between_years",
-        ASTIntervalKind::Quarter => "between_quarters",
-        ASTIntervalKind::Month => "between_months",
-        ASTIntervalKind::Day => "between_days",
-        ASTIntervalKind::Hour => "between_hours",
-        ASTIntervalKind::Minute => "between_minutes",
-        ASTIntervalKind::Second => "between_seconds",
-        ASTIntervalKind::Doy => "between_doys",
-        ASTIntervalKind::Week => "between_weeks",
-        ASTIntervalKind::Dow => "between_dows",
-        ASTIntervalKind::Epoch => "between_epochs",
-        ASTIntervalKind::MicroSecond => "between_microseconds",
-        ASTIntervalKind::ISODow => "between_isodows",
-        ASTIntervalKind::YearWeek => "between_yearweeks",
-        ASTIntervalKind::Millennium => "between_millenniums",
-        ASTIntervalKind::ISOWeek | ASTIntervalKind::UnknownIntervalKind => {
-            return unsupported_date_interval(span, "date_between", interval_kind);
-        }
-    })
-}
-
-fn date_sub_function(span: Span, interval_kind: &ASTIntervalKind) -> Result<&'static str> {
-    Ok(match interval_kind {
-        ASTIntervalKind::Year => "add_years",
-        ASTIntervalKind::Quarter => "add_quarters",
-        ASTIntervalKind::Month => "date_add_months",
-        ASTIntervalKind::Day => "add_days",
-        ASTIntervalKind::Hour => "add_hours",
-        ASTIntervalKind::Minute => "add_minutes",
-        ASTIntervalKind::Second => "add_seconds",
-        ASTIntervalKind::Week => "add_weeks",
-        ASTIntervalKind::ISOYear
-        | ASTIntervalKind::Doy
-        | ASTIntervalKind::ISOWeek
-        | ASTIntervalKind::Dow
-        | ASTIntervalKind::Epoch
-        | ASTIntervalKind::MicroSecond
-        | ASTIntervalKind::ISODow
-        | ASTIntervalKind::YearWeek
-        | ASTIntervalKind::Millennium
-        | ASTIntervalKind::UnknownIntervalKind => {
-            return unsupported_date_interval(span, "date_add/date_sub", interval_kind);
-        }
-    })
 }
 
 fn unsupported_date_interval(
     span: Span,
     function_name: &str,
     interval_kind: &ASTIntervalKind,
-) -> Result<&'static str> {
-    Err(ErrorCode::SemanticError(format!(
-        "Unsupported interval type {} for {}",
-        interval_kind, function_name
+) -> ErrorCode {
+    ErrorCode::SemanticError(format!(
+        "Unsupported interval type {interval_kind} for {function_name}"
     ))
-    .set_span(span))
+    .set_span(span)
 }
 
-fn adjacent_day_function(weekday: &ASTWeekday, function: AdjacentDayFunction) -> &'static str {
-    match function {
-        AdjacentDayFunction::Previous => match weekday {
-            ASTWeekday::Monday => "to_previous_monday",
-            ASTWeekday::Tuesday => "to_previous_tuesday",
-            ASTWeekday::Wednesday => "to_previous_wednesday",
-            ASTWeekday::Thursday => "to_previous_thursday",
-            ASTWeekday::Friday => "to_previous_friday",
-            ASTWeekday::Saturday => "to_previous_saturday",
-            ASTWeekday::Sunday => "to_previous_sunday",
-        },
-        AdjacentDayFunction::Next => match weekday {
-            ASTWeekday::Monday => "to_next_monday",
-            ASTWeekday::Tuesday => "to_next_tuesday",
-            ASTWeekday::Wednesday => "to_next_wednesday",
-            ASTWeekday::Thursday => "to_next_thursday",
-            ASTWeekday::Friday => "to_next_friday",
-            ASTWeekday::Saturday => "to_next_saturday",
-            ASTWeekday::Sunday => "to_next_sunday",
-        },
+impl<'a, A> TypeChecker<'a, A> {
+    pub(super) fn adjust_date_interval_operands(
+        &self,
+        op: &BinaryOperator,
+        left_expr: &mut ScalarExpr,
+        left_type: &DataType,
+        right_expr: &mut ScalarExpr,
+        right_type: &DataType,
+    ) -> Result<()> {
+        match op {
+            BinaryOperator::Plus => {
+                self.adjust_single_date_interval_operand(
+                    left_expr, left_type, right_expr, right_type,
+                )?;
+                self.adjust_single_date_interval_operand(
+                    right_expr, right_type, left_expr, left_type,
+                )?;
+            }
+            BinaryOperator::Minus => {
+                self.adjust_single_date_interval_operand(
+                    left_expr, left_type, right_expr, right_type,
+                )?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub(super) fn adjust_date_interval_function_args(
+        &self,
+        func_name: &str,
+        args: &mut [ScalarExpr],
+    ) -> Result<()> {
+        if args.len() != 2 {
+            return Ok(());
+        }
+        let op = if func_name.eq_ignore_ascii_case("plus") {
+            BinaryOperator::Plus
+        } else if func_name.eq_ignore_ascii_case("minus") {
+            BinaryOperator::Minus
+        } else {
+            return Ok(());
+        };
+        let (left_slice, right_slice) = args.split_at_mut(1);
+        let left_expr = &mut left_slice[0];
+        let right_expr = &mut right_slice[0];
+        let left_type = left_expr.data_type()?;
+        let right_type = right_expr.data_type()?;
+        self.adjust_date_interval_operands(&op, left_expr, &left_type, right_expr, &right_type)
+    }
+
+    fn adjust_single_date_interval_operand(
+        &self,
+        date_expr: &mut ScalarExpr,
+        date_type: &DataType,
+        interval_expr: &ScalarExpr,
+        interval_type: &DataType,
+    ) -> Result<()> {
+        if date_type.remove_nullable() != DataType::Date
+            || interval_type.remove_nullable() != DataType::Interval
+        {
+            return Ok(());
+        }
+
+        if self.interval_contains_only_date_parts(interval_expr)? {
+            return Ok(());
+        }
+
+        // Preserve nullability when casting DATE to TIMESTAMP
+        let target_type = if date_type.is_nullable_or_null() {
+            DataType::Timestamp.wrap_nullable()
+        } else {
+            DataType::Timestamp
+        };
+        *date_expr = wrap_cast(date_expr, &target_type);
+        Ok(())
+    }
+
+    fn interval_contains_only_date_parts(&self, interval_expr: &ScalarExpr) -> Result<bool> {
+        let expr = interval_expr.as_expr()?;
+        let (folded, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        if let EExpr::Constant(Constant {
+            scalar: Scalar::Interval(value),
+            ..
+        }) = folded
+        {
+            return Ok(value.microseconds() == 0);
+        }
+        Ok(false)
     }
 }

@@ -26,6 +26,7 @@ use databend_common_expression::types::VectorScalar;
 use databend_common_meta_app::schema::TableIndexType;
 use unicase::Ascii;
 
+use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::ColumnBinding;
 use crate::binder::InternalColumnBinding;
@@ -33,7 +34,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
 
 impl<'a, A> TypeChecker<'a, A>
-where A: super::TypeCheckAdapter
+where A: TypeCheckAdapter
 {
     fn vector_functions() -> &'static [Ascii<&'static str>] {
         static VECTOR_FUNCTIONS: &[Ascii<&'static str>] = &[

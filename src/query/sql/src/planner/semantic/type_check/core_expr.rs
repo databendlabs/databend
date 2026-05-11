@@ -36,6 +36,7 @@ use super::CoreExprId;
 use super::CoreFunctionParams;
 use super::CoreOrderByExpr;
 use super::CoreOrderByExprs;
+use super::TypeCheckAdapter;
 use super::TypeChecker;
 use super::date::AdjacentDayFunction;
 use super::date::DateArithmeticFunction;
@@ -72,7 +73,10 @@ impl<'a> CoreExprArena<'a> {
     #[recursive::recursive]
     pub(super) fn lower_ast_expr(&mut self, expr: &'a Expr) -> Result<CoreExprId> {
         let id = match expr {
-            Expr::ColumnRef { span, column } => self.column_ref(*span, column),
+            Expr::ColumnRef { span, column } => self.alloc(CoreExpr::ColumnRef {
+                span: *span,
+                column,
+            }),
             Expr::Literal { span, value } => self.literal(*span, value.clone()),
             Expr::IsNull {
                 span,
@@ -230,7 +234,10 @@ impl<'a> CoreExprArena<'a> {
                 expr,
                 accessor,
             } => self.lower_map_access_expr(*span, expr, accessor)?,
-            Expr::Array { span, exprs } => self.array(*span, exprs)?,
+            Expr::Array { span, exprs } => {
+                let exprs = self.lower_expr_args(exprs)?;
+                self.alloc(CoreExpr::Array { span: *span, exprs })
+            }
             Expr::Map { span, kvs } => self.map(*span, kvs)?,
             Expr::Tuple { span, exprs } => self.tuple(*span, exprs)?,
             Expr::InList {
@@ -289,26 +296,20 @@ impl<'a> CoreExprArena<'a> {
                 left,
                 right,
                 escape,
-            } => {
-                let escape = Some(escape.clone());
-                self.lower_like_escape_expr(*span, "like_any", left, right, &escape)?
-            }
+            } => self.lower_like_escape_expr(*span, "like_any", left, right, Some(escape))?,
             Expr::LikeWithEscape {
                 span,
                 left,
                 right,
                 is_not,
                 escape,
-            } => {
-                let escape = Some(escape.clone());
-                self.lower_like_escape_expr(
-                    *span,
-                    if *is_not { "notlike" } else { "like" },
-                    left,
-                    right,
-                    &escape,
-                )?
-            }
+            } => self.lower_like_escape_expr(
+                *span,
+                if *is_not { "notlike" } else { "like" },
+                left,
+                right,
+                Some(escape),
+            )?,
             Expr::Case {
                 span,
                 operand,
@@ -324,18 +325,23 @@ impl<'a> CoreExprArena<'a> {
             )?,
             expr @ Expr::CountAll { span, window, .. } => {
                 if let Some(window) = window.as_ref() {
-                    self.count_all_window_function(format!("{:#}", expr), *span, window)?
+                    let window = self.lower_window(window)?;
+                    self.alloc(CoreExpr::CountAllWindowFunction {
+                        display_name: format!("{expr:#}"),
+                        span: *span,
+                        window,
+                    })
                 } else {
-                    self.aggregate_function(
-                        format!("{:#}", expr),
-                        *span,
-                        "count",
-                        false,
-                        SmallVec::new(),
-                        SmallVec::new(),
-                        true,
-                        SmallVec::new(),
-                    )
+                    self.alloc(CoreExpr::AggregateFunction {
+                        display_name: format!("{expr:#}"),
+                        span: *span,
+                        func_name: "count".to_string(),
+                        distinct: false,
+                        params: SmallVec::new(),
+                        args: SmallVec::new(),
+                        remove_count_args: true,
+                        order_by: SmallVec::new(),
+                    })
                 }
             }
             expr @ Expr::FunctionCall { span, func } => {
@@ -347,7 +353,10 @@ impl<'a> CoreExprArena<'a> {
                 )
                 .set_span(*span));
             }
-            Expr::StageLocation { span, location } => self.stage_location(*span, location),
+            Expr::StageLocation { span, location } => self.alloc(CoreExpr::StageLocation {
+                span: *span,
+                location,
+            }),
         };
         Ok(id)
     }
@@ -362,7 +371,7 @@ impl<'a> CoreExprArena<'a> {
     ) -> Result<CoreFunctionParams> {
         params
             .iter()
-            .map(|param| Ok((format!("{:#}", param), self.lower_ast_expr(param)?)))
+            .map(|param| Ok((format!("{param:#}"), self.lower_ast_expr(param)?)))
             .collect()
     }
 
@@ -376,7 +385,7 @@ impl<'a> CoreExprArena<'a> {
     }
 
     pub(super) fn lower_display_expr_arg(&mut self, arg: &'a Expr) -> Result<CoreDisplayExprArg> {
-        Ok((format!("{:#}", arg), self.lower_ast_expr(arg)?))
+        Ok((format!("{arg:#}"), self.lower_ast_expr(arg)?))
     }
 
     pub(super) fn lower_order_by_exprs(
@@ -439,7 +448,7 @@ impl<'a> CoreExprArena<'a> {
 }
 
 impl<'a, A> TypeChecker<'a, A>
-where A: super::TypeCheckAdapter
+where A: TypeCheckAdapter
 {
     #[recursive::recursive]
     pub(super) fn resolve_core(
@@ -455,9 +464,9 @@ where A: super::TypeCheckAdapter
                     data_type,
                 )))
             }
-            CoreExpr::Array { span, exprs } => self.resolve_core_array(arena, *span, exprs),
-            CoreExpr::Map { span, kvs } => self.resolve_core_map(arena, *span, kvs),
-            CoreExpr::Tuple { span, exprs } => self.resolve_core_tuple(arena, *span, exprs),
+            CoreExpr::Array { span, exprs } => self.resolve_array(arena, *span, exprs),
+            CoreExpr::Map { span, kvs } => self.resolve_map(arena, *span, kvs),
+            CoreExpr::Tuple { span, exprs } => self.resolve_tuple(arena, *span, exprs),
             CoreExpr::MapAccess {
                 span,
                 expr_span,

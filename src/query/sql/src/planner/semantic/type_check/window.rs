@@ -14,10 +14,7 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Identifier;
-use databend_common_ast::ast::OrderByExpr;
 use databend_common_ast::ast::Window;
-use databend_common_ast::ast::WindowDesc;
-use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
 use databend_common_ast::ast::WindowSpec;
@@ -43,6 +40,7 @@ use super::CoreExprArgs;
 use super::CoreExprId;
 use super::CoreFunctionParams;
 use super::CoreOrderByExprs;
+use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::binder::ExprContext;
 use crate::plans::CastExpr;
@@ -75,9 +73,9 @@ pub(super) struct CoreWindowSpec<'a> {
 }
 
 pub(super) struct CoreWindowFrame {
-    pub(super) units: WindowFrameUnits,
-    pub(super) start_bound: CoreWindowFrameBound,
-    pub(super) end_bound: CoreWindowFrameBound,
+    units: WindowFrameUnits,
+    start_bound: CoreWindowFrameBound,
+    end_bound: CoreWindowFrameBound,
 }
 
 pub(super) enum CoreWindowFrameBound {
@@ -87,78 +85,6 @@ pub(super) enum CoreWindowFrameBound {
 }
 
 impl<'a> CoreExprArena<'a> {
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn aggregate_window_function(
-        &mut self,
-        display_name: String,
-        span: Span,
-        func_name: impl Into<String>,
-        distinct: bool,
-        params: CoreFunctionParams,
-        args: CoreExprArgs,
-        remove_count_args: bool,
-        order_by: CoreOrderByExprs,
-        window: &'a WindowDesc,
-    ) -> Result<CoreExprId> {
-        let window = self.lower_window_desc(window)?;
-        Ok(self.alloc(CoreExpr::AggregateWindowFunction {
-            display_name,
-            span,
-            func_name: func_name.into(),
-            distinct,
-            params,
-            args,
-            remove_count_args,
-            order_by,
-            window,
-        }))
-    }
-
-    pub(super) fn count_all_window_function(
-        &mut self,
-        display_name: String,
-        span: Span,
-        window: &'a Window,
-    ) -> Result<CoreExprId> {
-        let window = self.lower_window(window)?;
-        Ok(self.alloc(CoreExpr::CountAllWindowFunction {
-            display_name,
-            span,
-            window,
-        }))
-    }
-
-    pub(super) fn general_window_function(
-        &mut self,
-        display_name: String,
-        span: Span,
-        func_name: &'static str,
-        args: CoreExprArgs,
-        order_by: &'a [OrderByExpr],
-        window: &'a WindowDesc,
-    ) -> Result<CoreExprId> {
-        let order_by = self.lower_order_by_exprs(order_by)?;
-        let window = self.lower_window_desc(window)?;
-        Ok(self.alloc(CoreExpr::GeneralWindowFunction {
-            display_name,
-            span,
-            func_name,
-            args,
-            order_by,
-            window,
-        }))
-    }
-
-    pub(super) fn lower_window_desc(
-        &mut self,
-        window: &'a WindowDesc,
-    ) -> Result<CoreWindowDesc<'a>> {
-        Ok(CoreWindowDesc {
-            ignore_nulls: window.ignore_nulls,
-            window: self.lower_window(&window.window)?,
-        })
-    }
-
     pub(super) fn lower_window(&mut self, window: &'a Window) -> Result<CoreWindow<'a>> {
         Ok(match window {
             Window::WindowReference(window_ref) => {
@@ -176,16 +102,14 @@ impl<'a> CoreExprArena<'a> {
             window_frame: spec
                 .window_frame
                 .as_ref()
-                .map(|frame| self.lower_window_frame(frame))
+                .map(|frame| {
+                    Ok::<_, ErrorCode>(CoreWindowFrame {
+                        units: frame.units.clone(),
+                        start_bound: self.lower_window_frame_bound(&frame.start_bound)?,
+                        end_bound: self.lower_window_frame_bound(&frame.end_bound)?,
+                    })
+                })
                 .transpose()?,
-        })
-    }
-
-    fn lower_window_frame(&mut self, frame: &'a WindowFrame) -> Result<CoreWindowFrame> {
-        Ok(CoreWindowFrame {
-            units: frame.units.clone(),
-            start_bound: self.lower_window_frame_bound(&frame.start_bound)?,
-            end_bound: self.lower_window_frame_bound(&frame.end_bound)?,
         })
     }
 
@@ -219,7 +143,7 @@ pub(super) fn general_window_function_name(func_name: &str) -> Option<&'static s
 }
 
 impl<'a, A> TypeChecker<'a, A>
-where A: super::TypeCheckAdapter
+where A: TypeCheckAdapter
 {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn resolve_core_aggregate_window_function(

@@ -24,38 +24,6 @@ use super::CoreExprArena;
 use super::CoreExprArgs;
 use super::CoreExprId;
 use super::TypeChecker;
-use super::function_arity::check_function_arity;
-
-pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
-    static FUNCTIONS: &[Ascii<&'static str>] = &[
-        Ascii::new("nullif"),
-        Ascii::new("iff"),
-        Ascii::new("ifnull"),
-        Ascii::new("nvl"),
-        Ascii::new("nvl2"),
-        Ascii::new("is_null"),
-        Ascii::new("isnull"),
-        Ascii::new("is_error"),
-        Ascii::new("error_or"),
-        Ascii::new("equal_null"),
-    ];
-    FUNCTIONS
-}
-
-impl<'a, A> TypeChecker<'a, A> {
-    pub fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
-        all_rewrite_functions()
-    }
-}
-
-pub(super) fn rewrite_function_name(func_name: &str) -> Option<&'static str> {
-    let func_name = Ascii::new(func_name);
-    all_rewrite_functions()
-        .iter()
-        .cloned()
-        .find(|name| *name == func_name)
-        .map(Ascii::into_inner)
-}
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_rewrite_function(
@@ -161,4 +129,61 @@ impl<'a> CoreExprArena<'a> {
 
         Ok(lowered)
     }
+}
+
+pub(super) fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
+    static FUNCTIONS: &[Ascii<&'static str>] = &[
+        Ascii::new("nullif"),
+        Ascii::new("iff"),
+        Ascii::new("ifnull"),
+        Ascii::new("nvl"),
+        Ascii::new("nvl2"),
+        Ascii::new("is_null"),
+        Ascii::new("isnull"),
+        Ascii::new("is_error"),
+        Ascii::new("error_or"),
+        Ascii::new("equal_null"),
+    ];
+    FUNCTIONS
+}
+
+impl<'a, A> TypeChecker<'a, A> {
+    pub fn all_rewrite_functions() -> &'static [Ascii<&'static str>] {
+        all_rewrite_functions()
+    }
+}
+
+pub(super) fn rewrite_function_name(func_name: &str) -> Option<&'static str> {
+    let func_name = Ascii::new(func_name);
+    all_rewrite_functions()
+        .iter()
+        .cloned()
+        .find(|name| *name == func_name)
+        .map(Ascii::into_inner)
+}
+
+pub(super) fn check_function_arity(
+    span: Span,
+    func_name: &str,
+    len: usize,
+    min: usize,
+    max: Option<usize>,
+) -> Result<()> {
+    if len >= min && max.map(|max| len <= max).unwrap_or(true) {
+        return Ok(());
+    }
+
+    let expected = match max {
+        Some(max) if min == max => format!("{min} {}", argument_word(min)),
+        Some(max) => format!("{min} to {max} arguments"),
+        None => format!("at least {min} {}", argument_word(min)),
+    };
+    Err(
+        ErrorCode::SemanticError(format!("{func_name} expects {expected}, but got {len}"))
+            .set_span(span),
+    )
+}
+
+fn argument_word(n: usize) -> &'static str {
+    if n == 1 { "argument" } else { "arguments" }
 }

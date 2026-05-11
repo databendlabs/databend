@@ -32,7 +32,7 @@ use super::CoreExprId;
 use super::NamespaceFunction;
 use super::SessionFunction;
 use super::TypeChecker;
-use super::function_arity::check_function_arity;
+use super::rewrite_function::check_function_arity;
 use crate::TypeCheckAdapter;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;

@@ -58,6 +58,24 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryType;
 
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn cast(
+        &mut self,
+        span: Span,
+        expr: &'a Expr,
+        target_type: TypeName,
+        is_try: bool,
+    ) -> Result<CoreExprId> {
+        let expr = self.lower_ast_expr(expr)?;
+        Ok(self.alloc(CoreExpr::Cast {
+            span,
+            is_try,
+            expr,
+            target_type,
+        }))
+    }
+}
+
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
 {
@@ -579,39 +597,6 @@ where A: TypeCheckAdapter
             .into(),
             expr.data_type().clone(),
         )))
-    }
-}
-
-impl<'a> CoreExprArena<'a> {
-    pub(super) fn cast(
-        &mut self,
-        span: Span,
-        expr: &'a Expr,
-        target_type: TypeName,
-        is_try: bool,
-    ) -> Result<CoreExprId> {
-        let expr = self.lower_ast_expr(expr)?;
-        Ok(self.alloc(CoreExpr::Cast {
-            span,
-            is_try,
-            expr,
-            target_type,
-        }))
-    }
-
-    pub(super) fn scalar_function(
-        &mut self,
-        span: Span,
-        func_name: &'static str,
-        params: CoreFunctionParams,
-        args: CoreExprArgs,
-    ) -> CoreExprId {
-        self.alloc(CoreExpr::ScalarFunction {
-            span,
-            func_name,
-            params,
-            args,
-        })
     }
 }
 

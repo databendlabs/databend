@@ -54,10 +54,6 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn stage_location(&mut self, span: Span, location: &'a str) -> CoreExprId {
-        self.alloc(CoreExpr::StageLocation { span, location })
-    }
-
     pub(super) fn lower_map_access_expr(
         &mut self,
         root_span: Span,

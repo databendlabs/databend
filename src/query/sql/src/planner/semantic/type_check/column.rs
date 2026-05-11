@@ -27,21 +27,12 @@ use databend_common_expression::types::DataType;
 use derive_visitor::DriveMut;
 use derive_visitor::VisitorMut;
 
-use super::CoreExpr;
-use super::CoreExprArena;
-use super::CoreExprId;
 use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::binder::NameResolutionResult;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::BoundColumnRef;
 use crate::plans::ScalarExpr;
-
-impl<'a> CoreExprArena<'a> {
-    pub(super) fn column_ref(&mut self, span: Span, column: &'a ColumnRef) -> CoreExprId {
-        self.alloc(CoreExpr::ColumnRef { span, column })
-    }
-}
 
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter
@@ -245,8 +236,8 @@ where A: TypeCheckAdapter
                 let Some(cached) = self.adapter.resolve_data_mask_policy(policy_id).map_err(
                     |err| {
                         ErrorCode::UnknownMaskPolicy(format!(
-                            "Failed to load masking policy (id: {}) for column '{}': {}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
-                            policy_id, column_binding.column_name, err
+                            "Failed to load masking policy (id: {policy_id}) for column '{}': {err}. Query denied to prevent potential data leakage. Please verify the policy still exists and meta service is available",
+                             column_binding.column_name
                         ))
                     },
                 )?
@@ -276,7 +267,7 @@ where A: TypeCheckAdapter
                             .iter()
                             .find(|f| f.column_id == *column_id)
                             .map(|f| f.name.clone())
-                            .unwrap_or_else(|| format!("column_{}", column_id));
+                            .unwrap_or_else(|| format!("column_{column_id}"));
 
                         Ok(Expr::ColumnRef {
                             span: None,

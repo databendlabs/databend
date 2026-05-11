@@ -41,16 +41,10 @@ use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn literal(&mut self, span: Span, value: Literal) -> CoreExprId {
-        self.constant(span, literal_value(&value))
-    }
-
-    fn constant(&mut self, span: Span, value: Scalar) -> CoreExprId {
-        self.alloc(CoreExpr::Literal { span, value })
-    }
-
-    pub(super) fn array(&mut self, span: Span, exprs: &'a [Expr]) -> Result<CoreExprId> {
-        let exprs = self.lower_expr_args(exprs)?;
-        Ok(self.alloc(CoreExpr::Array { span, exprs }))
+        self.alloc(CoreExpr::Literal {
+            span,
+            value: literal_value(&value),
+        })
     }
 
     pub(super) fn map(&mut self, span: Span, kvs: &'a [(Literal, Expr)]) -> Result<CoreExprId> {
@@ -72,9 +66,9 @@ impl<'a, A> TypeChecker<'a, A> {
     pub(super) fn resolve_literal(
         &self,
         span: Span,
-        literal: &databend_common_ast::ast::Literal,
+        literal: &Literal,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let (value, data_type) = literal_scalar(literal);
+        let (value, data_type) = infer_literal_data_type(literal_value(literal));
 
         let scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
         Ok(Box::new((scalar_expr, data_type)))
@@ -84,7 +78,7 @@ impl<'a, A> TypeChecker<'a, A> {
 impl<'a, A> TypeChecker<'a, A>
 where A: super::TypeCheckAdapter
 {
-    pub(super) fn resolve_core_array(
+    pub(super) fn resolve_array(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -144,13 +138,13 @@ where A: super::TypeCheckAdapter
                     casted.push(cast_scalar(span, value, &element_ty, &BUILTIN_FUNCTIONS)?);
                 }
             }
-            return Ok(Self::build_core_constant_array(span, element_ty, casted));
+            return Ok(Self::build_constant_array(span, element_ty, casted));
         }
 
         self.resolve_scalar_function_call(span, "array", vec![], elems)
     }
 
-    fn build_core_constant_array(
+    fn build_constant_array(
         span: Span,
         element_ty: DataType,
         values: Vec<Scalar>,
@@ -170,7 +164,7 @@ where A: super::TypeCheckAdapter
         ))
     }
 
-    pub(super) fn resolve_core_map(
+    pub(super) fn resolve_map(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -191,7 +185,7 @@ where A: super::TypeCheckAdapter
         self.resolve_scalar_function_call(span, "map", vec![], vec![key_arg, val_arg])
     }
 
-    pub(super) fn resolve_core_tuple(
+    pub(super) fn resolve_tuple(
         &mut self,
         arena: &CoreExprArena<'_>,
         span: Span,
@@ -206,11 +200,7 @@ where A: super::TypeCheckAdapter
     }
 }
 
-pub(super) fn literal_scalar(literal: &databend_common_ast::ast::Literal) -> (Scalar, DataType) {
-    infer_literal_data_type(literal_value(literal))
-}
-
-pub(super) fn literal_value(literal: &databend_common_ast::ast::Literal) -> Scalar {
+fn literal_value(literal: &Literal) -> Scalar {
     match literal {
         Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
         Literal::Decimal256 {

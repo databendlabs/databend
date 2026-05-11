@@ -26,6 +26,7 @@ use unicase::Ascii;
 use super::CoreExpr;
 use super::CoreExprArena;
 use super::CoreExprId;
+use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::binder::ExprContext;
 use crate::binder::parse_stage_name;
@@ -37,7 +38,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::ReadFileFunctionArgument;
 use crate::plans::ScalarExpr;
 
-pub(super) struct CoreAsyncFunctionArg {
+struct CoreAsyncFunctionArg {
     expr: CoreExprId,
     display: String,
 }
@@ -63,7 +64,7 @@ impl<'a> CoreExprArena<'a> {
     fn lower_async_function_arg(&mut self, expr: &'a Expr) -> Result<CoreAsyncFunctionArg> {
         Ok(CoreAsyncFunctionArg {
             expr: self.lower_ast_expr(expr)?,
-            display: format!("{:#}", expr),
+            display: format!("{expr:#}"),
         })
     }
 
@@ -134,7 +135,7 @@ impl<'a> CoreExprArena<'a> {
 }
 
 impl<'a, A> TypeChecker<'a, A>
-where A: super::TypeCheckAdapter
+where A: TypeCheckAdapter
 {
     pub(super) fn resolve_async_function(
         &mut self,
@@ -183,12 +184,11 @@ where A: super::TypeCheckAdapter
             match &sequence.column {
                 ColumnID::Name(ident) => {
                     let ident = normalize_identifier(ident, self.name_resolution_ctx);
-                    (ident.name.to_string(), format!("nextval({})", ident))
+                    (ident.name.to_string(), format!("nextval({ident})"))
                 }
                 ColumnID::Position(pos) => {
                     return Err(ErrorCode::SemanticError(format!(
-                        "nextval function argument don't support identifier {}",
-                        pos
+                        "nextval function argument don't support identifier {pos}"
                     ))
                     .set_span(span));
                 }
@@ -198,15 +198,13 @@ where A: super::TypeCheckAdapter
         self.adapter.validate_sequence(&sequence_name)?;
 
         let return_type = DataType::Number(NumberDataType::UInt64);
-        let func_arg = AsyncFunctionArgument::SequenceFunction(sequence_name);
-
         let async_func = AsyncFunctionCall {
             span,
             func_name: "nextval".to_string(),
             display_name,
             return_type: Box::new(return_type.clone()),
             arguments: vec![],
-            func_arg,
+            func_arg: AsyncFunctionArgument::SequenceFunction(sequence_name),
         };
 
         Ok(Box::new((async_func.into(), return_type)))
@@ -236,8 +234,7 @@ where A: super::TypeCheckAdapter
                 ColumnID::Name(ident) => normalize_identifier(ident, self.name_resolution_ctx).name,
                 ColumnID::Position(pos) => {
                     return Err(ErrorCode::SemanticError(format!(
-                        "dict_get function argument don't support identifier {}",
-                        pos
+                        "dict_get function argument don't support identifier {pos}"
                     ))
                     .set_span(span));
                 }
@@ -274,8 +271,8 @@ where A: super::TypeCheckAdapter
             args.push(key_scalar);
         }
         let display_name = format!(
-            "{}({}.{}, {}, {})",
-            "dict_get", dictionary.db_name, dict_name, function.field.display, function.key.display,
+            "dict_get({}.{dict_name}, {}, {})",
+            dictionary.db_name, function.field.display, function.key.display,
         );
         Ok(Box::new((
             ScalarExpr::AsyncFunctionCall(AsyncFunctionCall {
@@ -332,8 +329,7 @@ where A: super::TypeCheckAdapter
                 && !location.starts_with('@')
             {
                 return Err(ErrorCode::SemanticError(format!(
-                    "stage path must start with @, but got {}",
-                    location
+                    "stage path must start with @, but got {location}"
                 ))
                 .set_span(span));
             }

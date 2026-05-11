@@ -447,14 +447,11 @@ impl UdfAdapter for FullTypeCheckAdapter {
             resolve_file_location(self.ctx.as_ref(), &file_location),
         )
         .map_err(|err| {
-            ErrorCode::SemanticError(format!(
-                "Failed to resolve code location {:?}: {}",
-                code, err
-            ))
+            ErrorCode::SemanticError(format!("Failed to resolve code location {code:?}: {err}"))
         })?;
 
         let op = init_stage_operator(&stage_info).map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {}", err))
+            ErrorCode::SemanticError(format!("Failed to get StageTable operator: {err}"))
         })?;
 
         let code_blob = block_on_with_handle(
@@ -462,20 +459,17 @@ impl UdfAdapter for FullTypeCheckAdapter {
             op.read(&module_path),
         )
         .map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to read module {}: {}", module_path, err))
+            ErrorCode::SemanticError(format!("Failed to read module {module_path}: {err}"))
         })?
         .to_vec();
 
         let compress_algo = CompressAlgorithm::from_path(&module_path);
-        log::trace!(
-            "Detecting compression algorithm for module: {}",
-            &module_path
-        );
-        log::info!("Detected compression algorithm: {:#?}", &compress_algo);
+        log::trace!("Detecting compression algorithm for module: {module_path}");
+        log::info!("Detected compression algorithm: {compress_algo:#?}");
 
         let code_blob = match compress_algo {
             Some(algo) => {
-                log::trace!("Decompressing module using {:?} algorithm", algo);
+                log::trace!("Decompressing module using {algo:?} algorithm");
                 if algo == CompressAlgorithm::Zip {
                     DecompressDecoder::decompress_all_zip(
                         &code_blob,
@@ -487,8 +481,8 @@ impl UdfAdapter for FullTypeCheckAdapter {
                     decoder.decompress_all(&code_blob)
                 }
                 .map_err(|err| {
-                    let error_msg = format!("Failed to decompress module {}: {}", module_path, err);
-                    log::error!("{}", error_msg);
+                    let error_msg = format!("Failed to decompress module {module_path}: {err}");
+                    log::error!("{error_msg}");
                     ErrorCode::SemanticError(error_msg)
                 })?
             }
