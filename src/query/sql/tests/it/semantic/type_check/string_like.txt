@@ -33,6 +33,20 @@ status: ok
 scalar: and(gte(text (#1), 'ab'), lt(text (#1), 'ac'))
 type: Boolean NULL
 
+=== non_ascii_like_prefix_rewrites_to_range ===
+description: A non-ASCII LIKE prefix should use the Unicode scalar range rewrite.
+sql: text LIKE '测试%'
+status: ok
+scalar: and(gte(text (#1), '测试'), lt(text (#1), '测诖'))
+type: Boolean NULL
+
+=== latin1_like_prefix_rewrites_without_byte_overflow ===
+description: A LIKE prefix ending at U+00FF should rewrite using the next Unicode scalar.
+sql: text LIKE 'ÿ%'
+status: ok
+scalar: and(gte(text (#1), 'ÿ'), lt(text (#1), 'Ā'))
+type: Boolean NULL
+
 === like_percent_rewrites_to_is_not_null ===
 description: A LIKE pattern made only of percent wildcards should type check as an IS NOT NULL predicate.
 sql: text LIKE '%%'

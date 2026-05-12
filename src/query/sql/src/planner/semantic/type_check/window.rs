@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Window;
 use databend_common_ast::ast::WindowFrameBound;
@@ -85,6 +86,36 @@ pub(super) enum CoreWindowFrameBound {
 }
 
 impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_general_window_function_call(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: &'static str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<CoreExprId> {
+        let Some(window) = func.window.as_ref() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {func_name} can only be used in window clause"
+            ))
+            .set_span(span));
+        };
+
+        let args = self.lower_expr_args(&func.args)?;
+        let order_by = self.lower_order_by_exprs(&func.order_by)?;
+        let window = CoreWindowDesc {
+            ignore_nulls: window.ignore_nulls,
+            window: self.lower_window(&window.window)?,
+        };
+        Ok(self.alloc(CoreExpr::GeneralWindowFunction {
+            display_name,
+            span,
+            func_name,
+            args,
+            order_by,
+            window,
+        }))
+    }
+
     pub(super) fn lower_window(&mut self, window: &'a Window) -> Result<CoreWindow<'a>> {
         Ok(match window {
             Window::WindowReference(window_ref) => {

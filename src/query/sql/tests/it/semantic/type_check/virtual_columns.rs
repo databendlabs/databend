@@ -14,6 +14,7 @@ use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<()> {
+    init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
     let adapter = TestTypeCheckAdapter::new(settings.clone());
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;

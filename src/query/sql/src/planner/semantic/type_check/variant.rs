@@ -770,18 +770,4 @@ where A: super::TypeCheckAdapter
             DataType::Nullable(Box::new(DataType::Variant)),
         )))
     }
-
-    pub(super) fn resolve_stage_location(
-        &mut self,
-        span: Span,
-        location: &str,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        Ok(Box::new((
-            ScalarExpr::ConstantExpr(ConstantExpr {
-                span,
-                value: Scalar::String(location.to_string()),
-            }),
-            DataType::String,
-        )))
-    }
 }

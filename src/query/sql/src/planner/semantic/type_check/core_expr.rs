@@ -22,7 +22,6 @@ use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
-use smallvec::SmallVec;
 use smallvec::smallvec;
 
 use super::CoreDisplayExprArg;
@@ -322,25 +321,7 @@ impl<'a> CoreExprArena<'a> {
                 else_result.as_deref(),
             )?,
             expr @ Expr::CountAll { span, window, .. } => {
-                if let Some(window) = window.as_ref() {
-                    let window = self.lower_window(window)?;
-                    self.alloc(CoreExpr::CountAllWindowFunction {
-                        display_name: format!("{expr:#}"),
-                        span: *span,
-                        window,
-                    })
-                } else {
-                    self.alloc(CoreExpr::AggregateFunction {
-                        display_name: format!("{expr:#}"),
-                        span: *span,
-                        func_name: "count".to_string(),
-                        distinct: false,
-                        params: SmallVec::new(),
-                        args: SmallVec::new(),
-                        remove_count_args: true,
-                        order_by: SmallVec::new(),
-                    })
-                }
+                self.lower_count_all_expr(format!("{expr:#}"), *span, window.as_ref())?
             }
             expr @ Expr::FunctionCall { span, func } => {
                 self.lower_function_call_expr(expr, *span, func)?
@@ -616,9 +597,14 @@ where A: TypeCheckAdapter
                 order_by,
                 window,
             ),
-            CoreExpr::StageLocation { span, location } => {
-                self.resolve_stage_location(*span, location)
-            }
+            CoreExpr::StageLocation { span, location } => Ok(Box::new((
+                crate::plans::ConstantExpr {
+                    span: *span,
+                    value: Scalar::String(location.to_string()),
+                }
+                .into(),
+                DataType::String,
+            ))),
         }
     }
 

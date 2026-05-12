@@ -13,6 +13,10 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
+use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::Window;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -22,10 +26,13 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
+use smallvec::SmallVec;
 use unicase::Ascii;
 
+use super::CoreExpr;
 use super::CoreExprArena;
 use super::CoreExprArgs;
+use super::CoreExprId;
 use super::CoreFunctionParams;
 use super::CoreOrderByExprs;
 use super::TypeCheckAdapter;
@@ -35,6 +42,89 @@ use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn lower_aggregate_function_call(
+        &mut self,
+        display_name: String,
+        span: Span,
+        func_name: String,
+        func: &'a ASTFunctionCall,
+    ) -> Result<CoreExprId> {
+        let ASTFunctionCall {
+            distinct,
+            args,
+            params,
+            order_by,
+            window,
+            ..
+        } = func;
+        let remove_count_args = func_name.eq_ignore_ascii_case("count")
+            && !*distinct
+            && args
+                .iter()
+                .all(|expr| matches!(expr, Expr::Literal { value, .. } if *value != Literal::Null));
+        let params = self.lower_function_params(params)?;
+        let args = self.lower_expr_args(args)?;
+        let order_by = self.lower_order_by_exprs(order_by)?;
+
+        Ok(if let Some(window) = window {
+            let window = super::window::CoreWindowDesc {
+                ignore_nulls: window.ignore_nulls,
+                window: self.lower_window(&window.window)?,
+            };
+            self.alloc(CoreExpr::AggregateWindowFunction {
+                display_name,
+                span,
+                func_name,
+                distinct: *distinct,
+                params,
+                args,
+                remove_count_args,
+                order_by,
+                window,
+            })
+        } else {
+            self.alloc(CoreExpr::AggregateFunction {
+                display_name,
+                span,
+                func_name,
+                distinct: *distinct,
+                params,
+                args,
+                remove_count_args,
+                order_by,
+            })
+        })
+    }
+
+    pub(super) fn lower_count_all_expr(
+        &mut self,
+        display_name: String,
+        span: Span,
+        window: Option<&'a Window>,
+    ) -> Result<CoreExprId> {
+        if let Some(window) = window {
+            let window = self.lower_window(window)?;
+            Ok(self.alloc(CoreExpr::CountAllWindowFunction {
+                display_name,
+                span,
+                window,
+            }))
+        } else {
+            Ok(self.alloc(CoreExpr::AggregateFunction {
+                display_name,
+                span,
+                func_name: "count".to_string(),
+                distinct: false,
+                params: SmallVec::new(),
+                args: SmallVec::new(),
+                remove_count_args: true,
+                order_by: SmallVec::new(),
+            }))
+        }
+    }
+}
 
 impl<'a, A> TypeChecker<'a, A>
 where A: TypeCheckAdapter

@@ -63,7 +63,6 @@ mod date;
 mod function_call;
 mod in_list;
 mod lambda;
-mod like;
 mod literal;
 mod resolve;
 mod rewrite_function;

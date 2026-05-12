@@ -34,6 +34,18 @@ async fn test_type_check_string_and_like_rewrites() -> Result<()> {
             sql: "text LIKE 'ab%'",
         },
         SqlTestCase {
+            name: "non_ascii_like_prefix_rewrites_to_range",
+            description: "A non-ASCII LIKE prefix should use the Unicode scalar range rewrite.",
+            setup_sqls: &[],
+            sql: "text LIKE '测试%'",
+        },
+        SqlTestCase {
+            name: "latin1_like_prefix_rewrites_without_byte_overflow",
+            description: "A LIKE prefix ending at U+00FF should rewrite using the next Unicode scalar.",
+            setup_sqls: &[],
+            sql: "text LIKE 'ÿ%'",
+        },
+        SqlTestCase {
             name: "like_percent_rewrites_to_is_not_null",
             description: "A LIKE pattern made only of percent wildcards should type check as an IS NOT NULL predicate.",
             setup_sqls: &[],

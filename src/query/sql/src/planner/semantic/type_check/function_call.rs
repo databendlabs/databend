@@ -15,7 +15,6 @@
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
-use databend_common_ast::ast::Literal;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
@@ -32,7 +31,6 @@ use super::rewrite_function::rewrite_function_name;
 use super::scalar_function::builtin_scalar_function_name;
 use super::window::general_window_function_name;
 use crate::planner::semantic::type_check::CoreExpr;
-use crate::planner::semantic::type_check::window::CoreWindowDesc;
 
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_function_call_expr(
@@ -67,67 +65,21 @@ impl<'a> CoreExprArena<'a> {
         if lambda.is_none()
             && let Some(func_name) = general_window_function_name(&func_name)
         {
-            return match window.as_ref() {
-                Some(window) => {
-                    let args = self.lower_expr_args(args)?;
-                    let order_by = self.lower_order_by_exprs(order_by)?;
-                    let window = CoreWindowDesc {
-                        ignore_nulls: window.ignore_nulls,
-                        window: self.lower_window(&window.window)?,
-                    };
-                    Ok(self.alloc(CoreExpr::GeneralWindowFunction {
-                        display_name: format!("{original_expr:#}"),
-                        span,
-                        func_name,
-                        args,
-                        order_by,
-                        window,
-                    }))
-                }
-                None => Err(ErrorCode::SemanticError(format!(
-                    "window function {func_name} can only be used in window clause"
-                ))
-                .set_span(span)),
-            };
+            return self.lower_general_window_function_call(
+                format!("{original_expr:#}"),
+                span,
+                func_name,
+                func,
+            );
         }
 
         if lambda.is_none() && self.aggregate_function_factory.contains(&func_name) {
-            let remove_count_args = func_name.eq_ignore_ascii_case("count")
-                && !*distinct
-                && args.iter().all(
-                    |expr| matches!(expr, Expr::Literal { value, .. } if *value != Literal::Null),
-                );
-            let params = self.lower_function_params(params)?;
-            let args = self.lower_expr_args(args)?;
-            let order_by = self.lower_order_by_exprs(order_by)?;
-            return Ok(if let Some(window) = window.as_ref() {
-                let window = CoreWindowDesc {
-                    ignore_nulls: window.ignore_nulls,
-                    window: self.lower_window(&window.window)?,
-                };
-                self.alloc(CoreExpr::AggregateWindowFunction {
-                    display_name: format!("{original_expr:#}"),
-                    span,
-                    func_name,
-                    distinct: *distinct,
-                    params,
-                    args,
-                    remove_count_args,
-                    order_by,
-                    window,
-                })
-            } else {
-                self.alloc(CoreExpr::AggregateFunction {
-                    display_name: format!("{original_expr:#}"),
-                    span,
-                    func_name,
-                    distinct: *distinct,
-                    params,
-                    args,
-                    remove_count_args,
-                    order_by,
-                })
-            });
+            return self.lower_aggregate_function_call(
+                format!("{original_expr:#}"),
+                span,
+                func_name,
+                func,
+            );
         }
 
         let uni_case_func_name = Ascii::new(func_name.as_str());
