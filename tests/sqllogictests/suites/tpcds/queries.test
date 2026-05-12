@@ -4,6 +4,9 @@ set sandbox_tenant = 'test_tenant';
 statement ok
 use tpcds;
 
+statement ok
+set flight_client_timeout = 180;
+
 include ./Q1
 include ./Q2
 include ./Q3
@@ -103,3 +106,6 @@ include ./Q96
 include ./Q97
 include ./Q98
 include ./Q99
+
+statement ok
+unset flight_client_timeout;

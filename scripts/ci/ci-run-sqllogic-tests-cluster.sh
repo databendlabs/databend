@@ -6,6 +6,13 @@ set -e
 
 export STORAGE_ALLOW_INSECURE=true
 
+if [ -n "${QUERY_HTTP_HANDLER_RESULT_TIMEOUT_SECS:-}" ]; then
+	echo "Use QUERY_HTTP_HANDLER_RESULT_TIMEOUT_SECS=${QUERY_HTTP_HANDLER_RESULT_TIMEOUT_SECS}"
+	export QUERY_HTTP_HANDLER_RESULT_TIMEOUT_SECS
+else
+	unset QUERY_HTTP_HANDLER_RESULT_TIMEOUT_SECS
+fi
+
 echo "Starting Cluster databend-query"
 ./scripts/ci/deploy/databend-query-cluster-3-nodes.sh
 

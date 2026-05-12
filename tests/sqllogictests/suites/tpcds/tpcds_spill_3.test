@@ -5,6 +5,9 @@ statement ok
 use tpcds;
 
 statement ok
+set flight_client_timeout = 180;
+
+statement ok
 set max_memory_usage = 100*1024*1024;
 
 statement ok
@@ -58,3 +61,6 @@ unset max_query_memory_usage;
 
 statement ok
 unset query_out_of_memory_behavior;
+
+statement ok
+unset flight_client_timeout;
