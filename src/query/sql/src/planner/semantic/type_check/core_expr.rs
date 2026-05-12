@@ -466,7 +466,6 @@ where A: TypeCheckAdapter
             CoreExpr::Map { span, kvs } => self.resolve_map(arena, *span, kvs),
             CoreExpr::Tuple { span, exprs } => self.resolve_tuple(arena, *span, exprs),
             CoreExpr::MapAccess {
-                kind,
                 span,
                 expr_span,
                 expr,
@@ -474,7 +473,6 @@ where A: TypeCheckAdapter
             } => {
                 let box (scalar, data_type) = self.resolve_core(arena, *expr)?;
                 self.resolve_map_access_from_scalar(
-                    *kind,
                     *span,
                     *expr_span,
                     scalar,
@@ -676,7 +674,6 @@ mod tests {
     use databend_common_ast::parser::tokenize_sql;
 
     use super::*;
-    use crate::planner::semantic::type_check::CoreMapAccessKind;
 
     fn assert_sql_lowers_to(sql: &str, check: impl FnOnce(&CoreExprArena<'_>, CoreExprId)) {
         let tokens = tokenize_sql(sql).unwrap();
@@ -759,24 +756,6 @@ mod tests {
                 panic!("map access should lower to CoreExpr::MapAccess");
             };
             assert!(matches!(arena.get(*expr), CoreExpr::Literal { .. }));
-        });
-    }
-
-    #[test]
-    fn lowers_get_function_as_semantic_map_access() {
-        assert_sql_lowers_to("get(get(v, 'a'), 0)", |arena, root| {
-            let CoreExpr::MapAccess {
-                kind, expr, paths, ..
-            } = arena.get(root)
-            else {
-                panic!("get should lower to CoreExpr::MapAccess");
-            };
-            assert_eq!(*kind, CoreMapAccessKind::GetFunction);
-            assert!(matches!(arena.get(*expr), CoreExpr::ColumnRef { .. }));
-            assert_eq!(
-                paths.iter().map(|(_, value)| value).collect::<Vec<_>>(),
-                vec![&Literal::String("a".to_string()), &Literal::UInt64(0)]
-            );
         });
     }
 

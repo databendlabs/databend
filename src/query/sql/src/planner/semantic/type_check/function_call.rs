@@ -189,12 +189,6 @@ impl<'a> CoreExprArena<'a> {
                 return Ok(expr);
             }
 
-            if matches!(func_name.as_str(), "get" | "get_string")
-                && let Some(expr) = self.lower_get_function_as_map_access(span, &func_name, args)?
-            {
-                return Ok(expr);
-            }
-
             if let Some(func_name) = builtin_scalar_function_name(&func_name) {
                 let args = self.lower_expr_args(args)?;
                 return Ok(self.call(span, func_name, args));

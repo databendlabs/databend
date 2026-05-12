@@ -171,6 +171,12 @@ where A: TypeCheckAdapter
             )));
         }
 
+        if let Some(rewritten_get_expr) =
+            self.try_resolve_get_function_chain(arena, span, func_name, args)
+        {
+            return rewritten_get_expr;
+        }
+
         let mut scalars = SmallVec::<[ScalarExpr; 4]>::with_capacity(args.len());
         for arg in args {
             let box (scalar, _) = self.resolve_core(arena, *arg)?;

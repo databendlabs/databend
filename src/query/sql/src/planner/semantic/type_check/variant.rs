@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
-use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
 use databend_common_ast::ast::MapAccessor;
@@ -38,8 +37,8 @@ use unicase::Ascii;
 
 use super::CoreExpr;
 use super::CoreExprArena;
+use super::CoreExprArgs;
 use super::CoreExprId;
-use super::CoreMapAccessKind;
 use super::TypeChecker;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
@@ -107,76 +106,11 @@ impl<'a> CoreExprArena<'a> {
         let expr_span = expr.span();
         let expr = self.lower_ast_expr(expr)?;
         Ok(self.alloc(CoreExpr::MapAccess {
-            kind: CoreMapAccessKind::Syntax,
             span: root_span,
             expr_span,
             expr,
             paths,
         }))
-    }
-
-    pub(super) fn lower_get_function_as_map_access(
-        &mut self,
-        root_span: Span,
-        func_name: &str,
-        args: &'a [Expr],
-    ) -> Result<Option<CoreExprId>> {
-        let [expr, path_expr] = args else {
-            return Ok(None);
-        };
-        let mut expr: &'a Expr = expr;
-        let mut path_expr: &'a Expr = path_expr;
-
-        let mut paths = VecDeque::new();
-        loop {
-            let Expr::Literal { value, .. } = path_expr else {
-                return Ok(None);
-            };
-            if !matches!(value, Literal::UInt64(_) | Literal::String(_)) {
-                return Ok(None);
-            }
-            paths.push_front((path_expr.span(), value.clone()));
-
-            let Expr::FunctionCall { func, .. } = expr else {
-                break;
-            };
-            let ASTFunctionCall {
-                distinct,
-                name,
-                args,
-                params,
-                order_by,
-                window,
-                lambda,
-            } = func;
-            if *distinct
-                || !name.name.eq_ignore_ascii_case("get")
-                || args.len() != 2
-                || !params.is_empty()
-                || !order_by.is_empty()
-                || window.is_some()
-                || lambda.is_some()
-            {
-                break;
-            }
-            expr = &args[0];
-            path_expr = &args[1];
-        }
-
-        let kind = match func_name {
-            "get" => CoreMapAccessKind::GetFunction,
-            "get_string" => CoreMapAccessKind::GetStringFunction,
-            _ => return Ok(None),
-        };
-        let expr_span = expr.span();
-        let expr = self.lower_ast_expr(expr)?;
-        Ok(Some(self.alloc(CoreExpr::MapAccess {
-            kind,
-            span: root_span,
-            expr_span,
-            expr,
-            paths,
-        })))
     }
 }
 
@@ -264,19 +198,130 @@ where A: super::TypeCheckAdapter
         None
     }
 
+    pub(super) fn try_resolve_get_function_chain(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        func_name: &str,
+        args: &CoreExprArgs,
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        let string_result = match func_name {
+            "get" => false,
+            "get_string" => true,
+            _ => return None,
+        };
+
+        let mut paths = Vec::new();
+        let mut current_args = args;
+        let base = loop {
+            let [expr, path_id] = current_args.as_slice() else {
+                return None;
+            };
+            let path = Self::get_core_get_function_keypath(arena, *path_id)?;
+            paths.push((*path_id, path));
+
+            match arena.get(*expr) {
+                CoreExpr::Call {
+                    func_name: "get",
+                    args,
+                    ..
+                } => current_args = args,
+                _ => {
+                    break *expr;
+                }
+            }
+        };
+
+        paths.reverse();
+        let box (scalar, data_type) = match self.resolve_core(arena, base) {
+            Ok(resolved) => resolved,
+            Err(err) => return Some(Err(err)),
+        };
+
+        if data_type.remove_nullable() == DataType::Variant {
+            let keypaths = OwnedKeyPaths {
+                paths: paths.iter().map(|(_, path)| path.clone()).collect(),
+            };
+            if let Some(box (scalar, data_type)) =
+                self.try_rewrite_variant_keypaths(span, &scalar, keypaths)
+            {
+                return Some(Ok(if string_result {
+                    let target_type = DataType::Nullable(Box::new(DataType::String));
+                    let scalar = ScalarExpr::CastExpr(CastExpr {
+                        span: scalar.span(),
+                        is_try: false,
+                        argument: Box::new(scalar),
+                        target_type: Box::new(target_type.clone()),
+                    });
+                    Box::new((scalar, target_type))
+                } else {
+                    Box::new((scalar, data_type))
+                }));
+            }
+        }
+
+        Some(self.resolve_get_function_chain_fallback(arena, span, string_result, scalar, paths))
+    }
+
+    fn resolve_get_function_chain_fallback(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        string_result: bool,
+        mut scalar: ScalarExpr,
+        paths: Vec<(CoreExprId, OwnedKeyPath)>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let last_index = paths.len().saturating_sub(1);
+        let mut data_type = scalar.data_type()?;
+        for (index, (path, _)) in paths.into_iter().enumerate() {
+            let box (path_scalar, _) = self.resolve_core(arena, path)?;
+            let func_name = if string_result && index == last_index {
+                "get_string"
+            } else {
+                "get"
+            };
+            let box (next_scalar, next_type) =
+                self.resolve_scalar_function_call(span, func_name, vec![], vec![
+                    scalar,
+                    path_scalar,
+                ])?;
+            scalar = next_scalar;
+            data_type = next_type;
+        }
+        Ok(Box::new((scalar, data_type)))
+    }
+
+    fn get_core_get_function_keypath(
+        arena: &CoreExprArena<'_>,
+        arg: CoreExprId,
+    ) -> Option<OwnedKeyPath> {
+        let CoreExpr::Literal { value, .. } = arena.get(arg) else {
+            return None;
+        };
+        Self::get_function_keypath(value)
+    }
+
     fn get_function_keypaths(arg: &ScalarExpr) -> Option<OwnedKeyPaths> {
         let ScalarExpr::ConstantExpr(ConstantExpr { value, .. }) = arg else {
             return None;
         };
+        Self::get_function_keypath(value).map(|path| OwnedKeyPaths { paths: vec![path] })
+    }
+
+    fn get_function_keypath(value: &Scalar) -> Option<OwnedKeyPath> {
         let path = match value {
             Scalar::String(path) => OwnedKeyPath::QuotedName(path.clone()),
             Scalar::Number(number) => {
-                let index = i32::try_from(number.integer_to_i128()?).ok()?;
+                let index = number.integer_to_i128()?;
+                if index < 0 {
+                    return None;
+                }
+                let index = i32::try_from(index).ok()?;
                 OwnedKeyPath::Index(index)
             }
             _ => return None,
         };
-        Some(OwnedKeyPaths { paths: vec![path] })
+        Some(path)
     }
 
     pub(super) fn resolve_cast_to_variant(
@@ -377,20 +422,12 @@ where A: super::TypeCheckAdapter
 
     pub(super) fn resolve_map_access_from_scalar(
         &mut self,
-        kind: CoreMapAccessKind,
         span: Span,
         expr_span: Span,
         scalar: ScalarExpr,
         data_type: DataType,
         mut paths: VecDeque<(Span, Literal)>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if matches!(
-            kind,
-            CoreMapAccessKind::GetFunction | CoreMapAccessKind::GetStringFunction
-        ) {
-            return self.resolve_get_function_map_access(span, kind, scalar, data_type, &paths);
-        }
-
         let mut scalar = scalar;
         // Variant type can be converted to `get_by_keypath` function.
         if data_type.remove_nullable() == DataType::Variant {
@@ -482,90 +519,6 @@ where A: super::TypeCheckAdapter
         }
         let return_type = scalar.data_type()?;
         Ok(Box::new((scalar, return_type)))
-    }
-
-    fn resolve_get_function_map_access(
-        &mut self,
-        span: Span,
-        kind: CoreMapAccessKind,
-        scalar: ScalarExpr,
-        data_type: DataType,
-        paths: &VecDeque<(Span, Literal)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if data_type.remove_nullable() == DataType::Variant
-            && let Some(rewritten) =
-                self.try_rewrite_get_function_map_access(span, kind, &scalar, paths)
-        {
-            return rewritten;
-        }
-
-        let mut scalar = scalar;
-        let mut data_type = data_type;
-        let last_index = paths.len().saturating_sub(1);
-        for (index, (path_span, path)) in paths.iter().enumerate() {
-            let box (path_scalar, _) = self.resolve_literal(*path_span, path)?;
-            let func_name = if kind == CoreMapAccessKind::GetStringFunction && index == last_index {
-                "get_string"
-            } else {
-                "get"
-            };
-            let box (next_scalar, next_type) =
-                self.resolve_scalar_function_call(span, func_name, vec![], vec![
-                    scalar,
-                    path_scalar,
-                ])?;
-            scalar = next_scalar;
-            data_type = next_type;
-        }
-        Ok(Box::new((scalar, data_type)))
-    }
-
-    fn try_rewrite_get_function_map_access(
-        &mut self,
-        span: Span,
-        kind: CoreMapAccessKind,
-        scalar: &ScalarExpr,
-        paths: &VecDeque<(Span, Literal)>,
-    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        if !self.bind_context.allow_virtual_column {
-            return None;
-        }
-        let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = scalar else {
-            return None;
-        };
-        if column.index.as_usize() >= self.metadata.read().columns().len() {
-            return None;
-        }
-        let mut keypaths = OwnedKeyPaths {
-            paths: Vec::with_capacity(paths.len()),
-        };
-        for (_, path) in paths {
-            let keypath = match path {
-                Literal::String(path) => OwnedKeyPath::QuotedName(path.clone()),
-                Literal::UInt64(index) => {
-                    let index = i32::try_from(*index).ok()?;
-                    OwnedKeyPath::Index(index)
-                }
-                _ => return None,
-            };
-            keypaths.paths.push(keypath);
-        }
-
-        let rewritten = self.try_rewrite_variant_keypaths(span, scalar, keypaths);
-        rewritten.map(|box (scalar, data_type)| {
-            if kind == CoreMapAccessKind::GetStringFunction {
-                let target_type = DataType::Nullable(Box::new(DataType::String));
-                let scalar = ScalarExpr::CastExpr(CastExpr {
-                    span: scalar.span(),
-                    is_try: false,
-                    argument: Box::new(scalar),
-                    target_type: Box::new(target_type.clone()),
-                });
-                Ok(Box::new((scalar, target_type)))
-            } else {
-                Ok(Box::new((scalar, data_type)))
-            }
-        })
     }
 
     fn try_rewrite_variant_keypaths(

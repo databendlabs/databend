@@ -92,13 +92,6 @@ type CoreDisplayExprArg = (String, CoreExprId);
 type CoreDisplayExprArgs = SmallVec<[CoreDisplayExprArg; 4]>;
 type CoreUdfCallArgs = SmallVec<[(String, CoreExprId); 4]>;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum CoreMapAccessKind {
-    Syntax,
-    GetFunction,
-    GetStringFunction,
-}
-
 pub struct CoreExprArena<'a> {
     nodes: Vec<CoreExpr<'a>>,
     week_start: u64,
@@ -128,7 +121,6 @@ enum CoreExpr<'a> {
         exprs: CoreExprArgs,
     },
     MapAccess {
-        kind: CoreMapAccessKind,
         span: Span,
         expr_span: Span,
         expr: CoreExprId,

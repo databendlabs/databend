@@ -418,3 +418,4 @@ mod search;
 mod special_functions;
 mod string_like;
 mod udf;
+mod virtual_columns;
