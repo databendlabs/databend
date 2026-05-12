@@ -28,6 +28,7 @@ mod block;
 mod block_thresholds;
 mod block_vec;
 mod common;
+mod conversion;
 mod decimal;
 mod display;
 mod evaluator;

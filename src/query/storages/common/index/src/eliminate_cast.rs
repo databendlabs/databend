@@ -21,43 +21,12 @@ use databend_common_expression::ExprVisitor;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::expr::*;
 use databend_common_expression::type_check::check_function;
 use databend_common_expression::types::DataType;
 use databend_common_expression::visit_expr;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-
-pub(super) fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
-    if src == dest {
-        return true;
-    }
-
-    match (src, dest) {
-        (DataType::Boolean, DataType::String | DataType::Number(_) | DataType::Decimal(_)) => true,
-
-        (DataType::Number(src), DataType::Number(dest))
-            if src.is_integer() && dest.is_integer() =>
-        {
-            true
-        }
-        (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
-        (DataType::Number(_), DataType::String) => true,
-        (DataType::Decimal(_), DataType::String) => true,
-
-        (DataType::Date, DataType::Timestamp) => true,
-
-        // (_, DataType::Boolean) => false,
-        // (DataType::String, _) => false,
-        // (DataType::Decimal(_), DataType::Number(_)) => false,
-        // (DataType::Number(src), DataType::Number(dest))
-        //     if src.is_float() && dest.is_integer() =>
-        // {
-        //     false
-        // }
-        (DataType::Nullable(src), DataType::Nullable(dest)) => is_injective_cast(src, dest),
-        _ => false,
-    }
-}
 
 pub(super) struct RewriteVisitor<'a> {
     pub input_domains: HashMap<String, Domain>,
@@ -97,7 +66,7 @@ impl RewriteVisitor<'_> {
             expr, dest_type, ..
         } = cast;
         let src_type = expr.data_type();
-        if !is_injective_cast(src_type, dest_type) {
+        if !classify_conversion(src_type, dest_type).is_lossless_injective() {
             return Ok(None);
         }
 
