@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
+use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Window;
@@ -86,6 +87,49 @@ pub(super) enum CoreWindowFrameBound {
 }
 
 impl<'a> CoreExprArena<'a> {
+    pub(super) fn try_lower_general_window_function(
+        &mut self,
+        original_expr: &'a Expr,
+        span: Span,
+        func_name: &str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        if func.lambda.is_some() {
+            return Ok(None);
+        }
+        let func_name = Ascii::new(func_name);
+        let Some(func_name) = GENERAL_WINDOW_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == func_name)
+            .map(Ascii::into_inner)
+        else {
+            return Ok(None);
+        };
+
+        let Some(window) = func.window.as_ref() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {func_name} can only be used in window clause"
+            ))
+            .set_span(span));
+        };
+
+        let args = self.lower_expr_args(&func.args)?;
+        let order_by = self.lower_order_by_exprs(&func.order_by)?;
+        let window = CoreWindowDesc {
+            ignore_nulls: window.ignore_nulls,
+            window: self.lower_window(&window.window)?,
+        };
+        Ok(Some(self.alloc(CoreExpr::GeneralWindowFunction {
+            display_name: format!("{original_expr:#}"),
+            span,
+            func_name,
+            args,
+            order_by,
+            window,
+        })))
+    }
+
     pub(super) fn ensure_window_not_in_lambda(&self, span: Span, has_window: bool) -> Result<()> {
         if self.in_lambda_function && has_window {
             return Err(ErrorCode::SemanticError(
@@ -113,36 +157,6 @@ impl<'a> CoreExprArena<'a> {
             .set_span(span));
         }
         Ok(())
-    }
-
-    pub(super) fn lower_general_window_function_call(
-        &mut self,
-        display_name: String,
-        span: Span,
-        func_name: &'static str,
-        func: &'a ASTFunctionCall,
-    ) -> Result<CoreExprId> {
-        let Some(window) = func.window.as_ref() else {
-            return Err(ErrorCode::SemanticError(format!(
-                "window function {func_name} can only be used in window clause"
-            ))
-            .set_span(span));
-        };
-
-        let args = self.lower_expr_args(&func.args)?;
-        let order_by = self.lower_order_by_exprs(&func.order_by)?;
-        let window = CoreWindowDesc {
-            ignore_nulls: window.ignore_nulls,
-            window: self.lower_window(&window.window)?,
-        };
-        Ok(self.alloc(CoreExpr::GeneralWindowFunction {
-            display_name,
-            span,
-            func_name,
-            args,
-            order_by,
-            window,
-        }))
     }
 
     pub(super) fn lower_window(&mut self, window: &'a Window) -> Result<CoreWindow<'a>> {
@@ -191,15 +205,6 @@ impl<'a> CoreExprArena<'a> {
             ),
         })
     }
-}
-
-pub(super) fn general_window_function_name(func_name: &str) -> Option<&'static str> {
-    let func_name = Ascii::new(func_name);
-    GENERAL_WINDOW_FUNCTIONS
-        .iter()
-        .cloned()
-        .find(|name| *name == func_name)
-        .map(Ascii::into_inner)
 }
 
 impl<'a, A> TypeChecker<'a, A>

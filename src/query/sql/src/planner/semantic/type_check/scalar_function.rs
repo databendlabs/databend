@@ -14,6 +14,7 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::TypeName;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -72,6 +73,57 @@ impl<'a> CoreExprArena<'a> {
             is_try,
             expr,
             target_type,
+        }))
+    }
+
+    pub(super) fn lower_scalar_function(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<CoreExprId> {
+        let ASTFunctionCall {
+            distinct,
+            args,
+            params,
+            order_by,
+            window,
+            lambda,
+            ..
+        } = func;
+
+        if !*distinct
+            && params.is_empty()
+            && order_by.is_empty()
+            && window.is_none()
+            && lambda.is_none()
+        {
+            if let Some(expr) = self.lower_rewrite_function(span, func_name, args)? {
+                return Ok(expr);
+            }
+
+            if let Some(expr) = self.special_function(span, func_name, args)? {
+                return Ok(expr);
+            }
+
+            if let Some(func_name) = builtin_scalar_function_name(func_name) {
+                let args = self.lower_expr_args(args)?;
+                return Ok(self.call(span, func_name, args));
+            }
+        }
+
+        let Some(func_name) = builtin_scalar_function_name(func_name) else {
+            return Err(ErrorCode::Internal(format!(
+                "function {func_name} should have been classified before scalar lowering",
+            )));
+        };
+        let params = self.lower_function_params(params)?;
+        let args = self.lower_expr_args(args)?;
+        Ok(self.alloc(CoreExpr::ScalarFunction {
+            span,
+            func_name,
+            params,
+            args,
         }))
     }
 }

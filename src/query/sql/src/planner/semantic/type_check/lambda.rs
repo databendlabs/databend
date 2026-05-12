@@ -69,7 +69,12 @@ impl<'a> CoreExprArena<'a> {
             );
         }
 
-        let Some(func_name) = general_lambda_function_name(func_name) else {
+        let Some(func_name) = GENERAL_LAMBDA_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == uni_case_func_name)
+            .map(Ascii::into_inner)
+        else {
             return Ok(None);
         };
         let Some(lambda) = func.lambda.as_ref() else {
@@ -105,15 +110,6 @@ impl<'a> CoreExprArena<'a> {
             lambda_expr,
         }))
     }
-}
-
-pub(super) fn general_lambda_function_name(func_name: &str) -> Option<&'static str> {
-    let func_name = Ascii::new(func_name);
-    GENERAL_LAMBDA_FUNCTIONS
-        .iter()
-        .cloned()
-        .find(|name| *name == func_name)
-        .map(Ascii::into_inner)
 }
 
 impl<'a, A> TypeChecker<'a, A>

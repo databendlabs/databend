@@ -60,7 +60,6 @@ mod async_functions;
 mod column;
 mod core_expr;
 mod date;
-mod function_call;
 mod in_list;
 mod lambda;
 mod literal;

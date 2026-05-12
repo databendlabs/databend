@@ -32,7 +32,7 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn try_lower_srf(
+    pub(super) fn try_lower_set_returning_function(
         &mut self,
         span: Span,
         func_name: &str,

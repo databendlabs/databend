@@ -16,8 +16,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FileLocation;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::UriLocation;
 use databend_common_ast::parser::parse_expr;
@@ -37,6 +37,7 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::is_builtin_function;
 use databend_common_meta_app::principal::LambdaUDF;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::StageInfo;
@@ -51,6 +52,7 @@ use databend_common_storage::init_stage_operator;
 use itertools::Itertools;
 use serde_json::json;
 use serde_json::to_string;
+use unicase::Ascii;
 
 use super::CoreExpr;
 use super::CoreExprArena;
@@ -60,6 +62,7 @@ use super::FullTypeCheckAdapter;
 use super::StageLocationParam;
 use super::TypeChecker;
 use super::UdfAdapter;
+use super::rewrite_function::rewrite_function_name;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
 use crate::NameResolutionContext;
@@ -88,20 +91,29 @@ struct UdfAsset {
 }
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn runtime_call(
+    pub(super) fn try_lower_udf_call(
         &mut self,
         span: Span,
-        name: &'a Identifier,
-        args: &'a [Expr],
-    ) -> Result<CoreExprId> {
-        let args = self.lower_runtime_call_args(args)?;
-        Ok(self.alloc(CoreExpr::UdfCall { span, name, args }))
-    }
+        func_name: &str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        if is_builtin_function(func_name)
+            || TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name))
+            || rewrite_function_name(func_name).is_some()
+        {
+            return Ok(None);
+        }
 
-    fn lower_runtime_call_args(&mut self, args: &'a [Expr]) -> Result<CoreUdfCallArgs> {
-        args.iter()
-            .map(|arg| Ok((format!("{}", arg), self.lower_ast_expr(arg)?)))
-            .collect()
+        let args = func
+            .args
+            .iter()
+            .map(|arg| Ok::<_, ErrorCode>((format!("{}", arg), self.lower_ast_expr(arg)?)))
+            .collect::<Result<CoreUdfCallArgs>>()?;
+        Ok(Some(self.alloc(CoreExpr::UdfCall {
+            span,
+            name: &func.name,
+            args,
+        })))
     }
 }
 

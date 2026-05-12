@@ -44,28 +44,17 @@ use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn ensure_within_group_function_call(
-        &self,
+    pub(super) fn try_lower_aggregate_function(
+        &mut self,
+        original_expr: &'a Expr,
         span: Span,
         func_name: &str,
-        has_order_by: bool,
-    ) -> Result<()> {
-        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name)) {
-            return Err(ErrorCode::SemanticError(
-                "only aggregate functions allowed in within group syntax",
-            )
-            .set_span(span));
-        }
-        Ok(())
-    }
-
-    pub(super) fn lower_aggregate_function_call(
-        &mut self,
-        display_name: String,
-        span: Span,
-        func_name: String,
         func: &'a ASTFunctionCall,
-    ) -> Result<CoreExprId> {
+    ) -> Result<Option<CoreExprId>> {
+        if func.lambda.is_some() || !self.aggregate_function_factory.contains(func_name) {
+            return Ok(None);
+        }
+
         let ASTFunctionCall {
             distinct,
             args,
@@ -74,6 +63,8 @@ impl<'a> CoreExprArena<'a> {
             window,
             ..
         } = func;
+        let display_name = format!("{original_expr:#}");
+        let func_name = func_name.to_string();
         let remove_count_args = func_name.eq_ignore_ascii_case("count")
             && !*distinct
             && args
@@ -83,7 +74,7 @@ impl<'a> CoreExprArena<'a> {
         let args = self.lower_expr_args(args)?;
         let order_by = self.lower_order_by_exprs(order_by)?;
 
-        Ok(if let Some(window) = window {
+        Ok(Some(if let Some(window) = window {
             let window = super::window::CoreWindowDesc {
                 ignore_nulls: window.ignore_nulls,
                 window: self.lower_window(&window.window)?,
@@ -110,7 +101,22 @@ impl<'a> CoreExprArena<'a> {
                 remove_count_args,
                 order_by,
             })
-        })
+        }))
+    }
+
+    pub(super) fn ensure_within_group_function_call(
+        &self,
+        span: Span,
+        func_name: &str,
+        has_order_by: bool,
+    ) -> Result<()> {
+        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name)) {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        Ok(())
     }
 
     pub(super) fn lower_count_all_expr(

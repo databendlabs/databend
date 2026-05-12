@@ -14,6 +14,7 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::OrderByExpr;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -342,6 +343,56 @@ impl<'a> CoreExprArena<'a> {
 
     pub(super) fn lower_expr_args(&mut self, exprs: &'a [Expr]) -> Result<CoreExprArgs> {
         exprs.iter().map(|expr| self.lower_ast_expr(expr)).collect()
+    }
+
+    fn lower_function_call_expr(
+        &mut self,
+        original_expr: &'a Expr,
+        span: Span,
+        func: &'a ASTFunctionCall,
+    ) -> Result<CoreExprId> {
+        let func_name = func.name.name.to_ascii_lowercase();
+        self.ensure_window_not_in_lambda(span, func.window.is_some())?;
+        if let Some(expr) = self.try_lower_udf_call(span, &func_name, func)? {
+            return Ok(expr);
+        }
+
+        if let Some(expr) =
+            self.try_lower_general_window_function(original_expr, span, &func_name, func)?
+        {
+            return Ok(expr);
+        }
+
+        if let Some(expr) =
+            self.try_lower_aggregate_function(original_expr, span, &func_name, func)?
+        {
+            return Ok(expr);
+        }
+
+        self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
+        self.ensure_window_function_call(
+            span,
+            &func_name,
+            func.window.is_some(),
+            self.aggregate_function_factory.contains(&func_name),
+        )?;
+        if let Some(expr) = self.try_lower_lambda(span, &func_name, func)? {
+            return Ok(expr);
+        }
+
+        if let Some(expr) = self.try_lower_search(span, &func_name, func)? {
+            return Ok(expr);
+        }
+
+        if let Some(expr) = self.try_lower_async_function(span, &func_name, func)? {
+            return Ok(expr);
+        }
+
+        if let Some(expr) = self.try_lower_set_returning_function(span, &func_name, func)? {
+            return Ok(expr);
+        }
+
+        self.lower_scalar_function(span, &func_name, func)
     }
 
     pub(super) fn lower_function_params(
