@@ -53,3 +53,10 @@ sql: row_number()
 status: error
 code: 1065
 message: window function row_number can only be used in window clause
+
+=== within_group_check_precedes_window_lowering ===
+description: WITHIN GROUP legality should match the old function dispatch order before window-specific lowering.
+sql: row_number() WITHIN GROUP (ORDER BY number)
+status: error
+code: 1065
+message: only aggregate functions allowed in within group syntax

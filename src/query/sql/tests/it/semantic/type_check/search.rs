@@ -4,6 +4,12 @@ use super::*;
 async fn test_type_check_search_rule_errors() -> Result<()> {
     let cases = [
         SqlTestCase {
+            name: "score_rejects_arguments",
+            description: "score should keep its zero-argument search-function contract.",
+            setup_sqls: &[],
+            sql: "score(1)",
+        },
+        SqlTestCase {
             name: "match_rejects_non_constant_query_text",
             description: "match should require constant query text after reaching WHERE-clause search resolution.",
             setup_sqls: &[],
@@ -48,4 +54,24 @@ async fn test_type_check_search_rule_errors() -> Result<()> {
     ];
 
     run_type_check_cases_in_context("search.txt", &cases, ExprContext::WhereClause).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_search_context_rules() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "match_requires_where_context",
+            description: "match search should remain restricted to WHERE-clause resolution.",
+            setup_sqls: &[],
+            sql: "match(text, 'needle')",
+        },
+        SqlTestCase {
+            name: "query_requires_where_context",
+            description: "query search should remain restricted to WHERE-clause resolution.",
+            setup_sqls: &[],
+            sql: "query('text:needle')",
+        },
+    ];
+
+    run_type_check_cases("search_context.txt", &cases).await
 }

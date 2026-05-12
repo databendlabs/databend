@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_string_and_like_rewrites() -> Result<()> {
+async fn test_type_check_string_rewrites() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "substring_from_for_from_tpc_h_binds",
@@ -77,5 +77,5 @@ async fn test_type_check_string_and_like_rewrites() -> Result<()> {
         },
     ];
 
-    run_type_check_cases("string_like.txt", &cases).await
+    run_type_check_cases("string.txt", &cases).await
 }

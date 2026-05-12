@@ -357,6 +357,14 @@ impl<'a> CoreExprArena<'a> {
             return Ok(expr);
         }
 
+        self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
+        self.ensure_window_function_call(
+            span,
+            &func_name,
+            func.window.is_some(),
+            self.aggregate_function_factory.contains(&func_name),
+        )?;
+
         if let Some(expr) =
             self.try_lower_general_window_function(original_expr, span, &func_name, func)?
         {
@@ -369,13 +377,6 @@ impl<'a> CoreExprArena<'a> {
             return Ok(expr);
         }
 
-        self.ensure_within_group_function_call(span, &func_name, !func.order_by.is_empty())?;
-        self.ensure_window_function_call(
-            span,
-            &func_name,
-            func.window.is_some(),
-            self.aggregate_function_factory.contains(&func_name),
-        )?;
         if let Some(expr) = self.try_lower_lambda(span, &func_name, func)? {
             return Ok(expr);
         }

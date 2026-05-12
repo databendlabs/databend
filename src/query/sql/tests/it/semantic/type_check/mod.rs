@@ -406,16 +406,19 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
     run_type_check_cases_in_context(file_name, cases, ExprContext::Unknown).await
 }
 
-mod adapter;
-mod aggregate_window;
-mod core_lowering;
-mod datetime;
-mod literals_collections;
-mod rewrite_functions;
-mod rules;
-mod scalar_rewrites;
+mod aggregate;
+mod async_functions;
+mod core_expr;
+mod date;
+mod in_list;
+mod lambda;
+mod literal;
+mod rewrite_function;
+mod scalar_function;
+mod scalar_rewrite;
 mod search;
-mod special_functions;
-mod string_like;
+mod special_function;
+mod string;
 mod udf;
-mod virtual_columns;
+mod variant;
+mod window;

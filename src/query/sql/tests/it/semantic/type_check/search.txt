@@ -1,3 +1,10 @@
+=== score_rejects_arguments ===
+description: score should keep its zero-argument search-function contract.
+sql: score(1)
+status: error
+code: 1065
+message: invalid arguments for search function, score expects 0 argument, but got 1
+
 === match_rejects_non_constant_query_text ===
 description: match should require constant query text after reaching WHERE-clause search resolution.
 sql: match(text, pattern)

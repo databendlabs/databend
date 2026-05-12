@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_literals_and_collections() -> Result<()> {
+async fn test_type_check_literal() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "float_literal_from_parser_tests_binds",
@@ -45,31 +45,7 @@ async fn test_type_check_literals_and_collections() -> Result<()> {
             setup_sqls: &[],
             sql: "(number, text, true)",
         },
-        SqlTestCase {
-            name: "array_index_access_binds",
-            description: "Array index access should preserve the existing get-function rewrite and nullable result type.",
-            setup_sqls: &[],
-            sql: "[10, 20, 30][1]",
-        },
-        SqlTestCase {
-            name: "map_key_access_binds",
-            description: "Map key access should preserve the existing get-function rewrite.",
-            setup_sqls: &[],
-            sql: "{'k1': 1, 'k2': delta}['k1']",
-        },
-        SqlTestCase {
-            name: "variant_colon_access_binds",
-            description: "Variant colon access should preserve the get_by_keypath rewrite.",
-            setup_sqls: &[],
-            sql: "to_variant({'k1': 1}):k1",
-        },
-        SqlTestCase {
-            name: "variant_get_with_quoted_unicode_key_stays_get",
-            description: "A plain get call should not be lowered into a keypath expression before virtual-column resolution.",
-            setup_sqls: &[],
-            sql: "get(to_variant({'测试\"💎': 'a'}), '测试\"💎')",
-        },
     ];
 
-    run_type_check_cases("literals_collections.txt", &cases).await
+    run_type_check_cases("literal.txt", &cases).await
 }

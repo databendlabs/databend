@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_core_lowering() -> Result<()> {
+async fn test_type_check_core_expr_lowering() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "minus_literal_is_folded_after_scalar_resolution",
@@ -51,7 +51,13 @@ async fn test_type_check_core_lowering() -> Result<()> {
             setup_sqls: &[],
             sql: "row_number()",
         },
+        SqlTestCase {
+            name: "within_group_check_precedes_window_lowering",
+            description: "WITHIN GROUP legality should match the old function dispatch order before window-specific lowering.",
+            setup_sqls: &[],
+            sql: "row_number() WITHIN GROUP (ORDER BY number)",
+        },
     ];
 
-    run_type_check_cases("core_lowering.txt", &cases).await
+    run_type_check_cases("core_expr.txt", &cases).await
 }

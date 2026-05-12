@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_rewrite_functions() -> Result<()> {
+async fn test_type_check_rewrite_function() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "nullif_rewrites_to_if",
@@ -41,5 +41,5 @@ async fn test_type_check_rewrite_functions() -> Result<()> {
         },
     ];
 
-    run_type_check_cases("rewrite_functions.txt", &cases).await
+    run_type_check_cases("rewrite_function.txt", &cases).await
 }

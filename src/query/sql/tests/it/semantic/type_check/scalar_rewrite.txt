@@ -32,17 +32,3 @@ sql: CASE number WHEN 1 THEN text WHEN 2 THEN pattern ELSE 'fallback' END
 status: ok
 scalar: if(eq(number (#0), 1), text (#1), eq(number (#0), 2), pattern (#2), 'fallback')
 type: String NULL
-
-=== small_in_list_rewrites_to_balanced_or ===
-description: A small IN list should stay in scalar type checking rather than using the subquery conversion path.
-sql: number IN (1, 2, delta)
-status: ok
-scalar: or(or(eq(number (#0), 1), eq(number (#0), 2)), eq(number (#0), delta (#3)))
-type: Boolean NULL
-
-=== not_in_list_wraps_rewritten_predicate ===
-description: NOT IN should wrap the scalar IN-list rewrite with a NOT function.
-sql: number NOT IN (1, 2, delta)
-status: ok
-scalar: not(or(or(eq(number (#0), 1), eq(number (#0), 2)), eq(number (#0), delta (#3))))
-type: Boolean NULL

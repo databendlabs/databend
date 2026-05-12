@@ -1,73 +1,3 @@
-=== count_star_removes_count_args ===
-description: count(*) should type check through the aggregate path that removes redundant count arguments.
-sql: count(*)
-status: ok
-scalar: COUNT(*)
-type: UInt64
-
-=== count_distinct_rewrites_to_count_distinct ===
-description: count(distinct x) should select the count_distinct aggregate implementation.
-sql: count(distinct number)
-status: ok
-scalar: count(DISTINCT number)
-type: UInt64
-
-=== sum_distinct_uses_distinct_aggregate_name ===
-description: A non-count DISTINCT aggregate should append the _distinct suffix during type checking.
-sql: sum(distinct number)
-status: ok
-scalar: sum(DISTINCT number)
-type: Int64 NULL
-
-=== aggregate_display_name_preserves_original_call ===
-description: Aggregate display names should keep the original SQL spelling while resolving arguments.
-sql: SUM(number + delta)
-status: ok
-scalar: SUM(number + delta)
-type: Int64 NULL
-
-=== string_agg_delimiter_becomes_param ===
-description: string_agg with a constant delimiter should move the delimiter into aggregate params.
-sql: string_agg(text, '|')
-status: ok
-scalar: string_agg(text, '|')
-type: String NULL
-
-=== listagg_within_group_preserves_sort_desc ===
-description: WITHIN GROUP should resolve aggregate sort descriptors at type-check time.
-sql: listagg(text, '|') WITHIN GROUP (ORDER BY number DESC NULLS LAST)
-status: ok
-scalar: listagg(text, '|') WITHIN GROUP ( ORDER BY number DESC NULLS LAST )
-type: String NULL
-
-=== listagg_within_group_lowers_order_expression ===
-description: WITHIN GROUP order expressions should keep resolving through aggregate sort descriptors.
-sql: listagg(text, '|') WITHIN GROUP (ORDER BY number + delta DESC NULLS LAST)
-status: ok
-scalar: listagg(text, '|') WITHIN GROUP ( ORDER BY number + delta DESC NULLS LAST )
-type: String NULL
-
-=== histogram_bucket_argument_becomes_param ===
-description: histogram(expr, buckets) should fold the bucket count into aggregate params.
-sql: histogram(number, 10)
-status: ok
-scalar: histogram(number, 10)
-type: String NULL
-
-=== aggregate_parameterized_call_binds ===
-description: Parameterized aggregate syntax should fold constant params and resolve aggregate arguments.
-sql: quantile_cont(0.6)(number)
-status: ok
-scalar: quantile_cont(0.6)(number)
-type: Float64 NULL
-
-=== nested_aggregate_errors ===
-description: Nested grouped aggregates should be rejected while resolving aggregate arguments.
-sql: sum(count(number))
-status: error
-code: 1065
-message: aggregate function calls cannot be nested
-
 === rank_order_by_uses_default_order_frame ===
 description: A rank window with ORDER BY should keep the ordered default frame.
 sql: rank() OVER (ORDER BY number)
@@ -158,3 +88,24 @@ sql: sum(number) OVER (ORDER BY number ROWS BETWEEN UNBOUNDED PRECEDING AND UNBO
 status: error
 code: 1065
 message: Frame end cannot be UNBOUNDED PRECEDING
+
+=== window_function_inside_lambda_errors ===
+description: Window functions should remain rejected while resolving lambda bodies.
+sql: array_transform([number], x -> row_number() OVER ())
+status: error
+code: 1065
+message: window functions can not be used in lambda function
+
+=== non_window_function_rejects_over_clause ===
+description: A scalar function should not be accepted with window syntax.
+sql: abs(number) OVER ()
+status: error
+code: 1065
+message: only window and aggregate functions allowed in window syntax
+
+=== window_function_rejects_ignore_nulls_when_unsupported ===
+description: Non-value window functions should reject IGNORE/RESPECT NULLS options.
+sql: row_number() IGNORE NULLS OVER ()
+status: error
+code: 1065
+message: window function row_number not support IGNORE/RESPECT NULLS option

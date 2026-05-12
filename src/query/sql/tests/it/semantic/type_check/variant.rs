@@ -13,6 +13,44 @@ use databend_common_storages_basic::NullTable;
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_type_check_variant_rewrites() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "array_index_access_binds",
+            description: "Array index access should preserve the existing get-function rewrite and nullable result type.",
+            setup_sqls: &[],
+            sql: "[10, 20, 30][1]",
+        },
+        SqlTestCase {
+            name: "map_key_access_binds",
+            description: "Map key access should preserve the existing get-function rewrite.",
+            setup_sqls: &[],
+            sql: "{'k1': 1, 'k2': delta}['k1']",
+        },
+        SqlTestCase {
+            name: "variant_colon_access_binds",
+            description: "Variant colon access should preserve the get_by_keypath rewrite.",
+            setup_sqls: &[],
+            sql: "to_variant({'k1': 1}):k1",
+        },
+        SqlTestCase {
+            name: "variant_get_with_quoted_unicode_key_stays_get",
+            description: "A plain get call should not be lowered into a keypath expression before virtual-column resolution.",
+            setup_sqls: &[],
+            sql: "get(to_variant({'测试\"💎': 'a'}), '测试\"💎')",
+        },
+        SqlTestCase {
+            name: "map_accessor_requires_literal_path",
+            description: "Map and variant accessors should reject unsupported bracket expressions during lowering.",
+            setup_sqls: &[],
+            sql: "to_variant({'k1': 1})[true]",
+        },
+    ];
+
+    run_type_check_cases("variant.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<()> {
     init_testing_globals();
     let settings = Settings::create(Tenant::new_literal("default"));
@@ -57,7 +95,7 @@ async fn nested_get_virtual_column_rewrite_skips_intermediate_paths() -> Result<
         setup_sqls: &[],
         sql: "get(get(v, 'a'), 0); get(get(v, 'b'), 'c'); get_string(get(v, 'b'), 'c')",
     };
-    let mut file = open_golden_file("semantic/type_check", "virtual_columns.txt")?;
+    let mut file = open_golden_file("semantic/type_check", "variant_virtual_columns.txt")?;
     write_case_header(&mut file, &case)?;
     write_case_outcome_body(
         &mut file,

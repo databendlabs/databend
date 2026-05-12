@@ -1,68 +1,8 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_aggregate_and_window_rewrites() -> Result<()> {
+async fn test_type_check_window_rewrites() -> Result<()> {
     let cases = [
-        SqlTestCase {
-            name: "count_star_removes_count_args",
-            description: "count(*) should type check through the aggregate path that removes redundant count arguments.",
-            setup_sqls: &[],
-            sql: "count(*)",
-        },
-        SqlTestCase {
-            name: "count_distinct_rewrites_to_count_distinct",
-            description: "count(distinct x) should select the count_distinct aggregate implementation.",
-            setup_sqls: &[],
-            sql: "count(distinct number)",
-        },
-        SqlTestCase {
-            name: "sum_distinct_uses_distinct_aggregate_name",
-            description: "A non-count DISTINCT aggregate should append the _distinct suffix during type checking.",
-            setup_sqls: &[],
-            sql: "sum(distinct number)",
-        },
-        SqlTestCase {
-            name: "aggregate_display_name_preserves_original_call",
-            description: "Aggregate display names should keep the original SQL spelling while resolving arguments.",
-            setup_sqls: &[],
-            sql: "SUM(number + delta)",
-        },
-        SqlTestCase {
-            name: "string_agg_delimiter_becomes_param",
-            description: "string_agg with a constant delimiter should move the delimiter into aggregate params.",
-            setup_sqls: &[],
-            sql: "string_agg(text, '|')",
-        },
-        SqlTestCase {
-            name: "listagg_within_group_preserves_sort_desc",
-            description: "WITHIN GROUP should resolve aggregate sort descriptors at type-check time.",
-            setup_sqls: &[],
-            sql: "listagg(text, '|') WITHIN GROUP (ORDER BY number DESC NULLS LAST)",
-        },
-        SqlTestCase {
-            name: "listagg_within_group_lowers_order_expression",
-            description: "WITHIN GROUP order expressions should keep resolving through aggregate sort descriptors.",
-            setup_sqls: &[],
-            sql: "listagg(text, '|') WITHIN GROUP (ORDER BY number + delta DESC NULLS LAST)",
-        },
-        SqlTestCase {
-            name: "histogram_bucket_argument_becomes_param",
-            description: "histogram(expr, buckets) should fold the bucket count into aggregate params.",
-            setup_sqls: &[],
-            sql: "histogram(number, 10)",
-        },
-        SqlTestCase {
-            name: "aggregate_parameterized_call_binds",
-            description: "Parameterized aggregate syntax should fold constant params and resolve aggregate arguments.",
-            setup_sqls: &[],
-            sql: "quantile_cont(0.6)(number)",
-        },
-        SqlTestCase {
-            name: "nested_aggregate_errors",
-            description: "Nested grouped aggregates should be rejected while resolving aggregate arguments.",
-            setup_sqls: &[],
-            sql: "sum(count(number))",
-        },
         SqlTestCase {
             name: "rank_order_by_uses_default_order_frame",
             description: "A rank window with ORDER BY should keep the ordered default frame.",
@@ -141,7 +81,25 @@ async fn test_type_check_aggregate_and_window_rewrites() -> Result<()> {
             setup_sqls: &[],
             sql: "sum(number) OVER (ORDER BY number ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED PRECEDING)",
         },
+        SqlTestCase {
+            name: "window_function_inside_lambda_errors",
+            description: "Window functions should remain rejected while resolving lambda bodies.",
+            setup_sqls: &[],
+            sql: "array_transform([number], x -> row_number() OVER ())",
+        },
+        SqlTestCase {
+            name: "non_window_function_rejects_over_clause",
+            description: "A scalar function should not be accepted with window syntax.",
+            setup_sqls: &[],
+            sql: "abs(number) OVER ()",
+        },
+        SqlTestCase {
+            name: "window_function_rejects_ignore_nulls_when_unsupported",
+            description: "Non-value window functions should reject IGNORE/RESPECT NULLS options.",
+            setup_sqls: &[],
+            sql: "row_number() IGNORE NULLS OVER ()",
+        },
     ];
 
-    run_type_check_cases("aggregate_window.txt", &cases).await
+    run_type_check_cases("window.txt", &cases).await
 }

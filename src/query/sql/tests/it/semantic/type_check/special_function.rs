@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_special_functions() -> Result<()> {
+async fn test_type_check_special_function() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "current_catalog_rewrites_to_literal",
@@ -137,5 +137,5 @@ async fn test_type_check_special_functions() -> Result<()> {
         },
     ];
 
-    run_type_check_cases("special_functions.txt", &cases).await
+    run_type_check_cases("special_function.txt", &cases).await
 }

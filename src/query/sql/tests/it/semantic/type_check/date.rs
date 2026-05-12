@@ -1,7 +1,7 @@
 use super::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_type_check_datetime_rewrites() -> Result<()> {
+async fn test_type_check_date_rewrites() -> Result<()> {
     let cases = [
         SqlTestCase {
             name: "date_add_date_from_function_tests_binds",
@@ -53,5 +53,5 @@ async fn test_type_check_datetime_rewrites() -> Result<()> {
         },
     ];
 
-    run_type_check_cases("datetime.txt", &cases).await
+    run_type_check_cases("date.txt", &cases).await
 }
