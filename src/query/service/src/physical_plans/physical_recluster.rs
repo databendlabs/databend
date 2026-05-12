@@ -115,8 +115,8 @@ impl IPhysicalPlan for Recluster {
     //           └──────────────┘
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         match self.tasks.len() {
-            // A zero-task recluster still rebuilds segments from sidecar `remained_blocks`
-            // during commit. This is the segment-only reorder path, not a no-op success path.
+            // Keep the pipeline constructible if an empty task list reaches
+            // this layer; normal recluster planning filters no-op parts out.
             0 => builder.main_pipeline.add_source(EmptySource::create, 1),
             1 => {
                 let table = builder
@@ -152,8 +152,12 @@ impl IPhysicalPlan for Recluster {
                     metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
 
                     log::info!(
-                        "Number of blocks scheduled for recluster: {}",
-                        recluster_block_nums
+                        "recluster: scheduled blocks level={} block_count={} rows={} bytes={} compressed={}",
+                        task.level,
+                        recluster_block_nums,
+                        task.total_rows,
+                        task.total_bytes,
+                        task.total_compressed,
                     );
                 }
 

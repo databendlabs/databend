@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
+use log::debug;
 use log::warn;
 use opendal::Operator;
 
@@ -102,6 +103,14 @@ impl FuseTable {
             )
             .await?;
 
+            debug!(
+                "recluster: scanned segment chunk chunk_segments={} compact_segments={} segment_progress={}/{}",
+                chunk.len(),
+                compact_segments.len(),
+                segment_idx + chunk.len(),
+                number_segments,
+            );
+
             // Status.
             {
                 segment_idx += chunk.len();
@@ -115,23 +124,51 @@ impl FuseTable {
             }
 
             if compact_segments.is_empty() {
+                debug!(
+                    "recluster: build tasks skipped chunk_segments={} skip_reason=empty_compact_segments",
+                    chunk.len(),
+                );
                 continue;
             }
 
             // select the segments with the highest depth.
             let selected_segs = mutator.select_segments(&compact_segments, max_seg_num)?;
+            debug!(
+                "recluster: selected segments compact_segments={} selected_segments={} max_segments={}",
+                compact_segments.len(),
+                selected_segs.len(),
+                max_seg_num,
+            );
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
+                debug!(
+                    "recluster: selected segments empty, fallback to generate_recluster_parts compact_segments={}",
+                    compact_segments.len(),
+                );
                 let result =
                     Self::generate_recluster_parts(mutator.clone(), compact_segments).await?;
                 if let Some((seg_num, block_num, recluster_parts)) = result {
                     selected_seg_num = seg_num;
                     recluster_blocks_count = block_num;
                     parts = recluster_parts;
+                    debug!(
+                        "recluster: fallback built parts segments={} blocks={} tasks={}",
+                        selected_seg_num,
+                        recluster_blocks_count,
+                        parts.tasks.len(),
+                    );
+                } else {
+                    debug!("recluster: fallback built no parts skip_reason=empty_parts",);
                 }
             } else {
                 selected_seg_num = selected_segs.len() as u64;
                 (recluster_blocks_count, parts) = mutator.target_select(selected_segs).await?;
+                debug!(
+                    "recluster: built parts segments={} blocks={} tasks={}",
+                    selected_seg_num,
+                    recluster_blocks_count,
+                    parts.tasks.len(),
+                );
             }
 
             if !parts.is_empty() || limit.is_some() {
