@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -1182,11 +1183,9 @@ impl Binder {
         }
         let preferred_aliases = group_by_aliases.preferred_aliases();
         let available_aliases = group_by_aliases.available_aliases();
-        // GROUP BY binds names with column-first resolution. The first pass
-        // uses the preferred alias set, then falls back to the full alias set
-        // only when the expression cannot be resolved. This keeps SRF and
-        // aggregate aliases available without letting them shadow same-name
-        // input columns.
+        // Keep alias-first binding for simple `GROUP BY <alias>` items. For
+        // complex expressions, resolve input columns first and only use SELECT
+        // aliases for names that are not present in the input scope.
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
@@ -1219,26 +1218,51 @@ impl Binder {
                 continue;
             }
 
-            let mut scalar_binder = ScalarBinder::new(
-                bind_context,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                self.metadata.clone(),
-                preferred_aliases,
-            );
-            let (mut scalar_expr, _) = if preferred_aliases == available_aliases {
-                scalar_binder.bind(expr)?
+            let is_simple_column_ref = matches!(expr, Expr::ColumnRef {
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    ..
+                },
+                ..
+            });
+
+            let (mut scalar_expr, _) = if is_simple_column_ref {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    preferred_aliases,
+                );
+                if preferred_aliases == available_aliases {
+                    scalar_binder.bind(expr)?
+                } else {
+                    scalar_binder.bind(expr).or_else(|_| {
+                        let mut fallback_scalar_binder = ScalarBinder::new(
+                            bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            available_aliases,
+                        );
+                        fallback_scalar_binder.bind(expr)
+                    })?
+                }
             } else {
-                scalar_binder.bind(expr).or_else(|_| {
-                    let mut fallback_scalar_binder = ScalarBinder::new(
-                        bind_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        available_aliases,
-                    );
-                    fallback_scalar_binder.bind(expr)
-                })?
+                bind_context.with_expr_context(
+                    ExprContext::SelectClause,
+                    |bind_context| -> Result<(ScalarExpr, DataType)> {
+                        let mut scalar_binder = ScalarBinder::new(
+                            bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            available_aliases,
+                        );
+                        scalar_binder.bind(expr)
+                    },
+                )?
             };
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());
