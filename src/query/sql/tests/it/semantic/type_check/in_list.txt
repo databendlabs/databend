@@ -11,3 +11,17 @@ sql: number NOT IN (1, 2, delta)
 status: ok
 scalar: not(or(or(eq(number (#0), 1), eq(number (#0), 2)), eq(number (#0), delta (#3))))
 type: Boolean NULL
+
+=== constant_in_list_uses_contains_after_or_threshold ===
+description: A constant IN list above max_inlist_to_or should preserve the old contains(array_distinct(...)) rewrite.
+sql: number IN (1, 2, 3, 4)
+status: ok
+scalar: contains([1, 2, 3, 4], number (#0))
+type: Boolean NULL
+
+=== constant_not_in_list_wraps_contains_rewrite ===
+description: NOT IN should wrap the contains rewrite when the constant list exceeds max_inlist_to_or.
+sql: number NOT IN (1, 2, 3, 4)
+status: ok
+scalar: not(contains([1, 2, 3, 4], number (#0)))
+type: Boolean NULL

@@ -307,6 +307,7 @@ fn add_test_column(bind_context: &mut BindContext, index: usize, name: &str, dat
             Box::new(data_type.wrap_nullable()),
             Visibility::Visible,
         )
+        .column_position(Some(index + 1))
         .build(),
     );
 }
@@ -383,6 +384,33 @@ async fn type_check_case_in_context(
     Ok(outcome)
 }
 
+async fn type_check_case_with_settings(
+    case: &SqlTestCase,
+    settings: Arc<Settings>,
+    expr_context: ExprContext,
+) -> Result<SqlTestOutcome> {
+    init_testing_globals();
+    assert!(
+        case.setup_sqls.is_empty(),
+        "type_check tests use a dependency-only adapter and do not run setup SQL"
+    );
+    let adapter = TestTypeCheckAdapter::new(settings);
+    let mut bind_context = test_bind_context(expr_context);
+
+    let outcome = match resolve_type_check_sql(case.sql, adapter, &mut bind_context) {
+        Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
+            "scalar: {}\ntype: {}",
+            format_scalar(&scalar),
+            data_type
+        )),
+        Err(err) => SqlTestOutcome::Error {
+            code: err.code(),
+            message: err.message(),
+        },
+    };
+    Ok(outcome)
+}
+
 async fn run_type_check_cases_in_context(
     file_name: &str,
     cases: &[SqlTestCase],
@@ -406,8 +434,29 @@ async fn run_type_check_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<
     run_type_check_cases_in_context(file_name, cases, ExprContext::Unknown).await
 }
 
+async fn run_type_check_cases_with_settings(
+    file_name: &str,
+    cases: &[SqlTestCase],
+    settings: Arc<Settings>,
+    expr_context: ExprContext,
+) -> Result<()> {
+    let mut file = open_golden_file("semantic/type_check", file_name)?;
+
+    for (index, case) in cases.iter().enumerate() {
+        if index > 0 {
+            writeln!(file)?;
+        }
+        write_case_header(&mut file, case)?;
+        let outcome = type_check_case_with_settings(case, settings.clone(), expr_context).await?;
+        write_case_outcome_body(&mut file, &outcome)?;
+    }
+
+    Ok(())
+}
+
 mod aggregate;
 mod async_functions;
+mod column;
 mod core_expr;
 mod date;
 mod in_list;
@@ -417,8 +466,10 @@ mod rewrite_function;
 mod scalar_function;
 mod scalar_rewrite;
 mod search;
+mod set_returning;
 mod special_function;
 mod string;
 mod udf;
 mod variant;
+mod vector;
 mod window;
