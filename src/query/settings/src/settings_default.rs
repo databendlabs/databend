@@ -937,7 +937,7 @@ impl DefaultSettings {
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(25),
-                    desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
+                    desc: "Threshold for triggering auto compaction after write. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations. Set to 0 to disable auto compaction.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -1006,7 +1006,7 @@ impl DefaultSettings {
                     desc: "Sets the maximum byte size of blocks for recluster",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
@@ -1251,6 +1251,13 @@ impl DefaultSettings {
                 ("use_legacy_query_executor", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Fallback to legacy query executor",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("enable_decimal_sum_widening", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Automatically widen SUM arguments from Decimal(19..38, scale) to Decimal(76, scale).",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
@@ -1777,7 +1784,7 @@ impl DefaultSettings {
     fn recluster_block_size(max_memory_usage: u64) -> u64 {
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        std::cmp::min(max_memory_usage * 30 / 100, 80 * 1024 * 1024 * 1024)
+        std::cmp::min(max_memory_usage * 20 / 100, 80 * 1024 * 1024 * 1024)
     }
 
     /// Converts and validates a setting value based on its key.

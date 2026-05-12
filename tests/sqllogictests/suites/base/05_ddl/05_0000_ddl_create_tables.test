@@ -13,6 +13,9 @@ DROP TABLE IF EXISTS t4
 statement ok
 DROP TABLE IF EXISTS issue_11031
 
+statement ok
+DROP TABLE IF EXISTS test_properties_as_ident
+
 statement error 1302
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = iceberg
 
@@ -82,6 +85,21 @@ SELECT radio, range, samples FROM issue_11031
 ----
 lte 10 1
 
+# PROPERTIES should be usable as an identifier (column name, table name)
+statement ok
+CREATE TABLE test_properties_as_ident (
+    properties STRING,
+    value INT32
+)
+
+statement ok
+INSERT INTO test_properties_as_ident (properties, value) VALUES ('key1', 100)
+
+query TI
+SELECT properties, value FROM test_properties_as_ident
+----
+key1 100
+
 statement ok
 DROP TABLE IF EXISTS t
 
@@ -96,6 +114,9 @@ DROP TABLE IF EXISTS t4
 
 statement ok
 DROP TABLE IF EXISTS issue_11031
+
+statement ok
+DROP TABLE IF EXISTS test_properties_as_ident
 
 statement ok
 DROP DATABASE IF EXISTS db1

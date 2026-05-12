@@ -21,6 +21,8 @@ use crate::runtime::Runtime;
 
 pub struct GlobalIORuntime;
 
+pub struct GlobalControlRuntime(pub Runtime);
+
 pub struct GlobalQueryRuntime(pub Runtime);
 
 impl GlobalQueryRuntime {
@@ -43,6 +45,23 @@ impl GlobalIORuntime {
     }
 
     pub fn instance() -> Arc<Runtime> {
+        GlobalInstance::get()
+    }
+}
+
+impl GlobalControlRuntime {
+    #[inline(always)]
+    pub fn runtime(self: &Arc<Self>) -> &Runtime {
+        &self.0
+    }
+
+    pub fn init() -> Result<()> {
+        let rt = Runtime::with_worker_threads(2, Some("control-worker".to_owned()))?;
+        GlobalInstance::set(Arc::new(GlobalControlRuntime(rt)));
+        Ok(())
+    }
+
+    pub fn instance() -> Arc<GlobalControlRuntime> {
         GlobalInstance::get()
     }
 }
