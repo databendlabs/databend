@@ -190,9 +190,6 @@ pub struct BindContext {
 
     pub expr_context: ExprContext,
 
-    /// Resolve GROUP BY names to input columns before SELECT aliases.
-    pub group_by_column_first: bool,
-
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
@@ -273,7 +270,6 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            group_by_column_first: false,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         }
@@ -321,7 +317,6 @@ impl BindContext {
             vector_index_map: Box::default(),
             allow_virtual_column: parent.allow_virtual_column,
             expr_context: ExprContext::default(),
-            group_by_column_first: parent.group_by_column_first,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         })
@@ -334,7 +329,6 @@ impl BindContext {
         bind_context.cte_context = self.cte_context.clone();
         bind_context.udf_cache = self.udf_cache.clone();
         bind_context.binding_views = self.binding_views.clone();
-        bind_context.group_by_column_first = self.group_by_column_first;
         bind_context
     }
 
@@ -431,38 +425,6 @@ impl BindContext {
                 column_case_sensitive,
                 &mut result,
             );
-        } else if self.expr_context == ExprContext::GroupClaue && self.group_by_column_first {
-            Self::search_bound_columns_in_context(
-                self,
-                database,
-                table,
-                column,
-                column_case_sensitive,
-                &mut result,
-            );
-
-            if result.is_empty() {
-                for (alias, scalar) in available_aliases {
-                    if database.is_none() && table.is_none() && name == alias {
-                        result.push(NameResolutionResult::Alias {
-                            alias: alias.clone(),
-                            scalar: scalar.clone(),
-                        });
-                    }
-                }
-            }
-
-            if result.is_empty()
-                && let Some(ref parent) = self.parent
-            {
-                parent.search_bound_columns_recursively(
-                    database,
-                    table,
-                    column,
-                    column_case_sensitive,
-                    &mut result,
-                );
-            }
         } else if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && name == alias {

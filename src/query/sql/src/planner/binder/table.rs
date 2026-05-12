@@ -198,7 +198,6 @@ impl Binder {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            group_by_column_first: bind_context.group_by_column_first,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };

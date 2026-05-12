@@ -537,18 +537,6 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s",
         },
         SqlTestCase {
-            name: "group_by_complex_expr_does_not_shadow_column_with_same_name_alias",
-            description: "A complex GROUP BY expression should resolve internal column refs from FROM, not from a same-name SELECT alias.",
-            setup_sqls: &["CREATE TABLE t(type Int32)"],
-            sql: "SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END",
-        },
-        SqlTestCase {
-            name: "group_by_complex_expr_falls_back_to_select_alias",
-            description: "A complex GROUP BY expression should still resolve SELECT aliases when no input column matches.",
-            setup_sqls: &["CREATE TABLE t(i Int32)"],
-            sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)",
-        },
-        SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
@@ -688,6 +676,1078 @@ async fn test_binder_enable_group_by_column_first_setting() -> Result<()> {
     );
 
     Ok(())
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum AliasUseSite {
+    Select,
+    Where,
+    GroupBy,
+    Having,
+    Qualify,
+    OrderBy,
+    AggregateArgument,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum AliasKind {
+    Scalar,
+    Aggregate,
+    Window,
+    Srf,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum AliasReferenceShape {
+    SimpleName,
+    ComplexExpression,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum AliasNameRelation {
+    ConflictsWithInputColumn,
+    NoInputColumn,
+}
+
+type AliasMatrixDimension = (
+    AliasUseSite,
+    AliasKind,
+    AliasReferenceShape,
+    AliasNameRelation,
+    bool,
+);
+
+#[derive(Clone, Copy, Debug)]
+enum MatrixExpectation {
+    PlanOk,
+    PlanContains(&'static [&'static str]),
+    ErrorContains(&'static str),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct AliasMatrixRun {
+    enable_group_by_column_first: bool,
+    sql: &'static str,
+    expectation: MatrixExpectation,
+}
+
+#[derive(Debug)]
+struct AliasMatrixCase {
+    name: &'static str,
+    setup_sqls: &'static [&'static str],
+    runs: Vec<AliasMatrixRun>,
+    covered_dimensions: Vec<AliasMatrixDimension>,
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_alias_resolution_matrix() -> Result<()> {
+    let mut cases = Vec::<AliasMatrixCase>::new();
+    for dimension in alias_matrix_dimensions() {
+        let case = alias_matrix_case(dimension);
+        assert!(
+            case.covered_dimensions.contains(&dimension),
+            "alias matrix case {} does not declare coverage for {:?}",
+            case.name,
+            dimension,
+        );
+        if !cases.iter().any(|existing| existing.name == case.name) {
+            cases.push(case);
+        }
+    }
+
+    for case in cases {
+        let test_case = SqlTestCase {
+            name: case.name,
+            description: "",
+            setup_sqls: case.setup_sqls,
+            sql: case.runs[0].sql,
+        };
+        let ctx = setup_context(&test_case).await?;
+        for run in case.runs {
+            ctx.get_settings().set_setting(
+                "enable_group_by_column_first".to_string(),
+                if run.enable_group_by_column_first {
+                    "1"
+                } else {
+                    "0"
+                }
+                .to_string(),
+            )?;
+
+            let result = ctx.bind_sql(run.sql).await;
+            match (&run.expectation, result) {
+                (MatrixExpectation::PlanOk, Ok(_)) => {}
+                (MatrixExpectation::PlanContains(expected), Ok(plan)) => {
+                    let plan = plan.format_indent(Default::default())?;
+                    for fragment in *expected {
+                        assert!(
+                            plan.contains(fragment),
+                            "matrix case {} expected plan fragment `{fragment}`:\n{plan}",
+                            case.name,
+                        );
+                    }
+                }
+                (MatrixExpectation::ErrorContains(expected), Err(err)) => {
+                    assert!(
+                        err.message().contains(expected),
+                        "matrix case {} expected error fragment `{expected}`, got: {}",
+                        case.name,
+                        err.message(),
+                    );
+                }
+                (MatrixExpectation::PlanOk | MatrixExpectation::PlanContains(_), Err(err)) => {
+                    panic!(
+                        "matrix case {} expected plan, got error: {err:?}",
+                        case.name
+                    );
+                }
+                (MatrixExpectation::ErrorContains(expected), Ok(plan)) => {
+                    let plan = plan.format_indent(Default::default())?;
+                    panic!(
+                        "matrix case {} expected error fragment `{expected}`, got plan:\n{plan}",
+                        case.name
+                    );
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn alias_matrix_dimensions() -> [AliasMatrixDimension; 28] {
+    [
+        alias_matrix_dimension(
+            AliasUseSite::Select,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Select,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Where,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Where,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Where,
+            AliasKind::Srf,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Having,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Qualify,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Qualify,
+            AliasKind::Window,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::Qualify,
+            AliasKind::Srf,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::OrderBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::OrderBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::OrderBy,
+            AliasKind::Window,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::AggregateArgument,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::AggregateArgument,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            true,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            true,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            true,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            true,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Srf,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ),
+        alias_matrix_dimension(
+            AliasUseSite::GroupBy,
+            AliasKind::Srf,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ),
+    ]
+}
+
+const fn alias_matrix_dimension(
+    use_site: AliasUseSite,
+    alias_kind: AliasKind,
+    reference_shape: AliasReferenceShape,
+    name_relation: AliasNameRelation,
+    enable_group_by_column_first: bool,
+) -> AliasMatrixDimension {
+    match (
+        use_site,
+        alias_kind,
+        reference_shape,
+        name_relation,
+        enable_group_by_column_first,
+    ) {
+        (
+            AliasUseSite::Select,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn | AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::Where,
+            AliasKind::Scalar | AliasKind::Aggregate | AliasKind::Srf,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::Having,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::Qualify,
+            AliasKind::Aggregate | AliasKind::Window | AliasKind::Srf,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::OrderBy,
+            AliasKind::Scalar | AliasKind::Aggregate | AliasKind::Window,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::AggregateArgument,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn | AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName | AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn | AliasNameRelation::NoInputColumn,
+            false | true,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::SimpleName | AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn | AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Srf,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn | AliasNameRelation::NoInputColumn,
+            false,
+        ) => (
+            use_site,
+            alias_kind,
+            reference_shape,
+            name_relation,
+            enable_group_by_column_first,
+        ),
+        _ => panic!("unsupported alias matrix dimension"),
+    }
+}
+
+fn alias_matrix_case(dimension: AliasMatrixDimension) -> AliasMatrixCase {
+    match dimension {
+        (
+            AliasUseSite::Select,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "select_scalar_alias_conflict_prefers_input_column",
+            setup_sqls: &["CREATE TABLE t(i Int32, x Int32)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT i AS x, x + 1 FROM t",
+                expectation: MatrixExpectation::PlanContains(&["plus(t.x (#1), 1)"]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::Select,
+                AliasKind::Scalar,
+                AliasReferenceShape::ComplexExpression,
+                AliasNameRelation::ConflictsWithInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::Select,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::OrderBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "select_and_order_by_scalar_alias_in_expression",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT number + 1 AS s, s + 1 AS next FROM t ORDER BY s + 1",
+                expectation: MatrixExpectation::PlanOk,
+            }],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::Select,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::OrderBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::Where,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "where_scalar_alias_in_expression",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT number + 1 AS s FROM t WHERE s > 1",
+                expectation: MatrixExpectation::PlanOk,
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::Where,
+                AliasKind::Scalar,
+                AliasReferenceShape::ComplexExpression,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::Where,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "where_rejects_aggregate_alias",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT sum(number) AS s FROM t WHERE s > 0",
+                expectation: MatrixExpectation::ErrorContains(
+                    "Where clause can't contain aggregate or window functions",
+                ),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::Where,
+                AliasKind::Aggregate,
+                AliasReferenceShape::ComplexExpression,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::Where,
+            AliasKind::Srf,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::Qualify,
+            AliasKind::Srf,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "where_and_qualify_srf_alias_in_expression",
+            setup_sqls: &[],
+            runs: vec![
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT unnest([1, 2, 3]) AS u WHERE u = 1",
+                    expectation: MatrixExpectation::PlanOk,
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT unnest([1, 2, 3]) AS u QUALIFY u = 1",
+                    expectation: MatrixExpectation::PlanOk,
+                },
+            ],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::Where,
+                    AliasKind::Srf,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::Qualify,
+                    AliasKind::Srf,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::Having,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::OrderBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "having_and_order_by_aggregate_alias_in_expression",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT sum(number) AS s FROM t HAVING s > 0 ORDER BY s + 1",
+                expectation: MatrixExpectation::PlanOk,
+            }],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::Having,
+                    AliasKind::Aggregate,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::OrderBy,
+                    AliasKind::Aggregate,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::Qualify,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "qualify_rejects_aggregate_alias",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT sum(number) AS s FROM t QUALIFY s > 0",
+                expectation: MatrixExpectation::ErrorContains(
+                    "Qualify clause must not contain aggregate functions",
+                ),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::Qualify,
+                AliasKind::Aggregate,
+                AliasReferenceShape::ComplexExpression,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::Qualify,
+            AliasKind::Window,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::OrderBy,
+            AliasKind::Window,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "qualify_and_order_by_window_alias_in_expression",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1 ORDER BY rn + 1",
+                expectation: MatrixExpectation::PlanOk,
+            }],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::Qualify,
+                    AliasKind::Window,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::OrderBy,
+                    AliasKind::Window,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::AggregateArgument,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "aggregate_argument_prefers_base_column_over_select_alias",
+            setup_sqls: &["CREATE TABLE t(a UInt64, c2 UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT a AS c2, sum(c2) FROM t GROUP BY a",
+                expectation: MatrixExpectation::PlanContains(&["sum(t.c2 (#1))"]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::AggregateArgument,
+                AliasKind::Scalar,
+                AliasReferenceShape::SimpleName,
+                AliasNameRelation::ConflictsWithInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::AggregateArgument,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "aggregate_argument_falls_back_to_select_alias",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3",
+                expectation: MatrixExpectation::PlanContains(&["sum(number % 3 (#1))"]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::AggregateArgument,
+                AliasKind::Scalar,
+                AliasReferenceShape::SimpleName,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            true,
+        ) => AliasMatrixCase {
+            name: "group_by_scalar_simple_conflict_setting_switch",
+            setup_sqls: &["CREATE TABLE t(i Int32, x Int32)"],
+            runs: vec![
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT i AS x, count(*) FROM t GROUP BY x",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [t.i (#0) AS (#0)]",
+                    ]),
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: true,
+                    sql: "SELECT i AS x, count(*) FROM t GROUP BY x",
+                    expectation: MatrixExpectation::ErrorContains(
+                        "must appear in the GROUP BY clause or be used in an aggregate function",
+                    ),
+                },
+            ],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::SimpleName,
+                    AliasNameRelation::ConflictsWithInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::SimpleName,
+                    AliasNameRelation::ConflictsWithInputColumn,
+                    true,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            true,
+        ) => AliasMatrixCase {
+            name: "group_by_scalar_simple_no_conflict_falls_back_to_alias",
+            setup_sqls: &["CREATE TABLE t(i Int32, x Int32)"],
+            runs: vec![
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT i AS k, count(*) FROM t GROUP BY k",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [t.i (#0) AS (#0)]",
+                    ]),
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: true,
+                    sql: "SELECT i AS k, count(*) FROM t GROUP BY k",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [t.i (#0) AS (#0)]",
+                    ]),
+                },
+            ],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::SimpleName,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::SimpleName,
+                    AliasNameRelation::NoInputColumn,
+                    true,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            true,
+        ) => AliasMatrixCase {
+            name: "group_by_scalar_complex_conflict_prefers_input_column",
+            setup_sqls: &["CREATE TABLE t(type Int32)"],
+            runs: vec![
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [if(eq(t.type (#0), 0), 'A', 'B') AS",
+                    ]),
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: true,
+                    sql: "SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [if(eq(t.type (#0), 0), 'A', 'B') AS",
+                    ]),
+                },
+            ],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::ConflictsWithInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::ConflictsWithInputColumn,
+                    true,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        )
+        | (
+            AliasUseSite::GroupBy,
+            AliasKind::Scalar,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            true,
+        ) => AliasMatrixCase {
+            name: "group_by_scalar_complex_uses_prior_simple_alias_group_item",
+            setup_sqls: &["CREATE TABLE t(i Int32)"],
+            runs: vec![
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [t.i (#0) AS (#0)]",
+                        "abs(t.i (#0)) AS (#3)",
+                    ]),
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: true,
+                    sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)",
+                    expectation: MatrixExpectation::PlanContains(&[
+                        "group items: [t.i (#0) AS (#0)]",
+                        "abs(t.i (#0)) AS (#3)",
+                    ]),
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: false,
+                    sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY abs(k)",
+                    expectation: MatrixExpectation::ErrorContains("column k doesn't exist"),
+                },
+                AliasMatrixRun {
+                    enable_group_by_column_first: true,
+                    sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY abs(k)",
+                    expectation: MatrixExpectation::ErrorContains("column k doesn't exist"),
+                },
+            ],
+            covered_dimensions: vec![
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    false,
+                ),
+                alias_matrix_dimension(
+                    AliasUseSite::GroupBy,
+                    AliasKind::Scalar,
+                    AliasReferenceShape::ComplexExpression,
+                    AliasNameRelation::NoInputColumn,
+                    true,
+                ),
+            ],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "group_by_aggregate_simple_conflict_prefers_input_column",
+            setup_sqls: &[],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x",
+                expectation: MatrixExpectation::PlanContains(&["group items: [x (#2) AS (#2)]"]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::GroupBy,
+                AliasKind::Aggregate,
+                AliasReferenceShape::SimpleName,
+                AliasNameRelation::ConflictsWithInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "group_by_aggregate_simple_no_conflict_rejects_alias_group_item",
+            setup_sqls: &["CREATE TABLE t(i Int32)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT count(*) AS c FROM t GROUP BY c",
+                expectation: MatrixExpectation::ErrorContains(
+                    "GROUP BY items can't contain aggregate functions",
+                ),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::GroupBy,
+                AliasKind::Aggregate,
+                AliasReferenceShape::SimpleName,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "group_by_aggregate_complex_conflict_prefers_input_column",
+            setup_sqls: &[],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x + 1",
+                expectation: MatrixExpectation::PlanContains(&["group items: [plus(x (#2), 1) AS"]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::GroupBy,
+                AliasKind::Aggregate,
+                AliasReferenceShape::ComplexExpression,
+                AliasNameRelation::ConflictsWithInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Aggregate,
+            AliasReferenceShape::ComplexExpression,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "group_by_aggregate_complex_no_conflict_rejects_alias_group_item",
+            setup_sqls: &["CREATE TABLE t(i Int32)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT count(*) AS c FROM t GROUP BY c + 1",
+                expectation: MatrixExpectation::ErrorContains("column c doesn't exist"),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::GroupBy,
+                AliasKind::Aggregate,
+                AliasReferenceShape::ComplexExpression,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Srf,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::ConflictsWithInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "group_by_srf_simple_conflict_prefers_input_column",
+            setup_sqls: &["CREATE TABLE t_str(col1 String, col2 String)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2",
+                expectation: MatrixExpectation::PlanContains(&[
+                    "group items: [t_str.col1 (#0) AS (#0), t_str.col2 (#1) AS (#1)]",
+                ]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::GroupBy,
+                AliasKind::Srf,
+                AliasReferenceShape::SimpleName,
+                AliasNameRelation::ConflictsWithInputColumn,
+                false,
+            )],
+        },
+        (
+            AliasUseSite::GroupBy,
+            AliasKind::Srf,
+            AliasReferenceShape::SimpleName,
+            AliasNameRelation::NoInputColumn,
+            false,
+        ) => AliasMatrixCase {
+            name: "group_by_srf_simple_no_conflict_falls_back_to_alias",
+            setup_sqls: &["CREATE TABLE t_str(col1 String, col2 String)"],
+            runs: vec![AliasMatrixRun {
+                enable_group_by_column_first: false,
+                sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3",
+                expectation: MatrixExpectation::PlanContains(&[
+                    "get(unnest(split(t.col2 (#1), ',')) (#2)) AS (#3)",
+                ]),
+            }],
+            covered_dimensions: vec![alias_matrix_dimension(
+                AliasUseSite::GroupBy,
+                AliasKind::Srf,
+                AliasReferenceShape::SimpleName,
+                AliasNameRelation::NoInputColumn,
+                false,
+            )],
+        },
+        _ => panic!("unmapped alias matrix dimension: {dimension:?}"),
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

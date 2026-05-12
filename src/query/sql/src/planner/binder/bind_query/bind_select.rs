@@ -112,6 +112,24 @@ struct SelectGlobalView {
     order_by: Vec<SelectClauseFact>,
 }
 
+impl SelectGlobalView {
+    fn where_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.semantic_alias.all_aliases()
+    }
+
+    fn having_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.rewritten_alias.all_aliases()
+    }
+
+    fn qualify_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.semantic_alias.all_aliases()
+    }
+
+    fn order_by_aliases(&self) -> &[(String, ScalarExpr)] {
+        self.semantic_alias.all_aliases()
+    }
+}
+
 struct SelectPreparation<'a> {
     s_expr: SExpr,
     from_context: BindContext,
@@ -183,8 +201,9 @@ impl Binder {
         // after SRF analysis. WHERE / QUALIFY still need the pre-aggregate and
         // pre-window expressions behind aliases, but SRF aliases must already point
         // at the ProjectSet-produced columns instead of expanding back to raw SRFs.
-        let mut semantic_alias_catalog = select_list.alias_catalog();
-        let group_by_aliases = semantic_alias_catalog.bindings_for(ExprContext::GroupClaue);
+        let mut semantic_alias = select_list.alias_catalog();
+        let group_by_aliases = semantic_alias
+            .group_by_bindings(self.ctx.get_settings().get_enable_group_by_column_first()?);
 
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
@@ -199,7 +218,7 @@ impl Binder {
             stmt.qualify.as_ref(),
             order_by,
         )?;
-        semantic_alias_catalog.analyze_aggregate_prepass_exprs(
+        semantic_alias.analyze_aggregate_prepass_exprs(
             &select_list,
             &self.name_resolution_ctx,
             &udaf_names,
@@ -211,7 +230,7 @@ impl Binder {
             aggregate_prepass_inputs,
         } = self.build_select_clause_facts(
             &udaf_names,
-            &semantic_alias_catalog,
+            &semantic_alias,
             stmt.having.as_ref(),
             stmt.qualify.as_ref(),
             order_by,
@@ -219,12 +238,12 @@ impl Binder {
 
         let aggregate_prepass_facts = self.derive_aggregate_prepass_facts(
             &udaf_names,
-            &semantic_alias_catalog,
+            &semantic_alias,
             aggregate_prepass_inputs.into_iter(),
         );
         self.bind_aggregate_prepass_facts(
             &mut from_context,
-            semantic_alias_catalog.all_aliases(),
+            semantic_alias.all_aliases(),
             &aggregate_prepass_facts,
         )?;
 
@@ -241,7 +260,7 @@ impl Binder {
         );
 
         let global_view = SelectGlobalView {
-            semantic_alias: semantic_alias_catalog,
+            semantic_alias,
             rewritten_alias: select_list.alias_catalog(),
             qualify,
             order_by,
@@ -283,12 +302,8 @@ impl Binder {
         // Bind WHERE after select-list analysis so aliases are available, but
         // resolve them against the original pre-rewrite select-item semantics.
         let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self.bind_where(
-                &mut from_context,
-                global_view.semantic_alias.all_aliases(),
-                expr,
-                s_expr,
-            )?;
+            let (new_expr, scalar) =
+                self.bind_where(&mut from_context, global_view.where_aliases(), expr, s_expr)?;
             s_expr = new_expr;
             Some(scalar)
         } else {
@@ -301,7 +316,7 @@ impl Binder {
         let having = if let Some(having) = &stmt.having {
             Some(self.analyze_aggregate_having(
                 &mut from_context,
-                global_view.rewritten_alias.all_aliases(),
+                global_view.having_aliases(),
                 having,
             )?)
         } else {
@@ -311,7 +326,7 @@ impl Binder {
         let qualify = if let Some(qualify) = global_view.qualify.as_ref() {
             Some(self.analyze_window_qualify(
                 &mut from_context,
-                global_view.semantic_alias.all_aliases(),
+                global_view.qualify_aliases(),
                 &qualify.expr_info.ast,
                 qualify.contains_or_references_window(),
             )?)
@@ -326,7 +341,7 @@ impl Binder {
             // snapshot used by the clause prepass. This avoids binding against
             // already-rewritten select-item scalars when a later clause only
             // needs the original alias semantics.
-            global_view.semantic_alias.all_aliases(),
+            global_view.order_by_aliases(),
             Some(&global_view.order_by),
             order_by,
             stmt.distinct,
