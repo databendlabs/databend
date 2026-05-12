@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use databend_common_ast::Span;
-use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionKind;
@@ -32,11 +32,11 @@ use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn set_returning_function(
+    pub(super) fn try_lower_srf(
         &mut self,
         span: Span,
         func_name: &str,
-        args: &'a [Expr],
+        func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
         if !BUILTIN_FUNCTIONS
             .get_property(func_name)
@@ -60,7 +60,7 @@ impl<'a> CoreExprArena<'a> {
             return Ok(None);
         };
 
-        let args = self.lower_expr_args(args)?;
+        let args = self.lower_expr_args(&func.args)?;
         Ok(Some(self.alloc(CoreExpr::SetReturningFunction {
             span,
             func_name,

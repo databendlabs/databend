@@ -44,6 +44,21 @@ use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
 impl<'a> CoreExprArena<'a> {
+    pub(super) fn ensure_within_group_function_call(
+        &self,
+        span: Span,
+        func_name: &str,
+        has_order_by: bool,
+    ) -> Result<()> {
+        if has_order_by && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&Ascii::new(func_name)) {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        Ok(())
+    }
+
     pub(super) fn lower_aggregate_function_call(
         &mut self,
         display_name: String,

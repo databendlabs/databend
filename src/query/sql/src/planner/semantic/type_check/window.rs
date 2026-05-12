@@ -86,6 +86,35 @@ pub(super) enum CoreWindowFrameBound {
 }
 
 impl<'a> CoreExprArena<'a> {
+    pub(super) fn ensure_window_not_in_lambda(&self, span: Span, has_window: bool) -> Result<()> {
+        if self.in_lambda_function && has_window {
+            return Err(ErrorCode::SemanticError(
+                "window functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
+        Ok(())
+    }
+
+    pub(super) fn ensure_window_function_call(
+        &self,
+        span: Span,
+        func_name: &str,
+        has_window: bool,
+        is_aggregate_function: bool,
+    ) -> Result<()> {
+        if has_window
+            && !is_aggregate_function
+            && !GENERAL_WINDOW_FUNCTIONS.contains(&Ascii::new(func_name))
+        {
+            return Err(ErrorCode::SemanticError(
+                "only window and aggregate functions allowed in window syntax",
+            )
+            .set_span(span));
+        }
+        Ok(())
+    }
+
     pub(super) fn lower_general_window_function_call(
         &mut self,
         display_name: String,

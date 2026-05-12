@@ -20,6 +20,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -60,11 +61,11 @@ pub(super) enum CoreSearchFunction {
 }
 
 impl<'a> CoreExprArena<'a> {
-    pub(super) fn search_function(
+    pub(super) fn try_lower_search(
         &mut self,
         span: Span,
         func_name: &str,
-        args: &'a [Expr],
+        func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
         let func_name = Ascii::new(func_name);
         let Some(func_name) = GENERAL_SEARCH_FUNCTIONS
@@ -78,20 +79,20 @@ impl<'a> CoreExprArena<'a> {
 
         let function = match func_name {
             "score" => {
-                if !args.is_empty() {
+                if !func.args.is_empty() {
                     return Err(ErrorCode::SemanticError(format!(
                         "invalid arguments for search function, score expects 0 argument, but got {}",
-                        args.len()
+                        func.args.len()
                     ))
                     .set_span(span));
                 }
                 CoreSearchFunction::Score
             }
             "match" => CoreSearchFunction::Match {
-                args: self.lower_display_expr_args(args)?,
+                args: self.lower_display_expr_args(&func.args)?,
             },
             "query" => CoreSearchFunction::Query {
-                args: self.lower_display_expr_args(args)?,
+                args: self.lower_display_expr_args(&func.args)?,
             },
             _ => {
                 return Err(ErrorCode::Internal(format!(

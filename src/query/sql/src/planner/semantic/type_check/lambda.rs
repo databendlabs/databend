@@ -17,6 +17,7 @@ use std::mem;
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Lambda;
 use databend_common_exception::ErrorCode;
@@ -54,6 +55,35 @@ use crate::plans::ScalarExpr;
 use crate::plans::Visitor;
 
 impl<'a> CoreExprArena<'a> {
+    pub(super) fn try_lower_lambda(
+        &mut self,
+        span: Span,
+        func_name: &str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        let uni_case_func_name = Ascii::new(func_name);
+        if func.lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
+            return Err(
+                ErrorCode::SemanticError("only lambda functions allowed in lambda syntax")
+                    .set_span(span),
+            );
+        }
+
+        let Some(func_name) = general_lambda_function_name(func_name) else {
+            return Ok(None);
+        };
+        let Some(lambda) = func.lambda.as_ref() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "function {func_name} must have a lambda expression",
+            ))
+            .set_span(span));
+        };
+
+        Ok(Some(
+            self.lambda_function(span, func_name, &func.args, lambda)?,
+        ))
+    }
+
     pub(super) fn lambda_function(
         &mut self,
         span: Span,

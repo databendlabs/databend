@@ -16,6 +16,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::types::DataType;
@@ -68,11 +69,11 @@ impl<'a> CoreExprArena<'a> {
         })
     }
 
-    pub(super) fn async_function(
+    pub(super) fn try_lower_async_function(
         &mut self,
         span: Span,
         func_name: &str,
-        args: &'a [Expr],
+        func: &'a ASTFunctionCall,
     ) -> Result<Option<CoreExprId>> {
         let func_name = Ascii::new(func_name);
         let Some(func_name) = ASYNC_FUNCTIONS
@@ -86,7 +87,7 @@ impl<'a> CoreExprArena<'a> {
 
         let function = match func_name {
             "nextval" => {
-                let [Expr::ColumnRef { column, .. }] = args else {
+                let [Expr::ColumnRef { column, .. }] = func.args.as_slice() else {
                     return Err(ErrorCode::SemanticError(
                         "nextval function argument don't support expr".to_string(),
                     )
@@ -95,7 +96,7 @@ impl<'a> CoreExprArena<'a> {
                 CoreAsyncFunction::NextVal { sequence: column }
             }
             "dict_get" => {
-                let [Expr::ColumnRef { column, .. }, field, key] = args else {
+                let [Expr::ColumnRef { column, .. }, field, key] = func.args.as_slice() else {
                     return Err(ErrorCode::SemanticError(
                         "async function can only used as column".to_string(),
                     )
@@ -107,7 +108,7 @@ impl<'a> CoreExprArena<'a> {
                     key: self.lower_async_function_arg(key)?,
                 })
             }
-            "read_file" => match args {
+            "read_file" => match func.args.as_slice() {
                 [location] => CoreAsyncFunction::ReadFile(CoreReadFileFunction {
                     stage: None,
                     location: self.lower_async_function_arg(location)?,
@@ -119,7 +120,7 @@ impl<'a> CoreExprArena<'a> {
                 _ => {
                     return Err(ErrorCode::SemanticError(format!(
                         "read_file function need one or two arguments but got {}",
-                        args.len()
+                        func.args.len()
                     ))
                     .set_span(span));
                 }

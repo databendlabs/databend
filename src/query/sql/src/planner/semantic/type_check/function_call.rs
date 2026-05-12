@@ -17,16 +17,12 @@ use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_functions::GENERAL_LAMBDA_FUNCTIONS;
-use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
-use databend_common_functions::GENERAL_WITHIN_GROUP_FUNCTIONS;
 use databend_common_functions::is_builtin_function;
 use unicase::Ascii;
 
 use super::CoreExprArena;
 use super::CoreExprId;
 use super::TypeChecker;
-use super::lambda::general_lambda_function_name;
 use super::rewrite_function::rewrite_function_name;
 use super::scalar_function::builtin_scalar_function_name;
 use super::window::general_window_function_name;
@@ -49,12 +45,7 @@ impl<'a> CoreExprArena<'a> {
             lambda,
         } = func;
         let func_name = name.name.to_ascii_lowercase();
-        if self.in_lambda_function && window.is_some() {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
+        self.ensure_window_not_in_lambda(span, window.is_some())?;
         if !is_builtin_function(&func_name)
             && !TypeChecker::<()>::all_special_functions().contains(&Ascii::new(func_name.as_str()))
             && rewrite_function_name(&func_name).is_none()
@@ -82,48 +73,26 @@ impl<'a> CoreExprArena<'a> {
             );
         }
 
-        let uni_case_func_name = Ascii::new(func_name.as_str());
-        if !order_by.is_empty() && !GENERAL_WITHIN_GROUP_FUNCTIONS.contains(&uni_case_func_name) {
-            return Err(ErrorCode::SemanticError(
-                "only aggregate functions allowed in within group syntax",
-            )
-            .set_span(span));
-        }
-        if window.is_some()
-            && !self.aggregate_function_factory.contains(&func_name)
-            && !GENERAL_WINDOW_FUNCTIONS.contains(&uni_case_func_name)
-        {
-            return Err(ErrorCode::SemanticError(
-                "only window and aggregate functions allowed in window syntax",
-            )
-            .set_span(span));
-        }
-        if lambda.is_some() && !GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
-            return Err(
-                ErrorCode::SemanticError("only lambda functions allowed in lambda syntax")
-                    .set_span(span),
-            );
-        }
-
-        if let Some(func_name) = general_lambda_function_name(&func_name) {
-            return match lambda.as_ref() {
-                Some(lambda) => self.lambda_function(span, func_name, args, lambda),
-                None => Err(ErrorCode::SemanticError(format!(
-                    "function {func_name} must have a lambda expression",
-                ))
-                .set_span(span)),
-            };
-        }
-
-        if let Some(expr) = self.search_function(span, &func_name, args)? {
+        self.ensure_within_group_function_call(span, &func_name, !order_by.is_empty())?;
+        self.ensure_window_function_call(
+            span,
+            &func_name,
+            window.is_some(),
+            self.aggregate_function_factory.contains(&func_name),
+        )?;
+        if let Some(expr) = self.try_lower_lambda(span, &func_name, func)? {
             return Ok(expr);
         }
 
-        if let Some(expr) = self.async_function(span, &func_name, args)? {
+        if let Some(expr) = self.try_lower_search(span, &func_name, func)? {
             return Ok(expr);
         }
 
-        if let Some(expr) = self.set_returning_function(span, &func_name, args)? {
+        if let Some(expr) = self.try_lower_async_function(span, &func_name, func)? {
+            return Ok(expr);
+        }
+
+        if let Some(expr) = self.try_lower_srf(span, &func_name, func)? {
             return Ok(expr);
         }
 
