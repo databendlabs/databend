@@ -9,23 +9,23 @@ db=${1:-"tpch_test"}
 force=${2:-"1"}
 
 if [ "$force" == "0" ]; then
-    table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'nation'" | $BENDSQL_CLIENT_CONNECT --output tsv --quote-style never)
-    table_exists=$(echo "$table_exists" | tr -d '\r\n[:space:]')
-    if [ -n "$table_exists" ] && [ "$table_exists" -gt 0 ]; then
-        res=$(echo "SELECT COUNT() from ${db}.nation" | $BENDSQL_CLIENT_CONNECT --output tsv --quote-style never)
-        res=$(echo "$res" | tr -d '\r\n[:space:]')
-        if [ -n "$res" ] && [ "$res" -gt 0 ]; then
-            echo "Table $db.nation already exists and is not empty, size: ${res}. Use force=1 to override it."
-            exit 0
-        fi
-    fi
+	table_exists=$(echo "SELECT COUNT() FROM system.tables WHERE database = '${db}' AND name = 'nation'" | $BENDSQL_CLIENT_CONNECT --output tsv)
+	table_exists=$(echo "$table_exists" | tr -d '\r\n[:space:]')
+	if [ -n "$table_exists" ] && [ "$table_exists" -gt 0 ]; then
+		res=$(echo "SELECT COUNT() from ${db}.nation" | $BENDSQL_CLIENT_CONNECT --output tsv)
+		res=$(echo "$res" | tr -d '\r\n[:space:]')
+		if [ -n "$res" ] && [ "$res" -gt 0 ]; then
+			echo "Table $db.nation already exists and is not empty, size: ${res}. Use force=1 to override it."
+			exit 0
+		fi
+	fi
 fi
 
 echo "DROP DATABASE if EXISTS ${db}" | $BENDSQL_CLIENT_CONNECT
 echo "CREATE DATABASE ${db}" | $BENDSQL_CLIENT_CONNECT
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-    echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
+	echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
 done
 
 # create tpch tables
@@ -132,10 +132,9 @@ stmt "create stage s1 url='fs:///tmp/tpch_1/'"
 
 # insert data to tables
 for t in customer lineitem nation orders partsupp part region supplier; do
-    echo "$t"
-   	query "copy into ${db}.$t from @s1/$t.csv force = true file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')"
-    query "analyze table $db.$t"
+	echo "$t"
+	query "copy into ${db}.$t from @s1/$t.csv force = true file_format = (type = CSV skip_header = 1 field_delimiter = '|' record_delimiter = '\n')"
+	query "analyze table $db.$t"
 done
-
 
 # rm -rf /tmp/tpch_1

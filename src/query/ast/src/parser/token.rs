@@ -1974,7 +1974,6 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
-            | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
             // | TokenKind::OVERLAPS
