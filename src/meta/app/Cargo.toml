@@ -42,7 +42,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 
 [package.metadata.cargo-machete]
-ignored = ["num-traits"]
+ignored = ["num-traits", "structkey"]
 
 [lints]
 workspace = true

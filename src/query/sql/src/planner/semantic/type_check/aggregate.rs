@@ -248,7 +248,7 @@ where A: TypeCheckAdapter
             self.bind_context.expr_context = original_context;
         }
         self.in_aggregate_function = false;
-        let (arguments, arg_types) = arguments_result?;
+        let (mut arguments, mut arg_types) = arguments_result?;
 
         self.try_widen_sum_decimal_argument(func_name, &mut arguments, &mut arg_types)?;
 
@@ -382,7 +382,7 @@ where A: TypeCheckAdapter
     ) -> Result<()> {
         if !func_name.eq_ignore_ascii_case("sum")
             || arguments.len() != 1
-            || !self.ctx.get_settings().get_enable_decimal_sum_widening()?
+            || !self.adapter.settings().get_enable_decimal_sum_widening()?
         {
             return Ok(());
         }
