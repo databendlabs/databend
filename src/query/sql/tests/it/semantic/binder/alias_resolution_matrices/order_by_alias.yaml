@@ -1,0 +1,94 @@
+matrix: order_by_alias
+local_dimensions:
+  relation:
+    input-conflict: "0001"
+    no-input: "0002"
+  ambiguity:
+    duplicate-select-alias: "0010"
+  syntax:
+    positional-lookup: "0000"
+regions:
+  - description: ORDER BY bare-name lookup prefers SELECT aliases over conflicting input columns
+    main:
+      consumers: [O0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      relation: [input-conflict]
+    cases:
+      - key: O0N0S1_0001
+        name: order_by_scalar_alias_conflict_prefers_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, x Int32)"
+        runs:
+          - sql: "SELECT i AS x FROM t ORDER BY x"
+  - description: ORDER BY aggregate-alias lookup distinguishes ordinary alias use from duplicate-alias ambiguity
+    main:
+      consumers: [O0]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      relation: [no-input]
+    cases:
+      - key: O0N0S2_0002
+        name: order_by_aggregate_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) AS s FROM t ORDER BY s"
+  - description: duplicate SELECT aggregate aliases make ORDER BY bare-name lookup ambiguous
+    main:
+      consumers: [O0]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      ambiguity: [duplicate-select-alias]
+    cases:
+      - key: O0N0S2_0010
+        name: order_by_duplicate_aggregate_alias_is_ambiguous
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) AS s, max(number) AS s FROM t ORDER BY s"
+  - description: ORDER BY complex expressions can reuse window aliases produced by the SELECT list
+    main:
+      consumers: [O0]
+      name_shapes: [N2]
+      producers: [S3]
+    local:
+      relation: [no-input]
+    cases:
+      - key: O0N2S3_0002
+        name: order_by_window_alias_expression
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t ORDER BY rn + 1"
+  - description: ordinal ORDER BY syntax included to document why it is not alias name lookup
+    main:
+      consumers: [O0]
+      name_shapes: [N4]
+      producers: [N0]
+    local:
+      syntax: [positional-lookup]
+    masks:
+      - when:
+          main:
+            name_shapes: [N4]
+          local:
+            syntax: [positional-lookup]
+        reason: ORDER BY ordinals are positional lookup, not SELECT-alias name resolution
+  - description: ORDER BY main-coordinate closure outside positive coverage obligations
+    excluded: true
+    reason: this coarse region closes ORDER BY main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
+    main:
+      consumers: [O0]
+      name_shapes: [N0, N1, N2, N3, N4, N5]
+      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+    cases:
+      - key: O0N1S1_0000
+        name: order_by_qualified_name_binds_relation_not_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k FROM t ORDER BY t.k"

@@ -70,6 +70,7 @@ pub struct SelectList<'a> {
 pub(crate) struct ClauseAliasBindings {
     preferred: Vec<(String, ScalarExpr)>,
     available: Vec<(String, ScalarExpr)>,
+    prior_group_aliases: Vec<(String, ScalarExpr)>,
     group_by_column_first: bool,
 }
 
@@ -83,11 +84,16 @@ impl ClauseAliasBindings {
         // Only simple GROUP BY items can resolve SELECT aliases directly.
         //
         // `SELECT i AS k FROM t GROUP BY k` may bind `k` as the alias for `i`.
-        // `SELECT i AS k FROM t GROUP BY abs(k)` must not expand `k` from the
-        // SELECT list; it is valid only if `k` is already a bound input/group
-        // column, for example from a prior `GROUP BY k, abs(k)` item.
+        // `SELECT i AS k FROM t GROUP BY abs(k)` must not expand `k` directly
+        // from the SELECT list. A complex item may only reuse an alias that an
+        // earlier simple item has already grouped, for example
+        // `GROUP BY k, abs(k)`.
         if Self::simple_unqualified_column_name(expr).is_none() {
-            return (None, None);
+            return (
+                None,
+                (!self.prior_group_aliases.is_empty())
+                    .then_some(self.prior_group_aliases.as_slice()),
+            );
         }
 
         // With `enable_group_by_column_first`, the first binding pass should
@@ -119,6 +125,18 @@ impl ClauseAliasBindings {
                 alias.eq_ignore_ascii_case(column_name) && scalar == scalar_expr
             })
             .map(|(alias, _)| alias.clone())
+    }
+
+    pub(crate) fn register_group_item_alias(&mut self, alias: String, scalar: ScalarExpr) {
+        if !self
+            .prior_group_aliases
+            .iter()
+            .any(|(existing_alias, existing_scalar)| {
+                existing_alias.eq_ignore_ascii_case(&alias) && existing_scalar == &scalar
+            })
+        {
+            self.prior_group_aliases.push((alias, scalar));
+        }
     }
 
     fn simple_unqualified_column_name(expr: &Expr) -> Option<&str> {

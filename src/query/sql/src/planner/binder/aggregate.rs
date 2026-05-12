@@ -1176,6 +1176,7 @@ impl Binder {
         if collect_grouping_sets {
             grouping_sets.push(Vec::with_capacity(group_by.len()));
         }
+        let mut group_by_aliases = group_by_aliases.clone();
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
@@ -1278,7 +1279,10 @@ impl Binder {
                 bind_context.aggregate_info.group_items.len() - 1
             };
             if let Some(alias) = group_alias {
-                Self::register_group_item_alias_column(bind_context, alias, group_item_index)?;
+                let group_item_scalar = bind_context.aggregate_info.group_items[group_item_index]
+                    .scalar
+                    .clone();
+                group_by_aliases.register_group_item_alias(alias, group_item_scalar);
             }
         }
 
@@ -1346,51 +1350,6 @@ impl Binder {
                 .insert(item.scalar.clone(), i);
         }
         bind_context.aggregate_info.group_items = results;
-
-        Ok(())
-    }
-
-    fn register_group_item_alias_column(
-        bind_context: &mut BindContext,
-        alias: String,
-        group_item_index: usize,
-    ) -> Result<()> {
-        let group_item = &bind_context.aggregate_info.group_items[group_item_index];
-        // Bind the alias name to the same physical group item index. This keeps
-        // later expressions in the same GROUP BY list from creating another
-        // derived group item for an already-grouped expression.
-        let column_binding = if let ScalarExpr::BoundColumnRef(column_ref) = &group_item.scalar {
-            let mut column = column_ref.column.clone();
-            column.column_name = alias;
-            column
-        } else {
-            ColumnBindingBuilder::new(
-                alias,
-                group_item.index,
-                Box::new(group_item.scalar.data_type()?),
-                Visibility::Visible,
-            )
-            .build()
-        };
-        let column_ref: ScalarExpr = BoundColumnRef {
-            span: group_item.scalar.span(),
-            column: column_binding.clone(),
-        }
-        .into();
-        if !bind_context
-            .columns
-            .iter()
-            .any(|column| column == &column_binding)
-        {
-            bind_context.add_column_binding(column_binding);
-        }
-        // Also teach GroupingChecker that `alias` is the same group item. This
-        // matters after binding rewrites `abs(k)` to `abs(<alias column>)`.
-        bind_context
-            .aggregate_info
-            .group_items_map
-            .entry(column_ref)
-            .or_insert(group_item_index);
 
         Ok(())
     }

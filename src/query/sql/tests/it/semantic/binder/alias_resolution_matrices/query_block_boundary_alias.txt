@@ -1,0 +1,85 @@
+=== query_block_boundary_alias__subquery_exposes_select_alias_as_output_name ===
+matrix: query_block_boundary_alias
+key: B0N0S1_0001
+setting: enable_group_by_column_first=0
+sql: SELECT k FROM (SELECT i AS k FROM t) AS q
+status: ok
+EvalScalar
+├── scalars: [t.i (#0) AS (#0)]
+└── EvalScalar
+    ├── scalars: [t.i (#0) AS (#0)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== query_block_boundary_alias__cte_exposes_select_alias_as_output_name ===
+matrix: query_block_boundary_alias
+key: B0N0S1_0002
+setting: enable_group_by_column_first=0
+sql: WITH q AS (SELECT i AS k FROM t) SELECT k FROM q
+status: ok
+EvalScalar
+├── scalars: [t.i (#0) AS (#0)]
+└── EvalScalar
+    ├── scalars: [t.i (#0) AS (#0)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== query_block_boundary_alias__named_window_subquery_keeps_query_block_boundary ===
+matrix: query_block_boundary_alias
+key: B0N0S3_0004
+setting: enable_group_by_column_first=0
+sql: SELECT i, p, o, row_number() OVER w AS rn FROM qt WINDOW w AS (PARTITION BY p ORDER BY o) QUALIFY rn = (SELECT i FROM qt LIMIT 1)
+status: ok
+EvalScalar
+├── scalars: [qt.i (#0) AS (#0), qt.p (#1) AS (#1), qt.o (#2) AS (#2), row_number() OVER w (#3) AS (#3)]
+└── Filter
+    ├── filters: [eq(row_number() OVER w (#3), SUBQUERY AS (#4))]
+    ├── subquerys
+    │   └── Subquery (Scalar)
+    │       ├── output_column: qt.i (#4)
+    │       └── Limit
+    │           ├── limit: [1]
+    │           ├── offset: [0]
+    │           └── EvalScalar
+    │               ├── scalars: [qt.i (#4) AS (#4)]
+    │               └── Scan
+    │                   ├── table: default.qt (#1)
+    │                   ├── filters: []
+    │                   ├── order by: []
+    │                   └── limit: NONE
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: [qt.p (#1) AS (#1)]
+        ├── order by items: [qt.o (#2) AS (#2)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [qt.p (#1) ASC NULLS LAST, qt.o (#2) ASC NULLS LAST]
+            ├── limit: [NONE]
+            ├── window top: NONE
+            ├── window function: RowNumber
+            └── EvalScalar
+                ├── scalars: [qt.p (#1) AS (#1), qt.o (#2) AS (#2)]
+                └── Scan
+                    ├── table: default.qt (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== query_block_boundary_alias__query_block_boundary_does_not_expose_prior_group_alias_namespace ===
+matrix: query_block_boundary_alias
+key: B0N0G0_0000
+setting: enable_group_by_column_first=0
+sql: SELECT k FROM (SELECT i, count(*) FROM t GROUP BY i, abs(i)) AS q
+status: error
+code: 1065
+message: column k doesn't exist
+

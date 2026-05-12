@@ -1,0 +1,107 @@
+matrix: predicate_alias
+local_dimensions:
+  relation:
+    input-conflict: "0001"
+    no-input: "0002"
+  legality:
+    producer-kind-illegal: "0010"
+  syntax:
+    no-alias-lookup: "0000"
+regions:
+  - description: predicate consumers that can use a visible alias as a bare name
+    main:
+      consumers: [P0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      relation: [no-input]
+    cases:
+      - key: P0N0S1_0002
+        name: where_scalar_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i > 0 AS ok FROM t WHERE ok"
+  - description: HAVING consumes aggregate aliases after aggregate binding
+    main:
+      consumers: [P1]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      relation: [no-input]
+    cases:
+      - key: P1N0S2_0002
+        name: having_aggregate_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) > 0 AS ok FROM t HAVING ok"
+  - description: QUALIFY consumes window aliases after window binding
+    main:
+      consumers: [P2]
+      name_shapes: [N0]
+      producers: [S3]
+    local:
+      relation: [no-input]
+    cases:
+      - key: P2N0S3_0002
+        name: qualify_window_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1"
+  - description: predicate consumers where aggregate aliases are clause-specific legality boundaries
+    main:
+      consumers: [P0, P2]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      relation: [no-input]
+      legality: [producer-kind-illegal]
+    cases:
+      - key: P0N0S2_0012
+        name: where_aggregate_alias_no_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) > 0 AS ok FROM t WHERE ok"
+      - key: P2N0S2_0012
+        name: qualify_aggregate_alias_no_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) > 0 AS ok FROM t QUALIFY ok"
+  - description: ordinal syntax included to document that predicates have no positional alias lookup
+    main:
+      consumers: [P0]
+      name_shapes: [N4]
+      producers: [N0]
+    local:
+      syntax: [no-alias-lookup]
+    masks:
+      - when:
+          main:
+            name_shapes: [N4]
+          local:
+            syntax: [no-alias-lookup]
+        reason: predicates have no ordinal alias-lookup syntax
+  - description: predicate main-coordinate closure outside positive coverage obligations
+    excluded: true
+    reason: this coarse region closes predicate main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
+    main:
+      consumers: [P0, P1, P2]
+      name_shapes: [N0, N1, N2, N3, N4, N5]
+      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+    cases:
+      - key: P0N0S3_0000
+        name: where_window_alias_no_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT row_number() OVER (ORDER BY number) AS rn FROM t WHERE rn = 1"
+      - key: P1N0S3_0000
+        name: having_window_alias_no_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT row_number() OVER (ORDER BY number) AS rn FROM t HAVING rn = 1"

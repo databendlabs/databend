@@ -4447,6 +4447,7 @@ dependencies = [
  "roaring 0.10.12",
  "serde",
  "serde_json",
+ "serde_yaml",
  "sha2",
  "similar",
  "simsearch",

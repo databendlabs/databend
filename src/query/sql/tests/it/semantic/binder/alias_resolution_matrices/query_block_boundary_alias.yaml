@@ -1,0 +1,69 @@
+matrix: query_block_boundary_alias
+local_dimensions:
+  query_block_boundary:
+    subquery-output-alias: "0001"
+    cte-output-alias: "0002"
+    named-window-subquery: "0004"
+regions:
+  - description: subqueries and CTEs expose SELECT aliases as output names at query-block boundaries
+    main:
+      consumers: [B0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      query_block_boundary: [subquery-output-alias, cte-output-alias]
+    cases:
+      - key: B0N0S1_0001
+        name: subquery_exposes_select_alias_as_output_name
+        setup_sqls:
+          - "CREATE TABLE t(i UInt64)"
+        runs:
+          - sql: "SELECT k FROM (SELECT i AS k FROM t) AS q"
+      - key: B0N0S1_0002
+        name: cte_exposes_select_alias_as_output_name
+        setup_sqls:
+          - "CREATE TABLE t(i UInt64)"
+        runs:
+          - sql: "WITH q AS (SELECT i AS k FROM t) SELECT k FROM q"
+  - description: named-window paths with subqueries preserve alias metadata inside the correct query block
+    main:
+      consumers: [B0]
+      name_shapes: [N0]
+      producers: [S3]
+    local:
+      query_block_boundary: [named-window-subquery]
+    cases:
+      - key: B0N0S3_0004
+        name: named_window_subquery_keeps_query_block_boundary
+        setup_sqls:
+          - "CREATE TABLE qt(i UInt64, p String, o UInt64)"
+        runs:
+          - sql: "SELECT i, p, o, row_number() OVER w AS rn FROM qt WINDOW w AS (PARTITION BY p ORDER BY o) QUALIFY rn = (SELECT i FROM qt LIMIT 1)"
+  - description: complex expressions included to document that query-block boundaries expose names, not expression aliases
+    main:
+      consumers: [B0]
+      name_shapes: [N2]
+      producers: [S1]
+    local:
+      query_block_boundary: [subquery-output-alias]
+    masks:
+      - when:
+          main:
+            name_shapes: [N2]
+          local:
+            query_block_boundary: [subquery-output-alias]
+        reason: query-block boundaries expose output names, not complex expressions as alias names
+  - description: query-block-boundary main-coordinate closure outside positive coverage obligations
+    excluded: true
+    reason: this coarse region closes query-block-boundary main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
+    main:
+      consumers: [B0]
+      name_shapes: [N0, N1, N2, N3, N4, N5]
+      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+    cases:
+      - key: B0N0G0_0000
+        name: query_block_boundary_does_not_expose_prior_group_alias_namespace
+        setup_sqls:
+          - "CREATE TABLE t(i UInt64)"
+        runs:
+          - sql: "SELECT k FROM (SELECT i, count(*) FROM t GROUP BY i, abs(i)) AS q"

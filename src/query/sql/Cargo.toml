@@ -89,6 +89,7 @@ databend-meta-runtime = { workspace = true }
 databend-storages-common-session = { workspace = true }
 goldenfile = { workspace = true }
 proptest = { workspace = true }
+serde_yaml = { workspace = true }
 
 [lints]
 workspace = true

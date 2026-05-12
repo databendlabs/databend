@@ -1,0 +1,102 @@
+=== predicate_alias__where_scalar_alias_no_input ===
+matrix: predicate_alias
+key: P0N0S1_0002
+setting: enable_group_by_column_first=0
+sql: SELECT i > 0 AS ok FROM t WHERE ok
+status: ok
+EvalScalar
+├── scalars: [gt(t.i (#0), 0) AS (#1)]
+└── Filter
+    ├── filters: [gt(t.i (#0), 0)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== predicate_alias__having_aggregate_alias_no_input ===
+matrix: predicate_alias
+key: P1N0S2_0002
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) > 0 AS ok FROM t HAVING ok
+status: ok
+EvalScalar
+├── scalars: [gt(sum(number) (#1), 0) AS (#2)]
+└── Filter
+    ├── filters: [gt(sum(number) (#1), 0)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== predicate_alias__qualify_window_alias_no_input ===
+matrix: predicate_alias
+key: P2N0S3_0002
+setting: enable_group_by_column_first=0
+sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1
+status: ok
+EvalScalar
+├── scalars: [t.number (#0) AS (#0), row_number() OVER (ORDER BY number) (#1) AS (#1)]
+└── Filter
+    ├── filters: [eq(row_number() OVER (ORDER BY number) (#1), 1)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [t.number (#0) AS (#0)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [t.number (#0) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== predicate_alias__where_aggregate_alias_no_input_rejected ===
+matrix: predicate_alias
+key: P0N0S2_0012
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) > 0 AS ok FROM t WHERE ok
+status: error
+code: 1065
+message: Where clause can't contain aggregate or window functions
+
+=== predicate_alias__qualify_aggregate_alias_no_input_rejected ===
+matrix: predicate_alias
+key: P2N0S2_0012
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) > 0 AS ok FROM t QUALIFY ok
+status: error
+code: 1065
+message: Qualify clause must not contain aggregate functions
+
+=== predicate_alias__where_window_alias_no_input_rejected ===
+matrix: predicate_alias
+key: P0N0S3_0000
+setting: enable_group_by_column_first=0
+sql: SELECT row_number() OVER (ORDER BY number) AS rn FROM t WHERE rn = 1
+status: error
+code: 1065
+message: Where clause can't contain aggregate or window functions
+
+=== predicate_alias__having_window_alias_no_input_rejected ===
+matrix: predicate_alias
+key: P1N0S3_0000
+setting: enable_group_by_column_first=0
+sql: SELECT row_number() OVER (ORDER BY number) AS rn FROM t HAVING rn = 1
+status: error
+code: 1065
+message: Having clause can't contain window functions
+

@@ -1,0 +1,273 @@
+matrix: group_by_alias
+local_dimensions:
+  relation:
+    input-conflict: "0001"
+    no-input: "0002"
+  scope:
+    same-list-exact: "0010"
+    same-set: "0080"
+    separate-set: "0100"
+  expansion:
+    generated-single-expression-set: "0400"
+    normal-plus-set: "0800"
+  legality:
+    producer-kind-illegal: "4000"
+  non_name:
+    select-item-position: "0004"
+    non-aggregate-select-items: "0020"
+  setting:
+    alias-first: "1000"
+    column-first: "2000"
+regions:
+  - description: bare GROUP BY lookup of SELECT scalar aliases under alias-first and column-first settings
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      relation: [input-conflict, no-input]
+      setting: [alias-first, column-first]
+    masks:
+      - when:
+          main:
+            consumers: [G0]
+            name_shapes: [N0]
+            producers: [S1]
+          local:
+            relation: [no-input]
+            setting: [column-first]
+        reason: without an input-column conflict, column-first and alias-first collapse to the same alias fallback behavior
+    cases:
+      - key: G0N0S1_1001
+        name: group_by_bare_select_alias_conflict_alias_first
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, x Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: false
+            sql: "SELECT i AS x, count(*) FROM t GROUP BY x"
+      - key: G0N0S1_2001
+        name: group_by_bare_select_alias_conflict_column_first
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, x Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: true
+            sql: "SELECT i AS x, count(*) FROM t GROUP BY x"
+      - key: G0N0S1_1002
+        name: group_by_bare_select_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY k"
+  - description: prior GROUP BY aliases reused by later expressions in the same ordinary grouping list
+    main:
+      consumers: [G0, G2]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      scope: [same-list-exact]
+      setting: [alias-first]
+    cases:
+      - key: G0N2G0_1010
+        name: group_by_expression_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)"
+      - key: G2N2G0_1010
+        name: rollup_same_list_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))"
+  - description: GROUPING SETS scope boundaries for prior GROUP BY alias reuse
+    main:
+      consumers: [G1]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      scope: [same-set, separate-set]
+      setting: [alias-first, column-first]
+    masks:
+      - when:
+          main:
+            consumers: [G1]
+          local:
+            scope: [same-set]
+            setting: [column-first]
+        reason: grouping-set same-set alias visibility is independent of GROUP BY column-first mode
+      - when:
+          main:
+            consumers: [G1]
+          local:
+            scope: [separate-set]
+            setting: [alias-first]
+        reason: separate grouping sets isolate prior aliases regardless of GROUP BY alias-first mode
+    cases:
+      - key: G1N2G0_1080
+        name: grouping_sets_same_set_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k, abs(k)))"
+      - key: G1N2G0_2100
+        name: grouping_sets_separate_set_does_not_share_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: true
+            sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k), (abs(k)))"
+  - description: CUBE-generated grouping sets that do not preserve prior alias visibility
+    main:
+      consumers: [G3]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      expansion: [generated-single-expression-set]
+      setting: [column-first]
+    cases:
+      - key: G3N2G0_2400
+        name: cube_generated_set_does_not_share_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: true
+            sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY CUBE(k, abs(k))"
+  - description: combined GROUP BY forms where normal items seed later grouping-set expressions
+    main:
+      consumers: [G4]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      expansion: [normal-plus-set]
+      setting: [alias-first]
+    cases:
+      - key: G4N2G0_1800
+        name: combined_grouping_sets_uses_prior_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, GROUPING SETS ((abs(k)))"
+  - description: qualified GROUP BY names included to document why they are outside alias lookup
+    main:
+      consumers: [G0]
+      name_shapes: [N1]
+      producers: [S1]
+    local:
+      relation: [no-input]
+      setting: [alias-first]
+    masks:
+      - when:
+          main:
+            name_shapes: [N1]
+          local:
+            relation: [no-input]
+            setting: [alias-first]
+        reason: qualified GROUP BY names bypass SELECT output aliases and belong to relation-name resolution
+  - description: GROUP BY references to aggregate SELECT aliases distinguish conflict from no-input legality
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S2]
+    local:
+      relation: [input-conflict, no-input]
+      legality: [producer-kind-illegal]
+    cases:
+      - key: G0N0S2_4001
+        name: group_by_aggregate_alias_conflict_uses_input
+        setup_sqls: []
+        runs:
+          - sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x"
+      - key: G0N0S2_4002
+        name: group_by_aggregate_alias_no_input_rejected
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT count(*) AS c FROM t GROUP BY c"
+  - description: GROUP BY references to SRF SELECT aliases distinguish conflict from alias fallback
+    main:
+      consumers: [G0]
+      name_shapes: [N0]
+      producers: [S4]
+    local:
+      relation: [input-conflict, no-input]
+    cases:
+      - key: G0N0S4_0001
+        name: group_by_srf_alias_conflict_uses_input
+        setup_sqls:
+          - "CREATE TABLE t_str(col1 String, col2 String)"
+        runs:
+          - sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2"
+      - key: G0N0S4_0002
+        name: group_by_srf_alias_no_input
+        setup_sqls:
+          - "CREATE TABLE t_str(col1 String, col2 String)"
+        runs:
+          - sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3"
+  - description: ordinal GROUP BY syntax included to document why producer-kind legality does not apply
+    main:
+      consumers: [G0]
+      name_shapes: [N4]
+      producers: [S2]
+    local:
+      relation: [no-input]
+      legality: [producer-kind-illegal]
+    masks:
+      - when:
+          main:
+            name_shapes: [N4]
+          local:
+            relation: [no-input]
+            legality: [producer-kind-illegal]
+        reason: ordinal GROUP BY syntax does not consume alias names, so producer kind legality is irrelevant
+  - description: GROUP BY ordinal references consume SELECT-item positions rather than alias names
+    main:
+      consumers: [G0]
+      name_shapes: [N4]
+      producers: [N0]
+    local:
+      non_name: [select-item-position]
+    cases:
+      - key: G0N4N0_0004
+        name: group_by_ordinal_uses_select_item_position
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY 1"
+  - description: GROUP BY ALL expands non-aggregate SELECT items without resolving a user-written alias name
+    main:
+      consumers: [G5]
+      name_shapes: [N5]
+      producers: [N0]
+    local:
+      non_name: [non-aggregate-select-items]
+    cases:
+      - key: G5N5N0_0020
+        name: group_by_all_expands_non_aggregate_select_items
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY ALL"
+  - description: GROUP BY-family main-coordinate closure outside positive coverage obligations
+    excluded: true
+    reason: this coarse region closes GROUP BY-family main-coordinate coverage; cases here are boundary probes rather than positive coverage obligations
+    main:
+      consumers: [G0, G1, G2, G3, G4, G5]
+      name_shapes: [N0, N1, N2, N3, N4, N5]
+      producers: [I0, S0, S1, S2, S3, S4, G0, N0]
+    cases:
+      - key: G0N3S1_0000
+        name: group_by_qualified_complex_does_not_fallback_to_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY t.k + 1"
+      - key: G1N1S1_0000
+        name: grouping_sets_qualified_name_does_not_fallback_to_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))"
