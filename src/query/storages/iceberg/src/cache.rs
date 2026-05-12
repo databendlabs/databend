@@ -18,6 +18,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_catalog::table::Table;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::CatalogInfo;
 use databend_storages_common_cache::CacheManager;
@@ -35,19 +36,33 @@ pub type IcebergTableReader = InMemoryCacheTTLReader<
 
 pub(crate) const SEP_STR: &str = "\u{001f}";
 
+pub(crate) fn table_cache_key(catalog_name: &str, database_name: &str, table_name: &str) -> String {
+    format!("{catalog_name}{SEP_STR}{database_name}{SEP_STR}{table_name}")
+}
+
+fn parse_table_cache_key(cache_key: &str) -> Result<(&str, &str)> {
+    let keys: Vec<&str> = cache_key.split(SEP_STR).collect();
+    if keys.len() != 3 {
+        return Err(ErrorCode::Internal(format!(
+            "Invalid iceberg table cache key: {cache_key:?}"
+        )));
+    }
+    Ok((keys[1], keys[2]))
+}
+
 #[async_trait::async_trait]
 impl Loader<(Arc<dyn Table>, AtomicBool, Instant)>
     for LoaderWrapper<(Arc<dyn iceberg::Catalog>, Arc<CatalogInfo>)>
 {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<(Arc<dyn Table>, AtomicBool, Instant)> {
-        let keys: Vec<&str> = params.location.split(SEP_STR).collect();
+        let (database_name, table_name) = parse_table_cache_key(&params.location)?;
         let inner = &self.0;
         let iceberg = IcebergTable::try_create_from_iceberg_catalog(
             inner.0.clone(),
             inner.1.clone(),
-            keys[0],
-            keys[1],
+            database_name,
+            table_name,
         )
         .await?;
 
@@ -65,4 +80,24 @@ pub fn iceberg_table_cache_reader(
         LoaderWrapper((catalog, info)),
         Duration::from_secs(600),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_table_cache_key_roundtrip() -> Result<()> {
+        let cache_key = table_cache_key("iceberg_rest", "db1", "tbl1");
+        let (database_name, table_name) = parse_table_cache_key(&cache_key)?;
+        assert_eq!(database_name, "db1");
+        assert_eq!(table_name, "tbl1");
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_invalid_table_cache_key() {
+        let err = parse_table_cache_key("db1\u{001f}tbl1").unwrap_err();
+        assert!(err.message().contains("Invalid iceberg table cache key"));
+    }
 }
