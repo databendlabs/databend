@@ -392,7 +392,22 @@ impl From<tonic::Status> for ErrorCode {
                     .set_span(serialized_error.span),
                 }
             }
-            _ => ErrorCode::Unimplemented(status.to_string()),
+            tonic::Code::Cancelled if status.message() == "Timeout expired" => {
+                ErrorCode::CannotConnectNode(format!(
+                    "gRPC request exceeded its timeout and was cancelled: {}",
+                    status
+                ))
+            }
+            tonic::Code::DeadlineExceeded => {
+                ErrorCode::CannotConnectNode(format!("gRPC request deadline exceeded: {}", status))
+            }
+            tonic::Code::Cancelled => {
+                ErrorCode::AbortedQuery(format!("gRPC request was cancelled: {}", status))
+            }
+            tonic::Code::Unavailable => {
+                ErrorCode::CannotConnectNode(format!("gRPC service is unavailable: {}", status))
+            }
+            _ => ErrorCode::UnknownException(format!("gRPC request failed: {}", status)),
         }
     }
 }

@@ -32,6 +32,7 @@ use futures_util::future::Either;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::Duration;
+use tonic::Code;
 use tonic::Request;
 use tonic::Status;
 use tonic::Streaming;
@@ -100,9 +101,18 @@ impl FlightClient {
             AsciiMetadataValue::from_str(&secret).unwrap(),
         );
 
-        let response = self.inner.do_action(request).await?;
+        let response = self
+            .inner
+            .do_action(request)
+            .await
+            .map_err(|status| flight_client_status_to_error(status, path, timeout))?;
 
-        match response.into_inner().message().await? {
+        match response
+            .into_inner()
+            .message()
+            .await
+            .map_err(|status| flight_client_status_to_error(status, path, timeout))?
+        {
             Some(response) => {
                 let mut deserializer = serde_json::Deserializer::from_slice(&response.body);
                 deserializer.disable_recursion_limit();
@@ -238,6 +248,29 @@ impl FlightClient {
                 Err(status) => Err(status),
             }
         })
+    }
+}
+
+fn flight_client_status_to_error(status: Status, path: &str, timeout: u64) -> ErrorCode {
+    match status.code() {
+        Code::Cancelled if status.message() == "Timeout expired" => {
+            ErrorCode::CannotConnectNode(format!(
+                "Flight action {path:?} exceeded flight_client_timeout ({timeout} seconds). \
+                The remote node did not finish the request before the gRPC deadline; \
+                consider increasing the flight_client_timeout setting if the action can legitimately take longer."
+            ))
+        }
+        Code::DeadlineExceeded => ErrorCode::CannotConnectNode(format!(
+            "Flight action {path:?} timed out after {timeout} seconds: {status}"
+        )),
+        Code::Unavailable => ErrorCode::CannotConnectNode(format!(
+            "Flight action {path:?} failed because the remote node is unavailable: {status}"
+        )),
+        Code::Unknown => {
+            ErrorCode::from(status).add_message(format!("failed to execute flight action {path:?}"))
+        }
+        _ => ErrorCode::from(status)
+            .add_message(format!("failed to execute flight action {path:?} via gRPC")),
     }
 }
 
