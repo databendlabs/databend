@@ -230,32 +230,26 @@ impl ReclusterMutator {
         let mut selected_segs_idx = Vec::with_capacity(compact_segments.len());
         let mut selected_statistics = Vec::with_capacity(compact_segments.len());
         let mut selected_seg_stats = Vec::with_capacity(compact_segments.len());
-        let selected_segments = compact_segments
-            .into_iter()
-            .map(|segment| {
-                selected_statistics.push(segment.info.summary.clone());
-                selected_segs_idx.push(segment.loc.segment_idx);
-                selected_seg_stats.push((
-                    segment.loc.segment_idx,
-                    segment
-                        .info
-                        .summary
-                        .additional_stats_meta
-                        .as_ref()
-                        .map(|v| v.location.clone()),
-                ));
-                (segment.loc.segment_idx, segment.info)
-            })
-            .collect::<Vec<_>>();
+        let mut selected_segments = Vec::with_capacity(compact_segments.len());
+        for segment in compact_segments {
+            selected_statistics.push(segment.info.summary.clone());
+            selected_segs_idx.push(segment.loc.segment_idx);
+            selected_seg_stats.push((
+                segment.loc.segment_idx,
+                segment
+                    .info
+                    .summary
+                    .additional_stats_meta
+                    .as_ref()
+                    .map(|v| v.location.clone()),
+            ));
+            selected_segments.push((segment.loc.segment_idx, segment.info));
+        }
 
         // Gather blocks and create a block map categorized by clustering levels
         let blocks = self.gather_blocks(selected_segments).await?;
         let selected_segment_count = selected_statistics.len() as u64;
         let selected_block_count = blocks.len() as u64;
-        let block_per_segment = self.block_thresholds.block_per_segment as u64;
-        let target_segment_count = selected_block_count.div_ceil(block_per_segment);
-        let needs_segment_rebuild =
-            selected_segment_count > 1 && target_segment_count < selected_segment_count;
 
         let mut blocks_map: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
         for (idx, block) in blocks.iter().enumerate() {
@@ -362,28 +356,60 @@ impl ReclusterMutator {
             }
         }
 
-        // Generate recluster parts based on selected segments. A zero-task
-        // rebuild is kept only when repacking unchanged blocks can reduce the
-        // segment count, avoiding repeated rebuilds of the active tail segment.
-        let parts = if !selected_blocks_idx.is_empty() || needs_segment_rebuild {
-            selected_segs_idx.sort_by(|a, b| b.cmp(a));
+        // Generate recluster parts based on the segments that will actually be
+        // replaced. For block rewrite tasks, keep the mutation scope limited to
+        // the segments containing selected blocks. A zero-task rebuild is kept
+        // only when repacking unchanged blocks can reduce the segment count,
+        // avoiding repeated rebuilds of the active tail segment.
+        let block_per_segment = self.block_thresholds.block_per_segment as u64;
+        let target_segment_count = selected_block_count.div_ceil(block_per_segment);
+        let rebuild_segments_only = selected_blocks_idx.is_empty()
+            && selected_segment_count > 1
+            && target_segment_count < selected_segment_count;
+        let removed_segment_set = if !selected_blocks_idx.is_empty() {
+            selected_blocks_idx
+                .iter()
+                .map(|idx| blocks[*idx].index.segment_idx)
+                .collect::<IndexSet<_>>()
+        } else if rebuild_segments_only {
+            selected_segs_idx.iter().copied().collect()
+        } else {
+            IndexSet::new()
+        };
+        let parts = if !removed_segment_set.is_empty() {
+            let mut removed_segment_indexes =
+                removed_segment_set.iter().copied().collect::<Vec<_>>();
+            removed_segment_indexes.sort_unstable_by(|a, b| b.cmp(a));
 
             let default_cluster_key_id = Some(self.cluster_key_id);
             let mut removed_segment_summary = Statistics::default();
-            selected_statistics.iter().for_each(|v| {
-                merge_statistics_mut(&mut removed_segment_summary, v, default_cluster_key_id)
-            });
+            for (idx, stats) in selected_segs_idx.iter().zip(selected_statistics.iter()) {
+                if removed_segment_set.contains(idx) {
+                    merge_statistics_mut(
+                        &mut removed_segment_summary,
+                        stats,
+                        default_cluster_key_id,
+                    );
+                }
+            }
 
-            let remained_blocks = blocks
+            let mut hll_segment_indexes = IndexSet::new();
+            let mut remained_blocks = Vec::new();
+            for (idx, block) in blocks.into_iter().enumerate() {
+                if !removed_segment_set.contains(&block.index.segment_idx)
+                    || selected_blocks_idx.contains(&idx)
+                {
+                    continue;
+                }
+                let mut block_meta = Arc::unwrap_or_clone(block.meta);
+                block_meta.cluster_stats = Some(block.stats);
+                hll_segment_indexes.insert(block.index.segment_idx);
+                remained_blocks.push((block.index, Arc::new(block_meta)));
+            }
+            let selected_seg_stats = selected_seg_stats
                 .into_iter()
-                .enumerate()
-                .filter_map(|(idx, block)| {
-                    if selected_blocks_idx.contains(&idx) {
-                        return None;
-                    }
-                    let mut block_meta = Arc::unwrap_or_clone(block.meta);
-                    block_meta.cluster_stats = Some(block.stats);
-                    Some((block.index, Arc::new(block_meta)))
+                .filter(|(segment_idx, location)| {
+                    location.is_some() && hll_segment_indexes.contains(segment_idx)
                 })
                 .collect::<Vec<_>>();
             let hlls = self.gather_hlls(selected_seg_stats).await?;
@@ -397,7 +423,7 @@ impl ReclusterMutator {
             ReclusterParts {
                 tasks,
                 remained_blocks,
-                removed_segment_indexes: selected_segs_idx,
+                removed_segment_indexes,
                 removed_segment_summary,
             }
         } else {
@@ -410,7 +436,7 @@ impl ReclusterMutator {
             parts.tasks.len(),
             parts.remained_blocks.len(),
             parts.removed_segment_indexes.len(),
-            needs_segment_rebuild,
+            rebuild_segments_only,
             selected_block_count,
             target_segment_count,
         );
@@ -870,6 +896,10 @@ impl ReclusterMutator {
         &self,
         hlls: Vec<(usize, Option<Location>)>,
     ) -> Result<HashMap<BlockIndex, Option<RawBlockHLL>>> {
+        if hlls.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         // combine all the tasks.
         let mut iter = hlls.into_iter();
         let tasks = std::iter::from_fn(|| {

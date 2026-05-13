@@ -161,10 +161,12 @@ impl FuseTable {
                     debug!("recluster: fallback built no parts skip_reason=empty_parts",);
                 }
             } else {
-                selected_seg_num = selected_segs.len() as u64;
+                let candidate_seg_num = selected_segs.len();
                 (recluster_blocks_count, parts) = mutator.target_select(selected_segs).await?;
+                selected_seg_num = parts.removed_segment_indexes.len() as u64;
                 debug!(
-                    "recluster: built parts segments={} blocks={} tasks={}",
+                    "recluster: built parts candidate_segments={} selected_segments={} blocks={} tasks={}",
+                    candidate_seg_num,
                     selected_seg_num,
                     recluster_blocks_count,
                     parts.tasks.len(),
@@ -226,8 +228,8 @@ impl FuseTable {
         let evaluate_batch = |selected_segs: Vec<SelectedReclusterSegment>| {
             let mutator = mutator.clone();
             async move {
-                let seg_num = selected_segs.len() as u64;
                 let (block_num, parts) = mutator.target_select(selected_segs).await?;
+                let seg_num = parts.removed_segment_indexes.len() as u64;
                 Ok::<_, databend_common_exception::ErrorCode>((seg_num, block_num, parts))
             }
         };
