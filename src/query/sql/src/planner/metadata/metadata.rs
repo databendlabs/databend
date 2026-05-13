@@ -84,6 +84,7 @@ pub struct Metadata {
     base_column_scan_id: HashMap<Symbol, usize>,
     next_runtime_filter_id: usize,
     next_logical_recursive_cte_id: u32,
+    next_materialized_cte_id: usize,
 }
 
 impl Metadata {
@@ -220,6 +221,12 @@ impl Metadata {
         let logical_recursive_cte_id = self.next_logical_recursive_cte_id;
         self.next_logical_recursive_cte_id += 1;
         logical_recursive_cte_id
+    }
+
+    pub fn allocate_materialized_cte_id(&mut self) -> usize {
+        let materialized_cte_id = self.next_materialized_cte_id;
+        self.next_materialized_cte_id += 1;
+        materialized_cte_id
     }
 
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
