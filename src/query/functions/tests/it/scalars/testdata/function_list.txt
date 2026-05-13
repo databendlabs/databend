@@ -3879,12 +3879,20 @@ Functions overloads:
 1 st_aswkt(Geometry NULL) :: String NULL
 2 st_aswkt(Geography) :: String
 3 st_aswkt(Geography NULL) :: String NULL
+0 st_azimuth(Geometry, Geometry) :: Float64 NULL
+1 st_azimuth(Geometry NULL, Geometry NULL) :: Float64 NULL
+0 st_buffer(Geometry, Float64) :: Geometry NULL
+1 st_buffer(Geometry NULL, Float64 NULL) :: Geometry NULL
 0 st_centroid(Geometry) :: Geometry NULL
 1 st_centroid(Geometry NULL) :: Geometry NULL
 0 st_contains(Geometry, Geometry) :: Boolean
 1 st_contains(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_convexhull(Geometry) :: Geometry
 1 st_convexhull(Geometry NULL) :: Geometry NULL
+0 st_coveredby(Geometry, Geometry) :: Boolean
+1 st_coveredby(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_covers(Geometry, Geometry) :: Boolean
+1 st_covers(Geometry NULL, Geometry NULL) :: Boolean NULL
 0 st_difference(Geometry, Geometry) :: Geometry NULL
 1 st_difference(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_dimension(Geometry) :: Int32 NULL
@@ -3941,6 +3949,8 @@ Functions overloads:
 1 st_geomfromgeohash(String NULL) :: Geometry NULL
 0 st_geompointfromgeohash(String) :: Geometry
 1 st_geompointfromgeohash(String NULL) :: Geometry NULL
+0 st_hausdorffdistance(Geometry, Geometry) :: Float64
+1 st_hausdorffdistance(Geometry NULL, Geometry NULL) :: Float64 NULL
 0 st_hilbert(Geometry) :: UInt64 NULL
 1 st_hilbert(Geometry NULL) :: UInt64 NULL
 2 st_hilbert(Geometry, Array(Float64)) :: UInt64 NULL
@@ -3953,6 +3963,8 @@ Functions overloads:
 1 st_intersection(Geometry NULL, Geometry NULL) :: Geometry NULL
 0 st_intersects(Geometry, Geometry) :: Boolean
 1 st_intersects(Geometry NULL, Geometry NULL) :: Boolean NULL
+0 st_isvalid(Geometry) :: Boolean
+1 st_isvalid(Geometry NULL) :: Boolean NULL
 0 st_length(Geometry) :: Float64
 1 st_length(Geometry NULL) :: Float64 NULL
 2 st_length(Geography) :: Float64
@@ -3969,16 +3981,22 @@ Functions overloads:
 1 st_makepolygon(Geometry NULL) :: Geometry NULL
 2 st_makepolygon(Geography) :: Geography
 3 st_makepolygon(Geography NULL) :: Geography NULL
+0 st_makepolygonoriented(Geometry) :: Geometry
+1 st_makepolygonoriented(Geometry NULL) :: Geometry NULL
 0 st_npoints(Geometry) :: UInt32
 1 st_npoints(Geometry NULL) :: UInt32 NULL
 2 st_npoints(Geography) :: UInt32
 3 st_npoints(Geography NULL) :: UInt32 NULL
+0 st_perimeter(Geometry) :: Float64
+1 st_perimeter(Geometry NULL) :: Float64 NULL
 0 st_pointn(Geometry, Int32) :: Geometry NULL
 1 st_pointn(Geometry NULL, Int32 NULL) :: Geometry NULL
 2 st_pointn(Geography, Int32) :: Geography NULL
 3 st_pointn(Geography NULL, Int32 NULL) :: Geography NULL
 0 st_setsrid(Geometry, Int32) :: Geometry
 1 st_setsrid(Geometry NULL, Int32 NULL) :: Geometry NULL
+0 st_simplify(Geometry, Float64) :: Geometry
+1 st_simplify(Geometry NULL, Float64 NULL) :: Geometry NULL
 0 st_srid(Geometry) :: Int32
 1 st_srid(Geometry NULL) :: Int32 NULL
 2 st_srid(Geography) :: Int32
