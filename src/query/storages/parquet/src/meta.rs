@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::intrinsics::unlikely;
 use std::sync::Arc;
 
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::plan::FullParquetMeta;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -26,12 +26,21 @@ use databend_storages_common_cache::CacheManager;
 use databend_storages_common_cache::InMemoryCacheReader;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_cache::Loader;
+use futures::Stream;
+use futures::StreamExt;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
 
 use crate::statistics::collect_row_group_stats;
+
+#[derive(Clone)]
+struct BasicMetaFileInfo {
+    location: String,
+    size: u64,
+    dedup_key: Option<String>,
+}
 
 pub async fn read_metadata_async_cached(
     path: &str,
@@ -51,60 +60,29 @@ pub async fn read_metadata_async_cached(
     reader.read(&load_params).await
 }
 
-#[async_backtrace::framed]
-pub async fn read_metas_in_parallel(
+pub fn stream_metas_in_parallel(
     op: &Operator,
-    file_infos: &[(String, u64, String)],
+    file_infos: Vec<(String, u64, String)>,
     expected: (SchemaDescPtr, String),
     leaf_fields: Arc<Vec<TableField>>,
     num_threads: usize,
     max_memory_usage: u64,
     enable_cache: bool,
-) -> Result<Vec<Arc<FullParquetMeta>>> {
-    if file_infos.is_empty() {
-        return Ok(vec![]);
-    }
-    let num_files = file_infos.len();
-
-    let mut tasks = Vec::with_capacity(num_threads);
-    // Equally distribute the tasks
-    for i in 0..num_threads {
-        let begin = num_files * i / num_threads;
-        let end = num_files * (i + 1) / num_threads;
-        if begin == end {
-            continue;
-        }
-
-        let file_infos = file_infos[begin..end].to_vec();
-        let op = op.clone();
+) -> impl Stream<Item = Result<Arc<FullParquetMeta>>> + Send + 'static {
+    stream_metas_in_parallel_with(file_infos, op, num_threads, move |file_info, op| {
         let (expected_schema, schema_from) = expected.clone();
         let leaf_fields = leaf_fields.clone();
 
-        tasks.push(read_parquet_metas_batch(
-            file_infos,
+        read_parquet_meta(
+            file_info,
             op,
             expected_schema,
             leaf_fields,
             schema_from,
             max_memory_usage,
             enable_cache,
-        ));
-    }
-
-    let metas = execute_futures_in_parallel(
-        tasks,
-        num_threads,
-        num_threads * 2,
-        "read-parquet-metas-worker".to_owned(),
-    )
-    .await?
-    .into_iter()
-    .collect::<Result<Vec<_>>>()?
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>();
-
-    Ok(metas)
+        )
+    })
 }
 
 pub(crate) fn check_parquet_schema(
@@ -125,51 +103,103 @@ pub(crate) fn check_parquet_schema(
     Ok(())
 }
 
-#[async_backtrace::framed]
-pub async fn read_metas_in_parallel_for_copy(
+pub fn stream_metas_in_parallel_for_copy(
     op: &Operator,
-    file_infos: &[(String, u64)],
+    file_infos: Vec<(String, u64)>,
     num_threads: usize,
     max_memory_usage: u64,
-) -> Result<Vec<Arc<FullParquetMeta>>> {
-    if file_infos.is_empty() {
-        return Ok(vec![]);
-    }
-    let num_files = file_infos.len();
-
-    let mut tasks = Vec::with_capacity(num_threads);
-    // Equally distribute the tasks
-    for i in 0..num_threads {
-        let begin = num_files * i / num_threads;
-        let end = num_files * (i + 1) / num_threads;
-        if begin == end {
-            continue;
-        }
-
-        let file_infos = file_infos[begin..end].to_vec();
-        let op = op.clone();
-
-        tasks.push(read_parquet_metas_batch_for_copy(
-            file_infos,
+) -> impl Stream<Item = Result<Arc<FullParquetMeta>>> + Send + 'static {
+    stream_metas_in_parallel_with(file_infos, op, num_threads, move |file_info, op| {
+        let (location, size) = file_info;
+        read_basic_parquet_meta(
+            BasicMetaFileInfo {
+                location,
+                size,
+                // Keep COPY metadata reads uncached. Some object stores may not
+                // provide a strong object identity, and COPY correctness should
+                // not depend on fallback cache keys.
+                dedup_key: None,
+            },
             op,
             max_memory_usage,
-        ));
-    }
+        )
+    })
+}
 
-    let metas = execute_futures_in_parallel(
-        tasks,
-        num_threads,
-        num_threads * 2,
-        "read-parquet-metas-worker".to_owned(),
+pub fn stream_basic_metas_in_parallel_with_cache(
+    op: &Operator,
+    file_infos: Vec<(String, u64, Option<String>)>,
+    num_threads: usize,
+    max_memory_usage: u64,
+) -> impl Stream<Item = Result<Arc<FullParquetMeta>>> + Send + 'static {
+    stream_metas_in_parallel_with(file_infos, op, num_threads, move |file_info, op| {
+        let (location, size, dedup_key) = file_info;
+        read_basic_parquet_meta(
+            BasicMetaFileInfo {
+                location,
+                size,
+                dedup_key,
+            },
+            op,
+            max_memory_usage,
+        )
+    })
+}
+
+fn stream_metas_in_parallel_with<T, F, Fut>(
+    file_infos: Vec<T>,
+    op: &Operator,
+    num_threads: usize,
+    read_meta: F,
+) -> impl Stream<Item = Result<Arc<FullParquetMeta>>> + Send + 'static
+where
+    T: Send + 'static,
+    F: Fn(T, Operator) -> Fut + Clone + Send + Sync + 'static,
+    Fut: Future<Output = Result<Option<Arc<FullParquetMeta>>>> + Send + 'static,
+{
+    let op = op.clone();
+    futures::stream::iter(file_infos)
+        .map(move |file_info| {
+            let read_meta = read_meta.clone();
+            let op = op.clone();
+            async move { read_meta(file_info, op).await }
+        })
+        .buffer_unordered(num_threads.max(1))
+        .filter_map(|meta| async move { meta.transpose() })
+}
+
+async fn read_parquet_meta(
+    file_info: (String, u64, String),
+    op: Operator,
+    expect: SchemaDescPtr,
+    leaf_fields: Arc<Vec<TableField>>,
+    schema_from: String,
+    max_memory_usage: u64,
+    enable_cache: bool,
+) -> Result<Option<Arc<FullParquetMeta>>> {
+    let (location, size, dedup_key) = file_info;
+    let meta = load_and_check_parquet_meta(
+        &location,
+        size,
+        op,
+        &expect,
+        &schema_from,
+        enable_cache,
+        &dedup_key,
     )
-    .await?
-    .into_iter()
-    .collect::<Result<Vec<_>>>()?
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>();
-
-    Ok(metas)
+    .await?;
+    check_memory_usage(max_memory_usage)?;
+    if unlikely(meta.file_metadata().num_rows() == 0) {
+        // Don't collect empty files
+        return Ok(None);
+    }
+    let stats = collect_row_group_stats(meta.row_groups(), &leaf_fields, None);
+    Ok(Some(Arc::new(FullParquetMeta {
+        location,
+        size,
+        meta,
+        row_group_level_stats: stats,
+    })))
 }
 
 /// Load parquet meta and check if the schema is matched.
@@ -197,65 +227,36 @@ async fn load_and_check_parquet_meta(
     Ok(metadata)
 }
 
-pub async fn read_parquet_metas_batch(
-    file_infos: Vec<(String, u64, String)>,
+async fn read_basic_parquet_meta(
+    file_info: BasicMetaFileInfo,
     op: Operator,
-    expect: SchemaDescPtr,
-    leaf_fields: Arc<Vec<TableField>>,
-    schema_from: String,
     max_memory_usage: u64,
-    enable_cache: bool,
-) -> Result<Vec<Arc<FullParquetMeta>>> {
-    let mut metas = Vec::with_capacity(file_infos.len());
-    for (location, size, dedup_key) in file_infos {
-        let meta = load_and_check_parquet_meta(
-            &location,
-            size,
-            op.clone(),
-            &expect,
-            &schema_from,
-            enable_cache,
-            &dedup_key,
-        )
-        .await?;
-        if unlikely(meta.file_metadata().num_rows() == 0) {
-            // Don't collect empty files
-            continue;
-        }
-        let stats = collect_row_group_stats(meta.row_groups(), &leaf_fields, None);
-        metas.push(Arc::new(FullParquetMeta {
-            location,
-            size,
-            meta,
-            row_group_level_stats: stats,
-        }));
-    }
-
+) -> Result<Option<Arc<FullParquetMeta>>> {
+    let meta = load_basic_parquet_meta_data(&file_info, &op).await?;
     check_memory_usage(max_memory_usage)?;
-    Ok(metas)
+    if unlikely(meta.file_metadata().num_rows() == 0) {
+        // Don't collect empty files
+        return Ok(None);
+    }
+    Ok(Some(Arc::new(FullParquetMeta {
+        location: file_info.location,
+        size: file_info.size,
+        meta,
+        row_group_level_stats: None,
+    })))
 }
 
-pub async fn read_parquet_metas_batch_for_copy(
-    file_infos: Vec<(String, u64)>,
-    op: Operator,
-    max_memory_usage: u64,
-) -> Result<Vec<Arc<FullParquetMeta>>> {
-    let mut metas = Vec::with_capacity(file_infos.len());
-    for (location, size) in file_infos {
-        let meta = Arc::new(read_metadata_async(&location, &op, Some(size)).await?);
-        if unlikely(meta.file_metadata().num_rows() == 0) {
-            // Don't collect empty files
-            continue;
-        }
-        metas.push(Arc::new(FullParquetMeta {
-            location,
-            size,
-            meta,
-            row_group_level_stats: None,
-        }));
+async fn load_basic_parquet_meta_data(
+    file_info: &BasicMetaFileInfo,
+    op: &Operator,
+) -> Result<Arc<ParquetMetaData>> {
+    if let Some(dedup_key) = &file_info.dedup_key {
+        read_metadata_async_cached(&file_info.location, op, Some(file_info.size), dedup_key).await
+    } else {
+        Ok(Arc::new(
+            read_metadata_async(&file_info.location, op, Some(file_info.size)).await?,
+        ))
     }
-    check_memory_usage(max_memory_usage)?;
-    Ok(metas)
 }
 
 // TODO(parquet): how to limit the memory when running this method is to be determined.

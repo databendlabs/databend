@@ -828,6 +828,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1024 * 1024..=u64::MAX)),
                 }),
+                ("enable_stage_parquet_table_statistics", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable exact table statistics for parquet stage scans by reading parquet footer metadata. Disabled by default to avoid planning-time object-store IO.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 // enterprise license related settings
                 ("enterprise_license", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),

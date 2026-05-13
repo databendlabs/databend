@@ -623,6 +623,10 @@ impl Settings {
         self.try_get_u64("parquet_rowgroup_hint_bytes")
     }
 
+    pub fn get_enable_stage_parquet_table_statistics(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_stage_parquet_table_statistics")? != 0)
+    }
+
     pub fn get_enable_table_lock(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
     }

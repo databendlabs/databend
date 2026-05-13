@@ -42,9 +42,11 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_common_storages_parquet::ParquetVariantTable;
-use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
+use databend_common_storages_parquet::stream_basic_metas_in_parallel_with_cache;
 use databend_storages_common_stage::SingleFilePartition;
 use databend_storages_common_table_meta::table::ChangeType;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use opendal::Operator;
 
 use crate::read::avro::AvroReadPipelineBuilder;
@@ -142,6 +144,24 @@ impl StageTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Option<TableStatistics>> {
         let stage_table_info = &self.table_info;
+        if let Some(metas) = &stage_table_info.parquet_metas {
+            let num_rows = metas
+                .iter()
+                .map(|meta| meta.meta.file_metadata().num_rows() as u64)
+                .sum();
+            let data_size_compressed = metas.iter().map(|meta| meta.size).sum();
+            return Ok(Some(TableStatistics {
+                num_rows: Some(num_rows),
+                data_size_compressed: Some(data_size_compressed),
+                ..Default::default()
+            }));
+        }
+
+        let settings = ctx.get_settings();
+        if !settings.get_enable_stage_parquet_table_statistics()? {
+            return Ok(None);
+        }
+
         let thread_num = ctx.get_settings().get_max_threads()? as usize;
 
         let files = if let Some(files) = &stage_table_info.files_to_copy {
@@ -152,9 +172,9 @@ impl StageTable {
         let file_infos = files
             .iter()
             .filter(|file| file.size > 0)
-            .map(|file| (file.path.clone(), file.size))
+            .map(|file| (file.path.clone(), file.size, file.object_identity_key()))
             .collect::<Vec<_>>();
-        let data_size_compressed = file_infos.iter().map(|(_, size)| *size).sum::<u64>();
+        let data_size_compressed = file_infos.iter().map(|(_, size, _)| *size).sum::<u64>();
 
         if file_infos.is_empty() {
             return Ok(Some(TableStatistics {
@@ -164,17 +184,20 @@ impl StageTable {
             }));
         }
 
-        let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
-        let metas =
-            read_metas_in_parallel_for_copy(&operator, &file_infos, max_threads, max_memory_usage)
-                .await?;
-        let num_rows = metas
-            .iter()
-            .map(|meta| meta.meta.file_metadata().num_rows() as u64)
-            .sum();
+        let mut metas = stream_basic_metas_in_parallel_with_cache(
+            &operator,
+            file_infos,
+            max_threads,
+            max_memory_usage,
+        )
+        .boxed();
+        let mut num_rows = 0;
+        while let Some(meta) = metas.try_next().await? {
+            num_rows += meta.meta.file_metadata().num_rows() as u64;
+        }
 
         Ok(Some(TableStatistics {
             num_rows: Some(num_rows),

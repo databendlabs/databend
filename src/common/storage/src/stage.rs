@@ -83,6 +83,12 @@ impl StageFileInfo {
                 .unwrap_or(format!("{}/{last_modified}/{}", self.path, self.size))
         }
     }
+
+    pub fn object_identity_key(&self) -> Option<String> {
+        // Do not fall back to path/last_modified/size for cache keys that
+        // must not survive object replacement.
+        self.md5.clone().or_else(|| self.etag.clone())
+    }
 }
 
 pub fn init_stage_operator(stage_info: &StageInfo) -> Result<Operator> {

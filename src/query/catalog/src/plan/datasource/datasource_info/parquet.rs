@@ -71,6 +71,8 @@ pub struct ParquetTableInfo {
     pub schema_from: String,
     pub compression_ratio: f64,
     pub leaf_fields: Arc<Vec<TableField>>,
+    pub first_file: StageFileInfo,
+    pub first_file_num_rows: u64,
 
     #[serde(skip)]
     pub need_stats_provider: bool,
@@ -131,6 +133,7 @@ mod tests {
     use std::sync::Arc;
 
     use arrow_schema::Schema as ArrowSchema;
+    use databend_common_storage::StageFileInfo;
     use databend_common_storage::StageFilesInfo;
     use parquet::basic::ConvertedType;
     use parquet::basic::Repetition;
@@ -206,6 +209,16 @@ mod tests {
                 metadata: Default::default(),
             },
             files_to_read: None,
+            first_file: StageFileInfo {
+                path: "".to_string(),
+                size: 0,
+                md5: None,
+                last_modified: None,
+                etag: None,
+                status: databend_common_storage::StageFileStatus::NeedCopy,
+                creator: None,
+            },
+            first_file_num_rows: 0,
             schema_from: "".to_string(),
             compression_ratio: 0.0,
             need_stats_provider: false,

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cache;
 mod data;
 mod prune_pages;
 mod prune_row_groups;

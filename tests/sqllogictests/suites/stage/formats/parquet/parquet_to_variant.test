@@ -60,7 +60,7 @@ select $1, metadata$file_row_number as r, metadata$filename as f from @data/parq
 {"c2":229,"c4":"249","c5":259,"c6":269} 9 parquet/diff_schema/f2.parquet
 
 query T
-explain select $1 from @data/parquet/diff_schema/(pattern=>'.*[.]parquet');
+explain select /*+ set_var(enable_stage_parquet_table_statistics=1) set_var(parquet_fast_read_bytes=1048576) */ $1 from @data/parquet/diff_schema/(pattern=>'.*[.]parquet');
 ----
 TableScan
 ├── table: default.system.stage
@@ -81,7 +81,7 @@ select $1 from @data/parquet/tuple.parquet;
 {"id":3,"t":{"A":3,"B":"c"}}
 
 query T
-explain select $1 from @data/parquet/tuple.parquet;
+explain select /*+ set_var(enable_stage_parquet_table_statistics=1) set_var(parquet_fast_read_bytes=1048576) */ $1 from @data/parquet/tuple.parquet;
 ----
 TableScan
 ├── table: default.system.stage
@@ -95,12 +95,54 @@ TableScan
 └── estimated rows: 3.00
 
 query T
-explain select $1 from @data/parquet/ (files=>('tuple.parquet', 'complex.parquet'));
+explain select /*+ set_var(enable_stage_parquet_table_statistics=1) set_var(parquet_fast_read_bytes=1048576) */ * from @data/parquet/tuple.parquet;
+----
+TableScan
+├── table: default.system.read_parquet(data)
+├── scan id: 0
+├── output columns: [id (#0), t (#1)]
+├── read rows: 1
+├── read size: 1.98 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 3.00
+
+query T
+explain select /*+ set_var(enable_stage_parquet_table_statistics=1) set_var(parquet_fast_read_bytes=1048576) */ id from @data/parquet/tuple.parquet;
+----
+TableScan
+├── table: default.system.read_parquet(data)
+├── scan id: 0
+├── output columns: [id (#0)]
+├── read rows: 1
+├── read size: 1.98 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 3.00
+
+query T
+explain select /*+ set_var(enable_stage_parquet_table_statistics=1) set_var(parquet_fast_read_bytes=1048576) */ $1 from @data/parquet/ (files=>('tuple.parquet', 'complex.parquet'));
 ----
 TableScan
 ├── table: default.system.stage
 ├── scan id: 0
 ├── output columns: [_$1 (#0)]
+├── read rows: 2
+├── read size: 92.57 KiB
+├── partitions total: 1
+├── partitions scanned: 1
+├── push downs: [filters: [], limit: NONE]
+└── estimated rows: 13.00
+
+query T
+explain select /*+ set_var(enable_stage_parquet_table_statistics=1) set_var(parquet_fast_read_bytes=1048576) */ * from @data/parquet/ (files=>('tuple.parquet', 'complex.parquet'));
+----
+TableScan
+├── table: default.system.read_parquet(data)
+├── scan id: 0
+├── output columns: [id (#0), t (#1)]
 ├── read rows: 2
 ├── read size: 92.57 KiB
 ├── partitions total: 1

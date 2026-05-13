@@ -52,12 +52,16 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storage::read_metadata_async;
 use databend_storages_common_table_meta::table::ChangeType;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use log::info;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 
-use crate::meta::read_metas_in_parallel;
+use crate::meta::read_metadata_async_cached;
+use crate::meta::stream_basic_metas_in_parallel_with_cache;
+use crate::meta::stream_metas_in_parallel;
 use crate::parquet_table::stats::create_stats_provider;
 use crate::schema::arrow_to_table_schema;
 
@@ -72,6 +76,8 @@ pub struct ParquetTable {
     pub(super) arrow_schema: ArrowSchema,
     pub(super) schema_descr: SchemaDescPtr,
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
+    pub(super) first_file: StageFileInfo,
+    pub(super) first_file_num_rows: u64,
     pub(super) schema_from: String,
     pub(super) compression_ratio: f64,
     /// Leaf fields of the schema.
@@ -82,6 +88,13 @@ pub struct ParquetTable {
     pub(super) need_stats_provider: bool,
     pub(super) max_threads: usize,
     pub(super) max_memory_usage: u64,
+}
+
+struct PreparedParquetMeta {
+    arrow_schema: ArrowSchema,
+    schema_descr: SchemaDescPtr,
+    compression_ratio: f64,
+    num_rows: u64,
 }
 
 impl ParquetTable {
@@ -96,6 +109,8 @@ impl ParquetTable {
             stage_info: info.stage_info.clone(),
             files_info: info.files_info.clone(),
             files_to_read: info.files_to_read.clone(),
+            first_file: info.first_file.clone(),
+            first_file_num_rows: info.first_file_num_rows,
             schema_descr: info.schema_descr.clone(),
             schema_from: info.schema_from.clone(),
             leaf_fields: info.leaf_fields.clone(),
@@ -127,11 +142,9 @@ impl ParquetTable {
             return ctx.get_zero_table().await;
         };
 
-        let first_file = first_file.path;
-
-        let (arrow_schema, schema_descr, compression_ratio) =
-            Self::prepare_metas(&first_file, operator.clone()).await?;
-        let schema = arrow_to_table_schema(&arrow_schema, true, fmt.use_logic_type)?.into();
+        let prepared_meta = Self::prepare_metas(&first_file, operator.clone()).await?;
+        let schema =
+            arrow_to_table_schema(&prepared_meta.arrow_schema, true, fmt.use_logic_type)?.into();
         let table_info = create_parquet_table_info(schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
@@ -153,16 +166,18 @@ impl ParquetTable {
 
         Ok(Arc::new(ParquetTable {
             table_info,
-            arrow_schema,
+            arrow_schema: prepared_meta.arrow_schema,
             operator,
             read_options,
-            schema_descr,
+            schema_descr: prepared_meta.schema_descr,
             leaf_fields,
             stage_info,
             files_info,
             files_to_read,
-            compression_ratio,
-            schema_from: first_file,
+            first_file: first_file.clone(),
+            first_file_num_rows: prepared_meta.num_rows,
+            compression_ratio: prepared_meta.compression_ratio,
+            schema_from: first_file.path,
             need_stats_provider,
             max_threads,
             max_memory_usage,
@@ -171,20 +186,32 @@ impl ParquetTable {
 
     #[async_backtrace::framed]
     async fn prepare_metas(
-        path: &str,
+        first_file: &StageFileInfo,
         operator: Operator,
-    ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {
+    ) -> Result<PreparedParquetMeta> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
-        let stat = operator.stat(path).await?;
+        let stat = operator.stat(&first_file.path).await?;
         let size = stat.content_length();
-        info!("infer schema from file {}, with stat {:?}", path, stat);
-        let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
+        info!(
+            "infer schema from file {}, with stat {:?}",
+            first_file.path, stat
+        );
+        let first_meta = if let Some(cache_key) = first_file.object_identity_key() {
+            read_metadata_async_cached(&first_file.path, &operator, Some(size), &cache_key).await?
+        } else {
+            Arc::new(read_metadata_async(&first_file.path, &operator, Some(size)).await?)
+        };
         let arrow_schema = infer_schema_with_extension(first_meta.file_metadata())?;
         let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.file_metadata().schema_descr_ptr();
-        Ok((arrow_schema, schema_descr, compression_ratio))
+        Ok(PreparedParquetMeta {
+            arrow_schema,
+            schema_descr,
+            compression_ratio,
+            num_rows: first_meta.file_metadata().num_rows() as u64,
+        })
     }
 }
 
@@ -228,6 +255,8 @@ impl Table for ParquetTable {
             leaf_fields: self.leaf_fields.clone(),
             files_info: self.files_info.clone(),
             files_to_read: self.files_to_read.clone(),
+            first_file: self.first_file.clone(),
+            first_file_num_rows: self.first_file_num_rows,
             schema_from: self.schema_from.clone(),
             compression_ratio: self.compression_ratio,
             need_stats_provider: self.need_stats_provider,
@@ -311,15 +340,16 @@ impl Table for ParquetTable {
         let num_columns = self.leaf_fields.len();
         let now = Instant::now();
         log::info!("begin read {} parquet file metas", file_locations.len());
-        let metas = read_metas_in_parallel(
+        let metas = stream_metas_in_parallel(
             &self.operator,
-            &file_locations, // The first file is already read.
+            file_locations.clone(), // The first file is already read.
             (self.schema_descr.clone(), self.schema_from.clone()),
             self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
             true,
         )
+        .try_collect::<Vec<_>>()
         .await?;
         let elapsed = now.elapsed();
         log::info!(
@@ -337,10 +367,82 @@ impl Table for ParquetTable {
         _require_fresh: bool,
         _change_type: Option<ChangeType>,
     ) -> Result<Option<TableStatistics>> {
-        let col_stats = self.column_statistics_provider(ctx).await?;
-        let num_rows = col_stats.num_rows();
+        let settings = ctx.get_settings();
+        let enable_parquet_table_statistics =
+            settings.get_enable_stage_parquet_table_statistics()?;
+        let files: Vec<StageFileInfo> = match &self.files_to_read {
+            Some(files) => files.iter().filter(|f| f.size > 0).cloned().collect(),
+            None => {
+                if self.files_info.files.is_none()
+                    && self.files_info.pattern.is_none()
+                    && self.first_file.path == self.files_info.path
+                {
+                    return Ok(Some(TableStatistics {
+                        num_rows: Some(self.first_file_num_rows),
+                        data_size_compressed: Some(self.first_file.size),
+                        ..Default::default()
+                    }));
+                }
+
+                if !enable_parquet_table_statistics {
+                    return Ok(None);
+                }
+
+                let thread_num = settings.get_max_threads()? as usize;
+                self.files_info
+                    .list(&self.operator, thread_num, None)
+                    .await?
+                    .into_iter()
+                    .filter(|f| f.size > 0)
+                    .collect()
+            }
+        };
+
+        if files.is_empty() {
+            return Ok(Some(TableStatistics {
+                num_rows: Some(0),
+                data_size_compressed: Some(0),
+                ..Default::default()
+            }));
+        }
+
+        if files.len() == 1
+            && files[0].path == self.first_file.path
+            && files[0].size == self.first_file.size
+        {
+            return Ok(Some(TableStatistics {
+                num_rows: Some(self.first_file_num_rows),
+                data_size_compressed: Some(self.first_file.size),
+                ..Default::default()
+            }));
+        }
+
+        if !enable_parquet_table_statistics {
+            return Ok(None);
+        }
+
+        let data_size_compressed = files.iter().map(|f| f.size).sum();
+        let file_infos = files
+            .iter()
+            .map(|file| (file.path.clone(), file.size, file.object_identity_key()))
+            .collect::<Vec<_>>();
+        let max_threads = settings.get_max_threads()? as usize;
+        let max_memory_usage = settings.get_max_memory_usage()?;
+        let mut metas = stream_basic_metas_in_parallel_with_cache(
+            &self.operator,
+            file_infos,
+            max_threads,
+            max_memory_usage,
+        )
+        .boxed();
+        let mut num_rows = 0;
+        while let Some(meta) = metas.try_next().await? {
+            num_rows += meta.meta.file_metadata().num_rows() as u64;
+        }
+
         Ok(Some(TableStatistics {
-            num_rows,
+            num_rows: Some(num_rows),
+            data_size_compressed: Some(data_size_compressed),
             ..Default::default()
         }))
     }

@@ -48,10 +48,11 @@ use databend_common_storage::StageFileInfo;
 use databend_common_storage::init_stage_operator;
 use databend_common_storage::parquet::infer_schema_with_extension;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
+use databend_common_storages_parquet::stream_metas_in_parallel_for_copy;
 use databend_query_storage_stage_support::StageTable;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::readers::snapshot_reader::TableSnapshotAccessor;
+use futures::TryStreamExt;
 use itertools::Itertools;
 use log::debug;
 use log::info;
@@ -246,12 +247,13 @@ impl CopyIntoTableInterpreter {
                     .map(|f| (f.path.clone(), f.size))
                     .collect::<Vec<_>>();
                 ctx.set_status_info("[TABLE-SCAN] Infer Parquet Schemas");
-                let metas = read_metas_in_parallel_for_copy(
+                let metas = stream_metas_in_parallel_for_copy(
                     &operator,
-                    &file_infos,
+                    file_infos,
                     max_threads,
                     max_memory_usage,
                 )
+                .try_collect::<Vec<_>>()
                 .await?;
 
                 let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode

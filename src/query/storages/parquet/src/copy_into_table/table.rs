@@ -32,12 +32,13 @@ use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_storage::FileStatus;
 use databend_common_storage::init_stage_operator;
+use futures::TryStreamExt;
 use parquet::file::metadata::FileMetaData;
 
 use crate::ParquetPart;
 use crate::copy_into_table::reader::RowGroupReaderForCopy;
 use crate::copy_into_table::source::ParquetCopySource;
-use crate::meta::read_metas_in_parallel_for_copy;
+use crate::meta::stream_metas_in_parallel_for_copy;
 use crate::partition::ParquetRowGroupPart;
 
 pub struct ParquetTableForCopy {}
@@ -67,7 +68,8 @@ impl ParquetTableForCopy {
             let max_memory_usage = settings.get_max_memory_usage()?;
 
             let operator = init_stage_operator(&stage_table_info.stage_info)?;
-            read_metas_in_parallel_for_copy(&operator, &file_infos, max_threads, max_memory_usage)
+            stream_metas_in_parallel_for_copy(&operator, file_infos, max_threads, max_memory_usage)
+                .try_collect::<Vec<_>>()
                 .await?
         };
 
