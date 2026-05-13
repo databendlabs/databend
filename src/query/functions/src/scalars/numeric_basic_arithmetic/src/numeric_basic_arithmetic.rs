@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Rem;
+
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
@@ -41,6 +43,7 @@ use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use num_traits::AsPrimitive;
 
+use crate::arithmetic_modulo::ModuloValue;
 use crate::arithmetic_modulo::RemScalar;
 use crate::arithmetic_modulo::vectorize_modulo;
 
@@ -79,6 +82,9 @@ where
         num_traits::cast::cast(rhs.min),
         num_traits::cast::cast(rhs.max),
     ) else {
+        // Mixed signed/unsigned overloads evaluate through `as` casts. If a
+        // range endpoint cannot be losslessly cast to the calculation type, the
+        // wrapped value range is not represented by the original endpoints.
         return FunctionDomain::Full;
     };
 
@@ -94,16 +100,6 @@ where
     let Some(rhs_max) = number_to_i128(rhs_max) else {
         return FunctionDomain::Full;
     };
-
-    if M::NEGATIVE {
-        let Some(signed_min) = number_to_i128(M::MIN) else {
-            return FunctionDomain::Full;
-        };
-        // Signed integer remainder may overflow for MIN % -1 in the calculation type.
-        if lhs_min <= signed_min && lhs_max >= signed_min && rhs_min <= -1 && rhs_max >= -1 {
-            return FunctionDomain::MayThrow;
-        }
-    }
 
     // Compute abs through unsigned space so signed minimum values widen safely.
     let max_abs_rhs = rhs_min.unsigned_abs().max(rhs_max.unsigned_abs());
@@ -490,69 +486,29 @@ where
     (L, R): ResultTypeOfBinary,
     LeastSuperResult<L, R>: Number
         + AsPrimitive<ModuloResult<L, R>>
-        + std::ops::Rem<Output = LeastSuperResult<L, R>>
-        + RemScalar<ModuloResult<L, R>>,
+        + Rem<Output = LeastSuperResult<L, R>>
+        + RemScalar<L, R, ModuloResult<L, R>>
+        + ModuloValue,
     ModuloResult<L, R>: Number,
 {
-    let rtype = LeastSuperResult::<L, R>::data_type();
-    if !matches!(
-        rtype,
-        NumberDataType::UInt8
-            | NumberDataType::UInt16
-            | NumberDataType::UInt32
-            | NumberDataType::UInt64
-    ) {
-        registry
-            .scalar_builder("modulo")
-            .function()
-            .typed_2_arg::<NumberType<L>, NumberType<R>, NumberType<ModuloResult<L, R>>>()
-            .passthrough_nullable()
-            .calc_domain(|_, lhs, rhs| {
-                modulo_domain_with_cast::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(
-                    lhs, rhs,
-                )
-            })
-            .derive_stat(|stat, _| {
-                derive_modulo_stat::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(stat)
-            })
-            .vectorized(vectorize_with_builder_2_arg::<
-                NumberType<L>,
-                NumberType<R>,
-                NumberType<ModuloResult<L, R>>,
-            >(|a, b, output, ctx| {
-                let b_value: F64 = b.as_();
-                if std::intrinsics::unlikely(b_value == 0.0) {
-                    ctx.set_error(output.len(), "divided by zero");
-                    output.push(ModuloResult::<L, R>::default());
-                } else {
-                    let lhs = AsPrimitive::<LeastSuperResult<L, R>>::as_(a);
-                    let rhs = AsPrimitive::<LeastSuperResult<L, R>>::as_(b);
-                    output.push(AsPrimitive::<ModuloResult<L, R>>::as_(lhs % rhs));
-                }
-            }))
-            .register();
-    } else {
-        registry
-            .scalar_builder("modulo")
-            .function()
-            .typed_2_arg::<NumberType<L>, NumberType<R>, NumberType<ModuloResult<L, R>>>()
-            .passthrough_nullable()
-            .calc_domain(|_, lhs, rhs| {
-                modulo_domain_with_cast::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(
-                    lhs, rhs,
-                )
-            })
-            .derive_stat(|stat, _| {
-                derive_modulo_stat::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(stat)
-            })
-            .vectorized(vectorize_modulo::<
-                L,
-                R,
-                LeastSuperResult<L, R>,
-                ModuloResult<L, R>,
-            >())
-            .register();
-    }
+    registry
+        .scalar_builder("modulo")
+        .function()
+        .typed_2_arg::<NumberType<L>, NumberType<R>, NumberType<ModuloResult<L, R>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, lhs, rhs| {
+            modulo_domain_with_cast::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(lhs, rhs)
+        })
+        .derive_stat(|stat, _| {
+            derive_modulo_stat::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(stat)
+        })
+        .vectorized(vectorize_modulo::<
+            L,
+            R,
+            LeastSuperResult<L, R>,
+            ModuloResult<L, R>,
+        >())
+        .register();
 }
 
 pub fn register_div_arithmetic(registry: &mut FunctionRegistry) {

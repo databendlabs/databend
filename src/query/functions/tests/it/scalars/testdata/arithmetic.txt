@@ -1649,6 +1649,121 @@ evaluation (internal):
 +---------+-----------------------------------------------+
 
 
+ast            : lhs_u8_wrap % rhs_i8_wrap
+raw expr       : modulo(lhs_u8_wrap::UInt8, rhs_i8_wrap::Int8)
+checked expr   : modulo<UInt8, Int8>(lhs_u8_wrap, rhs_i8_wrap)
+optimized expr : modulo<UInt8, Int8>(lhs_u8_wrap, -1_i8)
+evaluation:
++--------+-------------+-------------+-----------+
+|        | lhs_u8_wrap | rhs_i8_wrap | Output    |
++--------+-------------+-------------+-----------+
+| Type   | UInt8       | Int8        | UInt8     |
+| Domain | {127..=128} | {-1..=-1}   | {0..=255} |
+| Row 0  | 1           | -1          | 0         |
+| Row 1  | 2           | -1          | 0         |
+| Row 2  | 3           | -1          | 0         |
++--------+-------------+-------------+-----------+
+evaluation (internal):
++-------------+----------------------------+
+| Column      | Data                       |
++-------------+----------------------------+
+| lhs_u8_wrap | Column(UInt8([1, 2, 3]))   |
+| rhs_i8_wrap | Column(Int8([-1, -1, -1])) |
+| Output      | UInt8([0, 0, 0])           |
++-------------+----------------------------+
+
+
+ast            : lhs_u8_min_as_i8 % rhs_i8_minus_one
+raw expr       : modulo(lhs_u8_min_as_i8::UInt8, rhs_i8_minus_one::Int8)
+checked expr   : modulo<UInt8, Int8>(lhs_u8_min_as_i8, rhs_i8_minus_one)
+optimized expr : 0_u8
+evaluation:
++--------+------------------+------------------+---------+
+|        | lhs_u8_min_as_i8 | rhs_i8_minus_one | Output  |
++--------+------------------+------------------+---------+
+| Type   | UInt8            | Int8             | UInt8   |
+| Domain | {128..=128}      | {-1..=-1}        | {0..=0} |
+| Row 0  | 128              | -1               | 0       |
++--------+------------------+------------------+---------+
+evaluation (internal):
++------------------+----------------------+
+| Column           | Data                 |
++------------------+----------------------+
+| lhs_u8_min_as_i8 | Column(UInt8([128])) |
+| rhs_i8_minus_one | Column(Int8([-1]))   |
+| Output           | UInt8([0])           |
++------------------+----------------------+
+
+
+ast            : lhs_i8_wrap % rhs_u8_wrap
+raw expr       : modulo(lhs_i8_wrap::Int8, rhs_u8_wrap::UInt8)
+checked expr   : modulo<Int8, UInt8>(lhs_i8_wrap, rhs_u8_wrap)
+evaluation:
++--------+---------------+-------------+------------------+
+|        | lhs_i8_wrap   | rhs_u8_wrap | Output           |
++--------+---------------+-------------+------------------+
+| Type   | Int8          | UInt8       | Int16            |
+| Domain | {-128..=-127} | {254..=255} | {-32768..=32767} |
+| Row 0  | -1            | 1           | 0                |
+| Row 1  | -2            | 1           | 0                |
+| Row 2  | -3            | 1           | 0                |
++--------+---------------+-------------+------------------+
+evaluation (internal):
++-------------+----------------------------+
+| Column      | Data                       |
++-------------+----------------------------+
+| lhs_i8_wrap | Column(Int8([-1, -2, -3])) |
+| rhs_u8_wrap | Column(UInt8([1, 1, 1]))   |
+| Output      | Int16([0, 0, 0])           |
++-------------+----------------------------+
+
+
+ast            : lhs_i64_min % rhs_i64_minus_one
+raw expr       : modulo(lhs_i64_min::Int64, rhs_i64_minus_one::Int64)
+checked expr   : modulo<Int64, Int64>(lhs_i64_min, rhs_i64_minus_one)
+optimized expr : 0_i64
+evaluation:
++--------+-----------------------------------------------+-------------------+---------+
+|        | lhs_i64_min                                   | rhs_i64_minus_one | Output  |
++--------+-----------------------------------------------+-------------------+---------+
+| Type   | Int64                                         | Int64             | Int64   |
+| Domain | {-9223372036854775808..=-9223372036854775808} | {-1..=-1}         | {0..=0} |
+| Row 0  | -9223372036854775808                          | -1                | 0       |
++--------+-----------------------------------------------+-------------------+---------+
+evaluation (internal):
++-------------------+---------------------------------------+
+| Column            | Data                                  |
++-------------------+---------------------------------------+
+| lhs_i64_min       | Column(Int64([-9223372036854775808])) |
+| rhs_i64_minus_one | Column(Int64([-1]))                   |
+| Output            | Int64([0])                            |
++-------------------+---------------------------------------+
+
+
+ast            : wide_lhs % narrow_rhs
+raw expr       : modulo(wide_lhs::UInt16, narrow_rhs::UInt8)
+checked expr   : modulo<UInt16, UInt8>(wide_lhs, narrow_rhs)
+optimized expr : modulo<UInt16, UInt8>(wide_lhs, 255_u8)
+evaluation:
++--------+-------------+-------------+-----------+
+|        | wide_lhs    | narrow_rhs  | Output    |
++--------+-------------+-------------+-----------+
+| Type   | UInt16      | UInt8       | UInt8     |
+| Domain | {256..=512} | {255..=255} | {0..=254} |
+| Row 0  | 256         | 255         | 1         |
+| Row 1  | 511         | 255         | 1         |
+| Row 2  | 512         | 255         | 2         |
++--------+-------------+-------------+-----------+
+evaluation (internal):
++------------+---------------------------------+
+| Column     | Data                            |
++------------+---------------------------------+
+| wide_lhs   | Column(UInt16([256, 511, 512])) |
+| narrow_rhs | Column(UInt8([255, 255, 255]))  |
+| Output     | UInt8([1, 1, 2])                |
++------------+---------------------------------+
+
+
 ast            : small_lhs % wide_rhs
 raw expr       : modulo(small_lhs::Int64, wide_rhs::Int64)
 checked expr   : modulo<Int64, Int64>(small_lhs, wide_rhs)
