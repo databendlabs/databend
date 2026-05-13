@@ -22,11 +22,11 @@ out stats     :
 
 expr          : i % 4 = -1
 cardinality   : 100
-estimated     : 25
+estimated     : 14.285714285714288
 in stats      :
 0 ColumnStat { min: Int(-9), max: Int(9), ndv: 19.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(-9), max: Int(9), ndv: 4.75, null_count: 0, histogram: None }
+0 ColumnStat { min: Int(-9), max: Int(9), ndv: 2.714285714285715, null_count: 0, histogram: None }
 
 expr          : i % 4 = 5
 cardinality   : 100
@@ -38,11 +38,11 @@ out stats     :
 
 expr          : i % -4 = -1
 cardinality   : 100
-estimated     : 25
+estimated     : 14.285714285714288
 in stats      :
 0 ColumnStat { min: Int(-9), max: Int(9), ndv: 19.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(-9), max: Int(9), ndv: 4.75, null_count: 0, histogram: None }
+0 ColumnStat { min: Int(-9), max: Int(9), ndv: 2.714285714285715, null_count: 0, histogram: None }
 
 expr          : i % -4 = 5
 cardinality   : 100

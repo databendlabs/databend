@@ -95,19 +95,27 @@ where
         return FunctionDomain::Full;
     };
 
-    if signed_min_modulo_minus_one_may_throw::<M>(lhs_min, lhs_max, rhs_min, rhs_max) {
-        return FunctionDomain::MayThrow;
+    if M::NEGATIVE {
+        let Some(signed_min) = number_to_i128(M::MIN) else {
+            return FunctionDomain::Full;
+        };
+        // Signed integer remainder may overflow for MIN % -1 in the calculation type.
+        if lhs_min <= signed_min && lhs_max >= signed_min && rhs_min <= -1 && rhs_max >= -1 {
+            return FunctionDomain::MayThrow;
+        }
     }
 
-    let max_abs_rhs = rhs_min.abs().max(rhs_max.abs());
-    let max_abs_remainder = max_abs_rhs - 1;
-    let (min, max) = if lhs_min >= 0 {
-        (0, max_abs_remainder)
-    } else if lhs_max <= 0 {
-        (-max_abs_remainder, 0)
-    } else {
-        (-max_abs_remainder, max_abs_remainder)
+    // Compute abs through unsigned space so signed minimum values widen safely.
+    let max_abs_rhs = rhs_min.unsigned_abs().max(rhs_max.unsigned_abs());
+    let Some(max_abs_remainder) = max_abs_rhs
+        .checked_sub(1)
+        .and_then(|value| i128::try_from(value).ok())
+    else {
+        return FunctionDomain::Full;
     };
+    // The remainder keeps the dividend sign and cannot exceed either bound.
+    let min = lhs_min.min(0).max(-max_abs_remainder);
+    let max = lhs_max.max(0).min(max_abs_remainder);
 
     let (Some(min), Some(max)): (Option<O>, Option<O>) =
         (num_traits::cast::cast(min), num_traits::cast::cast(max))
@@ -116,23 +124,6 @@ where
     };
 
     FunctionDomain::Domain(SimpleDomain { min, max })
-}
-
-fn signed_min_modulo_minus_one_may_throw<M: Number>(
-    lhs_min: i128,
-    lhs_max: i128,
-    rhs_min: i128,
-    rhs_max: i128,
-) -> bool {
-    if !M::NEGATIVE {
-        return false;
-    }
-
-    let Some(min) = number_to_i128(M::MIN) else {
-        return false;
-    };
-
-    lhs_min <= min && lhs_max >= min && rhs_min <= -1 && rhs_max >= -1
 }
 
 fn number_to_i128<N: Number>(value: N) -> Option<i128> {
@@ -198,12 +189,19 @@ where
                 .normalize() else {
                     return Ok(None);
                 };
+                // A signed modulo range can contain both signs, so bound NDV by the
+                // derived output domain rather than by abs(divisor).
+                let Some(ndv_upper) =
+                    NumberType::<O>::upcast_domain(domain).finite_cardinality_upper()
+                else {
+                    return Ok(None);
+                };
                 ReturnStat {
                     domain: NullableType::<NumberType<O>>::upcast_domain(NullableDomain {
                         has_null,
                         value: Some(Box::new(domain)),
                     }),
-                    ndv: lhs.ndv.reduce(modulo_ndv::<R>(rhs)),
+                    ndv: lhs.ndv.reduce(ndv_upper as f64),
                     null_count: lhs.null_count,
                     distribution: OwnedDistribution::Unknown,
                 }
@@ -227,29 +225,19 @@ where
     else {
         return Ok(None);
     };
+    let output_domain = NumberType::<O>::upcast_domain(domain);
+    // A signed modulo range can contain both signs, so bound NDV by the
+    // derived output domain rather than by abs(divisor).
+    let Some(ndv_upper) = output_domain.finite_cardinality_upper() else {
+        return Ok(None);
+    };
 
     Ok(Some(ReturnStat {
-        domain: NumberType::<O>::upcast_domain(domain),
-        ndv: lhs.ndv.reduce(modulo_ndv::<R>(rhs)),
+        domain: output_domain,
+        ndv: lhs.ndv.reduce(ndv_upper as f64),
         null_count: lhs.null_count,
         distribution: OwnedDistribution::Unknown,
     }))
-}
-
-fn modulo_ndv<R: Number>(rhs: R) -> f64 {
-    let scalar = R::upcast_scalar(rhs);
-    match scalar {
-        NumberScalar::UInt8(value) => value as f64,
-        NumberScalar::UInt16(value) => value as f64,
-        NumberScalar::UInt32(value) => value as f64,
-        NumberScalar::UInt64(value) => value as f64,
-        NumberScalar::Int8(value) => value.unsigned_abs() as f64,
-        NumberScalar::Int16(value) => value.unsigned_abs() as f64,
-        NumberScalar::Int32(value) => value.unsigned_abs() as f64,
-        NumberScalar::Int64(value) => value.unsigned_abs() as f64,
-        NumberScalar::Float32(value) => value.0.abs().into(),
-        NumberScalar::Float64(value) => value.0.abs(),
-    }
 }
 
 pub fn register_plus<L, R>(registry: &mut FunctionRegistry)
