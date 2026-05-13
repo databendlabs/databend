@@ -25,6 +25,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::Table;
+use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,7 +42,9 @@ use databend_common_storage::init_stage_operator;
 use databend_common_storages_orc::OrcTableForCopy;
 use databend_common_storages_parquet::ParquetTableForCopy;
 use databend_common_storages_parquet::ParquetVariantTable;
+use databend_common_storages_parquet::read_metas_in_parallel_for_copy;
 use databend_storages_common_stage::SingleFilePartition;
+use databend_storages_common_table_meta::table::ChangeType;
 use opendal::Operator;
 
 use crate::read::avro::AvroReadPipelineBuilder;
@@ -132,6 +135,53 @@ impl StageTable {
             Partitions::create(PartitionsShuffleKind::Seq, partitions),
         ))
     }
+
+    #[async_backtrace::framed]
+    async fn parquet_table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+    ) -> Result<Option<TableStatistics>> {
+        let stage_table_info = &self.table_info;
+        let thread_num = ctx.get_settings().get_max_threads()? as usize;
+
+        let files = if let Some(files) = &stage_table_info.files_to_copy {
+            files.clone()
+        } else {
+            StageTable::list_files(stage_table_info, thread_num, None).await?
+        };
+        let file_infos = files
+            .iter()
+            .filter(|file| file.size > 0)
+            .map(|file| (file.path.clone(), file.size))
+            .collect::<Vec<_>>();
+        let data_size_compressed = file_infos.iter().map(|(_, size)| *size).sum::<u64>();
+
+        if file_infos.is_empty() {
+            return Ok(Some(TableStatistics {
+                num_rows: Some(0),
+                data_size_compressed: Some(0),
+                ..Default::default()
+            }));
+        }
+
+        let settings = ctx.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+        let max_memory_usage = settings.get_max_memory_usage()?;
+        let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        let metas =
+            read_metas_in_parallel_for_copy(&operator, &file_infos, max_threads, max_memory_usage)
+                .await?;
+        let num_rows = metas
+            .iter()
+            .map(|meta| meta.meta.file_metadata().num_rows() as u64)
+            .sum();
+
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            data_size_compressed: Some(data_size_compressed),
+            ..Default::default()
+        }))
+    }
 }
 
 #[async_trait::async_trait]
@@ -194,6 +244,19 @@ impl Table for StageTable {
 
     fn distribution_level(&self) -> DistributionLevel {
         DistributionLevel::Cluster
+    }
+
+    #[async_backtrace::framed]
+    async fn table_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _require_fresh: bool,
+        _change_type: Option<ChangeType>,
+    ) -> Result<Option<TableStatistics>> {
+        match self.table_info.stage_info.file_format_params {
+            FileFormatParams::Parquet(_) => self.parquet_table_statistics(ctx).await,
+            _ => Ok(None),
+        }
     }
 
     fn read_data(
