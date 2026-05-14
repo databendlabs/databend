@@ -1,0 +1,53 @@
+statement ok
+SET enable_auto_materialize_cte = 1
+
+statement ok
+DROP DATABASE IF EXISTS auto_m_cte_unique
+
+statement ok
+CREATE DATABASE auto_m_cte_unique
+
+statement ok
+CREATE TABLE auto_m_cte_unique.t(id INT NULL, k INT NULL) ENGINE = FUSE
+
+statement ok
+CREATE VIEW auto_m_cte_unique.v_base AS
+SELECT * FROM (
+    WITH c AS (
+        SELECT id, k FROM auto_m_cte_unique.t
+    ),
+    d AS (
+        SELECT id, k FROM auto_m_cte_unique.c
+        UNION ALL
+        SELECT id, k FROM auto_m_cte_unique.c
+    )
+    SELECT id, k FROM auto_m_cte_unique.d
+) v(id, k)
+
+statement ok
+CREATE VIEW auto_m_cte_unique.v_wrap AS
+SELECT * FROM auto_m_cte_unique.v_base
+
+query I
+WITH a AS (
+    SELECT id, COUNT(*) AS c
+    FROM auto_m_cte_unique.v_wrap
+    GROUP BY id
+),
+b AS (
+    SELECT id, COUNT(*) AS c
+    FROM auto_m_cte_unique.v_wrap
+    WHERE k IS NOT NULL
+    GROUP BY id
+),
+u AS (
+    SELECT id, c FROM a
+    UNION ALL
+    SELECT id, c FROM b
+)
+SELECT COUNT(*) FROM u
+----
+0
+
+statement ok
+DROP DATABASE auto_m_cte_unique
