@@ -38,10 +38,10 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::calculate_block_overlap_depths;
 use crate::statistics::get_min_max_stats;
 use crate::table_functions::TableMetaFunc;
 use crate::table_functions::TableMetaFuncTemplate;
-use crate::table_functions::clustering_depth::calculate_block_overlap_depths;
 
 pub struct ClusteringStatistics;
 

@@ -45,10 +45,10 @@ use crate::FuseTable;
 use crate::Table;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::calculate_block_overlap_depths;
 use crate::statistics::get_min_max_stats;
 use crate::table_functions::SimpleArgFunc;
 use crate::table_functions::SimpleArgFuncTemplate;
-use crate::table_functions::clustering_depth::calculate_block_overlap_depths;
 use crate::table_functions::parse_db_tb_opt_args;
 use crate::table_functions::string_literal;
 

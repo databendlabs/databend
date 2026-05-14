@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod clustering_depth;
 mod clustering_information;
 mod clustering_statistics;
 mod function_template;
