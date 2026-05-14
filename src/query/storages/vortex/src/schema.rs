@@ -38,8 +38,8 @@ pub fn ipc_bytes_to_record_batches(ipc_bytes: &[u8]) -> VortexResult<Vec<RecordB
 
     let mut batches = Vec::new();
     for batch in reader {
-        let batch = batch
-            .map_err(|e| VortexStorageError::Other(format!("IPC batch read error: {e}")))?;
+        let batch =
+            batch.map_err(|e| VortexStorageError::Other(format!("IPC batch read error: {e}")))?;
         batches.push(batch);
     }
     Ok(batches)

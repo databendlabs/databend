@@ -17,24 +17,24 @@
 //! Flow:
 //!   opendal::Operator + path
 //!     → databend-storages-vortex::read_vortex_file (arrow 58 + vortex)
-//!       → Arrow IPC bytes (arrow 58, stable binary format)
-//!         → RecordBatch (arrow 56, Databend side)
-//!           → DataBlock
+//!       → Arrow IPC bytes (stable binary format)
+//!         → RecordBatch(es) (arrow 58, Databend side)
+//!           → DataBlock(s) → concatenated DataBlock
 
 use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_ipc::reader::StreamReader;
+use arrow_schema::Field;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::ColumnId;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataField;
 use databend_common_expression::FieldIndex;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::ColumnId;
 use databend_common_expression::types::DataType;
-use arrow_schema::Field;
 use databend_storages_vortex::read_vortex_file as vortex_read;
 use opendal::Operator;
 
@@ -53,8 +53,7 @@ pub async fn read_vortex_block(
     project_indices: &Arc<BTreeMap<FieldIndex, (ColumnId, Field, DataType)>>,
     num_rows: usize,
 ) -> Result<DataBlock> {
-    // Build the column projection list (indices into the Vortex file's schema).
-    // Vortex uses 0-based column indices matching the schema order.
+    // Build the column projection list (0-based indices into the Vortex file's schema).
     let projected_cols: Vec<usize> = project_indices.keys().copied().collect();
     let projected_cols = if projected_cols.is_empty() {
         None
@@ -62,29 +61,34 @@ pub async fn read_vortex_block(
         Some(projected_cols)
     };
 
-    // Read the Vortex file → Arrow IPC bytes (arrow 58 inside vortex crate).
+    // Read the Vortex file → Arrow IPC bytes.
     let ipc_bytes = vortex_read(operator, path, projected_cols)
         .await
         .map_err(|e| ErrorCode::StorageOther(format!("Vortex read error: {e}")))?;
 
     if ipc_bytes.is_empty() {
-        // Empty file — return an empty block with the right schema.
         return Ok(DataBlock::new(vec![], num_rows));
     }
 
-    // Deserialize Arrow IPC bytes → RecordBatch (arrow 56, Databend side).
+    // Deserialize Arrow IPC bytes → RecordBatches.
+    // A Vortex file may have multiple chunks, each becoming one IPC batch.
     let cursor = Cursor::new(&ipc_bytes);
-    let mut reader = StreamReader::try_new(cursor, None)
+    let reader = StreamReader::try_new(cursor, None)
         .map_err(|e| ErrorCode::StorageOther(format!("Vortex: IPC stream read error: {e}")))?;
 
-    let batch = reader
-        .next()
-        .ok_or_else(|| {
-            ErrorCode::StorageOther("Vortex: IPC stream contained no batches".to_string())
-        })?
-        .map_err(|e| ErrorCode::StorageOther(format!("Vortex: IPC batch read error: {e}")))?;
-
-    // Convert RecordBatch → DataBlock using the projected schema.
     let data_schema = projected_schema.as_ref().into();
-    DataBlock::from_record_batch(&data_schema, &batch)
+    let mut blocks: Vec<DataBlock> = Vec::new();
+
+    for batch_result in reader {
+        let batch = batch_result
+            .map_err(|e| ErrorCode::StorageOther(format!("Vortex: IPC batch read error: {e}")))?;
+        let block = DataBlock::from_record_batch(&data_schema, &batch)?;
+        blocks.push(block);
+    }
+
+    match blocks.len() {
+        0 => Ok(DataBlock::new(vec![], num_rows)),
+        1 => Ok(blocks.remove(0)),
+        _ => DataBlock::concat(&blocks),
+    }
 }

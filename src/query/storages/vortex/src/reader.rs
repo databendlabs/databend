@@ -14,12 +14,10 @@
 
 //! Read a Vortex file and return Arrow IPC bytes.
 //!
-//! The caller passes an opendal Operator and a path. We open the Vortex file via
-//! object_store_opendal, scan the requested columns, convert to RecordBatches,
-//! serialize to Arrow IPC bytes, and return those bytes to the caller.
-//!
-//! Statistics-based pruning is handled entirely by Fuse's BlockMeta — we never
-//! read per-column statistics from the Vortex file itself.
+//! The caller (Databend fuse, using arrow 56) passes an opendal Operator and a path.
+//! We open the Vortex file via object_store_opendal, scan the requested columns,
+//! convert to RecordBatches (arrow 58), serialize to Arrow IPC bytes, and return
+//! those bytes to the caller. The caller then deserializes with arrow 56.
 
 use std::sync::Arc;
 
@@ -28,11 +26,9 @@ use futures::TryStreamExt;
 use object_store::ObjectStore;
 use object_store_opendal::OpendalStore;
 use opendal::Operator;
-use vortex_array::ExecutionCtx;
-use vortex_array::arrow::ArrowArrayExecutor;
+use vortex_array::arrow::IntoArrowArray;
 use vortex_array::stream::ArrayStreamExt;
 use vortex_file::OpenOptionsSessionExt;
-use vortex_file::VortexOpenOptions;
 use vortex_file::register_default_encodings;
 use vortex_session::VortexSession;
 
@@ -45,10 +41,10 @@ use crate::schema::record_batches_to_ipc_bytes;
 /// # Arguments
 /// * `operator`       - Databend opendal Operator for the storage backend.
 /// * `path`           - Path to the `.vortex` file within the operator's namespace.
-/// * `projected_cols` - Optional column indices (0-based) to project. `None` reads all columns.
+/// * `projected_cols` - Optional list of column indices to project. `None` reads all columns.
 ///
 /// # Returns
-/// Arrow IPC stream bytes, readable by Databend's arrow IPC reader.
+/// Arrow IPC stream bytes (arrow 58 format, readable by arrow 56 on the Databend side).
 pub async fn read_vortex_file(
     operator: Operator,
     path: &str,
@@ -61,17 +57,20 @@ pub async fn read_vortex_file(
     // 2. Wrap opendal Operator as an object_store ObjectStore
     let store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(operator));
 
-    // 3. Open the Vortex file via object_store integration.
-    //    open_object_store reads only the footer (O(1) IO), not the data.
-    let vortex_file = VortexOpenOptions::new(session.clone())
+    // 3. Open the Vortex file via object_store (reads only the footer — O(1) IO)
+    let vortex_file = session
+        .open_options()
         .open_object_store(&store, path)
         .await
         .map_err(VortexStorageError::Vortex)?;
 
-    // 4. Build the scan with optional column projection
-    let mut scan_builder = vortex_file.scan();
-    if let Some(indices) = projected_cols {
-        scan_builder = scan_builder.with_indices(indices);
+    // 4. Build the scan, optionally applying column projection
+    let mut scan_builder = vortex_file
+        .scan()
+        .map_err(VortexStorageError::Vortex)?;
+
+    if let Some(cols) = projected_cols {
+        scan_builder = scan_builder.with_indices(cols);
     }
 
     // 5. Execute the scan → stream of Vortex arrays
@@ -80,32 +79,22 @@ pub async fn read_vortex_file(
         .await
         .map_err(VortexStorageError::Vortex)?;
 
-    // 6. Derive the Arrow schema from the Vortex DType
-    let dtype = array_stream.dtype().clone();
-    let arrow_schema = dtype
-        .to_arrow_schema()
-        .map_err(VortexStorageError::Vortex)?;
-
-    // 7. Collect all arrays from the stream
-    let arrays: Vec<_> = array_stream
+    // 6. Convert each Vortex array chunk → RecordBatch (arrow 58)
+    let batches: Vec<RecordBatch> = array_stream
         .map_err(VortexStorageError::Vortex)
+        .and_then(|array| async move {
+            array
+                .into_arrow_record_batch()
+                .map_err(VortexStorageError::Vortex)
+        })
         .try_collect()
         .await?;
 
-    if arrays.is_empty() {
+    if batches.is_empty() {
         return Ok(Vec::new());
     }
 
-    // 8. Convert each Vortex array → RecordBatch via ArrowArrayExecutor
-    let mut ctx = ExecutionCtx::new(session);
-    let mut batches: Vec<RecordBatch> = Vec::with_capacity(arrays.len());
-    for array in arrays {
-        let batch = array
-            .execute_record_batch(&arrow_schema, &mut ctx)
-            .map_err(VortexStorageError::Vortex)?;
-        batches.push(batch);
-    }
-
-    // 9. Serialize RecordBatches → Arrow IPC bytes
-    record_batches_to_ipc_bytes(&arrow_schema, &batches)
+    // 7. Serialize RecordBatches → Arrow IPC bytes (readable by arrow 56)
+    let schema = batches[0].schema();
+    record_batches_to_ipc_bytes(&schema, &batches)
 }

@@ -33,11 +33,7 @@ use vortex_io::runtime::Handle;
 ///   opendal::Operator
 ///     → object_store_opendal::OpendalStore (implements ObjectStore)
 ///       → vortex_io::ObjectStoreReadAt (implements VortexReadAt)
-pub fn make_vortex_reader(
-    operator: Operator,
-    path: &str,
-    handle: Handle,
-) -> ObjectStoreReadAt {
+pub fn make_vortex_reader(operator: Operator, path: &str, handle: Handle) -> ObjectStoreReadAt {
     let store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(operator));
     let object_path = ObjectPath::from(path);
     ObjectStoreReadAt::new(store, object_path, handle)

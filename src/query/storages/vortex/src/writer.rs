@@ -14,18 +14,21 @@
 
 //! Write a Vortex file from Arrow IPC bytes.
 //!
-//! The caller (Databend fuse) serializes its DataBlock into Arrow IPC bytes and
-//! passes them here. We deserialize, convert to Vortex arrays, compress, and write
-//! a self-contained .vortex file into the output buffer.
+//! The caller (Databend fuse, using arrow 56) serializes its DataBlock into Arrow IPC
+//! bytes and passes them here. We deserialize with arrow 58, convert to a Vortex
+//! ArrayStream, compress, and write a Vortex file into the output buffer.
 //!
-//! Column statistics are NOT written into the Vortex file — Fuse's own BlockMeta
-//! already carries that information in the segment metadata.
+//! Column statistics are NOT written into the Vortex file — they are stored externally
+//! in Fuse's BlockMeta.col_stats. This keeps the Vortex file as a pure data container.
 
 use arrow_array::RecordBatch;
+use futures::TryStreamExt;
+use futures::stream;
 use vortex_array::ArrayRef;
 use vortex_array::arrow::FromArrowArray;
 use vortex_array::stream::ArrayStreamExt;
 use vortex_file::VortexWriteOptions;
+use vortex_file::WriteOptionsSessionExt;
 use vortex_file::register_default_encodings;
 use vortex_session::VortexSession;
 
@@ -36,13 +39,13 @@ use crate::schema::ipc_bytes_to_record_batches;
 /// Write Arrow IPC bytes as a Vortex file into `out`.
 ///
 /// # Arguments
-/// * `ipc_bytes` - Arrow IPC stream bytes produced by Databend.
+/// * `ipc_bytes` - Arrow IPC stream bytes produced by Databend (arrow 56).
 /// * `out`       - Output buffer; will contain a complete `.vortex` file on success.
 ///
 /// # Returns
 /// Number of rows written.
 pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexResult<u64> {
-    // 1. Deserialize IPC bytes → RecordBatches
+    // 1. Deserialize IPC bytes → RecordBatches (arrow 58)
     let batches = ipc_bytes_to_record_batches(ipc_bytes)?;
     if batches.is_empty() {
         return Ok(0);
@@ -50,30 +53,23 @@ pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexRes
 
     let row_count: u64 = batches.iter().map(|b| b.num_rows() as u64).sum();
 
-    // 2. Build a VortexSession with default encodings (ALP, FastLanes, FSST, ZigZag, etc.)
+    // 2. Build a VortexSession with default encodings (ALP, FastLanes, FSST, etc.)
     let session = VortexSession::empty();
     register_default_encodings(&session);
 
-    // 3. Convert RecordBatches → Vortex Arrays via FromArrowArray
+    // 3. Convert RecordBatches → Vortex Arrays
     let arrays: Vec<ArrayRef> = batches
         .into_iter()
         .map(record_batch_to_vortex)
         .collect::<VortexResult<_>>()?;
 
-    // 4. Capture the dtype from the first array (all batches share the same schema)
+    // 4. Build an ArrayStream from the arrays
     let dtype = arrays[0].dtype().clone();
+    let array_stream = stream::iter(arrays.into_iter().map(Ok)).into_array_stream(dtype);
 
-    // 5. Build an ArrayStream from the arrays
-    let array_stream = futures::stream::iter(
-        arrays
-            .into_iter()
-            .map(Ok::<_, vortex_error::VortexError>),
-    )
-    .into_array_stream(dtype);
-
-    // 6. Write to the output buffer.
-    //    Statistics are excluded — Fuse BlockMeta owns that data.
-    VortexWriteOptions::new(session)
+    // 5. Write to the output buffer using the session's write options
+    session
+        .write_options()
         .write(out, array_stream)
         .await
         .map_err(VortexStorageError::Vortex)?;
@@ -81,8 +77,10 @@ pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexRes
     Ok(row_count)
 }
 
-/// Convert a single RecordBatch into a Vortex ArrayRef via FromArrowArray.
+/// Convert a single RecordBatch (arrow 58) into a Vortex ArrayRef.
 fn record_batch_to_vortex(batch: RecordBatch) -> VortexResult<ArrayRef> {
-    // FromArrowArray<RecordBatch> is implemented for ArrayRef (owned conversion).
-    ArrayRef::from_arrow(batch, true).map_err(VortexStorageError::Vortex)
+    // vortex_array::arrow::FromArrowArray provides conversion from Arrow arrays.
+    // A RecordBatch maps to a StructArray in Vortex.
+    ArrayRef::from_arrow_record_batch(&batch)
+        .map_err(VortexStorageError::Vortex)
 }

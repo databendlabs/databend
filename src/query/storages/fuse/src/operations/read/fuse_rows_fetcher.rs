@@ -70,7 +70,7 @@ pub fn row_fetch_processor(
 
     match &fuse_table.storage_format {
         FuseStorageFormat::Native => unreachable!(),
-        FuseStorageFormat::Parquet => {
+        FuseStorageFormat::Parquet | FuseStorageFormat::Vortex => {
             let read_settings = ReadSettings::from_ctx(&ctx)?;
             let block_threshold = BlockThreshold {
                 max_rows: ctx.get_settings().get_max_block_size()? as usize,

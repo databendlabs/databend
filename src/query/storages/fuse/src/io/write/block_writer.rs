@@ -49,8 +49,6 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
-use databend_storages_common_table_meta::meta::VortexColumnMeta;
-use databend_storages_vortex::write_vortex_file;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -58,8 +56,10 @@ use databend_storages_common_table_meta::meta::ColumnMeta;
 use databend_storages_common_table_meta::meta::ExtendedBlockMeta;
 use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
+use databend_storages_common_table_meta::meta::VortexColumnMeta;
 use databend_storages_common_table_meta::meta::encode_column_hll;
 use databend_storages_common_table_meta::table::TableCompression;
+use databend_storages_vortex::write_vortex_file;
 use opendal::Operator;
 
 use crate::FuseStorageFormat;
@@ -149,9 +149,7 @@ pub fn serialize_block_with_column_stats(
 
             Ok(metas)
         }
-        FuseStorageFormat::Vortex => {
-            serialize_block_vortex(&schema, block, buf)
-        }
+        FuseStorageFormat::Vortex => serialize_block_vortex(&schema, block, buf),
     }
 }
 
@@ -174,8 +172,9 @@ fn serialize_block_vortex(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
-    use arrow_ipc::writer::StreamWriter;
     use std::sync::Arc as StdArc;
+
+    use arrow_ipc::writer::StreamWriter;
 
     let row_count = block.num_rows() as u64;
     let leaf_column_ids = schema.to_leaf_column_ids();
@@ -282,9 +281,10 @@ impl BlockBuilder {
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
-        let (block_location, block_id) = self
-            .meta_locations
-            .gen_block_location(self.table_meta_timestamps);
+        let (block_location, block_id) = self.meta_locations.gen_block_location_with_format(
+            self.table_meta_timestamps,
+            &self.write_settings.storage_format,
+        );
 
         let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
         let bloom_index_state = BloomIndexState::from_data_block(

@@ -244,6 +244,11 @@ impl<'a> FuseEncodingImpl<'a> {
                     )
                     .await?;
                 }
+                FuseStorageFormat::Vortex => {
+                    // fuse_encoding is not yet implemented for Vortex format.
+                    // Vortex encoding information is stored in the file footer,
+                    // not in per-column metadata. Return empty rows for now.
+                }
             }
         }
 

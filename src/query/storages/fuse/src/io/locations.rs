@@ -150,13 +150,27 @@ impl TableMetaLocationGenerator {
         &self,
         table_meta_timestamps: TableMetaTimestamps,
     ) -> (Location, Uuid) {
+        self.gen_block_location_with_format(table_meta_timestamps, &crate::FuseStorageFormat::Parquet)
+    }
+
+    pub fn gen_block_location_with_format(
+        &self,
+        table_meta_timestamps: TableMetaTimestamps,
+        storage_format: &crate::FuseStorageFormat,
+    ) -> (Location, Uuid) {
         let part_uuid = uuid_from_date_time(table_meta_timestamps.segment_block_timestamp);
+        let ext = match storage_format {
+            crate::FuseStorageFormat::Parquet => "parquet",
+            crate::FuseStorageFormat::Native => "parquet", // native uses parquet extension by convention
+            crate::FuseStorageFormat::Vortex => "vortex",
+        };
         let location_path = format!(
-            "{}{}{}_v{}.parquet",
+            "{}{}{}_v{}.{}",
             self.block_location_prefix(),
             VACUUM2_OBJECT_KEY_PREFIX,
             part_uuid.as_simple(),
             DataBlock::VERSION,
+            ext,
         );
 
         ((location_path, DataBlock::VERSION), part_uuid)

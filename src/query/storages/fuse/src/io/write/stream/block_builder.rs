@@ -303,6 +303,15 @@ impl StreamBlockBuilder {
                 )?;
                 BlockWriterImpl::Native(writer)
             }
+            FuseStorageFormat::Vortex => {
+                // Vortex format does not support streaming writes; use the batch
+                // write path (BlockBuilder::build) instead.
+                return Err(databend_common_exception::ErrorCode::StorageOther(
+                    "Vortex format does not support streaming block writes; \
+                     use the batch write path instead"
+                        .to_string(),
+                ));
+            }
         };
 
         let inverted_index_writers = properties
@@ -409,7 +418,10 @@ impl StreamBlockBuilder {
         let (block_location, block_id) = self
             .properties
             .meta_locations
-            .gen_block_location(self.properties.table_meta_timestamps);
+            .gen_block_location_with_format(
+                self.properties.table_meta_timestamps,
+                &self.properties.write_settings.storage_format,
+            );
 
         let bloom_index_location = self
             .properties
