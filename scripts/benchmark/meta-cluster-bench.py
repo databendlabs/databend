@@ -15,7 +15,8 @@ Usage
         --leader-bin   /path/to/build-A \\
         --follower-bin /path/to/build-B \\
         [--leader-label A] [--follower-label B] \\
-        [--workload-clients 4] [--workload-ops 10000] [--workload-rpc upsert_kv] \\
+        [--workload-clients 4] [--workload-client-pool-size 1] \\
+        [--workload-ops 10000] [--workload-rpc upsert_kv] \\
         [--port-base 28101] [--work-dir DIR]
 
 Each `--*-bin` directory is expected to contain:
@@ -123,6 +124,19 @@ class RunResult:
     workload_ops: int
     elapsed_ms: int | None = None
     qps: float | None = None
+    success_qps: float | None = None
+    error_qps: float | None = None
+    client_pool_size: int | None = None
+    metabench_total: int | None = None
+    metabench_success: int | None = None
+    metabench_error: int | None = None
+    latency_avg_us: int | None = None
+    latency_max_us: int | None = None
+    latency_p50_us: int | None = None
+    latency_p90_us: int | None = None
+    latency_p95_us: int | None = None
+    latency_p99_us: int | None = None
+    latency_histogram: str | None = None
     slow_rpc_client: int = 0
     slow_io_leader: int = 0
     slow_io_follower: int = 0
@@ -160,6 +174,10 @@ def main() -> int:
         help="metabench --client (default: 4).",
     )
     parser.add_argument(
+        "--workload-client-pool-size", type=int, default=1,
+        help="metabench --client-pool-size (default: 1).",
+    )
+    parser.add_argument(
         "--workload-ops", type=int, default=10000,
         help="metabench --number = ops per client (default: 10000).",
     )
@@ -177,6 +195,11 @@ def main() -> int:
         default=Path("/tmp/databend-meta-cluster-bench"),
         help="scratch dir for configs, logs, raft state. Wiped on each run "
              "(default: /tmp/databend-meta-cluster-bench).",
+    )
+    parser.add_argument(
+        "--post-bench-wait-secs", type=float, default=2.0,
+        help="seconds to keep servers alive after metabench exits so periodic "
+             "server stats can be flushed to logs (default: 2.0).",
     )
     args = parser.parse_args()
 
@@ -295,6 +318,7 @@ def run_cluster(
         bench_log = work_dir / "metabench.log"
         print(f"[bench] driving load through node1 grpc=127.0.0.1:{ports['n1_grpc']}")
         print(f"        client={args.workload_clients} number={args.workload_ops} "
+              f"client_pool_size={args.workload_client_pool_size} "
               f"rpc={args.workload_rpc}")
         t0 = time.time()
         with open(bench_log, "w") as f:
@@ -303,6 +327,7 @@ def run_cluster(
                     str(bench_bin),
                     "--grpc-api-address", f"127.0.0.1:{ports['n1_grpc']}",
                     "--client", str(args.workload_clients),
+                    "--client-pool-size", str(args.workload_client_pool_size),
                     "--number", str(args.workload_ops),
                     "--rpc", args.workload_rpc,
                     "--log-level", "warn",
@@ -310,9 +335,14 @@ def run_cluster(
                 cwd=work_dir,
                 stdout=f,
                 stderr=subprocess.STDOUT,
+                check=True,
             )
         wall = time.time() - t0
         print(f"[bench] wall={wall:.1f}s, log={bench_log}\n")
+
+        if args.post_bench_wait_secs > 0:
+            print(f"[bench] waiting {args.post_bench_wait_secs:.1f}s for server stats")
+            time.sleep(args.post_bench_wait_secs)
 
         bench_text = bench_log.read_text()
         summary_line = next(
@@ -326,6 +356,40 @@ def run_cluster(
                 result.qps = result.workload_ops * 1000.0 / ms
         else:
             result.notes.append("metabench produced no summary line")
+
+        bench_summary_line = next(
+            (ln for ln in bench_text.splitlines()
+             if ln.startswith("benchmark summary:")),
+            None,
+        )
+        if bench_summary_line:
+            metrics = parse_key_value_line(bench_summary_line, "benchmark summary:")
+            result.metabench_total = parse_int_metric(metrics, "total")
+            result.metabench_success = parse_int_metric(metrics, "success")
+            result.metabench_error = parse_int_metric(metrics, "error")
+            elapsed_ms = parse_int_metric(metrics, "elapsed_ms")
+            if elapsed_ms is not None:
+                result.elapsed_ms = elapsed_ms
+            qps = parse_float_metric(metrics, "qps")
+            if qps is not None:
+                result.qps = qps
+            result.success_qps = parse_float_metric(metrics, "success_qps")
+            result.error_qps = parse_float_metric(metrics, "error_qps")
+            result.client_pool_size = parse_int_metric(metrics, "client_pool_size")
+            result.latency_avg_us = parse_int_metric(metrics, "avg_us")
+            result.latency_max_us = parse_int_metric(metrics, "max_us")
+            result.latency_p50_us = parse_int_metric(metrics, "p50_us")
+            result.latency_p90_us = parse_int_metric(metrics, "p90_us")
+            result.latency_p95_us = parse_int_metric(metrics, "p95_us")
+            result.latency_p99_us = parse_int_metric(metrics, "p99_us")
+
+        histogram_line = next(
+            (ln for ln in bench_text.splitlines()
+             if ln.startswith("benchmark latency histogram:")),
+            None,
+        )
+        if histogram_line:
+            result.latency_histogram = histogram_line.split(":", 1)[1].strip()
 
         result.slow_rpc_client = bench_text.count("done slowly:")
         result.slow_io_leader = sum_count(log1, "Slow IO operation")
@@ -361,12 +425,22 @@ def print_report(
     print(f"\n{'=' * 72}\n=== Report\n{'=' * 72}\n")
     print(f"leader   : {result.leader_label}  (node1 grpc=127.0.0.1:{ports['n1_grpc']})")
     print(f"follower : {result.follower_label}  (node2 grpc=127.0.0.1:{ports['n2_grpc']})")
+    client_pool_size = result.client_pool_size or args.workload_client_pool_size
     print(f"workload : {args.workload_clients} clients x {args.workload_ops} "
-          f"ops/client = {result.workload_ops} ops via {args.workload_rpc}\n")
+          f"ops/client = {result.workload_ops} ops via {args.workload_rpc}; "
+          f"client_pool_size={client_pool_size}\n")
 
     rows = [
         ("throughput (ops/sec)",  fmt_float(result.qps)),
+        ("success qps",           fmt_float(result.success_qps)),
+        ("error qps",             fmt_float(result.error_qps)),
         ("wall (ms)",             fmt_int(result.elapsed_ms)),
+        ("metabench total",       fmt_int(result.metabench_total)),
+        ("metabench success",     fmt_int(result.metabench_success)),
+        ("metabench error",       fmt_int(result.metabench_error)),
+        ("latency avg/max (us)",  fmt_pair(result.latency_avg_us, result.latency_max_us)),
+        ("latency p50/p90 (us)",  fmt_pair(result.latency_p50_us, result.latency_p90_us)),
+        ("latency p95/p99 (us)",  fmt_pair(result.latency_p95_us, result.latency_p99_us)),
         ("slow-RPC (client view)", fmt_int(result.slow_rpc_client)),
         ("slow-IO leader",        fmt_int(result.slow_io_leader)),
         ("slow-IO follower",      fmt_int(result.slow_io_follower)),
@@ -382,12 +456,19 @@ def print_report(
         for n in result.notes:
             print(f"  - {n}")
 
+    if result.latency_histogram:
+        print("\nlatency histogram:")
+        print(f"  {result.latency_histogram}")
+
     print(
         "\nLegend:\n"
-        "  throughput (ops/sec)    successful RPCs per second, derived from\n"
-        "                          metabench's summary line.\n"
+        "  throughput (ops/sec)    completed operations per second, derived from\n"
+        "                          metabench's detailed summary when available.\n"
         "  wall (ms)               total wall-clock duration of the workload,\n"
         "                          as reported by metabench.\n"
+        "  latency                 client-side RPC duration measured around each\n"
+        "                          metabench operation. Percentiles are bucket\n"
+        "                          upper bounds from the latency histogram.\n"
         "  slow-RPC (client view)  metabench-side count of RPCs that took\n"
         "                          longer than 300 ms end-to-end (`done slowly:`\n"
         "                          warnings from the meta gRPC client).\n"
@@ -411,6 +492,38 @@ def fmt_int(x: int | None) -> str:
 
 def fmt_float(x: float | None) -> str:
     return "n/a" if x is None else f"{x:.1f}"
+
+
+def fmt_pair(a: int | None, b: int | None) -> str:
+    if a is None or b is None:
+        return "n/a"
+    return f"{a}/{b}"
+
+
+def parse_key_value_line(line: str, prefix: str) -> dict[str, str]:
+    if not line.startswith(prefix):
+        return {}
+    metrics = {}
+    for part in line[len(prefix):].strip().split():
+        if "=" not in part:
+            continue
+        k, v = part.split("=", 1)
+        metrics[k] = v.rstrip(",")
+    return metrics
+
+
+def parse_int_metric(metrics: dict[str, str], key: str) -> int | None:
+    try:
+        return int(metrics[key])
+    except (KeyError, ValueError):
+        return None
+
+
+def parse_float_metric(metrics: dict[str, str], key: str) -> float | None:
+    try:
+        return float(metrics[key])
+    except (KeyError, ValueError):
+        return None
 
 
 def spawn_meta(binary: Path, cfg: Path, stdout_path: Path, cwd: Path) -> subprocess.Popen:
