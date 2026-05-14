@@ -38,6 +38,7 @@ databend-storages-common-io = { workspace = true }
 databend-storages-common-pruner = { workspace = true }
 databend-storages-common-session = { workspace = true }
 databend-storages-common-table-meta = { workspace = true }
+databend-storages-vortex = { workspace = true }
 
 ahash = { workspace = true }
 arrow = { workspace = true }

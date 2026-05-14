@@ -31,6 +31,7 @@ members = [
     "src/meta/store",
     "src/meta/ver",
     "src/query/codegen",
+    "src/query/storages/vortex",
     "src/tests/sqlsmith",
     "tests/sqllogictests",
 ]
@@ -120,6 +121,7 @@ databend-common-storages-parquet = { path = "src/query/storages/parquet" }
 databend-common-storages-stage = { path = "src/query/storages/stage" }
 databend-common-storages-stream = { path = "src/query/storages/stream" }
 databend-common-storages-system = { path = "src/query/storages/system" }
+databend-storages-vortex = { path = "src/query/storages/vortex" }
 databend-common-telemetry = { path = "src/common/telemetry" }
 databend-common-timezone = { path = "src/common/timezone" }
 databend-common-tracing = { path = "src/common/tracing" }

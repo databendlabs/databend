@@ -20,6 +20,7 @@ mod block_reader_native;
 mod block_reader_native_deserialize;
 mod block_reader_parquet_deserialize;
 pub mod parquet;
+pub(crate) mod vortex_reader;
 
 pub use block_reader::BlockReadContext;
 pub use block_reader::BlockReader;

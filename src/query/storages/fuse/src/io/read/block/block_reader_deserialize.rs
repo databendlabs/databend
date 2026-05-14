@@ -32,6 +32,7 @@ use crate::BlockReadResult;
 use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::read::block::block_reader_merge_io::DataItem;
+use crate::io::read::block::vortex_reader::read_vortex_block;
 
 pub enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),
@@ -85,6 +86,11 @@ impl BlockReader {
             FuseStorageFormat::Native => {
                 self.deserialize_native_chunks(block_path, num_rows, column_metas, column_chunks)
             }
+            // Vortex blocks are read as a whole file via read_by_meta / read_vortex_block;
+            // this path should not be reached for Vortex format.
+            FuseStorageFormat::Vortex => Err(databend_common_exception::ErrorCode::StorageOther(
+                "deserialize_chunks called for Vortex format; use read_by_meta instead".to_string(),
+            )),
         }
     }
 
@@ -96,6 +102,18 @@ impl BlockReader {
         meta: &BlockMeta,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
+        // Vortex files are read as a whole — bypass the merge-IO path entirely.
+        if matches!(storage_format, FuseStorageFormat::Vortex) {
+            return read_vortex_block(
+                self.operator.clone(),
+                &meta.location.0,
+                &self.projected_schema,
+                &self.project_indices,
+                meta.row_count as usize,
+            )
+            .await;
+        }
+
         // Get the merged IO read result.
         let merge_io_read_result = self
             .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
@@ -130,6 +148,11 @@ impl BlockReader {
                 &meta.col_metas,
                 column_chunks,
             ),
+            // Vortex blocks must be read via read_by_meta which bypasses merge-IO.
+            FuseStorageFormat::Vortex => Err(databend_common_exception::ErrorCode::StorageOther(
+                "deserialize_chunks_with_meta called for Vortex format; use read_by_meta instead"
+                    .to_string(),
+            )),
         }
     }
 }

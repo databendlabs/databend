@@ -49,6 +49,8 @@ use databend_common_metrics::storage::metrics_inc_block_write_nums;
 use databend_common_native::write::NativeWriter;
 use databend_storages_common_blocks::blocks_to_parquet_with_stats;
 use databend_storages_common_index::NgramArgs;
+use databend_storages_common_table_meta::meta::VortexColumnMeta;
+use databend_storages_vortex::write_vortex_file;
 use databend_storages_common_table_meta::meta::BlockHLLState;
 use databend_storages_common_table_meta::meta::BlockMeta;
 use databend_storages_common_table_meta::meta::ClusterStatistics;
@@ -147,7 +149,86 @@ pub fn serialize_block_with_column_stats(
 
             Ok(metas)
         }
+        FuseStorageFormat::Vortex => {
+            serialize_block_vortex(&schema, block, buf)
+        }
     }
+}
+
+/// Serialize a DataBlock into a Vortex file.
+///
+/// The strategy is:
+/// 1. Convert DataBlock → RecordBatch (arrow 56) → Arrow IPC bytes
+/// 2. Pass IPC bytes to `databend-storages-vortex` crate (arrow 58 + vortex)
+/// 3. That crate deserializes IPC with arrow 58, converts to Vortex arrays,
+///    compresses, and writes a .vortex file into `buf`.
+///
+/// Column statistics are NOT written into the Vortex file — they are stored
+/// externally in Fuse's BlockMeta.col_stats (computed by gen_columns_statistics).
+/// This keeps the Vortex file as a pure data container.
+///
+/// Returns a ColumnMeta::Vortex entry per leaf column (all sharing the same
+/// row count; the file path comes from BlockMeta.location).
+fn serialize_block_vortex(
+    schema: &TableSchemaRef,
+    block: DataBlock,
+    buf: &mut Vec<u8>,
+) -> Result<HashMap<ColumnId, ColumnMeta>> {
+    use arrow_ipc::writer::StreamWriter;
+    use std::sync::Arc as StdArc;
+
+    let row_count = block.num_rows() as u64;
+    let leaf_column_ids = schema.to_leaf_column_ids();
+
+    // Step 1: DataBlock → RecordBatch (arrow 56)
+    let record_batch = block.to_record_batch(schema.as_ref())?;
+
+    // Step 2: RecordBatch → Arrow IPC stream bytes (arrow 56)
+    // These bytes are the stable binary bridge to the vortex crate (arrow 58).
+    let mut ipc_buf = Vec::new();
+    {
+        let mut writer = StreamWriter::try_new(&mut ipc_buf, record_batch.schema_ref().as_ref())
+            .map_err(|e| {
+                databend_common_exception::ErrorCode::StorageOther(format!(
+                    "Vortex: failed to create Arrow IPC writer: {e}"
+                ))
+            })?;
+        writer.write(&record_batch).map_err(|e| {
+            databend_common_exception::ErrorCode::StorageOther(format!(
+                "Vortex: failed to write Arrow IPC batch: {e}"
+            ))
+        })?;
+        writer.finish().map_err(|e| {
+            databend_common_exception::ErrorCode::StorageOther(format!(
+                "Vortex: failed to finish Arrow IPC stream: {e}"
+            ))
+        })?;
+    }
+
+    // Step 3: IPC bytes → Vortex file (via databend-storages-vortex, arrow 58)
+    // This runs synchronously by blocking on the async write_vortex_file.
+    let rt = tokio::runtime::Handle::current();
+    let _row_count_written = rt.block_on(write_vortex_file(&ipc_buf, buf)).map_err(|e| {
+        databend_common_exception::ErrorCode::StorageOther(format!(
+            "Vortex: failed to write vortex file: {e}"
+        ))
+    })?;
+
+    // Step 4: Build ColumnMeta::Vortex for each leaf column.
+    // All columns share the same row count; the file path is in BlockMeta.location.
+    let metas = leaf_column_ids
+        .iter()
+        .map(|col_id| {
+            (
+                *col_id,
+                ColumnMeta::Vortex(VortexColumnMeta {
+                    num_values: row_count,
+                }),
+            )
+        })
+        .collect();
+
+    Ok(metas)
 }
 
 /// Take ownership here to avoid extra copy.

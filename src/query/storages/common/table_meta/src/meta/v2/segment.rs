@@ -328,12 +328,28 @@ impl SegmentInfo {
     }
 }
 
+/// Column-level metadata for a Vortex-format block.
+///
+/// Unlike Parquet and Native formats where each column has its own byte range,
+/// a Vortex file stores all columns together in a single file. Column offsets are
+/// encoded in the Vortex file footer (Layout flatbuffer) and resolved at read time
+/// by the Vortex reader. We only need to track the row count here; the file-level
+/// location is stored in BlockMeta.location.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct VortexColumnMeta {
+    /// Total number of rows in this column (== block row count).
+    pub num_values: u64,
+}
+
 #[derive(
     serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, EnumAsInner, FrozenAPI,
 )]
 pub enum ColumnMeta {
     Parquet(v0::ColumnMeta),
     Native(NativeColumnMeta),
+    /// Vortex format: column layout is encoded in the file footer; only row count
+    /// is stored here. The file path comes from BlockMeta.location.
+    Vortex(VortexColumnMeta),
 }
 
 impl ColumnMeta {
@@ -341,6 +357,7 @@ impl ColumnMeta {
         match self {
             ColumnMeta::Parquet(v) => v.num_values as usize,
             ColumnMeta::Native(v) => v.pages.iter().map(|page| page.num_values as usize).sum(),
+            ColumnMeta::Vortex(v) => v.num_values as usize,
         }
     }
 
@@ -348,6 +365,10 @@ impl ColumnMeta {
         match self {
             ColumnMeta::Parquet(v) => (v.offset, v.len),
             ColumnMeta::Native(v) => (v.offset, v.pages.iter().map(|page| page.length).sum()),
+            // Vortex files are read as a whole; offset/length are not meaningful
+            // at the column level. Return (0, 0) — callers must use the file path
+            // from BlockMeta.location and let the Vortex reader handle IO.
+            ColumnMeta::Vortex(_) => (0, 0),
         }
     }
 
@@ -364,6 +385,7 @@ impl ColumnMeta {
                     .sum(),
                 None => v.pages.iter().map(|page| page.num_values).sum(),
             },
+            ColumnMeta::Vortex(v) => v.num_values,
         }
     }
 
@@ -380,6 +402,9 @@ impl ColumnMeta {
                     .sum(),
                 None => v.pages.iter().map(|page| page.length).sum(),
             },
+            // File size is tracked at block level (BlockMeta.file_size); return 0
+            // here to avoid double-counting in callers that sum column bytes.
+            ColumnMeta::Vortex(_) => 0,
         }
     }
 }
