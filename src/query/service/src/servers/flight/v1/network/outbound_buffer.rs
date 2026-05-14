@@ -308,7 +308,7 @@ impl ExchangeSinkBuffer {
         {
             let state = remote.state.lock();
             if let Some(status) = state.last_error.clone() {
-                return Err(status.into());
+                return Err(status);
             }
         }
 
@@ -331,7 +331,7 @@ impl ExchangeSinkBuffer {
 
             // Check for previous error
             if let Some(status) = state.last_error.clone() {
-                return Err(status.into());
+                return Err(status);
             }
 
             // Try to send again

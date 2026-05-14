@@ -28,8 +28,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::prelude::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
+use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 
 pub struct BroadcastSendTransform {
@@ -40,7 +40,7 @@ pub struct BroadcastSendTransform {
     local_pos: usize,
     tasks: SyncTaskSet,
     channels: OutboundSendChannels,
-    handle: Option<SyncTaskHandle<'static, Vec<(usize, Result<()>)>>>,
+    handle: Option<OutboundSendHandle>,
 }
 
 impl BroadcastSendTransform {

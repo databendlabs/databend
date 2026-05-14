@@ -19,6 +19,11 @@ use databend_common_exception::Result;
 
 use crate::servers::flight::v1::network::DummyOutboundChannel;
 use crate::servers::flight::v1::network::OutboundChannel;
+use crate::servers::flight::v1::network::SyncTaskHandle;
+
+pub(super) type OutboundSendResult = (usize, Result<()>);
+pub(super) type OutboundSendResults = Vec<OutboundSendResult>;
+pub(super) type OutboundSendHandle = SyncTaskHandle<'static, OutboundSendResults>;
 
 pub(super) struct OutboundSendChannels {
     channels: Vec<Arc<dyn OutboundChannel>>,
@@ -63,7 +68,7 @@ impl OutboundSendChannels {
         }
     }
 
-    pub(super) fn handle_send_results(&mut self, results: Vec<(usize, Result<()>)>) -> Result<()> {
+    pub(super) fn handle_send_results(&mut self, results: OutboundSendResults) -> Result<()> {
         for (idx, result) in results {
             match result {
                 Ok(()) => {}

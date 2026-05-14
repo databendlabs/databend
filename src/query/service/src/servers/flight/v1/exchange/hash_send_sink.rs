@@ -28,8 +28,8 @@ use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::graph::NodeIndex;
 
 use super::outbound_send_channels::OutboundSendChannels;
+use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -40,7 +40,7 @@ pub struct HashSendSink {
     partition_stream: BlockPartitionStream,
     tasks: SyncTaskSet,
     channels: OutboundSendChannels,
-    handle: Option<SyncTaskHandle<'static, Vec<(usize, Result<()>)>>>,
+    handle: Option<OutboundSendHandle>,
 }
 
 impl HashSendSink {
