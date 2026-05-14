@@ -74,6 +74,15 @@ EvalScalar
                     └── limit: NONE
 
 
+=== query_block_boundary_alias__query_block_boundary_does_not_expose_inner_input_name_after_alias ===
+matrix: query_block_boundary_alias
+key: B0N0I0_0000
+setting: enable_group_by_column_first=0
+sql: SELECT i FROM (SELECT i AS k FROM t) AS q
+status: error
+code: 1065
+message: column i doesn't exist
+
 === query_block_boundary_alias__query_block_boundary_does_not_expose_prior_group_alias_namespace ===
 matrix: query_block_boundary_alias
 key: B0N0G0_0000

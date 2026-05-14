@@ -329,6 +329,15 @@ EvalScalar
             └── limit: NONE
 
 
+=== group_by_alias__group_by_qualified_name_does_not_consume_prior_group_alias ===
+matrix: group_by_alias
+key: G0N1G0_0000
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k, count(*) FROM t GROUP BY k, t.k
+status: error
+code: 1065
+message: column k doesn't exist
+
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
 key: G0N3S1_0000

@@ -82,6 +82,12 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
+      - key: A0N1S0_0000
+        name: aggregate_argument_qualified_name_does_not_consume_prior_select_alias
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3"
       - key: A0N1S2_0000
         name: aggregate_argument_qualified_name_does_not_consume_aggregate_alias
         setup_sqls:

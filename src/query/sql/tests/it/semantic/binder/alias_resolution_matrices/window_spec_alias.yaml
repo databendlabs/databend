@@ -82,6 +82,12 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
+      - key: W0N1G0_0000
+        name: window_spec_qualified_name_does_not_consume_group_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k"
       - key: W0N1S2_0000
         name: window_spec_qualified_name_does_not_consume_aggregate_alias
         setup_sqls:

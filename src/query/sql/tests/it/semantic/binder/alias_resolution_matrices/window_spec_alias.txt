@@ -71,6 +71,15 @@ status: error
 code: 1065
 message: Window function cannot contain another window function
 
+=== window_spec_alias__window_spec_qualified_name_does_not_consume_group_alias ===
+matrix: window_spec_alias
+key: W0N1G0_0000
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k
+status: error
+code: 1065
+message: column k doesn't exist
+
 === window_spec_alias__window_spec_qualified_name_does_not_consume_aggregate_alias ===
 matrix: window_spec_alias
 key: W0N1S2_0000

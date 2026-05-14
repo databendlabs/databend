@@ -5,6 +5,8 @@ local_dimensions:
     no-input: "0002"
   legality:
     producer-kind-illegal: "0010"
+  ambiguity:
+    duplicate-select-alias: "0020"
   syntax:
     no-alias-lookup: "0000"
 regions:
@@ -127,6 +129,42 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
+      - key: P0N1S1_0000
+        name: where_qualified_name_does_not_consume_scalar_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i > 0 AS ok FROM t AS t WHERE t.ok"
+      - key: P1N1S2_0000
+        name: having_qualified_name_does_not_consume_aggregate_alias
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) > 0 AS ok FROM t AS t HAVING t.ok"
+      - key: P2N1S3_0000
+        name: qualify_qualified_name_does_not_consume_window_alias
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t AS t QUALIFY t.rn = 1"
+      - key: P0N0S1_0020
+        name: where_duplicate_scalar_alias_is_ambiguous
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - sql: "SELECT i > 0 AS ok, i < 10 AS ok FROM t WHERE ok"
+      - key: P1N0S2_0020
+        name: having_duplicate_aggregate_alias_is_ambiguous
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT sum(number) > 0 AS ok, count(*) > 0 AS ok FROM t HAVING ok"
+      - key: P2N0S3_0020
+        name: qualify_duplicate_window_alias_is_ambiguous
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn, rank() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1"
       - key: P0N0S3_0000
         name: where_window_alias_no_input_rejected
         setup_sqls:

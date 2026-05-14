@@ -61,6 +61,12 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
+      - key: B0N0I0_0000
+        name: query_block_boundary_does_not_expose_inner_input_name_after_alias
+        setup_sqls:
+          - "CREATE TABLE t(i UInt64)"
+        runs:
+          - sql: "SELECT i FROM (SELECT i AS k FROM t) AS q"
       - key: B0N0G0_0000
         name: query_block_boundary_does_not_expose_prior_group_alias_namespace
         setup_sqls:

@@ -87,6 +87,15 @@ status: error
 code: 1065
 message: column c reference or alias is ambiguous, please use another alias name
 
+=== aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_prior_select_alias ===
+matrix: aggregate_argument_alias
+key: A0N1S0_0000
+setting: enable_group_by_column_first=0
+sql: SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3
+status: error
+code: 1065
+message: column c1 doesn't exist
+
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_aggregate_alias ===
 matrix: aggregate_argument_alias
 key: A0N1S2_0000
