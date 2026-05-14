@@ -763,13 +763,13 @@ select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t1
 1 4 8
 4 4 8
 
-query TTI
-select min, max, level from clustering_statistics('db_09_0008','t15');
+query TTII
+select min, max, level, block_depth from clustering_statistics('db_09_0008','t15');
 ----
-[1] [2] 0
-[3] [4] 0
-[5] [6] 0
-[9] [10] 0
+[1] [2] 0 1
+[3] [4] 0 1
+[5] [6] 0 1
+[9] [10] 0 1
 
 statement ok
 drop table t15 all
