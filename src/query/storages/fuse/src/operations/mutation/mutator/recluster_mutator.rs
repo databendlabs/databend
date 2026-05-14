@@ -48,6 +48,7 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use indexmap::IndexSet;
 use log::debug;
+use log::info;
 use log::warn;
 use opendal::Operator;
 
@@ -664,14 +665,14 @@ impl ReclusterMutator {
             return Ok(None);
         }
 
-        debug!(
-            "recluster: level selection detail level={} block_count={} average_depth={} max_depth={} max_point_overlap_count={} threshold={} selected_count={} task_count={}",
+        info!(
+            "recluster: built level task candidates level={} block_count={} avg_depth={} depth_threshold={} max_depth={} max_point_overlap_count={} selected_count={} task_count={}",
             level,
             block_count,
             average_depth,
+            self.depth_threshold,
             max_depth,
             max_point_overlap_count,
-            self.depth_threshold,
             selected_block_count,
             tasks.len(),
         );
