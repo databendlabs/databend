@@ -22,12 +22,10 @@
 //! in Fuse's BlockMeta.col_stats. This keeps the Vortex file as a pure data container.
 
 use arrow_array::RecordBatch;
-use futures::TryStreamExt;
 use futures::stream;
 use vortex_array::ArrayRef;
 use vortex_array::arrow::FromArrowArray;
 use vortex_array::stream::ArrayStreamExt;
-use vortex_file::VortexWriteOptions;
 use vortex_file::WriteOptionsSessionExt;
 use vortex_file::register_default_encodings;
 use vortex_session::VortexSession;
@@ -58,16 +56,18 @@ pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexRes
     register_default_encodings(&session);
 
     // 3. Convert RecordBatches → Vortex Arrays
+    // ArrayRef::from_arrow(RecordBatch, nullable) converts a RecordBatch to a StructArray.
     let arrays: Vec<ArrayRef> = batches
         .into_iter()
-        .map(record_batch_to_vortex)
+        .map(|batch| ArrayRef::from_arrow(batch, false).map_err(VortexStorageError::Vortex))
         .collect::<VortexResult<_>>()?;
 
     // 4. Build an ArrayStream from the arrays
     let dtype = arrays[0].dtype().clone();
     let array_stream = stream::iter(arrays.into_iter().map(Ok)).into_array_stream(dtype);
 
-    // 5. Write to the output buffer using the session's write options
+    // 5. Write to the output buffer using the session's write options.
+    // write() takes ownership of the sink and stream, compresses, and writes the .vortex file.
     session
         .write_options()
         .write(out, array_stream)
@@ -75,12 +75,4 @@ pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexRes
         .map_err(VortexStorageError::Vortex)?;
 
     Ok(row_count)
-}
-
-/// Convert a single RecordBatch (arrow 58) into a Vortex ArrayRef.
-fn record_batch_to_vortex(batch: RecordBatch) -> VortexResult<ArrayRef> {
-    // vortex_array::arrow::FromArrowArray provides conversion from Arrow arrays.
-    // A RecordBatch maps to a StructArray in Vortex.
-    ArrayRef::from_arrow_record_batch(&batch)
-        .map_err(VortexStorageError::Vortex)
 }

@@ -102,6 +102,12 @@ impl MutationSource {
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
     ) -> Result<ProcessorPtr> {
+        if matches!(storage_format, FuseStorageFormat::Vortex) {
+            return Err(databend_common_exception::ErrorCode::Unimplemented(
+                "DML operations (UPDATE/DELETE/MERGE) are not yet supported for \
+                 Vortex storage format tables",
+            ));
+        }
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
             output,

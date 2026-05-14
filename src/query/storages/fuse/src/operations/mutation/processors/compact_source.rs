@@ -138,6 +138,8 @@ impl CompactTransform {
         storage_format: FuseStorageFormat,
         stream_ctx: Option<StreamContext>,
     ) -> Self {
+        // Note: Vortex format compact is not yet supported. The caller
+        // (compact.rs) should check storage_format before creating this transform.
         Self {
             scan_progress: ctx.get_scan_progress(),
             block_reader,

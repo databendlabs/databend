@@ -172,8 +172,6 @@ fn serialize_block_vortex(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<HashMap<ColumnId, ColumnMeta>> {
-    use std::sync::Arc as StdArc;
-
     use arrow_ipc::writer::StreamWriter;
 
     let row_count = block.num_rows() as u64;
@@ -204,10 +202,13 @@ fn serialize_block_vortex(
         })?;
     }
 
-    // Step 3: IPC bytes → Vortex file (via databend-storages-vortex, arrow 58)
-    // This runs synchronously by blocking on the async write_vortex_file.
-    let rt = tokio::runtime::Handle::current();
-    let _row_count_written = rt.block_on(write_vortex_file(&ipc_buf, buf)).map_err(|e| {
+    // Step 3: IPC bytes → Vortex file (via databend-storages-vortex, arrow 58).
+    // serialize_block is called from a sync context inside a Tokio runtime, so we
+    // use block_in_place to safely run the async write without blocking the executor.
+    let _row_count_written = tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(write_vortex_file(&ipc_buf, buf))
+    })
+    .map_err(|e| {
         databend_common_exception::ErrorCode::StorageOther(format!(
             "Vortex: failed to write vortex file: {e}"
         ))

@@ -119,6 +119,11 @@ pub async fn read_block(
     block_meta: &BlockMeta,
     read_settings: &ReadSettings,
 ) -> Result<DataBlock> {
+    // Vortex files are read as a whole via read_by_meta; bypass merge-IO.
+    if matches!(storage_format, FuseStorageFormat::Vortex) {
+        return reader.read_by_meta(read_settings, block_meta, &storage_format).await;
+    }
+
     let merged_io_read_result = reader
         .read_columns_data_by_merge_io(
             read_settings,
