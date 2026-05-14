@@ -31,6 +31,9 @@ use parking_lot::Mutex;
 use tokio::task::JoinHandle;
 use tonic::Status;
 
+pub const REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE: &str =
+    "Aborted query, because the remote flight channel is closed.";
+
 /// Response from a ping-pong exchange.
 pub struct PingPongResponse {
     pub data: Result<FlightData, Status>,
@@ -105,7 +108,7 @@ impl PingPongExchangeInner {
             Err(TrySendError::Closed(_)) => {
                 *self.send_time.lock() = None;
                 self.in_flight.store(false, Ordering::SeqCst);
-                Err(Status::aborted("Exchange closed"))
+                Err(Status::aborted(REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE))
             }
             Err(TrySendError::Full(data)) => {
                 *self.send_time.lock() = None;
@@ -279,6 +282,8 @@ mod tests {
         drop(send_rx);
 
         let result = exchange.try_send(make_flight_data(1));
-        assert!(result.is_err());
+        let status = result.expect_err("closed request channel should abort the exchange");
+        assert_eq!(status.code(), tonic::Code::Aborted);
+        assert_eq!(status.message(), REMOTE_FLIGHT_CHANNEL_CLOSED_MESSAGE);
     }
 }
