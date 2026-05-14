@@ -87,6 +87,46 @@ EvalScalar
             └── limit: NONE
 
 
+=== group_by_alias__group_by_expression_uses_prior_group_alias_column_first ===
+matrix: group_by_alias
+key: G0N2G0_2010
+setting: enable_group_by_column_first=1
+sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
+status: ok
+EvalScalar
+├── scalars: [t.i (#0) AS (#0), COUNT(*) (#2) AS (#2), abs(t.i (#0)) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.i (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.i (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_alias__rollup_same_list_uses_prior_group_alias_column_first ===
+matrix: group_by_alias
+key: G2N2G0_2010
+setting: enable_group_by_column_first=1
+sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))
+status: ok
+EvalScalar
+├── scalars: [t.i (#0) AS (#0), COUNT(*) (#5) AS (#5), abs(k) (#1) AS (#6)]
+└── Aggregate(Initial)
+    ├── group items: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1), _grouping_id (#4) AS (#4)]
+    ├── aggregate functions: [count() AS (#5)]
+    └── EvalScalar
+        ├── scalars: [t.i (#0) AS (#0), abs(t.i (#0)) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
 === group_by_alias__group_by_expression_prefers_prior_group_alias_over_input_column ===
 matrix: group_by_alias
 key: G0N2G0_1011

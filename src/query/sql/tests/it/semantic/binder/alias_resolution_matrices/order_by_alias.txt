@@ -76,6 +76,24 @@ Sort
                     └── limit: NONE
 
 
+=== order_by_alias__order_by_qualified_name_binds_input_column ===
+matrix: order_by_alias
+key: O0N1I0_0000
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k FROM t ORDER BY t.k
+status: ok
+Sort
+├── sort keys: [t.k (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.i (#0) AS (#0), t.k (#1) AS (#1)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
 === order_by_alias__order_by_qualified_name_binds_relation_not_select_alias ===
 matrix: order_by_alias
 key: O0N1S1_0000

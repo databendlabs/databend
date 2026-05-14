@@ -22,14 +22,34 @@ regions:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i > 0 AS ok FROM t WHERE ok"
-  - description: HAVING consumes aggregate aliases after aggregate binding
+  - description: WHERE keeps input-column precedence when a scalar alias has the same name
+    main:
+      consumers: [P0]
+      name_shapes: [N0]
+      producers: [S1]
+    local:
+      relation: [input-conflict]
+    cases:
+      - key: P0N0S1_0001
+        name: where_scalar_alias_conflict_prefers_input_column
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, ok Boolean)"
+        runs:
+          - sql: "SELECT i > 0 AS ok FROM t WHERE ok"
+  - description: HAVING keeps aggregate-alias precedence when an input column has the same name
     main:
       consumers: [P1]
       name_shapes: [N0]
       producers: [S2]
     local:
-      relation: [no-input]
+      relation: [input-conflict, no-input]
     cases:
+      - key: P1N0S2_0001
+        name: having_aggregate_alias_conflict_prefers_aggregate_alias
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64, ok Boolean)"
+        runs:
+          - sql: "SELECT sum(number) > 0 AS ok FROM t HAVING ok"
       - key: P1N0S2_0002
         name: having_aggregate_alias_no_input
         setup_sqls:
@@ -48,6 +68,20 @@ regions:
         name: qualify_window_alias_no_input
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
+        runs:
+          - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1"
+  - description: QUALIFY keeps window-alias precedence when an input column has the same name
+    main:
+      consumers: [P2]
+      name_shapes: [N0]
+      producers: [S3]
+    local:
+      relation: [input-conflict]
+    cases:
+      - key: P2N0S3_0001
+        name: qualify_window_alias_conflict_prefers_window_alias
+        setup_sqls:
+          - "CREATE TABLE t(number UInt64, rn UInt64)"
         runs:
           - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1"
   - description: predicate consumers where aggregate aliases are clause-specific legality boundaries

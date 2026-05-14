@@ -39,6 +39,12 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
+      - key: S0N1S0_0000
+        name: select_list_qualified_name_binds_relation_not_prior_alias
+        setup_sqls:
+          - "CREATE TABLE t(i Int32, k Int32)"
+        runs:
+          - sql: "SELECT i AS k, t.k FROM t"
       - key: S0N4N0_0000
         name: select_list_ordinal_is_literal_expression_not_alias_lookup
         setup_sqls:

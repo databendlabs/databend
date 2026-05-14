@@ -81,6 +81,31 @@ regions:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))"
+  - description: prior GROUP BY alias reuse is independent of column-first mode once the earlier item fell back to an alias
+    main:
+      consumers: [G0, G2]
+      name_shapes: [N2]
+      producers: [G0]
+    local:
+      scope: [same-list-exact]
+      setting: [column-first]
+    cases:
+      - key: G0N2G0_2010
+        name: group_by_expression_uses_prior_group_alias_column_first
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: true
+            sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)"
+      - key: G2N2G0_2010
+        name: rollup_same_list_uses_prior_group_alias_column_first
+        setup_sqls:
+          - "CREATE TABLE t(i Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: true
+            sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))"
   - description: prior GROUP BY aliases still win inside later expressions when an input column has the same name
     main:
       consumers: [G0]
