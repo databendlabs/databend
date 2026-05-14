@@ -132,13 +132,20 @@ impl Binder {
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
-        let max_column_position = self.metadata.read().get_max_column_position();
+        let (max_column_position, has_column_name_ref) = {
+            let metadata = self.metadata.read();
+            (
+                metadata.get_max_column_position(),
+                metadata.has_column_name_ref(),
+            )
+        };
         let table = table_ctx
             .create_stage_table(
                 stage_info,
                 files_info,
                 files_to_copy,
                 max_column_position,
+                has_column_name_ref,
                 on_error_mode,
             )
             .await?;
