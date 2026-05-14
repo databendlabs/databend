@@ -89,6 +89,15 @@ impl IPhysicalPlan for CompactSource {
             .build_table_by_table_info(&self.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
 
+        if matches!(
+            table.get_storage_format(),
+            databend_common_storages_fuse::FuseStorageFormat::Vortex
+        ) {
+            return Err(databend_common_exception::ErrorCode::Unimplemented(
+                "Compact is not yet supported for Vortex storage format tables",
+            ));
+        }
+
         if self.parts.is_empty() {
             return builder.main_pipeline.add_source(EmptySource::create, 1);
         }

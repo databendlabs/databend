@@ -108,6 +108,10 @@ pub fn build_fuse_source_pipeline(
     let block_format = match storage_format {
         FuseStorageFormat::Native => FuseNativeBlockFormat::create(),
         FuseStorageFormat::Parquet => FuseParquetBlockFormat::create(),
+        // Vortex files are read as a whole via read_by_meta (in block_reader_deserialize.rs).
+        // The merge-IO path is never reached for Vortex, so we reuse the Parquet block format
+        // as a placeholder to satisfy the type system.
+        FuseStorageFormat::Vortex => FuseParquetBlockFormat::create(),
     };
 
     let read_block_context = ReadBlockContext::create(
@@ -158,7 +162,7 @@ pub fn build_fuse_source_pipeline(
                 )
             })?;
         }
-        FuseStorageFormat::Parquet => {
+        FuseStorageFormat::Parquet | FuseStorageFormat::Vortex => {
             pipeline.add_transform(|transform_input, transform_output| {
                 DeserializeDataTransform::create(
                     ctx.clone(),

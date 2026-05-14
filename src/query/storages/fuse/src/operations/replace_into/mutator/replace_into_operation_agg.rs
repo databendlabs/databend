@@ -55,6 +55,7 @@ use log::warn;
 use opendal::Operator;
 use tokio::sync::Semaphore;
 
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
@@ -636,6 +637,14 @@ impl AggregationContext {
     }
 
     async fn read_block(&self, reader: &BlockReader, block_meta: &BlockMeta) -> Result<DataBlock> {
+        let storage_format = self.write_settings.storage_format;
+
+        // Vortex files are read as a whole; bypass merge-IO.
+        if matches!(storage_format, FuseStorageFormat::Vortex) {
+            let read_settings = &self.read_settings;
+            return reader.read_by_meta(read_settings, block_meta, &storage_format).await;
+        }
+
         let merged_io_read_result = reader
             .read_columns_data_by_merge_io(
                 &self.read_settings,
@@ -647,7 +656,6 @@ impl AggregationContext {
 
         // deserialize block data
         // cpu intensive task, send them to dedicated thread pool
-        let storage_format = self.write_settings.storage_format;
         let block_meta_ptr = block_meta.clone();
         let reader = reader.clone();
         GlobalIORuntime::instance()
