@@ -77,6 +77,7 @@ pub struct Metadata {
     table_row_id_index: HashMap<IndexType, Symbol>,
     agg_indices: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
+    has_column_name_ref: bool,  // for schema inference from stage files
 
     /// Scan id of each scan operator.
     next_scan_id: usize,
@@ -490,12 +491,17 @@ impl Metadata {
         }
     }
 
-    pub fn set_max_column_position(&mut self, max_pos: usize) {
-        self.max_column_position = max_pos
+    pub fn set_stage_column_references(&mut self, max_pos: usize, has_name_ref: bool) {
+        self.max_column_position = max_pos;
+        self.has_column_name_ref = has_name_ref;
     }
 
     pub fn get_max_column_position(&self) -> usize {
         self.max_column_position
+    }
+
+    pub fn has_column_name_ref(&self) -> bool {
+        self.has_column_name_ref
     }
 
     pub fn next_scan_id(&mut self) -> usize {

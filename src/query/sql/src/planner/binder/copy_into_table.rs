@@ -109,9 +109,10 @@ impl Binder {
                         expr.walk(&mut max_column_position)?;
                     }
                 }
-                self.metadata
-                    .write()
-                    .set_max_column_position(max_column_position.max_pos);
+                self.metadata.write().set_stage_column_references(
+                    max_column_position.max_pos,
+                    max_column_position.has_name_ref,
+                );
                 let plan = self.bind_copy_into_table_common(stmt, from, true).await?;
 
                 let alias = alias_name.as_ref().map(|name| TableAlias {
