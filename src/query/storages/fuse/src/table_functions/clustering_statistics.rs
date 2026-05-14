@@ -87,6 +87,9 @@ impl TableMetaFunc for ClusteringStatistics {
         let limit = limit.unwrap_or(usize::MAX);
         let capacity = snapshot.summary.block_count as usize;
         let output_len = std::cmp::min(capacity, limit);
+        if output_len == 0 {
+            return Ok(DataBlock::empty_with_schema(&Self::schema().into()));
+        }
 
         let cluster_keys = tbl.resolve_cluster_keys().unwrap();
         let exprs = parse_cluster_keys(ctx.clone(), Arc::new(tbl.clone()), cluster_keys)?;
