@@ -53,9 +53,12 @@ impl TableMetaFunc for ClusteringStatistics {
         TableSchemaRefExt::create(vec![
             TableField::new("segment_name", TableDataType::String),
             TableField::new("block_name", TableDataType::String),
-            TableField::new("min", TableDataType::String.wrap_nullable()),
-            TableField::new("max", TableDataType::String.wrap_nullable()),
-            TableField::new("level", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("min", TableDataType::String),
+            TableField::new("max", TableDataType::String),
+            TableField::new(
+                "level",
+                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
+            ),
             TableField::new("block_depth", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("pages", TableDataType::String.wrap_nullable()),
         ])
@@ -144,7 +147,7 @@ impl TableMetaFunc for ClusteringStatistics {
 
                     segment_names.push(segment_loc.clone());
                     block_names.push(block.location.0.clone());
-                    levels.push(current_cluster_stats.map_or(0, |v| v.level));
+                    levels.push(current_cluster_stats.map(|v| v.level));
                     pages.push(
                         current_cluster_stats.and_then(|v| v.pages.as_ref().map(|v| format_vec(v))),
                     );
@@ -166,8 +169,8 @@ impl TableMetaFunc for ClusteringStatistics {
             segment_name.put_and_commit(&segment_names[row_idx]);
             block_name.put_and_commit(&block_names[row_idx]);
 
-            min.push(Some(format_vec(&ranges[row_idx].0)));
-            max.push(Some(format_vec(&ranges[row_idx].1)));
+            min.push(format_vec(&ranges[row_idx].0));
+            max.push(format_vec(&ranges[row_idx].1));
             level.push(levels[row_idx]);
             block_depth.push(block_depths[row_idx].depth as u64);
             output_pages.push(pages[row_idx].clone());
@@ -177,9 +180,9 @@ impl TableMetaFunc for ClusteringStatistics {
             vec![
                 Column::String(segment_name.build()).into(),
                 Column::String(block_name.build()).into(),
-                StringType::from_opt_data(min).into(),
-                StringType::from_opt_data(max).into(),
-                Int32Type::from_data(level).into(),
+                StringType::from_data(min).into(),
+                StringType::from_data(max).into(),
+                Int32Type::from_opt_data(level).into(),
                 UInt64Type::from_data(block_depth).into(),
                 StringType::from_opt_data(output_pages).into(),
             ],
