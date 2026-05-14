@@ -1,6 +1,6 @@
 === window_spec_alias__window_order_reuses_having_aggregate_alias ===
 matrix: window_spec_alias
-key: W0N0S2_0002
+key: W0N0S2_0_
 setting: enable_group_by_column_first=0
 sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0
 status: ok
@@ -32,7 +32,7 @@ EvalScalar
 
 === window_spec_alias__window_spec_reuses_group_item_alias ===
 matrix: window_spec_alias
-key: W0N2G0_0002
+key: W0N2G0_0_
 setting: enable_group_by_column_first=0
 sql: SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b
 status: ok
@@ -64,7 +64,7 @@ EvalScalar
 
 === window_spec_alias__window_order_rejects_recursive_window_alias ===
 matrix: window_spec_alias
-key: W0N0S3_0112
+key: W0N0S3_1_
 setting: enable_group_by_column_first=0
 sql: SELECT row_number() OVER () AS rn, row_number() OVER (ORDER BY rn) FROM t
 status: error
@@ -73,7 +73,7 @@ message: Window function cannot contain another window function
 
 === window_spec_alias__window_spec_qualified_name_does_not_consume_group_alias ===
 matrix: window_spec_alias
-key: W0N1G0_0000
+key: W0N1G0_3_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k
 status: error
@@ -82,7 +82,7 @@ message: column k doesn't exist
 
 === window_spec_alias__window_spec_qualified_name_does_not_consume_aggregate_alias ===
 matrix: window_spec_alias
-key: W0N1S2_0000
+key: W0N1S2_3_
 setting: enable_group_by_column_first=0
 sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY t.s) FROM t AS t
 status: error

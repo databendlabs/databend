@@ -45,8 +45,15 @@ const ALIAS_MATRIX_DIR: &str = "tests/it/semantic/binder/alias_resolution_matric
 #[serde(deny_unknown_fields)]
 struct AliasMatrixFile {
     matrix: String,
-    local_dimensions: BTreeMap<String, BTreeMap<String, String>>,
+    local_dimensions: Vec<AliasMatrixLocalDimension>,
     regions: Vec<AliasMatrixRegion>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AliasMatrixLocalDimension {
+    name: String,
+    values: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -205,31 +212,72 @@ impl AliasMatrixFile {
     }
 
     fn assert_definition(&self) {
-        assert!(
-            !self.local_dimensions.is_empty(),
-            "alias matrix yaml {} must declare local dimensions",
-            self.matrix
-        );
-        for (axis, values) in &self.local_dimensions {
+        let mut axis_names = HashSet::new();
+        for dimension in &self.local_dimensions {
             assert!(
-                !values.is_empty(),
+                !dimension.name.trim().is_empty(),
+                "alias matrix yaml {} local dimension has an empty name",
+                self.matrix
+            );
+            assert!(
+                axis_names.insert(dimension.name.as_str()),
+                "alias matrix yaml {} local dimension is declared more than once: {}",
+                self.matrix,
+                dimension.name
+            );
+            assert!(
+                !dimension.values.is_empty(),
                 "alias matrix yaml {} local dimension {} must have values",
                 self.matrix,
-                axis
+                dimension.name
             );
-            for (value, bit) in values {
+            let mut value_names = HashSet::new();
+            assert!(
+                dimension.values.len() <= 16,
+                "alias matrix yaml {} local dimension {} cannot exceed sixteen values",
+                self.matrix,
+                dimension.name
+            );
+            for value in &dimension.values {
                 assert!(
                     !value.trim().is_empty(),
                     "alias matrix yaml {} local dimension {} has an empty value",
                     self.matrix,
-                    axis
+                    dimension.name
                 );
-                assert_fixed_hex_context(bit, &self.matrix);
+                assert!(
+                    value_names.insert(value.as_str()),
+                    "alias matrix yaml {} local dimension {} declares duplicate value: {}",
+                    self.matrix,
+                    dimension.name,
+                    value
+                );
             }
         }
         for region in &self.regions {
             region.assert_definition(self);
         }
+    }
+
+    fn local_dimension_value_index(&self, axis: &str, value: &str) -> Option<usize> {
+        let dimension = self
+            .local_dimensions
+            .iter()
+            .find(|dimension| dimension.name == axis)?;
+        dimension
+            .values
+            .iter()
+            .position(|known_value| known_value == value)
+    }
+
+    fn has_local_dimension(&self, axis: &str) -> bool {
+        self.local_dimensions
+            .iter()
+            .any(|dimension| dimension.name == axis)
+    }
+
+    fn has_local_dimension_value(&self, axis: &str, value: &str) -> bool {
+        self.local_dimension_value_index(axis, value).is_some()
     }
 
     fn expected_keys(&self) -> HashSet<String> {
@@ -241,11 +289,11 @@ impl AliasMatrixFile {
 
         let mut candidate_keys = HashSet::new();
         let mut expected = HashSet::new();
-        for region in &self.regions {
+        for (region_index, region) in self.regions.iter().enumerate() {
             if region.excluded {
                 continue;
             }
-            let candidates = region.coordinates(self);
+            let candidates = region.coordinates(self, region_index);
             for coordinate in &candidates {
                 assert!(
                     candidate_keys.insert(coordinate.key.clone()),
@@ -272,17 +320,25 @@ impl AliasMatrixFile {
     }
 
     fn encode_local_context(&self, local: &BTreeMap<String, String>) -> String {
-        let mut context = 0u16;
-        for (axis, value) in local {
-            let bit = &self.local_dimensions[axis][value];
-            context |= u16::from_str_radix(bit, 16).unwrap_or_else(|err| {
-                panic!(
-                    "alias matrix yaml {} has invalid hex bit for {}.{}: {err}",
-                    self.matrix, axis, value
-                )
-            });
+        let mut context = String::new();
+        for dimension in &self.local_dimensions {
+            if let Some(value) = local.get(&dimension.name) {
+                let value_index = self
+                    .local_dimension_value_index(&dimension.name, value)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "alias matrix yaml {} references unknown local value: {}.{}",
+                            self.matrix, dimension.name, value
+                        )
+                    });
+                context.push(
+                    char::from_digit(value_index as u32, 16)
+                        .expect("local dimension value index should fit in one hex digit")
+                        .to_ascii_uppercase(),
+                );
+            }
         }
-        format!("{context:04X}")
+        context
     }
 }
 
@@ -312,16 +368,11 @@ impl AliasMatrixRegion {
                 "alias matrix yaml {} non-excluded region must explain missing coordinates with masks",
                 matrix.matrix
             );
-            assert!(
-                !self.local.is_empty(),
-                "alias matrix yaml {} non-excluded region local selector must choose local dimensions",
-                matrix.matrix
-            );
         }
 
         for (axis, values) in &self.local {
             assert!(
-                matrix.local_dimensions.contains_key(axis),
+                matrix.has_local_dimension(axis),
                 "alias matrix yaml {} region references unknown local dimension: {}",
                 matrix.matrix,
                 axis
@@ -334,7 +385,7 @@ impl AliasMatrixRegion {
             );
             for value in values {
                 assert!(
-                    matrix.local_dimensions[axis].contains_key(value),
+                    matrix.has_local_dimension_value(axis, value),
                     "alias matrix yaml {} region references unknown local value: {}.{}",
                     matrix.matrix,
                     axis,
@@ -370,7 +421,11 @@ impl AliasMatrixRegion {
         coordinates
     }
 
-    fn coordinates(&self, matrix: &AliasMatrixFile) -> Vec<AliasMatrixGeneratedCoordinate> {
+    fn coordinates(
+        &self,
+        matrix: &AliasMatrixFile,
+        region_index: usize,
+    ) -> Vec<AliasMatrixGeneratedCoordinate> {
         let local_coordinates = self.local_coordinates(matrix);
         let mut candidates = Vec::new();
         for main in self.main_coordinates(matrix) {
@@ -379,7 +434,7 @@ impl AliasMatrixRegion {
             let producer = main[4..6].to_string();
             for local in &local_coordinates {
                 let context = matrix.encode_local_context(local);
-                let key = format!("{main}_{context}");
+                let key = format!("{main}_{region_index}_{context}");
                 candidates.push(AliasMatrixGeneratedCoordinate {
                     key,
                     consumer: consumer.clone(),
@@ -394,15 +449,10 @@ impl AliasMatrixRegion {
     }
 
     fn local_coordinates(&self, matrix: &AliasMatrixFile) -> Vec<BTreeMap<String, String>> {
-        assert!(
-            !self.local.is_empty(),
-            "alias matrix yaml {} region local selector must choose local dimensions",
-            matrix.matrix
-        );
         let mut coordinates = vec![BTreeMap::new()];
         for (axis, values) in &self.local {
             assert!(
-                matrix.local_dimensions.contains_key(axis),
+                matrix.has_local_dimension(axis),
                 "alias matrix yaml {} region references unknown local dimension: {}",
                 matrix.matrix,
                 axis
@@ -411,7 +461,7 @@ impl AliasMatrixRegion {
             for coordinate in coordinates {
                 for value in values {
                     assert!(
-                        matrix.local_dimensions[axis].contains_key(value),
+                        matrix.has_local_dimension_value(axis, value),
                         "alias matrix yaml {} region references unknown local value: {}.{}",
                         matrix.matrix,
                         axis,
@@ -431,7 +481,12 @@ impl AliasMatrixRegion {
         if self.excluded {
             HashSet::new()
         } else {
-            let candidates = self.coordinates(matrix);
+            let region_index = matrix
+                .regions
+                .iter()
+                .position(|region| std::ptr::eq(region, self))
+                .expect("region should belong to matrix");
+            let candidates = self.coordinates(matrix, region_index);
             self.unmasked_keys(matrix, candidates)
         }
     }
@@ -468,9 +523,15 @@ impl AliasMatrixRegion {
             .collect()
     }
 
-    fn owns_excluded_case(&self, matrix: &AliasMatrixFile, case: &AliasMatrixYamlCase) -> bool {
+    fn owns_excluded_case(
+        &self,
+        matrix: &AliasMatrixFile,
+        region_index: usize,
+        case: &AliasMatrixYamlCase,
+    ) -> bool {
         self.main_coordinates(matrix)
             .contains(&case.main_coordinate(&matrix.matrix))
+            && case.region_index(&matrix.matrix) == region_index
     }
 }
 
@@ -559,7 +620,7 @@ impl AliasMatrixMaskSelector {
 
         for (axis, values) in &self.local {
             assert!(
-                matrix.local_dimensions.contains_key(axis),
+                matrix.has_local_dimension(axis),
                 "alias matrix yaml {} mask references unknown local dimension: {}",
                 matrix.matrix,
                 axis
@@ -572,7 +633,7 @@ impl AliasMatrixMaskSelector {
             );
             for value in values {
                 assert!(
-                    matrix.local_dimensions[axis].contains_key(value),
+                    matrix.has_local_dimension_value(axis, value),
                     "alias matrix yaml {} mask references unknown local value: {}.{}",
                     matrix.matrix,
                     axis,
@@ -625,25 +686,36 @@ impl AliasMatrixYamlCase {
     }
 
     fn assert_key(&self, matrix: &str) {
-        let Some((main, context)) = self.key.split_once('_') else {
-            panic!(
-                "alias matrix yaml {matrix} key must contain one separator: {}",
-                self.key
-            );
-        };
+        let (main, region, context) = self.key_parts(matrix);
         assert_main_coordinate(main, matrix);
-        assert_fixed_hex_context(context, matrix);
+        assert_region_index(region, matrix);
+        assert_hex_context(context, matrix);
     }
 
     fn main_coordinate(&self, matrix: &str) -> String {
-        let Some((main, _)) = self.key.split_once('_') else {
-            panic!(
-                "alias matrix yaml {matrix} key must contain one separator: {}",
-                self.key
-            );
-        };
+        let (main, _, _) = self.key_parts(matrix);
         assert_main_coordinate(main, matrix);
         main.to_string()
+    }
+
+    fn region_index(&self, matrix: &str) -> usize {
+        let (_, region, _) = self.key_parts(matrix);
+        assert_region_index(region, matrix);
+        region.parse::<usize>().unwrap_or_else(|err| {
+            panic!(
+                "alias matrix yaml {matrix} region index must be decimal digits: {region}: {err}"
+            )
+        })
+    }
+
+    fn key_parts<'a>(&'a self, matrix: &str) -> (&'a str, &'a str, &'a str) {
+        let parts = self.key.split('_').collect::<Vec<_>>();
+        assert!(
+            parts.len() == 3,
+            "alias matrix yaml {matrix} key must have main, region, and local parts separated by underscores: {}",
+            self.key
+        );
+        (parts[0], parts[1], parts[2])
     }
 
     async fn write_runs(&self, file: &mut impl Write, matrix: &AliasMatrixFile) -> Result<()> {
@@ -742,11 +814,18 @@ impl AliasMatrixCoverage {
 
     fn assert_matrix_cases(&mut self, matrix: &AliasMatrixFile) -> HashSet<String> {
         let mut covered = HashSet::new();
-        for region in &matrix.regions {
+        for (region_index, region) in matrix.regions.iter().enumerate() {
             self.register_region(matrix, region);
             let region_expected = region.expected_keys(matrix);
             for case in &region.cases {
-                self.assert_case(matrix, region, &region_expected, case, &mut covered);
+                self.assert_case(
+                    matrix,
+                    region,
+                    region_index,
+                    &region_expected,
+                    case,
+                    &mut covered,
+                );
             }
         }
         covered
@@ -756,6 +835,7 @@ impl AliasMatrixCoverage {
         &mut self,
         matrix: &AliasMatrixFile,
         region: &AliasMatrixRegion,
+        region_index: usize,
         region_expected: &HashSet<String>,
         case: &AliasMatrixYamlCase,
         covered: &mut HashSet<String>,
@@ -763,7 +843,7 @@ impl AliasMatrixCoverage {
         case.assert_key(&matrix.matrix);
         if region.excluded {
             assert!(
-                region.owns_excluded_case(matrix, case),
+                region.owns_excluded_case(matrix, region_index, case),
                 "alias matrix yaml {} excluded-region case {} covers a main coordinate outside its region: {}",
                 matrix.matrix,
                 case.name,
@@ -877,13 +957,19 @@ fn assert_coordinate_segment(segment: &str, matrix: &str, name: &str) {
     );
 }
 
-fn assert_fixed_hex_context(context: &str, matrix: &str) {
+fn assert_region_index(region: &str, matrix: &str) {
     assert!(
-        context.len() == 4
-            && context
-                .bytes()
-                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_lowercase()),
-        "alias matrix yaml {matrix} local context must be four uppercase hex digits: {context}"
+        !region.is_empty() && region.bytes().all(|byte| byte.is_ascii_digit()),
+        "alias matrix yaml {matrix} region index must be decimal digits: {region}"
+    );
+}
+
+fn assert_hex_context(context: &str, matrix: &str) {
+    assert!(
+        context
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_lowercase()),
+        "alias matrix yaml {matrix} local context must be empty or uppercase hex digits: {context}"
     );
 }
 

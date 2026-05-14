@@ -150,28 +150,30 @@ The key encodes a local coordinate, but the key grammar is global.
 The key shape is:
 
 ```text
-<consumer><name_shape><producer>_<local_context>
+<consumer><name_shape><producer>_<region_index>_<local_context>
 ```
 
 The first three coordinate codes are the main coordinate and are concatenated
 directly. Each coordinate code is exactly two ASCII characters: one uppercase
-letter followed by one digit. The only separator is `_`, placed before
-`local_context`; this keeps the main coordinate compact while keeping the local
-boundary mechanically parseable.
+letter followed by one digit. The region index is the zero-based `regions`
+array position in the owning YAML file.
 
 The encoded form is:
 
 ```text
-CCNNPP_HHHH
+CCNNPP_R_<local_index_sequence>
 ```
 
-`CCNNPP` is the main coordinate. `HHHH` is the local context bitmap. The local
-context shape is global: exactly four uppercase hex digits.
+`CCNNPP` is the main coordinate. `R` is the region index. The suffix after the
+second `_` is the encoded local context. The second separator is always present.
+If no local dimension is selected, the suffix is empty.
 
-Four hex digits provide sixteen bits. The width and syntax are global. The bit
-layout and bit meaning are local. If a matrix needs more than sixteen local
-context bits, that means its semantic region is probably too broad or its axes
-need to be split into another named matrix.
+Each matrix declares an ordered `local_dimensions` list; the harness assigns bit
+positions to those dimensions in that order. When a region selects a local
+dimension, the selected value is encoded as that value's zero-based index in
+uppercase hex. The local context is the concatenation of the selected dimensions'
+indexes, in global local-dimension order. For example, with dimensions
+`[[a, b], [c, d]]`, selecting `a` and `d` encodes as `01`.
 
 ## Local Coordinate
 
@@ -182,9 +184,9 @@ main_coordinate x local_context
 ```
 
 The shape and width are shared across all matrices. The interpretation is not
-shared. The owning matrix defines the bit layout and gives meaning to the local
-context. One local coordinate is one semantic situation. It is not one query and
-it is not an assertion result.
+shared. The owning matrix defines the ordered local dimensions and gives meaning
+to the local context. One local coordinate is one semantic situation. It is not
+one query and it is not an assertion result.
 
 Local context is not a global semantic dimension. It is interpreted only after
 the main coordinate has selected an owning matrix.
@@ -195,22 +197,14 @@ legality, ordering ambiguity, and query-block boundary are not one shared axis.
 Forcing them into a global context would make the main coordinate less stable
 and would reserve bits for facts that most matrices cannot contain.
 
-The bitmap value is only meaningful inside the matrix selected by the main
+The encoded value is only meaningful inside the matrix selected by the main
 coordinate. The same hex value can mean different local facts in different
 matrices.
 
-Inside one matrix, bits are grouped by semantic axis. A group can be exclusive
-or combinable:
-
-- Exclusive group: at most one bit in the group can be set.
-- Combinable group: any subset of bits in the group can be set.
-- Zero group: no bit is set; this means the default or independent case for
-  that group.
-
-Exclusive and combinable groups are matrix-local decisions. For example,
-relation and setting groups are exclusive in the matrices that define them,
-while scope, expansion, legality, and boundary groups may be exclusive or
-combinable depending on that matrix's local semantics.
+Inside one matrix, dimensions are ordered semantic axes. A region selects zero
+or more of those axes through its `local` selector. The harness takes the
+Cartesian product of selected values, encodes each selected value in its
+dimension's position, and concatenates those indexes into the local context.
 
 ## Matrix Family
 

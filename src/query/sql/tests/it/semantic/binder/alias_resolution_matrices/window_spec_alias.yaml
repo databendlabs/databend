@@ -1,44 +1,30 @@
 matrix: window_spec_alias
-local_dimensions:
-  relation:
-    no-input: "0002"
-  legality:
-    producer-kind-illegal: "0010"
-  window_boundary:
-    recursive-window-alias: "0100"
-  syntax:
-    positional-lookup: "0000"
+local_dimensions: []
 regions:
   - description: window specifications can reuse aggregate aliases and grouped item aliases from the surrounding query block
     main:
       consumers: [W0]
       name_shapes: [N0, N2]
       producers: [S2, G0]
-    local:
-      relation: [no-input]
     masks:
       - when:
           main:
             name_shapes: [N0]
             producers: [G0]
-          local:
-            relation: [no-input]
         reason: group-item aliases are only relevant inside window expressions, not as bare SELECT alias names
       - when:
           main:
             name_shapes: [N2]
             producers: [S2]
-          local:
-            relation: [no-input]
         reason: aggregate alias reuse in window specs is represented by the bare-name window ORDER BY path
     cases:
-      - key: W0N0S2_0002
+      - key: W0N0S2_0_
         name: window_order_reuses_having_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0"
-      - key: W0N2G0_0002
+      - key: W0N2G0_0_
         name: window_spec_reuses_group_item_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -49,12 +35,8 @@ regions:
       consumers: [W0]
       name_shapes: [N0]
       producers: [S3]
-    local:
-      relation: [no-input]
-      legality: [producer-kind-illegal]
-      window_boundary: [recursive-window-alias]
     cases:
-      - key: W0N0S3_0112
+      - key: W0N0S3_1_
         name: window_order_rejects_recursive_window_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -65,14 +47,10 @@ regions:
       consumers: [W0]
       name_shapes: [N4]
       producers: [N0]
-    local:
-      syntax: [positional-lookup]
     masks:
       - when:
           main:
             name_shapes: [N4]
-          local:
-            syntax: [positional-lookup]
         reason: window-spec ordinals are ordering-position syntax, not alias namespace lookup
   - description: window-spec main-coordinate closure outside positive coverage obligations
     excluded: true
@@ -82,13 +60,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
-      - key: W0N1G0_0000
+      - key: W0N1G0_3_
         name: window_spec_qualified_name_does_not_consume_group_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k"
-      - key: W0N1S2_0000
+      - key: W0N1S2_3_
         name: window_spec_qualified_name_does_not_consume_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"

@@ -1,6 +1,6 @@
 === group_by_alias__group_by_bare_select_alias_conflict_alias_first ===
 matrix: group_by_alias
-key: G0N0S1_1001
+key: G0N0S1_0_00
 setting: enable_group_by_column_first=0
 sql: SELECT i AS x, count(*) FROM t GROUP BY x
 status: ok
@@ -20,7 +20,7 @@ EvalScalar
 
 === group_by_alias__group_by_bare_select_alias_conflict_column_first ===
 matrix: group_by_alias
-key: G0N0S1_2001
+key: G0N0S1_0_01
 setting: enable_group_by_column_first=1
 sql: SELECT i AS x, count(*) FROM t GROUP BY x
 status: error
@@ -29,7 +29,7 @@ message: column "i" must appear in the GROUP BY clause or be used in an aggregat
 
 === group_by_alias__group_by_bare_select_alias_no_input ===
 matrix: group_by_alias
-key: G0N0S1_1002
+key: G0N0S1_0_10
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY k
 status: ok
@@ -49,7 +49,7 @@ EvalScalar
 
 === group_by_alias__group_by_expression_uses_prior_group_alias ===
 matrix: group_by_alias
-key: G0N2G0_1010
+key: G0N2G0_1_00
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
 status: ok
@@ -69,7 +69,7 @@ EvalScalar
 
 === group_by_alias__rollup_same_list_uses_prior_group_alias ===
 matrix: group_by_alias
-key: G2N2G0_1010
+key: G2N2G0_1_00
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))
 status: ok
@@ -89,7 +89,7 @@ EvalScalar
 
 === group_by_alias__group_by_expression_uses_prior_group_alias_column_first ===
 matrix: group_by_alias
-key: G0N2G0_2010
+key: G0N2G0_2_01
 setting: enable_group_by_column_first=1
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
 status: ok
@@ -109,7 +109,7 @@ EvalScalar
 
 === group_by_alias__rollup_same_list_uses_prior_group_alias_column_first ===
 matrix: group_by_alias
-key: G2N2G0_2010
+key: G2N2G0_2_01
 setting: enable_group_by_column_first=1
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY ROLLUP(k, abs(k))
 status: ok
@@ -129,7 +129,7 @@ EvalScalar
 
 === group_by_alias__group_by_expression_prefers_prior_group_alias_over_input_column ===
 matrix: group_by_alias
-key: G0N2G0_1011
+key: G0N2G0_3_000
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
 status: ok
@@ -149,7 +149,7 @@ EvalScalar
 
 === group_by_alias__grouping_sets_same_set_uses_prior_group_alias ===
 matrix: group_by_alias
-key: G1N2G0_1080
+key: G1N2G0_4_10
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k, abs(k)))
 status: ok
@@ -169,7 +169,7 @@ EvalScalar
 
 === group_by_alias__grouping_sets_separate_set_does_not_share_prior_alias ===
 matrix: group_by_alias
-key: G1N2G0_2100
+key: G1N2G0_4_21
 setting: enable_group_by_column_first=1
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY GROUPING SETS ((k), (abs(k)))
 status: error
@@ -178,7 +178,7 @@ message: column k doesn't exist
 
 === group_by_alias__cube_generated_set_does_not_share_prior_alias ===
 matrix: group_by_alias
-key: G3N2G0_2400
+key: G3N2G0_5_1
 setting: enable_group_by_column_first=1
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY CUBE(k, abs(k))
 status: error
@@ -187,7 +187,7 @@ message: column k doesn't exist
 
 === group_by_alias__combined_grouping_sets_uses_prior_group_alias ===
 matrix: group_by_alias
-key: G4N2G0_1800
+key: G4N2G0_6_0
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, GROUPING SETS ((abs(k)))
 status: ok
@@ -207,7 +207,7 @@ EvalScalar
 
 === group_by_alias__group_by_aggregate_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N0S2_4001
+key: G0N0S2_8_0
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x
 status: ok
@@ -234,7 +234,7 @@ EvalScalar
 
 === group_by_alias__group_by_aggregate_alias_no_input_rejected ===
 matrix: group_by_alias
-key: G0N0S2_4002
+key: G0N0S2_8_1
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c FROM t GROUP BY c
 status: error
@@ -243,7 +243,7 @@ message: GROUP BY items can't contain aggregate functions or window functions: C
 
 === group_by_alias__group_by_srf_alias_conflict_uses_input ===
 matrix: group_by_alias
-key: G0N0S4_0001
+key: G0N0S4_9_0
 setting: enable_group_by_column_first=0
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2
 status: ok
@@ -267,7 +267,7 @@ Sort
 
 === group_by_alias__group_by_srf_alias_no_input ===
 matrix: group_by_alias
-key: G0N0S4_0002
+key: G0N0S4_9_1
 setting: enable_group_by_column_first=0
 sql: SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3
 status: ok
@@ -291,7 +291,7 @@ Sort
 
 === group_by_alias__group_by_ordinal_uses_select_item_position ===
 matrix: group_by_alias
-key: G0N4N0_0004
+key: G0N4N0_11_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY 1
 status: ok
@@ -311,7 +311,7 @@ EvalScalar
 
 === group_by_alias__group_by_all_expands_non_aggregate_select_items ===
 matrix: group_by_alias
-key: G5N5N0_0020
+key: G5N5N0_12_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY ALL
 status: ok
@@ -331,7 +331,7 @@ EvalScalar
 
 === group_by_alias__group_by_qualified_name_does_not_consume_prior_group_alias ===
 matrix: group_by_alias
-key: G0N1G0_0000
+key: G0N1G0_13_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY k, t.k
 status: error
@@ -340,7 +340,7 @@ message: column k doesn't exist
 
 === group_by_alias__group_by_qualified_complex_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G0N3S1_0000
+key: G0N3S1_13_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY t.k + 1
 status: error
@@ -349,7 +349,7 @@ message: column k doesn't exist
 
 === group_by_alias__grouping_sets_qualified_name_does_not_fallback_to_select_alias ===
 matrix: group_by_alias
-key: G1N1S1_0000
+key: G1N1S1_13_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, count(*) FROM t GROUP BY GROUPING SETS ((t.k))
 status: error

@@ -1,6 +1,6 @@
 === select_list_alias__select_list_bare_prior_alias ===
 matrix: select_list_alias
-key: S0N0S0_0002
+key: S0N0S0_0_1
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, k FROM t
 status: ok
@@ -15,7 +15,7 @@ EvalScalar
 
 === select_list_alias__select_list_expression_prior_alias ===
 matrix: select_list_alias
-key: S0N2S0_0002
+key: S0N2S0_0_1
 setting: enable_group_by_column_first=0
 sql: SELECT number + 1 AS s, s + 1 AS next FROM t
 status: ok
@@ -30,7 +30,7 @@ EvalScalar
 
 === select_list_alias__select_list_qualified_name_binds_relation_not_prior_alias ===
 matrix: select_list_alias
-key: S0N1S0_0000
+key: S0N1S0_1_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, t.k FROM t
 status: ok
@@ -45,7 +45,7 @@ EvalScalar
 
 === select_list_alias__select_list_ordinal_is_literal_expression_not_alias_lookup ===
 matrix: select_list_alias
-key: S0N4N0_0000
+key: S0N4N0_1_
 setting: enable_group_by_column_first=0
 sql: SELECT i AS k, 1 FROM t
 status: ok

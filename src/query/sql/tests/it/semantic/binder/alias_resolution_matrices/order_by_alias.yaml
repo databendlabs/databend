@@ -1,12 +1,7 @@
 matrix: order_by_alias
 local_dimensions:
-  relation:
-    input-conflict: "0001"
-    no-input: "0002"
-  ambiguity:
-    duplicate-select-alias: "0010"
-  syntax:
-    positional-lookup: "0000"
+  - name: relation
+    values: [input-conflict, no-input]
 regions:
   - description: ORDER BY bare-name lookup prefers SELECT aliases over conflicting input columns
     main:
@@ -16,7 +11,7 @@ regions:
     local:
       relation: [input-conflict]
     cases:
-      - key: O0N0S1_0001
+      - key: O0N0S1_0_0
         name: order_by_scalar_alias_conflict_prefers_select_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32, x Int32)"
@@ -30,7 +25,7 @@ regions:
     local:
       relation: [no-input]
     cases:
-      - key: O0N0S2_0002
+      - key: O0N0S2_1_1
         name: order_by_aggregate_alias_no_input
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -41,10 +36,8 @@ regions:
       consumers: [O0]
       name_shapes: [N0]
       producers: [S2]
-    local:
-      ambiguity: [duplicate-select-alias]
     cases:
-      - key: O0N0S2_0010
+      - key: O0N0S2_2_
         name: order_by_duplicate_aggregate_alias_is_ambiguous
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -58,7 +51,7 @@ regions:
     local:
       relation: [no-input]
     cases:
-      - key: O0N2S3_0002
+      - key: O0N2S3_3_1
         name: order_by_window_alias_expression
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -69,14 +62,10 @@ regions:
       consumers: [O0]
       name_shapes: [N4]
       producers: [N0]
-    local:
-      syntax: [positional-lookup]
     masks:
       - when:
           main:
             name_shapes: [N4]
-          local:
-            syntax: [positional-lookup]
         reason: ORDER BY ordinals are positional lookup, not SELECT-alias name resolution
   - description: ORDER BY main-coordinate closure outside positive coverage obligations
     excluded: true
@@ -86,13 +75,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
-      - key: O0N1I0_0000
+      - key: O0N1I0_5_
         name: order_by_qualified_name_binds_input_column
         setup_sqls:
           - "CREATE TABLE t(i Int32, k Int32)"
         runs:
           - sql: "SELECT i AS k FROM t ORDER BY t.k"
-      - key: O0N1S1_0000
+      - key: O0N1S1_5_
         name: order_by_qualified_name_binds_relation_not_select_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"

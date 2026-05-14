@@ -1,6 +1,6 @@
 === query_block_boundary_alias__subquery_exposes_select_alias_as_output_name ===
 matrix: query_block_boundary_alias
-key: B0N0S1_0001
+key: B0N0S1_0_0
 setting: enable_group_by_column_first=0
 sql: SELECT k FROM (SELECT i AS k FROM t) AS q
 status: ok
@@ -17,7 +17,7 @@ EvalScalar
 
 === query_block_boundary_alias__cte_exposes_select_alias_as_output_name ===
 matrix: query_block_boundary_alias
-key: B0N0S1_0002
+key: B0N0S1_0_1
 setting: enable_group_by_column_first=0
 sql: WITH q AS (SELECT i AS k FROM t) SELECT k FROM q
 status: ok
@@ -34,7 +34,7 @@ EvalScalar
 
 === query_block_boundary_alias__named_window_subquery_keeps_query_block_boundary ===
 matrix: query_block_boundary_alias
-key: B0N0S3_0004
+key: B0N0S3_1_2
 setting: enable_group_by_column_first=0
 sql: SELECT i, p, o, row_number() OVER w AS rn FROM qt WINDOW w AS (PARTITION BY p ORDER BY o) QUALIFY rn = (SELECT i FROM qt LIMIT 1)
 status: ok
@@ -76,7 +76,7 @@ EvalScalar
 
 === query_block_boundary_alias__query_block_boundary_does_not_expose_inner_input_name_after_alias ===
 matrix: query_block_boundary_alias
-key: B0N0I0_0000
+key: B0N0I0_3_
 setting: enable_group_by_column_first=0
 sql: SELECT i FROM (SELECT i AS k FROM t) AS q
 status: error
@@ -85,7 +85,7 @@ message: column i doesn't exist
 
 === query_block_boundary_alias__query_block_boundary_does_not_expose_prior_group_alias_namespace ===
 matrix: query_block_boundary_alias
-key: B0N0G0_0000
+key: B0N0G0_3_
 setting: enable_group_by_column_first=0
 sql: SELECT k FROM (SELECT i, count(*) FROM t GROUP BY i, abs(i)) AS q
 status: error

@@ -1,11 +1,9 @@
 matrix: aggregate_argument_alias
 local_dimensions:
-  relation:
-    input-conflict: "0001"
-    no-input: "0002"
-  ambiguity:
-    unique-select-alias: "0010"
-    duplicate-select-alias: "0020"
+  - name: relation
+    values: [input-conflict, no-input]
+  - name: ambiguity
+    values: [unique-select-alias, duplicate-select-alias]
 regions:
   - description: aggregate arguments bind bare names against input columns before falling back to prior SELECT aliases
     main:
@@ -15,13 +13,13 @@ regions:
     local:
       relation: [input-conflict, no-input]
     cases:
-      - key: A0N0S0_0001
+      - key: A0N0S0_0_0
         name: aggregate_argument_prefers_input_column
         setup_sqls:
           - "CREATE TABLE t(a UInt64, c2 UInt64)"
         runs:
           - sql: "SELECT a AS c2, sum(c2) FROM t GROUP BY a"
-      - key: A0N0S0_0002
+      - key: A0N0S0_0_1
         name: aggregate_argument_falls_back_to_prior_select_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -42,19 +40,19 @@ regions:
             ambiguity: [duplicate-select-alias]
         reason: input-column precedence decides aggregate arguments before duplicate SELECT aliases are considered
     cases:
-      - key: A0N0S2_0011
+      - key: A0N0S2_1_00
         name: aggregate_argument_prefers_input_column_over_prior_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(c UInt64)"
         runs:
           - sql: "SELECT count(*) AS c, sum(c) FROM t"
-      - key: A0N0S2_0012
+      - key: A0N0S2_1_10
         name: aggregate_argument_consumes_unique_prior_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT count(*) AS c, sum(c) FROM t"
-      - key: A0N0S2_0022
+      - key: A0N0S2_1_11
         name: aggregate_argument_rejects_duplicate_prior_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -82,13 +80,13 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
-      - key: A0N1S0_0000
+      - key: A0N1S0_3_
         name: aggregate_argument_qualified_name_does_not_consume_prior_select_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3"
-      - key: A0N1S2_0000
+      - key: A0N1S2_3_
         name: aggregate_argument_qualified_name_does_not_consume_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"

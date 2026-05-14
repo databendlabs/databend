@@ -1,6 +1,6 @@
 === aggregate_argument_alias__aggregate_argument_prefers_input_column ===
 matrix: aggregate_argument_alias
-key: A0N0S0_0001
+key: A0N0S0_0_0
 setting: enable_group_by_column_first=0
 sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a
 status: ok
@@ -20,7 +20,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_falls_back_to_prior_select_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S0_0002
+key: A0N0S0_0_1
 setting: enable_group_by_column_first=0
 sql: SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3
 status: ok
@@ -40,7 +40,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_prefers_input_column_over_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_0011
+key: A0N0S2_1_00
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(c) FROM t
 status: ok
@@ -60,7 +60,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_consumes_unique_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_0012
+key: A0N0S2_1_10
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(c) FROM t
 status: ok
@@ -80,7 +80,7 @@ EvalScalar
 
 === aggregate_argument_alias__aggregate_argument_rejects_duplicate_prior_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N0S2_0022
+key: A0N0S2_1_11
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, max(number) AS c, sum(c) FROM t
 status: error
@@ -89,7 +89,7 @@ message: column c reference or alias is ambiguous, please use another alias name
 
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_prior_select_alias ===
 matrix: aggregate_argument_alias
-key: A0N1S0_0000
+key: A0N1S0_3_
 setting: enable_group_by_column_first=0
 sql: SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3
 status: error
@@ -98,7 +98,7 @@ message: column c1 doesn't exist
 
 === aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_aggregate_alias ===
 matrix: aggregate_argument_alias
-key: A0N1S2_0000
+key: A0N1S2_3_
 setting: enable_group_by_column_first=0
 sql: SELECT count(*) AS c, sum(t.c) FROM t AS t
 status: error

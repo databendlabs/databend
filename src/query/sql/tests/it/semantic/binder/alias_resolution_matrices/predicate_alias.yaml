@@ -1,14 +1,7 @@
 matrix: predicate_alias
 local_dimensions:
-  relation:
-    input-conflict: "0001"
-    no-input: "0002"
-  legality:
-    producer-kind-illegal: "0010"
-  ambiguity:
-    duplicate-select-alias: "0020"
-  syntax:
-    no-alias-lookup: "0000"
+  - name: relation
+    values: [input-conflict, no-input]
 regions:
   - description: predicate consumers that can use a visible alias as a bare name
     main:
@@ -18,7 +11,7 @@ regions:
     local:
       relation: [no-input]
     cases:
-      - key: P0N0S1_0002
+      - key: P0N0S1_0_1
         name: where_scalar_alias_no_input
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
@@ -32,7 +25,7 @@ regions:
     local:
       relation: [input-conflict]
     cases:
-      - key: P0N0S1_0001
+      - key: P0N0S1_1_0
         name: where_scalar_alias_conflict_prefers_input_column
         setup_sqls:
           - "CREATE TABLE t(i Int32, ok Boolean)"
@@ -46,13 +39,13 @@ regions:
     local:
       relation: [input-conflict, no-input]
     cases:
-      - key: P1N0S2_0001
+      - key: P1N0S2_2_0
         name: having_aggregate_alias_conflict_prefers_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64, ok Boolean)"
         runs:
           - sql: "SELECT sum(number) > 0 AS ok FROM t HAVING ok"
-      - key: P1N0S2_0002
+      - key: P1N0S2_2_1
         name: having_aggregate_alias_no_input
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -66,7 +59,7 @@ regions:
     local:
       relation: [no-input]
     cases:
-      - key: P2N0S3_0002
+      - key: P2N0S3_3_1
         name: qualify_window_alias_no_input
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -80,7 +73,7 @@ regions:
     local:
       relation: [input-conflict]
     cases:
-      - key: P2N0S3_0001
+      - key: P2N0S3_4_0
         name: qualify_window_alias_conflict_prefers_window_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64, rn UInt64)"
@@ -93,15 +86,14 @@ regions:
       producers: [S2]
     local:
       relation: [no-input]
-      legality: [producer-kind-illegal]
     cases:
-      - key: P0N0S2_0012
+      - key: P0N0S2_5_1
         name: where_aggregate_alias_no_input_rejected
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT sum(number) > 0 AS ok FROM t WHERE ok"
-      - key: P2N0S2_0012
+      - key: P2N0S2_5_1
         name: qualify_aggregate_alias_no_input_rejected
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
@@ -112,14 +104,10 @@ regions:
       consumers: [P0]
       name_shapes: [N4]
       producers: [N0]
-    local:
-      syntax: [no-alias-lookup]
     masks:
       - when:
           main:
             name_shapes: [N4]
-          local:
-            syntax: [no-alias-lookup]
         reason: predicates have no ordinal alias-lookup syntax
   - description: predicate main-coordinate closure outside positive coverage obligations
     excluded: true
@@ -129,49 +117,49 @@ regions:
       name_shapes: [N0, N1, N2, N3, N4, N5]
       producers: [I0, S0, S1, S2, S3, S4, G0, N0]
     cases:
-      - key: P0N1S1_0000
+      - key: P0N1S1_7_
         name: where_qualified_name_does_not_consume_scalar_alias
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i > 0 AS ok FROM t AS t WHERE t.ok"
-      - key: P1N1S2_0000
+      - key: P1N1S2_7_
         name: having_qualified_name_does_not_consume_aggregate_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT sum(number) > 0 AS ok FROM t AS t HAVING t.ok"
-      - key: P2N1S3_0000
+      - key: P2N1S3_7_
         name: qualify_qualified_name_does_not_consume_window_alias
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t AS t QUALIFY t.rn = 1"
-      - key: P0N0S1_0020
+      - key: P0N0S1_7_
         name: where_duplicate_scalar_alias_is_ambiguous
         setup_sqls:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i > 0 AS ok, i < 10 AS ok FROM t WHERE ok"
-      - key: P1N0S2_0020
+      - key: P1N0S2_7_
         name: having_duplicate_aggregate_alias_is_ambiguous
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT sum(number) > 0 AS ok, count(*) > 0 AS ok FROM t HAVING ok"
-      - key: P2N0S3_0020
+      - key: P2N0S3_7_
         name: qualify_duplicate_window_alias_is_ambiguous
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT number, row_number() OVER (ORDER BY number) AS rn, rank() OVER (ORDER BY number) AS rn FROM t QUALIFY rn = 1"
-      - key: P0N0S3_0000
+      - key: P0N0S3_7_
         name: where_window_alias_no_input_rejected
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
         runs:
           - sql: "SELECT row_number() OVER (ORDER BY number) AS rn FROM t WHERE rn = 1"
-      - key: P1N0S3_0000
+      - key: P1N0S3_7_
         name: having_window_alias_no_input_rejected
         setup_sqls:
           - "CREATE TABLE t(number UInt64)"
