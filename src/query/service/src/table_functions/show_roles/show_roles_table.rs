@@ -21,7 +21,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -44,6 +43,8 @@ use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
 use databend_common_sql::validate_function_arg;
 use itertools::Itertools;
+
+use crate::sessions::TableContext;
 
 const SHOW_ROLES: &str = "show_roles";
 

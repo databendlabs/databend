@@ -109,18 +109,6 @@ statement ok
 alter table t4 recluster final
 
 statement ok
-DROP Table t1 all
-
-statement ok
-DROP Table t2 all
-
-statement ok
-DROP Table t3 all
-
-statement ok
-DROP Table t4 all
-
-statement ok
 DROP DATABASE db_09_0016
 
 statement ok

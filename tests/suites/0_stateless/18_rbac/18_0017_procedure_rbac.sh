@@ -4,11 +4,37 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR/../../../shell_env.sh"
 
+# Use a synchronous stderr filter for this script so expected bendsql errors are
+# emitted before the next numbered step is printed.
+bendsql_client_sync() {
+	local stderr_file status
+
+	stderr_file=$(mktemp) || return 1
+	bendsql "$@" 2>"$stderr_file"
+	status=$?
+	sed -E 's/ \[v[0-9][^]]*\]$//' "$stderr_file" >&2
+	rm -f "$stderr_file"
+	return "$status"
+}
+
+bendsql_query_http_user_connect_sync() {
+	local user="$1"
+	local password="$2"
+	shift 2
+
+	bendsql_client_sync \
+		--host "${QUERY_MYSQL_HANDLER_HOST}" \
+		--port "${QUERY_HTTP_HANDLER_PORT}" \
+		--user "${user}" \
+		--password "${password}" \
+		"$@"
+}
+
 # Define connection strings for each user
 echo "=== Setting up user connection strings ==="
-export USER_ADMIN_USER_CONNECT="bendsql -A --user=admin_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_DEV_USER_CONNECT="bendsql -A --user=dev_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
-export USER_TEST_USER_CONNECT="bendsql -A --user=test_user --password=123 --host=${QUERY_MYSQL_HANDLER_HOST} --port ${QUERY_HTTP_HANDLER_PORT}"
+export USER_ADMIN_USER_CONNECT="bendsql_query_http_user_connect_sync admin_user 123 -A"
+export USER_DEV_USER_CONNECT="bendsql_query_http_user_connect_sync dev_user 123 -A"
+export USER_TEST_USER_CONNECT="bendsql_query_http_user_connect_sync test_user 123 -A"
 
 # Create roles
 echo "=== Creating roles ==="

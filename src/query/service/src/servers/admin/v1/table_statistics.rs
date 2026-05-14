@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::StatisticsTable;
@@ -26,6 +25,7 @@ use poem::web::Json;
 use poem::web::Path;
 
 use crate::sessions::SessionManager;
+use crate::sessions::TableContext;
 
 #[poem::handler]
 #[async_backtrace::framed]

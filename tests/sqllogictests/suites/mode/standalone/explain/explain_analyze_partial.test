@@ -64,7 +64,7 @@ query T
 explain analyze partial select * from t1 join t2 on t1.a = t2.b where t1.a > 1;
 ----
 HashJoin: INNER
-├── estimated rows: 8.00
+├── estimated rows: 7.31
 ├── output rows: 8
 ├── TableScan
 │   ├── table: default.default.t2

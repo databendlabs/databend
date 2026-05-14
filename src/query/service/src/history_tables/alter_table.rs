@@ -20,7 +20,6 @@ use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::table::Table;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::TableSchemaRef;
@@ -32,6 +31,7 @@ use log::info;
 
 use crate::history_tables::external::ExternalStorageConnection;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextTableAccess;
 
 pub async fn get_schemas(
     ctx: Arc<QueryContext>,

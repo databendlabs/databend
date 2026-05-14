@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::basic::create_resize_item;
 use databend_common_pipeline::core::Pipe;
@@ -40,6 +39,7 @@ use crate::servers::flight::v1::exchange::exchange_sink::build_hash_outbound_cha
 use crate::servers::flight::v1::network::create_local_channels;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct ExchangeTransform;
 

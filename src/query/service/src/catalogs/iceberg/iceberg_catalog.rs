@@ -23,7 +23,6 @@ use databend_common_catalog::catalog::CatalogCreator;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::ErrorCodeResultExt;
@@ -107,6 +106,7 @@ use databend_meta_client::types::SeqV;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 
 #[derive(Debug)]
@@ -568,7 +568,7 @@ impl Catalog for IcebergCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unimplemented!()
     }
@@ -579,7 +579,7 @@ impl Catalog for IcebergCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unimplemented!()
     }

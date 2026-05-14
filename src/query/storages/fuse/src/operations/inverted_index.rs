@@ -97,8 +97,7 @@ impl FuseTable {
         // Read data here to keep the order of blocks in segment.
         let projection = Projection::Columns(field_indices);
 
-        let block_reader =
-            self.create_block_reader(ctx.clone(), projection, false, false, false)?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false)?;
 
         let segment_reader = MetaReaders::segment_info_reader(self.get_operator(), table_schema);
 

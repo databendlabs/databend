@@ -23,7 +23,6 @@ use databend_common_meta_app::principal::StageInfo;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_cost_milliseconds;
 use databend_common_metrics::storage::metrics_inc_copy_purge_files_counter;
 use databend_common_storage::init_stage_operator;
-use databend_common_storages_fuse::TableContext;
 use databend_common_storages_fuse::commit_with_backoff;
 use databend_common_storages_fuse::operations::vacuum_tables_from_info;
 use databend_enterprise_vacuum_handler::VacuumHandlerWrapper;
@@ -36,6 +35,7 @@ use log::warn;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 pub struct CommitInterpreter {
     ctx: Arc<QueryContext>,

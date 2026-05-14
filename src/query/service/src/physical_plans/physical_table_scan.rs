@@ -31,7 +31,6 @@ use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::VirtualColumnField;
 use databend_common_catalog::plan::VirtualColumnInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -68,6 +67,7 @@ use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 use databend_common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_storages_fuse::FuseTable;
+use databend_common_storages_fuse::operations::need_reserve_block_info;
 use rand::distributions::Bernoulli;
 use rand::distributions::Distribution;
 use rand::thread_rng;
@@ -83,6 +83,9 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableFactory;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
@@ -410,7 +413,7 @@ impl PhysicalPlanBuilder {
         let table = table_entry.table();
 
         if !table.result_can_be_cached() {
-            self.ctx.set_cacheable(false);
+            self.ctx.result_cache_state().set_cacheable(false);
         }
 
         let mut table_schema = table.schema_with_stream();
@@ -463,7 +466,9 @@ impl PhysicalPlanBuilder {
             serialized.sort();
             let combined = format!("{}|{}", scan.table_index, serialized.join("|"));
             let hash = format!("{:x}", Sha256::digest(combined.as_bytes()));
-            self.ctx.add_cache_key_extra(format!("secure:{}", hash));
+            self.ctx
+                .result_cache_state()
+                .add_cache_key_extra(format!("secure:{}", hash));
         }
 
         let mut source = table
@@ -504,6 +509,8 @@ impl PhysicalPlanBuilder {
         }
         source.table_index = scan.table_index;
         source.scan_id = scan.scan_id;
+        source.block_meta_options.reserve_block_index =
+            need_reserve_block_info(self.ctx.clone(), scan.table_index).0;
         if let Some(agg_index) = &scan.agg_index {
             let source_schema = source.schema();
             let push_down = source.push_downs.as_mut().unwrap();
@@ -634,7 +641,7 @@ impl PhysicalPlanBuilder {
 
                 // Check if the source table supports result caching at all.
                 if !source_table.result_can_be_cached() {
-                    self.ctx.set_cacheable(false);
+                    self.ctx.result_cache_state().set_cacheable(false);
                     break;
                 }
 
@@ -643,10 +650,11 @@ impl PhysicalPlanBuilder {
                 // we conservatively disable caching to avoid returning stale results.
                 if let Ok(fuse_table) = FuseTable::try_from_table(source_table.as_ref()) {
                     self.ctx
+                        .result_cache_state()
                         .add_partitions_sha(fuse_table.query_result_cache_id());
                 } else {
                     // Non-FuseTable (system table, memory table, etc.), disable caching.
-                    self.ctx.set_cacheable(false);
+                    self.ctx.result_cache_state().set_cacheable(false);
                     break;
                 }
             }

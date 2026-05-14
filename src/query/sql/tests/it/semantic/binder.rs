@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_catalog::table_context::TableContextSettings;
 use databend_common_exception::Result;
 use databend_common_sql::plans::Plan;
 
@@ -45,6 +46,15 @@ export function merge(state1, state2) {
 }
 export function finish(state) {
     return state.sum / state.weight;
+}
+$$
+"#;
+
+const TEST_SCRIPT_UDF_SQL: &str = r#"
+CREATE OR REPLACE FUNCTION add_one (INT) RETURNS INT
+LANGUAGE javascript HANDLER = 'add_one' AS $$
+export function add_one(v) {
+    return v + 1;
 }
 $$
 "#;
@@ -185,6 +195,18 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
             sql: "SELECT sum(number) AS s FROM t ORDER BY s + 1",
         },
         SqlTestCase {
+            name: "distinct_order_by_reuses_same_aggregate_select_item",
+            description: "SELECT DISTINCT should still accept an ORDER BY aggregate expression when it is already present in the select list.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT DISTINCT sum(number) FROM t ORDER BY sum(number)",
+        },
+        SqlTestCase {
+            name: "distinct_order_by_reuses_same_window_select_item",
+            description: "SELECT DISTINCT should still accept an ORDER BY window expression when it is already present in the select list.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT DISTINCT row_number() OVER (ORDER BY number) FROM t ORDER BY row_number() OVER (ORDER BY number)",
+        },
+        SqlTestCase {
             name: "aggregate_argument_prefers_base_column_over_select_alias",
             description: "Inside an aggregate function, a same-name select alias should not shadow the base column.",
             setup_sqls: &["CREATE TABLE t(a UInt64, c2 UInt64)"],
@@ -196,9 +218,61 @@ async fn test_binder_clauses_and_ordering() -> Result<()> {
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3",
         },
+        SqlTestCase {
+            name: "table_function_named_arguments_require_fat_arrow",
+            description: "A table function named argument written with '=' should produce a direct hint to use '=>'.",
+            setup_sqls: &[],
+            sql: "SELECT * FROM infer_schema(location = '@data/parquet/int96.parquet')",
+        },
+        SqlTestCase {
+            name: "obfuscate_named_arguments_require_fat_arrow",
+            description: "OBFUSCATE should surface the same '=>' hint when a named argument is written with '='.",
+            setup_sqls: &["CREATE TABLE t1(a String)"],
+            sql: "SELECT * FROM obfuscate(t1, seed = 20)",
+        },
     ];
 
     run_binder_cases("binder_clauses.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_mutation_udf() -> Result<()> {
+    let cases = [
+        SqlTestCase {
+            name: "update_where_accepts_script_udf",
+            description: "A mutation filter should allow script UDFs and rewrite them before the filter is evaluated.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "UPDATE t SET b = a WHERE add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "delete_where_accepts_script_udf",
+            description: "DELETE should allow script UDFs in the mutation filter.",
+            setup_sqls: &["CREATE TABLE t(a INT, b INT)", TEST_SCRIPT_UDF_SQL],
+            sql: "DELETE FROM t WHERE add_one(a) > 1",
+        },
+        SqlTestCase {
+            name: "merge_matched_condition_accepts_script_udf",
+            description: "MERGE matched conditions should allow script UDFs.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE TABLE s(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+            ],
+            sql: "MERGE INTO t USING s ON t.a = s.a WHEN MATCHED AND add_one(s.b) > 1 THEN UPDATE SET b = add_one(s.b)",
+        },
+        SqlTestCase {
+            name: "merge_unmatched_accepts_script_udf",
+            description: "MERGE unmatched conditions and insert values should allow script UDFs.",
+            setup_sqls: &[
+                "CREATE TABLE t(a INT, b INT)",
+                "CREATE TABLE s(a INT, b INT)",
+                TEST_SCRIPT_UDF_SQL,
+            ],
+            sql: "MERGE INTO t USING s ON t.a = s.a WHEN NOT MATCHED AND add_one(s.b) > 1 THEN INSERT (a, b) VALUES (s.a, add_one(s.b))",
+        },
+    ];
+
+    run_binder_cases("binder_mutation_udf.txt", &cases).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -339,6 +413,12 @@ async fn test_binder_named_window_paths() -> Result<()> {
             sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
         },
         SqlTestCase {
+            name: "named_window_aggregate_inside_nested_window_expression_binds",
+            description: "A named window aggregate introduced from a referenced window spec must still bind when the window expression is nested inside a larger select expression.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w + 1 FROM empsalary GROUP BY depname WINDOW w AS (PARTITION BY 1 ORDER BY sum(salary))",
+        },
+        SqlTestCase {
             name: "inherited_named_window_from_sqllogictest_binds",
             description: "An inherited named WINDOW specification should bind without losing the base partition spec.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
@@ -349,6 +429,12 @@ async fn test_binder_named_window_paths() -> Result<()> {
             description: "A recursive chain of named WINDOW references should resolve inherited partition and order specs.",
             setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
             sql: "SELECT rank() OVER w3 FROM empsalary WINDOW w1 AS (PARTITION BY depname ORDER BY salary), w2 AS (w1), w3 AS (w2)",
+        },
+        SqlTestCase {
+            name: "missing_named_window_in_select_prebind_errors",
+            description: "A missing named window referenced from a select-item window expression must fail during prebinding instead of being silently ignored.",
+            setup_sqls: &["CREATE TABLE empsalary(depname String, salary UInt64)"],
+            sql: "SELECT depname, sum(sum(salary)) OVER w FROM empsalary GROUP BY depname",
         },
         SqlTestCase {
             name: "inherited_named_window_rejects_partition_override",
@@ -427,16 +513,64 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
             sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col3 FROM t_str AS t GROUP BY col1, col3 ORDER BY col3",
         },
         SqlTestCase {
+            name: "group_by_prefers_input_column_over_same_name_srf_alias",
+            description: "GROUP BY should keep a same-name input column ahead of an SRF alias, while still allowing non-conflicting SRF aliases.",
+            setup_sqls: &["CREATE TABLE t_str(col1 String, col2 String)"],
+            sql: "SELECT t.col1 AS col1, unnest(split(t.col2, ',')) AS col2 FROM t_str AS t GROUP BY col1, col2 ORDER BY col2",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_select_alias_over_same_name_base_column",
+            description: "GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)"],
+            sql: "SELECT a AS b, count(*) FROM t GROUP BY b",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_input_column_over_aggregate_alias",
+            description: "GROUP BY should keep a same-name input column ahead of an aggregate alias, because the alias itself is not a valid grouping key.",
+            setup_sqls: &[],
+            sql: "SELECT count(*) AS x FROM (SELECT 1 AS x UNION ALL SELECT 2 AS x) GROUP BY x",
+        },
+        SqlTestCase {
+            name: "group_by_prefers_input_column_over_same_name_aggregate_alias_in_subquery",
+            description: "GROUP BY inside a subquery should still resolve a same-name source column before an aggregate alias.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT * FROM (SELECT sum(number) AS number FROM t GROUP BY number) AS s",
+        },
+        SqlTestCase {
+            name: "group_by_complex_expr_does_not_shadow_column_with_same_name_alias",
+            description: "A complex GROUP BY expression should resolve internal column refs from FROM, not from a same-name SELECT alias.",
+            setup_sqls: &["CREATE TABLE t(type Int32)"],
+            sql: "SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END",
+        },
+        SqlTestCase {
+            name: "group_by_complex_expr_falls_back_to_select_alias",
+            description: "A complex GROUP BY expression should still resolve SELECT aliases when no input column matches.",
+            setup_sqls: &["CREATE TABLE t(i Int32)"],
+            sql: "SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)",
+        },
+        SqlTestCase {
             name: "group_by_all_collects_non_aggregate_select_items",
             description: "GROUP BY ALL should expand to the non-aggregate SELECT items only.",
             setup_sqls: &["CREATE TABLE t(number UInt64)"],
             sql: "SELECT number % 2 AS a, sum(number) FROM t GROUP BY ALL",
         },
         SqlTestCase {
+            name: "select_scalar_wraps_builtin_aggregate",
+            description: "A scalar wrapper over a builtin aggregate should bind through the select aggregate path without requiring direct aggregate support in type checking.",
+            setup_sqls: &["CREATE TABLE t(number UInt64)"],
+            sql: "SELECT sum(number) + 1 FROM t",
+        },
+        SqlTestCase {
             name: "grouped_select_udaf_binds",
             description: "A grouped SELECT should rewrite UDAF output through the aggregate path like builtin aggregates.",
             setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
             sql: "SELECT a % 2 AS g, weighted_avg(a, b) FROM t GROUP BY g",
+        },
+        SqlTestCase {
+            name: "select_scalar_wraps_udaf",
+            description: "A scalar wrapper over a UDAF should keep binding through the normal UDAF path while coexisting with builtin aggregate prebinding.",
+            setup_sqls: &["CREATE TABLE t(a UInt64, b UInt64)", TEST_UDAF_SQL],
+            sql: "SELECT weighted_avg(a, b) + 1 FROM t",
         },
         SqlTestCase {
             name: "group_by_all_collects_non_udaf_select_items",
@@ -501,6 +635,59 @@ async fn test_binder_grouping_and_srf_paths() -> Result<()> {
     ];
 
     run_binder_cases("binder_grouping.txt", &cases).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_binder_enable_group_by_column_first_setting() -> Result<()> {
+    let case = SqlTestCase {
+        name: "group_by_column_first_disabled_prefers_alias",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "0".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [1 AS"),
+        "GROUP BY should bind the SELECT alias when enable_group_by_column_first=0:\n{plan}"
+    );
+
+    let case = SqlTestCase {
+        name: "enable_group_by_column_first_setting_prefers_column",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT 1 AS i, sum(i) FROM t GROUP BY i",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "1".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [t.i (#0) AS (#0)]"),
+        "GROUP BY should bind the input column when enable_group_by_column_first=1:\n{plan}"
+    );
+
+    let case = SqlTestCase {
+        name: "group_by_column_first_enabled_keeps_alias_fallback",
+        description: "",
+        setup_sqls: &["CREATE TABLE t(i UInt64, j UInt64)"],
+        sql: "SELECT i % 2 AS k, sum(i) FROM t GROUP BY k",
+    };
+    let ctx = setup_context(&case).await?;
+    ctx.get_settings()
+        .set_setting("enable_group_by_column_first".to_string(), "1".to_string())?;
+    let plan = ctx.bind_sql(case.sql).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("group items: [modulo(t.i (#0), 2) AS"),
+        "GROUP BY should still bind non-conflicting aliases when enable_group_by_column_first=1:\n{plan}"
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

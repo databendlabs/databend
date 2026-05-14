@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_sql::plans::RemoveStagePlan;
 use databend_common_storage::StageFileInfo;
@@ -29,6 +28,8 @@ use opendal::Operator;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextQueryIdentity;
 
 #[derive(Debug)]
 pub struct RemoveUserStageInterpreter {

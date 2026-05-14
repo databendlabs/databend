@@ -242,7 +242,7 @@ impl<T: AsMetaRef> RowGroupCore<T> {
         &mut self,
         projection: &ProjectionMask,
         selection: Option<&RowSelection>,
-        get_ranges: impl Fn(Vec<Range<u64>>) -> Result<Vec<Bytes>>,
+        get_ranges: impl FnOnce(Vec<Range<u64>>) -> Result<Vec<Bytes>>,
     ) -> Result<()> {
         if let Some((selection, page_locations)) = selection.zip(self.page_locations.as_ref()) {
             // If we have a `RowSelection` and an `OffsetIndex` then only fetch pages required for the
@@ -332,6 +332,10 @@ impl<T: AsMetaRef> RowGroupCore<T> {
                 }))
             }
         }
+    }
+
+    pub fn fetch_ranges(&self, projection: &ProjectionMask) -> Vec<Range<u64>> {
+        self.get_fetch_ranges_without_index(projection)
     }
 
     fn get_fetch_ranges_without_index(&self, projection: &ProjectionMask) -> Vec<Range<u64>> {

@@ -19,7 +19,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_catalog::catalog::CATALOG_DEFAULT;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -63,6 +62,10 @@ use crate::interpreters::access::AccessChecker;
 use crate::meta_service_error;
 use crate::sessions::QueryContext;
 use crate::sessions::Session;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 use crate::sql::plans::Plan;
 
 pub struct PrivilegeAccess {
@@ -1990,6 +1993,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DescNotification(_)
             | Plan::AlterNotification(_)
             | Plan::DescUser(_)
+            | Plan::ShowPublicKeys(_)
             | Plan::CreateTask(_)   // TODO: need to build ownership info for task
             | Plan::ShowTasks(_)    // TODO: need to build ownership info for task
             | Plan::DescribeTask(_) // TODO: need to build ownership info for task

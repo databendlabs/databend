@@ -46,7 +46,8 @@ use itertools::Itertools;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
 
 pub struct ShowCreateTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -217,6 +218,13 @@ impl ShowCreateTableInterpreter {
                     "".to_string()
                 };
 
+                let stats_truncate_len = table_info
+                    .meta
+                    .field_stats_truncate_len
+                    .get(&field.column_id())
+                    .map(|n| format!(" STATS_TRUNCATE_LEN {n}"))
+                    .unwrap_or_default();
+
                 let ident = display_ident(
                     field.name(),
                     force_quoted_ident,
@@ -225,7 +233,7 @@ impl ShowCreateTableInterpreter {
                 );
                 let data_type = field.data_type().sql_name_explicit_null();
                 let column_str = format!(
-                    "  {ident} {data_type}{default_expr}{computed_expr}{auto_increment}{comment}"
+                    "  {ident} {data_type}{default_expr}{computed_expr}{auto_increment}{comment}{stats_truncate_len}"
                 );
 
                 create_defs.push(column_str);

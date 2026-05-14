@@ -22,7 +22,6 @@ use databend_common_base::runtime::PerfEvent;
 use databend_common_base::runtime::PerfValue;
 use databend_common_base::runtime::QueryPerf;
 use databend_common_base::runtime::ThreadTracker;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,6 +43,8 @@ use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextPerf;
+use crate::sessions::TableContextSettings;
 
 pub struct ExplainPerfInterpreter {
     pub sql: String,

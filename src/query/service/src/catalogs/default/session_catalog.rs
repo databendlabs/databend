@@ -21,7 +21,6 @@ use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -129,6 +128,7 @@ use databend_storages_common_table_meta::table_id_ranges::is_temp_table_id;
 use crate::catalogs::Catalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::servers::http::v1::ClientSessionManager;
+use crate::sessions::TableContext;
 
 #[derive(Clone, Debug)]
 pub struct SessionCatalog {
@@ -841,7 +841,7 @@ impl Catalog for SessionCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         self.inner.get_sequence(req, visibility_checker).await
     }
@@ -852,7 +852,7 @@ impl Catalog for SessionCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         self.inner
             .get_sequence_next_value(req, visibility_checker)

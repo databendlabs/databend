@@ -45,6 +45,7 @@ pub async fn init_query_env(env: QueryEnv) -> Result<()> {
 
     let mut tracking_payload = ThreadTracker::new_tracking_payload();
     tracking_payload.query_id = Some(env.query_id.clone());
+    tracking_payload.warehouse_id = env.cluster.get_warehouse_id().ok();
     tracking_payload.mem_stat = Some(query_mem_stat.clone());
     tracking_payload.workload_group_resource = tracking_workload_group;
 

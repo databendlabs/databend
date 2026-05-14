@@ -496,7 +496,7 @@ impl PhysicalPlanBuilder {
             limit: sort.limit,
             step: SortStep::Sample,
             pre_projection,
-            broadcast_id: Some(self.ctx.get_next_broadcast_id()),
+            broadcast_id: Some(self.ctx.broadcast_registry().next_broadcast_id()),
             enable_fixed_rows,
             stat_info: Some(stat_info.clone()),
             meta: PhysicalPlanMeta::new("Sort"),

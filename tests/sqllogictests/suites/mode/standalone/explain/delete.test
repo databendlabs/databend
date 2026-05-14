@@ -125,4 +125,4 @@ CommitSink
                 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                 ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
                 ├── apply join filters: [#0]
-                └── estimated rows: 3.00
+                └── estimated rows: 3.50

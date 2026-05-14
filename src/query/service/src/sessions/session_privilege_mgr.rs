@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
@@ -87,7 +88,12 @@ pub trait SessionPrivilegeManager {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker>;
+    ) -> Result<Arc<GrantObjectVisibilityChecker>>;
+
+    /// Returns a grant-only visibility checker (no ownership loaded).
+    /// Equivalent to `get_visibility_checker(true, Object::All)` but with
+    /// clearer intent — the caller will handle ownership lazily.
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
     async fn set_current_warehouse(&self, warehouse: Option<String>) -> Result<()>;
@@ -382,35 +388,94 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl<'_> {
         &self,
         ignore_ownership: bool,
         object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
-        // TODO(liyz): is it check the visibility according onwerships?
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         let roles = self.get_all_effective_roles().await?;
-        let roles_name: Vec<String> = roles.iter().map(|role| role.name.to_string()).collect();
 
-        let ownership_infos =
-            if roles_name.contains(&BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()) || ignore_ownership {
-                vec![]
-            } else {
-                let user_api = UserApiProvider::instance();
-                let role_api = user_api.role_api(&self.session_ctx.get_current_tenant());
-                let ownerships = match object.to_ownership_object() {
-                    Some(obj) => role_api
-                        .list_ownerships_by_owner_object(obj)
-                        .await
-                        .map_err(meta_service_error)?,
-                    None => role_api
-                        .list_ownerships()
-                        .await
-                        .map_err(meta_service_error)?
-                        .into_iter()
-                        .map(|item| item.data)
-                        .collect(),
-                };
-                ownerships
+        if ignore_ownership || Self::is_account_admin(&roles) {
+            return Ok(Arc::new(GrantObjectVisibilityChecker::new_from_grants(
+                &self.get_current_user()?,
+                &roles,
+            )));
+        }
+
+        // Cache path: only cache the expensive full checker.
+        if matches!(&object, Object::All) {
+            if let Some(shared) = self.session_ctx.get_query_context_shared() {
+                if let Some(checker) = shared.visibility_checker_cache.get() {
+                    return Ok(checker.clone());
+                }
+
+                return shared
+                    .visibility_checker_cache
+                    .get_or_try_init(|| async move {
+                        let checker = self
+                            .build_visibility_checker_with_roles(roles, false, &Object::All)
+                            .await?;
+                        Ok(Arc::new(checker))
+                    })
+                    .await
+                    .cloned();
+            }
+            // No query context shared available: fallback to uncached build.
+            return Ok(Arc::new(
+                self.build_visibility_checker_with_roles(roles, false, &Object::All)
+                    .await?,
+            ));
+        }
+
+        Ok(Arc::new(
+            self.build_visibility_checker_with_roles(roles, false, &object)
+                .await?,
+        ))
+    }
+
+    #[async_backtrace::framed]
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        let roles = self.get_all_effective_roles().await?;
+        Ok(GrantObjectVisibilityChecker::new_from_grants(
+            &self.get_current_user()?,
+            &roles,
+        ))
+    }
+}
+
+impl<'a> SessionPrivilegeManagerImpl<'a> {
+    fn is_account_admin(roles: &[RoleInfo]) -> bool {
+        roles
+            .iter()
+            .any(|role| role.name == BUILTIN_ROLE_ACCOUNT_ADMIN)
+    }
+
+    async fn build_visibility_checker_with_roles(
+        &self,
+        roles: Vec<RoleInfo>,
+        ignore_ownership: bool,
+        object: &Object,
+    ) -> Result<GrantObjectVisibilityChecker> {
+        let ownership_infos = if ignore_ownership || Self::is_account_admin(&roles) {
+            vec![]
+        } else {
+            let user_api = UserApiProvider::instance();
+            let role_api = user_api.role_api(&self.session_ctx.get_current_tenant());
+            let ownerships = match object.to_ownership_object() {
+                Some(obj) => role_api
+                    .list_ownerships_by_owner_object(obj)
+                    .await
+                    .map_err(meta_service_error)?,
+                None => role_api
+                    .list_ownerships()
+                    .await
+                    .map_err(meta_service_error)?
                     .into_iter()
-                    .filter(|o| roles_name.contains(&o.role))
-                    .collect()
+                    .map(|item| item.data)
+                    .collect(),
             };
+            let role_names: HashSet<&str> = roles.iter().map(|role| role.name.as_str()).collect();
+            ownerships
+                .into_iter()
+                .filter(|o| role_names.contains(o.role.as_str()))
+                .collect()
+        };
 
         Ok(GrantObjectVisibilityChecker::new(
             &self.get_current_user()?,

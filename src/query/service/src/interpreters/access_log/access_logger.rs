@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_catalog::plan::DataSourceInfo;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_sql::InsertInputSource;
 use databend_common_sql::MetadataRef;
 use databend_common_sql::plans::CopyIntoLocationPlan;
@@ -34,6 +33,8 @@ use crate::interpreters::access_log::log_entry::DDLOperationType;
 use crate::interpreters::access_log::log_entry::ModifyByDDLObject;
 use crate::interpreters::access_log::log_entry::ObjectDomain;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
 use crate::sessions::convert_query_log_timestamp;
 
 pub struct AccessLogger {

@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use databend_base::uniq_id::GlobalUniq;
 use databend_common_catalog::cluster_info::Cluster;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::Metadata;
@@ -35,6 +34,8 @@ use databend_meta_client::types::NodeInfo;
 use databend_query::clusters::ClusterHelper;
 use databend_query::physical_plans::PhysicalPlanBuilder;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextCluster;
+use databend_query::sessions::TableContextSettings;
 use databend_query::test_kits::TestFixture;
 
 use crate::sql::planner::optimizer::test_utils::execute_sql;

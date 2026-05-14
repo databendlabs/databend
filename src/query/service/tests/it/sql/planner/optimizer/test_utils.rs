@@ -47,9 +47,9 @@ use databend_common_sql::plans::RelOperator;
 use databend_common_sql::plans::ScalarExpr;
 use databend_common_sql::plans::ScalarItem;
 use databend_common_sql::plans::Scan;
-use databend_common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::TableContextSettings;
 
 // TPC-DS Test Utilities
 

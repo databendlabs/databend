@@ -102,6 +102,7 @@ message OssStorageConfig {
   string server_side_encryption = 8;
   string server_side_encryption_key_id = 9;
   NetworkConfig network_config = 10;
+  string role_arn = 11;
 }
 
 message WebhdfsStorageConfig {

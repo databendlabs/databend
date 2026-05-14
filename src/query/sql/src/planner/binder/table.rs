@@ -34,8 +34,6 @@ use databend_common_ast::ast::SetOperator;
 use databend_common_ast::ast::TableAlias;
 use databend_common_ast::ast::TemporalClause;
 use databend_common_ast::ast::TimeTravelPoint;
-use databend_common_ast::parser::parse_expr;
-use databend_common_ast::parser::tokenize_sql;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::table::NavigationPoint;
 use databend_common_catalog::table::Table;
@@ -63,11 +61,13 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_storage::StageFileInfo;
 use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::PolicyType;
+use databend_common_users::security_policy_cache::RawPolicyDef;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_row_access_policy_feature::get_row_access_policy_handler;
 use databend_meta_client::types::MetaId;
 use databend_storages_common_table_meta::table::ChangeType;
 use log::debug;
-use log::info;
 
 use crate::BaseTableColumn;
 use crate::BindContext;
@@ -82,6 +82,7 @@ use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
 use crate::binder::split_conjunctions;
+use crate::binder::table_args::execute_subquery_for_scalar;
 use crate::optimizer::ir::SExpr;
 use crate::planner::semantic::TypeChecker;
 use crate::planner::semantic::normalize_identifier;
@@ -131,13 +132,20 @@ impl Binder {
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
-        let max_column_position = self.metadata.read().get_max_column_position();
+        let (max_column_position, has_column_name_ref) = {
+            let metadata = self.metadata.read();
+            (
+                metadata.get_max_column_position(),
+                metadata.has_column_name_ref(),
+            )
+        };
         let table = table_ctx
             .create_stage_table(
                 stage_info,
                 files_info,
                 files_to_copy,
                 max_column_position,
+                has_column_name_ref,
                 on_error_mode,
             )
             .await?;
@@ -197,6 +205,7 @@ impl Binder {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
+            group_by_column_first: bind_context.group_by_column_first,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };
@@ -502,8 +511,6 @@ impl Binder {
     ) -> Result<SExpr> {
         LicenseManagerSwitch::instance()
             .check_enterprise_enabled(self.ctx.get_license_key(), Feature::RowAccessPolicy)?;
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let handler = get_row_access_policy_handler();
         // Collect arguments in policy.columns_ids order (matches the policy parameter list).
         // Previously this iterated `fields` (schema order) with a contains-filter, which
         // silently reordered arguments when USING column order differed from schema order.
@@ -521,26 +528,28 @@ impl Binder {
             })
             .collect();
         let policy = policy.policy_id;
-        let start = std::time::Instant::now();
-        let res = databend_common_base::runtime::block_on(handler.get_row_access_policy_by_id(
-            meta_api,
-            &self.ctx.get_tenant(),
+        let tenant = self.ctx.get_tenant();
+        let cache = SecurityPolicyCacheManager::instance();
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let tenant_clone = tenant.clone();
+        let res = cache.get_cached_or_load_sync(
+            PolicyType::RowAccessPolicy,
+            &tenant,
             policy,
-        ))?;
-        let fetch_elapsed = start.elapsed();
-        info!(
-            "row_access_policy: policy_id={}, fetch_ms={:.3}",
-            policy,
-            fetch_elapsed.as_secs_f64() * 1000.0,
-        );
-        let body = res.data.body;
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(&body)?;
-        let expr = parse_expr(&tokens, sql_dialect)?;
+            || async move {
+                let handler = get_row_access_policy_handler();
+                let seq_v = handler
+                    .get_row_access_policy_by_id(meta_api, &tenant_clone, policy)
+                    .await?;
+                let meta = seq_v.data;
+                Ok(RawPolicyDef {
+                    body: meta.body,
+                    args: meta.args,
+                })
+            },
+        )?;
 
         let parameters = res
-            .data
             .args
             .iter()
             .map(|arg| arg.0.to_string())
@@ -553,7 +562,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&expr, |nest_expr| {
+        let expr = TypeChecker::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match
@@ -688,30 +697,68 @@ impl Binder {
         }
     }
 
+    fn fold_travel_point_expr(
+        &self,
+        bind_context: &mut BindContext,
+        expr: &Expr,
+    ) -> Result<databend_common_expression::Expr<crate::ColumnBinding>> {
+        let mut type_checker = TypeChecker::try_create(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        )?;
+        let box (scalar, _) = type_checker.resolve(expr)?;
+        let scalar_expr = scalar.as_expr()?;
+        let (new_expr, _) = ConstantFolder::fold(
+            &scalar_expr,
+            &self.ctx.get_function_context()?,
+            &BUILTIN_FUNCTIONS,
+        );
+        Ok(new_expr)
+    }
+
     pub(crate) fn resolve_data_travel_point(
         &self,
         bind_context: &mut BindContext,
         travel_point: &TimeTravelPoint,
     ) -> Result<NavigationPoint> {
         match travel_point {
-            TimeTravelPoint::Snapshot(s) => Ok(NavigationPoint::SnapshotID(s.to_owned())),
-            TimeTravelPoint::Timestamp(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
+            TimeTravelPoint::Snapshot(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                match new_expr {
+                    databend_common_expression::Expr::Constant(Constant {
+                        scalar: databend_common_expression::Scalar::String(s),
+                        ..
+                    }) => Ok(NavigationPoint::SnapshotID(s)),
+                    _ => {
+                        if let Some(executor) = &self.subquery_executor {
+                            let result = execute_subquery_for_scalar(executor, expr)?;
+                            match result {
+                                databend_common_expression::Scalar::String(s) => {
+                                    Ok(NavigationPoint::SnapshotID(s))
+                                }
+                                _ => Err(ErrorCode::InvalidArgument(format!(
+                                    "TimeTravelPoint for 'Snapshot' must resolve to a string value, \
+                                    got: {}",
+                                    result
+                                ))),
+                            }
+                        } else {
+                            Err(ErrorCode::InvalidArgument(format!(
+                                "TimeTravelPoint for 'Snapshot' must resolve to a constant string value. \
+                                Provided expression '{}' is not a constant string",
+                                expr
+                            )))
+                        }
+                    }
+                }
+            }
+            TimeTravelPoint::Timestamp(expr) => {
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 match new_expr {
                     databend_common_expression::Expr::Constant(Constant {
@@ -734,22 +781,7 @@ impl Binder {
                 }
             }
             TimeTravelPoint::Offset(expr) => {
-                let mut type_checker = TypeChecker::try_create(
-                    bind_context,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    self.metadata.clone(),
-                    &[],
-                    false,
-                )?;
-                let box (scalar, _) = type_checker.resolve(expr)?;
-                let scalar_expr = scalar.as_expr()?;
-
-                let (new_expr, _) = ConstantFolder::fold(
-                    &scalar_expr,
-                    &self.ctx.get_function_context()?,
-                    &BUILTIN_FUNCTIONS,
-                );
+                let new_expr = self.fold_travel_point_expr(bind_context, expr)?;
 
                 let v: i64 = check_number(
                     None,

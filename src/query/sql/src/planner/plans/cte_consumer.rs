@@ -32,13 +32,25 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct MaterializedCTERef {
     pub cte_name: String,
     pub output_columns: Vec<Symbol>,
     pub def: SExpr,
     pub column_mapping: HashMap<Symbol, Symbol>,
+    pub stat_info: Option<Arc<StatInfo>>,
 }
+
+impl PartialEq for MaterializedCTERef {
+    fn eq(&self, other: &Self) -> bool {
+        self.cte_name == other.cte_name
+            && self.output_columns == other.output_columns
+            && self.def == other.def
+            && self.column_mapping == other.column_mapping
+    }
+}
+
+impl Eq for MaterializedCTERef {}
 
 impl Hash for MaterializedCTERef {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -58,6 +70,9 @@ impl Operator for MaterializedCTERef {
 
     /// Derive statistics information
     fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        if let Some(stat_info) = &self.stat_info {
+            return Ok(stat_info.clone());
+        }
         RelExpr::with_s_expr(&self.def).derive_cardinality()
     }
 

@@ -20,6 +20,7 @@ use databend_common_base::base::Progress;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
+use databend_common_catalog::plan::BlockMetaOptions;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PrewhereInfo;
@@ -43,7 +44,6 @@ use super::parquet_data_source::ParquetDataSource;
 use super::read_data_source::ReadDataSource;
 use super::read_state::ReadState;
 use super::util::add_data_block_meta;
-use super::util::need_reserve_block_info;
 use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
@@ -68,7 +68,7 @@ pub struct DeserializeDataTransform {
     virtual_reader: Arc<Option<VirtualColumnReader>>,
 
     base_block_ids: Option<Scalar>,
-    need_reserve_block_info: bool,
+    block_meta_options: BlockMetaOptions,
 
     prewhere_info: Option<PrewhereInfo>,
     read_state: Option<ReadState>,
@@ -111,7 +111,6 @@ impl DeserializeDataTransform {
             .and_then(|p| p.prewhere.as_ref())
             .cloned();
 
-        let (need_reserve_block_info, _) = need_reserve_block_info(ctx.clone(), plan.table_index);
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             ctx: ctx.clone(),
             scan_id: plan.scan_id,
@@ -127,7 +126,7 @@ impl DeserializeDataTransform {
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
-            need_reserve_block_info,
+            block_meta_options: plan.block_meta_options.clone(),
             prewhere_info,
             read_state: None,
         })))
@@ -267,7 +266,7 @@ impl Processor for DeserializeDataTransform {
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `TransformAddInternalColumns` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    let offsets = if self.block_reader.query_internal_columns() {
+                    let offsets = if self.block_meta_options.query_internal_columns {
                         bitmap_selection.as_ref().map(|bitmap| {
                             RoaringTreemap::from_sorted_iter(
                                 (0..bitmap.len())
@@ -285,9 +284,7 @@ impl Processor for DeserializeDataTransform {
                         part,
                         offsets,
                         self.base_block_ids.clone(),
-                        self.block_reader.update_stream_columns(),
-                        self.block_reader.query_internal_columns(),
-                        self.need_reserve_block_info,
+                        &self.block_meta_options,
                     )?;
 
                     self.output_data = Some(data_block);

@@ -21,7 +21,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -52,6 +51,7 @@ use databend_common_users::Object;
 use futures_util::StreamExt;
 use futures_util::stream::Chunks;
 
+use crate::sessions::TableContext;
 use crate::table_functions::list_stage::table_args::ListStageArgsParsed;
 
 const LIST_STAGE: &str = "list_stage";

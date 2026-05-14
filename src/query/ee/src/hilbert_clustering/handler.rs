@@ -104,7 +104,7 @@ impl HilbertClusteringHandler for RealHilbertClusteringHandler {
         let mut removed_statistics = Statistics::default();
         let mut removed_segment_indexes = Vec::with_capacity(target_segments.len());
         for (segment_loc, segment) in target_segments {
-            ctx.add_selected_segment_location(segment_loc.location);
+            ctx.selected_segment_locations().add(segment_loc.location);
             removed_segment_indexes.push(segment_loc.segment_idx);
             merge_statistics_mut(
                 &mut removed_statistics,

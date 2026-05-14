@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::OutputPort;
@@ -41,6 +40,8 @@ use crate::pipelines::processors::transforms::aggregator::TransformFinalAggregat
 use crate::pipelines::processors::transforms::aggregator::transform_partition_bucket::TransformPartitionBucket;
 use crate::servers::flight::v1::exchange::ExchangeShuffleTransform;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 fn build_partition_bucket_experimental(
     pipeline: &mut Pipeline,

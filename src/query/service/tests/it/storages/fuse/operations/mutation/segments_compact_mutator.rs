@@ -50,6 +50,9 @@ use databend_common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use databend_common_storages_fuse::statistics::sort_by_cluster_stats;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
+use databend_query::sessions::TableContextTelemetry;
 use databend_query::test_kits::*;
 use databend_storages_common_cache::LoadParams;
 use databend_storages_common_table_meta::meta::BlockMeta;
@@ -727,7 +730,12 @@ impl CompactSegmentTestFixture {
                 for block in blocks {
                     let block = block?;
 
-                    let col_stats = gen_columns_statistics(&block, None, &schema)?;
+                    let col_stats = gen_columns_statistics(
+                        &block,
+                        None,
+                        &schema,
+                        &std::collections::BTreeMap::new(),
+                    )?;
 
                     let cluster_stats = if unclustered && num_blocks % 4 == 0 {
                         None

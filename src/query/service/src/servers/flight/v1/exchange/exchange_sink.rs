@@ -43,7 +43,8 @@ use crate::servers::flight::v1::network::outbound_buffer::ExchangeBufferConfig;
 use crate::servers::flight::v1::network::outbound_buffer::ExchangeSinkBuffer;
 use crate::servers::flight::v1::scatter::HashFlightScatter;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 
 pub struct ExchangeSink;
 

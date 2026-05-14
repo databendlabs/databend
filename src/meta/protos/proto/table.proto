@@ -151,6 +151,9 @@ message TableMeta {
 
   // The main cluster key id.
   optional uint32 cluster_key_id = 38;
+
+  // Per-column string stats truncation length, keyed by ColumnId.
+  map<uint32, uint64> field_stats_truncate_len = 39;
 }
 
 message RowAccessPolicyColumnMap {

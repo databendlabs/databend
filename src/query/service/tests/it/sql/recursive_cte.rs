@@ -38,7 +38,11 @@ use databend_query::interpreters::DropTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
+use databend_query::sessions::TableContextCte;
+use databend_query::sessions::TableContextQueryIdentity;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
+use databend_query::sessions::TableContextTableManagement;
 use databend_query::sql::Planner;
 use databend_query::test_kits::TestFixture;
 use databend_query::test_kits::rcte_hooks::RcteHookRegistry;
@@ -139,6 +143,7 @@ async fn create_internal_recursive_cte_memory_table(
         storage_params: None,
         options,
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         cluster_key: None,
         as_select: None,
         table_indexes: None,
@@ -344,6 +349,7 @@ fn recursive_cte_deterministic_wrong_count_repro() -> anyhow::Result<()> {
             storage_params: None,
             options,
             field_comments: vec![],
+            field_stats_truncate_len: vec![],
             cluster_key: None,
             as_select: None,
             table_indexes: None,

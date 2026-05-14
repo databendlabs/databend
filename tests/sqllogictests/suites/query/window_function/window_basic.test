@@ -60,6 +60,41 @@ SELECT sum(salary) OVER (PARTITION BY depname ORDER BY salary) ss FROM empsalary
 9600
 14600
 
+query T
+SELECT array_agg(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, ['a'] AS v UNION ALL SELECT 1, ['b'] UNION ALL SELECT 1, ['c'])
+----
+[["a"],["b"],["c"]]
+[["a"],["b"],["c"]]
+[["a"],["b"],["c"]]
+
+query T rowsort
+SELECT json_array_agg(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, 'a' AS v UNION ALL SELECT 1, 'b' UNION ALL SELECT 1, 'c')
+----
+["a","b","c"]
+["a","b","c"]
+["a","b","c"]
+
+query T
+SELECT json_object_agg(v, n) OVER (PARTITION BY k) FROM (SELECT 1 AS k, 'a' AS v, 10 AS n UNION ALL SELECT 1, 'b', 20 UNION ALL SELECT 1, 'c', 30)
+----
+{"a":10,"b":20,"c":30}
+{"a":10,"b":20,"c":30}
+{"a":10,"b":20,"c":30}
+
+query T
+SELECT range_bound(3)(v) OVER (PARTITION BY k) FROM (SELECT 1 AS k, 10 AS v UNION ALL SELECT 1, 20 UNION ALL SELECT 1, 30)
+----
+[10,20]
+[10,20]
+[10,20]
+
+query T
+SELECT m FROM (SELECT markov_train(1, 0, 0, 1, 0)(v) OVER (PARTITION BY k) AS m FROM (SELECT 1 AS k, 'ab' AS v UNION ALL SELECT 1, 'ac' UNION ALL SELECT 1, 'ad'));
+----
+[(0,6,4,{97:4,98:2,99:2,100:2})]
+[(0,6,4,{97:4,98:2,99:2,100:2})]
+[(0,6,4,{97:4,98:2,99:2,100:2})]
+
 # row_number
 query I
 SELECT row_number() OVER (PARTITION BY depname ORDER BY salary) rn FROM empsalary ORDER BY depname, rn

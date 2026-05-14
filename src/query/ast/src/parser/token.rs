@@ -729,6 +729,8 @@ pub enum TokenKind {
     FILES,
     #[token("FINAL", ignore(ascii_case))]
     FINAL,
+    #[token("FINGERPRINT", ignore(ascii_case))]
+    FINGERPRINT,
     #[token("FLASHBACK", ignore(ascii_case))]
     FLASHBACK,
     #[token("FLOAT", ignore(ascii_case))]
@@ -877,8 +879,14 @@ pub enum TokenKind {
     JWT,
     #[token("KEY", ignore(ascii_case))]
     KEY,
+    #[token("KEYS", ignore(ascii_case))]
+    KEYS,
+    #[token("KEY_PAIR", ignore(ascii_case))]
+    KEY_PAIR,
     #[token("KILL", ignore(ascii_case))]
     KILL,
+    #[token("LABEL", ignore(ascii_case))]
+    LABEL,
     #[token("LAST_DAY", ignore(ascii_case))]
     LAST_DAY,
     #[token("LATERAL", ignore(ascii_case))]
@@ -1074,6 +1082,10 @@ pub enum TokenKind {
     PURGE,
     #[token("PUT", ignore(ascii_case))]
     PUT,
+    #[token("PUBLIC_KEY", ignore(ascii_case))]
+    PUBLIC_KEY,
+    #[token("PUBLIC", ignore(ascii_case))]
+    PUBLIC,
     #[token("PARTIAL", ignore(ascii_case))]
     PARTIAL,
     #[token("QUARTER", ignore(ascii_case))]
@@ -1290,6 +1302,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("STATISTICS", ignore(ascii_case))]
     STATISTICS,
+    #[token("STATS_TRUNCATE_LEN", ignore(ascii_case))]
+    STATS_TRUNCATE_LEN,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
@@ -1960,10 +1974,8 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
-            | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
-            | TokenKind::RANGE
             // | TokenKind::OVERLAPS
             // | TokenKind::RETURNING
             | TokenKind::STAGE
@@ -1996,10 +2008,24 @@ impl TokenKind {
     }
 }
 
-pub fn all_reserved_keywords() -> Vec<String> {
-    let mut result = Vec::new();
-    for token in TokenKind::iter() {
-        result.push(format!("{:?}", token));
+pub fn all_reserved_keywords() -> impl Iterator<Item = String> {
+    TokenKind::iter()
+        .filter(TokenKind::is_keyword)
+        .filter(|token| token.is_reserved_ident(false) || token.is_reserved_function_name())
+        .map(|token| format!("{:?}", token))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_reserved_keywords;
+
+    #[test]
+    fn test_all_reserved_keywords_only_returns_reserved_keywords() {
+        let keywords = all_reserved_keywords().collect::<Vec<_>>();
+
+        assert!(keywords.contains(&"SELECT".to_string()));
+        assert!(keywords.contains(&"TABLE".to_string()));
+        assert!(!keywords.contains(&"DATABASE".to_string()));
+        assert!(!keywords.contains(&"Whitespace".to_string()));
     }
-    result
 }

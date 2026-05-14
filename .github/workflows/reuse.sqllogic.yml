@@ -208,7 +208,6 @@ jobs:
           - "http_handler"
         handler:
           - "ttc-rust"
-          - "ttc-go"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_test

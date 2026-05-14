@@ -22,7 +22,6 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -49,6 +48,9 @@ use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
 use crate::pipelines::PipelineBuilder;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CompactSource {
@@ -114,7 +116,6 @@ impl IPhysicalPlan for CompactSource {
                 })
                 .collect::<Vec<_>>();
 
-            let column_ids = self.column_ids.clone();
             builder.main_pipeline.set_on_init(move || {
                 let ctx = query_ctx.clone();
                 let partitions =
@@ -123,7 +124,6 @@ impl IPhysicalPlan for CompactSource {
                             let partitions = BlockCompactMutator::build_compact_tasks(
                                 ctx.clone(),
                                 dal.clone(),
-                                column_ids.clone(),
                                 cluster_key_id,
                                 thresholds,
                                 lazy_parts,
@@ -145,8 +145,6 @@ impl IPhysicalPlan for CompactSource {
         let block_reader = table.create_block_reader(
             builder.ctx.clone(),
             Projection::Columns(table.all_column_indices()),
-            false,
-            table.change_tracking_enabled(),
             false,
         )?;
         let stream_ctx = if table.change_tracking_enabled() {

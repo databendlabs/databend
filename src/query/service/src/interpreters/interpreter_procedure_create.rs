@@ -28,7 +28,8 @@ use log::debug;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
 
 #[derive(Debug)]
 pub struct CreateProcedureInterpreter {

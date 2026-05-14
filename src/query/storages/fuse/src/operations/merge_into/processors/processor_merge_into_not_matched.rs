@@ -175,11 +175,13 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     metrics_inc_merge_into_append_blocks_rows_counter(
                         satisfied_block.num_rows() as u32
                     );
-                    self.ctx.add_mutation_status(MutationStatus {
-                        insert_rows: satisfied_block.num_rows() as u64,
-                        update_rows: 0,
-                        deleted_rows: 0,
-                    });
+                    self.ctx
+                        .mutation_state()
+                        .add_mutation_status(MutationStatus {
+                            insert_rows: satisfied_block.num_rows() as u64,
+                            update_rows: 0,
+                            deleted_rows: 0,
+                        });
 
                     self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)

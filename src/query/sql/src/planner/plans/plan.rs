@@ -174,6 +174,7 @@ use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
+use crate::plans::ShowPublicKeysPlan;
 use crate::plans::ShowTasksPlan;
 use crate::plans::SuspendWarehousePlan;
 use crate::plans::SwapTablePlan;
@@ -370,6 +371,7 @@ pub enum Plan {
     CreateUser(Box<CreateUserPlan>),
     DropUser(Box<DropUserPlan>),
     DescUser(Box<DescUserPlan>),
+    ShowPublicKeys(Box<ShowPublicKeysPlan>),
 
     // UDF
     CreateUDF(Box<CreateUDFPlan>),
@@ -608,6 +610,7 @@ impl Plan {
             Plan::CallProcedure(plan) => plan.schema(),
             Plan::InsertMultiTable(plan) => plan.schema(),
             Plan::DescUser(plan) => plan.schema(),
+            Plan::ShowPublicKeys(plan) => plan.schema(),
             Plan::Insert(plan) => plan.schema(),
             Plan::InspectWarehouse(plan) => plan.schema(),
             Plan::ShowWarehouses => DataSchemaRefExt::create(vec![

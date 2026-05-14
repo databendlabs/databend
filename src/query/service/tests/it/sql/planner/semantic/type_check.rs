@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::ColumnIndex;
 use databend_common_expression::Expr;
 use databend_common_sql::Planner;
 use databend_common_sql::parse_exprs;
 use databend_common_sql::plans::Plan;
 use databend_query::physical_plans::PhysicalPlanBuilder;
+use databend_query::sessions::TableContextSettings;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]

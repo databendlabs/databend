@@ -16,9 +16,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::runtime::PerfEvent;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::Result;
+
+use crate::sessions::TableContext;
 
 #[derive(Clone)]
 pub struct ExecutorSettings {

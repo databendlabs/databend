@@ -27,7 +27,6 @@ mod verify;
 #[cfg(not(feature = "storage-stage"))]
 use databend_common_base::base::ProgressValues;
 pub use discovery::discovery_nodes;
-#[cfg(not(feature = "storage-stage"))]
 use http::StatusCode;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryResponseField;
@@ -75,6 +74,24 @@ pub use users::list_users_handler;
 pub use verify::verify_handler;
 
 pub use crate::servers::http::error::QueryError;
+
+fn require_upload_filename(
+    field_name: Option<&str>,
+    filename: Option<&str>,
+) -> poem::Result<String> {
+    match filename.filter(|name| !name.is_empty()) {
+        Some(name) => Ok(name.to_string()),
+        None => {
+            let field_name = field_name.unwrap_or("upload");
+            Err(poem::Error::from_string(
+                format!(
+                    "Invalid form-data field '{field_name}': expected a file upload with a filename. If you are using curl, did you forget the '@' in -F '{field_name}=@/path/to/file'?"
+                ),
+                StatusCode::BAD_REQUEST,
+            ))
+        }
+    }
+}
 
 #[cfg(not(feature = "storage-stage"))]
 #[derive(Serialize, Deserialize, Debug)]

@@ -143,7 +143,7 @@ impl FuseTable {
                 // Since the recluster logic requires scanning the table twice, fetching the segments directly
                 // can avoid redundant selection logic and ensure that the same data is accessed during both scans.
                 // TODO(zhyass): refactor if necessary.
-                let selected_segment = ctx.get_selected_segment_locations();
+                let selected_segment = ctx.selected_segment_locations().list();
                 let segment_locs = if !selected_segment.is_empty() {
                     selected_segment
                 } else {

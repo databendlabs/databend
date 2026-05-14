@@ -26,6 +26,7 @@ target/
 # profile
 flamegraph.*
 perf.*
+!perf.rs
 
 # tests
 *.stderr
@@ -54,7 +55,7 @@ test/
 tests/longrun/_*.csv
 tests/longrun/**/_*.csv
 tests/sqllogictests/data/*
-tests/nox/cache/*
+tests/nox/cache/
 
 # fuzz
 hfuzz_target/
@@ -96,3 +97,4 @@ benchmark/clickbench/results
 tmp
 # superpowers agent plan docs
 docs/
+.alma-snapshots

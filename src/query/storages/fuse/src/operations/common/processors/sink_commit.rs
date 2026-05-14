@@ -315,8 +315,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
         self.new_virtual_schema_mode = virtual_schema_mode;
 
         if has_hll {
-            let binding = self.ctx.get_mutation_status();
-            let status = binding.read();
+            let binding = self.ctx.mutation_state().mutation_status();
+            let status = binding.read().unwrap();
             self.insert_rows = status.insert_rows + status.update_rows;
             self.insert_hll = hll;
         }
@@ -514,11 +514,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
-                        set_compaction_num_block_hint(
-                            self.ctx.as_ref(),
-                            table_info.name.as_str(),
-                            &snapshot.summary,
-                        );
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
@@ -630,6 +625,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     .location_gen
                     .gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 self.dal.write(&location, data).await?;
+                let imperfect_count =
+                    snapshot.summary.block_count - snapshot.summary.perfect_block_count;
 
                 // enable auto analyze.
                 let mut enable_auto_analyze = false;
@@ -661,6 +658,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     .await
                 {
                     Ok(_) => {
+                        set_compaction_num_block_hint(
+                            self.ctx.as_ref(),
+                            &table_info,
+                            imperfect_count,
+                        );
+
                         if self.need_truncate() {
                             // Truncate table operation should be executed in the context of ddl,
                             // which implies auto commit mode.
@@ -707,7 +710,7 @@ where F: SnapshotGenerator + Send + Sync + 'static
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
                         for segment_loc in std::mem::take(&mut self.new_segment_locs).into_iter() {
-                            self.ctx.add_written_segment_location(segment_loc)?;
+                            self.ctx.written_segment_locations().add(segment_loc);
                         }
 
                         if enable_auto_analyze {

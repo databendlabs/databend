@@ -60,6 +60,33 @@ select typeof(sum(number::Decimal(19, 1))), typeof(sum(number::Decimal(66, 1))) 
 ----
 DECIMAL(38, 1) NULL DECIMAL(76, 1) NULL
 
+query R
+SELECT SUM(agg0) FROM (
+  SELECT SUM(0.5) AS agg0 FROM numbers(2) a, numbers(2) b
+  UNION ALL
+  SELECT SUM(0.5) AS agg0 FROM numbers(2) a, numbers(2) b
+) x
+----
+4.0
+
+query TT
+select typeof(sum(number::Decimal(18, 1))), typeof(sum(number::Decimal(19, 1))) from numbers(1000);
+----
+DECIMAL(18, 1) NULL DECIMAL(38, 1) NULL
+
+query TT
+settings(enable_decimal_sum_widening=1) select typeof(sum(number::Decimal(18, 1))), typeof(sum(number::Decimal(19, 1))) from numbers(1000);
+----
+DECIMAL(18, 1) NULL DECIMAL(76, 1) NULL
+
+statement error Decimal overflow
+select sum(a) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a)
+
+query RT
+settings(enable_decimal_sum_widening=1) select sum(a), typeof(sum(a)) from (select '99999999999999999999999999999999999999'::Decimal(38, 0) as a union all select 1::Decimal(38, 0) as a);
+----
+100000000000000000000000000000000000000 DECIMAL(76, 0) NULL
+
 query RRT
 select avg(number * number),  avg( (number * number)::Decimal(39, 7) ), typeof(avg( (number * number)::Decimal(39, 7) )) from numbers(100);
 ----
@@ -104,6 +131,24 @@ query RII
 SELECT AVG(1 + a), sum(1 + a), count(1 + a) FROM tc;
 ----
 3.0 9 3
+
+statement ok
+create or replace table t0(c0 int);
+
+statement ok
+create or replace table t1(c0 int);
+
+statement ok
+insert into t0 values (1), (2);
+
+statement ok
+insert into t1 values (1), (2);
+
+# https://github.com/databendlabs/databend/issues/19738
+query R
+select avg(0.5) from t0, t1;
+----
+0.5000000
 
 ## Aggregate with alias and window function
 statement ok

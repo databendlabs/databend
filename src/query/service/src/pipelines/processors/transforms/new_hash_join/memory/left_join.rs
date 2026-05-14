@@ -16,7 +16,6 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_base::base::ProgressValues;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -44,6 +43,7 @@ use crate::pipelines::processors::transforms::new_hash_join::memory::basic::Basi
 use crate::pipelines::processors::transforms::new_hash_join::performance::PerformanceContext;
 use crate::pipelines::processors::transforms::wrap_true_validity;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct OuterLeftHashJoin {
     pub(crate) basic_hash_join: BasicHashJoin,

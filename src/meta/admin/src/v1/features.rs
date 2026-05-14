@@ -16,12 +16,12 @@ use std::sync::Arc;
 
 use databend_meta::meta_node::errors::MetaNodeStopped;
 use databend_meta::meta_node::meta_handle::MetaHandle;
+use databend_meta::openraft::rt::watch::WatchReceiver;
 use databend_meta::raft_store::StateMachineFeature;
 use databend_meta::runtime_api::SpawnApi;
 use http::StatusCode;
 use log::info;
 use log::warn;
-use openraft_rt::watch::WatchReceiver;
 use poem::IntoResponse;
 use poem::Response;
 use poem::web::Json;

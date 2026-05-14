@@ -57,7 +57,6 @@ use super::Location;
 use super::SpillerInner;
 use super::SpillsBufferPool;
 use super::async_buffer::BufferWriter;
-use super::async_buffer::SpillTarget;
 
 pub struct Properties {
     schema: Arc<Schema>,
@@ -481,7 +480,7 @@ impl<A> SpillerInner<A> {
 
         let remote_location = self.create_unique_location();
         let remote =
-            pool.buffer_writer(op.clone(), remote_location.clone(), SpillTarget::Remote)?;
+            pool.buffer_writer(op.clone(), remote_location.clone(), self.writer_pool_bytes)?;
 
         Ok(AnyFileWriter::Remote {
             path: remote_location.clone(),

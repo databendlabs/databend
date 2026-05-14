@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+use databend_meta_client::kvapi;
+
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, kvapi::KeyCodec)]
 pub struct MarkedDeletedTableIndexId {
     pub table_id: u64,
     pub index_name: String,
@@ -25,31 +27,6 @@ impl MarkedDeletedTableIndexId {
             table_id,
             index_name,
             index_version,
-        }
-    }
-}
-
-mod kvapi_key_impl {
-    use databend_meta_client::kvapi;
-
-    use super::MarkedDeletedTableIndexId;
-
-    impl kvapi::KeyCodec for MarkedDeletedTableIndexId {
-        fn encode_key(&self, b: kvapi::KeyBuilder) -> kvapi::KeyBuilder {
-            b.push_u64(self.table_id)
-                .push_str(&self.index_name)
-                .push_str(&self.index_version)
-        }
-
-        fn decode_key(parser: &mut kvapi::KeyParser) -> Result<Self, kvapi::KeyError> {
-            let table_id = parser.next_u64()?;
-            let index_name = parser.next_str()?;
-            let index_version = parser.next_str()?;
-            Ok(Self {
-                table_id,
-                index_name,
-                index_version,
-            })
         }
     }
 }

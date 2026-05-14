@@ -2404,6 +2404,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2460,6 +2461,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2516,6 +2518,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2530,6 +2533,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2610,6 +2614,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2663,6 +2668,76 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
+                    },
+                ],
+                opt_table_indexes: None,
+                opt_column_constraints: None,
+                opt_table_constraints: None,
+            },
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: None,
+        table_options: {},
+        iceberg_table_partition: None,
+        table_properties: None,
+        as_query: None,
+        table_type: Normal,
+    },
+)
+
+
+---------- Input ----------
+create table issue_11031 (range int, samples int)
+---------- Output ---------
+CREATE TABLE issue_11031 (range Int32, samples Int32)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        create_option: Create,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                13..24,
+            ),
+            name: "issue_11031",
+            quote: None,
+            ident_type: None,
+        },
+        source: Some(
+            Columns {
+                columns: [
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                26..31,
+                            ),
+                            name: "range",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            span: Some(
+                                37..44,
+                            ),
+                            name: "samples",
+                            quote: None,
+                            ident_type: None,
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        check: None,
+                        comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2716,6 +2791,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2730,6 +2806,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2849,6 +2926,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2863,6 +2941,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -2938,6 +3017,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2952,6 +3032,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -3103,6 +3184,7 @@ CreateTable(
                             },
                         ),
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3117,6 +3199,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -3295,6 +3378,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3315,6 +3399,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -3397,6 +3482,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -3459,6 +3545,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3473,6 +3560,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3558,6 +3646,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -3620,6 +3709,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3634,6 +3724,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3695,6 +3786,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -3757,6 +3849,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3771,6 +3864,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: Some(
@@ -3869,6 +3963,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -3883,6 +3978,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: Some(
@@ -4089,6 +4185,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -5434,6 +5531,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -5450,6 +5548,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -5466,6 +5565,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -5685,6 +5785,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -5699,6 +5800,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -6791,7 +6893,14 @@ CreateStream(
         },
         travel_point: Some(
             Snapshot(
-                "9828b23f74664ff3806f44bbc1925ea5",
+                Literal {
+                    span: Some(
+                        69..103,
+                    ),
+                    value: String(
+                        "9828b23f74664ff3806f44bbc1925ea5",
+                    ),
+                },
             ),
         ),
         append_only: true,
@@ -7272,6 +7381,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7288,6 +7398,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7304,6 +7415,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -7359,6 +7471,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7375,6 +7488,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7391,6 +7505,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -7444,6 +7559,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7458,6 +7574,7 @@ CreateTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -7522,6 +7639,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -7694,6 +7812,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -7762,6 +7881,7 @@ CreateTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -7992,6 +8112,131 @@ AlterUser(
         auth_option: None,
         user_options: [
             UnsetWorkloadGroup,
+        ],
+    },
+)
+
+
+---------- Input ----------
+CREATE USER u1 IDENTIFIED WITH key_pair BY '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----'
+---------- Output ---------
+CREATE USER 'u1'@'%' IDENTIFIED WITH key_pair BY '-----BEGIN PUBLIC KEY-----
+test
+-----END PUBLIC KEY-----'
+---------- AST ------------
+CreateUser(
+    CreateUserStmt {
+        create_option: Create,
+        user: UserIdentity {
+            username: "u1",
+            hostname: "%",
+        },
+        auth_option: AuthOption {
+            auth_type: Some(
+                KeyPair,
+            ),
+            password: Some(
+                "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----",
+            ),
+        },
+        user_options: [],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH ADD PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH ADD PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----
+test
+-----END PUBLIC KEY-----'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            AddPublicKey(
+                "-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----",
+                None,
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH ADD PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A' LABEL = 'ci-pipeline';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH ADD PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A' LABEL = 'ci-pipeline'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            AddPublicKey(
+                "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A",
+                Some(
+                    "ci-pipeline",
+                ),
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH REMOVE PUBLIC_KEY LABEL = 'ci-pipeline';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH REMOVE PUBLIC_KEY LABEL = 'ci-pipeline'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            RemovePublicKeyByLabel(
+                "ci-pipeline",
+            ),
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER USER u1 WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:abc123';
+---------- Output ---------
+ALTER USER 'u1'@'%' WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:abc123'
+---------- AST ------------
+AlterUser(
+    AlterUserStmt {
+        user: Some(
+            UserIdentity {
+                username: "u1",
+                hostname: "%",
+            },
+        ),
+        auth_option: None,
+        user_options: [
+            RemovePublicKeyByFingerprint(
+                "SHA256:abc123",
+            ),
         ],
     },
 )
@@ -8287,6 +8532,173 @@ Delete(
                 ],
             },
         ),
+    },
+)
+
+
+---------- Input ----------
+insert into issue_11031 (radio, range, samples) values ('lte', 10, 1)
+---------- Output ---------
+INSERT INTO issue_11031 (radio, range, samples) VALUES ('lte', 10, 1)
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        with: None,
+        table: TableRef {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                span: Some(
+                    12..23,
+                ),
+                name: "issue_11031",
+                quote: None,
+                ident_type: None,
+            },
+            branch: None,
+        },
+        columns: [
+            Identifier {
+                span: Some(
+                    25..30,
+                ),
+                name: "radio",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    32..37,
+                ),
+                name: "range",
+                quote: None,
+                ident_type: None,
+            },
+            Identifier {
+                span: Some(
+                    39..46,
+                ),
+                name: "samples",
+                quote: None,
+                ident_type: None,
+            },
+        ],
+        source: Values {
+            rows: [
+                [
+                    Literal {
+                        span: Some(
+                            56..61,
+                        ),
+                        value: String(
+                            "lte",
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            63..65,
+                        ),
+                        value: UInt64(
+                            10,
+                        ),
+                    },
+                    Literal {
+                        span: Some(
+                            67..68,
+                        ),
+                        value: UInt64(
+                            1,
+                        ),
+                    },
+                ],
+            ],
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
+select range from issue_11031;
+---------- Output ---------
+SELECT range FROM issue_11031
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..29,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..29,
+                ),
+                hints: None,
+                distinct: false,
+                top_n: None,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..12,
+                            ),
+                            column: ColumnRef {
+                                database: None,
+                                table: None,
+                                column: Name(
+                                    Identifier {
+                                        span: Some(
+                                            7..12,
+                                        ),
+                                        name: "range",
+                                        quote: None,
+                                        ident_type: None,
+                                    },
+                                ),
+                            },
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Table {
+                        span: Some(
+                            18..29,
+                        ),
+                        table: TableRef {
+                            catalog: None,
+                            database: None,
+                            table: Identifier {
+                                span: Some(
+                                    18..29,
+                                ),
+                                name: "issue_11031",
+                                quote: None,
+                                ident_type: None,
+                            },
+                            branch: None,
+                        },
+                        alias: None,
+                        temporal: None,
+                        with_options: None,
+                        pivot: None,
+                        unpivot: None,
+                        sample: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+                qualify: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 
@@ -16294,7 +16706,14 @@ OptimizeTable(
         action: Purge {
             before: Some(
                 Snapshot(
-                    "9828b23f74664ff3806f44bbc1925ea5",
+                    Literal {
+                        span: Some(
+                            43..77,
+                        ),
+                        value: String(
+                            "9828b23f74664ff3806f44bbc1925ea5",
+                        ),
+                    },
                 ),
             ),
         },
@@ -16697,6 +17116,7 @@ AlterTable(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
             option: End,
         },
@@ -16753,6 +17173,7 @@ AlterTable(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
             option: End,
         },
@@ -16809,6 +17230,7 @@ AlterTable(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
             option: End,
         },
@@ -16878,6 +17300,7 @@ AlterTable(
                 comment: Some(
                     "hello",
                 ),
+                stats_truncate_len: None,
             },
             option: First,
         },
@@ -16943,6 +17366,7 @@ AlterTable(
                 ),
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
             option: After(
                 Identifier {
@@ -17542,6 +17966,7 @@ AlterTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -17556,6 +17981,7 @@ AlterTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
             ),
@@ -17625,6 +18051,7 @@ AlterTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -17641,6 +18068,7 @@ AlterTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
             ),
@@ -17710,6 +18138,7 @@ AlterTable(
                         ),
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -17728,6 +18157,7 @@ AlterTable(
                         comment: Some(
                             "column b",
                         ),
+                        stats_truncate_len: None,
                     },
                 ],
             ),
@@ -17799,6 +18229,7 @@ AlterTable(
                         comment: Some(
                             "column a",
                         ),
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -17817,6 +18248,7 @@ AlterTable(
                         comment: Some(
                             "column b",
                         ),
+                        stats_truncate_len: None,
                     },
                 ],
             ),
@@ -17937,6 +18369,7 @@ AlterTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
             ),
@@ -17993,6 +18426,7 @@ AlterTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
             ),
@@ -18388,7 +18822,14 @@ AlterTable(
         },
         action: FlashbackTo {
             point: Snapshot(
-                "9828b23f74664ff3806f44bbc1925ea5",
+                Literal {
+                    span: Some(
+                        40..74,
+                    ),
+                    value: String(
+                        "9828b23f74664ff3806f44bbc1925ea5",
+                    ),
+                },
             ),
         },
     },
@@ -18439,7 +18880,14 @@ AlterTable(
                 },
                 travel_point: Some(
                     Snapshot(
-                        "9828b23f74664ff3806f44bbc1925ea5",
+                        Literal {
+                            span: Some(
+                                47..81,
+                            ),
+                            value: String(
+                                "9828b23f74664ff3806f44bbc1925ea5",
+                            ),
+                        },
                     ),
                 ),
                 retain: Some(
@@ -19534,6 +19982,7 @@ CreateDictionary(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -19548,6 +19997,7 @@ CreateDictionary(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
         ],
         primary_keys: [
@@ -19859,6 +20309,7 @@ CreateTable(
                         comment: Some(
                             "col comment",
                         ),
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -20057,6 +20508,7 @@ CreateTable(
                         comment: Some(
                             "col comment",
                         ),
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -27707,6 +28159,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -27721,6 +28174,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -27860,6 +28314,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -27874,6 +28329,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -28059,6 +28515,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -28073,6 +28530,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -28302,6 +28760,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -28316,6 +28775,7 @@ CreateDynamicTable(
                         expr: None,
                         check: None,
                         comment: None,
+                        stats_truncate_len: None,
                     },
                 ],
                 opt_table_indexes: None,
@@ -33721,6 +34181,7 @@ CreateDictionary(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
             ColumnDefinition {
                 name: Identifier {
@@ -33735,6 +34196,7 @@ CreateDictionary(
                 expr: None,
                 check: None,
                 comment: None,
+                stats_truncate_len: None,
             },
         ],
         primary_keys: [

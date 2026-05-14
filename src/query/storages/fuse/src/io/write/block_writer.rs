@@ -104,6 +104,8 @@ pub fn serialize_block_with_column_stats(
                 write_settings.enable_parquet_dictionary,
                 None,
                 column_stats,
+                write_settings.data_page_rows,
+                write_settings.data_page_bytes,
             )?;
             let meta = column_parquet_metas(&result, &schema)?;
             Ok(meta)
@@ -275,6 +277,7 @@ impl BlockBuilder {
             &data_block,
             Some(column_distinct_count),
             &self.source_schema,
+            &self.write_settings.col_stats_truncate_lens,
         )?;
 
         let mut buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);

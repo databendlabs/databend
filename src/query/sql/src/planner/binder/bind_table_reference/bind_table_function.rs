@@ -137,6 +137,7 @@ impl Binder {
             &[],
         );
         let table_args = bind_table_args(
+            &func_name.name,
             &mut scalar_binder,
             params,
             named_params,

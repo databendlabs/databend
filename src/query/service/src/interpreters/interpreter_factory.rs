@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_ast::ast::ExplainKind;
 use databend_common_catalog::lock::LockTableOption;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_sql::binder::ExplainConfig;
@@ -49,6 +48,7 @@ use crate::interpreters::DropTagInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetObjectTagsInterpreter;
 use crate::interpreters::SetRoleInterpreter;
+use crate::interpreters::ShowPublicKeysInterpreter;
 use crate::interpreters::UnsetObjectTagsInterpreter;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::access_log::AccessLogger;
@@ -122,6 +122,7 @@ use crate::interpreters::interpreter_worker_show::ShowWorkersInterpreter;
 #[cfg(feature = "task-support")]
 use crate::interpreters::task;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextCluster;
 use crate::sql::plans::Plan;
 
 /// InterpreterFactory is the entry of Interpreter.
@@ -576,6 +577,10 @@ impl InterpreterFactory {
             Plan::DescUser(desc_user) => Ok(Arc::new(DescUserInterpreter::try_create(
                 ctx,
                 *desc_user.clone(),
+            )?)),
+            Plan::ShowPublicKeys(plan) => Ok(Arc::new(ShowPublicKeysInterpreter::try_create(
+                ctx,
+                *plan.clone(),
             )?)),
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),

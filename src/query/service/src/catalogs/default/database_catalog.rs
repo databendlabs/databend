@@ -22,7 +22,6 @@ use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::database::Database;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -130,6 +129,7 @@ use super::super::merge_options;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
 use crate::catalogs::default::SessionCatalog;
+use crate::sessions::TableContext;
 use crate::storages::Table;
 use crate::table_functions::TableFunctionFactory;
 use crate::table_functions::UDTFTable;
@@ -882,7 +882,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = &visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -904,7 +904,7 @@ impl Catalog for DatabaseCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = &visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

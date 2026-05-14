@@ -91,7 +91,7 @@ RowFetch
             ├── filters: []
             ├── build join filters:
             │   └── filter id:0, build key:t1.id (#0), probe targets:[t2.id (#4)@scan1], filter type:bloom,inlist,min_max
-            ├── estimated rows: 2.00
+            ├── estimated rows: 2.67
             ├── TableScan(Build)
             │   ├── table: default.default.lazy_join_t1
             │   ├── scan id: 0

@@ -69,7 +69,7 @@ use super::assert_unary_arguments;
 use super::batch_merge1;
 use super::batch_serialize1;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ArrayAggStateAny<T>
 where T: ValueType
 {
@@ -170,7 +170,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ArrayAggStateSimple<T>
 where T: SimpleType
 {
@@ -288,7 +288,7 @@ where T: SimpleType
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ArrayAggStateZST<const IS_NULL: bool> {
     validity: MutableBitmap,
 }
@@ -387,7 +387,7 @@ impl<const IS_NULL: bool> StateSerde for ArrayAggStateZST<IS_NULL> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct ArrayAggStateBinary<T>
 where T: ArgType
 {
@@ -565,7 +565,7 @@ struct AggregateArrayAggFunction<T, State> {
 impl<T, State> AggregateFunction for AggregateArrayAggFunction<T, State>
 where
     T: AccessType,
-    State: ScalarStateFunc<T>,
+    State: Clone + ScalarStateFunc<T>,
 {
     fn name(&self) -> &str {
         "AggregateArrayAggFunction"
@@ -686,11 +686,16 @@ where
     fn merge_result(
         &self,
         place: AggrState,
-        _read_only: bool,
+        read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         let state = place.get::<State>();
-        state.merge_result(builder)
+        if read_only {
+            let mut state = state.clone();
+            state.merge_result(builder)
+        } else {
+            state.merge_result(builder)
+        }
     }
 
     fn need_manual_drop_state(&self) -> bool {
@@ -712,7 +717,7 @@ impl<T, State> fmt::Display for AggregateArrayAggFunction<T, State> {
 impl<T, State> AggregateArrayAggFunction<T, State>
 where
     T: ValueType,
-    State: ScalarStateFunc<T>,
+    State: Clone + ScalarStateFunc<T>,
 {
     fn create(display_name: &str, return_type: DataType) -> Result<Arc<dyn AggregateFunction>> {
         let func = AggregateArrayAggFunction::<T, State> {

@@ -498,7 +498,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                         },
                     })
                 } else {
-                    Err(nom::Err::Failure(ErrorKind::Other(
+                    Err(nom::Err::Failure(ErrorKind::other(
                         "inconsistent number of variables and values",
                     )))
                 }
@@ -1711,6 +1711,12 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
         },
         |(_, _, user)| Statement::DescribeUser { user },
     );
+    let show_public_keys = map(
+        rule! {
+            SHOW ~ PUBLIC ~ KEYS ~ FOR ~ USER ~ #user_identity
+        },
+        |(_, _, _, _, _, user)| Statement::ShowPublicKeys { user },
+    );
     let create_user = map_res(
         rule! {
             CREATE ~  ( OR ~ ^REPLACE )? ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
@@ -2839,6 +2845,7 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
                 #show_dictionaries : "`SHOW DICTIONARIES [<show_option>, ...]`"
                 | #show_create_dictionary : "`SHOW CREATE DICTIONARY <dictionary_name> `"
                 | #show_users : "`SHOW USERS`"
+                | #show_public_keys : "`SHOW PUBLIC KEYS FOR USER <user_name>`"
                 | #show_roles : "`SHOW ROLES`"
                 | #show_grants : "`SHOW GRANTS {FOR  { ROLE <role_name> | USER <user> }] | ON {DATABASE <db_name> | TABLE <db_name>.<table_name>} }`"
                 | #show_connections: "`SHOW CONNECTIONS`"
@@ -3076,7 +3083,7 @@ AS
     );
     Err(nom::Err::Error(Error::from_error_kind(
         i,
-        ErrorKind::Other("expecting SQL statement"),
+        ErrorKind::other("expecting SQL statement"),
     )))
 }
 
@@ -3101,7 +3108,7 @@ pub fn parse_create_option(
         (false, false) => Ok(CreateOption::Create),
         (true, false) => Ok(CreateOption::CreateOrReplace),
         (false, true) => Ok(CreateOption::CreateIfNotExists),
-        (true, true) => Err(nom::Err::Failure(ErrorKind::Other(
+        (true, true) => Err(nom::Err::Failure(ErrorKind::other(
             "option IF NOT EXISTS and OR REPLACE are incompatible.",
         ))),
     }
@@ -3128,7 +3135,7 @@ pub fn insert_stmt(
             },
             |(with, _, opt_hints, overwrite, into, _, table, opt_columns, source)| {
                 if overwrite.is_none() && into.is_none() {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "INSERT statement must be followed by 'overwrite' or 'into'",
                     )));
                 }
@@ -3593,21 +3600,30 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
+    let stats_truncate_len = map(
+        rule! {
+            STATS_TRUNCATE_LEN ~ #literal_u64
+        },
+        |(_, n)| n,
+    );
+
     let (i, (mut def, constraints)) = map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`"
+            ~ ( #stats_truncate_len )?
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`"
         },
-        |(name, data_type, constraints, comment)| {
+        |(name, data_type, constraints, comment, stats_truncate_len)| {
             let def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len,
             };
             (def, constraints)
         },
@@ -3621,7 +3637,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("ambiguous NOT NULL constraint"),
+                        ErrorKind::other("ambiguous NOT NULL constraint"),
                     )));
                 }
                 if nullable {
@@ -3634,7 +3650,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::AutoIncrement { .. })) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other(
+                        ErrorKind::other(
                             "DEFAULT and AUTO INCREMENT cannot exist at the same time",
                         ),
                     )));
@@ -3656,7 +3672,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 if matches!(def.expr, Some(ColumnExpr::Default(_))) {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
-                        ErrorKind::Other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
+                        ErrorKind::other("DEFAULT and AUTOINCREMENT cannot exist at the same time"),
                     )));
                 }
                 def.expr = Some(ColumnExpr::AutoIncrement {
@@ -3728,14 +3744,14 @@ pub fn role_name(i: Input) -> IResult<String> {
                 match c {
                     '\\' => match chars.next() {
                         Some('f') | Some('b') => {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "' or \" or \\f or \\b are not allowed in role name",
                             )));
                         }
                         _ => {}
                     },
                     '\'' | '"' => {
-                        return Err(nom::Err::Failure(ErrorKind::Other(
+                        return Err(nom::Err::Failure(ErrorKind::other(
                             "' or \" or \\f or \\b are not allowed in role name",
                         )));
                     }
@@ -4667,6 +4683,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len: None,
             };
             for constraint in constraints {
                 match constraint {
@@ -4674,7 +4691,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                         if (nullable && matches!(def.data_type, TypeName::NotNull(_)))
                             || (!nullable && matches!(def.data_type, TypeName::Nullable(_)))
                         {
-                            return Err(nom::Err::Failure(ErrorKind::Other(
+                            return Err(nom::Err::Failure(ErrorKind::other(
                                 "ambiguous NOT NULL constraint",
                             )));
                         }
@@ -5409,7 +5426,7 @@ pub fn workload_quotas(i: Input) -> IResult<BTreeMap<String, QuotaValueStmt>> {
                     quotas.insert(name, value);
                 }
                 Err(error_desc) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(error_desc)));
+                    return Err(nom::Err::Failure(ErrorKind::other(error_desc)));
                 }
             }
         }
@@ -5750,6 +5767,27 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         },
         |(_, _, _)| UserOptionItem::UnsetWorkloadGroup,
     );
+    let add_public_key = map(
+        rule! {
+            ADD ~ PUBLIC_KEY ~ ^"=" ~ ^#literal_string ~ ( LABEL ~ ^"=" ~ ^#literal_string )?
+        },
+        |(_, _, _, pem, label_opt)| {
+            let label = label_opt.map(|(_, _, l)| l);
+            UserOptionItem::AddPublicKey(pem, label)
+        },
+    );
+    let remove_public_key_by_label = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ LABEL ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, label)| UserOptionItem::RemovePublicKeyByLabel(label),
+    );
+    let remove_public_key_by_fingerprint = map(
+        rule! {
+            REMOVE ~ PUBLIC_KEY ~ FINGERPRINT ~ ^"=" ~ ^#literal_string
+        },
+        |(_, _, _, _, fingerprint)| UserOptionItem::RemovePublicKeyByFingerprint(fingerprint),
+    );
 
     rule!(
         #tenant_setting
@@ -5764,6 +5802,9 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
         | #must_change_password
         | #set_workload_group
         | #unset_workload_group
+        | #add_public_key
+        | #remove_public_key_by_label
+        | #remove_public_key_by_fingerprint
     )
     .parse(i)
 }
@@ -5787,6 +5828,7 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
+        value(AuthType::KeyPair, rule! { KEY_PAIR }),
     ))
     .parse(i)
 }
@@ -6029,7 +6071,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
                     return_type,
                 },
                 (ReturnBody::Scalar(_), FuncBody::Server { .. }) => {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "ScalarUDF unsupported external Server",
                     )));
                 }
@@ -6360,7 +6402,7 @@ pub fn explain_perf(i: Input) -> IResult<Statement> {
         |(_, _, opt_options, statement)| {
             let event_groups = if let Some((_, key, _, value, _)) = opt_options {
                 if key.name.to_lowercase() != "events" {
-                    return Err(nom::Err::Failure(ErrorKind::Other(
+                    return Err(nom::Err::Failure(ErrorKind::other(
                         "expected 'events' as the option key for EXPLAIN PERF",
                     )));
                 }

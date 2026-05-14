@@ -31,10 +31,11 @@ use databend_common_pipeline_transforms::sorts::add_k_way_merge_sort;
 use databend_common_pipeline_transforms::sorts::core::SortKeyDescription;
 use databend_common_pipeline_transforms::sorts::try_add_multi_sort_merge;
 use databend_common_storage::DataOperator;
-use databend_common_storages_fuse::TableContext;
 use databend_storages_common_cache::TempDirManager;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextSettings;
 use crate::spillers::SortSpillerImpl;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
@@ -138,6 +139,9 @@ impl SortPipelineBuilder {
                 location_prefix,
                 disk_spill,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+                writer_pool_bytes: settings
+                    .get_spill_writer_memory_pool_size_mb()?
+                    .saturating_mul(1024 * 1024),
             };
             let op = DataOperator::instance().spill_operator();
             SortSpillerImpl::new(self.ctx.clone(), op, config)?
@@ -224,6 +228,9 @@ impl SortPipelineBuilder {
                 location_prefix,
                 disk_spill: None,
                 use_parquet: settings.get_spilling_file_format()?.is_parquet(),
+                writer_pool_bytes: settings
+                    .get_spill_writer_memory_pool_size_mb()?
+                    .saturating_mul(1024 * 1024),
             };
             let op = DataOperator::instance().spill_operator();
             SortSpillerImpl::new(self.ctx.clone(), op, config)?

@@ -26,7 +26,6 @@ use databend_common_ast::ast::OptimizeTableStmt;
 use databend_common_ast::ast::Statement;
 use databend_common_base::base::short_sql;
 use databend_common_catalog::query_kind::QueryKind;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_exception::ResultExt;
@@ -57,6 +56,14 @@ use crate::sessions::AcquireQueueGuard;
 use crate::sessions::QueriesQueueManager;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryEntry;
+use crate::sessions::TableContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextQueryState;
+use crate::sessions::TableContextSession;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTelemetry;
 use crate::stream::DataBlockStream;
 use crate::stream::ProgressStream;
 use crate::stream::PullingExecutorStream;
@@ -94,8 +101,8 @@ pub trait Interpreter: Sync + Send {
 
     async fn execute_inner(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         {
-            let mutation_status = ctx.get_mutation_status();
-            let mut mutation_status = mutation_status.write();
+            let mutation_status = ctx.mutation_state().mutation_status();
+            let mut mutation_status = mutation_status.write().unwrap();
             mutation_status.insert_rows = 0;
             mutation_status.deleted_rows = 0;
             mutation_status.update_rows = 0;

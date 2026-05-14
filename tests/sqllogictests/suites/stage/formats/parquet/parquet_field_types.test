@@ -210,3 +210,11 @@ select * from t2 order by a
 4 ["a","b"]
 5 {"k":"v"}
 6 null
+
+query TT
+select * from @data/parquet/binary_view.parquet;
+----
+6162 [1,2]
+68656C6C6F [3,4]
+6C61726765207061796C6F6164206F766572203132206279746573 [5,6]
+

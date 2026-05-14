@@ -153,6 +153,10 @@ impl Table for StageTable {
         DataSourceInfo::StageSource(self.table_info.clone())
     }
 
+    fn is_stage_table(&self) -> bool {
+        true
+    }
+
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -222,7 +226,7 @@ impl Table for StageTable {
                 OrcTableForCopy::do_read_data(ctx, plan, pipeline, _put_cache)
             }
             FileFormatParams::Csv(_) | FileFormatParams::NdJson(_) | FileFormatParams::Text(_) => {
-                let compact_threshold = ctx.get_read_block_thresholds();
+                let compact_threshold = ctx.read_block_thresholds().get();
                 RowBasedReadPipelineBuilder {
                     stage_table_info,
                     compact_threshold,
@@ -230,7 +234,7 @@ impl Table for StageTable {
                 .read_data(ctx, plan, pipeline, internal_columns)
             }
             FileFormatParams::Avro(_) => {
-                let compact_threshold = ctx.get_read_block_thresholds();
+                let compact_threshold = ctx.read_block_thresholds().get();
                 AvroReadPipelineBuilder {
                     stage_table_info,
                     compact_threshold,

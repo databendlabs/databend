@@ -21,7 +21,6 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
@@ -158,6 +157,7 @@ use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
 use crate::meta_service_error;
 use crate::meta_txn_error;
+use crate::sessions::TableContext;
 use crate::storages::StorageDescription;
 use crate::storages::StorageFactory;
 use crate::storages::Table;
@@ -965,7 +965,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -1008,7 +1008,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

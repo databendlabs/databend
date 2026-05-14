@@ -22,7 +22,6 @@ use databend_common_base::runtime::PerfConfig;
 use databend_common_catalog::cluster_info::Cluster;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::session_type::SessionType;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -41,6 +40,8 @@ use crate::clusters::FlightParams;
 use crate::servers::flight::v1::actions::INIT_QUERY_ENV;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionManager;
+use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextQueryIdentity;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Edge {

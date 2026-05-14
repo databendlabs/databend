@@ -181,7 +181,9 @@ impl Walk for Statement {
             Statement::RefreshTableIndex(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::RefreshVirtualColumn(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::ShowVirtualColumns(stmt) => try_walk!(stmt.walk(visitor)),
-            Statement::DescribeUser { .. } | Statement::DropUser { .. } => {}
+            Statement::DescribeUser { .. }
+            | Statement::DropUser { .. }
+            | Statement::ShowPublicKeys { .. } => {}
             Statement::CreateUser(_) | Statement::AlterUser(_) => {}
             Statement::Grant(stmt) => try_walk!(stmt.walk(visitor)),
             Statement::Revoke(stmt) => try_walk!(stmt.walk(visitor)),
@@ -394,7 +396,9 @@ impl WalkMut for Statement {
             Statement::RefreshTableIndex(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::RefreshVirtualColumn(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::ShowVirtualColumns(stmt) => try_walk!(stmt.walk_mut(visitor)),
-            Statement::DescribeUser { .. } | Statement::DropUser { .. } => {}
+            Statement::DescribeUser { .. }
+            | Statement::DropUser { .. }
+            | Statement::ShowPublicKeys { .. } => {}
             Statement::CreateUser(_) | Statement::AlterUser(_) => {}
             Statement::Grant(stmt) => try_walk!(stmt.walk_mut(visitor)),
             Statement::Revoke(stmt) => try_walk!(stmt.walk_mut(visitor)),

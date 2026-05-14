@@ -62,6 +62,10 @@ use crate::pipelines::ValueSource;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextProgress;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextTableAccess;
+use crate::sessions::TableContextTableManagement;
 use crate::stream::DataBlockStream;
 
 pub struct InsertInterpreter {
@@ -357,8 +361,8 @@ impl Interpreter for InsertInterpreter {
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let binding = self.ctx.get_mutation_status();
-        let status = binding.read();
+        let binding = self.ctx.mutation_state().mutation_status();
+        let status = binding.read().unwrap();
         let blocks = vec![DataBlock::new_from_columns(vec![UInt64Type::from_data(
             vec![status.insert_rows],
         )])];

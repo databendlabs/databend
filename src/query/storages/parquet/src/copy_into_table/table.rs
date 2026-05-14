@@ -73,7 +73,7 @@ impl ParquetTableForCopy {
 
         let mut schemas = vec![];
         let mut parts = vec![];
-        let copy_status = ctx.get_copy_status();
+        let copy_status = ctx.copy_state().copy_status();
         let mut stats = PartStatistics::default();
         for meta in metas.iter() {
             let schema = meta.meta.file_metadata().schema_descr_ptr();

@@ -35,6 +35,7 @@ use crate::optimizer::optimizers::CascadesOptimizer;
 use crate::optimizer::optimizers::CommonSubexpressionOptimizer;
 use crate::optimizer::optimizers::DPhpyOptimizer;
 use crate::optimizer::optimizers::EliminateSelfJoinOptimizer;
+use crate::optimizer::optimizers::SyncMaterializedCTERefOptimizer;
 use crate::optimizer::optimizers::distributed::BroadcastToShuffleOptimizer;
 use crate::optimizer::optimizers::operator::CleanupUnusedCTEOptimizer;
 use crate::optimizer::optimizers::operator::DeduplicateJoinConditionOptimizer;
@@ -50,6 +51,7 @@ use crate::optimizer::optimizers::rule::RuleID;
 use crate::optimizer::pipeline::OptimizerPipeline;
 use crate::optimizer::statistics::CollectStatisticsOptimizer;
 use crate::plans::ConstantTableScan;
+use crate::plans::EvalScalar;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::MatchedEvaluator;
@@ -58,6 +60,7 @@ use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::plans::SetScalarsOrQuery;
 
 #[fastrace::trace]
@@ -191,6 +194,7 @@ pub async fn optimize(opt_ctx: Arc<OptimizerContext>, plan: Plan) -> Result<Plan
         }
         Plan::InsertMultiTable(mut plan) => {
             plan.input_source = optimize(opt_ctx.clone(), plan.input_source.clone()).await?;
+            rewrite_insert_multi_table_whens(opt_ctx, plan.as_mut())?;
             Ok(Plan::InsertMultiTable(plan))
         }
         Plan::Replace(mut plan) => {
@@ -253,6 +257,12 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         .add(RuleNormalizeAggregateOptimizer::new())
         // Pull up and infer filter.
         .add(PullUpFilterOptimizer::new(opt_ctx.clone()))
+        // Common subexpression elimination optimization
+        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
+        .add_if(
+            settings.get_enable_cse_optimizer()?,
+            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
+        )
         // Run default rewrite rules
         .add(RecursiveRuleOptimizer::new(
             opt_ctx.clone(),
@@ -260,6 +270,8 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
         ))
         // CTE filter pushdown optimization
         .add(CTEFilterPushdownOptimizer::new(opt_ctx.clone()))
+        // Sync CTE consumer statistics with the latest producer estimates after pushdown rewrites.
+        .add(SyncMaterializedCTERefOptimizer::new())
         // Run post rewrite rules
         .add(RecursiveRuleOptimizer::new(opt_ctx.clone(), &[
             RuleID::SplitAggregate,
@@ -281,12 +293,6 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
             settings.get_force_eager_aggregate()?,
             RuleEagerAggregation::new(opt_ctx.get_metadata()),
         )
-        // Common subexpression elimination optimization
-        // TODO(Sky): Currently uses heuristic approach, will be integrated into Cascades optimizer in the future.
-        .add_if(
-            settings.get_enable_cse_optimizer()?,
-            CommonSubexpressionOptimizer::new(opt_ctx.clone()),
-        )
         // Cascades optimizer may fail due to timeout, fallback to heuristic optimizer in this case.
         .add(CascadesOptimizer::new(opt_ctx.clone())?)
         // Eliminate unnecessary scalar calculations to clean up the final plan
@@ -301,6 +307,59 @@ pub async fn optimize_query(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Re
     let s_expr = pipeline.execute().await?;
 
     Ok(s_expr)
+}
+
+fn rewrite_insert_multi_table_whens(
+    opt_ctx: Arc<OptimizerContext>,
+    plan: &mut crate::plans::InsertMultiTable,
+) -> Result<()> {
+    let Plan::Query { s_expr, .. } = &mut plan.input_source else {
+        return Ok(());
+    };
+
+    let mut source_expr = s_expr.as_ref().clone();
+    let mut rewritten_any = false;
+
+    for (idx, when) in plan.whens.iter_mut().enumerate() {
+        if !when.condition.has_subquery() {
+            continue;
+        }
+
+        let condition_index = opt_ctx.get_metadata().write().add_derived_column(
+            format!("_insert_multi_when_{}", idx),
+            when.condition.data_type()?,
+        );
+        let eval_expr = source_expr.clone().build_unary(EvalScalar {
+            items: vec![ScalarItem {
+                scalar: when.condition.clone(),
+                index: condition_index,
+            }],
+        });
+
+        let mut rewriter = SubqueryDecorrelatorOptimizer::new(opt_ctx.clone(), None);
+        let rewritten = rewriter.optimize_sync(&eval_expr)?;
+        let RelOperator::EvalScalar(eval) = rewritten.plan() else {
+            return Err(ErrorCode::Internal(
+                "Subquery rewrite for multi-table insert must keep the top eval scalar".to_string(),
+            ));
+        };
+        let scalar_item = eval.items.first().ok_or_else(|| {
+            ErrorCode::Internal(
+                "Subquery rewrite for multi-table insert must keep one eval scalar item"
+                    .to_string(),
+            )
+        })?;
+
+        when.condition = scalar_item.scalar.clone();
+        source_expr = rewritten.child(0)?.clone();
+        rewritten_any = true;
+    }
+
+    if rewritten_any {
+        *s_expr = Box::new(source_expr);
+    }
+
+    Ok(())
 }
 
 async fn get_optimized_memo(opt_ctx: Arc<OptimizerContext>, s_expr: SExpr) -> Result<Memo> {

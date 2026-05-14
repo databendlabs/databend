@@ -217,7 +217,7 @@ CommitSink
                 ├── filters: []
                 ├── build join filters:
                 │   └── filter id:0, build key:employees2.employee_id (#0), probe targets:[salaries2.employee_id (#3)@scan1], filter type:bloom,inlist,min_max
-                ├── estimated rows: 4.00
+                ├── estimated rows: 6.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.employees2
                 │   ├── scan id: 0
@@ -264,7 +264,7 @@ CommitSink
                 ├── filters: []
                 ├── build join filters:
                 │   └── filter id:0, build key:employees2.employee_id (#0), probe targets:[salaries2.employee_id (#3)@scan1], filter type:bloom,inlist,min_max
-                ├── estimated rows: 4.00
+                ├── estimated rows: 6.00
                 ├── TableScan(Build)
                 │   ├── table: default.default.employees2
                 │   ├── scan id: 0

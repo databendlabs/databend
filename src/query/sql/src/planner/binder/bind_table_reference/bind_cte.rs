@@ -55,7 +55,11 @@ impl Binder {
                     &bind_context.cte_context.cte_map,
                     &cte.query,
                 )?;
+                // The physical CTE registry is query-global, while CTE aliases are scoped.
+                // Give each materialized producer a unique execution name.
+                let materialized_cte_id = self.metadata.write().allocate_materialized_cte_id();
                 let materialized_cte_info = MaterializedCTEInfo {
+                    cte_name: format!("__materialized_cte_{materialized_cte_id}_{cte_name}"),
                     bound_s_expr: s_expr,
                     bound_context: cte_bind_context,
                 };
@@ -167,10 +171,15 @@ impl Binder {
 
         let s_expr = SExpr::create_leaf(Arc::new(RelOperator::MaterializedCTERef(
             MaterializedCTERef {
-                cte_name: table_name.to_string(),
+                cte_name: cte_info
+                    .materialized_cte_info
+                    .as_ref()
+                    .map(|info| info.cte_name.clone())
+                    .unwrap_or_else(|| table_name.to_string()),
                 output_columns,
                 def: s_expr,
                 column_mapping,
+                stat_info: None,
             },
         )));
         Ok((s_expr, new_bind_context))
@@ -217,7 +226,8 @@ impl Binder {
             if let Some(materialized_cte_info) = &cte_info.materialized_cte_info {
                 let s_expr = materialized_cte_info.bound_s_expr.clone();
 
-                let materialized_cte = MaterializedCTE::new(cte_name, None);
+                let materialized_cte =
+                    MaterializedCTE::new(materialized_cte_info.cte_name.clone(), None);
                 let materialized_cte = SExpr::create_unary(materialized_cte, s_expr);
                 let sequence = Sequence {};
                 current_expr = SExpr::create_binary(sequence, materialized_cte, current_expr);

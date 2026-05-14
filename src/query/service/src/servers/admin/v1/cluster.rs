@@ -25,7 +25,7 @@ use poem::web::Json;
 
 use crate::clusters::ClusterHelper;
 use crate::sessions::SessionManager;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextCluster;
 
 // GET /v1/cluster/list
 // list all nodes in current databend-query cluster

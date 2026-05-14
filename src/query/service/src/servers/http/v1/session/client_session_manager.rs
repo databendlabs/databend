@@ -19,7 +19,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_cache::Cache;
 use databend_common_cache::LruCache;
 use databend_common_config::InnerConfig;
@@ -121,7 +121,9 @@ impl ClientSessionManager {
         });
         GlobalInstance::set(mgr.clone());
 
-        GlobalIORuntime::instance().spawn(async move { Self::check_timeout(mgr).await });
+        GlobalControlRuntime::instance()
+            .runtime()
+            .spawn(async move { Self::check_timeout(mgr).await });
         Ok(())
     }
 

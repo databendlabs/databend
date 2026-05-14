@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_base::base::GlobalInstance;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataBlock;
@@ -30,6 +29,7 @@ use databend_meta_client::types::NodeType;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
 
 pub struct InspectWarehouseInterpreter {
     ctx: Arc<QueryContext>,

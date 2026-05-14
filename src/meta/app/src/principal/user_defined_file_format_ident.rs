@@ -66,7 +66,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::user_defined_file_format_ident::UserDefinedFileFormatIdent;
     use crate::tenant::Tenant;
@@ -75,13 +76,6 @@ mod tests {
     fn test_file_format_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = UserDefinedFileFormatIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_file_formats/test/test1");
-
-        assert_eq!(
-            ident,
-            UserDefinedFileFormatIdent::from_str_key(&key).unwrap()
-        );
+        assert_round_trip(ident, "__fd_file_formats/test/test1");
     }
 }

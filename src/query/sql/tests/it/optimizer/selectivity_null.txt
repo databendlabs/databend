@@ -1,0 +1,28 @@
+=== estimated_zero_predicates ===
+description: Estimated zero selectivity should not be treated as a proven empty result.
+expr          : is_not_null(n)
+cardinality   : 8
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: ~8.0, histogram: None }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: ~8.0, histogram: None }
+
+expr          : is_not_null(n)
+cardinality   : 0
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+
+=== exact_null_predicates ===
+description: Exact all-null input domains should fold is_not_null to an empty result and clear distributions.
+expr          : is_not_null(n)
+cardinality   : exact 8
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 8, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 0.0, null_count: 0, histogram: None }
+

@@ -1564,7 +1564,7 @@ impl PhysicalPlanBuilder {
                     | databend_common_sql::plans::Exchange::GlobalHash(_)
             )
         }) {
-            Some(self.ctx.get_next_broadcast_id())
+            Some(self.ctx.broadcast_registry().next_broadcast_id())
         } else {
             None
         };

@@ -20,7 +20,6 @@ use arrow_ipc::writer::IpcWriteOptions;
 use databend_common_base::base::ProgressValues;
 use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfoDowncast;
 use databend_common_expression::DataBlock;
@@ -59,6 +58,8 @@ use crate::pipelines::processors::transforms::aggregator::exchange_defines;
 use crate::servers::flight::v1::exchange::ExchangeShuffleMeta;
 use crate::servers::flight::v1::exchange::serde::serialize_block;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
+use crate::sessions::TableContextSpillProgress;
 use crate::spillers::Spiller;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
@@ -97,6 +98,10 @@ impl TransformExchangeAggregateSerializer {
             location_prefix,
             disk_spill: None,
             use_parquet: ctx.get_settings().get_spilling_file_format()?.is_parquet(),
+            writer_pool_bytes: ctx
+                .get_settings()
+                .get_spill_writer_memory_pool_size_mb()?
+                .saturating_mul(1024 * 1024),
         };
 
         let spiller = Spiller::create(ctx.clone(), operator, config.clone())?;

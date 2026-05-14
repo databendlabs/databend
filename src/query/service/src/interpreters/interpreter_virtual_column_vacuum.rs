@@ -24,12 +24,13 @@ use databend_common_license::license::Feature::VirtualColumn;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use databend_common_sql::plans::VacuumVirtualColumnPlan;
 use databend_common_storages_fuse::FuseTable;
-use databend_common_storages_fuse::TableContext;
 use databend_enterprise_virtual_column::get_virtual_column_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextLicense;
+use crate::sessions::TableContextTableAccess;
 
 pub struct VacuumVirtualColumnInterpreter {
     ctx: Arc<QueryContext>,

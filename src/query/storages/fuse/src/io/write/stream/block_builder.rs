@@ -94,6 +94,8 @@ impl UninitializedArrowWriter {
             None,
             num_rows,
             self.table_schema.as_ref(),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
         );
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let writer =
@@ -334,8 +336,11 @@ impl StreamBlockBuilder {
         let block_stats_builder = BlockStatsBuilder::new(&properties.ndv_columns_map);
         let cluster_stats_state =
             ClusterStatisticsState::new(properties.cluster_stats_builder.clone());
-        let column_stats_state =
-            ColumnStatisticsState::new(&properties.stats_columns, &properties.distinct_columns);
+        let column_stats_state = ColumnStatisticsState::new(
+            &properties.stats_columns,
+            &properties.distinct_columns,
+            &properties.write_settings.col_stats_truncate_lens,
+        );
         Ok(StreamBlockBuilder {
             properties,
             block_writer,

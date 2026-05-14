@@ -520,6 +520,18 @@ pub struct UriLocation {
 }
 
 impl UriLocation {
+    fn invalid_uri_hint(uri: &str) -> Option<&'static str> {
+        if uri.starts_with('/') {
+            Some("local filesystem paths must use fs:///path/ instead of /path/")
+        } else if uri.starts_with("file://") {
+            Some("local filesystem paths must use fs:///path/ instead of file:///path/")
+        } else if uri.starts_with("fs://") && !uri.starts_with("fs:///") {
+            Some("fs locations must start with fs:///")
+        } else {
+            None
+        }
+    }
+
     pub fn new(
         protocol: String,
         name: String,
@@ -535,14 +547,12 @@ impl UriLocation {
     }
 
     pub fn from_uri(uri: String, conns: BTreeMap<String, String>) -> Result<Self> {
+        if let Some(message) = Self::invalid_uri_hint(&uri) {
+            return Err(ParseError(None, message.to_string()));
+        }
+
         // fs location is not a valid url, let's check it in advance.
         if let Some(path) = uri.strip_prefix("fs://") {
-            if !path.starts_with('/') {
-                return Err(ParseError(
-                    None,
-                    format!("Invalid uri: {}. fs location must start with 'fs:///'", uri),
-                ));
-            }
             return Ok(UriLocation::new(
                 "fs".to_string(),
                 "".to_string(),

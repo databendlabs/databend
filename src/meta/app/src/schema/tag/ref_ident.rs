@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_meta_client::kvapi::KeyBuilder;
-use databend_meta_client::kvapi::KeyCodec;
-use databend_meta_client::kvapi::KeyError;
-use databend_meta_client::kvapi::KeyParser;
+use databend_meta_client::kvapi;
 
 use super::TaggableObject;
 use crate::tenant_key::ident::TIdent;
@@ -27,7 +24,7 @@ use crate::tenant_key::raw::TIdentRaw;
 ///
 /// Used as the "name" portion of [`ObjectTagIdRefIdent`] keys in the meta store.
 /// The key format is `__fd_object_tag_ref/<tenant>/<object_type>/<object_id>/<tag_id>`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, kvapi::KeyCodec)]
 pub struct ObjectTagIdRef {
     /// The object this tag is attached to.
     pub object: TaggableObject,
@@ -38,20 +35,6 @@ pub struct ObjectTagIdRef {
 impl ObjectTagIdRef {
     pub fn new(object: TaggableObject, tag_id: u64) -> Self {
         Self { object, tag_id }
-    }
-}
-
-impl KeyCodec for ObjectTagIdRef {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        self.object.encode_to_key(b).push_u64(self.tag_id)
-    }
-
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-    where Self: Sized {
-        let object = TaggableObject::decode_from_key(parser)?;
-        let tag_id = parser.next_u64()?;
-        parser.done()?;
-        Ok(Self { object, tag_id })
     }
 }
 
@@ -66,7 +49,7 @@ pub use kvapi_impl::Resource;
 /// Composite key component for tag-to-object mapping.
 ///
 /// Key format: `__fd_tag_object_ref/<tenant>/<tag_id>/<object_type>/<object_id>`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, kvapi::KeyCodec)]
 pub struct TagIdObjectRef {
     pub tag_id: u64,
     pub object: TaggableObject,
@@ -86,20 +69,6 @@ impl TagIdObjectRef {
             tag_id,
             object: TaggableObject::Database { db_id: 0 },
         }
-    }
-}
-
-impl KeyCodec for TagIdObjectRef {
-    fn encode_key(&self, b: KeyBuilder) -> KeyBuilder {
-        self.object.encode_to_key(b.push_u64(self.tag_id))
-    }
-
-    fn decode_key(parser: &mut KeyParser) -> Result<Self, KeyError>
-    where Self: Sized {
-        let tag_id = parser.next_u64()?;
-        let object = TaggableObject::decode_from_key(parser)?;
-        parser.done()?;
-        Ok(Self { tag_id, object })
     }
 }
 
@@ -157,7 +126,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::ObjectTagIdRef;
     use super::ObjectTagIdRefIdent;
@@ -172,10 +142,10 @@ mod tests {
         let name = ObjectTagIdRef::new(TaggableObject::Table { table_id: 22 }, 42);
         let ident = ObjectTagIdRefIdent::new_generic(tenant, name.clone());
 
-        let key = ident.to_string_key();
-        assert_eq!("__fd_object_tag_ref/tenant_a/table/22/42", key);
-        assert_eq!(ident, ObjectTagIdRefIdent::from_str_key(&key).unwrap());
-        assert_eq!(name, ident.name().clone());
+        // Verify the name accessor before assert_round_trip consumes `ident`.
+        assert_eq!(&name, ident.name());
+
+        assert_round_trip(ident, "__fd_object_tag_ref/tenant_a/table/22/42");
     }
 
     #[test]
@@ -184,9 +154,8 @@ mod tests {
         let name = TagIdObjectRef::new(42, TaggableObject::Table { table_id: 22 });
         let ident = TagIdObjectRefIdent::new_generic(tenant, name.clone());
 
-        let key = ident.to_string_key();
-        assert_eq!("__fd_tag_object_ref/tenant_b/42/table/22", key);
-        assert_eq!(ident, TagIdObjectRefIdent::from_str_key(&key).unwrap());
-        assert_eq!(name, ident.name().clone());
+        assert_eq!(&name, ident.name());
+
+        assert_round_trip(ident, "__fd_tag_object_ref/tenant_b/42/table/22");
     }
 }

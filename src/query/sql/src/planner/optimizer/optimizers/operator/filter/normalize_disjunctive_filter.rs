@@ -110,33 +110,74 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
     match predicate_scalar {
         PredicateScalar::And(args) => {
             assert!(args.len() >= 2);
-            args.into_iter()
-                .map(normalize_predicate_scalar)
-                .reduce(|lhs, rhs| {
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "and".to_string(),
-                        params: vec![],
-                        arguments: vec![lhs, rhs],
-                    })
-                })
-                .expect("has at least two args")
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and_filters".to_string(),
+                params: vec![],
+                arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
+            })
         }
         PredicateScalar::Or(args) => {
             assert!(args.len() >= 2);
-            args.into_iter()
-                .map(normalize_predicate_scalar)
-                .reduce(|lhs, rhs| {
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "or".to_string(),
-                        params: vec![],
-                        arguments: vec![lhs, rhs],
-                    })
-                })
-                .expect("has at least two args")
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "or_filters".to_string(),
+                params: vec![],
+                arguments: args.into_iter().map(normalize_predicate_scalar).collect(),
+            })
         }
         PredicateScalar::Other(expr) => *expr,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::Scalar;
+    use databend_common_expression::types::NumberScalar;
+
+    use super::*;
+
+    fn bool_constant(value: bool) -> ScalarExpr {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Boolean(value),
+        })
+    }
+
+    fn int_constant(value: i64) -> ScalarExpr {
+        ScalarExpr::ConstantExpr(ConstantExpr {
+            span: None,
+            value: Scalar::Number(NumberScalar::Int64(value)),
+        })
+    }
+
+    fn binary_filter(func_name: &str, lhs: ScalarExpr, rhs: ScalarExpr) -> ScalarExpr {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: func_name.to_string(),
+            params: vec![],
+            arguments: vec![lhs, rhs],
+        })
+    }
+
+    #[test]
+    fn test_normalize_predicate_scalar_keeps_flat_filters() {
+        let mut expr = bool_constant(false);
+        for i in 0..256 {
+            let term = binary_filter("and", bool_constant(true), int_constant(i));
+            expr = binary_filter("or", expr, term);
+        }
+
+        let predicates = NormalizeDisjunctiveFilterOptimizer::new()
+            .optimize(vec![expr])
+            .unwrap();
+
+        assert_eq!(predicates.len(), 1);
+        let ScalarExpr::FunctionCall(func) = &predicates[0] else {
+            panic!("expected normalized predicate to remain a function call");
+        };
+        assert_eq!(func.func_name, "or_filters");
+        assert!(func.arguments.len() > 2);
     }
 }
 

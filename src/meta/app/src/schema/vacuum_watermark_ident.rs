@@ -50,7 +50,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::VacuumWatermarkIdent;
     use crate::tenant::Tenant;
@@ -59,10 +60,6 @@ mod tests {
     fn test_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = VacuumWatermarkIdent::new_global(tenant);
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_vacuum_watermark_ts/dummy");
-
-        assert_eq!(ident, VacuumWatermarkIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_vacuum_watermark_ts/dummy");
     }
 }

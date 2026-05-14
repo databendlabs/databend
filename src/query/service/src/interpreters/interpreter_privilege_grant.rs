@@ -39,7 +39,9 @@ use crate::interpreters::util::check_system_history;
 use crate::interpreters::util::check_system_history_stage;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
+use crate::sessions::TableContextAuthorization;
+use crate::sessions::TableContextQueryIdentity;
+use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
 pub struct GrantPrivilegeInterpreter {

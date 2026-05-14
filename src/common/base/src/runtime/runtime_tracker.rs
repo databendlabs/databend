@@ -135,6 +135,7 @@ impl CaptureLogSettings {
 
 pub struct TrackingPayload {
     pub query_id: Option<String>,
+    pub warehouse_id: Option<String>,
     pub profile: Option<Arc<Profile>>,
     pub mem_stat: Option<Arc<MemStat>>,
     pub metrics: Option<Arc<ScopedRegistry>>,
@@ -204,6 +205,7 @@ impl Clone for TrackingPayload {
     fn clone(&self) -> Self {
         TrackingPayload {
             query_id: self.query_id.clone(),
+            warehouse_id: self.warehouse_id.clone(),
             profile: self.profile.clone(),
             mem_stat: self.mem_stat.clone(),
             metrics: self.metrics.clone(),
@@ -291,6 +293,7 @@ impl ThreadTracker {
                 metrics: None,
                 mem_stat: None,
                 query_id: None,
+                warehouse_id: None,
                 capture_log_settings: None,
                 time_series_profile: None,
                 local_time_series_profile: None,
@@ -406,6 +409,19 @@ impl ThreadTracker {
                     .query_id
                     .as_ref()
                     .map(|query_id| unsafe { &*(query_id as *const String) })
+            })
+            .unwrap_or(None)
+    }
+
+    pub fn warehouse_id() -> Option<&'static String> {
+        TRACKER
+            .try_with(|tracker| {
+                tracker
+                    .borrow()
+                    .payload
+                    .warehouse_id
+                    .as_ref()
+                    .map(|warehouse_id| unsafe { &*(warehouse_id as *const String) })
             })
             .unwrap_or(None)
     }

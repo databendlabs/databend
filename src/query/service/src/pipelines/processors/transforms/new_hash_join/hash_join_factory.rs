@@ -25,7 +25,6 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethodKind;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
-use databend_common_storages_fuse::TableContext;
 
 use super::common::CStyleCell;
 use super::grace::GraceHashJoinState;
@@ -46,6 +45,7 @@ use crate::pipelines::processors::transforms::memory::SemiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::SemiRightHashJoin;
 use crate::pipelines::processors::transforms::memory::left_join::OuterLeftHashJoin;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextSettings;
 
 pub struct HashJoinFactory {
     mutex: Mutex<()>,

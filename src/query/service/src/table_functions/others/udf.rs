@@ -27,7 +27,6 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table_args::TableArgs;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_catalog::table_function::TableFunction;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
@@ -51,6 +50,8 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::OneBlockSource;
 use databend_common_storages_factory::Table;
 use url::Url;
+
+use crate::sessions::TableContext;
 
 pub struct UdfEchoTable {
     table_info: TableInfo,

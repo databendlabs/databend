@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_settings::OutofMemoryBehavior;
 
 use crate::sessions::QueryContext;
+use crate::sessions::TableContextPartitionStats;
+use crate::sessions::TableContextSettings;
 
 pub trait MemorySettingsExt: Sized {
     fn from_join_settings(ctx: &QueryContext) -> Result<Self>;
@@ -160,11 +161,12 @@ impl MemorySettingsExt for MemorySettings {
 
 #[cfg(test)]
 mod tests {
-    use databend_common_catalog::table_context::TableContext;
     use databend_common_exception::Result;
     use databend_common_pipeline_transforms::MemorySettings;
 
     use crate::pipelines::memory_settings::MemorySettingsExt;
+    use crate::sessions::TableContextPartitionStats;
+    use crate::sessions::TableContextSettings;
     use crate::test_kits::TestFixture;
 
     #[tokio::test(flavor = "multi_thread")]

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
+use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
@@ -40,6 +41,7 @@ use databend_common_tracing::GlobalLogger;
 use databend_common_users::RoleCacheManager;
 use databend_common_users::UserApiProvider;
 use databend_common_users::builtin::BuiltIn;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_enterprise_resources_management::DummyResourcesManagement;
 use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_cache::CacheManager;
@@ -109,12 +111,13 @@ impl GlobalServices {
 
         // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+        GlobalControlRuntime::init()?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.
         ClusterDiscovery::init(config, version).await?;
 
-        SpillsBufferPool::init();
+        SpillsBufferPool::init(&config.spill)?;
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different
@@ -164,6 +167,7 @@ impl GlobalServices {
             .await?;
         }
         RoleCacheManager::init()?;
+        SecurityPolicyCacheManager::init()?;
 
         DataOperator::init(&config.storage, config.spill.storage_params.clone()).await?;
         ShareTableConfig::init(

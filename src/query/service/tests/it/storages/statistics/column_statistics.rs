@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use databend_common_catalog::table_context::TableContext;
 use databend_common_expression::Column;
 use databend_common_expression::DataBlock;
 use databend_common_expression::FromData;
@@ -26,6 +25,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::number::Float64Type;
 use databend_common_expression::types::number::Int64Type;
+use databend_query::sessions::TableContextTableAccess;
 use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::test_kits::TestFixture;
 
@@ -84,7 +84,12 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
 #[test]
 fn test_column_statistic() -> anyhow::Result<()> {
     let (sample_block, sample_cols, schema) = gen_sample_block();
-    let col_stats = gen_columns_statistics(&sample_block, None, &schema)?;
+    let col_stats = gen_columns_statistics(
+        &sample_block,
+        None,
+        &schema,
+        &std::collections::BTreeMap::new(),
+    )?;
 
     assert_eq!(5, col_stats.len());
 

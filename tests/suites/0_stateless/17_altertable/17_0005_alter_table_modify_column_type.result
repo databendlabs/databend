@@ -1,12 +1,12 @@
 1
 1	2	3
-a	VARCHAR	NO	''	
-b	INT	NO	0	
-c	INT	NO	0	
+a	VARCHAR	NO	NULL	
+b	INT	NO	NULL	
+c	INT	NO	NULL	
 1.0	2
-a	FLOAT	NO	0	
-b	VARCHAR	NO	''	
-c	INT	NO	0	
+a	FLOAT	NO	NULL	
+b	VARCHAR	NO	NULL	
+c	INT	NO	NULL	
 1
 Error: APIError: QueryFailed: [1006]fail to auto cast column a (String) to column a (Float32)
 invalid float literal while evaluating function `to_float32('a')` in expr `CAST(a AS Float32)`
@@ -39,8 +39,8 @@ Error: APIError: QueryFailed: [1006]null value in column `a` of table `f` violat
 1
 1	1
 	2
-a	VARCHAR	NO	''	
-b	INT	NO	0	
+a	VARCHAR	NO	NULL	
+b	INT	NO	NULL	
 begin test modify column NULL to not NULL
 >>>> CREATE TABLE test_modify_column_type.g(a STRING NULL, b INT NULL, c string not null)
 >>>> INSERT INTO test_modify_column_type.g VALUES('a',1,'c1'),('b',NULL,'c2'),(NULL,3,'c3'),('d',4,'c4')
@@ -65,4 +65,4 @@ d	4	c4
 >>>> DESC test_modify_column_type.g
 a	VARCHAR	YES	NULL	
 b	INT	YES	NULL	
-c	VARCHAR	NO	''	
+c	VARCHAR	NO	NULL	

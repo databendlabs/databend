@@ -102,7 +102,7 @@ impl ParquetVariantSource {
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
-        let copy_status = ctx.get_copy_status();
+        let copy_status = ctx.copy_state().copy_status();
 
         let settings = ctx.get_settings();
         let tz_string = settings.get_timezone()?;
