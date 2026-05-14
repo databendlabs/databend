@@ -12,35 +12,78 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! IO bridge: opendal::Operator → object_store::ObjectStore → VortexReadAt
+//! IO bridge: opendal::Operator → VortexReadAt
 //!
-//! object_store_opendal provides OpendalStore which implements ObjectStore on top of
-//! opendal::Operator. vortex-io's ObjectStoreReadAt then wraps that into VortexReadAt.
-//! This gives us a zero-copy path from Databend's opendal-based storage to Vortex's IO layer.
+//! We implement VortexReadAt directly on top of opendal::Operator, bypassing
+//! the object_store version conflict (workspace uses 0.12, vortex-io needs 0.13).
 
 use std::sync::Arc;
 
-use object_store::ObjectStore;
-use object_store::path::Path as ObjectPath;
-use object_store_opendal::OpendalStore;
+use futures::FutureExt;
+use futures::future::BoxFuture;
 use opendal::Operator;
-use vortex_io::object_store::ObjectStoreReadAt;
-use vortex_io::runtime::Handle;
+use vortex_array::buffer::BufferHandle;
+use vortex_buffer::Alignment;
+use vortex_buffer::ByteBuffer;
+use vortex_error::VortexResult;
 
-/// Build a VortexReadAt from a Databend opendal Operator and a file path.
-///
-/// The chain is:
-///   opendal::Operator
-///     → object_store_opendal::OpendalStore (implements ObjectStore)
-///       → vortex_io::ObjectStoreReadAt (implements VortexReadAt)
-pub fn make_vortex_reader(operator: Operator, path: &str, handle: Handle) -> ObjectStoreReadAt {
-    let store: Arc<dyn ObjectStore> = Arc::new(OpendalStore::new(operator));
-    let object_path = ObjectPath::from(path);
-    ObjectStoreReadAt::new(store, object_path, handle)
+use vortex_io::VortexReadAt;
+
+/// Wraps an opendal Operator as a VortexReadAt source.
+#[derive(Clone)]
+pub struct OpendalVortexReader {
+    operator: Operator,
+    path: Arc<String>,
 }
 
-/// Build a VortexWrite sink backed by an in-memory Vec<u8>.
-/// The caller is responsible for extracting the bytes after writing.
-pub fn make_memory_writer() -> Vec<u8> {
-    Vec::new()
+impl OpendalVortexReader {
+    pub fn new(operator: Operator, path: impl Into<String>) -> Self {
+        Self {
+            operator,
+            path: Arc::new(path.into()),
+        }
+    }
+}
+
+impl VortexReadAt for OpendalVortexReader {
+    fn read_at(
+        &self,
+        offset: u64,
+        length: usize,
+        _alignment: Alignment,
+    ) -> BoxFuture<'static, VortexResult<BufferHandle>> {
+        let operator = self.operator.clone();
+        let path = self.path.clone();
+
+        async move {
+            let end = offset + length as u64;
+            let buf = operator
+                .read_with(&*path)
+                .range(offset..end)
+                .await
+                .map_err(|e| vortex_error::vortex_err!("opendal read_at error: {e}"))?;
+
+            let byte_buf = ByteBuffer::from(buf.to_bytes());
+            Ok(BufferHandle::new_host(byte_buf))
+        }
+        .boxed()
+    }
+
+    fn size(&self) -> BoxFuture<'static, VortexResult<u64>> {
+        let operator = self.operator.clone();
+        let path = self.path.clone();
+
+        async move {
+            let meta = operator
+                .stat(&*path)
+                .await
+                .map_err(|e| vortex_error::vortex_err!("opendal stat error: {e}"))?;
+            Ok(meta.content_length())
+        }
+        .boxed()
+    }
+
+    fn concurrency(&self) -> usize {
+        64
+    }
 }

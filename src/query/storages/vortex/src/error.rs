@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow_schema::ArrowError;
 use databend_common_exception::ErrorCode;
 use vortex_error::VortexError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VortexStorageError {
     #[error("Arrow IPC error: {0}")]
-    ArrowIpc(String),
+    ArrowIpc(#[from] ArrowError),
 
     #[error("Vortex error: {0}")]
     Vortex(#[from] VortexError),
@@ -26,23 +27,8 @@ pub enum VortexStorageError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Object store error: {0}")]
-    ObjectStore(#[from] object_store::Error),
-
     #[error("{0}")]
     Other(String),
-}
-
-impl From<arrow_ipc::reader::ArrowError> for VortexStorageError {
-    fn from(e: arrow_ipc::reader::ArrowError) -> Self {
-        VortexStorageError::ArrowIpc(e.to_string())
-    }
-}
-
-impl From<arrow_ipc::writer::ArrowError> for VortexStorageError {
-    fn from(e: arrow_ipc::writer::ArrowError) -> Self {
-        VortexStorageError::ArrowIpc(e.to_string())
-    }
 }
 
 impl From<VortexStorageError> for ErrorCode {

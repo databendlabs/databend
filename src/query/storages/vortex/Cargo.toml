@@ -7,9 +7,10 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 # This crate bridges Databend's Fuse storage engine with the Vortex columnar file
-# format. Arrow 58 is now the workspace-wide version so we use workspace deps
-# directly. object_store is pinned to 0.13 (required by vortex-io) which differs
-# from the 0.12 used elsewhere; object_store_opendal 0.56 bridges the two.
+# format. Arrow 58 is the workspace-wide version so we use workspace deps directly.
+#
+# IO bridge: we implement VortexReadAt directly on top of opendal::Operator,
+# bypassing the object_store version conflict (workspace uses 0.12, vortex needs 0.13).
 
 [dependencies]
 databend-common-exception = { workspace = true }
@@ -21,17 +22,14 @@ arrow-ipc = { workspace = true }
 arrow-select = { workspace = true }
 
 # Vortex 0.70 — pinned, file format is stable from 0.36+
+# No object_store feature — we implement VortexReadAt directly via opendal
 vortex-array = { version = "=0.70.0", features = ["serde"] }
 vortex-file = { version = "=0.70.0", features = ["tokio"] }
-vortex-io = { version = "=0.70.0", features = ["object_store", "tokio"] }
+vortex-io = { version = "=0.70.0", features = ["tokio"] }
 vortex-session = { version = "=0.70.0" }
-vortex-compressor = { version = "=0.70.0" }
 vortex-error = { version = "=0.70.0" }
+vortex-buffer = { version = "=0.70.0" }
 
-# object_store 0.13 required by vortex-io (workspace uses 0.12)
-# object_store_opendal 0.56 wraps opendal::Operator as an ObjectStore
-object_store = "0.13"
-object_store_opendal = "0.56"
 opendal = { workspace = true }
 
 futures = { workspace = true }
