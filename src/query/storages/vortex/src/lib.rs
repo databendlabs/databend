@@ -14,22 +14,33 @@
 
 //! Vortex storage format integration for Databend Fuse engine.
 //!
-//! This crate bridges Databend's storage layer with the Vortex columnar file format.
-//! It intentionally uses arrow 58 (required by vortex) which differs from the arrow 56
-//! used by the rest of Databend. The public interface is purely byte-based so both
-//! arrow versions can coexist in the same workspace without type conflicts.
+//! This crate bridges Databend's Fuse storage engine with the Vortex columnar
+//! file format (https://github.com/vortex-data/vortex).
 //!
 //! # Architecture
 //!
 //! ```text
-//! Databend (arrow 56)          │  This crate (arrow 58 + vortex)
-//!                              │
-//! DataBlock ──IPC bytes──────► │ ──► RecordBatch(58) ──► VortexArray ──► .vortex file
-//!                              │
-//! DataBlock ◄──IPC bytes────── │ ◄── RecordBatch(58) ◄── VortexArray ◄── .vortex file
+//! Databend Fuse                    databend-storages-vortex
+//!
+//! DataBlock ──to_record_batch()──► RecordBatch
+//!           ──Arrow IPC bytes───► ──► VortexArray ──► .vortex file (object storage)
+//!
+//! DataBlock ◄──from_record_batch() ◄── RecordBatch
+//!           ◄──Arrow IPC bytes──── ◄── VortexArray ◄── .vortex file (object storage)
 //! ```
 //!
-//! The IPC byte stream is the stable binary protocol shared between arrow 56 and 58.
+//! # IO
+//!
+//! The IO bridge is implemented directly on top of `opendal::Operator` via
+//! `OpendalVortexReader` (implements `VortexReadAt`), bypassing the
+//! `object_store` version conflict between the workspace (0.12) and vortex-io (0.13).
+//!
+//! # Statistics
+//!
+//! Column statistics (min/max/null_count) are stored externally in Fuse's
+//! `BlockMeta.col_stats` — NOT inside the Vortex file. The Vortex file is a
+//! pure data container. This keeps the pruning logic entirely in Fuse's
+//! existing metadata layer.
 
 mod error;
 mod io;
