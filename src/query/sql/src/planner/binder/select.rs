@@ -90,9 +90,9 @@ impl ClauseAliasBindings {
         // `GROUP BY k, abs(k)`.
         if Self::simple_unqualified_column_name(expr).is_none() {
             return (
-                None,
                 (!self.prior_group_aliases.is_empty())
                     .then_some(self.prior_group_aliases.as_slice()),
+                None,
             );
         }
 
