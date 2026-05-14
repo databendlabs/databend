@@ -626,13 +626,13 @@ databend-meta = { git = "https://github.com/databendlabs/databend-meta.git", tag
 databend-meta-client = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260205.9.0" }
 databend-meta-test-harness = { git = "https://github.com/databendlabs/databend-meta.git", tag = "v260512.1.0" }
 deltalake = { git = "https://github.com/delta-io/delta-rs", rev = "9954bff" }
-map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 lance-arrow = { git = "https://github.com/SkyFan2002/lance.git", rev = "983238285f482cc6d229483d15d6dde8f3bc3e96" }
 lance-core = { git = "https://github.com/SkyFan2002/lance.git", rev = "983238285f482cc6d229483d15d6dde8f3bc3e96" }
 lance-encoding = { git = "https://github.com/SkyFan2002/lance.git", rev = "983238285f482cc6d229483d15d6dde8f3bc3e96" }
 lance-file = { git = "https://github.com/SkyFan2002/lance.git", rev = "983238285f482cc6d229483d15d6dde8f3bc3e96" }
 lance-io = { git = "https://github.com/SkyFan2002/lance.git", rev = "983238285f482cc6d229483d15d6dde8f3bc3e96" }
 lance-table = { git = "https://github.com/SkyFan2002/lance.git", rev = "983238285f482cc6d229483d15d6dde8f3bc3e96" }
+map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 # Keep ORC on a local patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/SkyFan2002/orc-rust.git", rev = "3fba34ccde628b4063d7f892d15866f89236064c" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
