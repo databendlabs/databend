@@ -25,18 +25,23 @@ use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRefExt;
+use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::StringType;
+use databend_common_expression::types::UInt64Type;
 use databend_common_expression::types::string::StringColumnBuilder;
+use databend_common_sql::parse_cluster_keys;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 
 use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::statistics::get_min_max_stats;
 use crate::table_functions::TableMetaFunc;
 use crate::table_functions::TableMetaFuncTemplate;
+use crate::table_functions::clustering_depth::calculate_block_overlap_depths;
 
 pub struct ClusteringStatistics;
 
@@ -50,10 +55,8 @@ impl TableMetaFunc for ClusteringStatistics {
             TableField::new("block_name", TableDataType::String),
             TableField::new("min", TableDataType::String.wrap_nullable()),
             TableField::new("max", TableDataType::String.wrap_nullable()),
-            TableField::new(
-                "level",
-                TableDataType::Number(NumberDataType::Int32).wrap_nullable(),
-            ),
+            TableField::new("level", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("block_depth", TableDataType::Number(NumberDataType::UInt64)),
             TableField::new("pages", TableDataType::String.wrap_nullable()),
         ])
     }
@@ -79,20 +82,33 @@ impl TableMetaFunc for ClusteringStatistics {
         };
 
         let limit = limit.unwrap_or(usize::MAX);
-        let len = std::cmp::min(snapshot.summary.block_count as usize, limit);
+        let capacity = snapshot.summary.block_count as usize;
+        let output_len = std::cmp::min(capacity, limit);
 
-        let mut segment_name = StringColumnBuilder::with_capacity(len);
-        let mut block_name = StringColumnBuilder::with_capacity(len);
-        let mut max = Vec::with_capacity(len);
-        let mut min = Vec::with_capacity(len);
-        let mut level = Vec::with_capacity(len);
-        let mut pages = Vec::with_capacity(len);
+        let cluster_keys = tbl.resolve_cluster_keys().unwrap();
+        let exprs = parse_cluster_keys(ctx.clone(), Arc::new(tbl.clone()), cluster_keys)?;
+        let cluster_key_types = exprs
+            .iter()
+            .map(|v| {
+                let data_type = v.data_type();
+                if matches!(*data_type, DataType::String) {
+                    data_type.wrap_nullable()
+                } else {
+                    data_type.clone()
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let mut segment_names = Vec::with_capacity(capacity);
+        let mut block_names = Vec::with_capacity(capacity);
+        let mut ranges = Vec::with_capacity(capacity);
+        let mut levels = Vec::with_capacity(capacity);
+        let mut pages = Vec::with_capacity(capacity);
 
         let segments_io = SegmentsIO::create(ctx.clone(), tbl.operator.clone(), tbl.schema());
+        let schema = tbl.schema();
 
-        let mut row_num = 0;
-        let chunk_size =
-            std::cmp::min(ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
+        let chunk_size = ctx.get_settings().get_max_threads()? as usize * 4;
         let format_vec = |v: &[Scalar]| -> String {
             format!(
                 "[{}]",
@@ -102,7 +118,9 @@ impl TableMetaFunc for ClusteringStatistics {
                     .join(", ")
             )
         };
-        'FOR: for chunk in snapshot.segments.chunks(chunk_size) {
+        // block_depth is a global overlap metric, so all block ranges must be
+        // collected before LIMIT can be applied to the final output rows.
+        for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
                 .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
@@ -111,37 +129,48 @@ impl TableMetaFunc for ClusteringStatistics {
                 let segment_loc = &chunk[i].0;
 
                 for block in segment.blocks.iter() {
-                    segment_name.put_and_commit(segment_loc);
-
                     let block = block.as_ref();
-                    block_name.put_and_commit(&block.location.0);
-
-                    let cluster_stats = block.cluster_stats.as_ref();
-                    let clustered = block
+                    let (min, max) = get_min_max_stats(
+                        &exprs,
+                        &block.col_stats,
+                        block.cluster_stats.as_ref(),
+                        Some(cluster_key_id),
+                        schema.as_ref(),
+                    );
+                    let current_cluster_stats = block
                         .cluster_stats
                         .as_ref()
-                        .is_some_and(|v| v.cluster_key_id == cluster_key_id);
+                        .filter(|v| v.cluster_key_id == cluster_key_id);
 
-                    if clustered {
-                        // Safe to unwrap
-                        let cluster_stats = cluster_stats.unwrap();
-                        min.push(Some(format_vec(cluster_stats.min())));
-                        max.push(Some(format_vec(cluster_stats.max())));
-                        level.push(Some(cluster_stats.level));
-                        pages.push(cluster_stats.pages.as_ref().map(|v| format_vec(v)));
-                    } else {
-                        min.push(None);
-                        max.push(None);
-                        level.push(None);
-                        pages.push(None);
-                    }
-
-                    row_num += 1;
-                    if row_num >= limit {
-                        break 'FOR;
-                    }
+                    segment_names.push(segment_loc.clone());
+                    block_names.push(block.location.0.clone());
+                    levels.push(current_cluster_stats.map_or(0, |v| v.level));
+                    pages.push(
+                        current_cluster_stats.and_then(|v| v.pages.as_ref().map(|v| format_vec(v))),
+                    );
+                    ranges.push((min, max));
                 }
             }
+        }
+
+        let block_depths = calculate_block_overlap_depths(&ranges, &cluster_key_types)?;
+        let mut segment_name = StringColumnBuilder::with_capacity(output_len);
+        let mut block_name = StringColumnBuilder::with_capacity(output_len);
+        let mut min = Vec::with_capacity(output_len);
+        let mut max = Vec::with_capacity(output_len);
+        let mut level = Vec::with_capacity(output_len);
+        let mut block_depth = Vec::with_capacity(output_len);
+        let mut output_pages = Vec::with_capacity(output_len);
+
+        for row_idx in 0..output_len {
+            segment_name.put_and_commit(&segment_names[row_idx]);
+            block_name.put_and_commit(&block_names[row_idx]);
+
+            min.push(Some(format_vec(&ranges[row_idx].0)));
+            max.push(Some(format_vec(&ranges[row_idx].1)));
+            level.push(levels[row_idx]);
+            block_depth.push(block_depths[row_idx].depth as u64);
+            output_pages.push(pages[row_idx].clone());
         }
 
         Ok(DataBlock::new(
@@ -150,10 +179,11 @@ impl TableMetaFunc for ClusteringStatistics {
                 Column::String(block_name.build()).into(),
                 StringType::from_opt_data(min).into(),
                 StringType::from_opt_data(max).into(),
-                Int32Type::from_opt_data(level).into(),
-                StringType::from_opt_data(pages).into(),
+                Int32Type::from_data(level).into(),
+                UInt64Type::from_data(block_depth).into(),
+                StringType::from_opt_data(output_pages).into(),
             ],
-            row_num,
+            output_len,
         ))
     }
 }
