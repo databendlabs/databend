@@ -182,7 +182,7 @@ impl FuseTable {
         {
             let elapsed_time = start.elapsed();
             ctx.set_status_info(&format!(
-                "[FUSE-RECLUSTER] Built recluster tasks - segments: {}, blocks: {}, elapsed: {:?}",
+                "[FUSE-RECLUSTER] Built recluster tasks: segments={} blocks={} elapsed={:?}",
                 recluster_seg_num, recluster_blocks_count, elapsed_time,
             ));
             metrics_inc_recluster_build_task_milliseconds(elapsed_time.as_millis() as u64);
@@ -276,7 +276,7 @@ impl FuseTable {
             let v = std::cmp::max(max_threads, 10);
             if v > max_threads {
                 warn!(
-                    "[FUSE-RECLUSTER] max_threads setting too low {}, increased to {}",
+                    "recluster: max_threads setting too low {}, increased to {}",
                     max_threads, v
                 )
             }

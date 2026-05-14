@@ -134,7 +134,7 @@ impl Interpreter for ReclusterTableInterpreter {
         loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
-                    "execution of recluster statement aborted. server is shutting down or the query was killed, round={}",
+                    "recluster: statement aborted, server is shutting down or the query was killed, round={}",
                     times + 1
                 );
                 return Err(err.with_context("failed to execute"));
@@ -187,7 +187,7 @@ impl Interpreter for ReclusterTableInterpreter {
             // Status.
             {
                 let status = format!(
-                    "recluster: run recluster tasks:{} times, cost:{:?}",
+                    "[FUSE-RECLUSTER] Run recluster tasks:{} times, cost:{:?}",
                     times, elapsed_time
                 );
                 ctx.set_status_info(&status);
@@ -364,7 +364,7 @@ impl ReclusterTableInterpreter {
         }
 
         warn!(
-            "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
+            "recluster: build hilbert plan total_bytes={} total_rows={} total_partitions={}",
             total_bytes, total_rows, total_partitions
         );
 
