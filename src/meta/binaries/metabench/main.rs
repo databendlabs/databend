@@ -21,6 +21,7 @@
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
+use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -63,6 +64,140 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::sleep;
 
+const LATENCY_BUCKETS_US: [u64; 29] = [
+    100, 250, 500, 1_000, 2_000, 5_000, 10_000, 12_000, 15_000, 18_000, 20_000, 22_000, 25_000,
+    30_000, 35_000, 40_000, 45_000, 50_000, 60_000, 75_000, 100_000, 150_000, 200_000, 300_000,
+    500_000, 750_000, 1_000_000, 1_500_000, 2_000_000,
+];
+
+struct BenchStats {
+    total: AtomicU64,
+    success: AtomicU64,
+    error: AtomicU64,
+    latency_total_us: AtomicU64,
+    latency_max_us: AtomicU64,
+    buckets: Vec<AtomicU64>,
+}
+
+#[derive(Debug)]
+struct BenchStatsSnapshot {
+    total: u64,
+    success: u64,
+    error: u64,
+    latency_total_us: u64,
+    latency_max_us: u64,
+    buckets: Vec<u64>,
+}
+
+impl BenchStats {
+    fn new() -> Self {
+        Self {
+            total: AtomicU64::new(0),
+            success: AtomicU64::new(0),
+            error: AtomicU64::new(0),
+            latency_total_us: AtomicU64::new(0),
+            latency_max_us: AtomicU64::new(0),
+            buckets: (0..=LATENCY_BUCKETS_US.len())
+                .map(|_| AtomicU64::new(0))
+                .collect(),
+        }
+    }
+
+    fn record(&self, elapsed: Duration, success: bool) {
+        let latency_us = elapsed.as_micros().min(u64::MAX as u128) as u64;
+
+        self.total.fetch_add(1, Ordering::Relaxed);
+        if success {
+            self.success.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.error.fetch_add(1, Ordering::Relaxed);
+        }
+        self.latency_total_us
+            .fetch_add(latency_us, Ordering::Relaxed);
+        update_max(&self.latency_max_us, latency_us);
+
+        let bucket = LATENCY_BUCKETS_US
+            .iter()
+            .position(|upper| latency_us <= *upper)
+            .unwrap_or(LATENCY_BUCKETS_US.len());
+        self.buckets[bucket].fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn snapshot(&self) -> BenchStatsSnapshot {
+        BenchStatsSnapshot {
+            total: self.total.load(Ordering::Relaxed),
+            success: self.success.load(Ordering::Relaxed),
+            error: self.error.load(Ordering::Relaxed),
+            latency_total_us: self.latency_total_us.load(Ordering::Relaxed),
+            latency_max_us: self.latency_max_us.load(Ordering::Relaxed),
+            buckets: self
+                .buckets
+                .iter()
+                .map(|bucket| bucket.load(Ordering::Relaxed))
+                .collect(),
+        }
+    }
+}
+
+impl BenchStatsSnapshot {
+    fn avg_us(&self) -> u64 {
+        if self.total == 0 {
+            return 0;
+        }
+        self.latency_total_us / self.total
+    }
+
+    fn percentile_us(&self, percentile: f64) -> u64 {
+        if self.total == 0 {
+            return 0;
+        }
+
+        let target = ((self.total as f64 * percentile).ceil() as u64).max(1);
+        let mut cumulative = 0;
+        for (i, count) in self.buckets.iter().enumerate() {
+            cumulative += count;
+            if cumulative >= target {
+                return LATENCY_BUCKETS_US
+                    .get(i)
+                    .copied()
+                    .unwrap_or(self.latency_max_us);
+            }
+        }
+
+        self.latency_max_us
+    }
+
+    fn histogram_line(&self) -> String {
+        let mut parts = Vec::with_capacity(self.buckets.len());
+        for (i, count) in self.buckets.iter().enumerate() {
+            if let Some(upper) = LATENCY_BUCKETS_US.get(i) {
+                parts.push(format!("<={}us={}", upper, count));
+            } else {
+                parts.push(format!(">{}us={}", LATENCY_BUCKETS_US[i - 1], count));
+            }
+        }
+        parts.join(" ")
+    }
+}
+
+fn update_max(current: &AtomicU64, value: u64) {
+    let mut old = current.load(Ordering::Relaxed);
+    while value > old {
+        match current.compare_exchange_weak(old, value, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return,
+            Err(next) => old = next,
+        }
+    }
+}
+
+fn rate_per_sec(count: u64, elapsed_ms: u128) -> f64 {
+    if elapsed_ms == 0 {
+        0.0
+    } else {
+        count as f64 * 1000.0 / elapsed_ms as f64
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Parser)]
 #[clap(about, version = METASRV_COMMIT_VERSION.as_str(), author)]
 struct Config {
@@ -72,6 +207,10 @@ struct Config {
 
     #[clap(long, default_value = "10")]
     pub client: u64,
+
+    /// The number of independent MetaGrpcClient handles to spread benchmark clients across.
+    #[clap(long, default_value = "1")]
+    pub client_pool_size: u64,
 
     #[clap(long, default_value = "10000")]
     pub number: u64,
@@ -127,21 +266,16 @@ async fn main() {
         return;
     }
 
-    let client_handle = MetaGrpcClient::try_create_with_features(
-        vec![config.grpc_api_address.clone()],
-        "root",
-        "xxx",
-        None,
-        None,
-        None,
-        DEFAULT_GRPC_MESSAGE_SIZE,
-    )
-    .unwrap();
-    let client = MetaStore::R(client_handle);
+    let client_pool_size = config.client_pool_size.max(1).min(config.client.max(1));
+    let clients = (0..client_pool_size)
+        .map(|_| create_remote_meta_store(&config.grpc_api_address))
+        .collect::<Vec<_>>();
+    println!("effective client_pool_size: {}", client_pool_size);
 
     let start = Instant::now();
     let mut client_num = 0;
     let mut handles = Vec::new();
+    let stats = Arc::new(BenchStats::new());
     while client_num < config.client {
         client_num += 1;
         let rpc = config.rpc.clone();
@@ -151,26 +285,18 @@ async fn main() {
         let cmd = cmd_and_param[0].to_string();
         let param = cmd_and_param.get(1).unwrap_or(&"").to_string();
 
-        let client = client.clone();
+        let client = clients[((client_num - 1) % client_pool_size) as usize].clone();
+        let stats = stats.clone();
+        let number = config.number;
 
         let handle = DatabendRuntime::spawn(
             async move {
-                for i in 0..config.number {
-                    if cmd == "upsert_kv" {
-                        benchmark_upsert(&client, prefix, client_num, i).await;
-                    } else if cmd == "table" {
-                        benchmark_table(&client, prefix, client_num, i).await;
-                    } else if cmd == "get_table" {
-                        benchmark_get_table(&client, prefix, client_num, i).await;
-                    } else if cmd == "table_copy_file" {
-                        benchmark_table_copy_file(&client, prefix, client_num, i, &param).await;
-                    } else if cmd == "semaphore" {
-                        benchmark_semaphore(&client, prefix, client_num, i, &param).await;
-                    } else if cmd == "list" {
-                        benchmark_list(&client, prefix, client_num, i, &param).await;
-                    } else {
-                        unreachable!("Invalid config.rpc: {}", rpc);
-                    }
+                for i in 0..number {
+                    let op_start = Instant::now();
+                    let success =
+                        run_benchmark_once(&client, &cmd, &rpc, prefix, client_num, i, &param)
+                            .await;
+                    stats.record(op_start.elapsed(), success);
                 }
             },
             None,
@@ -188,9 +314,75 @@ async fn main() {
         config.number,
         end.duration_since(start).as_millis()
     );
+
+    let elapsed_ms = end.duration_since(start).as_millis();
+    let snapshot = stats.snapshot();
+    let qps = rate_per_sec(snapshot.total, elapsed_ms);
+    let success_qps = rate_per_sec(snapshot.success, elapsed_ms);
+    let error_qps = rate_per_sec(snapshot.error, elapsed_ms);
+
+    println!(
+        "benchmark summary: total={} success={} error={} elapsed_ms={} qps={:.1} success_qps={:.1} error_qps={:.1} avg_us={} max_us={} p50_us={} p90_us={} p95_us={} p99_us={} client_pool_size={}",
+        snapshot.total,
+        snapshot.success,
+        snapshot.error,
+        elapsed_ms,
+        qps,
+        success_qps,
+        error_qps,
+        snapshot.avg_us(),
+        snapshot.latency_max_us,
+        snapshot.percentile_us(0.50),
+        snapshot.percentile_us(0.90),
+        snapshot.percentile_us(0.95),
+        snapshot.percentile_us(0.99),
+        client_pool_size,
+    );
+    println!("benchmark latency histogram: {}", snapshot.histogram_line());
 }
 
-async fn benchmark_upsert(client: &MetaStore, prefix: u64, client_num: u64, i: u64) {
+fn create_remote_meta_store(grpc_api_address: &str) -> MetaStore {
+    let client_handle = MetaGrpcClient::try_create_with_features(
+        vec![grpc_api_address.to_string()],
+        "root",
+        "xxx",
+        None,
+        None,
+        None,
+        DEFAULT_GRPC_MESSAGE_SIZE,
+    )
+    .unwrap();
+
+    MetaStore::R(client_handle)
+}
+
+async fn run_benchmark_once(
+    client: &MetaStore,
+    cmd: &str,
+    rpc: &str,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+    param: &str,
+) -> bool {
+    if cmd == "upsert_kv" {
+        benchmark_upsert(client, prefix, client_num, i).await
+    } else if cmd == "table" {
+        benchmark_table(client, prefix, client_num, i).await
+    } else if cmd == "get_table" {
+        benchmark_get_table(client, prefix, client_num, i).await
+    } else if cmd == "table_copy_file" {
+        benchmark_table_copy_file(client, prefix, client_num, i, param).await
+    } else if cmd == "semaphore" {
+        benchmark_semaphore(client, prefix, client_num, i, param).await
+    } else if cmd == "list" {
+        benchmark_list(client, prefix, client_num, i, param).await
+    } else {
+        unreachable!("Invalid config.rpc: {}", rpc);
+    }
+}
+
+async fn benchmark_upsert(client: &MetaStore, prefix: u64, client_num: u64, i: u64) -> bool {
     let node_key = || format!("{}-{}-{}", prefix, client_num, i);
 
     let seq = MatchSeq::Any;
@@ -201,9 +393,10 @@ async fn benchmark_upsert(client: &MetaStore, prefix: u64, client_num: u64, i: u
         .await;
 
     print_res(i, "upsert_kv", &res);
+    res.is_ok()
 }
 
-async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) -> bool {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -224,6 +417,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
         .await;
 
     print_res(i, "create_db", &res);
+    let mut success = res.is_ok();
     let db_id = match res {
         Ok(res) => *res.db_id,
         Err(_) => 0,
@@ -242,14 +436,19 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
         .await;
 
     print_res(i, "create_table", &res);
+    success &= res.is_ok();
 
     let res = client
         .get_table(GetTableReq::new(&tenant(), db_name(), table_name()))
         .await;
 
     print_res(i, "get_table", &res);
+    success &= res.is_ok();
 
-    let t = res.unwrap();
+    let t = match res {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
 
     let res = client
         .upsert_table_option(UpsertTableOptionReq {
@@ -260,6 +459,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
         .await;
 
     print_res(i, "upsert_table_option", &res);
+    success &= res.is_ok();
 
     let res = client
         .drop_table_by_id(DropTableByIdReq {
@@ -275,6 +475,7 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
         .await;
 
     print_res(i, "drop_table", &res);
+    success &= res.is_ok();
 
     let res = client
         .create_table(CreateTableReq {
@@ -289,9 +490,10 @@ async fn benchmark_table(client: &MetaStore, prefix: u64, client_num: u64, i: u6
         .await;
 
     print_res(i, "create_table again", &res);
+    success && res.is_ok()
 }
 
-async fn benchmark_get_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) {
+async fn benchmark_get_table(client: &MetaStore, prefix: u64, client_num: u64, i: u64) -> bool {
     let tenant = || Tenant::new_literal(&format!("tenant-{}-{}", prefix, client_num));
     let db_name = || format!("db-{}-{}", prefix, client_num);
     let table_name = || format!("table-{}-{}", prefix, client_num);
@@ -301,6 +503,7 @@ async fn benchmark_get_table(client: &MetaStore, prefix: u64, client_num: u64, i
         .await;
 
     print_res(i, "get_table", &res);
+    res.is_ok()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -325,7 +528,7 @@ async fn benchmark_table_copy_file(
     client_num: u64,
     i: u64,
     param: &str,
-) {
+) -> bool {
     let param = if param.is_empty() {
         TableCopyFileConfig::default()
     } else {
@@ -358,7 +561,7 @@ async fn benchmark_table_copy_file(
     let res = client.transaction(txn).await;
 
     print_res(i, "table_copy_file", &res);
-    res.unwrap();
+    res.is_ok()
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -413,7 +616,11 @@ async fn benchmark_semaphore(
     client_num: u64,
     i: u64,
     param: &str,
-) {
+) -> bool {
+    fn print_sem_res<D: Debug>(i: u64, typ: impl Display, res: &D) {
+        println!("{:>10}-th {} result: {:?}", i, typ, res);
+    }
+
     let param = if param.is_empty() {
         SemaphoreConfig::default()
     } else {
@@ -446,7 +653,7 @@ async fn benchmark_semaphore(
         Ok(permit) => permit,
         Err(e) => {
             println!("ERROR: Failed to acquire semaphore: {permit_str}: {}", e);
-            return;
+            return false;
         }
     };
 
@@ -457,10 +664,7 @@ async fn benchmark_semaphore(
         format!("sem-released: {permit_str}, {}", permit.stat()),
         &permit,
     );
-
-    fn print_sem_res<D: Debug>(i: u64, typ: impl Display, res: &D) {
-        println!("{:>10}-th {} result: {:?}", i, typ, res);
-    }
+    true
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Default)]
@@ -476,7 +680,13 @@ struct ListConfig {
 }
 
 /// Benchmark listing keys with a prefix.
-async fn benchmark_list(client: &MetaStore, prefix: u64, client_num: u64, i: u64, param: &str) {
+async fn benchmark_list(
+    client: &MetaStore,
+    prefix: u64,
+    client_num: u64,
+    i: u64,
+    param: &str,
+) -> bool {
     let name = format!("client[{:>05}]-{}th", client_num, i);
 
     let config = if param.is_empty() {
@@ -517,31 +727,45 @@ async fn benchmark_list(client: &MetaStore, prefix: u64, client_num: u64, i: u64
         Err(e) => {
             println!("{:>10} list error: {:?}", name, e);
             ERROR.fetch_add(1, Ordering::Relaxed);
-            return;
+            return false;
         }
     };
 
     let mut count = 0;
 
-    while let Ok(Some(_item)) = strm.try_next().await {
-        count += 1;
+    let mut success = true;
+    loop {
+        match strm.try_next().await {
+            Ok(Some(_item)) => {
+                count += 1;
 
-        // Apply interval delay if specified (simulate slow client)
-        if let Some(interval_ms) = config.interval_ms {
-            if interval_ms > 0 {
-                sleep(Duration::from_millis(interval_ms)).await;
+                // Apply interval delay if specified (simulate slow client)
+                if let Some(interval_ms) = config.interval_ms {
+                    if interval_ms > 0 {
+                        sleep(Duration::from_millis(interval_ms)).await;
+                    }
+                }
+
+                // Apply limit if specified
+                if let Some(limit) = config.limit {
+                    if count >= limit {
+                        break;
+                    }
+                }
+
+                if count % 10 == 9 {
+                    println!("{:>10} list found {} keys", name, count);
+                }
             }
-        }
-
-        // Apply limit if specified
-        if let Some(limit) = config.limit {
-            if count >= limit {
+            Ok(None) => {
                 break;
             }
-        }
-
-        if count % 10 == 9 {
-            println!("{:>10} list found {} keys", name, count);
+            Err(e) => {
+                println!("{:>10} list stream error: {:?}", name, e);
+                ERROR.fetch_add(1, Ordering::Relaxed);
+                success = false;
+                break;
+            }
         }
     }
 
@@ -552,6 +776,7 @@ async fn benchmark_list(client: &MetaStore, prefix: u64, client_num: u64, i: u64
         TOTAL.load(Ordering::Relaxed),
         ERROR.load(Ordering::Relaxed)
     );
+    success
 }
 
 fn print_res<D: Debug>(i: u64, typ: impl Display, res: &D) {
