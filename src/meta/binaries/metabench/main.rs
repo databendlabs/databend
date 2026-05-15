@@ -22,11 +22,13 @@ use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 
+use base2histogram::Histogram;
 use chrono::Utc;
 use clap::Parser;
 use databend_common_meta_api::DatabaseApi;
@@ -64,19 +66,13 @@ use serde::Deserialize;
 use serde::Serialize;
 use tokio::time::sleep;
 
-const LATENCY_BUCKETS_US: [u64; 29] = [
-    100, 250, 500, 1_000, 2_000, 5_000, 10_000, 12_000, 15_000, 18_000, 20_000, 22_000, 25_000,
-    30_000, 35_000, 40_000, 45_000, 50_000, 60_000, 75_000, 100_000, 150_000, 200_000, 300_000,
-    500_000, 750_000, 1_000_000, 1_500_000, 2_000_000,
-];
-
 struct BenchStats {
     total: AtomicU64,
     success: AtomicU64,
     error: AtomicU64,
     latency_total_us: AtomicU64,
     latency_max_us: AtomicU64,
-    buckets: Vec<AtomicU64>,
+    latency_histogram: Mutex<Histogram>,
 }
 
 #[derive(Debug)]
@@ -86,7 +82,7 @@ struct BenchStatsSnapshot {
     error: u64,
     latency_total_us: u64,
     latency_max_us: u64,
-    buckets: Vec<u64>,
+    latency_histogram: Histogram,
 }
 
 impl BenchStats {
@@ -97,9 +93,7 @@ impl BenchStats {
             error: AtomicU64::new(0),
             latency_total_us: AtomicU64::new(0),
             latency_max_us: AtomicU64::new(0),
-            buckets: (0..=LATENCY_BUCKETS_US.len())
-                .map(|_| AtomicU64::new(0))
-                .collect(),
+            latency_histogram: Mutex::new(Histogram::new()),
         }
     }
 
@@ -116,25 +110,18 @@ impl BenchStats {
             .fetch_add(latency_us, Ordering::Relaxed);
         update_max(&self.latency_max_us, latency_us);
 
-        let bucket = LATENCY_BUCKETS_US
-            .iter()
-            .position(|upper| latency_us <= *upper)
-            .unwrap_or(LATENCY_BUCKETS_US.len());
-        self.buckets[bucket].fetch_add(1, Ordering::Relaxed);
+        self.latency_histogram.lock().unwrap().record(latency_us);
     }
 
     fn snapshot(&self) -> BenchStatsSnapshot {
+        let latency_histogram = self.latency_histogram.lock().unwrap().clone();
         BenchStatsSnapshot {
             total: self.total.load(Ordering::Relaxed),
             success: self.success.load(Ordering::Relaxed),
             error: self.error.load(Ordering::Relaxed),
             latency_total_us: self.latency_total_us.load(Ordering::Relaxed),
             latency_max_us: self.latency_max_us.load(Ordering::Relaxed),
-            buckets: self
-                .buckets
-                .iter()
-                .map(|bucket| bucket.load(Ordering::Relaxed))
-                .collect(),
+            latency_histogram,
         }
     }
 }
@@ -148,35 +135,40 @@ impl BenchStatsSnapshot {
     }
 
     fn percentile_us(&self, percentile: f64) -> u64 {
-        if self.total == 0 {
-            return 0;
-        }
-
-        let target = ((self.total as f64 * percentile).ceil() as u64).max(1);
-        let mut cumulative = 0;
-        for (i, count) in self.buckets.iter().enumerate() {
-            cumulative += count;
-            if cumulative >= target {
-                return LATENCY_BUCKETS_US
-                    .get(i)
-                    .copied()
-                    .unwrap_or(self.latency_max_us);
-            }
-        }
-
-        self.latency_max_us
+        self.latency_histogram.percentile(percentile)
     }
 
     fn histogram_line(&self) -> String {
-        let mut parts = Vec::with_capacity(self.buckets.len());
-        for (i, count) in self.buckets.iter().enumerate() {
-            if let Some(upper) = LATENCY_BUCKETS_US.get(i) {
-                parts.push(format!("<={}us={}", upper, count));
-            } else {
-                parts.push(format!(">{}us={}", LATENCY_BUCKETS_US[i - 1], count));
-            }
+        let parts = self
+            .latency_histogram
+            .bucket_data()
+            .filter(|bucket| bucket.count() > 0)
+            .map(|bucket| {
+                if bucket.is_last() {
+                    format!(
+                        "b{}[{}us,{}us]={}",
+                        bucket.index(),
+                        bucket.left(),
+                        bucket.right(),
+                        bucket.count()
+                    )
+                } else {
+                    format!(
+                        "b{}[{}us,{}us)={}",
+                        bucket.index(),
+                        bucket.left(),
+                        bucket.right(),
+                        bucket.count()
+                    )
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if parts.is_empty() {
+            "empty".to_string()
+        } else {
+            parts.join(" ")
         }
-        parts.join(" ")
     }
 }
 

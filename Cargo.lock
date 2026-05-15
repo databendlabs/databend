@@ -5459,6 +5459,7 @@ version = "0.1.0"
 dependencies = [
  "anyerror",
  "anyhow",
+ "base2histogram",
  "chrono",
  "clap",
  "databend-base",
