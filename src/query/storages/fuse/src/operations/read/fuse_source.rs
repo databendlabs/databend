@@ -121,6 +121,7 @@ pub fn build_fuse_source_pipeline(
         block_format,
         index_reader.clone(),
         virtual_reader.clone(),
+        block_reader.clone(),
     )?;
 
     pipeline.add_transform(|input, output| {

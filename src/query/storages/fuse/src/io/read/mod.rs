@@ -35,6 +35,7 @@ pub use block::NativeReaderExt;
 pub use block::NativeSourceData;
 pub use block::RowSelection;
 pub use block::column_chunks_to_record_batch;
+pub(crate) use block::read_vortex_block;
 pub use bloom::BloomBlockFilterReader;
 pub use inverted_index::InvertedIndexReader;
 pub use meta::CompactSegmentInfoReader;

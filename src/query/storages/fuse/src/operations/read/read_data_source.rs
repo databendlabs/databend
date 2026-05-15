@@ -15,6 +15,7 @@
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BlockMetaInfo;
+use databend_common_expression::DataBlock;
 
 use super::native_data_source::NativeDataSource;
 use super::parquet_data_source::ParquetDataSource;
@@ -23,14 +24,17 @@ use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 pub enum ReadDataSource {
     Native(Box<NativeDataSource>),
     Parquet(Box<ParquetDataSource>),
+    /// Vortex blocks are read and fully deserialized during the async IO phase.
+    /// The deserializer just passes the DataBlock through.
+    Vortex(DataBlock),
 }
 
 impl ReadDataSource {
     pub fn into_native(self) -> Result<NativeDataSource> {
         match self {
             ReadDataSource::Native(data) => Ok(*data),
-            ReadDataSource::Parquet(_) => Err(ErrorCode::Internal(
-                "NativeDeserializeDataTransform got parquet data source",
+            _ => Err(ErrorCode::Internal(
+                "NativeDeserializeDataTransform got non-native data source",
             )),
         }
     }
@@ -38,8 +42,17 @@ impl ReadDataSource {
     pub fn into_parquet(self) -> Result<ParquetDataSource> {
         match self {
             ReadDataSource::Parquet(data) => Ok(*data),
-            ReadDataSource::Native(_) => Err(ErrorCode::Internal(
-                "DeserializeDataTransform got native data source",
+            _ => Err(ErrorCode::Internal(
+                "DeserializeDataTransform got non-parquet data source",
+            )),
+        }
+    }
+
+    pub fn into_vortex(self) -> Result<DataBlock> {
+        match self {
+            ReadDataSource::Vortex(block) => Ok(block),
+            _ => Err(ErrorCode::Internal(
+                "VortexDeserializeDataTransform got non-vortex data source",
             )),
         }
     }

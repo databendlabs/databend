@@ -30,3 +30,4 @@ pub use block_reader_native::NativeReaderExt;
 pub use block_reader_native::NativeSourceData;
 pub use parquet::RowSelection;
 pub use parquet::column_chunks_to_record_batch;
+pub(crate) use vortex_reader::read_vortex_block;

@@ -23,6 +23,8 @@
 use arrow_array::RecordBatch;
 use vortex_array::ArrayRef;
 use vortex_array::arrow::FromArrowArray;
+use vortex_array::dtype::DType;
+use vortex_array::dtype::Nullability;
 use vortex_array::stream::ArrayStreamAdapter;
 use vortex_file::VortexWriteOptions;
 use vortex_file::register_default_encodings;
@@ -32,7 +34,13 @@ use crate::error::VortexResult;
 use crate::error::VortexStorageError;
 use crate::schema::ipc_bytes_to_record_batches;
 
-/// Write Arrow IPC bytes as a Vortex file into `out`.
+/// Write Arrow IPC bytes as a Vortex file into `out` (synchronous entry point).
+///
+/// This function is safe to call from any thread context — it creates its own
+/// single-threaded Tokio runtime internally so it does not depend on an ambient
+/// Tokio reactor.  Vortex's write path is async-only, so we need a runtime, but
+/// we deliberately avoid `block_in_place` / `Handle::current()` because Databend's
+/// pipeline executor threads are plain OS threads, not Tokio worker threads.
 ///
 /// # Arguments
 /// * `ipc_bytes` - Arrow IPC stream bytes produced by Databend.
@@ -40,7 +48,22 @@ use crate::schema::ipc_bytes_to_record_batches;
 ///
 /// # Returns
 /// Number of rows written.
-pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexResult<u64> {
+pub fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexResult<u64> {
+    // Build a private single-threaded runtime for this write.
+    // This is cheap (no thread pool) and avoids any dependency on an ambient Tokio context.
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|e| {
+            VortexStorageError::Other(format!("Vortex: failed to build Tokio runtime: {e}"))
+        })?;
+
+    rt.block_on(write_vortex_file_async(ipc_bytes, out))
+}
+
+/// Async implementation — called from within the private runtime created by
+/// `write_vortex_file`.
+async fn write_vortex_file_async(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexResult<u64> {
     // 1. Deserialize IPC bytes → RecordBatches
     let batches = ipc_bytes_to_record_batches(ipc_bytes)?;
     if batches.is_empty() {
@@ -59,8 +82,11 @@ pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexRes
         .map(record_batch_to_vortex)
         .collect::<VortexResult<_>>()?;
 
-    // 4. Capture the dtype from the first array (all batches share the same schema)
-    let dtype = arrays[0].dtype().clone();
+    // 4. Capture the dtype from the first array (all batches share the same schema).
+    //    Vortex's FileStatsAccumulator requires the top-level struct to be NonNullable.
+    //    Arrow RecordBatch → StructArray conversion may produce a nullable struct dtype,
+    //    so we force NonNullable here.
+    let dtype = force_nonnullable_struct(arrays[0].dtype().clone());
 
     // 5. Build an ArrayStream from the arrays using ArrayStreamAdapter
     let stream = futures::stream::iter(
@@ -81,6 +107,23 @@ pub async fn write_vortex_file(ipc_bytes: &[u8], out: &mut Vec<u8>) -> VortexRes
 }
 
 /// Convert a single RecordBatch into a Vortex ArrayRef via FromArrowArray.
+///
+/// The second argument is `nullable` for the top-level struct array.
+/// Vortex's FileStatsAccumulator requires the top-level struct to be NonNullable,
+/// so we always pass `false` here regardless of the individual column nullability.
 fn record_batch_to_vortex(batch: RecordBatch) -> VortexResult<ArrayRef> {
-    ArrayRef::from_arrow(batch, true).map_err(VortexStorageError::Vortex)
+    ArrayRef::from_arrow(batch, false).map_err(VortexStorageError::Vortex)
+}
+
+/// Force the top-level DType to be NonNullable if it is a Struct.
+///
+/// Vortex's FileStatsAccumulator panics when the top-level struct dtype is
+/// Nullable (even if no actual null values are present).  Arrow's
+/// RecordBatch → StructArray conversion can produce a nullable struct dtype,
+/// so we patch it here before passing it to the writer.
+fn force_nonnullable_struct(dtype: DType) -> DType {
+    match dtype {
+        DType::Struct(fields, _) => DType::Struct(fields, Nullability::NonNullable),
+        other => other,
+    }
 }

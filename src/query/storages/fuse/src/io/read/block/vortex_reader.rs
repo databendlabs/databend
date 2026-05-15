@@ -20,13 +20,22 @@
 //!       → Arrow IPC bytes (stable binary format)
 //!         → RecordBatch (arrow 58, Databend side)
 //!           → DataBlock
+//!
+//! Type fixup: Vortex stores Boolean columns as Int8 internally. When reading
+//! back via Arrow IPC, Boolean columns may arrive as Int8. We cast them back
+//! to Boolean using the projected_schema as the source of truth.
 
 use std::collections::BTreeMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
+use arrow_array::RecordBatch;
+use arrow_array::cast::AsArray;
+use arrow_cast::cast;
 use arrow_ipc::reader::StreamReader;
+use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field;
+use arrow_schema::Schema as ArrowSchema;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -81,12 +90,20 @@ pub async fn read_vortex_block(
     let reader = StreamReader::try_new(cursor, None)
         .map_err(|e| ErrorCode::StorageOther(format!("Vortex: IPC stream read error: {e}")))?;
 
+    // Build the expected Arrow schema from projected_schema so we can cast
+    // columns that Vortex may have changed type on (e.g. Boolean → Int8).
+    let expected_arrow_schema: ArrowSchema = projected_schema.as_ref().into();
+
     let data_schema = projected_schema.as_ref().into();
     let mut blocks: Vec<DataBlock> = Vec::new();
 
     for batch_result in reader {
         let batch = batch_result
             .map_err(|e| ErrorCode::StorageOther(format!("Vortex: IPC batch read error: {e}")))?;
+
+        // Cast any columns whose type doesn't match the expected schema.
+        let batch = cast_batch_to_schema(batch, &expected_arrow_schema)?;
+
         let block = DataBlock::from_record_batch(&data_schema, &batch)?;
         blocks.push(block);
     }
@@ -96,4 +113,50 @@ pub async fn read_vortex_block(
         1 => Ok(blocks.remove(0)),
         _ => DataBlock::concat(&blocks),
     }
+}
+
+/// Cast columns in `batch` to match `expected_schema` where types differ.
+///
+/// Vortex may store Boolean as Int8 internally. This function casts such
+/// columns back to their expected Arrow type using arrow_cast::cast.
+fn cast_batch_to_schema(batch: RecordBatch, expected: &ArrowSchema) -> Result<RecordBatch> {
+    // Fast path: if schemas already match, return as-is.
+    if batch.schema().fields().len() == expected.fields().len()
+        && batch
+            .schema()
+            .fields()
+            .iter()
+            .zip(expected.fields().iter())
+            .all(|(a, b)| a.data_type() == b.data_type())
+    {
+        return Ok(batch);
+    }
+
+    let mut new_columns = Vec::with_capacity(batch.num_columns());
+    let mut new_fields = Vec::with_capacity(batch.num_columns());
+
+    for (i, col) in batch.columns().iter().enumerate() {
+        let expected_field = &expected.fields()[i];
+        let expected_type = expected_field.data_type();
+
+        let new_col = if col.data_type() != expected_type {
+            cast(col.as_ref(), expected_type).map_err(|e| {
+                ErrorCode::StorageOther(format!(
+                    "Vortex: failed to cast column '{}' from {:?} to {:?}: {e}",
+                    expected_field.name(),
+                    col.data_type(),
+                    expected_type,
+                ))
+            })?
+        } else {
+            col.clone()
+        };
+
+        new_fields.push(expected_field.clone());
+        new_columns.push(new_col);
+    }
+
+    let new_schema = Arc::new(ArrowSchema::new(new_fields));
+    RecordBatch::try_new(new_schema, new_columns)
+        .map_err(|e| ErrorCode::StorageOther(format!("Vortex: failed to rebuild RecordBatch: {e}")))
 }

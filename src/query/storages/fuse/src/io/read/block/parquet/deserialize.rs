@@ -75,7 +75,11 @@ pub fn column_chunks_to_record_batch(
         num_rows,
         selection,
     )?;
-    let record = record_reader.next().unwrap()?;
+    // When num_rows == 0 the reader produces no batches; return an empty RecordBatch.
+    let record = match record_reader.next() {
+        Some(r) => r?,
+        None => RecordBatch::new_empty(std::sync::Arc::new(arrow_schema)),
+    };
     assert!(record_reader.next().is_none());
     Ok(record)
 }

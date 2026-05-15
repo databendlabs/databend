@@ -29,9 +29,11 @@ use crate::FuseBlockPartInfo;
 use crate::FuseStorageFormat;
 use crate::io::AggIndexReader;
 use crate::io::BlockReadContext;
+use crate::io::BlockReader;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::VirtualBlockReadResult;
 use crate::io::VirtualColumnReader;
+use crate::io::read_vortex_block;
 
 pub struct ReadBlockContext {
     read_settings: ReadSettings,
@@ -40,6 +42,8 @@ pub struct ReadBlockContext {
     block_format: Arc<dyn FuseBlockFormat>,
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
+    /// Used for Vortex format: reads the whole file and deserializes it directly.
+    block_reader: Arc<BlockReader>,
 }
 
 impl ReadBlockContext {
@@ -50,6 +54,7 @@ impl ReadBlockContext {
         block_format: Arc<dyn FuseBlockFormat>,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
+        block_reader: Arc<BlockReader>,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             read_settings: ReadSettings::from_ctx(&ctx)?,
@@ -58,6 +63,7 @@ impl ReadBlockContext {
             block_format,
             index_reader,
             virtual_reader,
+            block_reader,
         }))
     }
 
@@ -69,6 +75,26 @@ impl ReadBlockContext {
     #[async_backtrace::framed]
     pub async fn read_data(&self, part: PartInfoPtr) -> Result<ReadDataSource> {
         let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+
+        // Vortex files are self-contained: read and deserialize the whole file here,
+        // bypassing the merge-IO path entirely.
+        if matches!(self.storage_format, FuseStorageFormat::Vortex) {
+            let block = read_vortex_block(
+                self.block_read_ctx.operator().clone(),
+                &fuse_part.location,
+                &self.block_reader.projected_schema,
+                &self.block_reader.project_indices,
+                fuse_part.nums_rows,
+            )
+            .await?;
+            debug!(
+                "[VORTEX] read_vortex_block: path={} rows={} cols={}",
+                fuse_part.location,
+                block.num_rows(),
+                block.num_columns()
+            );
+            return Ok(ReadDataSource::Vortex(block));
+        }
 
         if let Some(data_source) = self.read_agg_index_data(fuse_part).await? {
             return Ok(data_source);

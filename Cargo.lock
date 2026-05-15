@@ -5107,6 +5107,7 @@ dependencies = [
  "ahash 0.8.12",
  "arrow 58.1.0",
  "arrow-array 58.1.0",
+ "arrow-cast 58.1.0",
  "arrow-ipc 58.1.0",
  "arrow-schema 58.1.0",
  "async-backtrace",

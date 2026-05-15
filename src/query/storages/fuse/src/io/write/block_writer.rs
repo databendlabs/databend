@@ -203,16 +203,12 @@ fn serialize_block_vortex(
     }
 
     // Step 3: IPC bytes → Vortex file (via databend-storages-vortex, arrow 58).
-    // serialize_block is called from a sync context inside a Tokio runtime, so we
-    // use block_in_place to safely run the async write without blocking the executor.
-    let _row_count_written = tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(write_vortex_file(&ipc_buf, buf))
-    })
-    .map_err(|e| {
-        databend_common_exception::ErrorCode::StorageOther(format!(
-            "Vortex: failed to write vortex file: {e}"
-        ))
-    })?;
+    // write_vortex_file is synchronous and creates its own private Tokio
+    // current-thread runtime internally, so it is safe to call from any thread.
+    let _row_count_written = write_vortex_file(&ipc_buf, buf)
+        .map_err(|e| databend_common_exception::ErrorCode::StorageOther(
+            format!("Vortex: failed to write vortex file: {e}")
+        ))?;
 
     // Step 4: Build ColumnMeta::Vortex for each leaf column.
     // All columns share the same row count; the file path is in BlockMeta.location.

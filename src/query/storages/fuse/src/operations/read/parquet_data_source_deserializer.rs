@@ -63,6 +63,9 @@ pub struct DeserializeDataTransform {
     output_schema: DataSchema,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<ParquetDataSource>,
+    /// Vortex blocks are fully deserialized during async IO; they still need
+    /// filter/prewhere applied and block-meta attached before output.
+    vortex_queue: Vec<(PartInfoPtr, DataBlock)>,
 
     index_reader: Arc<Option<AggIndexReader>>,
     virtual_reader: Arc<Option<VirtualColumnReader>>,
@@ -124,6 +127,7 @@ impl DeserializeDataTransform {
             output_schema,
             parts: vec![],
             chunks: vec![],
+            vortex_queue: vec![],
             index_reader,
             virtual_reader,
             base_block_ids: plan.base_block_ids.clone(),
@@ -160,7 +164,7 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if !self.chunks.is_empty() {
+        if !self.chunks.is_empty() || !self.vortex_queue.is_empty() {
             if !self.input.has_data() {
                 self.input.set_need_data();
             }
@@ -175,11 +179,23 @@ impl Processor for DeserializeDataTransform {
                     DataSourceWithMeta::<ReadDataSource>::downcast_from(source_meta)
                 {
                     self.parts = source_meta.meta;
-                    self.chunks = source_meta
-                        .data
-                        .into_iter()
-                        .map(ReadDataSource::into_parquet)
-                        .collect::<Result<Vec<_>>>()?;
+                    let mut parquet_parts: Vec<PartInfoPtr> = Vec::new();
+                    let mut parquet_chunks: Vec<ParquetDataSource> = Vec::new();
+
+                    for (part, source) in self.parts.drain(..).zip(source_meta.data.into_iter()) {
+                        match source {
+                            ReadDataSource::Vortex(block) => {
+                                self.vortex_queue.push((part, block));
+                            }
+                            other => {
+                                parquet_parts.push(part);
+                                parquet_chunks.push(other.into_parquet()?);
+                            }
+                        }
+                    }
+
+                    self.parts = parquet_parts;
+                    self.chunks = parquet_chunks;
                     return Ok(Event::Sync);
                 }
             }
@@ -197,6 +213,64 @@ impl Processor for DeserializeDataTransform {
     }
 
     fn process(&mut self) -> Result<()> {
+        // Process one Vortex block from the queue first.
+        // Vortex blocks are already deserialized; we only need to apply filter/prewhere
+        // and attach block metadata before pushing to output.
+        if let Some((part, mut block)) = self.vortex_queue.pop() {
+            let fuse_part = FuseBlockPartInfo::from_part(&part)?;
+            let num_rows = block.num_rows();
+
+            // Apply prewhere filter for Vortex blocks.
+            //
+            // ReadState::filter uses column indices from prewhere_schema (which only
+            // contains prewhere columns), but the Vortex DataBlock has columns ordered
+            // by src_schema (all projected columns).  We must re-project the filter
+            // expression against src_schema before evaluating it.
+            if let Some(prewhere_info) = &self.prewhere_info {
+                let filter_expr = prewhere_info
+                    .filter
+                    .as_expr(&databend_common_functions::BUILTIN_FUNCTIONS)
+                    .project_column_ref(|name| {
+                        Ok(self.src_schema.column_with_name(name).unwrap().0)
+                    })?;
+                let func_ctx = self.ctx.get_function_context()?;
+                let evaluator = databend_common_expression::Evaluator::new(
+                    &block,
+                    &func_ctx,
+                    &databend_common_functions::BUILTIN_FUNCTIONS,
+                );
+                let filter_result = evaluator
+                    .run(&filter_expr)?
+                    .try_downcast::<databend_common_expression::types::BooleanType>()
+                    .unwrap();
+                let bitmap = databend_common_expression::filter_helper::FilterHelpers::filter_to_bitmap(
+                    filter_result,
+                    num_rows,
+                );
+                block = block.filter_with_bitmap(&bitmap.into())?;
+            }
+
+            let progress_values = ProgressValues {
+                rows: block.num_rows(),
+                bytes: block.memory_size(),
+            };
+            self.scan_progress.incr(&progress_values);
+            Profile::record_usize_profile(ProfileStatisticsName::ScanBytes, block.memory_size());
+
+            block = block.resort(&self.src_schema, &self.output_schema)?;
+            block = add_data_block_meta(
+                block,
+                fuse_part,
+                None,
+                self.base_block_ids.clone(),
+                self.block_reader.update_stream_columns(),
+                self.block_reader.query_internal_columns(),
+                self.need_reserve_block_info,
+            )?;
+            self.output_data = Some(block);
+            return Ok(());
+        }
+
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {

@@ -22,11 +22,14 @@ use opendal::Operator;
 use vortex_array::ArrayRef;
 use vortex_array::ExecutionCtx;
 use vortex_array::arrow::ArrowArrayExecutor;
+use vortex_array::dtype::DType;
+use vortex_array::dtype::Nullability;
+use vortex_array::dtype::StructFields;
 use vortex_array::expr::root;
 use vortex_array::expr::select;
-use vortex_array::stream::ArrayStream;
 use vortex_file::OpenOptionsSessionExt;
 use vortex_file::register_default_encodings;
+use vortex_io::session::RuntimeSessionExt;
 use vortex_session::VortexSession;
 
 use crate::error::VortexResult;
@@ -45,8 +48,11 @@ pub async fn read_vortex_file(
     path: &str,
     projected_names: Option<Vec<String>>,
 ) -> VortexResult<Vec<u8>> {
-    // 1. Build session with default encodings
-    let session = VortexSession::empty();
+    // 1. Build session with default encodings and Tokio runtime handle.
+    //    with_tokio() registers TokioRuntime::current() so that ScanBuilder's
+    //    spawn_blocking calls are driven by the ambient Tokio multi-thread runtime
+    //    rather than an undriven smol executor.
+    let session = VortexSession::empty().with_tokio();
     register_default_encodings(&session);
 
     // 2. Build VortexReadAt from opendal Operator
@@ -59,7 +65,38 @@ pub async fn read_vortex_file(
         .await
         .map_err(VortexStorageError::Vortex)?;
 
-    // 4. Build scan with optional column projection via select() expression
+    // 4. Derive Arrow schema from the file's original DType (written at ingest time).
+    //    We must NOT use array_stream.dtype() because Vortex compression can change
+    //    the physical dtype (e.g. bool → constant/bitpacked int).  The file footer
+    //    always preserves the logical schema.
+    let arrow_schema = Arc::new({
+        let file_dtype = match &projected_names {
+            Some(names) => {
+                // Build a projected dtype that only includes the requested fields.
+                let fields = vortex_file
+                    .dtype()
+                    .as_struct_fields_opt()
+                    .ok_or_else(|| {
+                        VortexStorageError::Other(
+                            "Vortex file dtype is not a struct".into(),
+                        )
+                    })?;
+                // project() takes a &[FieldName] where FieldName wraps Arc<str>
+                let field_names: Vec<vortex_array::dtype::FieldName> =
+                    names.iter().map(|n| vortex_array::dtype::FieldName::from(n.as_str())).collect();
+                let projected = fields
+                    .project(field_names.as_slice())
+                    .map_err(VortexStorageError::Vortex)?;
+                DType::Struct(projected, Nullability::NonNullable)
+            }
+            None => vortex_file.dtype().clone(),
+        };
+        file_dtype
+            .to_arrow_schema()
+            .map_err(VortexStorageError::Vortex)?
+    });
+
+    // 5. Build scan with optional column projection via select() expression
     let scan_builder = vortex_file
         .scan()
         .map_err(VortexStorageError::Vortex)?;
@@ -72,18 +109,10 @@ pub async fn read_vortex_file(
         scan_builder
     };
 
-    // 5. Execute the scan → ArrayStream
+    // 6. Execute the scan → ArrayStream
     let array_stream = scan_builder
         .into_array_stream()
         .map_err(VortexStorageError::Vortex)?;
-
-    // 6. Derive Arrow schema from Vortex DType
-    let dtype = array_stream.dtype().clone();
-    let arrow_schema = Arc::new(
-        dtype
-            .to_arrow_schema()
-            .map_err(VortexStorageError::Vortex)?,
-    );
 
     // 7. Collect all arrays
     let arrays: Vec<ArrayRef> = array_stream
@@ -95,7 +124,9 @@ pub async fn read_vortex_file(
         return Ok(Vec::new());
     }
 
-    // 8. Convert Vortex arrays → RecordBatches
+    // 8. Convert Vortex arrays → RecordBatches using the logical Arrow schema.
+    //    execute_record_batch casts the physical (compressed) representation back
+    //    to the logical Arrow types declared in arrow_schema.
     let mut ctx = ExecutionCtx::new(session);
     let mut batches: Vec<RecordBatch> = Vec::with_capacity(arrays.len());
     for array in arrays {
