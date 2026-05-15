@@ -92,6 +92,6 @@ async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
     let pipelines = vec![pipeline];
     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
     ctx.set_executor(complete_executor.get_inner())?;
-    complete_executor.execute()?;
+    complete_executor.execute_async().await?;
     Ok(())
 }

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
@@ -99,6 +100,18 @@ impl PipelineCompleteExecutor {
         )
         .join()
         .flatten()
+    }
+
+    /// Runs the complete pipeline from an async caller without blocking a Tokio worker.
+    ///
+    /// `execute` waits on the dedicated executor thread with `join`, so async
+    /// paths should use this wrapper to move that wait onto Databend's IO
+    /// runtime blocking pool.
+    pub async fn execute_async(self: &Arc<Self>) -> Result<()> {
+        let executor = self.clone();
+        GlobalIORuntime::instance()
+            .spawn_blocking(move || executor.execute())
+            .await
     }
 
     fn thread_function(&self) -> impl Fn() -> Result<()> + use<> {

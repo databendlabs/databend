@@ -173,7 +173,7 @@ impl ExplainPerfInterpreter {
             pipelines.push(build_res.main_pipeline);
             let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
             ctx.set_executor(executor.get_inner())?;
-            executor.execute()?;
+            executor.execute_async().await?;
         } else {
             let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
             ctx.set_executor(executor.get_inner())?;
