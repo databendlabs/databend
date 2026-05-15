@@ -560,7 +560,7 @@ impl ExplainInterpreter {
             false => {
                 let mut executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
                 executor.start();
-                while (executor.pull_data()?).is_some() {}
+                while (executor.pull_data().await?).is_some() {}
             }
         }
         Ok(self

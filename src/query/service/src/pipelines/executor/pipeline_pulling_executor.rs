@@ -15,11 +15,10 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::mpsc::SyncSender;
 use std::time::Duration;
 
+use async_channel::Receiver;
+use async_channel::Sender;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
@@ -36,7 +35,6 @@ use databend_common_pipeline::sinks::Sink;
 use databend_common_pipeline::sinks::Sinker;
 use fastrace::func_path;
 use fastrace::prelude::*;
-use parking_lot::Condvar;
 use parking_lot::Mutex;
 
 use crate::pipelines::PipelineBuildResult;
@@ -45,9 +43,6 @@ use crate::pipelines::executor::PipelineExecutor;
 
 struct State {
     is_finished: AtomicBool,
-    finish_mutex: Mutex<bool>,
-    finish_condvar: Condvar,
-
     catch_error: Mutex<Option<ErrorCode>>,
 }
 
@@ -56,35 +51,25 @@ impl State {
         Arc::new(State {
             catch_error: Mutex::new(None),
             is_finished: AtomicBool::new(false),
-            finish_mutex: Mutex::new(false),
-            finish_condvar: Condvar::new(),
         })
     }
 
     pub fn finished(&self, message: Result<()>) {
-        self.is_finished.store(true, Ordering::Release);
-
         if let Err(error) = message {
             *self.catch_error.lock() = Some(error);
         }
 
-        {
-            let mut mutex = self.finish_mutex.lock();
-            *mutex = true;
-            self.finish_condvar.notify_one();
-        }
+        self.is_finished.store(true, Ordering::Release);
     }
 
-    pub fn wait_finish(&self) {
-        let mut mutex = self.finish_mutex.lock();
-
-        while !*mutex {
-            self.finish_condvar.wait(&mut mutex);
+    pub async fn wait_finish(&self) {
+        while !self.is_finished() {
+            tokio::time::sleep(Duration::from_millis(1)).await;
         }
     }
 
     pub fn is_finished(&self) -> bool {
-        self.is_finished.load(Ordering::Relaxed)
+        self.is_finished.load(Ordering::Acquire)
     }
 
     pub fn try_get_catch_error(&self) -> Option<ErrorCode> {
@@ -101,7 +86,7 @@ pub struct PipelinePullingExecutor {
 }
 
 impl PipelinePullingExecutor {
-    fn wrap_pipeline(pipeline: &mut Pipeline, tx: SyncSender<DataBlock>) -> Result<()> {
+    fn wrap_pipeline(pipeline: &mut Pipeline, tx: Sender<DataBlock>) -> Result<()> {
         if !pipeline.is_pulling_pipeline()? {
             return Err(ErrorCode::Internal(
                 "Logical error, PipelinePullingExecutor can only work on pulling pipeline.",
@@ -126,7 +111,7 @@ impl PipelinePullingExecutor {
         let tracking_payload = ThreadTracker::new_tracking_payload();
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
 
-        let (sender, receiver) = std::sync::mpsc::sync_channel(pipeline.output_len());
+        let (sender, receiver) = async_channel::bounded(std::cmp::max(1, pipeline.output_len()));
 
         Self::wrap_pipeline(&mut pipeline, sender)?;
         let executor = PipelineExecutor::create(pipeline, settings)?;
@@ -147,7 +132,8 @@ impl PipelinePullingExecutor {
         let _guard = ThreadTracker::tracking(tracking_payload.clone());
 
         let mut main_pipeline = build_res.main_pipeline;
-        let (sender, receiver) = std::sync::mpsc::sync_channel(main_pipeline.output_len());
+        let (sender, receiver) =
+            async_channel::bounded(std::cmp::max(1, main_pipeline.output_len()));
 
         Self::wrap_pipeline(&mut main_pipeline, sender)?;
 
@@ -203,13 +189,15 @@ impl PipelinePullingExecutor {
         self.executor.finish(cause);
     }
 
-    pub fn pull_data(&mut self) -> Result<Option<DataBlock>> {
+    pub async fn pull_data(&mut self) -> Result<Option<DataBlock>> {
         let mut need_check_graph_status = false;
 
         loop {
-            return match self.receiver.recv_timeout(Duration::from_millis(100)) {
-                Ok(data_block) => Ok(Some(data_block)),
-                Err(RecvTimeoutError::Timeout) => {
+            return match tokio::time::timeout(Duration::from_millis(100), self.receiver.recv())
+                .await
+            {
+                Ok(Ok(data_block)) => Ok(Some(data_block)),
+                Err(_) => {
                     if self.state.is_finished() {
                         if let Some(error) = self.state.try_get_catch_error() {
                             return Err(error);
@@ -218,7 +206,7 @@ impl PipelinePullingExecutor {
                         // It may be parallel. Let's check again.
                         if !need_check_graph_status {
                             need_check_graph_status = true;
-                            self.state.wait_finish();
+                            self.state.wait_finish().await;
                             continue;
                         }
 
@@ -230,12 +218,12 @@ impl PipelinePullingExecutor {
 
                     continue;
                 }
-                Err(RecvTimeoutError::Disconnected) => {
+                Ok(Err(_)) => {
                     if !self.executor.is_finished() {
                         self.executor.finish::<()>(None);
                     }
 
-                    self.state.wait_finish();
+                    self.state.wait_finish().await;
 
                     return match self.state.try_get_catch_error() {
                         None => Ok(None),
@@ -258,11 +246,11 @@ impl Drop for PipelinePullingExecutor {
 }
 
 struct PullingSink {
-    sender: Option<SyncSender<DataBlock>>,
+    sender: Option<Sender<DataBlock>>,
 }
 
 impl PullingSink {
-    pub fn create(tx: SyncSender<DataBlock>, input: Arc<InputPort>) -> Box<dyn Processor> {
+    pub fn create(tx: Sender<DataBlock>, input: Arc<InputPort>) -> Box<dyn Processor> {
         Sinker::create(input, PullingSink { sender: Some(tx) })
     }
 }
@@ -277,7 +265,7 @@ impl Sink for PullingSink {
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
         if let Some(sender) = &self.sender {
-            if let Err(cause) = sender.send(data_block) {
+            if let Err(cause) = sender.send_blocking(data_block) {
                 return Err(ErrorCode::Internal(format!(
                     "Logical error, cannot push data into SyncSender, cause {:?}",
                     cause

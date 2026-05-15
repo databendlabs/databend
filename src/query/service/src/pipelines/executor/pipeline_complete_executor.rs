@@ -26,7 +26,9 @@ use databend_common_pipeline::core::Pipeline;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use tokio::sync::oneshot;
-use tokio::time::{sleep, timeout};
+use tokio::time::sleep;
+use tokio::time::timeout;
+
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
 
@@ -129,9 +131,10 @@ impl PipelineCompleteExecutor {
                 sleep(Duration::from_millis(1)).await;
             }
         })
-        .await else {
+        .await
+        else {
             return Err(ErrorCode::Internal(
-                "Complete executor thread did not exit within 5s after returning result"
+                "Complete executor thread did not exit within 3s after returning result",
             ));
         };
 
