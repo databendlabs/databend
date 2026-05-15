@@ -79,6 +79,7 @@ fn test_variant() {
     test_array_flatten(file);
     test_array_indexof(file);
     test_array_remove(file);
+    test_array_concat(file);
     test_array_remove_first(file);
     test_array_remove_last(file);
     test_array_reverse(file);
@@ -2466,6 +2467,40 @@ fn test_array_remove(file: &mut impl Write) {
             StringType::from_data(vec!["[1, 2, 3]", "[\"a\", \"b\"]", "null"]),
         ),
         ("c2", StringType::from_data(vec!["a", "b", "c"])),
+    ]);
+}
+
+fn test_array_concat(file: &mut impl Write) {
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, \"a\"]'), parse_json('[true, null]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('1'), parse_json('[2, 3]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, 2]'), parse_json('3'))",
+        &[],
+    );
+    run_ast(file, "array_concat(null, parse_json('[1]'))", &[]);
+    run_ast(file, "array_concat(parse_json(c1), parse_json(c2))", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2]", "[\"a\"]", "true"]),
+        ),
+        (
+            "c2",
+            StringType::from_data(vec!["[3, 4]", "[\"b\", \"c\"]", "[false]"]),
+        ),
     ]);
 }
 

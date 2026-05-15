@@ -6899,6 +6899,74 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------+
 
 
+ast            : array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))
+raw expr       : array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("[1, 2]" AS Variant), CAST<String>("[3, 4]" AS Variant))
+optimized expr : 0x80000004200000022000000220000002200000025001500250035004
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3,4]'
+
+
+ast            : array_concat(parse_json('[1, "a"]'), parse_json('[true, null]'))
+raw expr       : array_concat(parse_json('[1, "a"]'), parse_json('[true, null]'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("[1, \"a\"]" AS Variant), CAST<String>("[true, null]" AS Variant))
+optimized expr : 0x8000000420000002100000014000000000000000500161
+output type    : Variant
+output domain  : Undefined
+output         : '[1,"a",true,null]'
+
+
+ast            : array_concat(parse_json('1'), parse_json('[2, 3]'))
+raw expr       : array_concat(parse_json('1'), parse_json('[2, 3]'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("1" AS Variant), CAST<String>("[2, 3]" AS Variant))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : array_concat(parse_json('[1, 2]'), parse_json('3'))
+raw expr       : array_concat(parse_json('[1, 2]'), parse_json('3'))
+checked expr   : array_concat<Variant, Variant>(CAST<String>("[1, 2]" AS Variant), CAST<String>("3" AS Variant))
+optimized expr : 0x80000003200000022000000220000002500150025003
+output type    : Variant
+output domain  : Undefined
+output         : '[1,2,3]'
+
+
+ast            : array_concat(null, parse_json('[1]'))
+raw expr       : array_concat(NULL, parse_json('[1]'))
+checked expr   : array_concat<Variant NULL, Variant NULL>(CAST<NULL>(NULL AS Variant NULL), CAST<Variant>(CAST<String>("[1]" AS Variant) AS Variant NULL))
+optimized expr : NULL
+output type    : Variant NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_concat(parse_json(c1), parse_json(c2))
+raw expr       : array_concat(parse_json(c1::String), parse_json(c2::String))
+checked expr   : array_concat<Variant, Variant>(CAST<String>(c1 AS Variant), CAST<String>(c2 AS Variant))
+evaluation:
++--------+----------------------+--------------------------------+-----------------+
+|        | c1                   | c2                             | Output          |
++--------+----------------------+--------------------------------+-----------------+
+| Type   | String               | String                         | Variant         |
+| Domain | {"[\"a\"]"..="true"} | {"[\"b\", \"c\"]"..="[false]"} | Unknown         |
+| Row 0  | '[1, 2]'             | '[3, 4]'                       | '[1,2,3,4]'     |
+| Row 1  | '["a"]'              | '["b", "c"]'                   | '["a","b","c"]' |
+| Row 2  | 'true'               | '[false]'                      | '[true,false]'  |
++--------+----------------------+--------------------------------+-----------------+
+evaluation (internal):
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                        |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+| c1     | Column(StringColumn[[1, 2], ["a"], true])                                                                                                   |
+| c2     | Column(StringColumn[[3, 4], ["b", "c"], [false]])                                                                                           |
+| Output | Variant([0x80000004200000022000000220000002200000025001500250035004, 0x80000003100000011000000110000001616263, 0x800000024000000030000000]) |
++--------+---------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 ast            : array_remove_first(parse_json('[1, 2, 3]'))
 raw expr       : array_remove_first(parse_json('[1, 2, 3]'))
 checked expr   : array_remove_first<Variant>(CAST<String>("[1, 2, 3]" AS Variant))
