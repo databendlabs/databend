@@ -29,7 +29,7 @@ pub struct AggIndexInfo {
     ///
     /// - The first element in the tuple is the expression.
     ///     - The index in the [`RemoteExpr`] is the offset of `schema`.
-    /// - The seoncd element in the tuple is the offset of the output schema of the table scan plan.
+    /// - The second element in the tuple is the offset of the output schema of the table scan plan.
     ///     - If the offset is [None], it means the selection item will be appended to the end of the output block;
     ///     - else the selection item will be placed at the offset.
     ///
