@@ -6175,6 +6175,7 @@ dependencies = [
  "databend-meta",
  "databend-meta-client 260205.9.0",
  "fastrace",
+ "hyper-util",
  "tokio",
  "tonic 0.13.1",
 ]

@@ -30,6 +30,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use databend_common_base::runtime;
+use databend_common_grpc::DNSService;
 use databend_meta::runtime_api::BoxFuture;
 use databend_meta::runtime_api::Channel;
 use databend_meta::runtime_api::ChannelError;
@@ -39,12 +40,21 @@ use databend_meta::runtime_api::SpawnApi;
 use databend_meta::runtime_api::TlsConfig;
 use databend_meta::runtime_api::TrackingData;
 use fastrace::collector::SpanContext;
+use hyper_util::client::legacy::connect::HttpConnector;
 pub use metrics::DatabendMetrics;
 use tonic_013::transport::Certificate;
 use tonic_013::transport::ClientTlsConfig;
 use tonic_013::transport::Endpoint;
 
 const HEADER_TRACE_PARENT: &str = "traceparent";
+
+fn build_databend_dns_connector(timeout: Option<Duration>) -> HttpConnector<DNSService> {
+    let mut connector = HttpConnector::new_with_resolver(DNSService);
+    connector.enforce_http(false);
+    connector.set_nodelay(true);
+    connector.set_connect_timeout(timeout);
+    connector
+}
 
 /// Runtime adapter that wraps `databend_common_base::Runtime`.
 ///
@@ -173,7 +183,7 @@ impl SpawnApi for DatabendRuntime {
         Box::new(move || Box::new(runtime::ThreadTracker::tracking(payload)))
     }
 
-    /// Create a gRPC channel using `ConnectionFactory` with DNS resolution.
+    /// Create a gRPC channel using Databend's DNS resolver.
     fn connect(
         addr: String,
         timeout: Option<Duration>,
@@ -214,11 +224,10 @@ impl SpawnApi for DatabendRuntime {
 
             if let Some(timeout) = timeout {
                 endpoint = endpoint.timeout(timeout);
-                endpoint = endpoint.connect_timeout(timeout);
             }
 
             endpoint
-                .connect()
+                .connect_with_connector(build_databend_dns_connector(timeout))
                 .await
                 .map_err(|e| ChannelError::CannotConnect {
                     uri,
@@ -279,6 +288,9 @@ impl RuntimeApi for DatabendRuntime {
 
 #[cfg(test)]
 mod tests {
+    use databend_common_grpc::DNSService;
+    use hyper_util::client::legacy::connect::HttpConnector;
+
     use super::*;
 
     #[test]
@@ -321,5 +333,13 @@ mod tests {
             Some("test-query"),
         )]);
         assert_eq!(fut.await, 100);
+    }
+
+    #[test]
+    fn test_connect_uses_databend_dns_service() {
+        fn assert_databend_dns_connector(_: &HttpConnector<DNSService>) {}
+
+        let connector = build_databend_dns_connector(Some(Duration::from_secs(3)));
+        assert_databend_dns_connector(&connector);
     }
 }
