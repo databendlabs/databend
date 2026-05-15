@@ -66,6 +66,10 @@ impl BroadcastSendTransform {
 
         PipeItem::create(processor, vec![input], vec![output])
     }
+
+    fn no_active_downstream(&self) -> bool {
+        self.output.is_finished() && self.channels.all_closed_except(self.local_pos)
+    }
 }
 
 impl Processor for BroadcastSendTransform {
@@ -83,7 +87,7 @@ impl Processor for BroadcastSendTransform {
             match handle.poll(matches!(cause, EventCause::Other)) {
                 Poll::Ready(results) => {
                     self.channels.handle_send_results(results)?;
-                    if self.output.is_finished() && self.channels.all_closed() {
+                    if self.no_active_downstream() {
                         self.input.finish();
                         return Ok(Event::Finished);
                     }
@@ -95,11 +99,9 @@ impl Processor for BroadcastSendTransform {
             };
         }
 
-        if self.output.is_finished() {
-            if self.channels.all_closed() {
-                self.input.finish();
-                return Ok(Event::Finished);
-            }
+        if self.no_active_downstream() {
+            self.input.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input.has_data() {
@@ -137,7 +139,7 @@ impl Processor for BroadcastSendTransform {
                 match handle.poll(matches!(cause, EventCause::Other)) {
                     Poll::Ready(results) => {
                         self.channels.handle_send_results(results)?;
-                        if self.output.is_finished() && self.channels.all_closed() {
+                        if self.no_active_downstream() {
                             self.input.finish();
                             return Ok(Event::Finished);
                         }
