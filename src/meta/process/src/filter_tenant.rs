@@ -1002,7 +1002,7 @@ impl TenantDump {
             .map(|(key, _)| key)
             .take_while(|key| key.starts_with(prefix))
         {
-            if suffix.map_or(true, |suffix| key.ends_with(suffix)) {
+            if suffix.is_none_or(|suffix| key.ends_with(suffix)) {
                 out.required(key.clone());
             }
         }
@@ -1398,8 +1398,10 @@ mod tests {
 
     #[test]
     fn test_index_is_traversed_from_table_meta() -> anyhow::Result<()> {
-        let mut index_meta = IndexMeta::default();
-        index_meta.table_id = 101;
+        let index_meta = IndexMeta {
+            table_id: 101,
+            ..Default::default()
+        };
 
         let input = vec![
             generic_kv_line("__fd_database/tenant_a/default", b"11".to_vec()),
@@ -1523,8 +1525,10 @@ mod tests {
 
     #[test]
     fn test_orphan_index_by_id_is_dropped_with_reverse_name() -> anyhow::Result<()> {
-        let mut index_meta = IndexMeta::default();
-        index_meta.table_id = 101;
+        let index_meta = IndexMeta {
+            table_id: 101,
+            ..Default::default()
+        };
 
         let input = vec![
             generic_kv_line("__fd_index_by_id/201", encode_pb(&index_meta)),
@@ -1545,8 +1549,10 @@ mod tests {
 
     #[test]
     fn test_index_by_id_with_existing_table_primary_is_not_orphan_root() {
-        let mut index_meta = IndexMeta::default();
-        index_meta.table_id = 101;
+        let index_meta = IndexMeta {
+            table_id: 101,
+            ..Default::default()
+        };
 
         let input = vec![
             generic_kv_line("__fd_table_by_id/101", encode_pb(&TableMeta::default())),
