@@ -7217,6 +7217,15 @@ output domain  : {TRUE}
 output         : true
 
 
+ast            : array_contains(parse_json('[1, 2, 3]'), 3)
+raw expr       : array_contains(parse_json('[1, 2, 3]'), 3)
+checked expr   : contains<T0=UInt8><Variant, T0>(CAST<String>("[1, 2, 3]" AS Variant), 3_u8)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
 ast            : contains(parse_json('[]'), 1)
 raw expr       : contains(parse_json('[]'), 1)
 checked expr   : contains<T0=UInt8><Variant, T0>(CAST<String>("[]" AS Variant), 1_u8)
@@ -7283,6 +7292,73 @@ evaluation (internal):
 | c2     | Column(StringColumn[a, b, c])               |
 | Output | Boolean([0b_____001])                       |
 +--------+---------------------------------------------+
+
+
+ast            : array_approx_count_distinct(parse_json('[1, 2, 2, 3, null]'))
+raw expr       : array_approx_count_distinct(parse_json('[1, 2, 2, 3, null]'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("[1, 2, 2, 3, null]" AS Variant))
+optimized expr : 4_u64
+output type    : UInt64
+output domain  : {4..=4}
+output         : 4
+
+
+ast            : array_approx_count_distinct(parse_json('["a", "b", "a", null]'))
+raw expr       : array_approx_count_distinct(parse_json('["a", "b", "a", null]'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("[\"a\", \"b\", \"a\", null]" AS Variant))
+optimized expr : 3_u64
+output type    : UInt64
+output domain  : {3..=3}
+output         : 3
+
+
+ast            : array_approx_count_distinct(parse_json('[]'))
+raw expr       : array_approx_count_distinct(parse_json('[]'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("[]" AS Variant))
+optimized expr : 0_u64
+output type    : UInt64
+output domain  : {0..=0}
+output         : 0
+
+
+ast            : array_approx_count_distinct(parse_json('1'))
+raw expr       : array_approx_count_distinct(parse_json('1'))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>("1" AS Variant))
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : array_approx_count_distinct(try_cast(NULL AS Variant))
+raw expr       : array_approx_count_distinct(TRY_CAST(NULL AS Variant))
+checked expr   : array_approx_count_distinct<Variant NULL>(TRY_CAST<NULL>(NULL AS Variant NULL))
+optimized expr : NULL
+output type    : UInt64 NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : array_approx_count_distinct(parse_json(c1))
+raw expr       : array_approx_count_distinct(parse_json(c1::String))
+checked expr   : array_approx_count_distinct<Variant>(CAST<String>(c1 AS Variant))
+evaluation:
++--------+----------------------------------+---------+
+|        | c1                               | Output  |
++--------+----------------------------------+---------+
+| Type   | String                           | UInt64  |
+| Domain | {"[\"a\", \"b\", \"a\"]"..="[]"} | Unknown |
+| Row 0  | '[1, 1, 2, null]'                | 3       |
+| Row 1  | '["a", "b", "a"]'                | 2       |
+| Row 2  | '[]'                             | 0       |
++--------+----------------------------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------+
+| Column | Data                                                       |
++--------+------------------------------------------------------------+
+| c1     | Column(StringColumn[[1, 1, 2, null], ["a", "b", "a"], []]) |
+| Output | UInt64([3, 2, 0])                                          |
++--------+------------------------------------------------------------+
 
 
 ast            : slice(parse_json('[]'), 1)
