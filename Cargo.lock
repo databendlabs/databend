@@ -1201,7 +1201,7 @@ dependencies = [
 [[package]]
 name = "arrow-udf-runtime"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/arrow-udf.git?rev=ec0c74d1bb53d68243c2bb23ebaa9392223e094c#ec0c74d1bb53d68243c2bb23ebaa9392223e094c"
+source = "git+https://github.com/datafuse-extras/arrow-udf.git?rev=c1de708add62ecd1afa2721b2e5c639f29be1f9d#c1de708add62ecd1afa2721b2e5c639f29be1f9d"
 dependencies = [
  "anyhow",
  "arrow-array 58.1.0",
@@ -8108,7 +8108,7 @@ dependencies = [
 [[package]]
 name = "fsst"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow-array 58.1.0",
  "rand 0.9.2",
@@ -10264,7 +10264,7 @@ dependencies = [
 [[package]]
 name = "iceberg"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=ffebe55242e43d49dcc73fe1303028aecb131260#ffebe55242e43d49dcc73fe1303028aecb131260"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=9a419379d671d8641b31cd491dca01dbe07e4582#9a419379d671d8641b31cd491dca01dbe07e4582"
 dependencies = [
  "anyhow",
  "apache-avro 0.21.0",
@@ -10319,7 +10319,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-glue"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=ffebe55242e43d49dcc73fe1303028aecb131260#ffebe55242e43d49dcc73fe1303028aecb131260"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=9a419379d671d8641b31cd491dca01dbe07e4582#9a419379d671d8641b31cd491dca01dbe07e4582"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10334,7 +10334,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-hms"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=ffebe55242e43d49dcc73fe1303028aecb131260#ffebe55242e43d49dcc73fe1303028aecb131260"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=9a419379d671d8641b31cd491dca01dbe07e4582#9a419379d671d8641b31cd491dca01dbe07e4582"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -10356,7 +10356,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-rest"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=ffebe55242e43d49dcc73fe1303028aecb131260#ffebe55242e43d49dcc73fe1303028aecb131260"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=9a419379d671d8641b31cd491dca01dbe07e4582#9a419379d671d8641b31cd491dca01dbe07e4582"
 dependencies = [
  "async-trait",
  "chrono",
@@ -10376,7 +10376,7 @@ dependencies = [
 [[package]]
 name = "iceberg-catalog-s3tables"
 version = "0.8.0"
-source = "git+https://github.com/SkyFan2002/iceberg-rust.git?rev=ffebe55242e43d49dcc73fe1303028aecb131260#ffebe55242e43d49dcc73fe1303028aecb131260"
+source = "git+https://github.com/databendlabs/iceberg-rust?rev=9a419379d671d8641b31cd491dca01dbe07e4582#9a419379d671d8641b31cd491dca01dbe07e4582"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -11085,7 +11085,7 @@ dependencies = [
 [[package]]
 name = "lance-arrow"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
@@ -11107,7 +11107,7 @@ dependencies = [
 [[package]]
 name = "lance-bitpacking"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrayref",
  "paste",
@@ -11117,7 +11117,7 @@ dependencies = [
 [[package]]
 name = "lance-core"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow-array 58.1.0",
  "arrow-buffer 58.1.0",
@@ -11153,7 +11153,7 @@ dependencies = [
 [[package]]
 name = "lance-encoding"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
@@ -11192,7 +11192,7 @@ dependencies = [
 [[package]]
 name = "lance-file"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow-arith 58.1.0",
  "arrow-array 58.1.0",
@@ -11226,7 +11226,7 @@ dependencies = [
 [[package]]
 name = "lance-io"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow 58.1.0",
  "arrow-arith 58.1.0",
@@ -11267,7 +11267,7 @@ dependencies = [
 [[package]]
 name = "lance-namespace"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow 58.1.0",
  "async-trait",
@@ -11294,7 +11294,7 @@ dependencies = [
 [[package]]
 name = "lance-table"
 version = "5.1.0-beta.3"
-source = "git+https://github.com/SkyFan2002/lance.git?rev=983238285f482cc6d229483d15d6dde8f3bc3e96#983238285f482cc6d229483d15d6dde8f3bc3e96"
+source = "git+https://github.com/datafuse-extras/lance?rev=85f9401d3246d52a287bca21457dbae0466858ee#85f9401d3246d52a287bca21457dbae0466858ee"
 dependencies = [
  "arrow 58.1.0",
  "arrow-array 58.1.0",
@@ -13086,7 +13086,7 @@ dependencies = [
 [[package]]
 name = "orc-rust"
 version = "0.6.0"
-source = "git+https://github.com/SkyFan2002/orc-rust.git?rev=3fba34ccde628b4063d7f892d15866f89236064c#3fba34ccde628b4063d7f892d15866f89236064c"
+source = "git+https://github.com/datafuse-extras/orc-rust?rev=fc17101f1c96e1ea7c7a19e931110471a4bd7e21#fc17101f1c96e1ea7c7a19e931110471a4bd7e21"
 dependencies = [
  "arrow 58.1.0",
  "async-trait",
