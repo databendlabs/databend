@@ -14,16 +14,17 @@
 
 use std::sync::Arc;
 
-use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::Thread;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayload;
+use databend_common_base::runtime::catch_unwind;
 use databend_common_base::runtime::drop_guard;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::Pipeline;
 use fastrace::func_path;
 use fastrace::prelude::*;
+use tokio::sync::oneshot;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
@@ -105,13 +106,19 @@ impl PipelineCompleteExecutor {
     /// Runs the complete pipeline from an async caller without blocking a Tokio worker.
     ///
     /// `execute` waits on the dedicated executor thread with `join`, so async
-    /// paths should use this wrapper to move that wait onto Databend's IO
-    /// runtime blocking pool.
+    /// paths use this wrapper to receive the result through a channel instead.
     pub async fn execute_async(self: &Arc<Self>) -> Result<()> {
-        let executor = self.clone();
-        GlobalIORuntime::instance()
-            .spawn_blocking(move || executor.execute())
-            .await
+        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
+        let (tx, rx) = oneshot::channel();
+        let thread_function = self.thread_function();
+
+        Thread::named_spawn(Some(String::from("CompleteExecutor")), move || {
+            let _ = tx.send(Result::flatten(catch_unwind(thread_function)));
+        });
+
+        rx.await.map_err(|_| {
+            ErrorCode::Internal("Complete executor thread exited without returning result")
+        })?
     }
 
     fn thread_function(&self) -> impl Fn() -> Result<()> + use<> {
