@@ -4135,13 +4135,10 @@ name = "databend-common-meta-process"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap",
  "databend-common-meta-api",
  "databend-common-meta-app",
  "databend-common-proto-conv",
- "databend-common-tracing",
  "databend-meta",
- "databend-meta-client 260205.10.0",
  "prost",
  "regex",
  "serde",
