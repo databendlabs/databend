@@ -42,7 +42,6 @@ use databend_common_meta_app::app_error::UnknownTable;
 use databend_common_meta_app::app_error::UnknownTableId;
 use databend_common_meta_app::app_error::ViewAlreadyExists;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::schema::AutoIncrementStorageIdent;
 use databend_common_meta_app::schema::AutoIncrementStorageValue;
@@ -91,6 +90,7 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::table_niv::TableNIV;
+use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::KvApiExt;
@@ -482,7 +482,7 @@ where
                     let storage_ident =
                         AutoIncrementStorageIdent::new_generic(req.tenant(), auto_increment_key);
                     let storage_value =
-                        Id::new_typed(AutoIncrementStorageValue(auto_increment_expr.start));
+                        ValueId::<AutoIncrementStorageValue>::new(auto_increment_expr.start);
                     txn.if_then
                         .extend(vec![txn_put_pb(&storage_ident, &storage_value)?]);
                 }

@@ -32,6 +32,7 @@ pub mod schema;
 pub mod storage;
 pub mod tenant;
 pub mod tenant_key;
+pub mod value_id;
 
 pub mod id_generator;
 
