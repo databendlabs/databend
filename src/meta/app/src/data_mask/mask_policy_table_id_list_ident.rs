@@ -38,9 +38,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for MaskpolicyTableIdList {
         type KeyType = MaskPolicyTableIdListIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

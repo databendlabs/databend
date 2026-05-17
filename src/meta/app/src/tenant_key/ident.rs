@@ -196,7 +196,6 @@ mod kvapi_key_impl {
 
     use databend_base::non_empty::NonEmptyString;
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
     use crate::KeyWithTenant;
     use crate::tenant::Tenant;
@@ -253,10 +252,6 @@ mod kvapi_key_impl {
         N: Debug,
     {
         type ValueType = R::ValueType;
-
-        fn parent(&self) -> Option<String> {
-            Some(self.tenant.to_string_key())
-        }
     }
 
     impl<R, N> KeyWithTenant for TIdent<R, N>
@@ -293,9 +288,6 @@ mod tests {
 
         impl kvapi::Value for FooValue {
             type KeyType = TIdent<Foo>;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
         }
 
         let tenant = Tenant::new_literal("test");
@@ -328,9 +320,6 @@ mod tests {
 
         impl kvapi::Value for FooValue {
             type KeyType = TIdent<Foo, u64>;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
         }
 
         let tenant = Tenant::new_literal("test");

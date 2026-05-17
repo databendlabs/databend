@@ -41,9 +41,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for PasswordPolicy {
         type KeyType = PasswordPolicyIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     impl kvapi::ValueWithName for PasswordPolicy {

@@ -39,10 +39,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for IndexNameIdentRaw {
         type KeyType = IndexIdToNameIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

@@ -50,10 +50,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for DictionaryMeta {
         type KeyType = DictionaryIdIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

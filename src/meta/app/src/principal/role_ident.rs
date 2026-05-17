@@ -54,10 +54,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for RoleInfo {
         type KeyType = RoleIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     // ExistError<Resource> is no longer produced: create_role returns bool.
