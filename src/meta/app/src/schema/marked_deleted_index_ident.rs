@@ -39,10 +39,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for MarkedDeletedIndexMeta {
         type KeyType = MarkedDeletedIndexIdIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 
