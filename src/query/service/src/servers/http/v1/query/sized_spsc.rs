@@ -86,6 +86,14 @@ impl SizedChannelBuffer {
             .sum()
     }
 
+    fn has_data_ready(&self) -> bool {
+        !self.pages.is_empty()
+            || self
+                .current_page
+                .as_ref()
+                .is_some_and(|page| !page.is_empty())
+    }
+
     fn is_pages_full(&self, reserve: usize) -> bool {
         self.pages_rows() + reserve > self.max_rows
     }
@@ -156,7 +164,27 @@ impl SizedChannelBuffer {
     }
 
     fn take_page(&mut self) -> Option<Page> {
-        self.pages.pop_front()
+        match self.pages.pop_front() {
+            Some(page) => Some(page),
+            None => self.take_current_page(),
+        }
+    }
+
+    fn take_current_page(&mut self) -> Option<Page> {
+        if !self
+            .current_page
+            .as_ref()
+            .is_some_and(|page| !page.is_empty())
+        {
+            return None;
+        }
+
+        Some(Page::Memory(
+            self.current_page
+                .replace(PageBuilder::new(self.page_rows))
+                .expect("current_page has taken")
+                .into_page(),
+        ))
     }
 }
 
@@ -189,6 +217,10 @@ impl PageBuilder {
 
     fn num_rows(&self) -> usize {
         self.blocks.iter().map(DataBlock::num_rows).sum()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.blocks.iter().all(DataBlock::is_empty)
     }
 
     fn calculate_take_rows(&self, block: &DataBlock) -> (usize, usize) {
@@ -319,7 +351,7 @@ where S: DataBlockSpill
         loop {
             {
                 let buffer = self.buffer.lock().unwrap();
-                if !buffer.pages.is_empty() {
+                if buffer.has_data_ready() {
                     return true;
                 }
                 if buffer.is_send_stopped {
@@ -676,6 +708,46 @@ mod tests {
         send_task.await.unwrap();
 
         assert_eq!(serializer.num_rows(), 3);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spsc_returns_partial_page_before_finish() {
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
+
+        let allow_finish = Arc::new(Notify::new());
+        let sender_allow_finish = allow_finish.clone();
+        let send_task = databend_common_base::runtime::spawn(async move {
+            sender.plan_ready(OutputFormatSettings::default(), None);
+            sender
+                .send(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                    vec![1, 2, 3],
+                )]))
+                .await
+                .unwrap();
+
+            sender_allow_finish.notified().await;
+            sender.finish();
+        });
+
+        let (serializer, is_end) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        assert_eq!(serializer.num_rows(), 3);
+        assert!(!is_end);
+
+        allow_finish.notify_one();
+        let (serializer, is_end) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        assert_eq!(serializer.num_rows(), 0);
+        assert!(is_end);
+
+        assert!(receiver.close().is_none());
+        send_task.await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
