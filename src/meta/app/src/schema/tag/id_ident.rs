@@ -53,10 +53,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for TagMeta {
         type KeyType = TagIdIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

@@ -37,10 +37,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for TenantQuota {
         type KeyType = super::TenantQuotaIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.
