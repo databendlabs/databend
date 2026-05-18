@@ -79,6 +79,7 @@ pub trait TableContextTableAccess: Send + Sync {
         catalog_name: &str,
         db_name: &str,
         tbl_name: &str,
+        branch: Option<&str>,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>>;
 

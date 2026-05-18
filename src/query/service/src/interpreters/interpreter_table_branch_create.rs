@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_sql::plans::CreateTableBranchPlan;
-use databend_common_storages_fuse::operations::check_table_ref_access;
 use databend_enterprise_table_ref_handler::get_table_ref_handler;
 
 use crate::interpreters::Interpreter;
@@ -46,7 +45,6 @@ impl Interpreter for CreateTableBranchInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        check_table_ref_access(self.ctx.as_ref())?;
         let handler = get_table_ref_handler();
         handler
             .do_create_table_branch(self.ctx.clone(), &self.plan)

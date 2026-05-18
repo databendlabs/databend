@@ -54,6 +54,7 @@ impl Interpreter for OptimizeCompactSegmentInterpreter {
                 &self.plan.catalog,
                 &self.plan.database,
                 &self.plan.table,
+                None,
                 &LockTableOption::LockWithRetry,
             )
             .await?;

@@ -28,7 +28,13 @@ use crate::table::Table;
 
 #[async_trait::async_trait]
 pub trait TableContextTableManagement: Send + Sync {
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()>;
+    fn evict_table_from_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+    ) -> Result<()>;
 
     fn get_table_meta_timestamps(
         &self,

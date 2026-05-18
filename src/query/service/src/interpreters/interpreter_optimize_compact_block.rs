@@ -78,7 +78,7 @@ impl Interpreter for OptimizeCompactBlockInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(&catalog, &database, &table, &self.lock_opt)
+            .acquire_table_lock(&catalog, &database, &table, None, &self.lock_opt)
             .await?;
 
         let mut build_res = PipelineBuildResult::create();

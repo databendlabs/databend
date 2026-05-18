@@ -85,11 +85,9 @@ impl Interpreter for AlterTableClusterKeyInterpreter {
                 if let Some(snapshot) = snapshot_opt {
                     snapshot.cluster_key_meta = cluster_key_meta.clone();
                 }
-                if plan.branch.is_none() {
-                    meta.cluster_key_v2 = cluster_key_meta;
-                    meta.options
-                        .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
-                }
+                meta.cluster_key_v2 = cluster_key_meta;
+                meta.options
+                    .insert(OPT_KEY_CLUSTER_TYPE.to_owned(), plan.cluster_type.clone());
             },
         )
         .await?;

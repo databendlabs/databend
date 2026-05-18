@@ -138,6 +138,7 @@ impl TableContextTableAccess for QueryContext {
         catalog_name: &str,
         db_name: &str,
         tbl_name: &str,
+        branch: Option<&str>,
         lock_opt: &LockTableOption,
     ) -> Result<Option<Arc<LockGuard>>> {
         let enabled_table_lock = self.get_settings().get_enable_table_lock().unwrap_or(false);
@@ -147,7 +148,7 @@ impl TableContextTableAccess for QueryContext {
 
         let catalog = self.get_catalog(catalog_name).await?;
         let tbl = catalog
-            .get_table(&self.get_tenant(), db_name, tbl_name)
+            .get_table_with_branch(&self.get_tenant(), db_name, tbl_name, branch)
             .await?;
         if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
@@ -160,7 +161,7 @@ impl TableContextTableAccess for QueryContext {
             LockTableOption::NoLock => None,
         };
         if lock_guard.is_some() {
-            self.evict_table_from_cache(catalog_name, db_name, tbl_name)?;
+            self.evict_table_from_cache(catalog_name, db_name, tbl_name, branch)?;
         }
         Ok(lock_guard)
     }
@@ -376,8 +377,15 @@ impl TableContextStage for QueryContext {
 
 #[async_trait::async_trait]
 impl TableContextTableManagement for QueryContext {
-    fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
-        self.shared.evict_table_from_cache(catalog, database, table)
+    fn evict_table_from_cache(
+        &self,
+        catalog: &str,
+        database: &str,
+        table: &str,
+        branch: Option<&str>,
+    ) -> Result<()> {
+        self.shared
+            .evict_table_from_cache(catalog, database, table, branch)
     }
 
     fn get_table_meta_timestamps(

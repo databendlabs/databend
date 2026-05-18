@@ -42,6 +42,7 @@ use databend_common_meta_app::schema::CreateLockRevReply;
 use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::CreateSequenceReply;
 use databend_common_meta_app::schema::CreateSequenceReq;
+use databend_common_meta_app::schema::CreateTableBranchReq;
 use databend_common_meta_app::schema::CreateTableIndexReq;
 use databend_common_meta_app::schema::CreateTableReply;
 use databend_common_meta_app::schema::CreateTableReq;
@@ -53,6 +54,7 @@ use databend_common_meta_app::schema::DropDatabaseReq;
 use databend_common_meta_app::schema::DropIndexReq;
 use databend_common_meta_app::schema::DropSequenceReply;
 use databend_common_meta_app::schema::DropSequenceReq;
+use databend_common_meta_app::schema::DropTableBranchReq;
 use databend_common_meta_app::schema::DropTableByIdReq;
 use databend_common_meta_app::schema::DropTableIndexReq;
 use databend_common_meta_app::schema::DropTableReply;
@@ -77,6 +79,7 @@ use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
 use databend_common_meta_app::schema::ListDictionaryReq;
 use databend_common_meta_app::schema::ListDroppedTableReq;
+use databend_common_meta_app::schema::ListHistoryTableBranchesReq;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_meta_app::schema::ListIndexesReq;
 use databend_common_meta_app::schema::ListLockRevReq;
@@ -98,6 +101,7 @@ use databend_common_meta_app::schema::SetTableRowAccessPolicyReply;
 use databend_common_meta_app::schema::SetTableRowAccessPolicyReq;
 use databend_common_meta_app::schema::SwapTableReply;
 use databend_common_meta_app::schema::SwapTableReq;
+use databend_common_meta_app::schema::TableBranchMeta;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::TableMeta;
 use databend_common_meta_app::schema::TableTag;
@@ -412,7 +416,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_branch_with_expire_ctl(
+    async fn get_table_branch(
         &self,
         tenant: &Tenant,
         db_name: &str,
@@ -421,19 +425,23 @@ impl Catalog for DatabaseCatalog {
         include_expired: bool,
     ) -> Result<Arc<dyn Table>> {
         self.mutable_catalog
-            .get_table_branch_with_expire_ctl(
-                tenant,
-                db_name,
-                table_name,
-                branch_name,
-                include_expired,
-            )
+            .get_table_branch(tenant, db_name, table_name, branch_name, include_expired)
             .await
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_branch(&self, req: CreateTableBranchReq) -> Result<u64> {
+        self.mutable_catalog.create_table_branch(req).await
     }
 
     #[async_backtrace::framed]
     async fn create_table_tag(&self, req: CreateTableTagReq) -> Result<()> {
         self.mutable_catalog.create_table_tag(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_table_branch(&self, req: DropTableBranchReq) -> Result<()> {
+        self.mutable_catalog.drop_table_branch(req).await
     }
 
     #[async_backtrace::framed]
@@ -459,6 +467,19 @@ impl Catalog for DatabaseCatalog {
         req: ListTableTagsReq,
     ) -> Result<Vec<(String, SeqV<TableTag>)>> {
         self.mutable_catalog.list_table_tags(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_branches(&self, table_id: u64) -> Result<Vec<TableBranchMeta>> {
+        self.mutable_catalog.list_table_branches(table_id).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_history_table_branches(
+        &self,
+        req: ListHistoryTableBranchesReq,
+    ) -> Result<Vec<TableBranchMeta>> {
+        self.mutable_catalog.list_history_table_branches(req).await
     }
 
     #[async_backtrace::framed]

@@ -41,6 +41,7 @@ use databend_common_meta_app::schema::DBIdTableName;
 use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::DbIdList;
 use databend_common_meta_app::schema::DictionaryMeta;
+use databend_common_meta_app::schema::DroppedBranchMeta;
 use databend_common_meta_app::schema::EmptyProto;
 use databend_common_meta_app::schema::IndexMeta;
 use databend_common_meta_app::schema::LeastVisibleTime;
@@ -48,9 +49,12 @@ use databend_common_meta_app::schema::LockMeta;
 use databend_common_meta_app::schema::MarkedDeletedIndexMeta;
 use databend_common_meta_app::schema::ObjectTagIdRefValue;
 use databend_common_meta_app::schema::SequenceMeta;
+use databend_common_meta_app::schema::TableBranch;
 use databend_common_meta_app::schema::TableCopiedFileInfo;
+use databend_common_meta_app::schema::TableIdBranchName;
 use databend_common_meta_app::schema::TableIdList;
 use databend_common_meta_app::schema::TableMeta;
+use databend_common_meta_app::schema::TableTag;
 use databend_common_meta_app::schema::TagMeta;
 use databend_common_meta_app::schema::VacuumWatermark;
 use databend_common_meta_app::tenant::TenantQuota;
@@ -97,6 +101,12 @@ pub fn decode_pb_value(key: &str, bytes: &[u8]) -> String {
         "__fd_table_id_to_name/"    => DBIdTableName,
         "__fd_table_id_list/"       => TableIdList,
         "__fd_table_copied_files/"  => TableCopiedFileInfo,
+
+        // table ref
+        "__fd_branch_id_to_name/"   => TableIdBranchName,
+        "__fd_table_branch/"        => TableBranch,
+        "__fd_dropped_branch/"      => DroppedBranchMeta,
+        "__fd_table_tag/"           => TableTag,
 
         // schema - catalog
         "__fd_catalog_by_id/"       => CatalogMeta,

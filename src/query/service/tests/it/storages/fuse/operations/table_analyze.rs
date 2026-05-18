@@ -55,14 +55,14 @@ async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     let statistics_sql = "analyze table default.t";
     fixture.execute_command(statistics_sql).await?;
 
     let table = catalog.get_table(&ctx.get_tenant(), "default", "t").await?;
 
     // check count
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     let count_qry = "select count(*) from t";
     let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts, query_count(stream).await? as usize);
@@ -72,11 +72,11 @@ async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
 
     // append the same values again, and ndv does changed.
     append_rows(ctx.clone(), num_inserts).await?;
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     fixture.execute_command(statistics_sql).await?;
 
     // check count
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     let count_qry = "select count(*) from t";
     let stream = fixture.execute_query(count_qry).await?;
     assert_eq!(num_inserts * 2, query_count(stream).await? as usize);
@@ -84,14 +84,14 @@ async fn test_table_modify_column_ndv_statistics() -> anyhow::Result<()> {
     check_column_ndv_statistics(ctx.clone(), table.clone(), expected.clone()).await?;
 
     // delete
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     let query = "delete from default.t where c=1";
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(query).await?;
     if let Plan::DataMutation { s_expr, schema, .. } = plan {
         do_mutation(ctx.clone(), *s_expr.clone(), schema.clone()).await?;
     }
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     fixture.execute_command(statistics_sql).await?;
 
     // check count: delete not affect counts
@@ -265,7 +265,7 @@ async fn test_table_analyze_without_prev_table_seq() -> anyhow::Result<()> {
     let qry = "insert into t values(4)";
     execute_command(ctx.clone(), qry).await?;
 
-    ctx.evict_table_from_cache("default", "default", "t")?;
+    ctx.evict_table_from_cache("default", "default", "t", None)?;
     let statistics_sql = "analyze table default.t";
     fixture.execute_command(statistics_sql).await?;
 

@@ -58,19 +58,22 @@ use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 
-pub fn bind_table(table_meta: Arc<dyn Table>) -> Result<(BindContext, MetadataRef)> {
+pub fn bind_table(
+    table_name: String,
+    table_meta: Arc<dyn Table>,
+) -> Result<(BindContext, MetadataRef)> {
     let mut bind_context = BindContext::new();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let table_index = metadata.write().add_table(
         CATALOG_DEFAULT.to_owned(),
         "default".to_string(),
+        table_name,
         table_meta,
         None,
         None,
         false,
         false,
         false,
-        None,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);
@@ -139,7 +142,8 @@ fn parse_ast_exprs(
     table_meta: Arc<dyn Table>,
     ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr<ColumnBinding>>> {
-    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let table_name = table_meta.name().to_string();
+    let (mut bind_context, metadata) = bind_table(table_name, table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
 
@@ -384,7 +388,8 @@ pub fn parse_cluster_keys(
     ast_exprs: Vec<AExpr>,
 ) -> Result<Vec<Expr>> {
     let schema = table_meta.schema();
-    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let table_name = table_meta.name().to_string();
+    let (mut bind_context, metadata) = bind_table(table_name, table_meta)?;
     let settings = ctx.get_settings();
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
     let mut type_checker = TypeChecker::try_create(
@@ -456,7 +461,8 @@ pub fn analyze_cluster_keys(
     sql: &str,
 ) -> Result<(String, Vec<Expr<Symbol>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
-    let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let table_name = table_meta.name().to_string();
+    let (mut bind_context, metadata) = bind_table(table_name, table_meta)?;
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,

@@ -66,6 +66,19 @@ pub const OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH: &str = "copy_dedup_full_path";
 pub const LINEAR_CLUSTER_TYPE: &str = "linear";
 pub const HILBERT_CLUSTER_TYPE: &str = "hilbert";
 
+/// Table Branch
+///
+/// The option key for storing the base table id in a branch's TableMeta.
+pub const OPT_KEY_BASE_TABLE_ID: &str = "base_table_id";
+/// Comma-separated list of branch table IDs that this branch transitively references.
+/// Base table is always implicitly referenced via OPT_KEY_BASE_TABLE_ID and is NOT included here.
+/// Set once at branch creation, never updated. Not set when creating from base table or when
+/// snapshot is empty.
+/// - Created from base table: not set
+/// - Created from branch A: "A_id"
+/// - Created from branch B (refs "A_id"): "B_id,A_id"
+pub const OPT_KEY_REFERENCED_BRANCH_IDS: &str = "referenced_branch_ids";
+
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specify this option keys in DDL
 /// - Should not be shown in `show create table` statement
@@ -74,6 +87,8 @@ pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_BASE_TABLE_ID);
+    r.insert(OPT_KEY_REFERENCED_BRANCH_IDS);
     r
 });
 
@@ -86,6 +101,8 @@ pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLoc
     r.insert(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
     r.insert(OPT_KEY_TEMP_PREFIX);
     r.insert(OPT_KEY_RECURSIVE_CTE);
+    r.insert(OPT_KEY_BASE_TABLE_ID);
+    r.insert(OPT_KEY_REFERENCED_BRANCH_IDS);
     r
 });
 

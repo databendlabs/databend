@@ -115,13 +115,13 @@ impl Dataframe {
             let table_index = metadata.write().add_table(
                 CATALOG_DEFAULT.to_owned(),
                 database.to_string(),
+                "one".to_string(),
                 table_meta,
                 None,
                 None,
                 false,
                 false,
                 false,
-                None,
             );
 
             binder.bind_base_table(&bind_context, database, table_index, None, &None, true)

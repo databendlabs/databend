@@ -1,0 +1,35 @@
+>>>> create or replace database test_vacuum_orphan_refs
+>>>> create or replace table test_vacuum_orphan_refs.a(c int) 'fs:///tmp/test_vacuum_orphan_refs/'
+>>>> insert into test_vacuum_orphan_refs.a values (1),(2)
+2
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_live
+>>>> insert into test_vacuum_orphan_refs.a values (2),(3)
+2
+>>>> optimize table test_vacuum_orphan_refs.a compact
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_live
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_exp retain 2 seconds
+>>>> set enable_experimental_table_ref=1; insert into test_vacuum_orphan_refs.a/b_exp values (5)
+1
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp retain 2 seconds
+>>>> set enable_experimental_table_ref=1; insert into test_vacuum_orphan_refs.a/b_live values (4)
+1
+before vacuum
+4
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_exp
+<<<< expected failure happened
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp
+<<<< expected failure happened
+after vacuum
+3
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a/b_live order by c
+1
+2
+2
+3
+4
+>>>> set enable_experimental_table_ref=1; select c from test_vacuum_orphan_refs.a at(tag => t_live) order by c
+1
+2
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create branch b_exp
+>>>> set enable_experimental_table_ref=1; alter table test_vacuum_orphan_refs.a create tag t_exp
+3

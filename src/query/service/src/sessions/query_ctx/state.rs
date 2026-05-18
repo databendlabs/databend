@@ -343,12 +343,13 @@ impl TableContextStream for QueryContext {
         let streams_refs = self.shared.streams_refs.read();
         let tables = self.shared.tables_refs.lock();
         let mut streams_meta = Vec::with_capacity(streams_refs.len());
-        for (stream_key, consume) in streams_refs.iter() {
+        for ((catalog, database, stream), consume) in streams_refs.iter() {
             if query && !consume {
                 continue;
             }
+            let table_key = (catalog.clone(), database.clone(), stream.clone(), None);
             let stream = tables
-                .get(stream_key)
+                .get(&table_key)
                 .ok_or_else(|| ErrorCode::Internal("Stream reference not found in tables cache"))?;
             streams_meta.push(stream.clone());
         }
