@@ -2843,6 +2843,18 @@ fn duration_from_time_parts(
     }
 }
 
+fn validate_timestamp_bounds(ctx: &mut EvalContext, row: usize, utc_micros: i64) -> Option<i64> {
+    if (TIMESTAMP_MIN..=TIMESTAMP_MAX).contains(&utc_micros) {
+        Some(utc_micros)
+    } else {
+        ctx.set_error(
+            row,
+            ErrorCode::BadArguments(format!("Timestamp out of range: {utc_micros}")),
+        );
+        None
+    }
+}
+
 fn timestamp_from_parts_to_micros(
     ctx: &mut EvalContext,
     row: usize,
@@ -2888,11 +2900,11 @@ fn timestamp_from_parts_to_micros(
         local_dt.second() as u8,
         (local_dt.subsec_nanosecond() / 1_000) as u32,
     ) {
-        return Some(micros);
+        return validate_timestamp_bounds(ctx, row, micros);
     }
 
     match tz.to_zoned(local_dt) {
-        Ok(zoned) => Some(zoned.timestamp().as_microsecond()),
+        Ok(zoned) => validate_timestamp_bounds(ctx, row, zoned.timestamp().as_microsecond()),
         Err(e) => {
             ctx.set_error(
                 row,

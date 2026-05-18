@@ -1862,6 +1862,14 @@ select timestamp_from_parts(2010, 13, 1, 0, 0, 0);
 ----
 2011-01-01 00:00:00.000000
 
+# Databend timestamp lower bound
+query error
+select timestamp_from_parts(0, 1, 1, 0, 0, 0);
+
+# Databend timestamp upper bound
+query error
+select timestamp_from_parts(10000, 1, 1, 0, 0, 0);
+
 ## Additional TIMESTAMP_TZ_FROM_PARTS tests
 
 statement ok
@@ -1908,6 +1916,13 @@ query ?
 select timestamp_tz_from_parts(2013, 13, 1, 0, 0, 0, 'UTC');
 ----
 2014-01-01 00:00:00.000000 +0000
+
+# Databend timestamp bounds with timezone
+query error
+select timestamp_tz_from_parts(0, 1, 1, 0, 0, 0, 'UTC');
+
+query error
+select timestamp_tz_from_parts(10000, 1, 1, 0, 0, 0, 'UTC');
 
 # Invalid timezone should produce error
 query error
