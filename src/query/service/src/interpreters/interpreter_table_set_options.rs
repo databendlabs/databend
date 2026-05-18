@@ -348,7 +348,7 @@ async fn analyze_table(
     let pipelines = vec![pipeline];
     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
     ctx.set_executor(complete_executor.get_inner())?;
-    complete_executor.execute()?;
+    complete_executor.execute().await?;
     let table = table.refresh(ctx.as_ref()).await?;
     Ok(table)
 }
