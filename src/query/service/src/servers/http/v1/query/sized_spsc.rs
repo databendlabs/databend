@@ -171,10 +171,10 @@ impl SizedChannelBuffer {
     }
 
     fn take_current_page(&mut self) -> Option<Page> {
-        if !self
+        if self
             .current_page
             .as_ref()
-            .is_some_and(|page| !page.is_empty())
+            .is_none_or(|page| page.is_empty())
         {
             return None;
         }
