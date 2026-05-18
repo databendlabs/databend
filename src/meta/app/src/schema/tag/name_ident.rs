@@ -37,10 +37,8 @@ impl TagNameIdentRaw {
 
 mod kvapi_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
     use super::super::id_ident::TagId;
-    use crate::key_with_tenant::KeyWithTenant;
     use crate::schema::TagNameIdent;
     use crate::tenant_key::resource::TenantResource;
 
@@ -54,10 +52,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for TagId {
         type KeyType = TagNameIdent;
-
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
     }
 }
 

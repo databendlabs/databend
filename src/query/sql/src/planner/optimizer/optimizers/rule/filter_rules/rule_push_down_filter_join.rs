@@ -154,7 +154,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
             JoinPredicate::Left(_) => {
                 if matches!(
                     join.join_type,
-                    JoinType::Right | JoinType::RightSingle | JoinType::Full
+                    JoinType::Right | JoinType::RightSingle | JoinType::Full | JoinType::FullAsof
                 ) {
                     if can_filter_null(
                         &predicate,
@@ -173,7 +173,7 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
             JoinPredicate::Right(_) => {
                 if matches!(
                     join.join_type,
-                    JoinType::Left | JoinType::LeftSingle | JoinType::Full
+                    JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::FullAsof
                 ) {
                     if can_filter_null(
                         &predicate,
@@ -213,7 +213,9 @@ fn try_push_down_filter_join(s_expr: &SExpr, metadata: MetadataRef) -> Result<(b
         return Ok((false, s_expr.clone()));
     }
 
-    if !matches!(join.join_type, JoinType::Full) && !join.has_null_equi_condition() {
+    if !matches!(join.join_type, JoinType::Full | JoinType::FullAsof)
+        && !join.has_null_equi_condition()
+    {
         // Infer new predicate and push down filter.
         for equi_condition in join.equi_conditions.iter() {
             let left = equi_condition.left.clone();

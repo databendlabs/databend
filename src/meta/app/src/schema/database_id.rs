@@ -55,17 +55,10 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for DatabaseId {
         type ValueType = DatabaseMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
     }
 
     impl kvapi::Value for DatabaseMeta {
         type KeyType = DatabaseId;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

@@ -353,25 +353,16 @@ impl ListDatabaseReq {
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdToName;
     use crate::schema::database_name_ident::DatabaseNameIdentRaw;
 
     impl kvapi::Key for DatabaseIdToName {
         type ValueType = DatabaseNameIdentRaw;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
     }
 
     impl kvapi::Value for DatabaseNameIdentRaw {
         type KeyType = DatabaseIdToName;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

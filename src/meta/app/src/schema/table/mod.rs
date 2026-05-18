@@ -1194,10 +1194,8 @@ pub struct EmptyProto {}
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
     use crate::schema::DBIdTableName;
-    use crate::schema::DatabaseId;
     use crate::schema::TableCopiedFileInfo;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -1208,34 +1206,18 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for DBIdTableName {
         type ValueType = TableId;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.db_id).to_string_key())
-        }
     }
 
     impl kvapi::Key for TableIdToName {
         type ValueType = DBIdTableName;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
     impl kvapi::Key for TableId {
         type ValueType = TableMeta;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
     }
 
     impl kvapi::Key for TableIdHistoryIdent {
         type ValueType = TableIdList;
-
-        fn parent(&self) -> Option<String> {
-            Some(DatabaseId::new(self.database_id).to_string_key())
-        }
     }
 
     impl kvapi::KeyCodec for TableCopiedFileNameIdent {
@@ -1264,47 +1246,26 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for TableCopiedFileNameIdent {
         type ValueType = TableCopiedFileInfo;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
     impl kvapi::Value for TableId {
         type KeyType = DBIdTableName;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.to_string_key()]
-        }
     }
 
     impl kvapi::Value for DBIdTableName {
         type KeyType = TableIdToName;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     impl kvapi::Value for TableMeta {
         type KeyType = TableId;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     impl kvapi::Value for TableIdList {
         type KeyType = TableIdHistoryIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            self.id_list
-                .iter()
-                .map(|id| TableId::new(*id).to_string_key())
-        }
     }
 
     impl kvapi::Value for TableCopiedFileInfo {
         type KeyType = TableCopiedFileNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

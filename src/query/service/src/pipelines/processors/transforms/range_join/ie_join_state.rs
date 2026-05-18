@@ -180,8 +180,12 @@ impl RangeJoinState {
             blocks
         } else {
             if !self.left_match.read().is_empty() {
-                return Ok(vec![self.fill_outer(task_id, true)?]);
-            } else if !self.right_match.read().is_empty() {
+                let left_fill_end = partition_count + self.left_sorted_blocks.read().len();
+                if task_id < left_fill_end {
+                    return Ok(vec![self.fill_outer(task_id, true)?]);
+                }
+            }
+            if !self.right_match.read().is_empty() {
                 return Ok(vec![self.fill_outer(task_id, false)?]);
             }
             Ok(vec![DataBlock::empty()])
