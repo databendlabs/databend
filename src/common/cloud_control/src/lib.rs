@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod billing_client;
 pub mod client_config;
 pub mod cloud_api;
 pub mod notification_client;
@@ -24,6 +25,7 @@ pub mod worker_client;
 #[allow(clippy::large_enum_variant)]
 /// ProtoBuf generated files.
 pub mod pb {
+    tonic::include_proto!("billingproto");
     // taskproto is proto package name.
     tonic::include_proto!("taskproto");
     tonic::include_proto!("notificationproto");

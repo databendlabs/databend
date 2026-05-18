@@ -68,7 +68,7 @@ Sort
 
 
 === group_by_prefers_select_alias_over_same_name_base_column ===
-description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column when both names exist.
+description: GROUP BY should keep resolving an unqualified name to the SELECT alias before the input column by default.
 sql: SELECT a AS b, count(*) FROM t GROUP BY b
 status: ok
 EvalScalar
@@ -128,6 +128,42 @@ EvalScalar
                 ├── filters: []
                 ├── order by: []
                 └── limit: NONE
+
+
+=== group_by_complex_expr_does_not_shadow_column_with_same_name_alias ===
+description: A complex GROUP BY expression should resolve internal column refs from FROM, not from a same-name SELECT alias.
+sql: SELECT CASE WHEN type = 0 THEN 'A' ELSE 'B' END AS type, count(*) FROM t GROUP BY CASE WHEN type = 0 THEN 'A' ELSE 'B' END
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#2) AS (#2), CASE WHEN type = 0 THEN 'A' ELSE 'B' END (#1) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [if(eq(t.type (#0), 0), 'A', 'B') AS (#1)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [if(eq(t.type (#0), 0), 'A', 'B') AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== group_by_complex_expr_falls_back_to_select_alias ===
+description: A complex GROUP BY expression should still resolve SELECT aliases when no input column matches.
+sql: SELECT i AS k, abs(i) AS ak, count(*) FROM t GROUP BY k, abs(k)
+status: ok
+EvalScalar
+├── scalars: [t.i (#0) AS (#0), COUNT(*) (#2) AS (#2), abs(t.i (#0)) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [t.i (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.i (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
 === group_by_all_collects_non_aggregate_select_items ===

@@ -50,7 +50,7 @@ def test_export_from_raft_dir():
     want = """["header",{"DataHeader":{"key":"header","value":{"version":"V004"}}}]
 ["raft_log",{"NodeId":1}]
 ["raft_log",{"Vote":{"leader_id":{"term":1,"node_id":1},"committed":true}}]
-["raft_log",{"Committed":{"leader_id":{"term":1,"node_id":1},"index":7}}]
+["raft_log",{"Committed":{"leader_id":{"term":1,"node_id":1},"index":6}}]
 ["raft_log",{"Purged":null}]
 ["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":0,"node_id":1},"index":0},"payload":{"Membership":{"configs":[[1]],"nodes":{"1":{}}}}}}]
 ["raft_log",{"LogEntry":{"log_id":{"leader_id":{"term":1,"node_id":1},"index":1},"payload":"Blank"}}]

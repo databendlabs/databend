@@ -51,12 +51,14 @@ use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::values::Value;
 
+pub mod comparison;
 pub mod function_builder;
 pub mod function_factory;
 pub mod function_stat;
 pub mod register;
 pub mod register_comparison;
 pub mod register_vectorize;
+pub mod stat_distribution;
 
 pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub type DynamicCastRules = Vec<Arc<dyn Fn(&DataType, &DataType) -> bool + Send + Sync>>;

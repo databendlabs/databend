@@ -174,6 +174,7 @@ use crate::plans::VacuumTemporaryFilesPlan;
 pub(in crate::planner::binder) struct AnalyzeCreateTableResult {
     pub(in crate::planner::binder) schema: TableSchemaRef,
     pub(in crate::planner::binder) field_comments: Vec<String>,
+    pub(in crate::planner::binder) field_stats_truncate_len: Vec<Option<u64>>,
     pub(in crate::planner::binder) table_indexes: Option<BTreeMap<String, TableIndex>>,
     pub(in crate::planner::binder) table_constraints: Option<BTreeMap<String, Constraint>>,
 }
@@ -702,6 +703,7 @@ impl Binder {
             AnalyzeCreateTableResult {
                 schema,
                 field_comments,
+                field_stats_truncate_len,
                 table_indexes,
                 table_constraints,
             },
@@ -733,6 +735,7 @@ impl Binder {
                     AnalyzeCreateTableResult {
                         schema,
                         field_comments: vec![],
+                        field_stats_truncate_len: vec![],
                         table_indexes: None,
                         table_constraints: None,
                     },
@@ -781,6 +784,7 @@ impl Binder {
                             AnalyzeCreateTableResult {
                                 schema: Arc::new(table_schema),
                                 field_comments: vec![],
+                                field_stats_truncate_len: vec![],
                                 table_indexes: None,
                                 table_constraints: None,
                             },
@@ -801,6 +805,7 @@ impl Binder {
                             AnalyzeCreateTableResult {
                                 schema: Arc::new(table_schema),
                                 field_comments: vec![],
+                                field_stats_truncate_len: vec![],
                                 table_indexes: None,
                                 table_constraints: None,
                             },
@@ -927,6 +932,7 @@ impl Binder {
             table_properties,
             table_partition,
             field_comments,
+            field_stats_truncate_len,
             cluster_key,
             as_select: as_query_plan,
             table_indexes,
@@ -996,6 +1002,7 @@ impl Binder {
             table_properties: None,
             table_partition: None,
             field_comments: vec![],
+            field_stats_truncate_len: vec![],
             cluster_key: None,
             as_select: None,
             table_indexes: None,
@@ -1902,17 +1909,35 @@ impl Binder {
     pub async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
-    ) -> Result<(TableSchemaRef, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>, Vec<Option<u64>>)> {
         let mut has_computed = false;
         let mut has_autoincrement = false;
         let mut fields = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
+        let mut fields_stats_truncate_len = Vec::with_capacity(columns.len());
         let not_null = self.is_column_not_null();
         let mut default_expr_binder = DefaultExprBinder::try_new(self.ctx.clone())?;
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
+            if let Some(len) = column.stats_truncate_len {
+                let inner_type = schema_data_type.remove_nullable();
+                if inner_type != databend_common_expression::TableDataType::String {
+                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
+                        format!(
+                            "STATS_TRUNCATE_LEN can only be set on STRING columns, but column '{}' is {:?}",
+                            name, inner_type
+                        ),
+                    ));
+                }
+                if len == 0 || len > 4096 {
+                    return Err(databend_common_exception::ErrorCode::TableOptionInvalid(
+                        format!("STATS_TRUNCATE_LEN must be in range [1, 4096], got {}", len),
+                    ));
+                }
+            }
+            fields_stats_truncate_len.push(column.stats_truncate_len);
             let mut field = TableField::new(&name, schema_data_type.clone());
             if let Some(expr) = &column.expr {
                 match expr {
@@ -1999,7 +2024,7 @@ impl Binder {
 
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
-        Ok((schema, fields_comments))
+        Ok((schema, fields_comments, fields_stats_truncate_len))
     }
 
     #[async_backtrace::framed]
@@ -2127,7 +2152,7 @@ impl Binder {
                 opt_table_constraints,
                 opt_column_constraints,
             } => {
-                let (schema, comments) =
+                let (schema, comments, stats_truncate_len) =
                     self.analyze_create_table_schema_by_columns(columns).await?;
                 let table_indexes = if let Some(table_index_defs) = opt_table_indexes {
                     let table_indexes = self
@@ -2159,6 +2184,7 @@ impl Binder {
                 Ok(AnalyzeCreateTableResult {
                     schema,
                     field_comments: comments,
+                    field_stats_truncate_len: stats_truncate_len,
                     table_indexes,
                     table_constraints,
                 })
@@ -2179,6 +2205,7 @@ impl Binder {
                         Ok(AnalyzeCreateTableResult {
                             schema: infer_table_schema(&plan.schema())?,
                             field_comments: vec![],
+                            field_stats_truncate_len: vec![],
                             table_indexes: None,
                             table_constraints: None,
                         })
@@ -2191,6 +2218,7 @@ impl Binder {
                     Ok(AnalyzeCreateTableResult {
                         schema: table.schema(),
                         field_comments: table.field_comments().clone(),
+                        field_stats_truncate_len: vec![],
                         table_indexes: None,
                         table_constraints: None,
                     })

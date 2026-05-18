@@ -52,6 +52,7 @@
 //!    ```
 
 pub mod examples;
+pub mod filter_tenant;
 pub mod kv_processor;
 pub mod pb_value_decoder;
 pub mod process;

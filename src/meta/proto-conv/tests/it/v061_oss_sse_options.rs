@@ -45,6 +45,7 @@ fn test_decode_v61_oss_sse_options() -> anyhow::Result<()> {
         bucket: "bucket".to_string(),
         presign_endpoint_url: "".to_string(),
         access_key_secret: "access_key_secret".to_string(),
+        role_arn: "".to_string(),
         server_side_encryption_key_id: "123".to_string(),
         network_config: None,
     };

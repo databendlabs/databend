@@ -366,6 +366,34 @@ mod tests {
         assert_eq!(queue.waiting, BTreeMap::from([(3, ent("t3", 1))]));
     }
 
+    #[test]
+    fn test_out_of_order_initial_flush_converges_after_smaller_seq_removed() {
+        let entry1 = || ent("t1", 1);
+        let entry2 = || ent("t2", 1);
+
+        let mut saw_larger_first = SemaphoreQueue::new(1);
+        let acquired_2 = vec![acquired(2, entry2())];
+        let acquired_1 = vec![acquired(1, entry1())];
+        assert_eq!(saw_larger_first.insert(2, entry2()), acquired_2);
+        assert_eq!(saw_larger_first.insert(1, entry1()), acquired_1);
+        assert_eq!(saw_larger_first.remove(1), vec![removed(1, entry1())]);
+
+        let mut saw_smaller_first = SemaphoreQueue::new(1);
+        let acquired_1 = vec![acquired(1, entry1())];
+        assert_eq!(saw_smaller_first.insert(1, entry1()), acquired_1);
+        assert_eq!(saw_smaller_first.insert(2, entry2()), vec![]);
+        assert_eq!(saw_smaller_first.remove(1), vec![
+            removed(1, entry1()),
+            acquired(2, entry2())
+        ]);
+
+        assert_eq!(saw_larger_first.size, saw_smaller_first.size);
+        assert_eq!(saw_larger_first.acquired, saw_smaller_first.acquired);
+        assert_eq!(saw_larger_first.waiting, saw_smaller_first.waiting);
+        assert_eq!(saw_larger_first.acquired, BTreeMap::from([(2, entry2())]));
+        assert!(saw_larger_first.waiting.is_empty());
+    }
+
     /// When a equal seq permit is inserted, it should be skipped automatically.
     ///
     /// See [`SemaphoreQueue::move_waiting_to_acquired`] for more details.

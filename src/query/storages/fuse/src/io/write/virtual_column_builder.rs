@@ -701,8 +701,12 @@ impl VirtualColumnBuilder {
         let metadata = Some(metadata);
 
         // Create the virtual block and convert to parquet
-        let columns_statistics =
-            gen_columns_statistics(&virtual_block, None, &virtual_block_schema)?;
+        let columns_statistics = gen_columns_statistics(
+            &virtual_block,
+            None,
+            &virtual_block_schema,
+            &std::collections::BTreeMap::new(),
+        )?;
 
         let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
         let file_meta = blocks_to_parquet_with_stats(
@@ -713,6 +717,8 @@ impl VirtualColumnBuilder {
             write_settings.enable_parquet_dictionary,
             metadata,
             Some(&columns_statistics),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
         )?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(

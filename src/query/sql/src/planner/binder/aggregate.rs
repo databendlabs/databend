@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
+use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
 use databend_common_ast::ast::GroupBy;
 use databend_common_ast::ast::Literal;
@@ -893,35 +894,42 @@ impl Binder {
         group_by: &GroupBy,
     ) -> Result<()> {
         let original_context = bind_context.replace_expr_context(ExprContext::GroupClaue);
+        let original_group_by_column_first = bind_context.group_by_column_first;
+        bind_context.group_by_column_first =
+            self.ctx.get_settings().get_enable_group_by_column_first()?;
 
-        let group_by = Self::expand_group(group_by.clone())?;
-        match &group_by {
-            GroupBy::Normal(exprs) => self.resolve_group_items(
-                bind_context,
-                select_list,
-                exprs,
-                group_by_aliases,
-                false,
-                &mut vec![],
-            )?,
-            GroupBy::All => {
-                let groups = self.resolve_group_all(select_list)?;
-                self.resolve_group_items(
+        let result = (|| {
+            let group_by = Self::expand_group(group_by.clone())?;
+            match &group_by {
+                GroupBy::Normal(exprs) => self.resolve_group_items(
                     bind_context,
                     select_list,
-                    &groups,
+                    exprs,
                     group_by_aliases,
                     false,
                     &mut vec![],
-                )?;
+                )?,
+                GroupBy::All => {
+                    let groups = self.resolve_group_all(select_list)?;
+                    self.resolve_group_items(
+                        bind_context,
+                        select_list,
+                        &groups,
+                        group_by_aliases,
+                        false,
+                        &mut vec![],
+                    )?;
+                }
+                GroupBy::GroupingSets(sets) => {
+                    self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
+                }
+                _ => unreachable!(),
             }
-            GroupBy::GroupingSets(sets) => {
-                self.resolve_grouping_sets(bind_context, select_list, sets, group_by_aliases)?;
-            }
-            _ => unreachable!(),
-        }
+            Ok(())
+        })();
         bind_context.expr_context = original_context;
-        Ok(())
+        bind_context.group_by_column_first = original_group_by_column_first;
+        result
     }
 
     pub fn expand_group(group_by: GroupBy) -> Result<GroupBy> {
@@ -1175,11 +1183,9 @@ impl Binder {
         }
         let preferred_aliases = group_by_aliases.preferred_aliases();
         let available_aliases = group_by_aliases.available_aliases();
-        // GROUP BY first uses the preferred alias set, then falls back to the
-        // full alias set only when the expression cannot be resolved. This
-        // keeps the main binding path centralized while allowing SRF and
-        // aggregate aliases to remain available without letting them shadow
-        // same-name input columns.
+        // Keep alias-first binding for simple `GROUP BY <alias>` items. For
+        // complex expressions, resolve input columns first and only use SELECT
+        // aliases for names that are not present in the input scope.
         for expr in group_by.iter() {
             // If expr is a number literal, then this is a index group item.
             if let Expr::Literal {
@@ -1212,26 +1218,51 @@ impl Binder {
                 continue;
             }
 
-            let mut scalar_binder = ScalarBinder::new(
-                bind_context,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                self.metadata.clone(),
-                preferred_aliases,
-            );
-            let (mut scalar_expr, _) = if preferred_aliases == available_aliases {
-                scalar_binder.bind(expr)?
+            let is_simple_column_ref = matches!(expr, Expr::ColumnRef {
+                column: ColumnRef {
+                    database: None,
+                    table: None,
+                    ..
+                },
+                ..
+            });
+
+            let (mut scalar_expr, _) = if is_simple_column_ref {
+                let mut scalar_binder = ScalarBinder::new(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    preferred_aliases,
+                );
+                if preferred_aliases == available_aliases {
+                    scalar_binder.bind(expr)?
+                } else {
+                    scalar_binder.bind(expr).or_else(|_| {
+                        let mut fallback_scalar_binder = ScalarBinder::new(
+                            bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            available_aliases,
+                        );
+                        fallback_scalar_binder.bind(expr)
+                    })?
+                }
             } else {
-                scalar_binder.bind(expr).or_else(|_| {
-                    let mut fallback_scalar_binder = ScalarBinder::new(
-                        bind_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        available_aliases,
-                    );
-                    fallback_scalar_binder.bind(expr)
-                })?
+                bind_context.with_expr_context(
+                    ExprContext::SelectClause,
+                    |bind_context| -> Result<(ScalarExpr, DataType)> {
+                        let mut scalar_binder = ScalarBinder::new(
+                            bind_context,
+                            self.ctx.clone(),
+                            &self.name_resolution_ctx,
+                            self.metadata.clone(),
+                            available_aliases,
+                        );
+                        scalar_binder.bind(expr)
+                    },
+                )?
             };
 
             let mut analyzer = SetReturningAnalyzer::new(bind_context, self.metadata.clone());

@@ -898,20 +898,22 @@ error:
 
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST('0' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('0')` in expr `CAST('0' AS Boolean)`
+ast            : CAST('0' AS BOOLEAN)
+raw expr       : CAST('0' AS Boolean)
+checked expr   : CAST<String>("0" AS Boolean)
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
 
 
-
-error: 
-  --> SQL:1:1
-  |
-1 | CAST('1' AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ cannot parse to type `BOOLEAN` while evaluating function `to_boolean('1')` in expr `CAST('1' AS Boolean)`
-
+ast            : CAST('1' AS BOOLEAN)
+raw expr       : CAST('1' AS Boolean)
+checked expr   : CAST<String>("1" AS Boolean)
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
 
 
 ast            : CAST('true' AS BOOLEAN)
@@ -3357,19 +3359,19 @@ output         : NULL
 ast            : TRY_CAST('0' AS BOOLEAN)
 raw expr       : TRY_CAST('0' AS Boolean)
 checked expr   : TRY_CAST<String>("0" AS Boolean NULL)
-optimized expr : NULL
+optimized expr : false
 output type    : Boolean NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {FALSE}
+output         : false
 
 
 ast            : TRY_CAST('1' AS BOOLEAN)
 raw expr       : TRY_CAST('1' AS Boolean)
 checked expr   : TRY_CAST<String>("1" AS Boolean NULL)
-optimized expr : NULL
+optimized expr : true
 output type    : Boolean NULL
-output domain  : {NULL}
-output         : NULL
+output domain  : {TRUE}
+output         : true
 
 
 ast            : TRY_CAST('true' AS BOOLEAN)

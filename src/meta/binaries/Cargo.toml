@@ -35,6 +35,7 @@ databend-meta-ver = { workspace = true }
 
 anyerror = { workspace = true }
 anyhow = { workspace = true }
+base2histogram = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
 display-more = { workspace = true }

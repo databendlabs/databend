@@ -21,7 +21,10 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::type_check::check_number;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Decimal;
 use databend_common_expression::types::NumberScalar;
+use databend_common_expression::types::decimal::DecimalSize;
+use databend_common_expression::types::i256;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_functions::aggregates::AggregateFunctionFactory;
 
@@ -30,7 +33,9 @@ use crate::binder::ExprContext;
 use crate::planner::metadata::optimize_remove_count_args;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
+use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
+use crate::plans::ScalarExpr;
 
 impl<'a> TypeChecker<'a> {
     /// Resolve aggregation function call.
@@ -97,6 +102,8 @@ impl<'a> TypeChecker<'a> {
         }
         self.in_aggregate_function = false;
         let (mut arguments, mut arg_types) = arguments_result?;
+
+        self.try_widen_sum_decimal_argument(func_name, &mut arguments, &mut arg_types)?;
 
         let sort_descs = order_by
             .iter()
@@ -201,5 +208,46 @@ impl<'a> TypeChecker<'a> {
         let data_type = agg_func.return_type()?;
 
         Ok((new_agg_func, data_type))
+    }
+
+    fn try_widen_sum_decimal_argument(
+        &self,
+        func_name: &str,
+        arguments: &mut [ScalarExpr],
+        arg_types: &mut [DataType],
+    ) -> Result<()> {
+        if !func_name.eq_ignore_ascii_case("sum")
+            || arguments.len() != 1
+            || !self.ctx.get_settings().get_enable_decimal_sum_widening()?
+        {
+            return Ok(());
+        }
+
+        let input_is_nullable = arg_types[0].is_nullable();
+        let DataType::Decimal(size) = arg_types[0].remove_nullable() else {
+            return Ok(());
+        };
+
+        if !size.can_carried_by_128() || size.precision() <= i64::MAX_PRECISION {
+            return Ok(());
+        }
+
+        let mut target_type = DataType::Decimal(DecimalSize::new_unchecked(
+            i256::MAX_PRECISION,
+            size.scale(),
+        ));
+        if input_is_nullable {
+            target_type = target_type.wrap_nullable();
+        }
+
+        arguments[0] = ScalarExpr::CastExpr(CastExpr {
+            span: arguments[0].span(),
+            is_try: false,
+            argument: Box::new(arguments[0].clone()),
+            target_type: Box::new(target_type.clone()),
+        });
+        arg_types[0] = target_type;
+
+        Ok(())
     }
 }

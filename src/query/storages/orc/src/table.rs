@@ -74,6 +74,7 @@ impl OrcTable {
     pub async fn try_create(
         ctx: &dyn TableContext,
         mut stage_table_info: StageTableInfo,
+        has_column_name_ref: bool,
     ) -> Result<Arc<dyn Table>> {
         let stage_info = &stage_table_info.stage_info;
         if stage_table_info.is_variant {
@@ -96,7 +97,13 @@ impl OrcTable {
             };
 
             let Some(first_file) = first_file else {
-                return ctx.get_zero_table().await;
+                return if has_column_name_ref {
+                    Err(ErrorCode::SemanticError(
+                        "no files found. specify a prefix/pattern/files that matches at least one file",
+                    ))
+                } else {
+                    ctx.get_zero_table().await
+                };
             };
 
             let schema_from = first_file.path.clone();

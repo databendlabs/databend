@@ -21,12 +21,12 @@ use databend_common_expression::TableSchema;
 use databend_common_meta_app::schema::TableInfo;
 use databend_storages_common_session::TxnManagerRef;
 use databend_storages_common_table_meta::meta::ClusterKey;
-use databend_storages_common_table_meta::meta::Statistics;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use log::info;
 
+use crate::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use crate::operations::common::ConflictResolveContext;
 use crate::statistics::TableStatsGenerator;
 
@@ -103,26 +103,38 @@ pub fn decorate_snapshot(
 
 pub(crate) fn set_compaction_num_block_hint(
     ctx: &dyn TableContext,
-    table_name: &str,
-    summary: &Statistics,
+    table_info: &TableInfo,
+    imperfect_count: u64,
 ) {
-    if let Err(e) = try_set_compaction_num_block_hint(ctx, table_name, summary) {
+    if let Err(e) = try_set_compaction_num_block_hint(ctx, table_info, imperfect_count) {
         log::warn!("set_compaction_num_block_hint failed: {}", e);
     }
 }
 
 pub(crate) fn try_set_compaction_num_block_hint(
     ctx: &dyn TableContext,
-    table_name: &str,
-    summary: &Statistics,
+    table_info: &TableInfo,
+    imperfect_count: u64,
 ) -> Result<()> {
     // check if need to auto compact
     // the algorithm is: if the number of imperfect blocks is greater than the threshold, then auto compact.
-    // the threshold is set by the setting `auto_compaction_imperfect_blocks_threshold`, default is 25.
-    let imperfect_count = summary.block_count - summary.perfect_block_count;
-    let auto_compaction_imperfect_blocks_threshold = ctx
-        .get_settings()
-        .get_auto_compaction_imperfect_blocks_threshold()?;
+    // the threshold is set by the table option `auto_compaction_imperfect_blocks_threshold`.
+    // If the table option is not set, fall back to the setting.
+    let auto_compaction_imperfect_blocks_threshold = match table_info
+        .options()
+        .get(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD)
+    {
+        Some(value) => value.parse::<u64>()?,
+        None => ctx
+            .get_settings()
+            .get_auto_compaction_imperfect_blocks_threshold()?,
+    };
+
+    // 0 means auto compaction after write is disabled.
+    if auto_compaction_imperfect_blocks_threshold == 0 {
+        return Ok(());
+    }
+
     if imperfect_count >= auto_compaction_imperfect_blocks_threshold {
         // If imperfect_count is larger, SLIGHTLY increase the number of blocks
         // eligible for auto-compaction, this adjustment is intended to help reduce
@@ -132,7 +144,7 @@ pub(crate) fn try_set_compaction_num_block_hint(
             (auto_compaction_imperfect_blocks_threshold as f64 * 1.5).ceil() as u64,
         );
         info!("set compact_num_block_hint to {compact_num_block_hint }");
-        ctx.set_compaction_num_block_hint(table_name, compact_num_block_hint);
+        ctx.set_compaction_num_block_hint(table_info.name.as_str(), compact_num_block_hint);
     }
     Ok(())
 }

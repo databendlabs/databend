@@ -23,7 +23,6 @@ use crate::ColumnSet;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::optimizer::ir::Distribution;
-use crate::optimizer::ir::Ndv;
 use crate::optimizer::ir::PhysicalProperty;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
@@ -164,13 +163,7 @@ impl Aggregate {
         if self.group_items.iter().any(|item| {
             column_stats
                 .get(&item.index)
-                .map(|stat| {
-                    if let Ndv::Max(ndv) = stat.ndv {
-                        ndv >= stat_info.cardinality
-                    } else {
-                        false
-                    }
-                })
+                .map(|stat| stat.ndv.lower == 0.0 && stat.ndv.upper >= stat_info.cardinality)
                 .unwrap_or(true)
         }) {
             return Ok(Arc::new(StatInfo {
@@ -185,7 +178,7 @@ impl Aggregate {
         let groups_ndv = self
             .group_items
             .iter()
-            .map(|group| column_stats[&group.index].ndv.value())
+            .map(|group| column_stats[&group.index].ndv.expected)
             .collect::<Vec<_>>();
 
         let cardinality = groups_ndv
@@ -214,9 +207,7 @@ impl Aggregate {
             // When there is a high probability that eager aggregation
             // is better, we will update the histogram.
             if histogram.num_values() >= histogram.num_distinct_values() * 10.0 {
-                for bucket in histogram.buckets.iter_mut() {
-                    bucket.aggregate_values();
-                }
+                histogram.collapse_counts_to_distinct();
             }
         }
 

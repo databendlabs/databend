@@ -166,3 +166,4 @@ mod v171_file_format_encoding;
 mod v172_file_format_trim_space;
 mod v173_csv_quote_style;
 mod v174_user_key_pair;
+mod v175_field_stats_truncate_len;

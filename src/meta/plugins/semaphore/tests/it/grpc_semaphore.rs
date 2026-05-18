@@ -133,7 +133,11 @@ async fn test_semaphore_guard_future() -> anyhow::Result<()> {
         .await?;
 
     let res = timeout(Duration::from_millis(100), c.as_mut()).await;
-    assert!(res.is_ok(), "acquired guard become ready");
+    assert!(
+        matches!(res, Ok(Ok(()))),
+        "acquired guard become ready: {:?}",
+        res
+    );
 
     Ok(())
 }
@@ -258,8 +262,9 @@ async fn test_permit_removal_notification() -> anyhow::Result<()> {
     // Now the permit should be notified of removal
     let notification_result = timeout(Duration::from_secs(5), permit_future.as_mut()).await;
     assert!(
-        notification_result.is_ok(),
-        "Permit should be notified of removal"
+        matches!(notification_result, Ok(Ok(()))),
+        "Permit should be notified of removal: {:?}",
+        notification_result
     );
 
     Ok(())
@@ -440,6 +445,52 @@ async fn test_watch_stream_resilience() -> anyhow::Result<()> {
 
     // Test continues to work even with some connection variability
     // (In a real scenario, this would test reconnection after temporary failures)
+
+    Ok(())
+}
+
+/// The permit future should report an error when the watch stream is closed.
+#[test(harness = meta_service_test_harness::<DatabendRuntime, _, _>)]
+#[fastrace::trace]
+async fn test_acquired_permit_connection_closed_error() -> anyhow::Result<()> {
+    let mut tcs = start_metasrv_cluster::<DatabendRuntime>(&[0]).await?;
+
+    let mut tc = tcs.remove(0);
+
+    let address = tc.config.grpc.api_address().unwrap();
+
+    let cli = make_grpc_client::<DatabendRuntime>(vec![address])?;
+    let client = || cli.clone();
+    let secs = |n| Duration::from_secs(n);
+
+    let permit =
+        Semaphore::new_acquired(client(), "permit_connection_closed", 1, "permit", secs(10))
+            .await?;
+
+    let (tx, rx) = oneshot::channel();
+    DatabendRuntime::spawn(
+        async move {
+            let res = tokio::time::timeout(secs(5), permit).await;
+            tx.send(res).ok();
+        },
+        None,
+    );
+
+    tokio::time::sleep(secs(1)).await;
+
+    let mut srv = tc.grpc_srv.take().unwrap();
+    srv.do_stop(None).await;
+
+    let res = rx.await?;
+    let err = res
+        .expect("permit future should finish after watch stream is closed")
+        .expect_err("permit future should report connection closed");
+    assert!(
+        err.to_string()
+            .contains("distributed-Semaphore connection closed"),
+        "unexpected permit error: {}",
+        err
+    );
 
     Ok(())
 }

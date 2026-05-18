@@ -140,9 +140,10 @@ impl Binder {
 
         let mut max_column_position = MaxColumnPosition::default();
         stmt.walk(&mut max_column_position)?;
-        self.metadata
-            .write()
-            .set_max_column_position(max_column_position.max_pos);
+        self.metadata.write().set_stage_column_references(
+            max_column_position.max_pos,
+            max_column_position.has_name_ref,
+        );
 
         let cross_joins = stmt
             .from
@@ -1052,21 +1053,21 @@ impl SelectRewriter {
 #[derive(Default)]
 pub struct MaxColumnPosition {
     pub max_pos: usize,
+    pub has_name_ref: bool,
 }
 
 impl Visitor for MaxColumnPosition {
     fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
-        if let Expr::ColumnRef {
-            column:
-                ColumnRef {
-                    column: ColumnID::Position(pos),
-                    ..
-                },
-            ..
-        } = expr
-            && pos.pos > self.max_pos
-        {
-            self.max_pos = pos.pos;
+        if let Expr::ColumnRef { column, .. } = expr {
+            match &column.column {
+                ColumnID::Position(pos) if pos.pos > self.max_pos => {
+                    self.max_pos = pos.pos;
+                }
+                ColumnID::Name(_) => {
+                    self.has_name_ref = true;
+                }
+                _ => {}
+            }
         }
         Ok(VisitControl::Continue)
     }

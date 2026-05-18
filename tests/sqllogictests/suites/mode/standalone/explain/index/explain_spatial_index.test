@@ -66,6 +66,36 @@ TableScan
 ├── push downs: [filters: [st_dwithin(stores.location (#4), 'POINT(10 10)', 2) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
 └── estimated rows: 1.60
 
+query T
+EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_coveredby(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) AND category = 'coffee' AND status = 'active';
+----
+TableScan
+├── table: default.test_spatial_index_db.stores
+├── scan id: 0
+├── output columns: [store_id (#0), category (#1), store_name (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 4
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [st_coveredby(stores.location (#4), 'POLYGON((9 9,9 12,12 12,12 9,9 9))') and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
+└── estimated rows: 1.60
+
+query T
+EXPLAIN SELECT store_id, store_name, category FROM stores WHERE st_covers(to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))'), location) AND category = 'coffee' AND status = 'active';
+----
+TableScan
+├── table: default.test_spatial_index_db.stores
+├── scan id: 0
+├── output columns: [store_id (#0), category (#1), store_name (#2)]
+├── read rows: 2
+├── read size: < 1 KiB
+├── partitions total: 4
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 4 to 4 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>, spatial pruning: 4 to 1 cost: <slt:ignore>>]
+├── push downs: [filters: [st_covers('POLYGON((9 9,9 12,12 12,12 9,9 9))', stores.location (#4)) and stores.category (#1) = 'coffee' and stores.status (#3) = 'active'], limit: NONE]
+└── estimated rows: 1.60
+
 statement ok
 INSERT INTO stores VALUES
 (9, 'tea', 'Gamma', 'active', TO_GEOMETRY('POINT(50 50)')),

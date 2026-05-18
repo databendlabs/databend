@@ -20,6 +20,7 @@ use crate::physical_plans::MaterializedCTE;
 use crate::physical_plans::PhysicalPlanMeta;
 use crate::physical_plans::format::FormatContext;
 use crate::physical_plans::format::PhysicalFormat;
+use crate::physical_plans::format::display_materialized_cte_name;
 
 pub struct MaterializedCTEFormatter<'a> {
     inner: &'a MaterializedCTE,
@@ -42,7 +43,10 @@ impl<'a> PhysicalFormat for MaterializedCTEFormatter<'a> {
         let input_payload = input_formatter.dispatch(ctx)?;
 
         Ok(FormatTreeNode::with_children(
-            format!("MaterializedCTE: {}", self.inner.cte_name),
+            format!(
+                "MaterializedCTE: {}",
+                display_materialized_cte_name(&self.inner.cte_name)
+            ),
             vec![input_payload],
         ))
     }
@@ -51,7 +55,10 @@ impl<'a> PhysicalFormat for MaterializedCTEFormatter<'a> {
     fn format_join(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
         let input = self.inner.input.formatter()?.format_join(ctx)?;
         let children = vec![
-            FormatTreeNode::new(format!("cte_name: {}", self.inner.cte_name)),
+            FormatTreeNode::new(format!(
+                "cte_name: {}",
+                display_materialized_cte_name(&self.inner.cte_name)
+            )),
             FormatTreeNode::new(format!("ref_count: {}", self.inner.ref_count)),
             input,
         ];

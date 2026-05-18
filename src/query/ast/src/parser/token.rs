@@ -1302,6 +1302,8 @@ pub enum TokenKind {
     SOUNDS,
     #[token("STATISTICS", ignore(ascii_case))]
     STATISTICS,
+    #[token("STATS_TRUNCATE_LEN", ignore(ascii_case))]
+    STATS_TRUNCATE_LEN,
     #[token("SYNC", ignore(ascii_case))]
     SYNC,
     #[token("SYSTEM", ignore(ascii_case))]
@@ -1972,7 +1974,6 @@ impl TokenKind {
             | TokenKind::ORDER
             | TokenKind::OVER
             | TokenKind::PARTITION
-            | TokenKind::PROPERTIES
             | TokenKind::QUALIFY
             | TokenKind::ROWS
             // | TokenKind::OVERLAPS

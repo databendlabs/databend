@@ -61,6 +61,66 @@ fn test_cluster_key_expr() -> Expr<usize> {
     })
 }
 
+async fn gen_recluster_segments(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    num_segments: usize,
+    blocks_per_segment: usize,
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let mut segment_locations = Vec::with_capacity(num_segments);
+    for _ in 0..num_segments {
+        let mut blocks = Vec::with_capacity(blocks_per_segment);
+        for _ in 0..blocks_per_segment {
+            let block_id = Uuid::new_v4().simple().to_string();
+            let location = (block_id, DataBlock::VERSION);
+            blocks.push(Arc::new(BlockMeta::new(
+                row_count,
+                block_size,
+                file_size,
+                HashMap::default(),
+                HashMap::default(),
+                Some(ClusterStatistics::new(
+                    cluster_key_id,
+                    vec![Scalar::from(1i32)],
+                    vec![Scalar::from(100i32)],
+                    0,
+                    None,
+                )),
+                location,
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                meta::Compression::Lz4Raw,
+                Some(Utc::now()),
+            )));
+        }
+
+        let block_refs = blocks
+            .iter()
+            .map(|block| block.as_ref())
+            .collect::<Vec<_>>();
+        let statistics = reduce_block_metas(&block_refs, thresholds, Some(cluster_key_id));
+        let segment = SegmentInfo::new(blocks, statistics);
+        let segment_location = location_generator
+            .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
+        segment.write_meta(data_accessor, &segment_location).await?;
+        segment_locations.push((segment_location, SegmentInfo::VERSION));
+    }
+    Ok(segment_locations)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let fixture = TestFixture::setup().await?;
@@ -114,8 +174,8 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let mut test_block_locations = vec![];
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        vec![Scalar::from(1i64)],
-        vec![Scalar::from(3i64)],
+        vec![Scalar::from(1i32)],
+        vec![Scalar::from(3i32)],
         0,
         None,
     )))
@@ -125,8 +185,8 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
 
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        vec![Scalar::from(2i64)],
-        vec![Scalar::from(4i64)],
+        vec![Scalar::from(2i32)],
+        vec![Scalar::from(4i32)],
         0,
         None,
     )))
@@ -137,8 +197,8 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     let schema = TableSchemaRef::new(TableSchema::empty());
     let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
         cluster_key_id,
-        vec![Scalar::from(4i64)],
-        vec![Scalar::from(5i64)],
+        vec![Scalar::from(4i32)],
+        vec![Scalar::from(5i32)],
         0,
         None,
     )))
@@ -176,6 +236,70 @@ async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
     assert_eq!(tasks.len(), 1);
     let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
     assert_eq!(total_block_nums, 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
+
+    // 200 small blocks with four workers should be selected and split by the
+    // parallel budget, instead of collapsing into one or two oversized tasks.
+    let segment_locations = gen_recluster_segments(
+        &data_accessor,
+        &location_generator,
+        20,
+        10,
+        1000,
+        10,
+        10,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let schema = TableSchemaRef::new(TableSchema::empty());
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let segment_locations = create_segment_location_vector(segment_locations, None);
+    let compact_segments = FuseTable::segment_pruning(
+        &ctx,
+        schema.clone(),
+        data_accessor.clone(),
+        &None,
+        segment_locations,
+    )
+    .await?;
+
+    let mutator = ReclusterMutator::new(
+        ctx,
+        data_accessor,
+        schema,
+        vec![test_cluster_key_expr()],
+        1.0,
+        thresholds,
+        cluster_key_id,
+        4,
+    );
+
+    let compact_segments = mutator.select_segments(&compact_segments, 1000)?;
+    let (block_num, parts) = mutator.target_select(compact_segments).await?;
+
+    assert_eq!(block_num, 200);
+    assert_eq!(parts.tasks.len(), 4);
+    let task_block_counts = parts
+        .tasks
+        .iter()
+        .map(|task| task.parts.len())
+        .collect::<Vec<_>>();
+    assert_eq!(task_block_counts, vec![50, 50, 50, 50]);
 
     Ok(())
 }

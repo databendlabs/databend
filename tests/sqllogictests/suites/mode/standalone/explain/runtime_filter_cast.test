@@ -31,7 +31,7 @@ HashJoin
 ├── filters: []
 ├── build join filters:
 │   └── filter id:0, build key:b.id (#1), probe targets:[CAST(p.a (#0) AS Int32 NULL)@scan0], filter type:bloom,inlist,min_max
-├── estimated rows: 1.80
+├── estimated rows: 2.60
 ├── TableScan(Build)
 │   ├── table: default.default.rf_cast_build
 │   ├── scan id: 1

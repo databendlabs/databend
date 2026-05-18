@@ -3600,21 +3600,30 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
+    let stats_truncate_len = map(
+        rule! {
+            STATS_TRUNCATE_LEN ~ #literal_u64
+        },
+        |(_, n)| n,
+    );
+
     let (i, (mut def, constraints)) = map(
         rule! {
             #ident
             ~ #type_name
             ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`"
+            ~ ( #stats_truncate_len )?
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`"
         },
-        |(name, data_type, constraints, comment)| {
+        |(name, data_type, constraints, comment, stats_truncate_len)| {
             let def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len,
             };
             (def, constraints)
         },
@@ -4674,6 +4683,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 expr: None,
                 check: None,
                 comment,
+                stats_truncate_len: None,
             };
             for constraint in constraints {
                 match constraint {

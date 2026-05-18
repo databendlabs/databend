@@ -38,6 +38,21 @@ pub struct FormatContext<'a> {
     pub runtime_filter_reports: HashMap<IndexType, Vec<RuntimeFilterReport>>,
 }
 
+pub fn display_materialized_cte_name(name: &str) -> &str {
+    let Some(rest) = name.strip_prefix("__materialized_cte_") else {
+        return name;
+    };
+    let Some((id, display_name)) = rest.split_once('_') else {
+        return name;
+    };
+
+    if !display_name.is_empty() && id.chars().all(|c| c.is_ascii_digit()) {
+        display_name
+    } else {
+        name
+    }
+}
+
 pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata) -> String {
     format!(
         "{}({})",
