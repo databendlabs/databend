@@ -4,9 +4,6 @@ set sandbox_tenant = 'test_tenant';
 statement ok
 use tpcds;
 
-statement ok
-set flight_client_timeout = 180;
-
 # Q1
 query T
 WITH customer_total_return AS materialized
@@ -2090,6 +2087,3 @@ ORDER BY count(DISTINCT ws_order_number)
 LIMIT 100;
 ----
 68 100592.32 -18202.90
-
-statement ok
-unset flight_client_timeout;
