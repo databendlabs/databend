@@ -29,7 +29,6 @@ use databend_common_meta_app::data_mask::MaskPolicyIdTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableId;
 use databend_common_meta_app::data_mask::MaskPolicyTableIdIdent;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::principal::AutoIncrementKey;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableId;
 use databend_common_meta_app::row_access_policy::RowAccessPolicyTableIdIdent;
@@ -66,6 +65,7 @@ use databend_common_meta_app::schema::UndropTableBranchByIdReq;
 use databend_common_meta_app::schema::UndropTableBranchReq;
 use databend_common_meta_app::schema::least_visible_time_ident::LeastVisibleTimeIdent;
 use databend_common_meta_app::schema::vacuum_watermark_ident::VacuumWatermarkIdent;
+use databend_common_meta_app::value_id::ValueId;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
 use databend_meta_client::kvapi::ListOptions;
@@ -407,14 +407,14 @@ where
                 let source_ai_ident =
                     AutoIncrementStorageIdent::new_generic(&req.tenant, source_ai_key);
                 let start_value = match self.get_pb(&source_ai_ident).await? {
-                    Some(seq_v) => seq_v.data.into_inner().0,
+                    Some(seq_v) => *seq_v.data,
                     None => auto_increment_expr.start,
                 };
 
                 let auto_increment_key = AutoIncrementKey::new(branch_id, table_field.column_id());
                 let storage_ident =
                     AutoIncrementStorageIdent::new_generic(&req.tenant, auto_increment_key);
-                let storage_value = Id::new_typed(AutoIncrementStorageValue(start_value));
+                let storage_value = ValueId::<AutoIncrementStorageValue>::new(start_value);
                 if_then.push(txn_put_pb(&storage_ident, &storage_value)?);
             }
 
