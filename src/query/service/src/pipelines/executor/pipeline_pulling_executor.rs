@@ -15,7 +15,6 @@
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 
 use async_channel::Receiver;
 use async_channel::Sender;
@@ -31,11 +30,13 @@ use databend_common_pipeline::core::InputPort;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
+use databend_common_pipeline::core::basic_callback;
 use databend_common_pipeline::sinks::Sink;
 use databend_common_pipeline::sinks::Sinker;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use parking_lot::Mutex;
+use tokio::sync::watch;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -43,13 +44,18 @@ use crate::pipelines::executor::PipelineExecutor;
 
 struct State {
     is_finished: AtomicBool,
+    finish_tx: watch::Sender<bool>,
+    finish_rx: watch::Receiver<bool>,
     catch_error: Mutex<Option<ErrorCode>>,
 }
 
 impl State {
     pub fn create() -> Arc<State> {
+        let (finish_tx, finish_rx) = watch::channel(false);
         Arc::new(State {
             catch_error: Mutex::new(None),
+            finish_tx,
+            finish_rx,
             is_finished: AtomicBool::new(false),
         })
     }
@@ -60,11 +66,19 @@ impl State {
         }
 
         self.is_finished.store(true, Ordering::Release);
+        let _ = self.finish_tx.send(true);
     }
 
     pub async fn wait_finish(&self) {
-        while !self.is_finished() {
-            tokio::time::sleep(Duration::from_millis(1)).await;
+        if self.is_finished() {
+            return;
+        }
+
+        let mut finish_rx = self.finish_rx.clone();
+        while !*finish_rx.borrow_and_update() {
+            if finish_rx.changed().await.is_err() {
+                return;
+            }
         }
     }
 
@@ -96,10 +110,10 @@ impl PipelinePullingExecutor {
         pipeline
             .add_sink(|input| Ok(ProcessorPtr::create(PullingSink::create(tx.clone(), input))))?;
 
-        pipeline.set_on_finished(move |_info: &ExecutionInfo| {
+        pipeline.set_on_finished(basic_callback(move |_info: &ExecutionInfo| {
             drop(tx);
             Ok(())
-        });
+        }));
 
         Ok(())
     }
@@ -190,47 +204,40 @@ impl PipelinePullingExecutor {
     }
 
     pub async fn pull_data(&mut self) -> Result<Option<DataBlock>> {
-        let mut need_check_graph_status = false;
-
-        loop {
-            return match tokio::time::timeout(Duration::from_millis(100), self.receiver.recv())
-                .await
-            {
-                Ok(Ok(data_block)) => Ok(Some(data_block)),
-                Err(_) => {
-                    if self.state.is_finished() {
-                        if let Some(error) = self.state.try_get_catch_error() {
-                            return Err(error);
-                        }
-
-                        // It may be parallel. Let's check again.
-                        if !need_check_graph_status {
-                            need_check_graph_status = true;
-                            self.state.wait_finish().await;
-                            continue;
-                        }
-
-                        return Err(ErrorCode::Internal(format!(
-                            "Processor graph not completed. graph nodes state: {}",
-                            self.executor.format_graph_nodes()
-                        )));
-                    }
-
-                    continue;
+        tokio::select! {
+            received = self.receiver.recv() => {
+                self.handle_received(received).await
+            }
+            () = self.state.wait_finish() => {
+                if let Some(error) = self.state.try_get_catch_error() {
+                    return Err(error);
                 }
-                Ok(Err(_)) => {
-                    if !self.executor.is_finished() {
-                        self.executor.finish::<()>(None);
-                    }
+                self.handle_received(self.receiver.recv().await).await
+            }
+        }
+    }
 
-                    self.state.wait_finish().await;
-
-                    return match self.state.try_get_catch_error() {
-                        None => Ok(None),
-                        Some(error) => Err(error),
-                    };
+    async fn handle_received(
+        &self,
+        received: std::result::Result<DataBlock, async_channel::RecvError>,
+    ) -> Result<Option<DataBlock>> {
+        match received {
+            Ok(data_block) => Ok(Some(data_block)),
+            Err(_) => {
+                if !self.executor.is_finished() {
+                    self.executor.finish::<()>(None);
                 }
-            };
+
+                self.state.wait_finish().await;
+                self.finish_result()
+            }
+        }
+    }
+
+    fn finish_result(&self) -> Result<Option<DataBlock>> {
+        match self.state.try_get_catch_error() {
+            None => Ok(None),
+            Some(error) => Err(error),
         }
     }
 }
