@@ -255,9 +255,7 @@ pub struct ListTableTagsReq {
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::schema::TableId;
     use crate::schema::table::BranchIdToName;
     use crate::schema::table::DroppedBranchIdent;
     use crate::schema::table::DroppedBranchMeta;
@@ -269,69 +267,37 @@ mod kvapi_key_impl {
     /// "__fd_table_branch/<tb_id>/<branch_name> -> TableBranch"
     impl kvapi::Key for TableIdBranchName {
         type ValueType = TableBranch;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
     /// "__fd_table_tag/<tb_id>/<tag_name> -> TableTag"
     impl kvapi::Key for TableIdTagName {
         type ValueType = TableTag;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
     /// "__fd_branch_id_to_name/<branch_id> -> TableIdBranchName"
     impl kvapi::Key for BranchIdToName {
         type ValueType = TableIdBranchName;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.branch_id).to_string_key())
-        }
     }
 
     impl kvapi::Value for TableBranch {
         type KeyType = TableIdBranchName;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [TableId::new(self.branch_id).to_string_key()]
-        }
     }
 
     impl kvapi::Value for TableTag {
         type KeyType = TableIdTagName;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     impl kvapi::Value for TableIdBranchName {
         type KeyType = BranchIdToName;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [TableId::new(self.table_id).to_string_key()]
-        }
     }
 
     /// "__fd_dropped_branch/<table_id>/<branch_name>/<branch_id> -> DroppedBranchMeta"
     impl kvapi::Key for DroppedBranchIdent {
         type ValueType = DroppedBranchMeta;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
     impl kvapi::Value for DroppedBranchMeta {
         type KeyType = DroppedBranchIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 
