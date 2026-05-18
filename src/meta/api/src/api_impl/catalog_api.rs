@@ -31,9 +31,9 @@ use databend_meta_client::types::SeqV;
 use fastrace::func_name;
 use log::debug;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
 
 /// CatalogApi defines APIs for catalog management.

@@ -21,8 +21,6 @@ pub mod dictionary_api;
 pub mod garbage_collection_api;
 pub mod index_api;
 pub mod lock_api;
-pub mod name_id_value_api;
-pub mod name_value_api;
 pub mod ref_api;
 pub mod security_api;
 pub mod table_api;

@@ -69,10 +69,10 @@ use log::debug;
 use log::warn;
 use seq_marked::SeqValue;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;

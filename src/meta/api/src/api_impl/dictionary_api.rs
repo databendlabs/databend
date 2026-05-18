@@ -34,10 +34,10 @@ use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
 use log::debug;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
 use crate::txn_core_util::send_txn;

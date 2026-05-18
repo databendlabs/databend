@@ -57,12 +57,12 @@ use fastrace::func_name;
 use log::debug;
 use uuid::Uuid;
 
-use super::name_id_value_api::NameIdValueApi;
 use super::schema_api::mark_index_as_deleted;
 use super::schema_api::mark_table_index_as_deleted;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
