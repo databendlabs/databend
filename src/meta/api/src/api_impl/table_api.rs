@@ -128,14 +128,11 @@ use crate::assert_table_exist;
 use crate::deserialize_struct;
 use crate::error_util::table_has_to_not_exist;
 use crate::fetch_id;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_fetch_util::deserialize_struct_get_response;
 use crate::kv_fetch_util::mget_pb_values;
-use crate::kv_fetch_util::mget_u64_values;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_crud_api::KVPbCrudApi;
-use crate::list_u64_value;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
 use crate::txn_condition_util::txn_cond_seq;
@@ -611,7 +608,8 @@ where
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
+            let (tb_id_seq, table_id) = self.get_pb_seq_and_value(&dbid_tbname).await?;
+            let table_id = table_id.map(|x| x.table_id).unwrap_or(0);
             if req.if_exists {
                 if tb_id_seq == 0 {
                     // TODO: table does not exist, can not return table id.
@@ -660,7 +658,7 @@ where
                 db_id: *new_seq_db_id.data,
                 table_name: req.new_table_name.clone(),
             };
-            let (new_tb_id_seq, _new_tb_id) = get_u64_value(self, &newdbid_newtbname).await?;
+            let (new_tb_id_seq, _new_tb_id) = self.get_pb_seq_and_value(&newdbid_newtbname).await?;
             table_has_to_not_exist(new_tb_id_seq, &tenant_newdbname_newtbname, "rename_table")?;
 
             let new_dbid_tbname_idlist = TableIdHistoryIdent {
@@ -761,7 +759,9 @@ where
                 table_name: req.origin_table.table_name.clone(),
             };
 
-            let (tb_id_seq_left, table_id_left) = get_u64_value(self, &dbid_tbname_left).await?;
+            let (tb_id_seq_left, table_id_left) =
+                self.get_pb_seq_and_value(&dbid_tbname_left).await?;
+            let table_id_left = table_id_left.map(|x| x.table_id).unwrap_or(0);
             if req.if_exists && tb_id_seq_left == 0 {
                 return Ok(SwapTableReply {});
             }
@@ -776,7 +776,9 @@ where
                 table_name: req.target_table_name.clone(),
             };
 
-            let (tb_id_seq_right, table_id_right) = get_u64_value(self, &dbid_tbname_right).await?;
+            let (tb_id_seq_right, table_id_right) =
+                self.get_pb_seq_and_value(&dbid_tbname_right).await?;
+            let table_id_right = table_id_right.map(|x| x.table_id).unwrap_or(0);
             if req.if_exists && tb_id_seq_right == 0 {
                 return Ok(SwapTableReply {});
             }
@@ -1005,7 +1007,7 @@ where
                 table_name: tenant_dbname_tbname.table_name.clone(),
             };
 
-            let (dbid_tbname_seq, _table_id) = get_u64_value(self, &dbid_tbname).await?;
+            let (dbid_tbname_seq, _table_id) = self.get_pb_seq_and_value(&dbid_tbname).await?;
 
             // get table id list from _fd_table_id_list/db_id/table_name
 
@@ -1524,13 +1526,13 @@ where
             .collect();
 
         // Batch get table ids
-        let table_ids = mget_u64_values(self, &dbid_tbnames).await?;
+        let table_ids = self.get_pb_values_vec(dbid_tbnames.clone()).await?;
 
         // Collect valid table ids with their names
         let mut valid_tables: Vec<(String, u64)> = Vec::with_capacity(table_names.len());
         for (dbid_tbname, table_id_opt) in dbid_tbnames.into_iter().zip(table_ids.into_iter()) {
             if let Some(table_id) = table_id_opt {
-                valid_tables.push((dbid_tbname.table_name, table_id));
+                valid_tables.push((dbid_tbname.table_name, table_id.data.table_id));
             }
         }
 
@@ -1595,15 +1597,15 @@ where
         let table_id = {
             // Get table by tenant, db_id, table_name to assert presence.
 
-            let (tb_id_seq, table_id) = get_u64_value(self, name_ident).await?;
+            let (tb_id_seq, table_id) = self.get_pb_seq_and_value(name_ident).await?;
             if tb_id_seq == 0 {
                 return Ok(None);
             }
 
-            table_id
+            table_id.unwrap_or_default()
         };
 
-        let tbid = TableId { table_id };
+        let tbid = table_id;
 
         let seq_meta = self.get_pb(&tbid).await?;
 
@@ -1628,20 +1630,21 @@ where
             table_name: "".to_string(),
         };
 
-        let (names, ids) = list_u64_value(self, &dbid_tbname).await?;
-
-        let ids = ids
-            .into_iter()
-            .map(|id| TableId { table_id: id })
+        let names_and_ids = self
+            .list_pb_vec(ListOptions::unlimited(&DirName::new(dbid_tbname)))
+            .await?;
+        let ids = names_and_ids
+            .iter()
+            .map(|(_, seq_id)| seq_id.data.clone())
             .collect::<Vec<_>>();
 
         let seq_metas = self.get_pb_values_vec(ids.clone()).await?;
 
-        let res = names
+        let res = names_and_ids
             .into_iter()
             .zip(ids)
             .zip(seq_metas)
-            .filter_map(|((n, id), seq_meta)| seq_meta.map(|x| (n.table_name, id, x)))
+            .filter_map(|(((n, _), id), seq_meta)| seq_meta.map(|x| (n.table_name, id, x)))
             .collect::<Vec<_>>();
         Ok(res)
     }

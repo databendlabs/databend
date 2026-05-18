@@ -20,7 +20,6 @@ use databend_common_catalog::table_context::CheckAbort;
 use databend_common_config::MetaConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
-use databend_common_meta_api::get_u64_value;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::send_txn;
 use databend_common_meta_api::txn_core_util::txn_replace_exact;
@@ -704,7 +703,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
         table_name: tbl_name.to_owned(),
     };
 
-    let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
+    let (seq, _) = meta.get_pb_seq_and_value(&db_id_table_name).await?;
     assert!(seq > 0);
 
     // 5. Drop test database
@@ -727,7 +726,7 @@ async fn test_vacuum_dropped_table_clean_ownership() -> anyhow::Result<()> {
     assert!(v.is_none());
 
     // 8. Check that DbIdTableName mapping is cleaned up
-    let (seq, _) = get_u64_value(&meta, &db_id_table_name).await?;
+    let (seq, _) = meta.get_pb_seq_and_value(&db_id_table_name).await?;
     assert_eq!(seq, 0);
 
     Ok(())

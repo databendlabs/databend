@@ -20,14 +20,6 @@ use databend_meta_client::types::MetaNetworkError;
 use crate::kv_pb_api::decode_pb;
 use crate::kv_pb_api::encode_pb;
 
-pub fn deserialize_u64(v: &[u8]) -> Result<u64, MetaNetworkError> {
-    let id = serde_json::from_slice(v).map_err(|e| {
-        let inv = InvalidReply::new("", &e);
-        MetaNetworkError::InvalidReply(inv)
-    })?;
-    Ok(id)
-}
-
 pub fn serialize_struct<T>(value: &T) -> Result<Vec<u8>, MetaNetworkError>
 where T: FromToProto + 'static {
     encode_pb(value).map_err(|e| MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "")))
