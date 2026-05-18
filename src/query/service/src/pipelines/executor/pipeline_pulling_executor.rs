@@ -36,7 +36,7 @@ use databend_common_pipeline::sinks::Sinker;
 use fastrace::func_path;
 use fastrace::prelude::*;
 use parking_lot::Mutex;
-use tokio::sync::watch;
+use tokio::sync::Notify;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -44,18 +44,15 @@ use crate::pipelines::executor::PipelineExecutor;
 
 struct State {
     is_finished: AtomicBool,
-    finish_tx: watch::Sender<bool>,
-    finish_rx: watch::Receiver<bool>,
+    finish_notify: Notify,
     catch_error: Mutex<Option<ErrorCode>>,
 }
 
 impl State {
     pub fn create() -> Arc<State> {
-        let (finish_tx, finish_rx) = watch::channel(false);
         Arc::new(State {
             catch_error: Mutex::new(None),
-            finish_tx,
-            finish_rx,
+            finish_notify: Notify::new(),
             is_finished: AtomicBool::new(false),
         })
     }
@@ -66,19 +63,21 @@ impl State {
         }
 
         self.is_finished.store(true, Ordering::Release);
-        let _ = self.finish_tx.send(true);
+        self.finish_notify.notify_waiters();
     }
 
     pub async fn wait_finish(&self) {
-        if self.is_finished() {
-            return;
-        }
-
-        let mut finish_rx = self.finish_rx.clone();
-        while !*finish_rx.borrow_and_update() {
-            if finish_rx.changed().await.is_err() {
+        loop {
+            if self.is_finished() {
                 return;
             }
+
+            let notified = self.finish_notify.notified();
+            if self.is_finished() {
+                return;
+            }
+
+            notified.await;
         }
     }
 
