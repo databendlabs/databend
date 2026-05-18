@@ -861,7 +861,7 @@ impl ReclusterMutator {
             average_depth, max_depth
         );
 
-        if average_depth <= depth_threshold {
+        if average_depth <= depth_threshold && max_depth as f64 <= depth_threshold * 2.0 {
             return Ok(IndexSet::new());
         }
 
