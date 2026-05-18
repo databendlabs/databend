@@ -2799,24 +2799,53 @@ fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<
 }
 
 fn duration_from_time_parts(
+    ctx: &mut EvalContext,
+    row: usize,
     hour: i64,
     minute: i64,
     second: i64,
     nanosecond: i64,
-) -> std::result::Result<SignedDuration, ErrorCode> {
-    let hour_duration = SignedDuration::try_from_hours(hour)
-        .ok_or_else(|| ErrorCode::BadArguments("Timestamp hour component is out of range"))?;
-    let minute_duration = SignedDuration::try_from_mins(minute)
-        .ok_or_else(|| ErrorCode::BadArguments("Timestamp minute component is out of range"))?;
+) -> Option<SignedDuration> {
+    let hour_duration = match SignedDuration::try_from_hours(hour) {
+        Some(duration) => duration,
+        None => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments("Timestamp hour component is out of range"),
+            );
+            return None;
+        }
+    };
+    let minute_duration = match SignedDuration::try_from_mins(minute) {
+        Some(duration) => duration,
+        None => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments("Timestamp minute component is out of range"),
+            );
+            return None;
+        }
+    };
 
-    hour_duration
+    match hour_duration
         .checked_add(minute_duration)
         .and_then(|d| d.checked_add(SignedDuration::from_secs(second)))
         .and_then(|d| d.checked_add(SignedDuration::from_nanos(nanosecond)))
-        .ok_or_else(|| ErrorCode::BadArguments("Timestamp components overflow"))
+    {
+        Some(duration) => Some(duration),
+        None => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments("Timestamp components overflow"),
+            );
+            None
+        }
+    }
 }
 
 fn timestamp_from_parts_to_micros(
+    ctx: &mut EvalContext,
+    row: usize,
     year: i64,
     month: i64,
     day: i64,
@@ -2825,13 +2854,29 @@ fn timestamp_from_parts_to_micros(
     second: i64,
     nanosecond: i64,
     tz: &TimeZone,
-) -> std::result::Result<i64, ErrorCode> {
-    let base_date = normalize_date_parts(year, month, day)
-        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")))?;
+) -> Option<i64> {
+    let base_date = match normalize_date_parts(year, month, day) {
+        Ok(date) => date,
+        Err(e) => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")),
+            );
+            return None;
+        }
+    };
+    let duration = duration_from_time_parts(ctx, row, hour, minute, second, nanosecond)?;
     let local_dt = base_date
         .at(0, 0, 0, 0)
-        .checked_add(duration_from_time_parts(hour, minute, second, nanosecond)?)
-        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")))?;
+        .checked_add(duration)
+        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")));
+    let local_dt = match local_dt {
+        Ok(local_dt) => local_dt,
+        Err(e) => {
+            ctx.set_error(row, e);
+            return None;
+        }
+    };
 
     if let Some(micros) = fast_utc_from_local(
         tz,
@@ -2843,13 +2888,19 @@ fn timestamp_from_parts_to_micros(
         local_dt.second() as u8,
         (local_dt.subsec_nanosecond() / 1_000) as u32,
     ) {
-        return Ok(micros);
+        return Some(micros);
     }
 
-    let zoned = tz
-        .to_zoned(local_dt)
-        .map_err(|e| ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")))?;
-    Ok(zoned.timestamp().as_microsecond())
+    match tz.to_zoned(local_dt) {
+        Ok(zoned) => Some(zoned.timestamp().as_microsecond()),
+        Err(e) => {
+            ctx.set_error(
+                row,
+                ErrorCode::BadArguments(format!("Cannot construct timestamp: {e}")),
+            );
+            None
+        }
+    }
 }
 
 fn register_date_from_parts(registry: &mut FunctionRegistry) {
@@ -3048,9 +3099,18 @@ fn build_timestamp_parts(
         };
 
         match timestamp_from_parts_to_micros(
-            year, month, day, hour, minute, second, nanosecond, &tz,
+            ctx,
+            ts_values.len(),
+            year,
+            month,
+            day,
+            hour,
+            minute,
+            second,
+            nanosecond,
+            &tz,
         ) {
-            Ok(utc_micros) => match Timestamp::from_microsecond(utc_micros) {
+            Some(utc_micros) => match Timestamp::from_microsecond(utc_micros) {
                 Ok(ts) => {
                     let offset = tz.to_offset(ts);
                     ts_values.push(utc_micros);
@@ -3062,8 +3122,7 @@ fn build_timestamp_parts(
                     offset_values.push(0);
                 }
             },
-            Err(e) => {
-                ctx.set_error(ts_values.len(), format!("{e}"));
+            None => {
                 ts_values.push(0);
                 offset_values.push(0);
             }
