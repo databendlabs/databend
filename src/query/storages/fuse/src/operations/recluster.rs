@@ -200,10 +200,9 @@ impl FuseTable {
         let mut block_count = 0;
 
         let max_threads = mutator.ctx.get_settings().get_max_threads()? as usize;
+        let block_per_segment = mutator.block_thresholds.block_per_segment;
         let mut segment_batches = Vec::new();
-
-        let latest = compact_segments.len() - 1;
-        for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
+        for compact_segment in compact_segments {
             let segment =
                 SelectedReclusterSegment::create(&mutator, compact_segment.0, compact_segment.1);
             if !(segment.stats.level >= 0
@@ -215,10 +214,13 @@ impl FuseTable {
 
             block_count += segment.info.summary.block_count as usize;
             selected_segs.push(segment);
-            if block_count >= mutator.block_thresholds.block_per_segment || idx == latest {
+            if block_count >= block_per_segment && selected_segs.len() >= mutator.max_tasks {
                 segment_batches.push(std::mem::take(&mut selected_segs));
                 block_count = 0;
             }
+        }
+        if !selected_segs.is_empty() {
+            segment_batches.push(selected_segs);
         }
 
         if segment_batches.is_empty() {
