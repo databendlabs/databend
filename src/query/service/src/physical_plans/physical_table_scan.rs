@@ -93,6 +93,10 @@ pub struct TableScan {
     pub scan_id: usize,
     pub name_mapping: BTreeMap<String, String>,
     pub source: Box<DataSourcePlan>,
+    #[serde(default)]
+    pub display_push_down_filters: Option<Filters>,
+    #[serde(default)]
+    pub has_secure_push_down: bool,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
     pub table_index: Option<IndexType>,
@@ -178,6 +182,8 @@ impl IPhysicalPlan for TableScan {
             scan_id: self.scan_id,
             name_mapping: self.name_mapping.clone(),
             source: self.source.clone(),
+            display_push_down_filters: self.display_push_down_filters.clone(),
+            has_secure_push_down: self.has_secure_push_down,
             internal_column: self.internal_column.clone(),
             table_index: self.table_index,
             stat_info: self.stat_info.clone(),
@@ -242,6 +248,8 @@ impl TableScan {
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        display_push_down_filters: Option<Filters>,
+        has_secure_push_down: bool,
     ) -> PhysicalPlan {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
@@ -254,6 +262,8 @@ impl TableScan {
         PhysicalPlan::new(TableScan {
             meta: PhysicalPlanMeta::new(name),
             source,
+            display_push_down_filters,
+            has_secure_push_down,
             scan_id,
             name_mapping,
             table_index,
@@ -429,7 +439,7 @@ impl PhysicalPlanBuilder {
             table_schema = Arc::new(schema);
         }
 
-        let push_downs = self.push_downs(
+        let (push_downs, display_push_down_filters) = self.push_downs(
             &scan,
             &table_schema,
             project_virtual_columns,
@@ -536,6 +546,10 @@ impl PhysicalPlanBuilder {
             Some(scan.table_index),
             Some(stat_info.clone()),
             internal_column,
+            display_push_down_filters,
+            scan.secure_predicates
+                .as_ref()
+                .is_some_and(|p| !p.is_empty()),
         );
 
         // Update stream columns if needed.
@@ -673,6 +687,8 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             None,
+            None,
+            false,
         ))
     }
 
@@ -682,7 +698,7 @@ impl PhysicalPlanBuilder {
         table_schema: &TableSchema,
         virtual_columns: BTreeMap<Symbol, VirtualColumn>,
         has_inner_column: bool,
-    ) -> Result<PushDownInfo> {
+    ) -> Result<(PushDownInfo, Option<Filters>)> {
         let metadata = self.metadata.read().clone();
         let projection = Self::build_projection(
             &metadata,
@@ -709,43 +725,18 @@ impl PhysicalPlanBuilder {
             None
         };
 
-        let mut is_deterministic = true;
+        let user_predicates = scan.push_down_predicates.as_deref().unwrap_or_default();
+        let secure_predicates = scan.secure_predicates.as_deref().unwrap_or_default();
+        let all_push_down_predicates = user_predicates
+            .iter()
+            .chain(secure_predicates.iter())
+            .collect::<Vec<_>>();
+        let display_push_down_predicates = user_predicates.iter().collect::<Vec<_>>();
 
-        let push_down_filter = scan
-            .push_down_predicates
-            .as_ref()
-            .filter(|p| !p.is_empty())
-            .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
-                let predicates = predicates
-                    .iter()
-                    .map(|p| {
-                        p.as_raw_expr()
-                            .type_check(&metadata)?
-                            .project_column_ref(|col| Ok(col.column_name.clone()))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let expr = predicates
-                    .into_iter()
-                    .try_reduce(|lhs, rhs| {
-                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    })?
-                    .unwrap();
-
-                let expr = cast_expr_to_non_null_boolean(expr)?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-                is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
-
-                let inverted_filter =
-                    check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
-
-                Ok(Filters {
-                    filter: expr.as_remote_expr(),
-                    inverted_filter: inverted_filter.as_remote_expr(),
-                })
-            })
-            .transpose()?;
+        let (push_down_filter, is_deterministic) =
+            self.create_scan_push_down_filters(&metadata, &all_push_down_predicates)?;
+        let (display_push_down_filters, _) =
+            self.create_scan_push_down_filters(&metadata, &display_push_down_predicates)?;
 
         let prewhere_info = scan
             .prewhere
@@ -802,6 +793,7 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
+                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -865,22 +857,66 @@ impl PhysicalPlanBuilder {
 
         let virtual_column = self.build_virtual_column(virtual_columns)?;
 
-        Ok(PushDownInfo {
-            projection: Some(projection),
-            output_columns,
-            filters: push_down_filter,
+        Ok((
+            PushDownInfo {
+                projection: Some(projection),
+                output_columns,
+                filters: push_down_filter,
+                is_deterministic,
+                prewhere: prewhere_info,
+                limit,
+                order_by,
+                virtual_column,
+                lazy_materialization: !metadata.lazy_columns().is_empty(),
+                agg_index: None,
+                change_type: scan.change_type.clone(),
+                inverted_index: scan.inverted_index.clone(),
+                vector_index: scan.vector_index.clone(),
+                sample: scan.sample.clone(),
+            },
+            display_push_down_filters,
+        ))
+    }
+
+    fn create_scan_push_down_filters(
+        &self,
+        metadata: &Metadata,
+        predicates: &[&ScalarExpr],
+    ) -> Result<(Option<Filters>, bool)> {
+        if predicates.is_empty() {
+            return Ok((None, true));
+        }
+
+        let predicates = predicates
+            .iter()
+            .map(|p| {
+                p.as_raw_expr()
+                    .type_check(metadata)?
+                    .project_column_ref(|col| Ok(col.column_name.clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let expr = predicates
+            .into_iter()
+            .try_reduce(|lhs, rhs| {
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+            })?
+            .unwrap();
+
+        let expr = cast_expr_to_non_null_boolean(expr)?;
+        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+        let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+        let inverted_filter =
+            check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
+
+        Ok((
+            Some(Filters {
+                filter: expr.as_remote_expr(),
+                inverted_filter: inverted_filter.as_remote_expr(),
+            }),
             is_deterministic,
-            prewhere: prewhere_info,
-            limit,
-            order_by,
-            virtual_column,
-            lazy_materialization: !metadata.lazy_columns().is_empty(),
-            agg_index: None,
-            change_type: scan.change_type.clone(),
-            inverted_index: scan.inverted_index.clone(),
-            vector_index: scan.vector_index.clone(),
-            sample: scan.sample.clone(),
-        })
+        ))
     }
 
     fn build_prewhere_virtual_column_ids(&self, indices: &ColumnSet) -> Option<Vec<u32>> {

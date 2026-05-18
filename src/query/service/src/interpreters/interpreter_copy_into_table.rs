@@ -176,6 +176,8 @@ impl CopyIntoTableInterpreter {
                     stat_info: None,
                     table_index: None,
                     internal_column: None,
+                    display_push_down_filters: None,
+                    has_secure_push_down: false,
                     source: Box::new(data_source_plan),
                     meta: PhysicalPlanMeta::new("TableScan"),
                 })),
