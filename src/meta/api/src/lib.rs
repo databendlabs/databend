@@ -19,6 +19,9 @@
 #![allow(clippy::unnecessary_unwrap)]
 #![feature(try_blocks)]
 
+/// The value type associated with a `kvapi::Key`.
+pub type ValueOf<K> = <K as databend_meta_client::kvapi::Key>::ValueType;
+
 pub mod api_impl;
 pub mod error;
 pub mod kv;
@@ -74,7 +77,6 @@ pub use kv::pb_api as kv_pb_api;
 pub use kv::pb_crud_api as kv_pb_crud_api;
 pub use kv_app_error::KVAppResultExt;
 pub use kv_app_error::from_nested;
-pub use kv_fetch_util::deserialize_id_get_response;
 pub use kv_fetch_util::deserialize_struct_get_response;
 pub use kv_fetch_util::fetch_id;
 pub use kv_fetch_util::get_u64_value;
@@ -107,6 +109,5 @@ pub use txn_op_builder_util::txn_del;
 pub use txn_op_builder_util::txn_get;
 pub use txn_op_builder_util::txn_put_pb;
 pub use txn_op_builder_util::txn_put_pb_with_ttl;
-pub use txn_op_builder_util::txn_put_u64;
 pub use util::DEFAULT_MGET_SIZE;
 pub use util::serialization as serialization_util;

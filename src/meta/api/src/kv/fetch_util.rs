@@ -16,7 +16,6 @@ use std::any::type_name;
 
 use databend_common_meta_app::id_generator::IdGenerator;
 use databend_common_meta_app::id_generator::IdGeneratorValue;
-use databend_common_meta_app::primitive::Id;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
@@ -45,7 +44,7 @@ pub async fn get_u64_value<T: kvapi::Key>(
     let res = kv_api.get_kv(&key.to_string_key()).await?;
 
     if let Some(seq_v) = res {
-        Ok((seq_v.seq, *deserialize_u64(&seq_v.data)?))
+        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
     } else {
         Ok((0, 0))
     }
@@ -71,28 +70,6 @@ where
         let seqv = SeqV::from(pb_seqv);
         let value = deserialize_struct::<K::ValueType>(&seqv.data)?;
         let seqv = SeqV::new_with_meta(seqv.seq, seqv.meta, value);
-        Ok((key, Some(seqv)))
-    } else {
-        Ok((key, None))
-    }
-}
-
-pub fn deserialize_id_get_response<K>(
-    resp: TxnGetResponse,
-) -> Result<(K, Option<SeqV<Id>>), MetaError>
-where K: kvapi::Key {
-    let key = K::from_str_key(&resp.key).map_err(|e| {
-        let inv = InvalidReply::new(
-            format!("fail to parse {} key, {}", type_name::<K>(), resp.key),
-            &e,
-        );
-        MetaNetworkError::InvalidReply(inv)
-    })?;
-
-    if let Some(pb_seqv) = resp.value {
-        let seqv = SeqV::from(pb_seqv);
-        let id = deserialize_u64(&seqv.data)?;
-        let seqv = SeqV::new_with_meta(seqv.seq, seqv.meta, id);
         Ok((key, Some(seqv)))
     } else {
         Ok((key, None))
@@ -144,7 +121,7 @@ pub async fn list_u64_value<K: kvapi::Key>(
     let mut values = Vec::with_capacity(n);
 
     for (str_key, seqv) in res.iter() {
-        let id = *deserialize_u64(&seqv.data)?;
+        let id = deserialize_u64(&seqv.data)?;
         values.push(id);
 
         // Parse key
@@ -176,7 +153,7 @@ pub async fn mget_u64_values<K: kvapi::Key>(
     let mut results = Vec::with_capacity(keys.len());
     while let Some(item) = strm.try_next().await? {
         if let Some(seq_v) = item.value {
-            let id = *deserialize_u64(&seq_v.data)?;
+            let id = deserialize_u64(&seq_v.data)?;
             results.push(Some(id));
         } else {
             results.push(None);

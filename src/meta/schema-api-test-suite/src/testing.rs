@@ -57,7 +57,7 @@ pub(crate) async fn get_kv_u64_data(
     let res = kv_api.get_kv(&key.to_string_key()).await?;
     if let Some(res) = res {
         let s = deserialize_u64(&res.data)?;
-        return Ok(*s);
+        return Ok(s);
     };
 
     Err(KVAppError::MetaError(MetaError::APIError(
