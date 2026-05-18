@@ -42,6 +42,9 @@ pub(super) enum SpecialFunction {
     Namespace(NamespaceFunction),
     Session(SessionFunction<'static>),
     Auth(AuthFunction),
+    IsRoleInSession {
+        role: CoreDisplayExprArg,
+    },
     Timezone,
     LastQueryId {
         arg: Option<CoreDisplayExprArg>,
@@ -98,6 +101,7 @@ impl<'a, A> TypeChecker<'a, A> {
             Ascii::new("current_role"),
             Ascii::new("current_secondary_roles"),
             Ascii::new("current_available_roles"),
+            Ascii::new("is_role_in_session"),
             Ascii::new("connection_id"),
             Ascii::new("client_session_id"),
             Ascii::new("timezone"),
@@ -182,6 +186,12 @@ impl<'a> CoreExprArena<'a> {
             "current_available_roles" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
                 SpecialFunction::Auth(AuthFunction::CurrentAvailableRoles)
+            }
+            "is_role_in_session" => {
+                check_function_arity(span, func_name, args.len(), 1, Some(1))?;
+                SpecialFunction::IsRoleInSession {
+                    role: self.lower_display_expr_arg(&args[0])?,
+                }
             }
             "timezone" => {
                 check_function_arity(span, func_name, args.len(), 0, Some(0))?;
@@ -364,6 +374,10 @@ where A: TypeCheckAdapter
                 self.adapter
                     .resolve_authorization_function(*authorization_function)?,
             ),
+            SpecialFunction::IsRoleInSession { role } => {
+                let (_, role, _) = self.resolve_display_arg(arena, role)?;
+                self.resolve_is_role_in_session(span, role)
+            }
             SpecialFunction::Timezone => self.resolve_special_literal(
                 span,
                 Scalar::String(self.adapter.settings().get_timezone().unwrap()),
@@ -482,6 +496,39 @@ where A: TypeCheckAdapter
             ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
             data_type,
         )))
+    }
+
+    fn resolve_is_role_in_session(
+        &mut self,
+        span: Span,
+        role: ScalarExpr,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let effective_roles = self.adapter.resolve_effective_role_names()?;
+        let mut predicate_levels =
+            Vec::with_capacity(effective_roles.len().max(1).ilog2() as usize + 1);
+
+        for effective_role in effective_roles {
+            let role_literal = ScalarExpr::ConstantExpr(ConstantExpr {
+                span,
+                value: Scalar::String(effective_role),
+            });
+            let box (predicate, _) =
+                self.resolve_scalar_function_call(span, "eq", vec![], vec![
+                    role.clone(),
+                    role_literal,
+                ])?;
+            self.merge_or_level(span, &mut predicate_levels, predicate)?;
+        }
+
+        let predicate = self
+            .fold_or_levels(span, predicate_levels)?
+            .unwrap_or_else(|| {
+                ScalarExpr::ConstantExpr(ConstantExpr {
+                    span,
+                    value: Scalar::Boolean(false),
+                })
+            });
+        self.resolve_scalar_function_call(span, "is_true", vec![], vec![predicate])
     }
 
     fn resolve_last_query_id(

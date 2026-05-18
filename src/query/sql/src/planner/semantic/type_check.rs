@@ -392,6 +392,12 @@ pub trait TypeCheckAdapter: Clone + Sized {
         ))
     }
 
+    fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
+        Err(missing_type_check_adapter_dependency(
+            "effective role names",
+        ))
+    }
+
     fn set_result_cache_uncacheable(&self);
 
     fn resolve_data_mask_policy(

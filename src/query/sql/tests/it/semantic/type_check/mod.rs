@@ -294,6 +294,10 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         }
     }
 
+    fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
+
     fn set_result_cache_uncacheable(&self) {
         self.result_cache_uncacheable.store(true, Ordering::Relaxed);
     }

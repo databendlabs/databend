@@ -387,6 +387,17 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         }
     }
 
+    fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
+        let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
+        Ok(block_on_with_handle(
+            &self.dependencies.async_runtime_handle,
+            authorization.get_all_effective_roles(),
+        )?
+        .into_iter()
+        .map(|role| role.name)
+        .collect())
+    }
+
     fn set_result_cache_uncacheable(&self) {
         self.ctx.result_cache_state().set_cacheable(false);
     }

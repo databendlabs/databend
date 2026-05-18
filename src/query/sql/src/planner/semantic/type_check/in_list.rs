@@ -241,7 +241,7 @@ where A: super::TypeCheckAdapter
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    fn merge_or_level(
+    pub(super) fn merge_or_level(
         &self,
         span: Span,
         predicate_levels: &mut Vec<Option<ScalarExpr>>,
@@ -267,7 +267,7 @@ where A: super::TypeCheckAdapter
         }
     }
 
-    fn fold_or_levels(
+    pub(super) fn fold_or_levels(
         &self,
         span: Span,
         predicate_levels: Vec<Option<ScalarExpr>>,
