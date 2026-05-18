@@ -91,7 +91,6 @@ pub use sequence_api::SequenceApi;
 pub use serialization_util::deserialize_struct;
 pub use serialization_util::deserialize_u64;
 pub use serialization_util::serialize_struct;
-pub use serialization_util::serialize_u64;
 pub use table_api::TableApi;
 pub use tag_api::TagApi;
 pub use txn::backoff as txn_backoff;
