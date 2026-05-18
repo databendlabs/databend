@@ -281,8 +281,6 @@ jobs:
           type: ${{ inputs.license_type }}
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
-        env:
-          QUERY_HTTP_HANDLER_RESULT_TIMEOUT_SECS: ${{ matrix.tests.dirs == 'tpcds' && matrix.handler == 'http' && '180' || '' }}
         with:
           dirs: ${{ matrix.tests.dirs }}
           handlers: ${{ matrix.handler }}
