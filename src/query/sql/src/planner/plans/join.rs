@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -24,9 +25,11 @@ use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::DatumKind;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::HistogramBuilder;
 
 use crate::ColumnSet;
 use crate::Symbol;
@@ -355,8 +358,8 @@ impl Join {
             return Ok(estimator.join_card);
         };
 
-        NewStatistic::finish_join_histograms(left_statistics, columns.left)?;
-        NewStatistic::finish_join_histograms(right_statistics, columns.right)?;
+        NewStatistic::finish_join_histograms(left_statistics, columns.left, estimator.join_card)?;
+        NewStatistic::finish_join_histograms(right_statistics, columns.right, estimator.join_card)?;
         Ok(estimator.join_card)
     }
 
@@ -1202,13 +1205,23 @@ impl NewStatistic {
         }
     }
 
-    fn finish_join_histograms(statistics: &mut Statistics, joined_column: Symbol) -> Result<()> {
+    fn finish_join_histograms(
+        statistics: &mut Statistics,
+        joined_column: Symbol,
+        join_card: f64,
+    ) -> Result<()> {
         for (idx, stat) in statistics.column_stats.iter_mut() {
-            stat.histogram = if let Some(histogram) = &stat.histogram
+            stat.histogram = if stat.histogram.is_some()
                 && *idx == joined_column
                 && stat.ndv.expected as u64 > 2
             {
-                histogram.restrict_to_bounds(&stat.min, &stat.max)?
+                let ndv = stat.ndv.expected as u64;
+                Some(HistogramBuilder::from_ndv(
+                    ndv,
+                    max(join_card as u64, ndv),
+                    Some((stat.min.clone(), stat.max.clone())),
+                    DEFAULT_HISTOGRAM_BUCKETS,
+                )?)
             } else {
                 // Other columns' histograms are inaccurate after the join cardinality update.
                 None
@@ -1224,6 +1237,8 @@ mod tests {
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
     use databend_common_statistics::F64;
+    use databend_common_statistics::TypedHistogram;
+    use databend_common_statistics::TypedHistogramBucket;
 
     use super::*;
     use crate::ColumnBindingBuilder;
@@ -1361,6 +1376,49 @@ mod tests {
         assert_eq!(left.max, Datum::Int(100));
         assert_eq!(right.min, Datum::Int(0));
         assert_eq!(right.max, Datum::Int(10));
+        Ok(())
+    }
+
+    #[test]
+    fn test_finish_join_histograms_rebuilds_join_key_histogram_from_join_cardinality() -> Result<()>
+    {
+        let mut statistics = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([
+                (Symbol::new(0), ColumnStat {
+                    min: Datum::Int(5),
+                    max: Datum::Int(10),
+                    ndv: StatEstimate::exact(5.0),
+                    null_count: StatCount::exact(0),
+                    histogram: Some(Histogram::Int(TypedHistogram {
+                        accuracy: true,
+                        buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
+                        avg_spacing: None,
+                    })),
+                }),
+                (Symbol::new(1), ColumnStat {
+                    min: Datum::Int(0),
+                    max: Datum::Int(10),
+                    ndv: StatEstimate::exact(10.0),
+                    null_count: StatCount::exact(0),
+                    histogram: Some(Histogram::Int(TypedHistogram {
+                        accuracy: true,
+                        buckets: vec![TypedHistogramBucket::new(0, 10, 1000.0, 10.0)],
+                        avg_spacing: None,
+                    })),
+                }),
+            ]),
+        };
+
+        NewStatistic::finish_join_histograms(&mut statistics, Symbol::new(0), 50.0)?;
+
+        let join_histogram = statistics.column_stats[&Symbol::new(0)]
+            .histogram
+            .as_ref()
+            .expect("join key histogram should be propagated");
+        assert!((join_histogram.num_values() - 50.0).abs() < 1e-9);
+        assert!((join_histogram.num_distinct_values() - 5.0).abs() < 1e-9);
+        assert!(statistics.column_stats[&Symbol::new(1)].histogram.is_none());
         Ok(())
     }
 
