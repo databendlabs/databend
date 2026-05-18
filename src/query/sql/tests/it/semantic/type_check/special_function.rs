@@ -34,6 +34,18 @@ async fn test_type_check_special_function() -> Result<()> {
             sql: "current_role()",
         },
         SqlTestCase {
+            name: "is_role_in_session_matches_effective_role",
+            description: "is_role_in_session should compare its argument against effective roles through the type-check adapter.",
+            setup_sqls: &[],
+            sql: "is_role_in_session('reader')",
+        },
+        SqlTestCase {
+            name: "is_role_in_session_rejects_missing_role",
+            description: "is_role_in_session should fold to false when no effective role matches.",
+            setup_sqls: &[],
+            sql: "is_role_in_session('owner')",
+        },
+        SqlTestCase {
             name: "timezone_rewrites_to_literal",
             description: "timezone() should read settings through the explicit type-check adapter.",
             setup_sqls: &[],

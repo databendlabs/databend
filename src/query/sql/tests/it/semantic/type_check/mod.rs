@@ -70,6 +70,7 @@ struct TestTypeCheckAdapter {
     func_ctx: FunctionContext,
     udf_adapter: TestUdfAdapter,
     forbid_udf: bool,
+    effective_role_names: Vec<String>,
     result_cache_uncacheable: Arc<AtomicBool>,
 }
 
@@ -80,6 +81,7 @@ impl TestTypeCheckAdapter {
             func_ctx: FunctionContext::default(),
             udf_adapter: TestUdfAdapter::default(),
             forbid_udf: false,
+            effective_role_names: vec!["analyst".to_string(), "reader".to_string()],
             result_cache_uncacheable: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -295,7 +297,7 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
     }
 
     fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
-        Ok(vec![])
+        Ok(self.effective_role_names.clone())
     }
 
     fn set_result_cache_uncacheable(&self) {

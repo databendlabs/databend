@@ -33,6 +33,20 @@ status: ok
 scalar: ''
 type: String
 
+=== is_role_in_session_matches_effective_role ===
+description: is_role_in_session should compare its argument against effective roles through the type-check adapter.
+sql: is_role_in_session('reader')
+status: ok
+scalar: true
+type: Boolean
+
+=== is_role_in_session_rejects_missing_role ===
+description: is_role_in_session should fold to false when no effective role matches.
+sql: is_role_in_session('owner')
+status: ok
+scalar: false
+type: Boolean
+
 === timezone_rewrites_to_literal ===
 description: timezone() should read settings through the explicit type-check adapter.
 sql: timezone()

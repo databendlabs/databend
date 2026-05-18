@@ -375,8 +375,7 @@ where A: TypeCheckAdapter
                     .resolve_authorization_function(*authorization_function)?,
             ),
             SpecialFunction::IsRoleInSession { role } => {
-                let (_, role, _) = self.resolve_display_arg(arena, role)?;
-                self.resolve_is_role_in_session(span, role)
+                self.resolve_is_role_in_session(arena, span, role)
             }
             SpecialFunction::Timezone => self.resolve_special_literal(
                 span,
@@ -500,10 +499,12 @@ where A: TypeCheckAdapter
 
     fn resolve_is_role_in_session(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        role: ScalarExpr,
+        role: &CoreDisplayExprArg,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let effective_roles = self.adapter.resolve_effective_role_names()?;
+        let (_, role, _) = self.resolve_display_arg(arena, role)?;
         let mut predicate_levels =
             Vec::with_capacity(effective_roles.len().max(1).ilog2() as usize + 1);
 
