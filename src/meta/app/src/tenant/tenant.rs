@@ -118,17 +118,9 @@ mod kvapi_key_impl {
 
     impl kvapi::Key for Tenant {
         type ValueType = EmptyTenantValue;
-
-        fn parent(&self) -> Option<String> {
-            None
-        }
     }
 
     impl kvapi::Value for EmptyTenantValue {
         type KeyType = Tenant;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }

@@ -38,13 +38,8 @@ mod kvapi_impl {
         type ValueType = LeastVisibleTime;
     }
 
-    // TODO: kvapi::Key::parent() for LeastVisibleTimeIdent should be the table id
     impl kvapi::Value for LeastVisibleTime {
         type KeyType = LeastVisibleTimeIdent;
-        /// IndexId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

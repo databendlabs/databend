@@ -93,26 +93,16 @@ pub struct ListTableTagsReq {
 
 mod kvapi_key_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::schema::TableId;
     use crate::schema::table::TableIdTagName;
     use crate::schema::table::TableTag;
 
     impl kvapi::Key for TableIdTagName {
         type ValueType = TableTag;
-
-        fn parent(&self) -> Option<String> {
-            Some(TableId::new(self.table_id).to_string_key())
-        }
     }
 
     impl kvapi::Value for TableTag {
         type KeyType = TableIdTagName;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 
