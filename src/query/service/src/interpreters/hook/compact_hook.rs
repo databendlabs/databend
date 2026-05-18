@@ -210,7 +210,7 @@ async fn compact_table(
             // Clears previously generated segment locations to avoid duplicate data in the refresh phase
             ctx.written_segment_locations().clear();
             ctx.set_executor(complete_executor.get_inner())?;
-            complete_executor.execute_async().await?;
+            complete_executor.execute().await?;
             drop(complete_executor);
         }
     }

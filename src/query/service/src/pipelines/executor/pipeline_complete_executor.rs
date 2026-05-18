@@ -96,24 +96,9 @@ impl PipelineCompleteExecutor {
         self.executor.finish(cause);
     }
 
+    /// Runs the complete pipeline without blocking a Tokio worker.
     #[fastrace::trace]
-    pub fn execute(&self) -> Result<()> {
-        let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
-
-        Thread::named_spawn(
-            Some(String::from("CompleteExecutor")),
-            self.thread_function(),
-        )
-        .join()
-        .flatten()
-    }
-
-    /// Runs the complete pipeline from an async caller without blocking a Tokio worker.
-    ///
-    /// `execute` waits on the dedicated executor thread with `join`, so async
-    /// paths wait for the result through a channel first and only join after
-    /// the executor thread has finished its work.
-    pub async fn execute_async(self: &Arc<Self>) -> Result<()> {
+    pub async fn execute(&self) -> Result<()> {
         let _guard = ThreadTracker::tracking(self.tracking_payload.clone());
         let (tx, rx) = oneshot::channel();
         let thread_function = self.thread_function();

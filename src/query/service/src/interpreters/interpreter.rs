@@ -165,7 +165,7 @@ pub trait Interpreter: Sync + Send {
             let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
             ctx.set_executor(complete_executor.get_inner())?;
-            complete_executor.execute_async().await?;
+            complete_executor.execute().await?;
             self.inject_result()
         } else {
             let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;

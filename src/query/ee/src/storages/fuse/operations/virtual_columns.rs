@@ -707,7 +707,7 @@ async fn execute_complete_pipeline(
         let executor_settings = ExecutorSettings::try_create(ctx)?;
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        complete_executor.execute_async().await?;
+        complete_executor.execute().await?;
     }
 
     Ok(())
