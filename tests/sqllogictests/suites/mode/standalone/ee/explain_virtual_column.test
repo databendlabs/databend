@@ -505,7 +505,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── EvalScalar
             ├── output columns: [event_date (#15), a.entity_id (#0), a.source_id (#1), type_code (#21), primary_category (#22), secondary_category (#23)]
-            ├── expressions: [if(CAST(is_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS Boolean NULL), CAST(assume_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS String NULL), true, 'Unknown', NULL), CAST(data_source_a.content_object['category_a'] (#19) AS String NULL), CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)]
+            ├── expressions: [if(CAST(is_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS Boolean NULL), CAST(assume_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS String NULL), 'Unknown'), CAST(data_source_a.content_object['category_a'] (#19) AS String NULL), CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)]
             ├── estimated rows: 0.20
             └── HashJoin
                 ├── output columns: [event_date (#15), a.metadata_object['type'] (#18), a.content_object['category_a'] (#19), a.content_object['category_b'] (#20), a.entity_id (#0), a.source_id (#1)]
@@ -530,7 +530,7 @@ EvalScalar
                 │       ├── read size: < 1 KiB
                 │       ├── partitions total: 1
                 │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
                 │       ├── push downs: [filters: [is_not_null(CAST(data_source_a.content_object['category_a'] (#19) AS String NULL)) and is_not_null(CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)) and is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#16) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
                 │       ├── virtual columns: [content_object['category_a'], content_object['category_b'], content_object['event_date'], metadata_object['type']]
                 │       └── estimated rows: 1.00
@@ -574,7 +574,7 @@ EvalScalar
                                     │       ├── read size: < 1 KiB
                                     │       ├── partitions total: 1
                                     │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
                                     │       ├── push downs: [filters: [is_not_null(CAST(CAST(CAST(data_source_a.content_object['event_date'] (#13) AS Int64 NULL) AS Timestamp NULL) AS Date NULL))], limit: NONE]
                                     │       ├── apply join filters: [#2, #3]
                                     │       ├── virtual columns: [content_object['event_date']]
@@ -587,7 +587,7 @@ EvalScalar
                                         ├── read size: < 1 KiB
                                         ├── partitions total: 1
                                         ├── partitions scanned: 1
-                                        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+                                        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
                                         ├── push downs: [filters: [is_true(config_table.process_mode (#12) = 'standard_mode')], limit: NONE]
                                         ├── apply join filters: [#2, #3, #0, #1]
                                         └── estimated rows: 1.00
