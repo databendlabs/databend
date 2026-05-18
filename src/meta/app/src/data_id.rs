@@ -209,10 +209,6 @@ mod prost_message_impl {
 
         impl kvapi::Key for Foo {
             type ValueType = Bar;
-
-            fn parent(&self) -> Option<String> {
-                todo!()
-            }
         }
 
         #[derive(Debug)]
@@ -220,9 +216,6 @@ mod prost_message_impl {
 
         impl kvapi::Value for Bar {
             type KeyType = Foo;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
         }
 
         #[test]

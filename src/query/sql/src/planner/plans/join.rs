@@ -72,6 +72,7 @@ pub enum JoinType {
     Asof,
     LeftAsof,
     RightAsof,
+    FullAsof,
 }
 
 impl JoinType {
@@ -107,6 +108,7 @@ impl JoinType {
                 | JoinType::RightSingle
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
+                | JoinType::FullAsof
         )
     }
 
@@ -124,7 +126,7 @@ impl JoinType {
     pub fn is_asof_join(&self) -> bool {
         matches!(
             self,
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof | JoinType::FullAsof
         )
     }
 
@@ -202,6 +204,9 @@ impl Display for JoinType {
             }
             JoinType::RightAsof => {
                 write!(f, "RIGHT ASOF")
+            }
+            JoinType::FullAsof => {
+                write!(f, "FULL ASOF")
             }
         }
     }
@@ -392,7 +397,7 @@ impl Join {
             JoinType::Right | JoinType::RightAny | JoinType::RightAsof => {
                 f64::max(right_cardinality, inner_join_cardinality)
             }
-            JoinType::Full => {
+            JoinType::Full | JoinType::FullAsof => {
                 f64::max(left_cardinality, inner_join_cardinality)
                     + f64::max(right_cardinality, inner_join_cardinality)
                     - inner_join_cardinality
@@ -610,6 +615,7 @@ impl Operator for Join {
                 | JoinType::Asof
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
+                | JoinType::FullAsof
         ) {
             let settings = ctx.get_settings();
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
@@ -745,6 +751,7 @@ impl Operator for Join {
                 | JoinType::Asof
                 | JoinType::LeftAsof
                 | JoinType::RightAsof
+                | JoinType::FullAsof
         ) && !settings.get_enforce_shuffle_join()?
         {
             // (Any, Broadcast)

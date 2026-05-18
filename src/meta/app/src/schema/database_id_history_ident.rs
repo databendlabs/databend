@@ -37,9 +37,7 @@ impl DatabaseIdHistoryIdentRaw {
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdHistoryIdent;
     use crate::schema::DbIdList;
     use crate::tenant_key::resource::TenantResource;
@@ -54,11 +52,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for DbIdList {
         type KeyType = DatabaseIdHistoryIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            self.id_list
-                .iter()
-                .map(|id| DatabaseId::new(*id).to_string_key())
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

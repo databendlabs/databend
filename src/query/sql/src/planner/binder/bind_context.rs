@@ -245,6 +245,7 @@ pub struct CteInfo {
 
 #[derive(Clone, Debug)]
 pub struct MaterializedCTEInfo {
+    pub cte_name: String,
     pub bound_s_expr: SExpr,
     pub bound_context: BindContext,
 }

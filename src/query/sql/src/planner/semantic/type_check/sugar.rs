@@ -54,6 +54,7 @@ impl<'a> TypeChecker<'a> {
             Ascii::new("current_role"),
             Ascii::new("current_secondary_roles"),
             Ascii::new("current_available_roles"),
+            Ascii::new("is_role_in_session"),
             Ascii::new("connection_id"),
             Ascii::new("client_session_id"),
             Ascii::new("timezone"),
@@ -180,6 +181,49 @@ impl<'a> TypeChecker<'a> {
                         e
                     )))),
                 }
+            }
+            ("is_role_in_session", &[role]) => {
+                let effective_roles = match self.ctx.get_all_effective_roles().await {
+                    Ok(roles) => roles,
+                    Err(err) => return Some(Err(err)),
+                };
+                let (role_expr, _) = match self.resolve(role) {
+                    Ok(res) => *res,
+                    Err(err) => return Some(Err(err)),
+                };
+
+                let mut predicate_levels =
+                    Vec::with_capacity(effective_roles.len().max(1).ilog2() as usize + 1);
+                for effective_role in effective_roles {
+                    let role_literal = ScalarExpr::ConstantExpr(ConstantExpr {
+                        span,
+                        value: Scalar::String(effective_role.name),
+                    });
+                    let predicate =
+                        match self.resolve_scalar_function_call(span, "eq", vec![], vec![
+                            role_expr.clone(),
+                            role_literal,
+                        ]) {
+                            Ok(res) => {
+                                let (predicate, _) = *res;
+                                predicate
+                            }
+                            Err(err) => return Some(Err(err)),
+                        };
+                    if let Err(err) = self.merge_or_level(span, &mut predicate_levels, predicate) {
+                        return Some(Err(err));
+                    }
+                }
+
+                let predicate = match self.fold_or_levels(span, predicate_levels) {
+                    Ok(Some(predicate)) => predicate,
+                    Ok(None) => ScalarExpr::ConstantExpr(ConstantExpr {
+                        span,
+                        value: Scalar::Boolean(false),
+                    }),
+                    Err(err) => return Some(Err(err)),
+                };
+                Some(self.resolve_scalar_function_call(span, "is_true", vec![], vec![predicate]))
             }
             ("connection_id", &[]) => Some(self.resolve(&Expr::Literal {
                 span,

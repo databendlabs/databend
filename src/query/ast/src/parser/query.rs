@@ -707,6 +707,7 @@ pub fn join_operator(i: Input) -> IResult<JoinOperator> {
         value(JoinOperator::CrossJoin, rule! { CROSS }),
         value(JoinOperator::LeftAsof, rule! { ASOF ~ LEFT }),
         value(JoinOperator::RightAsof, rule! { ASOF ~ RIGHT }),
+        value(JoinOperator::FullAsof, rule! { ASOF ~ FULL ~ OUTER? }),
         value(JoinOperator::Asof, rule! { ASOF }),
     ))
     .parse(i)

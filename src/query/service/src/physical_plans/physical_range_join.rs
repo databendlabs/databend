@@ -56,7 +56,8 @@ pub struct RangeJoin {
     pub conditions: Vec<RangeJoinCondition>,
     // The other conditions
     pub other_conditions: Vec<RemoteExpr>,
-    // Now only support inner join, will support left/right join later
+    // Now only support inner join, will support left/right join later.
+    // ASOF outer joins reuse this path after the interval-boundary rewrite.
     pub join_type: JoinType,
     pub range_join_type: RangeJoinType,
     pub output_schema: DataSchemaRef,

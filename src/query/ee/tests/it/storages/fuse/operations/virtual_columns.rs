@@ -71,7 +71,7 @@ async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<T
             pipelines.push(build_res.main_pipeline);
             let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
             ctx.set_executor(executor.get_inner())?;
-            executor.execute()?;
+            executor.execute().await?;
         }
     }
     Ok(fixture)
@@ -125,7 +125,7 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
 
         let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
         table_ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute()?;
+        complete_executor.execute().await?;
     }
 
     let table = fixture.latest_default_table().await?;

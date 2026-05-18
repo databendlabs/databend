@@ -67,9 +67,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for UserInfo {
         type KeyType = TenantUserIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

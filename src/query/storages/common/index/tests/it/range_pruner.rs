@@ -287,6 +287,30 @@ fn test_range_index_spatial() -> anyhow::Result<()> {
     );
     run_text_spatial(
         file,
+        "st_covers(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_covers(g, to_geometry('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_coveredby(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_coveredby(g, to_geometry('POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
         "st_dwithin(g, to_geometry('POINT(20 20)'), 9.9)",
         schema.clone(),
         Some(spatial_stats.clone()),

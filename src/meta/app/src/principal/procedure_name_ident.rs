@@ -36,9 +36,7 @@ impl ProcedureNameIdent {
 
 mod kvapi_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::KeyWithTenant;
     use crate::principal::ProcedureNameIdent;
     use crate::principal::procedure_id_ident::ProcedureId;
     use crate::tenant_key::resource::TenantResource;
@@ -52,9 +50,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for ProcedureId {
         type KeyType = ProcedureNameIdent;
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.
