@@ -101,7 +101,6 @@ use crate::txn_core_util::send_txn;
 use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
-use crate::txn_put_u64;
 
 impl<KV> SchemaApi for KV
 where
@@ -609,7 +608,7 @@ pub async fn handle_undrop_table(
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
-                        txn_put_u64(&dbid_tbname, table_id)?, // (tenant, db_id, tb_name) -> tb_id
+                        txn_put_pb(&dbid_tbname, &TableId::new(table_id))?, // (tenant, db_id, tb_name) -> tb_id
                         txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     policy_restore_ops,
