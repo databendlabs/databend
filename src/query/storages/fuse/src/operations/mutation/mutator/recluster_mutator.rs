@@ -859,7 +859,7 @@ impl ReclusterMutator {
             average_depth, max_depth
         );
 
-        if average_depth <= depth_threshold {
+        if average_depth <= depth_threshold && max_depth as f64 <= depth_threshold {
             return Ok(IndexSet::new());
         }
 
@@ -923,8 +923,11 @@ impl ReclusterMutator {
             }
 
             let remaining = max_len.saturating_sub(selected_idx.len());
+            if remaining < 2 {
+                break;
+            }
             if window.len() > remaining {
-                continue;
+                window.truncate(remaining);
             }
 
             if window.len() < 2 {
