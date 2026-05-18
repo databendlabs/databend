@@ -86,12 +86,8 @@ impl SizedChannelBuffer {
             .sum()
     }
 
-    fn has_data_ready(&self) -> bool {
+    fn has_page_ready(&self) -> bool {
         !self.pages.is_empty()
-            || self
-                .current_page
-                .as_ref()
-                .is_some_and(|page| !page.is_empty())
     }
 
     fn is_pages_full(&self, reserve: usize) -> bool {
@@ -164,10 +160,7 @@ impl SizedChannelBuffer {
     }
 
     fn take_page(&mut self) -> Option<Page> {
-        match self.pages.pop_front() {
-            Some(page) => Some(page),
-            None => self.take_current_page(),
-        }
+        self.pages.pop_front()
     }
 
     fn take_current_page(&mut self) -> Option<Page> {
@@ -351,7 +344,7 @@ where S: DataBlockSpill
         loop {
             {
                 let buffer = self.buffer.lock().unwrap();
-                if buffer.has_data_ready() {
+                if buffer.has_page_ready() {
                     return true;
                 }
                 if buffer.is_send_stopped {
@@ -411,6 +404,9 @@ where S: DataBlockSpill
                     }
                     Err(_) => {
                         debug!("Long polling timeout reached");
+                        if let Some(page) = self.try_take_current_page().await? {
+                            return Ok((page, self.chan.is_close()));
+                        }
                         return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
                 }
@@ -427,6 +423,16 @@ where S: DataBlockSpill
     #[fastrace::trace(name = "SizedChannelReceiver::try_take_page")]
     async fn try_take_page(&mut self) -> Result<Option<BlocksSerializer>> {
         let page = self.chan.buffer.lock().unwrap().take_page();
+        self.deserialize_page(page).await
+    }
+
+    #[fastrace::trace(name = "SizedChannelReceiver::try_take_current_page")]
+    async fn try_take_current_page(&mut self) -> Result<Option<BlocksSerializer>> {
+        let page = self.chan.buffer.lock().unwrap().take_current_page();
+        self.deserialize_page(page).await
+    }
+
+    async fn deserialize_page(&mut self, page: Option<Page>) -> Result<Option<BlocksSerializer>> {
         let collector = match page {
             None => return Ok(None),
             Some(Page::Memory(page)) => {
@@ -730,7 +736,7 @@ mod tests {
         });
 
         let (serializer, is_end) = receiver
-            .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_millis(50)))
             .await
             .unwrap();
 
