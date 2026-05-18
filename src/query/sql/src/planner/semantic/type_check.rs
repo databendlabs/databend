@@ -879,29 +879,35 @@ impl<'a> TypeChecker<'a> {
                             .scalar;
                         new_params.push(constant);
                     }
+
                     let in_window = self.in_window_function;
                     self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
-                    let (new_agg_func, data_type) = self.resolve_aggregate_function(
+                    let agg_result = self.resolve_aggregate_function(
                         *span, func_name, expr, *distinct, new_params, &args, order_by,
-                    )?;
+                    );
                     self.in_window_function = in_window;
                     self.in_aggregate_function = in_aggregate_function;
-                    if let Some(window) = window {
-                        // aggregate window function
-                        let display_name = format!("{:#}", expr);
-                        if window.ignore_nulls.is_some() {
-                            return Err(ErrorCode::SemanticError(format!(
-                                "window function {func_name} not support IGNORE/RESPECT NULLS option"
-                            ))
-                                .set_span(*span));
+                    match agg_result {
+                        Ok((new_agg_func, data_type)) => {
+                            if let Some(window) = window {
+                                // aggregate window function
+                                let display_name = format!("{:#}", expr);
+                                if window.ignore_nulls.is_some() {
+                                    return Err(ErrorCode::SemanticError(format!(
+                                        "window function {func_name} not support IGNORE/RESPECT NULLS option"
+                                    ))
+                                        .set_span(*span));
+                                }
+                                // general window function
+                                let func = WindowFuncType::Aggregate(new_agg_func);
+                                self.resolve_window(*span, display_name, &window.window, func)
+                            } else {
+                                // aggregate function
+                                Ok(Box::new((new_agg_func.into(), data_type)))
+                            }
                         }
-                        // general window function
-                        let func = WindowFuncType::Aggregate(new_agg_func);
-                        self.resolve_window(*span, display_name, &window.window, func)
-                    } else {
-                        // aggregate function
-                        Ok(Box::new((new_agg_func.into(), data_type)))
+                        Err(e) => Err(e),
                     }
                 } else if GENERAL_LAMBDA_FUNCTIONS.contains(&uni_case_func_name) {
                     if lambda.is_none() {

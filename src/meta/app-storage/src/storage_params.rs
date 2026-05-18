@@ -876,6 +876,8 @@ pub struct StorageOssConfig {
     pub access_key_id: String,
     pub access_key_secret: String,
     pub root: String,
+    /// The RoleArn that used for AssumeRole.
+    pub role_arn: String,
     /// Server-side encryption for OSS
     ///
     /// Available values: "AES256", "KMS"
@@ -899,6 +901,7 @@ impl Debug for StorageOssConfig {
                 "access_key_secret",
                 &mask_string(&self.access_key_secret, 3),
             )
+            .field("role_arn", &self.role_arn)
             .field(
                 "server_side_encryption",
                 &mask_string(&self.server_side_encryption, 3),

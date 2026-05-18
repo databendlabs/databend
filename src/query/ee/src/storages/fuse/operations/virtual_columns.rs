@@ -464,7 +464,7 @@ pub async fn do_vacuum_virtual_column(
             )
         })?;
 
-        execute_complete_pipeline(ctx.clone(), build_res)?;
+        execute_complete_pipeline(ctx.clone(), build_res).await?;
     }
 
     // Unconditionally remove legacy virtual column files. Safe even if historical
@@ -690,7 +690,7 @@ mod tests {
     }
 }
 
-fn execute_complete_pipeline(
+async fn execute_complete_pipeline(
     ctx: Arc<dyn TableContext>,
     mut build_res: PipelineBuildResult,
 ) -> Result<()> {
@@ -707,7 +707,7 @@ fn execute_complete_pipeline(
         let executor_settings = ExecutorSettings::try_create(ctx)?;
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        complete_executor.execute()?;
+        complete_executor.execute().await?;
     }
 
     Ok(())

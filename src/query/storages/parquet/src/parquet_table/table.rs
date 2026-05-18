@@ -116,6 +116,7 @@ impl ParquetTable {
         settings: Arc<Settings>,
         query_kind: QueryKind,
         fmt: &ParquetFileFormatParams,
+        has_column_name_ref: bool,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
         let first_file = match &files_to_read {
@@ -124,7 +125,13 @@ impl ParquetTable {
         };
 
         let Some(first_file) = first_file else {
-            return ctx.get_zero_table().await;
+            return if has_column_name_ref {
+                Err(ErrorCode::SemanticError(
+                    "no files found. specify a prefix/pattern/files that matches at least one file",
+                ))
+            } else {
+                ctx.get_zero_table().await
+            };
         };
 
         let first_file = first_file.path;

@@ -29,7 +29,6 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
-use databend_common_base::runtime::Thread;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -1260,14 +1259,16 @@ impl QueryCoordinator {
         } else {
             Span::noop()
         };
-        Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
-            let _g = span.set_local_parent();
-            let error = executor.execute().err();
-            statistics_sender.shutdown(error.clone());
-            query_ctx
-                .get_exchange_manager()
-                .on_finished_query(&query_id, error);
-        });
+        GlobalIORuntime::instance().spawn(
+            async move {
+                let error = executor.execute().await.err();
+                statistics_sender.shutdown(error.clone());
+                query_ctx
+                    .get_exchange_manager()
+                    .on_finished_query(&query_id, error);
+            }
+            .in_span(span),
+        );
 
         Ok(())
     }
