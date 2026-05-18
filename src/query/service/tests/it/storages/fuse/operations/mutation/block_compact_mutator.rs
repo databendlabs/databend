@@ -159,7 +159,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let executor_settings = ExecutorSettings::try_create(ctx.clone())?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
         ctx.set_executor(executor.get_inner())?;
-        executor.execute()?;
+        executor.execute().await?;
         Ok(true)
     } else {
         Ok(false)
