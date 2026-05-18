@@ -129,5 +129,75 @@ select block_count, row_count from fuse_segment('i15760', 't2');
 ----
 3 17
 
+# table-level auto compaction threshold overrides session/global threshold
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 50;
+
+statement ok
+create table t3(a int) row_per_block=5 auto_compaction_imperfect_blocks_threshold=3;
+
+statement ok
+insert into t3 values(0);
+
+statement ok
+insert into t3 select number from numbers(12);
+
+statement ok
+insert into t3 select number from numbers(2);
+
+statement ok
+insert into t3 select number from numbers(2);
+
+query I
+select count() from fuse_segment('i15760', 't3');
+----
+1
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 1;
+
+statement ok
+create table t4(a int) row_per_block=5 auto_compaction_imperfect_blocks_threshold=0;
+
+statement ok
+insert into t4 values(0);
+
+statement ok
+insert into t4 select number from numbers(12);
+
+statement ok
+insert into t4 select number from numbers(2);
+
+statement ok
+insert into t4 select number from numbers(2);
+
+query B
+select count() > 1 from fuse_segment('i15760', 't4');
+----
+1
+
+statement ok
+set auto_compaction_imperfect_blocks_threshold = 0;
+
+statement ok
+create table t5(a int) row_per_block=5;
+
+statement ok
+insert into t5 values(0);
+
+statement ok
+insert into t5 select number from numbers(12);
+
+statement ok
+insert into t5 select number from numbers(2);
+
+statement ok
+insert into t5 select number from numbers(2);
+
+query B
+select count() > 1 from fuse_segment('i15760', 't5');
+----
+1
+
 statement ok
 drop database i15760;

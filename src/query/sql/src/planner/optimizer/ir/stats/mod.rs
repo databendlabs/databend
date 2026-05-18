@@ -13,11 +13,10 @@
 // limitations under the License.
 
 mod column_stat;
-mod histogram;
+mod constraint;
 mod selectivity;
 
 pub use column_stat::*;
-pub use histogram::HistogramBuilder;
-pub use histogram::UniformSampleSet;
+pub use databend_common_statistics::UniformSampleSet;
 pub use selectivity::MAX_SELECTIVITY;
 pub use selectivity::SelectivityEstimator;

@@ -26,8 +26,11 @@ use databend_common_io::constants::DEFAULT_BLOCK_ROW_COUNT;
 use databend_common_settings::Settings;
 use databend_common_sql::ApproxDistinctColumns;
 use databend_common_sql::BloomIndexColumns;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_PAGE_BYTES;
+use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use databend_common_storages_fuse::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
@@ -75,6 +78,7 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_VACUUM);
     r.insert(FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE);
+    r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
 
     r.insert(OPT_KEY_BLOOM_INDEX_COLUMNS);
     r.insert(OPT_KEY_BLOOM_INDEX_TYPE);
@@ -96,6 +100,8 @@ pub static CREATE_FUSE_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
     r.insert(OPT_KEY_ENABLE_SCHEMA_EVOLUTION);
     r.insert(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY);
+    r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
+    r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
     r
 });
 
@@ -137,7 +143,10 @@ pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = Laz
     r.insert(FUSE_OPT_KEY_FILE_SIZE);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS);
     r.insert(FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP);
+    r.insert(FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD);
     r.insert(OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH);
+    r.insert(FUSE_OPT_KEY_DATA_PAGE_ROWS);
+    r.insert(FUSE_OPT_KEY_DATA_PAGE_BYTES);
     r
 });
 
@@ -281,6 +290,48 @@ pub fn is_valid_fuse_parquet_dictionary_opt(
     options: &BTreeMap<String, String>,
 ) -> databend_common_exception::Result<()> {
     is_valid_bool_opt(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, options)
+}
+
+pub fn is_valid_data_page_rows(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    if let Some(val) = options.get(FUSE_OPT_KEY_DATA_PAGE_ROWS) {
+        let v = val.parse::<usize>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_DATA_PAGE_ROWS} must be a positive integer, got: {val}"
+            ))
+        })?;
+        if v == 0 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_DATA_PAGE_ROWS} must be >= 1"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn is_valid_data_page_bytes(
+    options: &BTreeMap<String, String>,
+) -> databend_common_exception::Result<()> {
+    const PARQUET_PAGE_SIZE_HARD_LIMIT: usize = i32::MAX as usize - (1 << 20);
+    if let Some(val) = options.get(FUSE_OPT_KEY_DATA_PAGE_BYTES) {
+        let v = val.parse::<usize>().map_err(|_| {
+            ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_DATA_PAGE_BYTES} must be a positive integer, got: {val}"
+            ))
+        })?;
+        if v == 0 {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_DATA_PAGE_BYTES} must be >= 1"
+            )));
+        }
+        if v > PARQUET_PAGE_SIZE_HARD_LIMIT {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "{FUSE_OPT_KEY_DATA_PAGE_BYTES} {v} exceeds parquet hard limit ({PARQUET_PAGE_SIZE_HARD_LIMIT})"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn is_valid_bool_opt(

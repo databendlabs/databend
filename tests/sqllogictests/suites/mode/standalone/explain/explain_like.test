@@ -50,7 +50,7 @@ explain select * from t1 where s like 'abcd%' order by s;
 Sort(Single)
 ├── output columns: [t1.s (#0)]
 ├── sort keys: [s ASC NULLS LAST]
-├── estimated rows: 1.00
+├── estimated rows: 2.50
 └── TableScan
     ├── table: default.default.t1
     ├── scan id: 0
@@ -61,7 +61,7 @@ Sort(Single)
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
     ├── push downs: [filters: [t1.s (#0) >= 'abcd' and t1.s (#0) < 'abce'], limit: NONE]
-    └── estimated rows: 1.00
+    └── estimated rows: 2.50
 
 query T
 select * from t1 where s like 'abcd' order by s;

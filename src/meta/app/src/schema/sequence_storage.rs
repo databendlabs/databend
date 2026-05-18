@@ -40,9 +40,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for Id<SequenceStorageValue> {
         type KeyType = super::SequenceStorageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     #[derive(

@@ -192,6 +192,21 @@ impl From<ImportArgs> for RaftConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Args)]
+pub struct FilterTenantArgs {
+    /// Tenant name to keep in the exported dump.
+    #[clap(long)]
+    pub tenant: String,
+
+    /// Input ndjson export file. If empty, read from stdin.
+    #[clap(long, default_value = "")]
+    pub input: String,
+
+    /// Output ndjson export file. If empty, write to stdout.
+    #[clap(long, default_value = "")]
+    pub output: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Args)]
 pub struct TransferLeaderArgs {
     #[clap(long)]
     pub to: Option<u64>,

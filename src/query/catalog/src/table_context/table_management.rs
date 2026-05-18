@@ -57,6 +57,7 @@ pub trait TableContextTableManagement: Send + Sync {
         files_info: StageFilesInfo,
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
+        has_column_name_ref: bool,
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         let _ = (
@@ -64,6 +65,7 @@ pub trait TableContextTableManagement: Send + Sync {
             files_info,
             files_to_copy,
             max_column_position,
+            has_column_name_ref,
             on_error_mode,
         );
         unimplemented!()

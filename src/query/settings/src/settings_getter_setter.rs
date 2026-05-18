@@ -599,6 +599,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_enable_group_by_column_first(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_group_by_column_first")? != 0)
+    }
+
     pub fn get_grouping_sets_to_union(&self) -> Result<bool> {
         Ok(self.try_get_u64("grouping_sets_to_union")? == 1)
     }
@@ -901,6 +905,10 @@ impl Settings {
 
     pub fn get_use_legacy_query_executor(&self) -> Result<bool> {
         Ok(self.try_get_u64("use_legacy_query_executor")? == 1)
+    }
+
+    pub fn get_enable_decimal_sum_widening(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_decimal_sum_widening")? != 0)
     }
 
     pub fn get_statement_queued_timeout(&self) -> Result<u64> {

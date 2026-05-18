@@ -37,9 +37,5 @@ mod kvapi_impl {
 
     impl kvapi::Value for TaskMessage {
         type KeyType = TaskMessageIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }

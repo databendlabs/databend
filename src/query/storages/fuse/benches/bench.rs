@@ -150,6 +150,8 @@ mod dummy {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary,
+            data_page_rows: None,
+            data_page_bytes: None,
             col_stats_truncate_lens: std::collections::BTreeMap::new(),
         };
         let schema = Arc::new(schema);

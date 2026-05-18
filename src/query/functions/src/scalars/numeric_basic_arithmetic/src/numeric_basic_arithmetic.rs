@@ -18,8 +18,9 @@ use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::function_stat::ArgStat;
-use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::OwnedDistribution;
+use databend_common_expression::stat_distribution::ReturnStat;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::AccessType;
@@ -124,7 +125,7 @@ where
                 }),
                 ndv: stat.ndv,
                 null_count: stat.null_count,
-                histogram: None,
+                distribution: OwnedDistribution::Unknown,
             }
         });
     }
@@ -138,7 +139,7 @@ where
             }),
             ndv: stat.ndv,
             null_count: stat.null_count,
-            histogram: None,
+            distribution: OwnedDistribution::Unknown,
         }
     })
 }

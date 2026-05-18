@@ -94,6 +94,8 @@ impl UninitializedArrowWriter {
             None,
             num_rows,
             self.table_schema.as_ref(),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
         );
         let buffer = Vec::with_capacity(DEFAULT_BLOCK_BUFFER_SIZE);
         let writer =

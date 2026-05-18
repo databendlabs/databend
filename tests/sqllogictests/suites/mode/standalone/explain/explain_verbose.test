@@ -59,7 +59,7 @@ Scan
 ├── precise cardinality: N/A
 └── statistics
     ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-    └── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+    └── t.b (#1): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
 
 query T
 explain(verbose, logical, optimized) select * from t, t t1, t t2, t t3, t t4
@@ -80,11 +80,11 @@ Join(Cross)
 │   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
 │   ├── t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
 │   ├── t.a (#8): { min: 1, max: 1, ndv: 1, null count: 0 }
-│   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   ├── t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
-│   └── t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│   ├── t.b (#1): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+│   ├── t.b (#3): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+│   ├── t.b (#5): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+│   ├── t.b (#7): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+│   └── t.b (#9): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
 ├── Scan
 │   ├── table: testdb.t (#4)
 │   ├── filters: [eq(t.a (#8), 1)]
@@ -97,7 +97,7 @@ Join(Cross)
 │   ├── precise cardinality: N/A
 │   └── statistics
 │       ├── t.a (#8): { min: 1, max: 1, ndv: 1, null count: 0 }
-│       └── t.b (#9): { min: 1, max: 1000, ndv: 1, null count: 0 }
+│       └── t.b (#9): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
 └── Join(Cross)
     ├── build keys: []
     ├── probe keys: []
@@ -112,10 +112,10 @@ Join(Cross)
     │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
     │   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
     │   ├── t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
-    │   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-    │   ├── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
-    │   ├── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
-    │   └── t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │   ├── t.b (#1): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+    │   ├── t.b (#3): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+    │   ├── t.b (#5): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+    │   └── t.b (#7): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
     ├── Scan
     │   ├── table: testdb.t (#3)
     │   ├── filters: [eq(t.a (#6), 1)]
@@ -128,7 +128,7 @@ Join(Cross)
     │   ├── precise cardinality: N/A
     │   └── statistics
     │       ├── t.a (#6): { min: 1, max: 1, ndv: 1, null count: 0 }
-    │       └── t.b (#7): { min: 1, max: 1000, ndv: 1, null count: 0 }
+    │       └── t.b (#7): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
     └── Join(Cross)
         ├── build keys: []
         ├── probe keys: []
@@ -142,9 +142,9 @@ Join(Cross)
         │   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
         │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
         │   ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
-        │   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-        │   ├── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
-        │   └── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
+        │   ├── t.b (#1): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+        │   ├── t.b (#3): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+        │   └── t.b (#5): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
         ├── Scan
         │   ├── table: testdb.t (#2)
         │   ├── filters: [eq(t.a (#4), 1)]
@@ -157,7 +157,7 @@ Join(Cross)
         │   ├── precise cardinality: N/A
         │   └── statistics
         │       ├── t.a (#4): { min: 1, max: 1, ndv: 1, null count: 0 }
-        │       └── t.b (#5): { min: 1, max: 1000, ndv: 1, null count: 0 }
+        │       └── t.b (#5): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
         └── Join(Cross)
             ├── build keys: []
             ├── probe keys: []
@@ -170,8 +170,8 @@ Join(Cross)
             ├── statistics
             │   ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
             │   ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-            │   ├── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
-            │   └── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+            │   ├── t.b (#1): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
+            │   └── t.b (#3): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
             ├── Scan
             │   ├── table: testdb.t (#1)
             │   ├── filters: [eq(t.a (#2), 1)]
@@ -184,7 +184,7 @@ Join(Cross)
             │   ├── precise cardinality: N/A
             │   └── statistics
             │       ├── t.a (#2): { min: 1, max: 1, ndv: 1, null count: 0 }
-            │       └── t.b (#3): { min: 1, max: 1000, ndv: 1, null count: 0 }
+            │       └── t.b (#3): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
             └── Scan
                 ├── table: testdb.t (#0)
                 ├── filters: [eq(t.a (#0), 1)]
@@ -197,7 +197,7 @@ Join(Cross)
                 ├── precise cardinality: N/A
                 └── statistics
                     ├── t.a (#0): { min: 1, max: 1, ndv: 1, null count: 0 }
-                    └── t.b (#1): { min: 1, max: 1000, ndv: 1, null count: 0 }
+                    └── t.b (#1): { min: 1, max: 1000, ndv: 0.9999999999999999, null count: 0 }
 
 query T
 explain(decorrelated,verbose) select a, exists(select * from numbers(1000) where number % 10 = t.b) mark from t;

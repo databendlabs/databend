@@ -120,7 +120,7 @@ TableScan
 ├── partitions scanned: 0
 ├── pruning stats: [segments: <range pruning: 2 to 2 cost: <slt:ignore>>, blocks: <range pruning: 2 to 1 cost: <slt:ignore>, bloom pruning: 1 to 0 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t.s (#1) = '12')], limit: NONE]
-└── estimated rows: 2.67
+└── estimated rows: 1.00
 
 query IT
 select * from t where s = '12';

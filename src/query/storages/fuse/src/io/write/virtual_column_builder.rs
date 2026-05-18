@@ -717,6 +717,8 @@ impl VirtualColumnBuilder {
             write_settings.enable_parquet_dictionary,
             metadata,
             Some(&columns_statistics),
+            write_settings.data_page_rows,
+            write_settings.data_page_bytes,
         )?;
 
         let draft_virtual_column_metas = self.file_meta_to_virtual_column_metas(

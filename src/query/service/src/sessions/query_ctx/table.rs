@@ -498,6 +498,7 @@ impl TableContextTableManagement for QueryContext {
         files_info: StageFilesInfo,
         files_to_copy: Option<Vec<StageFileInfo>>,
         max_column_position: usize,
+        has_column_name_ref: bool,
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         let copy_options = CopyIntoTableOptions {
@@ -542,6 +543,7 @@ impl TableContextTableManagement for QueryContext {
                         self.get_settings(),
                         self.get_query_kind(),
                         fmt,
+                        has_column_name_ref,
                     )
                     .await
                 } else {
@@ -587,7 +589,7 @@ impl TableContextTableManagement for QueryContext {
                     copy_into_table_options: copy_options.clone(),
                     ..Default::default()
                 };
-                OrcTable::try_create(self, info).await
+                OrcTable::try_create(self, info, has_column_name_ref).await
             }
             FileFormatParams::NdJson(..) | FileFormatParams::Avro(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -665,6 +667,7 @@ impl TableContextTableManagement for QueryContext {
         _files_info: StageFilesInfo,
         _files_to_copy: Option<Vec<StageFileInfo>>,
         _max_column_position: usize,
+        _has_column_name_ref: bool,
         _on_error_mode: Option<OnErrorMode>,
     ) -> Result<Arc<dyn Table>> {
         Err(ErrorCode::Unimplemented(

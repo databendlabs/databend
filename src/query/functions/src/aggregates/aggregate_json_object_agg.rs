@@ -54,7 +54,7 @@ use super::borsh_partial_deserialize;
 use crate::aggregates::AggregateFunctionFeatures;
 
 pub(super) trait BinaryScalarStateFunc<V: ValueType>:
-    BorshSerialize + BorshDeserialize + Send + 'static
+    Clone + BorshSerialize + BorshDeserialize + Send + 'static
 {
     fn new() -> Self;
     fn add(&mut self, other: Option<(&str, V::ScalarRef<'_>)>) -> Result<()>;
@@ -68,7 +68,7 @@ pub(super) trait BinaryScalarStateFunc<V: ValueType>:
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
 }
 
-#[derive(BorshSerialize, BorshDeserialize, Debug)]
+#[derive(Clone, BorshSerialize, BorshDeserialize, Debug)]
 pub struct JsonObjectAggState<V>
 where
     V: ValueType,
@@ -347,11 +347,16 @@ where
     fn merge_result(
         &self,
         place: AggrState,
-        _read_only: bool,
+        read_only: bool,
         builder: &mut ColumnBuilder,
     ) -> Result<()> {
         let state = place.get::<State>();
-        state.merge_result(builder)
+        if read_only {
+            let mut state = state.clone();
+            state.merge_result(builder)
+        } else {
+            state.merge_result(builder)
+        }
     }
 
     fn need_manual_drop_state(&self) -> bool {
