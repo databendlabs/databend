@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod broadcast_recv_transform;
+mod broadcast_send_sink;
 mod broadcast_send_transform;
 mod data_exchange;
 mod exchange_injector;
@@ -37,6 +38,7 @@ pub mod serde;
 pub use broadcast_recv_transform::ExchangeRecvTransform;
 pub type BroadcastRecvTransform = ExchangeRecvTransform;
 pub type HashRecvTransform = ExchangeRecvTransform;
+pub use broadcast_send_sink::BroadcastExchangeSink;
 pub use broadcast_send_transform::BroadcastSendTransform;
 pub use data_exchange::BroadcastExchange;
 pub use data_exchange::DataExchange;
@@ -45,9 +47,14 @@ pub use data_exchange::NodeToNodeExchange;
 pub use exchange_injector::DefaultExchangeInjector;
 pub use exchange_injector::ExchangeInjector;
 pub use exchange_manager::DataExchangeManager;
+pub use exchange_params::BroadcastExchangeParams;
+pub use exchange_params::ExchangeParams;
+pub use exchange_params::GlobalExchangeParams;
 pub use exchange_params::MergeExchangeParams;
 pub use exchange_params::ShuffleExchangeParams;
 pub use exchange_sorting::ExchangeSorting;
+pub use exchange_source::via_remote_exchange_source;
+pub use exchange_transform::ExchangeTransform;
 pub use exchange_transform_scatter::ScatterTransform;
 pub use exchange_transform_shuffle::ExchangeShuffleMeta;
 pub use exchange_transform_shuffle::ExchangeShuffleTransform;

@@ -53,13 +53,17 @@ async fn test_null_table() -> anyhow::Result<()> {
             .read_plan(ctx.clone(), None, None, false, true)
             .await?;
         assert_eq!(table.engine(), "Null");
+        assert_eq!(source_plan.output_schema.num_fields(), 1);
 
         let stream = table
             .read_data_block_stream(ctx.clone(), &source_plan)
             .await?;
         let result = stream.try_collect::<Vec<_>>().await?;
-        let block = &result[0];
-        assert_eq!(block.num_columns(), 1);
+        assert!(result.len() <= 1);
+        for block in &result {
+            assert_eq!(block.num_rows(), 0);
+            assert_eq!(block.num_columns(), 1);
+        }
     }
 
     Ok(())

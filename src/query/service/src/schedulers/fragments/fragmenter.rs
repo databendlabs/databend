@@ -115,6 +115,15 @@ impl Fragmenter {
         });
 
         let edges = Self::collect_fragments_edge(fragments.values());
+        let source_lookup = fragments
+            .iter()
+            .map(|(fragment_id, fragment)| {
+                let mut fragment = fragment.clone();
+                fragment.source_fragments.clear();
+                (*fragment_id, fragment)
+            })
+            .collect::<BTreeMap<_, _>>();
+        let mut target_sources = BTreeMap::<usize, Vec<usize>>::new();
 
         for (source, target) in edges {
             let Some(fragment) = fragments.get_mut(&source) else {
@@ -124,6 +133,21 @@ impl Fragmenter {
             if let Some(exchange_sink) = ExchangeSink::from_mut_physical_plan(&mut fragment.plan) {
                 exchange_sink.destination_fragment_id = target;
             }
+
+            target_sources.entry(target).or_default().push(source);
+        }
+
+        for (target, sources) in target_sources {
+            let Some(fragment) = fragments.get_mut(&target) else {
+                continue;
+            };
+
+            let mut source_fragments = sources
+                .into_iter()
+                .filter_map(|source| source_lookup.get(&source).cloned())
+                .collect::<Vec<_>>();
+            source_fragments.sort_by_key(|fragment| fragment.fragment_id);
+            fragment.source_fragments = source_fragments;
         }
 
         Ok(fragments.into_values().collect::<Vec<_>>())
@@ -315,7 +339,7 @@ impl DeriveHandle for FragmentDeriveHandle {
 
             let source_fragment = PlanFragment {
                 plan,
-                exchange,
+                exchange: exchange.clone(),
                 fragment_type,
                 source_fragments: vec![],
                 fragment_id: source_fragment_id,
@@ -329,6 +353,7 @@ impl DeriveHandle for FragmentDeriveHandle {
                 query_id: self.query_id.clone(),
 
                 source_fragment_id,
+                source_exchange: exchange,
                 meta: PhysicalPlanMeta::with_plan_id("ExchangeSource", plan_id),
             }));
         }

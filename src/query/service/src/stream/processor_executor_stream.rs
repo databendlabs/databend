@@ -45,6 +45,12 @@ impl PullingExecutorStream {
                     Poll::Ready(Some(Err(cause)))
                 }
                 Ok(Some(data)) => {
+                    if data.num_rows() == 0 && executor.get_inner().is_all_nodes_finished() {
+                        self.end_of_stream = true;
+                        drop(executor);
+                        return Poll::Ready(None);
+                    }
+
                     self.executor = Some(executor);
                     Poll::Ready(Some(Ok(data)))
                 }

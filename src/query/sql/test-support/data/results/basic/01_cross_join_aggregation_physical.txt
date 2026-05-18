@@ -1,23 +1,24 @@
-AggregateFinal
-├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3), MAX(i2.i) (#4)]
-├── group by: []
-├── aggregate functions: [sum(i), min(i), max(i)]
+EvalScalar
+├── output columns: [MAX(i2.i) (#4), SUM(i1.i) (#2), MIN(i1.i) (#3)]
+├── expressions: [SUM(i1.i) (#14), MIN(i1.i) (#15)]
 ├── estimated rows: 1.00
-└── Exchange
-    ├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3), MAX(i2.i) (#4)]
-    ├── exchange type: Merge
+└── AggregateFinal
+    ├── output columns: [_eager_final_sum (#14), _eager_final_min (#15), MAX(i2.i) (#4)]
+    ├── group by: []
+    ├── aggregate functions: [sum(SUM(i1.i)), min(MIN(i1.i)), max(i)]
+    ├── estimated rows: 1.00
     └── AggregatePartial
         ├── group by: []
-        ├── aggregate functions: [sum(i), min(i), max(i)]
+        ├── aggregate functions: [sum(SUM(i1.i)), min(MIN(i1.i)), max(i)]
         ├── estimated rows: 1.00
         └── HashJoin
-            ├── output columns: [i1.i (#0), i2.i (#1)]
+            ├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3), i2.i (#1)]
             ├── join type: CROSS
             ├── build keys: []
             ├── probe keys: []
             ├── keys is null equal: []
             ├── filters: []
-            ├── estimated rows: 25000000.00
+            ├── estimated rows: 5000.00
             ├── Exchange(Build)
             │   ├── output columns: [i2.i (#1)]
             │   ├── exchange type: Broadcast
@@ -32,15 +33,27 @@ AggregateFinal
             │       ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
             │       ├── push downs: [filters: [], limit: NONE]
             │       └── estimated rows: 5000.00
-            └── TableScan(Probe)
-                ├── table: default.default.integers
-                ├── scan id: 0
-                ├── output columns: [i (#0)]
-                ├── read rows: 5000
-                ├── read size: 20.15 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 5000.00
+            └── AggregateFinal(Probe)
+                ├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3)]
+                ├── group by: []
+                ├── aggregate functions: [sum(i), min(i)]
+                ├── estimated rows: 1.00
+                └── Exchange
+                    ├── output columns: [SUM(i1.i) (#2), MIN(i1.i) (#3)]
+                    ├── exchange type: Merge
+                    └── AggregatePartial
+                        ├── group by: []
+                        ├── aggregate functions: [sum(i), min(i)]
+                        ├── estimated rows: 1.00
+                        └── TableScan
+                            ├── table: default.default.integers
+                            ├── scan id: 0
+                            ├── output columns: [i (#0)]
+                            ├── read rows: 5000
+                            ├── read size: 20.15 KiB
+                            ├── partitions total: 1
+                            ├── partitions scanned: 1
+                            ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
+                            ├── push downs: [filters: [], limit: NONE]
+                            └── estimated rows: 5000.00
 

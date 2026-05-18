@@ -354,39 +354,6 @@ impl OptimizeExprTask {
         let rel_expr = RelExpr::with_opt_context(m_expr, &optimizer.memo, &children_best_props);
         let physical_prop = rel_expr.derive_physical_prop()?;
 
-        let should_enforce = {
-            let mut should_enforce = true;
-
-            if optimizer.enforce_distribution()
-                && physical_prop.distribution == Distribution::Serial
-                && !matches!(
-                    self.required_prop.distribution,
-                    Distribution::Serial | Distribution::Any
-                )
-            {
-                should_enforce = false;
-            }
-
-            if optimizer.enforce_distribution()
-                && children_best_props
-                    .iter()
-                    .any(|prop| prop.distribution == Distribution::Serial)
-                && !children_best_props
-                    .iter()
-                    .all(|prop| prop.distribution == Distribution::Serial)
-            {
-                should_enforce = false;
-            }
-
-            should_enforce
-        };
-
-        // Sometimes we cannot enforce the required property and we cannot
-        // optimize the expression in this situation.
-        if !should_enforce {
-            return Ok(OptimizeExprEvent::OptimizedSelf);
-        }
-
         let mut enforcers: Vec<Box<dyn Enforcer>> = Vec::new();
 
         // Enforcers of distribution.

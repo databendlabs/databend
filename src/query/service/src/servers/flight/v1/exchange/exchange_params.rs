@@ -251,13 +251,12 @@ impl ShuffleExchangeParams {
         for (destination, channels) in &self.destination_channels {
             if destination == &self.executor_id {
                 for channel in channels {
-                    let Some(receivers) = receivers.remove(channel) else {
-                        return Err(ErrorCode::UnknownFragmentExchange(format!(
-                            "Unknown fragment flight receiver, {}, {}",
-                            self.executor_id, self.fragment_id
-                        )));
-                    };
-                    exchanges.extend(receivers.into_iter());
+                    // Local data stays in-process through the dummy branch in
+                    // `ExchangeTransform::node_shuffle`, so a receiver only exists
+                    // when some remote executor actually sends to this destination.
+                    if let Some(receivers) = receivers.remove(channel) {
+                        exchanges.extend(receivers.into_iter());
+                    }
                 }
             }
         }
