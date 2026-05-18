@@ -90,6 +90,7 @@ use databend_common_timezone::fast_components_from_timestamp;
 use databend_common_timezone::fast_utc_from_local;
 use dtparse::parse;
 use jiff::SignedDuration;
+use jiff::Span;
 use jiff::Timestamp;
 use jiff::Unit;
 use jiff::civil::Date;
@@ -99,6 +100,8 @@ use jiff::fmt::strtime::BrokenDownTime;
 use jiff::tz::Offset;
 use jiff::tz::TimeZone;
 use num_traits::AsPrimitive;
+
+const MONTHS_PER_YEAR: i64 = 12;
 
 pub fn register(registry: &mut FunctionRegistry) {
     // cast(xx AS timestamp)
@@ -2773,12 +2776,12 @@ fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<
         .checked_sub(1)
         .ok_or_else(|| format!("Date parts out of bounds: year={year}, month={month}"))?;
     let total_months = year
-        .checked_mul(12)
+        .checked_mul(MONTHS_PER_YEAR)
         .and_then(|y| y.checked_add(month_offset))
         .ok_or_else(|| format!("Date parts out of bounds: year={year}, month={month}"))?;
 
-    let norm_year_i64 = total_months.div_euclid(12);
-    let norm_month = (total_months.rem_euclid(12) + 1) as i8;
+    let norm_year_i64 = total_months.div_euclid(MONTHS_PER_YEAR);
+    let norm_month = (total_months.rem_euclid(MONTHS_PER_YEAR) + 1) as i8;
     let norm_year =
         i16::try_from(norm_year_i64).map_err(|_| format!("Year out of bounds: {norm_year_i64}"))?;
 
@@ -2787,11 +2790,11 @@ fn normalize_date_parts(year: i64, month: i64, day: i64) -> std::result::Result<
     let day_offset = day
         .checked_sub(1)
         .ok_or_else(|| format!("Day value out of bounds: {day}"))?;
-    let hours = day_offset
-        .checked_mul(24)
-        .ok_or_else(|| format!("Day value out of bounds: {day}"))?;
+    let days = Span::new()
+        .try_days(day_offset)
+        .map_err(|_| format!("Day value out of bounds: {day}"))?;
 
-    base.checked_add(SignedDuration::from_hours(hours))
+    base.checked_add(days)
         .map_err(|_| format!("Date out of range: year={year}, month={month}, day={day}"))
 }
 
