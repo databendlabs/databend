@@ -398,6 +398,8 @@ pub async fn do_vacuum2(
     // is the correct compatibility schema to pass here.
     let schema = fuse_table.schema();
     let mut protected_blocks_by_table: ProtectedBlocksByTable = HashMap::new();
+    let segment_count = all_segments.len();
+    let start = std::time::Instant::now();
     let mut segment_stream = futures::stream::iter(all_segments.into_iter().map(|segment_loc| {
         let op = op.clone();
         let schema = schema.clone();
@@ -417,6 +419,17 @@ pub async fn do_vacuum2(
                 .insert(block_id);
         }
     }
+    let protected_block_count = protected_blocks_by_table
+        .values()
+        .map(|blocks| blocks.len())
+        .sum::<usize>();
+    ctx.set_status_info(&format!(
+        "Read protected segments for table {}, elapsed: {:?}, total protected blocks: {}, segments: {}",
+        table_info.desc,
+        start.elapsed(),
+        protected_block_count,
+        segment_count
+    ));
 
     // Step 6: for beyond-retention branches, clean unprotected snapshots first, then decide
     // whether the branch can be final-GC'd or must stay gc-pending because it still owns
@@ -792,6 +805,7 @@ async fn cleanup_table_data(
     // Cleanup is table-local: list this table's candidates, then filter out segments/blocks that
     // still need to stay alive for other tables.
     let table_info = fuse_table.get_table_info();
+    let start = std::time::Instant::now();
     let segments_to_gc: Vec<_> = fuse_table
         .list_files_for_gc(
             fuse_table
@@ -803,6 +817,14 @@ async fn cleanup_table_data(
         .into_iter()
         .filter(|path| !protected_segment_paths.contains(path))
         .collect();
+    ctx.set_status_info(&format!(
+        "Collected segments_to_gc for table {}, elapsed: {:?}, segments_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&segments_to_gc)
+    ));
+
+    let start = std::time::Instant::now();
     let mut blocks_to_gc = Vec::new();
     for path in fuse_table
         .list_files_for_gc(
@@ -825,6 +847,12 @@ async fn cleanup_table_data(
             blocks_to_gc.push(path);
         }
     }
+    ctx.set_status_info(&format!(
+        "Collected blocks_to_gc for table {}, elapsed: {:?}, blocks_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&blocks_to_gc)
+    ));
 
     let files_to_gc = cleanup_table_files(
         fuse_table,
@@ -895,19 +923,27 @@ async fn cleanup_table_files(
     segments_to_gc: Vec<String>,
     blocks_to_gc: Vec<String>,
 ) -> Result<Vec<String>> {
+    let table_info = fuse_table.get_table_info();
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
+    let begin = std::time::Instant::now();
     // Companion files are derived from blocks/segments, so deleting them first keeps the data-file
     // deletion order aligned with the rest of vacuum2.
-    let mut stats_to_gc = segments_to_gc
+    let stats_to_gc = segments_to_gc
         .iter()
         .map(|path| {
             TableMetaLocationGenerator::gen_segment_stats_location_from_segment_location(path)
         })
         .collect::<Vec<_>>();
+    ctx.set_status_info(&format!(
+        "Collected stats_to_gc for table {}, elapsed: {:?}, stats_to_gc: {:?}",
+        table_info.desc,
+        begin.elapsed(),
+        slice_summary(&stats_to_gc)
+    ));
     let stats_gc_count = stats_to_gc.len();
-    op.remove_file_in_batch(&std::mem::take(&mut stats_to_gc))
-        .await?;
+    op.remove_file_in_batch(&stats_to_gc).await?;
 
+    let start = std::time::Instant::now();
     let catalog = ctx.get_default_catalog()?;
     let table_agg_index_ids = catalog
         .list_index_ids_by_table_id(ListIndexesByIdReq::new(
@@ -915,7 +951,7 @@ async fn cleanup_table_files(
             fuse_table.get_id(),
         ))
         .await?;
-    let inverted_indexes = &fuse_table.get_table_info().meta.indexes;
+    let inverted_indexes = &table_info.meta.indexes;
     let indexes_per_block = table_agg_index_ids.len() + inverted_indexes.len() + 2;
 
     // TODO: index_paths pre-allocates blocks_to_gc * indexes_per_block strings, which can be
@@ -944,9 +980,14 @@ async fn cleanup_table_files(
         // vacuum by refresh virtual column.
         // index_paths.push(TableMetaLocationGenerator::gen_virtual_block_location(loc));
     }
+    ctx.set_status_info(&format!(
+        "Collected indexes_to_gc for table {}, elapsed: {:?}, indexes_to_gc: {:?}",
+        table_info.desc,
+        start.elapsed(),
+        slice_summary(&index_paths)
+    ));
     let indexes_gc_count = index_paths.len();
-    op.remove_file_in_batch(&std::mem::take(&mut index_paths))
-        .await?;
+    op.remove_file_in_batch(&index_paths).await?;
 
     let subject_files_to_gc = segments_to_gc
         .into_iter()
@@ -968,10 +1009,20 @@ async fn cleanup_table_files(
         stats_gc_count,
     );
 
-    Ok(subject_files_to_gc
+    let files_to_gc: Vec<_> = subject_files_to_gc
         .into_iter()
+        .chain(stats_to_gc)
         .chain(snapshots_to_gc)
-        .collect())
+        .chain(index_paths)
+        .collect();
+    ctx.set_status_info(&format!(
+        "Removed files for table {}, elapsed: {:?}, files_to_gc: {:?}",
+        table_info.desc,
+        begin.elapsed(),
+        slice_summary(&files_to_gc),
+    ));
+
+    Ok(files_to_gc)
 }
 
 pub async fn prepare_snapshot_gc_selection(
