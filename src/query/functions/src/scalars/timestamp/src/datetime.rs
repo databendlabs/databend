@@ -2924,12 +2924,17 @@ fn register_date_from_parts(registry: &mut FunctionRegistry) {
             |_, _, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_3_arg::<Int64Type, Int64Type, Int64Type, DateType>(
                 |year, month, day, output, ctx| match normalize_date_parts(year, month, day) {
-                    Ok(d) => {
-                        let days = d
+                    Ok(date) => {
+                        let days = date
                             .since((Unit::Day, Date::new(1970, 1, 1).unwrap()))
                             .unwrap()
                             .get_days();
-                        output.push(clamp_date(days as i64));
+                        if (DATE_MIN as i64..=DATE_MAX as i64).contains(&(days as i64)) {
+                            output.push(days);
+                        } else {
+                            ctx.set_error(output.len(), format!("Date out of range: {days}"));
+                            output.push(0);
+                        }
                     }
                     Err(e) => {
                         ctx.set_error(output.len(), format!("cannot create date from parts: {e}"));
