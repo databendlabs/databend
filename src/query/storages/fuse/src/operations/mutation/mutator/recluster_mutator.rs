@@ -16,6 +16,7 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::execute_futures_in_parallel;
@@ -65,14 +66,6 @@ use crate::statistics::sort_by_cluster_stats;
 /// For two-block layouts, repeated reclustering beyond this level
 /// rarely improves data locality and may cause task churn.
 const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
-
-struct DepthPointAnalysis {
-    point_overlaps: Vec<Vec<usize>>,
-    interval_depths: HashMap<usize, usize>,
-    max_depth: usize,
-    max_point: usize,
-    average_depth: f64,
-}
 
 #[derive(Clone)]
 pub struct SelectedReclusterSegment {
@@ -335,7 +328,7 @@ impl ReclusterMutator {
             // on the observed block size in selected segments instead of the worst
             // allowed block size, otherwise distributed recluster can under-select.
             let mut selected_idx =
-                self.fetch_max_depth_windows(points_map, self.depth_threshold, max_blocks_num)?;
+                self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
             if selected_idx.is_empty() {
                 if level != 0 || small_blocks.len() < 2 {
                     continue;
@@ -438,9 +431,7 @@ impl ReclusterMutator {
                     level,
                 ));
             }
-            if tasks.len() >= self.max_tasks {
-                break;
-            }
+            break;
         }
 
         // Determine if reclustering is needed.
@@ -580,30 +571,23 @@ impl ReclusterMutator {
     ) -> Result<Vec<SelectedReclusterSegment>> {
         let mut blocks_num = 0;
         let mut indices = IndexSet::new();
-        let mut segment_stats = Vec::with_capacity(compact_segments.len());
-        let mut segment_block_counts = Vec::with_capacity(compact_segments.len());
+        let mut segments = vec![None; compact_segments.len()];
         let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
         let mut small_segments = IndexSet::new();
         let block_per_seg = self.block_thresholds.block_per_segment;
 
         // Iterate over all segments
-        for (i, (_, compact_segment)) in compact_segments.iter().enumerate() {
-            let stats = self.build_cluster_stats_for_recluster(
-                compact_segment.summary.cluster_stats.as_ref(),
-                &compact_segment.summary.col_stats,
-            );
-            let level = stats.level;
+        for (i, (loc, compact_segment)) in compact_segments.iter().enumerate() {
+            let segment =
+                SelectedReclusterSegment::create(self, loc.clone(), compact_segment.clone());
+            let level = segment.stats.level;
 
             // Skip if segment has more blocks than required and no reclustering is needed
             if level < 0 && compact_segment.summary.block_count as usize >= block_per_seg {
-                segment_stats.push(None);
-                segment_block_counts.push(0);
                 continue;
             }
 
-            let segment_blocks = compact_segment.summary.block_count as usize;
-            segment_block_counts.push(segment_blocks);
-            blocks_num += segment_blocks;
+            blocks_num += compact_segment.summary.block_count as usize;
             // Track small segments for special handling later
             if blocks_num < block_per_seg {
                 small_segments.insert(i);
@@ -612,25 +596,18 @@ impl ReclusterMutator {
             indices.insert(i);
             // Update points_map with min and max points of the segment
             points_map
-                .entry(stats.min().clone())
+                .entry(segment.stats.min().clone())
                 .and_modify(|v| v.0.push(i))
                 .or_insert((vec![i], vec![]));
             points_map
-                .entry(stats.max().clone())
+                .entry(segment.stats.max().clone())
                 .and_modify(|v| v.1.push(i))
                 .or_insert((vec![], vec![i]));
-            segment_stats.push(Some(stats));
+            segments[i] = Some(segment);
         }
 
         let selected_indices = if indices.len() > 1 && blocks_num > block_per_seg {
-            let max_selected_blocks = max_len.saturating_mul(block_per_seg);
-            let selected = self.fetch_max_depth_by_block_budget(
-                points_map,
-                1.0,
-                max_len,
-                &segment_block_counts,
-                max_selected_blocks,
-            )?;
+            let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
             if selected.is_empty() && small_segments.len() > 1 {
                 // If no segments were selected but small segments exist, use those.
                 small_segments
@@ -643,16 +620,7 @@ impl ReclusterMutator {
 
         Ok(selected_indices
             .into_iter()
-            .filter_map(|i| {
-                segment_stats[i].take().map(|stats| {
-                    let (loc, info) = &compact_segments[i];
-                    SelectedReclusterSegment {
-                        loc: loc.clone(),
-                        info: info.clone(),
-                        stats,
-                    }
-                })
-            })
+            .filter_map(|i| segments[i].take())
             .collect())
     }
 
@@ -715,18 +683,12 @@ impl ReclusterMutator {
             "convert-segments-worker".to_owned(),
         )
         .await?;
-        let mut blocks = joint
+        let blocks = joint
             .into_iter()
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flatten()
             .collect::<Vec<_>>();
-        blocks.sort_by(|left, right| {
-            left.0
-                .segment_idx
-                .cmp(&right.0.segment_idx)
-                .then_with(|| left.0.block_idx.cmp(&right.0.block_idx))
-        });
         Ok(blocks)
     }
 
@@ -780,25 +742,21 @@ impl ReclusterMutator {
             "convert-segments-worker".to_owned(),
         )
         .await?;
-        let mut blocks = joint
+        let blocks = joint
             .into_iter()
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flatten()
-            .collect::<Vec<_>>();
-        blocks.sort_by(|left, right| {
-            left.0
-                .segment_idx
-                .cmp(&right.0.segment_idx)
-                .then_with(|| left.0.block_idx.cmp(&right.0.block_idx))
-        });
-        Ok(blocks.into_iter().collect())
+            .collect::<HashMap<_, _>>();
+        Ok(blocks)
     }
 
-    fn analyze_depth_points(
+    fn fetch_max_depth(
         &self,
         points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
-    ) -> Result<DepthPointAnalysis> {
+        depth_threshold: f64,
+        max_len: usize,
+    ) -> Result<IndexSet<usize>> {
         let mut max_depth = 0;
         let mut max_point = 0;
         let mut interval_depths = HashMap::with_capacity(points_map.len());
@@ -837,254 +795,95 @@ impl ReclusterMutator {
             });
         }
 
+        let mut selected_idx = IndexSet::with_capacity(max_len);
         if !unfinished_intervals.is_empty() {
             warn!(
                 "Recluster: unfinished_intervals is not empty after calculate the blocks overlaps"
             );
+            // re-sort the unfinished unfinished_intervals firstly.
+            unfinished_intervals.keys().for_each(|idx| {
+                selected_idx.insert(*idx);
+            });
         }
 
         let sum_depth: usize = interval_depths.values().sum();
         // round the float to 4 decimal places.
         let average_depth =
             (10000.0 * sum_depth as f64 / interval_depths.len() as f64).round() / 10000.0;
-        Ok(DepthPointAnalysis {
-            point_overlaps,
-            interval_depths,
-            max_depth,
-            max_point,
-            average_depth,
-        })
-    }
+        debug!("recluster: average_depth: {}", average_depth);
 
-    fn fetch_max_depth_windows(
-        &self,
-        points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
-        depth_threshold: f64,
-        max_len: usize,
-    ) -> Result<IndexSet<usize>> {
-        let depth_points = self.analyze_depth_points(points_map)?;
-        debug!(
-            "recluster: average_depth: {}, max_depth: {}",
-            depth_points.average_depth, depth_points.max_depth
-        );
-
-        if depth_points.average_depth <= depth_threshold
-            && depth_points.max_depth as f64 <= depth_threshold * 2.0
-        {
-            return Ok(IndexSet::new());
-        }
-
-        let mut candidates = depth_points
-            .point_overlaps
-            .iter()
-            .enumerate()
-            .filter_map(|(point, overlaps)| {
-                let effective_blocks = overlaps
-                    .iter()
-                    .filter(|idx| {
-                        depth_points
-                            .interval_depths
-                            .get(idx)
-                            .is_some_and(|depth| *depth > 1)
-                    })
-                    .copied()
-                    .collect::<Vec<_>>();
-                let effective_depth = effective_blocks.len();
-                let depth_score = effective_blocks
-                    .iter()
-                    .filter_map(|idx| depth_points.interval_depths.get(idx).copied())
-                    .sum::<usize>();
-                let max_interval_depth = effective_blocks
-                    .iter()
-                    .filter_map(|idx| depth_points.interval_depths.get(idx).copied())
-                    .max()
-                    .unwrap_or(0);
-                let min_index = effective_blocks.iter().min().copied().unwrap_or(usize::MAX);
-                (effective_depth as f64 > depth_threshold).then_some((
-                    point,
-                    depth_score,
-                    max_interval_depth,
-                    effective_depth,
-                    overlaps.len(),
-                    min_index,
-                ))
-            })
-            .collect::<Vec<_>>();
-        candidates.sort_by(|left, right| {
-            right
-                .1
-                .cmp(&left.1)
-                .then_with(|| right.2.cmp(&left.2))
-                .then_with(|| right.3.cmp(&left.3))
-                .then_with(|| right.4.cmp(&left.4))
-                .then_with(|| left.5.cmp(&right.5))
-                .then_with(|| left.0.cmp(&right.0))
-        });
-
-        let mut selected_idx = IndexSet::with_capacity(max_len);
-        let mut selected_windows = 0usize;
-        for (point, _, _, _, _, _) in candidates {
-            if selected_idx.len() >= max_len {
-                break;
-            }
-
-            let mut window = depth_points.point_overlaps[point]
-                .iter()
-                .filter(|idx| {
-                    depth_points
-                        .interval_depths
-                        .get(idx)
-                        .is_some_and(|depth| *depth > 1)
-                })
-                .copied()
-                .collect::<Vec<_>>();
-            window.sort_unstable();
-            window.retain(|idx| !selected_idx.contains(idx));
-            if window.len() < 2 {
-                continue;
-            }
-
-            let remaining = max_len.saturating_sub(selected_idx.len());
-            if window.len() > remaining {
-                continue;
-            }
-
-            if window.len() < 2 {
-                continue;
-            }
-
-            selected_idx.extend(window);
-            selected_windows += 1;
-        }
-
-        selected_idx.truncate(max_len);
-        debug!(
-            "recluster: selected {} windows, {} blocks",
-            selected_windows,
-            selected_idx.len()
-        );
-        Ok(selected_idx)
-    }
-
-    fn fetch_max_depth_by_block_budget(
-        &self,
-        points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
-        depth_threshold: f64,
-        max_len: usize,
-        block_counts: &[usize],
-        max_blocks: usize,
-    ) -> Result<IndexSet<usize>> {
-        let depth_points = self.analyze_depth_points(points_map)?;
-        debug!("recluster: average_depth: {}", depth_points.average_depth);
-
-        let mut selected_idx = IndexSet::with_capacity(max_len);
-        if depth_points.average_depth <= depth_threshold {
-            return Ok(selected_idx);
-        }
-
-        let mut selected_blocks = 0usize;
-        depth_points.point_overlaps[depth_points.max_point]
-            .iter()
-            .for_each(|idx| {
-                selected_blocks = selected_blocks.saturating_add(block_counts[*idx]);
+        // find the max point, gather the indices.
+        if average_depth > depth_threshold {
+            point_overlaps[max_point].iter().for_each(|idx| {
                 selected_idx.insert(*idx);
             });
 
-        let mut left = depth_points.max_point;
-        let mut right = depth_points.max_point;
-        while selected_idx.len() < max_len {
-            let left_depth = if left > 0 {
-                let point_overlap = &depth_points.point_overlaps[left - 1];
-                let depth = point_overlap.len();
-                if point_overlap
-                    .iter()
-                    .all(|v| depth_points.interval_depths.get(v) == Some(&1))
-                {
-                    left = 0;
-                    0.0
+            let mut left = max_point;
+            let mut right = max_point;
+            while selected_idx.len() < max_len {
+                let left_depth = if left > 0 {
+                    let point_overlap = &point_overlaps[left - 1];
+                    // Calculate the depth of the point.
+                    let depth = point_overlap.len();
+                    if point_overlap
+                        .iter()
+                        .all(|v| interval_depths.get(v) == Some(&1))
+                    {
+                        // If all overlapping intervals have a depth of 1,
+                        // it indicates that these intervals donot overlap significantly.
+                        // Set left to indicate that the traversal on the left side is complete.
+                        left = 0;
+                        0.0
+                    } else {
+                        depth as f64
+                    }
                 } else {
-                    depth as f64
-                }
-            } else {
-                0.0
-            };
-
-            let right_depth = if right < depth_points.point_overlaps.len() - 1 {
-                let point_overlap = &depth_points.point_overlaps[right + 1];
-                let depth = point_overlap.len();
-                if point_overlap
-                    .iter()
-                    .all(|v| depth_points.interval_depths.get(v) == Some(&1))
-                {
-                    right = depth_points.point_overlaps.len() - 1;
                     0.0
+                };
+
+                let right_depth = if right < point_overlaps.len() - 1 {
+                    let point_overlap = &point_overlaps[right + 1];
+                    let depth = point_overlap.len();
+                    if point_overlap
+                        .iter()
+                        .all(|v| interval_depths.get(v) == Some(&1))
+                    {
+                        // If all overlapping intervals have a depth of 1,
+                        // it indicates that these intervals donot overlap significantly.
+                        // Set right to indicate that the traversal on the left side is complete.
+                        right = point_overlaps.len() - 1;
+                        0.0
+                    } else {
+                        depth as f64
+                    }
                 } else {
-                    depth as f64
-                }
-            } else {
-                0.0
-            };
+                    0.0
+                };
 
-            let max_depth = left_depth.max(right_depth);
-            if max_depth <= depth_threshold {
-                break;
-            }
-
-            if left_depth >= right_depth {
-                let point = left - 1;
-                let next_blocks = Self::new_selected_blocks(
-                    &depth_points.point_overlaps[point],
-                    &selected_idx,
-                    block_counts,
-                );
-                if selected_blocks > 0 && selected_blocks.saturating_add(next_blocks) > max_blocks {
+                let max_depth = left_depth.max(right_depth);
+                if max_depth <= depth_threshold {
                     break;
                 }
 
-                left -= 1;
-                let mut merged_idx = IndexSet::new();
-                depth_points.point_overlaps[left].iter().for_each(|idx| {
-                    merged_idx.insert(*idx);
-                });
-                merged_idx.extend(selected_idx);
-                selected_idx = merged_idx;
-                selected_blocks = selected_blocks.saturating_add(next_blocks);
-            } else {
-                let point = right + 1;
-                let next_blocks = Self::new_selected_blocks(
-                    &depth_points.point_overlaps[point],
-                    &selected_idx,
-                    block_counts,
-                );
-                if selected_blocks > 0 && selected_blocks.saturating_add(next_blocks) > max_blocks {
-                    break;
+                if left_depth >= right_depth {
+                    left -= 1;
+                    let mut merged_idx = IndexSet::new();
+                    point_overlaps[left].iter().for_each(|idx| {
+                        merged_idx.insert(*idx);
+                    });
+                    merged_idx.extend(selected_idx);
+                    selected_idx = merged_idx;
+                } else {
+                    right += 1;
+                    point_overlaps[right].iter().for_each(|idx| {
+                        selected_idx.insert(*idx);
+                    });
                 }
-
-                right += 1;
-                depth_points.point_overlaps[right].iter().for_each(|idx| {
-                    selected_idx.insert(*idx);
-                });
-                selected_blocks = selected_blocks.saturating_add(next_blocks);
             }
         }
 
         selected_idx.truncate(max_len);
         Ok(selected_idx)
-    }
-
-    fn new_selected_blocks(
-        candidates: &[usize],
-        selected_idx: &IndexSet<usize>,
-        block_counts: &[usize],
-    ) -> usize {
-        if block_counts.is_empty() {
-            return 0;
-        }
-        candidates
-            .iter()
-            .filter(|idx| !selected_idx.contains(*idx))
-            .map(|idx| block_counts[*idx])
-            .sum()
     }
 
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
@@ -1093,16 +892,7 @@ impl ReclusterMutator {
             return false;
         }
 
-        let mut first = None;
-        let mut second = None;
-        for idx in start.iter().chain(end.iter()) {
-            match (first, second) {
-                (None, _) => first = Some(idx),
-                (Some(first), None) if first != idx => second = Some(idx),
-                (Some(first), Some(second)) if first != idx && second != idx => return false,
-                _ => {}
-            }
-        }
-        first.is_some() && second.is_some()
+        let set: HashSet<usize> = HashSet::from_iter(start.iter().chain(end.iter()).cloned());
+        set.len() == 2
     }
 }
