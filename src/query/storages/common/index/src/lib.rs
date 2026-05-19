@@ -76,6 +76,7 @@ pub use spatial_predicate::SpatialPredicateResult;
 pub use spatial_predicate::collect_spatial_predicates;
 pub use virtual_column::VIRTUAL_COLUMN_NODES_KEY;
 pub use virtual_column::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
+pub use virtual_column::VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY;
 pub use virtual_column::VIRTUAL_COLUMN_STRING_TABLE_KEY;
 pub use virtual_column::VirtualColumnFileMeta;
 pub use virtual_column::VirtualColumnIdWithMeta;
