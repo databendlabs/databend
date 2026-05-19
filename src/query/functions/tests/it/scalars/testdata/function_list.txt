@@ -184,10 +184,12 @@ Functions overloads:
 3 array_compact(Array(Nothing) NULL) :: Array(Nothing) NULL
 4 array_compact(Array(T0)) :: Array(T0)
 5 array_compact(Array(T0) NULL) :: Array(T0) NULL
-0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
-1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_concat(Array(T0), Array(T0)) :: Array(T0)
-3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_concat(Variant, Variant) :: Variant
+1 array_concat(Variant NULL, Variant NULL) :: Variant NULL
+2 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+3 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_concat(Array(T0), Array(T0)) :: Array(T0)
+5 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_construct FACTORY
 0 array_count FACTORY
 0 array_distinct(Variant) :: Variant
