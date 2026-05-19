@@ -32,6 +32,71 @@ EXPLAIN redacts RAP expression
 EXPLAIN ANALYZE redacts RAP expression
 #### test 10: EXPLAIN PERF output should not leak the raw RAP expression
 EXPLAIN PERF redacts RAP expression
+#### test 11: RAP on VARIANT column enters prewhere, limit is pushed
+>>>> DROP TABLE IF EXISTS rap_vcol_test
+>>>> DROP ROW ACCESS POLICY IF EXISTS rap_vcol_policy
+>>>> CREATE TABLE rap_vcol_test(id INT, val VARIANT)
+>>>> INSERT INTO rap_vcol_test VALUES (1, '{"region":"EMEA"}'), (2, '{"region":"APAC"}'), (3, '{"region":"APAC"}')
+3
+>>>> CREATE ROW ACCESS POLICY rap_vcol_policy AS (val VARIANT) RETURNS boolean -> val['region'] = 'APAC'
+>>>> ALTER TABLE rap_vcol_test ADD ROW ACCESS POLICY rap_vcol_policy ON (val)
+#### verify limit IS pushed because RAP enters prewhere
+├── push downs: [filters: [], secure_filters: REDACTED, limit: 1]
+#### verify query still returns correct results with RAP enforced
+>>>> SELECT id FROM rap_vcol_test ORDER BY id
+2
+3
+<<<<
+>>>> ALTER TABLE rap_vcol_test DROP ROW ACCESS POLICY rap_vcol_policy
+>>>> DROP TABLE IF EXISTS rap_vcol_test
+>>>> DROP ROW ACCESS POLICY IF EXISTS rap_vcol_policy
+#### test 12: multi-block ORDER BY LIMIT correctness with RAP
+>>>> DROP TABLE IF EXISTS rap_multiblock_test
+>>>> DROP ROW ACCESS POLICY IF EXISTS rap_multiblock_policy
+>>>> CREATE TABLE rap_multiblock_test(id INT, name STRING, region STRING)
+>>>> INSERT INTO rap_multiblock_test VALUES (1, 'x1', 'EMEA'), (2, 'x2', 'EMEA'), (3, 'x3', 'EMEA')
+3
+>>>> INSERT INTO rap_multiblock_test VALUES (10, 'a1', 'APAC'), (11, 'a2', 'APAC'), (12, 'a3', 'APAC')
+3
+>>>> INSERT INTO rap_multiblock_test VALUES (20, 'b1', 'APAC'), (21, 'b2', 'APAC'), (22, 'b3', 'APAC')
+3
+>>>> CREATE ROW ACCESS POLICY rap_multiblock_policy AS (region STRING) RETURNS boolean -> region = 'APAC'
+>>>> ALTER TABLE rap_multiblock_test ADD ROW ACCESS POLICY rap_multiblock_policy ON (region)
+#### ORDER BY id LIMIT 2: should return 10,11 not 1,2
+>>>> SELECT id, region FROM rap_multiblock_test ORDER BY id LIMIT 2
+10	APAC
+11	APAC
+<<<<
+#### ORDER BY id DESC LIMIT 2: should return 22,21
+>>>> SELECT id, region FROM rap_multiblock_test ORDER BY id DESC LIMIT 2
+22	APAC
+21	APAC
+<<<<
+#### ORDER BY id LIMIT 4: spans two allowed blocks
+>>>> SELECT id, region FROM rap_multiblock_test ORDER BY id LIMIT 4
+10	APAC
+11	APAC
+12	APAC
+20	APAC
+<<<<
+>>>> ALTER TABLE rap_multiblock_test DROP ROW ACCESS POLICY rap_multiblock_policy
+>>>> DROP TABLE IF EXISTS rap_multiblock_test
+>>>> DROP ROW ACCESS POLICY IF EXISTS rap_multiblock_policy
+#### test 13: prove RAP expression participates in range index pruning
+>>>> DROP TABLE IF EXISTS rap_pruning_test
+>>>> DROP ROW ACCESS POLICY IF EXISTS rap_pruning_policy
+>>>> CREATE TABLE rap_pruning_test(id INT, region STRING) row_per_block=1
+>>>> INSERT INTO rap_pruning_test VALUES (1, 'EMEA'), (2, 'EMEA'), (3, 'APAC'), (4, 'APAC')
+4
+#### 4 rows with row_per_block=1 means 4 blocks
+#### RAP: region = 'APAC' should prune blocks where region min/max = 'EMEA'
+>>>> CREATE ROW ACCESS POLICY rap_pruning_policy AS (region STRING) RETURNS boolean -> region = 'APAC'
+>>>> ALTER TABLE rap_pruning_test ADD ROW ACCESS POLICY rap_pruning_policy ON (region)
+#### EXPLAIN ANALYZE should show blocks range pruning: 4 to 2 (2 EMEA blocks pruned by RAP)
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 4 to 2, bloom pruning: 2 to 2>]
+>>>> ALTER TABLE rap_pruning_test DROP ROW ACCESS POLICY rap_pruning_policy
+>>>> DROP TABLE IF EXISTS rap_pruning_test
+>>>> DROP ROW ACCESS POLICY IF EXISTS rap_pruning_policy
 #### cleanup
 >>>> ALTER TABLE rap_pushdown_test DROP ROW ACCESS POLICY rap_pushdown_policy
 >>>> DROP TABLE IF EXISTS rap_pushdown_test

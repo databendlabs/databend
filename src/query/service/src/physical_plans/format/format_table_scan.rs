@@ -62,8 +62,10 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
         };
         let filters = self
             .inner
-            .display_push_down_filters
+            .source
+            .push_downs
             .as_ref()
+            .and_then(|p| p.filters.as_ref())
             .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .unwrap_or_default();
 
@@ -111,7 +113,13 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             &self.inner.source.statistics,
         ));
         // Push downs.
-        let push_downs = if self.inner.has_secure_push_down {
+        let has_secure = self
+            .inner
+            .source
+            .push_downs
+            .as_ref()
+            .is_some_and(|p| p.has_secure_filters());
+        let push_downs = if has_secure {
             format!("push downs: [filters: [{filters}], secure_filters: REDACTED, limit: {limit}]")
         } else {
             format!("push downs: [filters: [{filters}], limit: {limit}]")

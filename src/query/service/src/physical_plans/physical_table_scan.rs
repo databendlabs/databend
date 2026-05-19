@@ -93,10 +93,6 @@ pub struct TableScan {
     pub scan_id: usize,
     pub name_mapping: BTreeMap<String, String>,
     pub source: Box<DataSourcePlan>,
-    #[serde(default)]
-    pub display_push_down_filters: Option<Filters>,
-    #[serde(default)]
-    pub has_secure_push_down: bool,
     pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
 
     pub table_index: Option<IndexType>,
@@ -182,8 +178,6 @@ impl IPhysicalPlan for TableScan {
             scan_id: self.scan_id,
             name_mapping: self.name_mapping.clone(),
             source: self.source.clone(),
-            display_push_down_filters: self.display_push_down_filters.clone(),
-            has_secure_push_down: self.has_secure_push_down,
             internal_column: self.internal_column.clone(),
             table_index: self.table_index,
             stat_info: self.stat_info.clone(),
@@ -248,8 +242,6 @@ impl TableScan {
         table_index: Option<IndexType>,
         stat_info: Option<PlanStatsInfo>,
         internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-        display_push_down_filters: Option<Filters>,
-        has_secure_push_down: bool,
     ) -> PhysicalPlan {
         let name = match &source.source_info {
             DataSourceInfo::TableSource(_) => "TableScan".to_string(),
@@ -262,8 +254,6 @@ impl TableScan {
         PhysicalPlan::new(TableScan {
             meta: PhysicalPlanMeta::new(name),
             source,
-            display_push_down_filters,
-            has_secure_push_down,
             scan_id,
             name_mapping,
             table_index,
@@ -439,7 +429,7 @@ impl PhysicalPlanBuilder {
             table_schema = Arc::new(schema);
         }
 
-        let (push_downs, display_push_down_filters) = self.push_downs(
+        let push_downs = self.push_downs(
             &scan,
             &table_schema,
             project_virtual_columns,
@@ -546,10 +536,6 @@ impl PhysicalPlanBuilder {
             Some(scan.table_index),
             Some(stat_info.clone()),
             internal_column,
-            display_push_down_filters,
-            scan.secure_predicates
-                .as_ref()
-                .is_some_and(|p| !p.is_empty()),
         );
 
         // Update stream columns if needed.
@@ -687,8 +673,6 @@ impl PhysicalPlanBuilder {
                 estimated_rows: 1.0,
             }),
             None,
-            None,
-            false,
         ))
     }
 
@@ -698,7 +682,7 @@ impl PhysicalPlanBuilder {
         table_schema: &TableSchema,
         virtual_columns: BTreeMap<Symbol, VirtualColumn>,
         has_inner_column: bool,
-    ) -> Result<(PushDownInfo, Option<Filters>)> {
+    ) -> Result<PushDownInfo> {
         let metadata = self.metadata.read().clone();
         let projection = Self::build_projection(
             &metadata,
@@ -727,16 +711,20 @@ impl PhysicalPlanBuilder {
 
         let user_predicates = scan.push_down_predicates.as_deref().unwrap_or_default();
         let secure_predicates = scan.secure_predicates.as_deref().unwrap_or_default();
-        let all_push_down_predicates = user_predicates
-            .iter()
-            .chain(secure_predicates.iter())
-            .collect::<Vec<_>>();
-        let display_push_down_predicates = user_predicates.iter().collect::<Vec<_>>();
 
-        let (push_down_filter, is_deterministic) =
-            self.create_scan_push_down_filters(&metadata, &all_push_down_predicates)?;
-        let (display_push_down_filters, _) =
-            self.create_scan_push_down_filters(&metadata, &display_push_down_predicates)?;
+        let (secure_filters, secure_is_deterministic) = if secure_predicates.is_empty() {
+            (None, true)
+        } else {
+            let preds = secure_predicates.iter().collect::<Vec<_>>();
+            self.create_scan_push_down_filters(&metadata, &preds)?
+        };
+        let (user_filters, user_is_deterministic) = if user_predicates.is_empty() {
+            (None, true)
+        } else {
+            let preds = user_predicates.iter().collect::<Vec<_>>();
+            self.create_scan_push_down_filters(&metadata, &preds)?
+        };
+        let is_deterministic = user_is_deterministic && secure_is_deterministic;
 
         let prewhere_info = scan
             .prewhere
@@ -857,25 +845,23 @@ impl PhysicalPlanBuilder {
 
         let virtual_column = self.build_virtual_column(virtual_columns)?;
 
-        Ok((
-            PushDownInfo {
-                projection: Some(projection),
-                output_columns,
-                filters: push_down_filter,
-                is_deterministic,
-                prewhere: prewhere_info,
-                limit,
-                order_by,
-                virtual_column,
-                lazy_materialization: !metadata.lazy_columns().is_empty(),
-                agg_index: None,
-                change_type: scan.change_type.clone(),
-                inverted_index: scan.inverted_index.clone(),
-                vector_index: scan.vector_index.clone(),
-                sample: scan.sample.clone(),
-            },
-            display_push_down_filters,
-        ))
+        Ok(PushDownInfo {
+            projection: Some(projection),
+            output_columns,
+            filters: user_filters,
+            is_deterministic,
+            prewhere: prewhere_info,
+            limit,
+            order_by,
+            virtual_column,
+            lazy_materialization: !metadata.lazy_columns().is_empty(),
+            agg_index: None,
+            change_type: scan.change_type.clone(),
+            inverted_index: scan.inverted_index.clone(),
+            vector_index: scan.vector_index.clone(),
+            sample: scan.sample.clone(),
+            secure_filters,
+        })
     }
 
     fn create_scan_push_down_filters(

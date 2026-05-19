@@ -104,7 +104,7 @@ Sort(Single)
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms, bloom pruning: 1 to 1 cost: 1 ms>]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
         ├── push downs: [filters: [], secure_filters: REDACTED, limit: NONE]
         └── estimated rows: 2.50
 
