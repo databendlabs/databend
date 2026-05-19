@@ -17,6 +17,7 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnBuilder;
+use databend_common_expression::TableDataType;
 use databend_common_formats::FieldJsonAstDecoder;
 use databend_common_meta_app::principal::NullAs;
 use databend_common_storage::FileParseError;
@@ -57,8 +58,7 @@ impl NdJsonDecoder {
         // speedup from this change alone.
         let mut json: serde_json::Value =
             serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_full_path))?;
-        // todo: this is temporary
-        if self.field_decoder.is_select {
+        if self.field_decoder.is_select || self.should_read_whole_row(&json) {
             self.field_decoder
                 .read_field(&mut columns[0], &json)
                 .map_err(|e| FileParseError::InvalidRow {
@@ -154,6 +154,34 @@ impl NdJsonDecoder {
             }
         }
         Ok(())
+    }
+
+    fn should_read_whole_row(&self, json: &serde_json::Value) -> bool {
+        let fields = self.load_context.schema.fields();
+        if fields.len() != 1
+            || !matches!(
+                fields[0].data_type.remove_nullable(),
+                TableDataType::Variant
+            )
+        {
+            return false;
+        }
+
+        let field_name = if self.field_decoder.ident_case_sensitive {
+            fields[0].name().to_owned()
+        } else {
+            fields[0].name().to_lowercase()
+        };
+
+        match json {
+            serde_json::Value::Object(obj) if self.field_decoder.ident_case_sensitive => {
+                !obj.contains_key(&field_name)
+            }
+            serde_json::Value::Object(obj) => {
+                !obj.keys().any(|key| key.to_lowercase() == field_name)
+            }
+            _ => true,
+        }
     }
 }
 

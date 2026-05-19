@@ -3,6 +3,12 @@ statement ok
 drop table if exists v
 
 statement ok
+drop table if exists v_whole_row
+
+statement ok
+drop table if exists v_score
+
+statement ok
 create table v (a variant)
 
 query ?
@@ -47,6 +53,34 @@ select $1 from v order by $1
 2
 3
 4
+
+statement ok
+create table v_whole_row (v variant)
+
+query TIITI
+copy into v_whole_row from @data/ndjson/json_sample.ndjson file_format = (type = ndjson) force=true
+----
+ndjson/json_sample.ndjson 4 0 NULL NULL
+
+query III
+select count(), min(json_path_query(v, '$.b')::int), max(json_path_query(v, '$.b')::int) from v_whole_row
+----
+4 1 4
+
+statement ok
+create table v_score (score variant)
+
+query TIITI
+copy into v_score from @data/ndjson/numbers.ndjson file_format = (type = ndjson) force=true
+----
+ndjson/numbers.ndjson 3 0 NULL NULL
+
+query T
+select score from v_score order by score
+----
+-1e+77
+1e+38
+null
 
 # ndjson only supports $1
 query error column position 2 doesn't exist
