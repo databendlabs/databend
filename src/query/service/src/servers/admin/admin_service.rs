@@ -124,6 +124,10 @@ impl AdminService {
                     get(super::v1::procedures::get_procedure_by_name),
                 )
                 .at(
+                    "/v1/tenants/:tenant/databases/:database/tables/:table/recluster/clustering_information",
+                    get(super::v1::clustering_information::clustering_information_handler),
+                )
+                .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",
                     get(super::v1::table_statistics::get_table_stats_handler),
                 );

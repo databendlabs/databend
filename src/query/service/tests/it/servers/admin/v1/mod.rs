@@ -14,4 +14,5 @@
 
 mod cluster;
 mod config;
+mod recluster;
 mod status;
