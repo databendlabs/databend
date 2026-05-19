@@ -96,8 +96,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         "asin",
         |_, _| {
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(2.0 * PI),
+                min: OrderedFloat(-PI / 2.0),
+                max: OrderedFloat(PI / 2.0),
             })
         },
         |f: F64, _| f.asin(),
