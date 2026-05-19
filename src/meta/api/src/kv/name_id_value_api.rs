@@ -53,6 +53,13 @@ pub enum CreateIdValueResult<IdRsc> {
     Existing(SeqV<DataId<IdRsc>>),
 }
 
+/// Defines how to handle an existing `name -> id` mapping when creating.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CreateIdValueMode {
+    CreateOnly,
+    CreateOrReplace,
+}
+
 /// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
 ///
 /// Such a two level mapping provides a consistent id `id` for internal use,
@@ -79,21 +86,21 @@ where
     /// For example, a `name -> id` mapping can have a reverse `id -> name` mapping.
     ///
     /// `mark_delete_records` is used to generate additional key-values for implementing `mark_delete` operation.
-    /// For example, when an index is dropped by `override_exist`,  `__fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta` will be added.
+    /// For example, when an index is replaced by `CreateOrReplace`,  `__fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta` will be added.
     ///
     /// If there is already a `name_ident` exists, return the existing id in `CreateIdValueResult::Existing`.
     /// Otherwise, create `name -> id -> value` and return the created id in `CreateIdValueResult::Created`.
     ///
-    /// `on_override_fn` is called with the old id and txn when override_exist is true and an existing
+    /// `on_override_fn` is called with the old id and txn when `CreateOrReplace` replaces an existing
     /// resource is being replaced. It can add custom operations to the transaction.
     ///
     /// This eliminates the need for callers to manually handle cleanup logic after the fact.
-    /// For example, when a procedure is dropped by `override_exist`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
+    /// For example, when a procedure is replaced by `CreateOrReplace`, `__fd_object_owners/tenant1/procedure-by-id/<procedure_id>` will be delete
     async fn create_id_value<A, M, O>(
         &self,
         name_ident: &K,
         value: &IdRsc::ValueType,
-        override_exist: bool,
+        create_mode: CreateIdValueMode,
         associated_records: A,
         mark_delete_records: M,
         on_override_fn: O,
@@ -119,31 +126,31 @@ where
                 let get_res = self.get_id_and_value(name_ident).await?;
 
                 if let Some((seq_id, seq_meta)) = get_res {
-                    if override_exist {
-                        // Override take place only when the id -> value does not change.
-                        // If it does not override, no such condition is required.
-                        let id_ident = seq_id.data.into_t_ident(tenant);
-                        txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
-                        txn.if_then.push(txn_del(&id_ident));
-
-                        // Following txn must match this seq to proceed.
-                        current_id_seq = seq_id.seq;
-
-                        // Remove existing associated.
-                        let kvs = associated_records(seq_id.data);
-                        for (k, _v) in kvs {
-                            txn.if_then.push(TxnOp::delete(k));
-                        }
-
-                        let kvs = mark_delete_records(seq_id.data, &seq_meta.data)?;
-                        for (k, v) in kvs {
-                            txn.if_then.push(TxnOp::put(k, v));
-                        }
-                        // Apply override function if provided
-                        on_override_fn(seq_id.data, &mut txn);
-                    } else {
+                    let CreateIdValueMode::CreateOrReplace = create_mode else {
                         return Ok(CreateIdValueResult::Existing(seq_id));
+                    };
+
+                    // Override take place only when the id -> value does not change.
+                    // If it does not override, no such condition is required.
+                    let id_ident = seq_id.data.into_t_ident(tenant);
+                    txn.condition.push(txn_cond_eq_seq(&id_ident, seq_meta.seq));
+                    txn.if_then.push(txn_del(&id_ident));
+
+                    // Following txn must match this seq to proceed.
+                    current_id_seq = seq_id.seq;
+
+                    // Remove existing associated.
+                    let kvs = associated_records(seq_id.data);
+                    for (k, _v) in kvs {
+                        txn.if_then.push(TxnOp::delete(k));
                     }
+
+                    let kvs = mark_delete_records(seq_id.data, &seq_meta.data)?;
+                    for (k, v) in kvs {
+                        txn.if_then.push(TxnOp::put(k, v));
+                    }
+                    // Apply override function if provided
+                    on_override_fn(seq_id.data, &mut txn);
                 };
             }
 

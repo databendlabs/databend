@@ -62,6 +62,7 @@ use super::schema_api::mark_table_index_as_deleted;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::CreateIdValueMode;
 use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
@@ -94,14 +95,17 @@ where
 
         let name_ident = &req.name_ident;
         let meta = &req.meta;
-        let overriding = req.create_option.is_overriding();
+        let create_mode = match req.create_option {
+            CreateOption::Create | CreateOption::CreateIfNotExists => CreateIdValueMode::CreateOnly,
+            CreateOption::CreateOrReplace => CreateIdValueMode::CreateOrReplace,
+        };
         let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident))?;
 
         let create_res = self
             .create_id_value(
                 name_ident,
                 meta,
-                overriding,
+                create_mode,
                 |id| {
                     vec![(
                         IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
