@@ -179,17 +179,15 @@ pub fn convert_number_size(num: f64) -> String {
 /// Mask the connection info in the sql.
 pub fn mask_connection_info(sql: &str) -> String {
     // Match CONNECTION = (...) handling quoted strings with possible embedded parens
-    static RE_CONNECTION_EQ: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)CONNECTION\s*=\s*\(([^)']*|'([^']|'')*')*\)").unwrap()
-    });
+    static RE_CONNECTION_EQ: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)CONNECTION\s*=\s*\(([^)']*|'([^']|'')*')*\)").unwrap());
     // Match CONNECTION => (...) (used in SELECT ... FROM stage syntax)
-    static RE_CONNECTION_ARROW: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?i)CONNECTION\s*=>\s*\(([^)']*|'([^']|'')*')*\)").unwrap()
-    });
+    static RE_CONNECTION_ARROW: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"(?i)CONNECTION\s*=>\s*\(([^)']*|'([^']|'')*')*\)").unwrap());
     // Match individual secret key-value pairs (fallback for bare keys outside CONNECTION blocks)
     static RE_SECRET_KV: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(
-            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY)\s*=\s*'([^']|'')*'"
+            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY)\s*=\s*'([^']|'')*'"
         ).unwrap()
     });
 
@@ -253,8 +251,7 @@ mod tests {
 
     #[test]
     fn test_mask_connection_arrow() {
-        let sql =
-            "SELECT * FROM 's3://b/data.csv' (CONNECTION => (ACCESS_KEY_ID = 'akid123', SECRET_ACCESS_KEY = 'secret456'))";
+        let sql = "SELECT * FROM 's3://b/data.csv' (CONNECTION => (ACCESS_KEY_ID = 'akid123', SECRET_ACCESS_KEY = 'secret456'))";
         let masked = mask_connection_info(sql);
         assert!(masked.contains("CONNECTION => (***masked***)"));
         assert!(!masked.contains("akid123"));
@@ -359,7 +356,8 @@ mod tests {
     #[test]
     fn test_mask_mixed_connection_and_bare_keys() {
         // CONNECTION block gets masked first, then any remaining bare keys
-        let sql = "COPY INTO t FROM 's3://b' CONNECTION = (ACCESS_KEY_ID = 'akid123') PASSWORD = 'pw123'";
+        let sql =
+            "COPY INTO t FROM 's3://b' CONNECTION = (ACCESS_KEY_ID = 'akid123') PASSWORD = 'pw123'";
         let masked = mask_connection_info(sql);
         assert!(masked.contains("CONNECTION = (***masked***)"));
         assert!(masked.contains("PASSWORD = '***'"));
@@ -379,5 +377,40 @@ mod tests {
         let sql = "CONNECTION=(ACCESS_KEY_ID='akid123')";
         let masked = mask_connection_info(sql);
         assert_eq!(masked, "CONNECTION = (***masked***)");
+    }
+
+    #[test]
+    fn test_mask_aws_secret_key() {
+        let sql = "CREATE CONNECTION c STORAGE_TYPE='s3' AWS_SECRET_KEY='my_secret'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("AWS_SECRET_KEY = '***'"));
+        assert!(masked.contains("STORAGE_TYPE='s3'"));
+        assert!(!masked.contains("my_secret"));
+    }
+
+    #[test]
+    fn test_mask_aws_token() {
+        let sql = "CREATE CONNECTION c STORAGE_TYPE='s3' AWS_TOKEN='tok_value'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("AWS_TOKEN = '***'"));
+        assert!(!masked.contains("tok_value"));
+    }
+
+    #[test]
+    fn test_mask_aws_access_key_id() {
+        let sql = "AWS_ACCESS_KEY_ID='AKIA1234' AWS_SECRET_ACCESS_KEY='secret_val'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("AWS_ACCESS_KEY_ID = '***'"));
+        assert!(masked.contains("AWS_SECRET_ACCESS_KEY = '***'"));
+        assert!(!masked.contains("AKIA1234"));
+        assert!(!masked.contains("secret_val"));
+    }
+
+    #[test]
+    fn test_mask_aws_session_token() {
+        let sql = "AWS_SESSION_TOKEN='session_tok_123'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "AWS_SESSION_TOKEN = '***'");
+        assert!(!masked.contains("session_tok_123"));
     }
 }
