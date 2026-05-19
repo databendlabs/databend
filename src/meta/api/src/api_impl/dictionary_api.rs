@@ -37,6 +37,7 @@ use log::debug;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_seq;
@@ -78,8 +79,10 @@ where
             .await?;
 
         match create_res {
-            Ok(id) => Ok(CreateDictionaryReply { dictionary_id: *id }),
-            Err(_existent) => Err(AppError::from(name_ident.exist_error(func_name!())).into()),
+            CreateIdValueResult::Created(id) => Ok(CreateDictionaryReply { dictionary_id: *id }),
+            CreateIdValueResult::Existing(_existent) => {
+                Err(AppError::from(name_ident.exist_error(func_name!())).into())
+            }
         }
     }
 

@@ -47,6 +47,12 @@ use crate::txn_core_util::txn_delete_exact;
 use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 
+/// The outcome of creating a `name -> id -> value` mapping.
+pub enum CreateIdValueResult<IdRsc> {
+    Created(DataId<IdRsc>),
+    Existing(SeqV<DataId<IdRsc>>),
+}
+
 /// NameIdValueApi provide generic meta-service access pattern implementations for `name -> id -> value` mapping.
 ///
 /// Such a two level mapping provides a consistent id `id` for internal use,
@@ -75,8 +81,8 @@ where
     /// `mark_delete_records` is used to generate additional key-values for implementing `mark_delete` operation.
     /// For example, when an index is dropped by `override_exist`,  `__fd_marked_deleted_index/<table_id>/<index_id> -> marked_deleted_index_meta` will be added.
     ///
-    /// If there is already a `name_ident` exists, return the existing id in a `Ok(Err(exist))`.
-    /// Otherwise, create `name -> id -> value` and returns the created id in a `Ok(Ok(created))`.
+    /// If there is already a `name_ident` exists, return the existing id in `CreateIdValueResult::Existing`.
+    /// Otherwise, create `name -> id -> value` and return the created id in `CreateIdValueResult::Created`.
     ///
     /// `on_override_fn` is called with the old id and txn when override_exist is true and an existing
     /// resource is being replaced. It can add custom operations to the transaction.
@@ -91,7 +97,7 @@ where
         associated_records: A,
         mark_delete_records: M,
         on_override_fn: O,
-    ) -> Result<Result<DataId<IdRsc>, SeqV<DataId<IdRsc>>>, MetaTxnError>
+    ) -> Result<CreateIdValueResult<IdRsc>, MetaTxnError>
     where
         A: Fn(DataId<IdRsc>) -> Vec<(String, Vec<u8>)> + Send,
         M: Fn(DataId<IdRsc>, &IdRsc::ValueType) -> Result<Vec<(String, Vec<u8>)>, MetaError> + Send,
@@ -136,7 +142,7 @@ where
                         // Apply override function if provided
                         on_override_fn(seq_id.data, &mut txn);
                     } else {
-                        return Ok(Err(seq_id));
+                        return Ok(CreateIdValueResult::Existing(seq_id));
                     }
                 };
             }
@@ -164,7 +170,7 @@ where
             debug!(name_ident :? =name_ident, id :? =&id_ident,succ = succ; "{}", func_name!());
 
             if succ {
-                return Ok(Ok(id));
+                return Ok(CreateIdValueResult::Created(id));
             }
         }
     }

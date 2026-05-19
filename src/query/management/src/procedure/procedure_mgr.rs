@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
+use databend_common_meta_api::name_id_value_api::CreateIdValueResult;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_app::KeyWithTenant;
@@ -107,8 +108,8 @@ impl ProcedureMgr {
             .await?;
 
         match create_res {
-            Ok(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
-            Err(_) => Ok(Err(name_ident.exist_error(func_name!()))),
+            CreateIdValueResult::Created(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
+            CreateIdValueResult::Existing(_) => Ok(Err(name_ident.exist_error(func_name!()))),
         }
     }
 

@@ -33,6 +33,7 @@ use log::debug;
 
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
 
@@ -59,7 +60,7 @@ where
 
         let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
 
-        let res = self
+        let res = match self
             .create_id_value(
                 name_ident,
                 meta,
@@ -73,7 +74,11 @@ where
                 |_, _| Ok(vec![]),
                 |_, _| {},
             )
-            .await?;
+            .await?
+        {
+            CreateIdValueResult::Created(id) => Ok(id),
+            CreateIdValueResult::Existing(seq_id) => Err(seq_id),
+        };
 
         Ok(res)
     }

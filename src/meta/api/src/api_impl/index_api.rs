@@ -62,6 +62,7 @@ use super::schema_api::mark_table_index_as_deleted;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::CreateIdValueResult;
 use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
@@ -116,8 +117,8 @@ where
             .await?;
 
         match create_res {
-            Ok(id) => Ok(CreateIndexReply { index_id: *id }),
-            Err(existent) => match req.create_option {
+            CreateIdValueResult::Created(id) => Ok(CreateIndexReply { index_id: *id }),
+            CreateIdValueResult::Existing(existent) => match req.create_option {
                 CreateOption::Create => {
                     Err(AppError::from(name_ident.exist_error(func_name!())).into())
                 }
