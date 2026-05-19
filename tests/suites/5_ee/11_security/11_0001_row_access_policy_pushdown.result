@@ -24,7 +24,7 @@
 ├── push downs: [filters: [is_true(rap_pushdown_test.id (#0) > 0)], secure_filters: REDACTED, limit: 1]
 #### test 7: ORDER BY + LIMIT semantics should apply RAP before TopK result selection
 >>>> SELECT id, region FROM rap_pushdown_test ORDER BY id LIMIT 1
-2 APAC
+2	APAC
 <<<<
 #### test 8: EXPLAIN output should not leak the raw RAP expression
 EXPLAIN redacts RAP expression
