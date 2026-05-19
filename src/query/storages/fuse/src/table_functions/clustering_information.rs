@@ -39,6 +39,7 @@ use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::SegmentInfo;
 use databend_storages_common_table_meta::table::ClusterType;
 use jsonb::Value as JsonbValue;
+use serde::Deserialize;
 use serde::Serialize;
 
 use crate::FuseTable;
@@ -89,6 +90,26 @@ impl TryFrom<(&str, TableArgs)> for ClusteringInformationArgs {
 pub type ClusteringInformationFunc = SimpleArgFuncTemplate<ClusteringInformation>;
 pub struct ClusteringInformation;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClusteringInformationResponse {
+    pub cluster_key: String,
+    #[serde(rename = "type")]
+    pub cluster_type: String,
+    pub timestamp: i64,
+    pub info: serde_json::Value,
+}
+
+#[async_backtrace::framed]
+pub async fn get_clustering_information(
+    ctx: Arc<dyn TableContext>,
+    table: &FuseTable,
+    cluster_key: &Option<String>,
+) -> Result<ClusteringInformationResponse> {
+    ClusteringInformationImpl::new(ctx, table)
+        .get_clustering_info(cluster_key)
+        .await
+}
+
 #[async_trait::async_trait]
 impl SimpleArgFunc for ClusteringInformation {
     type Args = ClusteringInformationArgs;
@@ -113,17 +134,9 @@ impl SimpleArgFunc for ClusteringInformation {
             )
             .await?;
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        ClusteringInformationImpl::new(ctx.clone(), tbl)
-            .get_clustering_info(&args.cluster_key)
-            .await
+        let info = get_clustering_information(ctx.clone(), tbl, &args.cluster_key).await?;
+        build_block(info)
     }
-}
-
-struct ClusteringStatisticsWrapper<T> {
-    cluster_key: String,
-    cluster_type: String,
-    timestamp: i64,
-    info: T,
 }
 
 struct ClusteringInformationImpl<'a> {
@@ -137,7 +150,10 @@ impl<'a> ClusteringInformationImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
+    async fn get_clustering_info(
+        &self,
+        cluster_key: &Option<String>,
+    ) -> Result<ClusteringInformationResponse> {
         match (self.table.cluster_type(), cluster_key) {
             (Some(ClusterType::Hilbert), None) => self.get_hilbert_clustering_info().await,
             (None, None) => Err(ErrorCode::UnclusteredTable(format!(
@@ -155,7 +171,10 @@ impl<'a> ClusteringInformationImpl<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn get_linear_clustering_info(&self, cluster_key: &Option<String>) -> Result<DataBlock> {
+    async fn get_linear_clustering_info(
+        &self,
+        cluster_key: &Option<String>,
+    ) -> Result<ClusteringInformationResponse> {
         let mut default_cluster_key_id = None;
         let (cluster_key, exprs) = match (self.table.cluster_key_str(), cluster_key) {
             (a, Some(b)) => {
@@ -194,11 +213,11 @@ impl<'a> ClusteringInformationImpl<'a> {
             .map_or(now, |s| s.timestamp.unwrap_or(now))
             .timestamp_micros();
         if snapshot.is_none() {
-            return build_block(ClusteringStatisticsWrapper {
+            return Ok(ClusteringInformationResponse {
                 cluster_key,
                 cluster_type,
                 timestamp,
-                info: LinerClusterStatistics::default(),
+                info: serde_json::to_value(LinerClusterStatistics::default())?,
             });
         }
         let snapshot = snapshot.unwrap();
@@ -279,18 +298,16 @@ impl<'a> ClusteringInformationImpl<'a> {
             average_depth,
             block_depth_histogram,
         };
-        let info = ClusteringStatisticsWrapper {
+        Ok(ClusteringInformationResponse {
             cluster_key,
             cluster_type,
             timestamp,
-            info,
-        };
-
-        build_block(info)
+            info: serde_json::to_value(info)?,
+        })
     }
 
     #[async_backtrace::framed]
-    async fn get_hilbert_clustering_info(&self) -> Result<DataBlock> {
+    async fn get_hilbert_clustering_info(&self) -> Result<ClusteringInformationResponse> {
         let Some((cluster_key_id, cluster_key_str)) = self.table.cluster_key_meta() else {
             unreachable!("Unclustered table {}", self.table.table_info.desc);
         };
@@ -362,14 +379,12 @@ impl<'a> ClusteringInformationImpl<'a> {
             unclustered_block_count,
         };
 
-        let stats = ClusteringStatisticsWrapper {
+        Ok(ClusteringInformationResponse {
             cluster_key: cluster_key_str.to_string(),
             cluster_type: "hilbert".to_string(),
             timestamp,
-            info,
-        };
-
-        build_block(stats)
+            info: serde_json::to_value(info)?,
+        })
     }
 
     fn schema() -> Arc<TableSchema> {
@@ -382,14 +397,14 @@ impl<'a> ClusteringInformationImpl<'a> {
     }
 }
 
-fn build_block<A: Serialize>(info: ClusteringStatisticsWrapper<A>) -> Result<DataBlock> {
+fn build_block(info: ClusteringInformationResponse) -> Result<DataBlock> {
     Ok(DataBlock::new(
         vec![
             BlockEntry::new_const_column_arg::<StringType>(info.cluster_key, 1),
             BlockEntry::new_const_column_arg::<StringType>(info.cluster_type, 1),
             BlockEntry::new_const_column_arg::<TimestampType>(info.timestamp, 1),
             BlockEntry::new_const_column_arg::<VariantType>(
-                JsonbValue::from(serde_json::to_value(&info.info)?).to_vec(),
+                JsonbValue::from(info.info).to_vec(),
                 1,
             ),
         ],
