@@ -58,6 +58,40 @@ select to_interval('1 month 1 hour 1 microsecond ago');
 
 skipif mysql
 query ?
+select to_interval('P1Y2M3DT4H5M6S');
+----
+1 year 2 months 3 days 4:05:06
+
+skipif mysql
+query ?
+select interval 'P3W';
+----
+21 days
+
+skipif mysql
+query ?
+select to_interval('PT0.123456S');
+----
+0:00:00.123456
+
+skipif mysql
+query ?
+select to_interval('+P2D');
+----
+2 days
+
+skipif mysql
+query ?
+select to_interval('-P1DT2H');
+----
+-1 day -2:00:00
+
+skipif mysql
+statement error 1006
+select to_interval('PT0.123456789S');
+
+skipif mysql
+query ?
 select to_interval('1 month 1 hour 1 microsecond ago');
 ----
 -1 month -1:00:00.000001

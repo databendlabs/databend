@@ -55,6 +55,7 @@ use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use derive_visitor::DriveMut;
+use log::debug;
 use log::error;
 use log::warn;
 
@@ -133,7 +134,8 @@ impl Interpreter for ReclusterTableInterpreter {
         loop {
             if let Err(err) = ctx.check_aborting() {
                 error!(
-                    "execution of recluster statement aborted. server is shutting down or the query was killed",
+                    "recluster: statement aborted, server is shutting down or the query was killed, round={}",
+                    times + 1
                 );
                 return Err(err.with_context("failed to execute"));
             }
@@ -145,6 +147,10 @@ impl Interpreter for ReclusterTableInterpreter {
             match res {
                 Ok(is_break) => {
                     if is_break {
+                        debug!(
+                            "recluster: final loop stop reason=no_recluster_parts round={}",
+                            times + 1,
+                        );
                         break;
                     }
                 }
@@ -158,8 +164,19 @@ impl Interpreter for ReclusterTableInterpreter {
                                 | ErrorCode::UNRESOLVABLE_CONFLICT
                         )
                     {
-                        warn!("Execute recluster error: {:?}", e);
+                        warn!(
+                            "recluster: final loop retry reason=retryable_conflict round={} code={} error={:?}",
+                            times + 1,
+                            e.code(),
+                            e,
+                        );
                     } else {
+                        error!(
+                            "recluster: final loop stop reason=error round={} code={} error={:?}",
+                            times + 1,
+                            e.code(),
+                            e,
+                        );
                         return Err(e);
                     }
                 }
@@ -170,7 +187,7 @@ impl Interpreter for ReclusterTableInterpreter {
             // Status.
             {
                 let status = format!(
-                    "recluster: run recluster tasks:{} times, cost:{:?}",
+                    "[FUSE-RECLUSTER] Run recluster tasks:{} times, cost:{:?}",
                     times, elapsed_time
                 );
                 ctx.set_status_info(&status);
@@ -182,8 +199,8 @@ impl Interpreter for ReclusterTableInterpreter {
 
             if elapsed_time >= timeout {
                 warn!(
-                    "Recluster stopped because the runtime was over {:?}",
-                    timeout
+                    "recluster: final loop stop reason=timeout round={} timeout={:?}",
+                    times, timeout,
                 );
                 break;
             }
@@ -347,7 +364,7 @@ impl ReclusterTableInterpreter {
         }
 
         warn!(
-            "Do hilbert recluster, total_bytes: {}, total_rows: {}, total_partitions: {}",
+            "recluster: build hilbert plan total_bytes={} total_rows={} total_partitions={}",
             total_bytes, total_rows, total_partitions
         );
 

@@ -90,7 +90,6 @@ use super::lock_api::LockApi;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
@@ -207,7 +206,7 @@ pub async fn construct_drop_table_txn_operations(
 
     let db_id = dbid_tbname.db_id;
     let tbname = dbid_tbname.table_name.clone();
-    let (tb_id_seq, _) = get_u64_value(kv_api, &dbid_tbname).await?;
+    let (tb_id_seq, _) = kv_api.get_pb_seq_and_value(&dbid_tbname).await?;
     if tb_id_seq == 0 {
         return if if_exists {
             Ok((0, 0))
@@ -502,10 +501,10 @@ pub async fn handle_undrop_table(
             table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let (dbid_tbname_seq, table_id) = get_u64_value(kv_api, &dbid_tbname).await?;
+        let (dbid_tbname_seq, table_id) = kv_api.get_pb_seq_and_value(&dbid_tbname).await?;
         if !req.force_replace() {
             // If table id already exists, return error.
-            if dbid_tbname_seq > 0 || table_id > 0 {
+            if dbid_tbname_seq > 0 || table_id.is_some() {
                 return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
                     UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
                 )));

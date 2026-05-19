@@ -19,36 +19,15 @@ use databend_common_meta_app::id_generator::IdGeneratorValue;
 use databend_common_proto_conv::FromToProto;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::KvApiExt;
-use databend_meta_client::kvapi::ListOptions;
 use databend_meta_client::types::InvalidReply;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::MetaNetworkError;
 use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnGetResponse;
-use databend_meta_client::types::errors;
-use futures::TryStreamExt;
 
 use crate::deserialize_struct;
-use crate::deserialize_u64;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
-
-/// Get u64 value by key.
-///
-/// It returns (seq, `u64` value).
-/// If not found, (0,0) is returned.
-pub async fn get_u64_value<T: kvapi::Key>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &T,
-) -> Result<(u64, u64), MetaError> {
-    let res = kv_api.get_kv(&key.to_string_key()).await?;
-
-    if let Some(seq_v) = res {
-        Ok((seq_v.seq, deserialize_u64(&seq_v.data)?))
-    } else {
-        Ok((0, 0))
-    }
-}
 
 #[allow(clippy::type_complexity)]
 pub fn deserialize_struct_get_response<K>(
@@ -97,78 +76,6 @@ where
     }
 
     Ok(seq_values)
-}
-
-/// List kvs whose value's type is `u64`.
-///
-/// It expects the kv-value' type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`,
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`, or
-/// `__fd_index/<tenant>/<index_name> -> (seq, index_id)`.
-///
-/// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
-pub async fn list_u64_value<K: kvapi::Key>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    key: &K,
-) -> Result<(Vec<K>, Vec<u64>), MetaError> {
-    let res = kv_api
-        .list_kv_collect(ListOptions::unlimited(&key.to_string_key()))
-        .await?;
-
-    let n = res.len();
-
-    let mut structured_keys = Vec::with_capacity(n);
-    let mut values = Vec::with_capacity(n);
-
-    for (str_key, seqv) in res.iter() {
-        let id = deserialize_u64(&seqv.data)?;
-        values.push(id);
-
-        // Parse key
-        let struct_key = K::from_str_key(str_key).map_err(|e| {
-            let inv = InvalidReply::new("list_u64_value", &e);
-            MetaNetworkError::InvalidReply(inv)
-        })?;
-        structured_keys.push(struct_key);
-    }
-
-    Ok((structured_keys, values))
-}
-
-/// Batch get u64 values by keys.
-///
-/// Returns a vec of Option<u64> in the same order as input keys.
-/// None means the key does not exist.
-pub async fn mget_u64_values<K: kvapi::Key>(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    keys: &[K],
-) -> Result<Vec<Option<u64>>, MetaError> {
-    if keys.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let str_keys: Vec<String> = keys.iter().map(|k| k.to_string_key()).collect();
-    let mut strm = kv_api.get_kv_stream(&str_keys).await?;
-
-    let mut results = Vec::with_capacity(keys.len());
-    while let Some(item) = strm.try_next().await? {
-        if let Some(seq_v) = item.value {
-            let id = deserialize_u64(&seq_v.data)?;
-            results.push(Some(id));
-        } else {
-            results.push(None);
-        }
-    }
-
-    if results.len() != keys.len() {
-        return Err(
-            errors::IncompleteStream::new(keys.len() as u64, results.len() as u64)
-                .context(" while mget_u64_values")
-                .into(),
-        );
-    }
-
-    Ok(results)
 }
 
 /// Generate an id on metasrv.
