@@ -17,7 +17,6 @@ use std::future::Future;
 use databend_common_meta_app::KeyWithTenant;
 use databend_common_meta_app::data_id::DataId;
 use databend_common_meta_app::id_generator::IdGenerator;
-use databend_common_meta_app::primitive::Id;
 use databend_common_meta_app::tenant_key::ident::TIdent;
 use databend_common_meta_app::tenant_key::resource::TenantResource;
 use databend_common_proto_conv::FromToProto;
@@ -36,6 +35,7 @@ use fastrace::func_name;
 use futures::TryStreamExt;
 use log::debug;
 
+use crate::ValueOf;
 use crate::kv_fetch_util::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::kv_pb_api::UpsertPB;
@@ -331,14 +331,13 @@ where
 
 /// Similar to `NameIdValueApi`, but is compatibility with non-DataId ids.
 #[tonic::async_trait]
-pub trait NameIdValueApiCompat<K, IdTyp>: KVApi<Error = MetaError>
+pub trait NameIdValueApiCompat<K>: KVApi<Error = MetaError>
 where
-    K: kvapi::Key<ValueType = Id<IdTyp>>,
+    K: kvapi::Key,
     K: KeyWithTenant,
     K: Send + Sync + 'static,
-    Id<IdTyp>: FromToProto + Send + Sync + 'static,
-    IdTyp: kvapi::Key + Clone + Send + Sync + 'static,
-    IdTyp::ValueType: FromToProto + Send + Sync + 'static,
+    K::ValueType: kvapi::Key + Clone + FromToProto + Send + Sync + 'static,
+    ValueOf<K::ValueType>: FromToProto + Send + Sync + 'static,
 {
     /// mget by names, returns a list of `(name, id, value)`
     ///
@@ -354,7 +353,10 @@ where
         &self,
         names: impl IntoIterator<Item = K> + Send,
     ) -> impl Future<
-        Output = Result<impl Iterator<Item = (K, IdTyp, SeqV<IdTyp::ValueType>)>, MetaError>,
+        Output = Result<
+            impl Iterator<Item = (K, K::ValueType, SeqV<ValueOf<K::ValueType>>)>,
+            MetaError,
+        >,
     > + Send {
         async move {
             let strm = self.get_pb_stream(names).await?;
@@ -362,7 +364,7 @@ where
 
             let name_ids = name_ids
                 .into_iter()
-                .filter_map(|(k, seq_v)| seq_v.map(|x| (k, x.data.into_inner())))
+                .filter_map(|(k, seq_v)| seq_v.map(|x| (k, x.data)))
                 .collect::<Vec<_>>();
 
             let id_idents = name_ids
@@ -386,15 +388,14 @@ where
     }
 }
 
-impl<K, IdTyp, T> NameIdValueApiCompat<K, IdTyp> for T
+impl<K, T> NameIdValueApiCompat<K> for T
 where
     T: KVApi<Error = MetaError> + ?Sized,
-    K: kvapi::Key<ValueType = Id<IdTyp>>,
+    K: kvapi::Key,
     K: KeyWithTenant,
     K: Send + Sync + 'static,
-    Id<IdTyp>: FromToProto + Send + Sync + 'static,
-    IdTyp: kvapi::Key + Clone + Send + Sync + 'static,
-    IdTyp::ValueType: FromToProto + Send + Sync + 'static,
+    K::ValueType: kvapi::Key + Clone + FromToProto + Send + Sync + 'static,
+    ValueOf<K::ValueType>: FromToProto + Send + Sync + 'static,
 {
 }
 

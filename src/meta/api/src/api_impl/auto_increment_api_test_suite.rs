@@ -166,7 +166,7 @@ impl AutoIncrementApiTestSuite {
             // assert auto increment current is 1 after next val
             let seqv = mt.get_pb(&auto_increment_sequence_storage).await?;
             assert!(seqv.as_ref().unwrap().seq != 0);
-            assert_eq!(seqv.as_ref().unwrap().data.inner().0, 1);
+            assert_eq!(*seqv.as_ref().unwrap().data, 1);
 
             // assert auto increment exists
             let seqv = mt

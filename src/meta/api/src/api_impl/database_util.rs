@@ -175,10 +175,10 @@ pub(crate) async fn get_db_or_err(
     let seq_db_id = kv_api.get_pb(name_key).await?;
     let seq_db_id = seq_db_id.ok_or_else(|| unknown_database_error(name_key, &msg))?;
 
-    let id_key = seq_db_id.data.into_inner();
+    let id_key = seq_db_id.data;
 
     let seq_db_meta = kv_api.get_pb(&id_key).await?;
     let seq_db_meta = seq_db_meta.ok_or_else(|| unknown_database_error(name_key, &msg))?;
 
-    Ok((seq_db_id.map(|x| x.into_inner()), seq_db_meta))
+    Ok((seq_db_id, seq_db_meta))
 }

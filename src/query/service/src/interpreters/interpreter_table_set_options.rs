@@ -64,6 +64,7 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -102,6 +103,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_recluster_depth(&self.plan.set_options)?;
         // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
         // check enable_parquet_encoding

@@ -798,10 +798,10 @@ error:
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no function matches signature `array_concat(Array(Boolean), Array(UInt8))`, you might need to add explicit type casts.
 
 candidate functions:
+  array_concat(Variant, Variant) :: Variant                                      : unable to unify `Array(Boolean)` with `Variant`
+  array_concat(Variant NULL, Variant NULL) :: Variant NULL                       : unable to unify `Array(Boolean)` with `Variant`
   array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)                 : unable to unify `Array(Boolean)` with `Array(Nothing)`
-  array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL  : unable to unify `Array(Boolean)` with `Array(Nothing)`
-  array_concat(Array(T0), Array(T0)) :: Array(T0)                                : unable to find a common super type for `Boolean` and `UInt8`
-... and 1 more
+... and 3 more
 
 
 

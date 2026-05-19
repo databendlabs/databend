@@ -17,6 +17,7 @@ pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
 pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
 pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
 pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
+pub const FUSE_OPT_KEY_RECLUSTER_DEPTH: &str = "recluster_depth";
 pub const FUSE_OPT_KEY_FILE_SIZE: &str = "file_size";
 pub const FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS: &str = "data_retention_period_in_hours";
 pub const FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP: &str =
@@ -52,3 +53,6 @@ pub const DEFAULT_ROW_PER_PAGE: usize = 8192;
 pub const DEFAULT_ROW_PER_INDEX: usize = 100000;
 
 pub const DEFAULT_AVG_DEPTH_THRESHOLD: f64 = 0.001;
+pub const MIN_RECLUSTER_DEPTH: u64 = 1;
+pub const MAX_RECLUSTER_DEPTH: u64 = 16;
+pub const DEFAULT_RECLUSTER_DEPTH: u64 = 8;
