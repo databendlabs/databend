@@ -126,7 +126,7 @@ where
     ) -> Result<Option<(SeqV<DictionaryId>, SeqV<DictionaryMeta>)>, MetaError> {
         debug!(dict_ident :? =(&name_ident); "DictionaryApi: {}", func_name!());
 
-        let got = self.get_id_value(&name_ident).await?;
+        let got = self.get_id_and_value(&name_ident).await?;
         Ok(got)
     }
 

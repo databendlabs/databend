@@ -142,7 +142,7 @@ impl ProcedureMgr {
     ) -> Result<Option<GetProcedureReply>, MetaError> {
         debug!(req :? =(req); "SchemaApi: {}", func_name!());
 
-        let res = self.kv_api.get_id_value(&req.inner).await?;
+        let res = self.kv_api.get_id_and_value(&req.inner).await?;
 
         let Some((seq_id, seq_meta)) = res else {
             return Ok(None);

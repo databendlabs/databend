@@ -271,7 +271,7 @@ where
     async fn get_tag(&self, name_ident: &TagNameIdent) -> Result<Option<GetTagReply>, MetaError> {
         debug!(name_ident :? =(name_ident); "SchemaApi: {}", func_name!());
 
-        match self.get_id_value(name_ident).await? {
+        match self.get_id_and_value(name_ident).await? {
             Some((id_seqv, meta_seqv)) => Ok(Some(GetTagReply {
                 tag_id: id_seqv,
                 meta: meta_seqv,

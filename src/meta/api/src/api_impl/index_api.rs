@@ -151,7 +151,7 @@ where
             let mut txn = TxnRequest::default();
 
             // remove name->id, id->meta, id->name
-            let get_res = self.get_id_value(name_ident).await?;
+            let get_res = self.get_id_and_value(name_ident).await?;
             let Some((seq_id, seq_meta)) = get_res else {
                 return Ok(None);
             };
@@ -194,7 +194,7 @@ where
     ) -> Result<Option<GetIndexReply>, MetaError> {
         debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
 
-        let res = self.get_id_value(name_ident).await?;
+        let res = self.get_id_and_value(name_ident).await?;
 
         let Some((seq_id, seq_meta)) = res else {
             return Ok(None);

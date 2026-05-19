@@ -32,7 +32,6 @@ use databend_meta_client::types::SeqV;
 use databend_meta_client::types::TxnOp;
 use databend_meta_client::types::TxnRequest;
 use fastrace::func_name;
-use futures::TryStreamExt;
 use log::debug;
 
 use crate::ValueOf;
@@ -160,7 +159,7 @@ where
             debug!(id :? = id,name_ident :? =name_ident; "new id");
 
             txn.condition
-                .extend(vec![txn_cond_eq_seq(name_ident, current_id_seq)]);
+                .push(txn_cond_eq_seq(name_ident, current_id_seq));
 
             txn.if_then
                 .push(txn_put_pb_with_ttl(name_ident, &id, None)?); // (tenant, name) -> id
@@ -206,7 +205,7 @@ where
 
             let mut txn = TxnRequest::default();
 
-            let get_res = self.get_id_value(name_ident).await?;
+            let get_res = self.get_id_and_value(name_ident).await?;
             let Some((seq_id, seq_meta)) = get_res else {
                 return Ok(None);
             };
@@ -241,7 +240,7 @@ where
         key: &K,
         value: IdRsc::ValueType,
     ) -> Result<Option<(DataId<IdRsc>, IdRsc::ValueType)>, MetaError> {
-        let got = self.get_id_value(key).await?;
+        let got = self.get_id_and_value(key).await?;
 
         let Some((seq_id, seq_meta)) = got else {
             return Ok(None);
@@ -267,27 +266,13 @@ where
         id_ident: TIdent<IdRsc, DataId<IdRsc>>,
         value: IdRsc::ValueType,
     ) -> Result<Change<IdRsc::ValueType>, MetaError> {
-        let reply = self
-            .upsert_pb(&UpsertPB::new(
-                id_ident,
-                MatchSeq::GE(1),
-                Operation::Update(value),
-                None,
-            ))
-            .await?;
-
-        Ok(reply)
-    }
-
-    /// Get the `name -> id -> value` mapping by name.
-    ///
-    /// Returning `None` means the name does not exist.
-    /// Otherwise, returns the `SeqV<id>` and `SeqV<value>`.
-    async fn get_id_value(
-        &self,
-        key: &K,
-    ) -> Result<Option<(SeqV<DataId<IdRsc>>, SeqV<IdRsc::ValueType>)>, MetaError> {
-        self.get_id_and_value(key).await
+        self.upsert_pb(&UpsertPB::new(
+            id_ident,
+            MatchSeq::GE(1),
+            Operation::Update(value),
+            None,
+        ))
+        .await
     }
 
     /// list by name prefix, returns a list of `(name, SeqV<id>, SeqV<value>)`
@@ -308,22 +293,21 @@ where
     > + Send {
         async move {
             let tenant = prefix.key().tenant();
-            let strm = self.list_pb(ListOptions::unlimited(prefix)).await?;
-            let name_ids = strm.try_collect::<Vec<_>>().await?;
+            let name_ids = self.list_pb_vec(ListOptions::unlimited(prefix)).await?;
 
             let id_idents = name_ids
                 .iter()
-                .map(|itm| itm.seqv.data.into_t_ident(tenant));
+                .map(|(_name, seq_id)| seq_id.data.into_t_ident(tenant))
+                .collect::<Vec<_>>();
 
-            let strm = self.get_pb_values(id_idents).await?;
-            let seq_metas = strm.try_collect::<Vec<_>>().await?;
+            let seq_metas = self.get_pb_values_vec(id_idents).await?;
 
             let name_id_values =
                 name_ids
                     .into_iter()
                     .zip(seq_metas)
-                    .filter_map(|(itm, opt_seq_meta)| {
-                        opt_seq_meta.map(|seq_meta| (itm.key, itm.seqv, seq_meta))
+                    .filter_map(|((name, seq_id), opt_seq_meta)| {
+                        opt_seq_meta.map(|seq_meta| (name, seq_id, seq_meta))
                     });
 
             Ok(name_id_values)
@@ -371,9 +355,10 @@ where
             MetaError,
         >,
     > + Send {
+        let names = names.into_iter().collect::<Vec<_>>();
+
         async move {
-            let strm = self.get_pb_stream(names).await?;
-            let name_ids = strm.try_collect::<Vec<_>>().await?;
+            let name_ids = self.get_pb_vec(names).await?;
 
             let name_ids = name_ids
                 .into_iter()
@@ -385,8 +370,7 @@ where
                 .map(|(_k, id)| id.clone())
                 .collect::<Vec<_>>();
 
-            let strm = self.get_pb_values(id_idents).await?;
-            let seq_metas = strm.try_collect::<Vec<_>>().await?;
+            let seq_metas = self.get_pb_values_vec(id_idents).await?;
 
             let name_id_values =
                 name_ids
