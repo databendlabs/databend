@@ -216,11 +216,9 @@ pub fn mask_connection_info(sql: &str) -> String {
     let masked_sql = RE_CONNECTION_ARROW
         .replace_all(&masked_sql, "CONNECTION => (***masked***)")
         .to_string();
-    let masked_sql = RE_SECRET_KV
+    RE_SECRET_KV
         .replace_all(&masked_sql, "$1 = '***'")
-        .to_string();
-
-    masked_sql
+        .to_string()
 }
 
 /// Maximum length of the SQL query to be displayed or log.
