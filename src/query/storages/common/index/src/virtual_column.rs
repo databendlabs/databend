@@ -27,6 +27,7 @@ use parquet::format::FileMetaData;
 use serde::ser::SerializeMap;
 
 pub const VIRTUAL_COLUMN_STRING_TABLE_KEY: &str = "string_table";
+pub const VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY: &str = "string_table_json";
 pub const VIRTUAL_COLUMN_NODES_KEY: &str = "nodes";
 pub const VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: &str = "shared_ids";
 
@@ -400,13 +401,32 @@ impl<'de> serde::Deserialize<'de> for CompactVirtualColumnSharedIds {
     }
 }
 
-pub fn encode_compact_virtual_column_string_table(string_table: &[String]) -> Result<String> {
-    if string_table.iter().any(|segment| segment.contains('\0')) {
-        return Err(ErrorCode::StorageOther(
-            "virtual column string table segment contains NUL delimiter".to_string(),
-        ));
+pub fn encode_compact_virtual_column_string_table(
+    string_table: &[String],
+) -> Result<(String, String)> {
+    let needs_json = compact_string_table_needs_json(string_table);
+    if needs_json {
+        // JSON object keys may legally contain NUL bytes. Virtual columns are an
+        // optimization, so use a JSON-array metadata format for these rare paths
+        // instead of rejecting the write.
+        let encoded = serde_json::to_string(string_table).map_err(|e| {
+            ErrorCode::StorageOther(format!(
+                "failed to encode virtual column string table {:?}",
+                e
+            ))
+        })?;
+        return Ok((VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY.to_string(), encoded));
     }
-    Ok(string_table.join("\0"))
+
+    Ok((
+        VIRTUAL_COLUMN_STRING_TABLE_KEY.to_string(),
+        string_table.join("\0"),
+    ))
+}
+
+fn compact_string_table_needs_json(string_table: &[String]) -> bool {
+    string_table.iter().any(|segment| segment.contains('\0'))
+        || matches!(string_table, [segment] if segment.is_empty())
 }
 
 pub fn encode_compact_virtual_column_shared_ids(
@@ -488,6 +508,8 @@ impl TryFrom<Bytes> for VirtualColumnFileMeta {
 // dedicated virtual column or a shared map entry for sparse paths. The parquet file stores:
 // - ARROW:schema: column names/types for all virtual columns.
 // - VIRTUAL_COLUMN_STRING_TABLE_KEY: NUL-delimited string table of unique path segments.
+// - VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY: JSON-array string table for segments that cannot
+//   be represented by NUL-delimited metadata.
 // - VIRTUAL_COLUMN_NODES_KEY: compact trie encoded by string table ids and leaf indices.
 // - VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: compact shared/typed-shared column id mapping.
 // Legacy metadata keys are still accepted as a fallback for old virtual column files.
@@ -498,6 +520,7 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
     fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
         let mut arrow_schema = None;
         let mut string_table = None;
+        let mut json_string_table = None;
         let mut legacy_string_table = None;
         let mut virtual_column_nodes = None;
         let mut legacy_virtual_column_nodes = None;
@@ -511,7 +534,10 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
                 arrow_schema = Some(get_arrow_schema_from_metadata(encoded_meta)?);
             } else if key_value.key == VIRTUAL_COLUMN_STRING_TABLE_KEY {
                 let encoded_meta = key_value.value.as_ref().unwrap();
-                string_table = Some(get_compact_virtual_column_string_table(encoded_meta));
+                string_table = Some(get_compact_virtual_column_string_table(encoded_meta)?);
+            } else if key_value.key == VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY {
+                let encoded_meta = key_value.value.as_ref().unwrap();
+                json_string_table = Some(get_virtual_column_string_table(encoded_meta)?);
             } else if key_value.key == LEGACY_VIRTUAL_COLUMN_STRING_TABLE_KEY {
                 let encoded_meta = key_value.value.as_ref().unwrap();
                 legacy_string_table = Some(get_virtual_column_string_table(encoded_meta)?);
@@ -536,9 +562,14 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
             ErrorCode::Internal("virtual column file missing ARROW:schema metadata")
         })?;
         let data_schema = DataSchema::try_from(&arrow_schema)?;
-        let string_table = string_table.or(legacy_string_table).ok_or_else(|| {
-            ErrorCode::Internal("virtual column file missing virtual column string table metadata")
-        })?;
+        let string_table = string_table
+            .or(json_string_table)
+            .or(legacy_string_table)
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "virtual column file missing virtual column string table metadata",
+                )
+            })?;
         let virtual_column_nodes = virtual_column_nodes
             .or(legacy_virtual_column_nodes)
             .ok_or_else(|| {
@@ -645,11 +676,11 @@ fn get_virtual_column_string_table(encoded_meta: &str) -> Result<Vec<String>> {
     })
 }
 
-fn get_compact_virtual_column_string_table(encoded_meta: &str) -> Vec<String> {
+fn get_compact_virtual_column_string_table(encoded_meta: &str) -> Result<Vec<String>> {
     if encoded_meta.is_empty() {
-        return Vec::new();
+        return Ok(Vec::new());
     }
-    encoded_meta.split('\0').map(str::to_string).collect()
+    Ok(encoded_meta.split('\0').map(str::to_string).collect())
 }
 
 fn get_virtual_column_nodes(encoded_meta: &str) -> Result<HashMap<u32, VirtualColumnNode>> {
@@ -779,6 +810,7 @@ mod tests {
     #[test]
     fn test_compact_virtual_column_metadata_key_names() {
         assert_eq!(VIRTUAL_COLUMN_STRING_TABLE_KEY, "string_table");
+        assert_eq!(VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY, "string_table_json");
         assert_eq!(VIRTUAL_COLUMN_NODES_KEY, "nodes");
         assert_eq!(VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY, "shared_ids");
     }
@@ -791,22 +823,46 @@ mod tests {
             "user_id".to_string(),
         ];
 
-        let encoded = encode_compact_virtual_column_string_table(&string_table)?;
+        let (key, encoded) = encode_compact_virtual_column_string_table(&string_table)?;
 
+        assert_eq!(key, VIRTUAL_COLUMN_STRING_TABLE_KEY);
         assert_eq!(encoded, "message\0attribute\0user_id");
         assert_eq!(
-            get_compact_virtual_column_string_table(&encoded),
+            get_compact_virtual_column_string_table(&encoded)?,
             string_table
         );
-        assert!(get_compact_virtual_column_string_table("").is_empty());
+        assert!(get_compact_virtual_column_string_table("")?.is_empty());
 
         Ok(())
     }
 
     #[test]
-    fn test_compact_virtual_column_string_table_rejects_nul_segment() {
-        let string_table = vec!["message\0attribute".to_string()];
-        assert!(encode_compact_virtual_column_string_table(&string_table).is_err());
+    fn test_virtual_column_string_table_metadata_uses_json_for_nul_segment() -> Result<()> {
+        let string_table = vec![
+            "message\0attribute".to_string(),
+            "".to_string(),
+            "user_id".to_string(),
+        ];
+
+        let (key, encoded) = encode_compact_virtual_column_string_table(&string_table)?;
+
+        assert_eq!(key, VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY);
+        assert_eq!(get_virtual_column_string_table(&encoded)?, string_table);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_virtual_column_string_table_metadata_uses_json_for_single_empty_segment() -> Result<()>
+    {
+        let string_table = vec!["".to_string()];
+
+        let (key, encoded) = encode_compact_virtual_column_string_table(&string_table)?;
+
+        assert_eq!(key, VIRTUAL_COLUMN_STRING_TABLE_JSON_KEY);
+        assert_eq!(get_virtual_column_string_table(&encoded)?, string_table);
+
+        Ok(())
     }
 
     #[test]

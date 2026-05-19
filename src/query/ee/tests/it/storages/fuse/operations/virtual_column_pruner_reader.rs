@@ -64,13 +64,14 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let location = ("_b/virtual_column_pruner_reader.parquet".to_string(), 0);
 
     let json_rows = [
-        r#"{"id":1,"create":"3/06","text":"a","user":{"id":1,"name":"alice","info":{"replies":2,"likes":25,"tags":["good","popular"]}},"sparse_bool":true,"sparse_uint":42,"sparse_int":-7,"sparse_float":1.5,"sparse_string":"rare","sparse_jsonb":[1,2],"container":{"mixed":7,"keep":1}}"#,
+        r#"{"id":1,"create":"3/06","text":"a","user":{"id":1,"name":"alice","info":{"replies":2,"likes":25,"tags":["good","popular"]}},"sparse_bool":true,"sparse_uint":42,"sparse_int":-7,"sparse_float":1.5,"sparse_string":"rare","sparse_jsonb":[1,2],"sparse_jsonb_arr":["x"],"container":{"mixed":7,"keep":1}}"#,
         r#"{"id":2,"create":"4/06","text":"b","user":{"id":2,"name":"bob","info":{"replies":12,"tags":["interesting"]}},"container":{"mixed":{"a":1},"keep":2}}"#,
         r#"{"id":3,"create":"4/07","text":"c","user":{"id":3,"name":"tom","info":{"replies":4,"likes":85,"tags":["bad"]},"extra":"new"}}"#,
         r#"{"id":4,"create":"4/08","text":"d","user":{"id":4,"name":"sam","info":{"replies":1,"likes":5,"tags":[]}}}"#,
         r#"{"id":5,"create":"4/09","text":"e","user":{"id":5,"name":"zen","info":{"replies":7}}}"#,
+        r#"[{"k":"v"},{"k1":"v1"}]"#,
     ];
-    let ids = vec![1, 2, 3, 4, 5];
+    let ids = vec![1, 2, 3, 4, 5, 6];
     let variants = json_rows
         .iter()
         .map(|row| Some(OwnedJsonb::from_str(row).unwrap().to_vec()))
@@ -108,7 +109,9 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         "{sparse_float}",
         "{sparse_string}",
         "{sparse_jsonb}",
+        "{sparse_jsonb_arr,0}",
         "{container}",
+        "{0,k}",
     ] {
         let key_paths = parse_key_paths(key_path.as_bytes()).unwrap().to_owned();
         let field = build_virtual_column_field(source_column_id, "v", column_id, key_paths);
@@ -176,6 +179,8 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
     let info_column_id = column_ids[2];
     let tags0_column_id = column_ids[3];
     let extra_column_id = column_ids[4];
+    let sparse_jsonb_arr0_column_id = column_ids[12];
+    let root_array_k_column_id = column_ids[14];
 
     let info_plans = virtual_block_meta_index
         .virtual_column_read_plan
@@ -195,6 +200,31 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         plan,
         VirtualColumnReadPlan::FromParent { suffix_path, .. } if suffix_path == "{0}"
     )));
+
+    let sparse_jsonb_arr0_plans = virtual_block_meta_index
+        .virtual_column_read_plan
+        .get(&sparse_jsonb_arr0_column_id)
+        .expect("sparse_jsonb_arr[0] plans");
+    assert!(sparse_jsonb_arr0_plans.iter().any(|plan| matches!(
+        plan,
+        VirtualColumnReadPlan::FromParent { parent, suffix_path }
+            if suffix_path == "{0}"
+                && matches!(parent.as_ref(), VirtualColumnReadPlan::Shared {
+                    data_type: VirtualColumnSharedDataType::Jsonb,
+                    ..
+                })
+    )));
+
+    assert!(
+        !virtual_block_meta_index
+            .virtual_column_read_plan
+            .contains_key(&root_array_k_column_id)
+    );
+    assert!(
+        !virtual_block_meta_index
+            .ignored_source_column_ids
+            .contains(&source_column_id)
+    );
 
     let extra_plans = virtual_block_meta_index
         .virtual_column_read_plan
@@ -239,13 +269,14 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         block.num_columns() + column_ids.len()
     );
 
-    let expected_id = vec![Some("1"), Some("2"), Some("3"), Some("4"), Some("5")];
+    let expected_id = vec![Some("1"), Some("2"), Some("3"), Some("4"), Some("5"), None];
     let expected_text = vec![
         Some(r#""a""#),
         Some(r#""b""#),
         Some(r#""c""#),
         Some(r#""d""#),
         Some(r#""e""#),
+        None,
     ];
     let expected_info = vec![
         Some(r#"{"replies":2,"likes":25,"tags":["good","popular"]}"#),
@@ -253,6 +284,7 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         Some(r#"{"replies":4,"likes":85,"tags":["bad"]}"#),
         Some(r#"{"replies":1,"likes":5,"tags":[]}"#),
         Some(r#"{"replies":7}"#),
+        None,
     ];
     let expected_tags0 = vec![
         Some(r#""good""#),
@@ -260,14 +292,25 @@ async fn test_virtual_column_pruner_reader() -> anyhow::Result<()> {
         Some(r#""bad""#),
         None,
         None,
+        None,
     ];
-    let expected_extra = vec![None, None, Some(r#""new""#), None, None];
+    let expected_extra = vec![None, None, Some(r#""new""#), None, None, None];
+    let expected_sparse_jsonb_arr0 = vec![Some(r#""x""#), None, None, None, None, None];
+    let expected_root_array_k = vec![None, None, None, None, None, Some(r#""v""#)];
 
     assert_variant_column(&result_block.get_by_offset(2).to_column(), &expected_id);
     assert_variant_column(&result_block.get_by_offset(3).to_column(), &expected_text);
     assert_variant_column(&result_block.get_by_offset(4).to_column(), &expected_info);
     assert_variant_column(&result_block.get_by_offset(5).to_column(), &expected_tags0);
     assert_variant_column(&result_block.get_by_offset(6).to_column(), &expected_extra);
+    assert_variant_column(
+        &result_block.get_by_offset(14).to_column(),
+        &expected_sparse_jsonb_arr0,
+    );
+    assert_variant_column(
+        &result_block.get_by_offset(16).to_column(),
+        &expected_root_array_k,
+    );
 
     Ok(())
 }

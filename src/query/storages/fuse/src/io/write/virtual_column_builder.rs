@@ -82,7 +82,6 @@ use siphasher::sip128::SipHasher24;
 
 use crate::index::VIRTUAL_COLUMN_NODES_KEY;
 use crate::index::VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY;
-use crate::index::VIRTUAL_COLUMN_STRING_TABLE_KEY;
 use crate::index::encode_compact_virtual_column_nodes;
 use crate::index::encode_compact_virtual_column_shared_ids;
 use crate::index::encode_compact_virtual_column_string_table;
@@ -914,9 +913,10 @@ impl VirtualColumnBuilder {
         // Parquet metadata stores only the trie, string table, and compact shared column ids.
         // Column metas (offset/len/num_values), column ids, and data types
         // are derived from the parquet schema + row group metadata during read.
-        let string_table_json = encode_compact_virtual_column_string_table(&string_table)?;
+        let (string_table_key, string_table_json) =
+            encode_compact_virtual_column_string_table(&string_table)?;
         metadata.push(KeyValue {
-            key: VIRTUAL_COLUMN_STRING_TABLE_KEY.to_string(),
+            key: string_table_key,
             value: Some(string_table_json),
         });
         let nodes_json = encode_compact_virtual_column_nodes(&virtual_column_nodes)?;
