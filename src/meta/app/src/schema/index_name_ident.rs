@@ -37,9 +37,7 @@ impl TIdentRaw<IndexName> {
 
 mod kvapi_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::KeyWithTenant;
     use crate::schema::IndexNameIdent;
     use crate::schema::index_id_ident::IndexId;
     use crate::tenant_key::resource::TenantResource;
@@ -53,10 +51,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for IndexId {
         type KeyType = IndexNameIdent;
-        /// IndexId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
     }
 }
 

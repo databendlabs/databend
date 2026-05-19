@@ -25,8 +25,8 @@ mod kvapi_impl {
 
     use databend_meta_client::kvapi;
 
-    use crate::primitive::Id;
     use crate::tenant_key::resource::TenantResource;
+    use crate::value_id::ValueId;
 
     /// Defines the storage for autoincrement generator.
     ///
@@ -36,28 +36,14 @@ mod kvapi_impl {
     impl TenantResource for AutoIncrementStorageRsc {
         const PREFIX: &'static str = "__fd_autoincrement_storage";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<AutoIncrementStorageValue>;
+        type ValueType = ValueId<AutoIncrementStorageValue>;
     }
 
-    impl kvapi::Value for Id<AutoIncrementStorageValue> {
+    impl kvapi::Value for ValueId<AutoIncrementStorageValue> {
         type KeyType = super::AutoIncrementStorageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
-    #[derive(
-        Debug,
-        Clone,
-        Copy,
-        Default,
-        PartialEq,
-        Eq,
-        derive_more::From,
-        derive_more::Deref,
-        derive_more::DerefMut,
-    )]
-    pub struct AutoIncrementStorageValue(pub u64);
+    pub struct AutoIncrementStorageValue;
 }
 
 #[cfg(test)]

@@ -31,6 +31,10 @@ impl<T> ThreadJoinHandle<T> {
         ThreadJoinHandle { inner }
     }
 
+    pub fn is_finished(&self) -> bool {
+        self.inner.is_finished()
+    }
+
     pub fn join(self) -> Result<T> {
         match self.inner.join() {
             Ok(res) => Ok(res),

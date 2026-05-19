@@ -40,9 +40,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for NetworkPolicy {
         type KeyType = NetworkPolicyIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     impl kvapi::ValueWithName for NetworkPolicy {
