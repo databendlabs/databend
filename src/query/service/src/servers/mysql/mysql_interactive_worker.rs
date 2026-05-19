@@ -19,6 +19,7 @@ use std::time::Instant;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::convert_byte_size;
 use databend_common_base::base::convert_number_size;
+use databend_common_base::base::mask_connection_info;
 use databend_common_base::runtime::MemStat;
 use databend_common_base::runtime::ThreadTracker;
 use databend_common_base::runtime::TrackingPayloadExt;
@@ -264,7 +265,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 
                 if let Err(cause) = write_result {
                     self.base.session.txn_mgr().lock().set_fail();
-                    let suffix = format!("(while in query {})", query);
+                    let suffix = format!("(while in query {})", mask_connection_info(query));
                     write_result = Err(cause.add_message_back(suffix));
                 }
                 observe_mysql_process_request_duration(instant.elapsed());
@@ -420,7 +421,7 @@ impl InteractiveWorkerBase {
                 ))
             }
             None => {
-                info!("Normal query: {}", query);
+                info!("Normal query: {}", mask_connection_info(query));
                 let context = self.session.create_query_context(self.version).await?;
                 context.update_init_query_id(query_id);
                 let mut tracking_payload = ThreadTracker::new_tracking_payload();
