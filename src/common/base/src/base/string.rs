@@ -180,23 +180,32 @@ pub fn convert_number_size(num: f64) -> String {
 pub fn mask_connection_info(sql: &str) -> String {
     // Quoted string pattern: handles both '' (SQL doubled) and \' (backslash escaped) quotes
     // Also handles other backslash escapes like \\
-    const QUOTED_STR: &str = r"'([^'\\]|''|\\.)*'";
+    // Supports both single-quoted and double-quoted literals (MySQL/Hive dialects)
+    const SINGLE_QUOTED_STR: &str = r"'([^'\\]|''|\\.)*'";
+    const DOUBLE_QUOTED_STR: &str = r#""([^"\\]|""|\\.)*""#;
 
     // Match CONNECTION = (...) handling quoted strings with possible embedded parens
     static RE_CONNECTION_EQ: LazyLock<Regex> = LazyLock::new(|| {
-        let pattern = format!(r"(?i)CONNECTION\s*=\s*\(([^)'\\]*|{})*\)", QUOTED_STR);
+        let pattern = format!(
+            r"(?i)CONNECTION\s*=\s*\(([^)'\x22\\]*|{}|{})*\)",
+            SINGLE_QUOTED_STR, DOUBLE_QUOTED_STR
+        );
         Regex::new(&pattern).unwrap()
     });
     // Match CONNECTION => (...) (used in SELECT ... FROM stage syntax)
     static RE_CONNECTION_ARROW: LazyLock<Regex> = LazyLock::new(|| {
-        let pattern = format!(r"(?i)CONNECTION\s*=>\s*\(([^)'\\]*|{})*\)", QUOTED_STR);
+        let pattern = format!(
+            r"(?i)CONNECTION\s*=>\s*\(([^)'\x22\\]*|{}|{})*\)",
+            SINGLE_QUOTED_STR, DOUBLE_QUOTED_STR
+        );
         Regex::new(&pattern).unwrap()
     });
     // Match individual secret key-value pairs (fallback for bare keys outside CONNECTION blocks)
+    // Supports both single-quoted and double-quoted values
     static RE_SECRET_KV: LazyLock<Regex> = LazyLock::new(|| {
         let pattern = format!(
-            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY)\s*=\s*{}",
-            QUOTED_STR
+            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY|CREDENTIAL)\s*=\s*({}|{})",
+            SINGLE_QUOTED_STR, DOUBLE_QUOTED_STR
         );
         Regex::new(&pattern).unwrap()
     });
@@ -451,5 +460,41 @@ mod tests {
         let masked = mask_connection_info(sql);
         assert_eq!(masked, "AWS_SESSION_TOKEN = '***'");
         assert!(!masked.contains("session_tok_123"));
+    }
+
+    #[test]
+    fn test_mask_gcs_credential() {
+        let sql =
+            "CREATE CONNECTION c STORAGE_TYPE='gcs' CREDENTIAL='service-account-json-content'";
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("CREDENTIAL = '***'"));
+        assert!(masked.contains("STORAGE_TYPE='gcs'"));
+        assert!(!masked.contains("service-account-json-content"));
+    }
+
+    #[test]
+    fn test_mask_double_quoted_password() {
+        // MySQL/Hive dialect uses double-quoted string literals
+        let sql = r#"CREATE CONNECTION c STORAGE_TYPE="s3" PASSWORD="secret_val""#;
+        let masked = mask_connection_info(sql);
+        assert!(masked.contains("PASSWORD = '***'"));
+        assert!(!masked.contains("secret_val"));
+    }
+
+    #[test]
+    fn test_mask_double_quoted_connection_block() {
+        let sql = r#"CONNECTION = (ACCESS_KEY_ID = "akid123" SECRET_ACCESS_KEY = "secret456")"#;
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "CONNECTION = (***masked***)");
+        assert!(!masked.contains("akid123"));
+        assert!(!masked.contains("secret456"));
+    }
+
+    #[test]
+    fn test_mask_double_quoted_with_backslash_escape() {
+        let sql = r#"PASSWORD = "pass\"word""#;
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "PASSWORD = '***'");
+        assert!(!masked.contains("pass"));
     }
 }
