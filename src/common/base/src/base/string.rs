@@ -178,17 +178,27 @@ pub fn convert_number_size(num: f64) -> String {
 
 /// Mask the connection info in the sql.
 pub fn mask_connection_info(sql: &str) -> String {
+    // Quoted string pattern: handles both '' (SQL doubled) and \' (backslash escaped) quotes
+    // Also handles other backslash escapes like \\
+    const QUOTED_STR: &str = r"'([^'\\]|''|\\.)*'";
+
     // Match CONNECTION = (...) handling quoted strings with possible embedded parens
-    static RE_CONNECTION_EQ: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?i)CONNECTION\s*=\s*\(([^)']*|'([^']|'')*')*\)").unwrap());
+    static RE_CONNECTION_EQ: LazyLock<Regex> = LazyLock::new(|| {
+        let pattern = format!(r"(?i)CONNECTION\s*=\s*\(([^)'\\]*|{})*\)", QUOTED_STR);
+        Regex::new(&pattern).unwrap()
+    });
     // Match CONNECTION => (...) (used in SELECT ... FROM stage syntax)
-    static RE_CONNECTION_ARROW: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"(?i)CONNECTION\s*=>\s*\(([^)']*|'([^']|'')*')*\)").unwrap());
+    static RE_CONNECTION_ARROW: LazyLock<Regex> = LazyLock::new(|| {
+        let pattern = format!(r"(?i)CONNECTION\s*=>\s*\(([^)'\\]*|{})*\)", QUOTED_STR);
+        Regex::new(&pattern).unwrap()
+    });
     // Match individual secret key-value pairs (fallback for bare keys outside CONNECTION blocks)
     static RE_SECRET_KV: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY)\s*=\s*'([^']|'')*'"
-        ).unwrap()
+        let pattern = format!(
+            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY)\s*=\s*{}",
+            QUOTED_STR
+        );
+        Regex::new(&pattern).unwrap()
     });
 
     let masked_sql = RE_CONNECTION_EQ
@@ -275,6 +285,35 @@ mod tests {
         let masked = mask_connection_info(sql);
         assert_eq!(masked, "CONNECTION = (***masked***)");
         assert!(!masked.contains("it''s_secret"));
+    }
+
+    #[test]
+    fn test_mask_connection_with_backslash_escaped_quotes() {
+        // Backslash-escaped quotes (\') inside values
+        let sql = r"CONNECTION = (PASSWORD = 'abc\'tail' ACCESS_KEY_ID = 'mykey')";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "CONNECTION = (***masked***)");
+        assert!(!masked.contains("tail"));
+        assert!(!masked.contains("mykey"));
+    }
+
+    #[test]
+    fn test_mask_bare_key_with_backslash_escaped_quote() {
+        // Backslash-escaped quote in a bare key value
+        let sql = r"PASSWORD = 'p@ss\'word'";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "PASSWORD = '***'");
+        assert!(!masked.contains("p@ss"));
+    }
+
+    #[test]
+    fn test_mask_connection_with_backslash_in_value() {
+        // Backslash-escaped backslash (\\) inside values
+        let sql = r"CONNECTION = (PASSWORD = 'path\\to\\secret' ACCESS_KEY_ID = 'key123')";
+        let masked = mask_connection_info(sql);
+        assert_eq!(masked, "CONNECTION = (***masked***)");
+        assert!(!masked.contains("path"));
+        assert!(!masked.contains("key123"));
     }
 
     #[test]
