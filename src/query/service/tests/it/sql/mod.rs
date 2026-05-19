@@ -14,5 +14,6 @@
 
 mod exec;
 mod expr;
+mod materialized_cte_spill;
 mod planner;
 mod recursive_cte;

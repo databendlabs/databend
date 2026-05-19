@@ -29,6 +29,7 @@ use crate::physical_plans::format::MaterializeCTERefFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::CTESource;
+use crate::pipelines::processors::transforms::create_materialized_cte_spiller;
 
 /// This is a leaf operator that consumes the result of a materialized CTE.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -79,9 +80,16 @@ impl IPhysicalPlan for MaterializeCTERef {
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
         let receiver = builder.ctx.get_materialized_cte_receiver(&self.cte_name);
+        let spiller =
+            create_materialized_cte_spiller(builder.ctx.clone(), builder.settings.clone())?;
         builder.main_pipeline.add_source(
             |output_port| {
-                CTESource::create(builder.ctx.clone(), output_port.clone(), receiver.clone())
+                CTESource::create(
+                    builder.ctx.clone(),
+                    output_port.clone(),
+                    receiver.clone(),
+                    spiller.clone(),
+                )
             },
             builder.settings.get_max_threads()? as usize,
         )

@@ -414,6 +414,10 @@ impl Settings {
         Ok(self.try_get_u64("join_spilling_memory_ratio")? as usize)
     }
 
+    pub fn get_materialized_cte_spilling_memory_ratio(&self) -> Result<usize> {
+        Ok(self.try_get_u64("materialized_cte_spilling_memory_ratio")? as usize)
+    }
+
     pub fn get_join_spilling_partition_bits(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_partition_bits")? as usize)
     }
@@ -1125,6 +1129,10 @@ impl Settings {
 
     pub fn get_force_aggregate_data_spill(&self) -> Result<bool> {
         Ok(self.try_get_u64("force_aggregate_data_spill")? == 1)
+    }
+
+    pub fn get_force_materialized_cte_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("force_materialized_cte_spill")? == 1)
     }
 
     pub fn get_enable_auto_vacuum(&self) -> Result<bool> {

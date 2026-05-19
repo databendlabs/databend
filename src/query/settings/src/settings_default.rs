@@ -491,6 +491,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=100)),
                 }),
+                ("materialized_cte_spilling_memory_ratio", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(60),
+                    desc: "Sets the maximum memory ratio in bytes that materialized CTE execution can use before spilling data to storage, 0 is unlimited",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=100)),
+                }),
                 ("join_spilling_partition_bits", DefaultSettingValue {
                     value: UserSettingValue::UInt64(4),
                     desc: "Set the number of partitions for join spilling. Default value is 4, it means 2^4 partitions.",
@@ -1548,6 +1555,13 @@ impl DefaultSettings {
                 ("force_aggregate_data_spill", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "For testing only. aggregate data will be forcibly spilled to external storage if enabled",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("force_materialized_cte_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "For testing only. materialized CTE data will be forcibly spilled to external storage if enabled",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
