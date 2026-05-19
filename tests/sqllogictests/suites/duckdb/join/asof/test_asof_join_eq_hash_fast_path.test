@@ -83,6 +83,23 @@ order by p.price, t.id
 20 3
 21 NULL
 
+# Full ASOF should preserve unmatched rows from both original sides after
+# ASOF nearest-predecessor matching.
+query II
+select t.id, p.price
+from asof_eq_trades t
+asof full join asof_eq_prices p
+    on t.symbol = p.symbol and t.wh >= p.wh
+order by t.id, p.price
+----
+1 10
+2 20
+3 20
+4 11
+5 NULL
+6 NULL
+NULL 21
+
 statement ok
 drop table asof_eq_trades
 

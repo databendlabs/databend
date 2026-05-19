@@ -383,6 +383,9 @@ create table t(a int) snapshot_location='xxx'
 statement error 1301
 create table t(a int) database_id='xxx'
 
+statement error 1301
+create table t(a int) row_avg_depth_threshold='0.001'
+
 statement error 1006
 create table t(a int) bloom_index_columns='b'
 
@@ -394,6 +397,9 @@ create table t(a int)
 
 statement error 1301
 alter table t set options(database_id = "22");
+
+statement error 1301
+alter table t set options(row_avg_depth_threshold = "0.001");
 
 statement ok
 drop table if exists t;

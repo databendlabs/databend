@@ -602,6 +602,7 @@ impl PhysicalPlanBuilder {
             | JoinType::LeftAny
             | JoinType::LeftSingle
             | JoinType::LeftAsof
+            | JoinType::FullAsof
             | JoinType::Full => {
                 let build_schema = build_side.output_schema()?;
                 // Wrap nullable type for columns in build side
@@ -638,7 +639,11 @@ impl PhysicalPlanBuilder {
         probe_side: &PhysicalPlan,
     ) -> Result<DataSchemaRef> {
         match join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::RightAsof | JoinType::Full => {
+            JoinType::Right
+            | JoinType::RightSingle
+            | JoinType::RightAsof
+            | JoinType::FullAsof
+            | JoinType::Full => {
                 let probe_schema = probe_side.output_schema()?;
                 // Wrap nullable type for columns in probe side
                 let probe_schema = DataSchemaRefExt::create(
@@ -1193,10 +1198,12 @@ impl PhysicalPlanBuilder {
                 ));
                 result
             }
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof => unreachable!(
-                "Invalid join type {} during building physical hash join.",
-                join.join_type
-            ),
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof | JoinType::FullAsof => {
+                unreachable!(
+                    "Invalid join type {} during building physical hash join.",
+                    join.join_type
+                )
+            }
         };
 
         // Create projections and output schema

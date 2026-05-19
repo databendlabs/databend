@@ -41,11 +41,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for IndexMeta {
         type KeyType = IndexIdIdent;
-
-        // todo!("IndexId being parent of IndexIdToName can be described with dependency_keys")
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

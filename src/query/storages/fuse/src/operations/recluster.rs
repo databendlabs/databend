@@ -30,6 +30,7 @@ use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ClusterType;
 use futures::stream::FuturesUnordered;
 use futures::stream::StreamExt;
+use log::debug;
 use log::warn;
 use opendal::Operator;
 
@@ -102,6 +103,14 @@ impl FuseTable {
             )
             .await?;
 
+            debug!(
+                "recluster: scanned segment chunk chunk_segments={} compact_segments={} segment_progress={}/{}",
+                chunk.len(),
+                compact_segments.len(),
+                segment_idx + chunk.len(),
+                number_segments,
+            );
+
             // Status.
             {
                 segment_idx += chunk.len();
@@ -115,23 +124,53 @@ impl FuseTable {
             }
 
             if compact_segments.is_empty() {
+                debug!(
+                    "recluster: build tasks skipped chunk_segments={} skip_reason=empty_compact_segments",
+                    chunk.len(),
+                );
                 continue;
             }
 
             // select the segments with the highest depth.
             let selected_segs = mutator.select_segments(&compact_segments, max_seg_num)?;
+            debug!(
+                "recluster: selected segments compact_segments={} selected_segments={} max_segments={}",
+                compact_segments.len(),
+                selected_segs.len(),
+                max_seg_num,
+            );
             // select the blocks with the highest depth.
             if selected_segs.is_empty() {
+                debug!(
+                    "recluster: selected segments empty, fallback to generate_recluster_parts compact_segments={}",
+                    compact_segments.len(),
+                );
                 let result =
                     Self::generate_recluster_parts(mutator.clone(), compact_segments).await?;
                 if let Some((seg_num, block_num, recluster_parts)) = result {
                     selected_seg_num = seg_num;
                     recluster_blocks_count = block_num;
                     parts = recluster_parts;
+                    debug!(
+                        "recluster: fallback built parts segments={} blocks={} tasks={}",
+                        selected_seg_num,
+                        recluster_blocks_count,
+                        parts.tasks.len(),
+                    );
+                } else {
+                    debug!("recluster: fallback built no parts skip_reason=empty_parts",);
                 }
             } else {
-                selected_seg_num = selected_segs.len() as u64;
+                let candidate_seg_num = selected_segs.len();
                 (recluster_blocks_count, parts) = mutator.target_select(selected_segs).await?;
+                selected_seg_num = parts.removed_segment_indexes.len() as u64;
+                debug!(
+                    "recluster: built parts candidate_segments={} selected_segments={} blocks={} tasks={}",
+                    candidate_seg_num,
+                    selected_seg_num,
+                    recluster_blocks_count,
+                    parts.tasks.len(),
+                );
             }
 
             if !parts.is_empty() || limit.is_some() {
@@ -143,7 +182,7 @@ impl FuseTable {
         {
             let elapsed_time = start.elapsed();
             ctx.set_status_info(&format!(
-                "[FUSE-RECLUSTER] Built recluster tasks - segments: {}, blocks: {}, elapsed: {:?}",
+                "[FUSE-RECLUSTER] Built recluster tasks: segments={} blocks={} elapsed={:?}",
                 recluster_seg_num, recluster_blocks_count, elapsed_time,
             ));
             metrics_inc_recluster_build_task_milliseconds(elapsed_time.as_millis() as u64);
@@ -161,10 +200,9 @@ impl FuseTable {
         let mut block_count = 0;
 
         let max_threads = mutator.ctx.get_settings().get_max_threads()? as usize;
+        let block_per_segment = mutator.block_thresholds.block_per_segment;
         let mut segment_batches = Vec::new();
-
-        let latest = compact_segments.len() - 1;
-        for (idx, compact_segment) in compact_segments.into_iter().enumerate() {
+        for compact_segment in compact_segments {
             let segment =
                 SelectedReclusterSegment::create(&mutator, compact_segment.0, compact_segment.1);
             if !(segment.stats.level >= 0
@@ -176,10 +214,13 @@ impl FuseTable {
 
             block_count += segment.info.summary.block_count as usize;
             selected_segs.push(segment);
-            if block_count >= mutator.block_thresholds.block_per_segment || idx == latest {
+            if block_count >= block_per_segment && selected_segs.len() >= mutator.max_tasks {
                 segment_batches.push(std::mem::take(&mut selected_segs));
                 block_count = 0;
             }
+        }
+        if !selected_segs.is_empty() {
+            segment_batches.push(selected_segs);
         }
 
         if segment_batches.is_empty() {
@@ -189,8 +230,8 @@ impl FuseTable {
         let evaluate_batch = |selected_segs: Vec<SelectedReclusterSegment>| {
             let mutator = mutator.clone();
             async move {
-                let seg_num = selected_segs.len() as u64;
                 let (block_num, parts) = mutator.target_select(selected_segs).await?;
+                let seg_num = parts.removed_segment_indexes.len() as u64;
                 Ok::<_, databend_common_exception::ErrorCode>((seg_num, block_num, parts))
             }
         };
@@ -237,7 +278,7 @@ impl FuseTable {
             let v = std::cmp::max(max_threads, 10);
             if v > max_threads {
                 warn!(
-                    "[FUSE-RECLUSTER] max_threads setting too low {}, increased to {}",
+                    "recluster: max_threads setting too low {}, increased to {}",
                     max_threads, v
                 )
             }

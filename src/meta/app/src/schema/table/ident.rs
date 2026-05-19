@@ -19,6 +19,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use databend_meta_client::kvapi;
+use derive_more::Deref;
+use derive_more::DerefMut;
 
 use crate::schema::database_name_ident::DatabaseNameIdent;
 use crate::tenant::Tenant;
@@ -124,7 +126,7 @@ impl Display for DBIdTableName {
 }
 
 /// `__fd_table_by_id/<tb_id> -> TableMeta`
-#[derive(Clone, Debug, Eq, PartialEq, Default, kvapi::StructKey)]
+#[derive(Clone, Debug, Eq, PartialEq, Default, Deref, DerefMut, kvapi::StructKey)]
 #[structkey(prefix = "__fd_table_by_id")]
 pub struct TableId {
     pub table_id: u64,

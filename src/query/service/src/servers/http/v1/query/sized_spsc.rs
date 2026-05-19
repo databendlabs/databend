@@ -86,6 +86,10 @@ impl SizedChannelBuffer {
             .sum()
     }
 
+    fn has_page_ready(&self) -> bool {
+        !self.pages.is_empty()
+    }
+
     fn is_pages_full(&self, reserve: usize) -> bool {
         self.pages_rows() + reserve > self.max_rows
     }
@@ -158,6 +162,23 @@ impl SizedChannelBuffer {
     fn take_page(&mut self) -> Option<Page> {
         self.pages.pop_front()
     }
+
+    fn take_current_page(&mut self) -> Option<Page> {
+        if self
+            .current_page
+            .as_ref()
+            .is_none_or(|page| page.is_empty())
+        {
+            return None;
+        }
+
+        Some(Page::Memory(
+            self.current_page
+                .replace(PageBuilder::new(self.page_rows))
+                .expect("current_page has taken")
+                .into_page(),
+        ))
+    }
 }
 
 enum SendFail {
@@ -189,6 +210,10 @@ impl PageBuilder {
 
     fn num_rows(&self) -> usize {
         self.blocks.iter().map(DataBlock::num_rows).sum()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.blocks.iter().all(DataBlock::is_empty)
     }
 
     fn calculate_take_rows(&self, block: &DataBlock) -> (usize, usize) {
@@ -319,7 +344,7 @@ where S: DataBlockSpill
         loop {
             {
                 let buffer = self.buffer.lock().unwrap();
-                if !buffer.pages.is_empty() {
+                if buffer.has_page_ready() {
                     return true;
                 }
                 if buffer.is_send_stopped {
@@ -379,6 +404,9 @@ where S: DataBlockSpill
                     }
                     Err(_) => {
                         debug!("Long polling timeout reached");
+                        if let Some(page) = self.try_take_current_page().await? {
+                            return Ok((page, self.chan.is_close()));
+                        }
                         return Ok((BlocksSerializer::empty(), self.chan.is_close()));
                     }
                 }
@@ -395,6 +423,16 @@ where S: DataBlockSpill
     #[fastrace::trace(name = "SizedChannelReceiver::try_take_page")]
     async fn try_take_page(&mut self) -> Result<Option<BlocksSerializer>> {
         let page = self.chan.buffer.lock().unwrap().take_page();
+        self.deserialize_page(page).await
+    }
+
+    #[fastrace::trace(name = "SizedChannelReceiver::try_take_current_page")]
+    async fn try_take_current_page(&mut self) -> Result<Option<BlocksSerializer>> {
+        let page = self.chan.buffer.lock().unwrap().take_current_page();
+        self.deserialize_page(page).await
+    }
+
+    async fn deserialize_page(&mut self, page: Option<Page>) -> Result<Option<BlocksSerializer>> {
         let collector = match page {
             None => return Ok(None),
             Some(Page::Memory(page)) => {
@@ -676,6 +714,46 @@ mod tests {
         send_task.await.unwrap();
 
         assert_eq!(serializer.num_rows(), 3);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_spsc_returns_partial_page_before_finish() {
+        let (mut sender, mut receiver) = sized_spsc::<MockSpiller>(5, 4);
+
+        let allow_finish = Arc::new(Notify::new());
+        let sender_allow_finish = allow_finish.clone();
+        let send_task = databend_common_base::runtime::spawn(async move {
+            sender.plan_ready(OutputFormatSettings::default(), None);
+            sender
+                .send(DataBlock::new_from_columns(vec![Int32Type::from_data(
+                    vec![1, 2, 3],
+                )]))
+                .await
+                .unwrap();
+
+            sender_allow_finish.notified().await;
+            sender.finish();
+        });
+
+        let (serializer, is_end) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_millis(50)))
+            .await
+            .unwrap();
+
+        assert_eq!(serializer.num_rows(), 3);
+        assert!(!is_end);
+
+        allow_finish.notify_one();
+        let (serializer, is_end) = receiver
+            .next_page(&Wait::Deadline(Instant::now() + Duration::from_secs(1)))
+            .await
+            .unwrap();
+
+        assert_eq!(serializer.num_rows(), 0);
+        assert!(is_end);
+
+        assert!(receiver.close().is_none());
+        send_task.await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]

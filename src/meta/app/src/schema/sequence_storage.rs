@@ -24,8 +24,8 @@ mod kvapi_impl {
 
     use databend_meta_client::kvapi;
 
-    use crate::primitive::Id;
     use crate::tenant_key::resource::TenantResource;
+    use crate::value_id::ValueId;
 
     /// Defines the storage for sequence generator.
     ///
@@ -35,28 +35,14 @@ mod kvapi_impl {
     impl TenantResource for SequenceStorageRsc {
         const PREFIX: &'static str = "__fd_sequence_storage";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<SequenceStorageValue>;
+        type ValueType = ValueId<SequenceStorageValue>;
     }
 
-    impl kvapi::Value for Id<SequenceStorageValue> {
+    impl kvapi::Value for ValueId<SequenceStorageValue> {
         type KeyType = super::SequenceStorageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
-    #[derive(
-        Debug,
-        Clone,
-        Copy,
-        Default,
-        PartialEq,
-        Eq,
-        derive_more::From,
-        derive_more::Deref,
-        derive_more::DerefMut,
-    )]
-    pub struct SequenceStorageValue(pub u64);
+    pub struct SequenceStorageValue;
 }
 
 #[cfg(test)]

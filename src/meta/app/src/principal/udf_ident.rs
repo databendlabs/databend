@@ -52,10 +52,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for UserDefinedFunction {
         type KeyType = UdfIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.
