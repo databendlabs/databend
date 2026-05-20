@@ -89,6 +89,12 @@ impl FullTypeCheckAdapter {
         self.skip_sequence_check = skip_sequence_check;
         self
     }
+
+    pub(super) fn block_on<F, T>(&self, future: F) -> Result<T>
+    where F: std::future::Future<Output = Result<T>> {
+        let handle = (self.dependencies.async_runtime_handle)()?;
+        block_on_with_handle(&handle, future)
+    }
 }
 
 impl FullTypeCheckAdapterDependencies {
@@ -105,8 +111,13 @@ impl FullTypeCheckAdapterDependencies {
             None
         };
 
+        fn current_async_runtime_handle() -> Result<tokio::runtime::Handle> {
+            tokio::runtime::Handle::try_current()
+                .map_err(|_| ErrorCode::Internal("type check operation requires a tokio runtime"))
+        }
+
         Self {
-            async_runtime_handle: tokio::runtime::Handle::current(),
+            async_runtime_handle: current_async_runtime_handle,
             aggregate_function_factory: AggregateFunctionFactory::instance(),
             license_manager: LicenseManagerSwitch::instance(),
             catalog_manager: CatalogManager::instance(),
@@ -157,17 +168,13 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             .get_enable_experimental_sequence_privilege_check()?
         {
             let ctx = self.ctx.clone();
-            Some(block_on_with_handle(
-                &self.dependencies.async_runtime_handle,
-                async move { ctx.get_visibility_checker(false, Object::Sequence).await },
-            )?)
+            Some(self.block_on(async move {
+                ctx.get_visibility_checker(false, Object::Sequence).await
+            })?)
         } else {
             None
         };
-        let _ = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            catalog.get_sequence(req, &visibility_checker),
-        )?;
+        self.block_on(catalog.get_sequence(req, &visibility_checker))?;
         Ok(())
     }
 
@@ -183,19 +190,13 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
             .map(ToString::to_string)
             .unwrap_or_else(|| self.ctx.get_current_database());
 
-        let db = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            catalog.get_database(&tenant, db_name.as_str()),
-        )?;
+        let db = self.block_on(catalog.get_database(&tenant, db_name.as_str()))?;
         let db_id = db.get_db_info().database_id.db_id;
         let req = DictionaryNameIdent::new(
             tenant.clone(),
             DictionaryIdentity::new(db_id, dict_name.to_string()),
         );
-        let reply = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            catalog.get_dictionary(req),
-        )?;
+        let reply = self.block_on(catalog.get_dictionary(req))?;
         let dictionary = if let Some(r) = reply {
             r.dictionary_meta
         } else {
@@ -272,7 +273,7 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
     }
 
     fn resolve_read_file_stage_info(&self, span: Span, stage_name: &str) -> Result<StageInfo> {
-        block_on_with_handle(&self.dependencies.async_runtime_handle, async move {
+        self.block_on(async move {
             let (stage_info, _) = resolve_stage_location(self.ctx.as_ref(), stage_name).await?;
             if self
                 .ctx
@@ -357,13 +358,11 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                     .unwrap_or_default(),
             )),
             AuthFunction::CurrentSecondaryRoles => {
-                let mut roles = block_on_with_handle(
-                    &self.dependencies.async_runtime_handle,
-                    authorization.get_all_effective_roles(),
-                )?
-                .into_iter()
-                .map(|role| role.name)
-                .collect::<Vec<_>>();
+                let mut roles = self
+                    .block_on(authorization.get_all_effective_roles())?
+                    .into_iter()
+                    .map(|role| role.name)
+                    .collect::<Vec<_>>();
                 roles.sort();
                 let roles_comma_separated_string = roles.iter().join(",");
                 let value = if authorization.get_secondary_roles().is_none() {
@@ -374,13 +373,11 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
                 Ok(Scalar::String(to_string(&value)?))
             }
             AuthFunction::CurrentAvailableRoles => {
-                let mut roles = block_on_with_handle(
-                    &self.dependencies.async_runtime_handle,
-                    authorization.get_all_available_roles(),
-                )?
-                .into_iter()
-                .map(|role| role.name)
-                .collect::<Vec<_>>();
+                let mut roles = self
+                    .block_on(authorization.get_all_available_roles())?
+                    .into_iter()
+                    .map(|role| role.name)
+                    .collect::<Vec<_>>();
                 roles.sort();
                 Ok(Scalar::String(to_string(&roles)?))
             }
@@ -389,13 +386,11 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
 
     fn resolve_effective_role_names(&self) -> Result<Vec<String>> {
         let authorization: &dyn TableContextAuthorization = self.ctx.as_ref();
-        Ok(block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            authorization.get_all_effective_roles(),
-        )?
-        .into_iter()
-        .map(|role| role.name)
-        .collect())
+        Ok(self
+            .block_on(authorization.get_all_effective_roles())?
+            .into_iter()
+            .map(|role| role.name)
+            .collect())
     }
 
     fn set_result_cache_uncacheable(&self) {
@@ -418,25 +413,22 @@ impl TypeCheckAdapter for FullTypeCheckAdapter {
         let tenant = self.ctx.get_tenant();
         let meta_api = self.dependencies.user_api_provider.get_meta_store_client();
         let tenant_clone = tenant.clone();
-        let policy = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            self.dependencies.security_policy_cache_manager.get_or_load(
-                PolicyType::DataMask,
-                &tenant,
-                policy_id,
-                || async move {
-                    let handler = get_datamask_handler();
-                    let seq_v = handler
-                        .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
-                        .await?;
-                    let meta = seq_v.data;
-                    Ok(RawPolicyDef {
-                        body: meta.body,
-                        args: meta.args,
-                    })
-                },
-            ),
-        )?;
+        let policy = self.block_on(self.dependencies.security_policy_cache_manager.get_or_load(
+            PolicyType::DataMask,
+            &tenant,
+            policy_id,
+            || async move {
+                let handler = get_datamask_handler();
+                let seq_v = handler
+                    .get_data_mask_by_id(meta_api, &tenant_clone, policy_id)
+                    .await?;
+                let meta = seq_v.data;
+                Ok(RawPolicyDef {
+                    body: meta.body,
+                    args: meta.args,
+                })
+            },
+        ))?;
         Ok(Some(policy))
     }
 }

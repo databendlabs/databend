@@ -22,6 +22,12 @@ async fn test_type_check_date_rewrites() -> Result<()> {
             sql: "date_diff(day, date, to_date('2024-12-31'))",
         },
         SqlTestCase {
+            name: "date_between_epoch_from_function_tests_binds",
+            description: "The date_between(epoch, start, end) scalar-test shape should resolve to between_epochs.",
+            setup_sqls: &[],
+            sql: "date_between(epoch, date, to_date('2024-12-31'))",
+        },
+        SqlTestCase {
             name: "date_trunc_month_from_sqllogictest_binds",
             description: "The date_trunc(month, ts) form should resolve through the date truncation rewrite path.",
             setup_sqls: &[],

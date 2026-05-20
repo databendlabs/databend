@@ -23,7 +23,6 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_ast::parser::parse_expr;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GLOBAL_MEM_STAT;
-use databend_common_base::runtime::block_on_with_handle;
 use databend_common_cloud_control::client_config::build_client_config;
 use databend_common_cloud_control::client_config::make_request;
 use databend_common_cloud_control::pb::CreateWorkerRequest;
@@ -305,17 +304,14 @@ impl FullTypeCheckAdapter {
             return Ok(Vec::new());
         }
 
-        let stage_locations = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            resolve_stage_locations(self.ctx.as_ref(), imports),
-        )?;
+        let stage_locations = self.block_on(resolve_stage_locations(self.ctx.as_ref(), imports))?;
         let expire = Duration::from_secs(
             self.ctx
                 .get_settings()
                 .get_udf_cloud_import_presign_expire_secs()?,
         );
 
-        block_on_with_handle(&self.dependencies.async_runtime_handle, async move {
+        self.block_on(async move {
             let mut results = Vec::with_capacity(stage_locations.len());
             for ((stage_info, path), location) in stage_locations.into_iter().zip(imports.iter()) {
                 let op = init_stage_operator(&stage_info).map_err(|err| {
@@ -403,8 +399,7 @@ impl FullTypeCheckAdapter {
             script,
         };
 
-        let resp = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
+        let resp = self.block_on(
             provider
                 .get_worker_client()
                 .create_worker(make_request(req, cfg)),
@@ -424,19 +419,17 @@ impl FullTypeCheckAdapter {
 impl UdfAdapter for FullTypeCheckAdapter {
     fn load_definition(&self, udf_name: &str) -> Result<Option<UserDefinedFunction>> {
         let tenant = self.ctx.get_tenant();
-        Ok(block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
+        self.block_on(async {
             self.dependencies
                 .user_api_provider
-                .get_udf(&tenant, udf_name),
-        )?)
+                .get_udf(&tenant, udf_name)
+                .await
+                .map_err(ErrorCode::from)
+        })
     }
 
     fn load_stage_locations(&self, locations: &[String]) -> Result<Vec<(StageInfo, String)>> {
-        block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            resolve_stage_locations(self.ctx.as_ref(), locations),
-        )
+        self.block_on(resolve_stage_locations(self.ctx.as_ref(), locations))
     }
 
     fn load_udf_code(&self, code: String) -> Result<Vec<u8>> {
@@ -454,26 +447,27 @@ impl UdfAdapter for FullTypeCheckAdapter {
             }
         };
 
-        let (stage_info, module_path) = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            resolve_file_location(self.ctx.as_ref(), &file_location),
-        )
-        .map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to resolve code location {code:?}: {err}"))
+        let (stage_info, module_path) = self.block_on(async {
+            resolve_file_location(self.ctx.as_ref(), &file_location)
+                .await
+                .map_err(|err| {
+                    ErrorCode::SemanticError(format!(
+                        "Failed to resolve code location {code:?}: {err}"
+                    ))
+                })
         })?;
 
         let op = init_stage_operator(&stage_info).map_err(|err| {
             ErrorCode::SemanticError(format!("Failed to get StageTable operator: {err}"))
         })?;
 
-        let code_blob = block_on_with_handle(
-            &self.dependencies.async_runtime_handle,
-            op.read(&module_path),
-        )
-        .map_err(|err| {
-            ErrorCode::SemanticError(format!("Failed to read module {module_path}: {err}"))
-        })?
-        .to_vec();
+        let code_blob = self
+            .block_on(async {
+                op.read(&module_path).await.map_err(|err| {
+                    ErrorCode::SemanticError(format!("Failed to read module {module_path}: {err}"))
+                })
+            })?
+            .to_vec();
 
         let compress_algo = CompressAlgorithm::from_path(&module_path);
         log::trace!("Detecting compression algorithm for module: {module_path}");
@@ -541,7 +535,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
         let query_id = self.ctx.get_id();
         let name = name.to_string();
         let headers = udf_definition.headers;
-        block_on_with_handle(&self.dependencies.async_runtime_handle, async move {
+        self.block_on(async move {
             let num_rows = 1;
             let mut client = databend_common_expression::udf_client::UDFFlightClient::connect(
                 &handler,
@@ -561,7 +555,7 @@ impl UdfAdapter for FullTypeCheckAdapter {
                 .await?;
 
             let value = unsafe { result.get_by_offset(0).index_unchecked(0) };
-            Ok(value.to_owned())
+            Ok::<_, ErrorCode>(value.to_owned())
         })
     }
 

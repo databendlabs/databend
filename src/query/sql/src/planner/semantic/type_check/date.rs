@@ -150,7 +150,7 @@ impl<'a> CoreExprArena<'a> {
                 (Between, Doy) => "between_doys",
                 (Between, Week) => "between_weeks",
                 (Between, Dow) => "between_dows",
-                (Between, Epoch) => "between_dows",
+                (Between, Epoch) => "between_epochs",
                 (Between, MicroSecond) => "between_microseconds",
                 (Between, ISODow) => "between_isodows",
                 (Between, YearWeek) => "between_yearweeks",

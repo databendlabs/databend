@@ -19,6 +19,13 @@ status: ok
 scalar: diff_days('2024-12-31', date (#6))
 type: Int64 NULL
 
+=== date_between_epoch_from_function_tests_binds ===
+description: The date_between(epoch, start, end) scalar-test shape should resolve to between_epochs.
+sql: date_between(epoch, date, to_date('2024-12-31'))
+status: ok
+scalar: between_epochs('2024-12-31', date (#6))
+type: Int64 NULL
+
 === date_trunc_month_from_sqllogictest_binds ===
 description: The date_trunc(month, ts) form should resolve through the date truncation rewrite path.
 sql: date_trunc(month, ts)

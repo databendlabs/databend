@@ -281,7 +281,7 @@ pub struct FullTypeCheckAdapter {
 
 #[derive(Clone)]
 struct FullTypeCheckAdapterDependencies {
-    async_runtime_handle: Handle,
+    async_runtime_handle: fn() -> Result<Handle>,
     aggregate_function_factory: &'static AggregateFunctionFactory,
     license_manager: Arc<LicenseManagerSwitch>,
     catalog_manager: Arc<CatalogManager>,
