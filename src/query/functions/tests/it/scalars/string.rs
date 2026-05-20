@@ -49,6 +49,7 @@ fn test_string() {
     test_bin(file);
     test_oct(file);
     test_hex(file);
+    test_conv(file);
     test_pad(file);
     test_replace(file);
     test_translate(file);
@@ -498,6 +499,34 @@ fn test_hex(file: &mut impl Write) {
     run_ast(file, "hex(c)", columns);
     run_ast(file, "hex(d)", columns);
     run_ast(file, "hex(e)", columns);
+    run_ast(file, "to_hex(c)", columns);
+    run_ast(file, "to_hex(e)", columns);
+}
+
+fn test_conv(file: &mut impl Write) {
+    run_ast(file, "conv('a', 16, 10)", &[]);
+    run_ast(file, "conv('6E', 18, 8)", &[]);
+    run_ast(file, "conv('zz', 36, 10)", &[]);
+    run_ast(file, "conv('11', 2, 36)", &[]);
+    run_ast(file, "conv(10, 10, 2)", &[]);
+    run_ast(file, "conv(10, 16, 10)", &[]);
+    run_ast(file, "conv(15, 10, 16)", &[]);
+    run_ast(file, "conv(-128, 10, 8)", &[]);
+    run_ast(file, "conv(-17, 10, -18)", &[]);
+    run_ast(file, "conv('FFFFFFFFFFFFFFFF', 16, -10)", &[]);
+    run_ast(file, "conv('11', -2, 10)", &[]);
+
+    let columns = &[
+        ("a", StringType::from_data(vec!["10", "a", "zz"])),
+        (
+            "b",
+            Int64Type::from_data_with_validity(vec![2i64, 16, 36], vec![true, false, true]),
+        ),
+        ("c", Int64Type::from_data(vec![10i64, 10, 16])),
+        ("d", Int64Type::from_data(vec![10i64, 16, -128])),
+    ];
+    run_ast(file, "conv(a, b, c)", columns);
+    run_ast(file, "conv(d, 10, 2)", columns);
 }
 
 fn test_pad(file: &mut impl Write) {
