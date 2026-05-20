@@ -65,12 +65,8 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             .source
             .push_downs
             .as_ref()
-            .and_then(|extras| {
-                extras
-                    .filters
-                    .as_ref()
-                    .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
-            })
+            .and_then(|p| p.filters.as_ref())
+            .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .unwrap_or_default();
 
         let limit = self
@@ -117,7 +113,17 @@ impl<'a> PhysicalFormat for TableScanFormatter<'a> {
             &self.inner.source.statistics,
         ));
         // Push downs.
-        let push_downs = format!("push downs: [filters: [{filters}], limit: {limit}]");
+        let has_secure = self
+            .inner
+            .source
+            .push_downs
+            .as_ref()
+            .is_some_and(|p| p.has_secure_filters());
+        let push_downs = if has_secure {
+            format!("push downs: [filters: [{filters}], secure_filters: REDACTED, limit: {limit}]")
+        } else {
+            format!("push downs: [filters: [{filters}], limit: {limit}]")
+        };
         children.push(FormatTreeNode::new(push_downs));
 
         // runtime filters
