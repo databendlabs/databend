@@ -1,0 +1,20 @@
+=== unnest_extracts_single_tuple_field ===
+description: A single-output SRF should preserve the old get(unnest(...), 1) top-level extraction.
+sql: unnest([1, 2, 3])
+status: ok
+scalar: get(unnest([1, 2, 3]))
+type: UInt8 NULL
+
+=== nested_set_returning_function_errors ===
+description: SRF arguments should keep the old nested set-returning function rejection.
+sql: unnest(unnest([1, 2, 3]))
+status: error
+code: 1065
+message: set-returning functions cannot be nested
+
+=== set_returning_function_rejects_window_spec ===
+description: SRFs should remain rejected while resolving aggregate window arguments.
+sql: sum(unnest([1, 2, 3])) OVER ()
+status: error
+code: 1065
+message: set-returning functions cannot be used in window spec

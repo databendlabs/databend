@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::meta_txn_error::MetaTxnError;
+use databend_common_meta_api::name_id_value_api::CreateIdValueMode;
+use databend_common_meta_api::name_id_value_api::CreateIdValueResult;
 use databend_common_meta_api::name_id_value_api::NameIdValueApi;
 use databend_common_meta_api::serialize_struct;
 use databend_common_meta_app::KeyWithTenant;
@@ -76,6 +78,11 @@ impl ProcedureMgr {
         let name_ident = &req.name_ident;
         let meta = &req.meta;
         let name_ident_raw = serialize_struct(name_ident.procedure_name())?;
+        let create_mode = if overriding {
+            CreateIdValueMode::CreateOrReplace
+        } else {
+            CreateIdValueMode::CreateOnly
+        };
 
         let tenant = &self.tenant;
         let create_res = self
@@ -83,7 +90,7 @@ impl ProcedureMgr {
             .create_id_value(
                 name_ident,
                 meta,
-                overriding,
+                create_mode,
                 |id| {
                     vec![(
                         ProcedureIdToNameIdent::new_generic(name_ident.tenant(), id)
@@ -107,8 +114,8 @@ impl ProcedureMgr {
             .await?;
 
         match create_res {
-            Ok(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
-            Err(_) => Ok(Err(name_ident.exist_error(func_name!()))),
+            CreateIdValueResult::Created(id) => Ok(Ok(CreateProcedureReply { procedure_id: *id })),
+            CreateIdValueResult::Existing(_) => Ok(Err(name_ident.exist_error(func_name!()))),
         }
     }
 
@@ -135,7 +142,7 @@ impl ProcedureMgr {
     ) -> Result<Option<GetProcedureReply>, MetaError> {
         debug!(req :? =(req); "SchemaApi: {}", func_name!());
 
-        let res = self.kv_api.get_id_value(&req.inner).await?;
+        let res = self.kv_api.get_id_and_value(&req.inner).await?;
 
         let Some((seq_id, seq_meta)) = res else {
             return Ok(None);

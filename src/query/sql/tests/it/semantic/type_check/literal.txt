@@ -1,0 +1,48 @@
+=== float_literal_from_parser_tests_binds ===
+description: A float literal shape from parser tests should resolve as a typed constant.
+sql: 1.925e-3
+status: ok
+scalar: 0.001925
+type: Decimal(6, 6)
+
+=== binary_literal_from_parser_tests_binds ===
+description: A binary literal shape from parser tests should resolve as a typed constant.
+sql: x'deedbeef'
+status: ok
+scalar: DEEDBEEF
+type: Binary
+
+=== null_literal_binds ===
+description: A NULL literal should stay on the literal type-check path.
+sql: NULL
+status: ok
+scalar: NULL
+type: NULL
+
+=== constant_array_from_comparison_tests_binds ===
+description: A constant array from scalar comparison tests should use the constant-array fast path.
+sql: [1, 2, 3]
+status: ok
+scalar: [1, 2, 3]
+type: Array(UInt8)
+
+=== mixed_array_with_column_binds ===
+description: An array with a column element should fall back to the scalar array function path.
+sql: [1, delta, NULL]
+status: ok
+scalar: array(1, delta (#3), NULL)
+type: Array(Int32 NULL)
+
+=== map_literal_from_sqllogictest_binds ===
+description: A map literal shape from map sqllogictests should resolve through map construction.
+sql: {'k1': 1, 'k2': delta}
+status: ok
+scalar: map(['k1', 'k2'], array(1, delta (#3)))
+type: Map(String, Int32 NULL)
+
+=== tuple_literal_from_parser_tests_binds ===
+description: A tuple expression from parser tests should resolve through tuple construction.
+sql: (number, text, true)
+status: ok
+scalar: tuple(number (#0), text (#1), true)
+type: Tuple(Int64 NULL, String NULL, Boolean)

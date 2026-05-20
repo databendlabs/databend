@@ -561,7 +561,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&res.expr, |nest_expr| {
+        let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match

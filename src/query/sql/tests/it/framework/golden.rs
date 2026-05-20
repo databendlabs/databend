@@ -94,7 +94,10 @@ pub(crate) fn write_case_header(file: &mut impl Write, case: &SqlTestCase) -> Re
     Ok(())
 }
 
-pub(crate) fn write_case_outcome(file: &mut impl Write, outcome: &SqlTestOutcome) -> Result<()> {
+pub(crate) fn write_case_outcome_body(
+    file: &mut impl Write,
+    outcome: &SqlTestOutcome,
+) -> Result<()> {
     match outcome {
         SqlTestOutcome::Plan(plan) => {
             writeln!(file, "status: ok")?;
@@ -107,6 +110,11 @@ pub(crate) fn write_case_outcome(file: &mut impl Write, outcome: &SqlTestOutcome
         }
     }
 
+    Ok(())
+}
+
+pub(crate) fn write_case_outcome(file: &mut impl Write, outcome: &SqlTestOutcome) -> Result<()> {
+    write_case_outcome_body(file, outcome)?;
     writeln!(file)?;
     Ok(())
 }

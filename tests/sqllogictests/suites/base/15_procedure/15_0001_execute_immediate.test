@@ -4,6 +4,14 @@ create or replace database test_procedure;
 statement ok
 use test_procedure;
 
+statement ok
+set variable exec_script = 'select 42';
+
+query I
+EXECUTE IMMEDIATE $exec_script
+----
+42
+
 query ?
 EXECUTE IMMEDIATE $$
 BEGIN
@@ -217,6 +225,9 @@ END;
 $$;
 ----
 390
+
+statement ok
+unset variable exec_script;
 
 statement ok
 drop database test_procedure;

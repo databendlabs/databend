@@ -20,6 +20,7 @@ use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
 use databend_common_ast::ast::Identifier;
 use databend_common_catalog::plan::InternalColumn;
 use databend_common_catalog::plan::InternalColumnType;
@@ -34,12 +35,18 @@ use databend_common_expression::SEARCH_SCORE_COL_NAME;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::F32;
 use databend_common_expression::types::NumberDataType;
+use databend_common_functions::GENERAL_SEARCH_FUNCTIONS;
 use databend_common_meta_app::schema::TableIndexType;
 use itertools::Itertools;
 use tantivy_query_grammar::UserInputAst;
 use tantivy_query_grammar::UserInputLeaf;
 use tantivy_query_grammar::parse_query_lenient;
+use unicase::Ascii;
 
+use super::CoreDisplayExprArgs;
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprId;
 use super::TypeChecker;
 use crate::binder::ExprContext;
 use crate::binder::InternalColumnBinding;
@@ -47,21 +54,82 @@ use crate::plans::BoundColumnRef;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
 
-impl<'a> TypeChecker<'a> {
-    pub(super) fn resolve_score_search_function(
+pub(super) enum CoreSearchFunction {
+    Score,
+    Match { args: CoreDisplayExprArgs },
+    Query { args: CoreDisplayExprArgs },
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn try_lower_search(
         &mut self,
         span: Span,
         func_name: &str,
-        args: &[&Expr],
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        let func_name = Ascii::new(func_name);
+        let Some(func_name) = GENERAL_SEARCH_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == func_name)
+            .map(Ascii::into_inner)
+        else {
+            return Ok(None);
+        };
+
+        let function = match func_name {
+            "score" => {
+                if !func.args.is_empty() {
+                    return Err(ErrorCode::SemanticError(format!(
+                        "invalid arguments for search function, score expects 0 argument, but got {}",
+                        func.args.len()
+                    ))
+                    .set_span(span));
+                }
+                CoreSearchFunction::Score
+            }
+            "match" => CoreSearchFunction::Match {
+                args: self.lower_display_expr_args(&func.args)?,
+            },
+            "query" => CoreSearchFunction::Query {
+                args: self.lower_display_expr_args(&func.args)?,
+            },
+            _ => {
+                return Err(ErrorCode::Internal(format!(
+                    "search function {func_name} should have been classified before lowering",
+                )));
+            }
+        };
+        Ok(Some(
+            self.alloc(CoreExpr::SearchFunction { span, function }),
+        ))
+    }
+}
+
+impl<'a, A> TypeChecker<'a, A>
+where A: super::TypeCheckAdapter
+{
+    pub(super) fn resolve_core_search_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        function: &CoreSearchFunction,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if !args.is_empty() {
-            return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 0 argument, but got {}",
-                func_name,
-                args.len()
-            ))
-            .set_span(span));
+        match function {
+            CoreSearchFunction::Score => self.resolve_core_score_search_function(span),
+            CoreSearchFunction::Match { args } => {
+                self.resolve_core_match_search_function(arena, span, args)
+            }
+            CoreSearchFunction::Query { args } => {
+                self.resolve_core_query_search_function(arena, span, args)
+            }
         }
+    }
+
+    fn resolve_core_score_search_function(
+        &mut self,
+        span: Span,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
         let internal_column =
             InternalColumn::new(SEARCH_SCORE_COL_NAME, InternalColumnType::SearchScore);
 
@@ -88,35 +156,39 @@ impl<'a> TypeChecker<'a> {
     /// gives preferential weight to fields being searched in.
     /// For example: title^5, content^1.2
     /// The second argument is the query text without query syntax.
-    pub(super) fn resolve_match_search_function(
+    fn resolve_core_match_search_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
-        args: &[&Expr],
+        args: &CoreDisplayExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
-            return Err(ErrorCode::SemanticError(format!(
-                "search function {} can only be used in where clause",
-                func_name
-            ))
+            return Err(ErrorCode::SemanticError(
+                "search function match can only be used in where clause".to_string(),
+            )
             .set_span(span));
         }
 
         // The optional third argument is additional configuration option.
         if args.len() != 2 && args.len() != 3 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 2 or 3 arguments, but got {}",
-                func_name,
+                "invalid arguments for search function, match expects 2 or 3 arguments, but got {}",
                 args.len()
             ))
             .set_span(span));
         }
 
-        let field_arg = args[0];
-        let query_arg = args[1];
-        let option_arg = if args.len() == 3 { Some(args[2]) } else { None };
+        let (_field_display, field_arg) = &args[0];
+        let (query_display, query_arg) = &args[1];
+        let option_arg = if args.len() == 3 {
+            let (display, arg) = &args[2];
+            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            Some((display.as_str(), scalar))
+        } else {
+            None
+        };
 
-        let box (field_scalar, _) = self.resolve(field_arg)?;
+        let box (field_scalar, _) = self.resolve_core(arena, *field_arg)?;
         let column_refs = match field_scalar {
             // single field without boost
             ScalarExpr::BoundColumnRef(column_ref) => {
@@ -189,23 +261,23 @@ impl<'a> TypeChecker<'a> {
             }
         };
 
-        let box (query_scalar, _) = self.resolve(query_arg)?;
+        let box (query_scalar, _) = self.resolve_core(arena, *query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
-                query_arg
+                query_display
             ))
             .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
-                query_arg
+                query_display
             ))
             .set_span(query_scalar.span()));
         };
 
-        let inverted_index_option = self.resolve_search_option(option_arg)?;
+        let inverted_index_option = self.resolve_core_search_option(option_arg)?;
 
         self.resolve_search_function(span, column_refs, query_text, inverted_index_option)
     }
@@ -218,45 +290,49 @@ impl<'a> TypeChecker<'a> {
     /// 3. must and negative operator terms, like `title:+fox -cat`
     /// 4. phrase terms, like `title:"quick brown fox"`
     /// 5. multiple field with boost terms, like `title:fox^5 content:dog^2`
-    pub(super) fn resolve_query_search_function(
+    fn resolve_core_query_search_function(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
-        func_name: &str,
-        args: &[&Expr],
+        args: &CoreDisplayExprArgs,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if !matches!(self.bind_context.expr_context, ExprContext::WhereClause) {
-            return Err(ErrorCode::SemanticError(format!(
-                "search function {} can only be used in where clause",
-                func_name
-            ))
+            return Err(ErrorCode::SemanticError(
+                "search function query can only be used in where clause".to_string(),
+            )
             .set_span(span));
         }
 
         // The optional second argument is additional configuration option.
         if args.len() != 1 && args.len() != 2 {
             return Err(ErrorCode::SemanticError(format!(
-                "invalid arguments for search function, {} expects 1 argument, but got {}",
-                func_name,
+                "invalid arguments for search function, query expects 1 argument, but got {}",
                 args.len()
             ))
             .set_span(span));
         }
 
-        let query_arg = args[0];
-        let option_arg = if args.len() == 2 { Some(args[1]) } else { None };
+        let (query_display, query_arg) = &args[0];
+        let option_arg = if args.len() == 2 {
+            let (display, arg) = &args[1];
+            let box (scalar, _) = self.resolve_core(arena, *arg)?;
+            Some((display.as_str(), scalar))
+        } else {
+            None
+        };
 
-        let box (query_scalar, _) = self.resolve(query_arg)?;
+        let box (query_scalar, _) = self.resolve_core(arena, *query_arg)?;
         let Ok(query_expr) = ConstantExpr::try_from(query_scalar.clone()) else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
-                query_arg
+                query_display
             ))
             .set_span(query_scalar.span()));
         };
         let Some(query_text) = query_expr.value.as_string() else {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for search function, query text must be a constant string, but got {}",
-                query_arg
+                query_display
             ))
             .set_span(query_scalar.span()));
         };
@@ -341,28 +417,27 @@ impl<'a> TypeChecker<'a> {
             };
             column_refs.push((column_ref, None));
         }
-        let inverted_index_option = self.resolve_search_option(option_arg)?;
+        let inverted_index_option = self.resolve_core_search_option(option_arg)?;
 
         self.resolve_search_function(span, column_refs, query_text, inverted_index_option)
     }
 
-    fn resolve_search_option(
+    fn resolve_core_search_option(
         &mut self,
-        option_arg: Option<&Expr>,
+        option_arg: Option<(&str, ScalarExpr)>,
     ) -> Result<Option<InvertedIndexOption>> {
-        if let Some(option_arg) = option_arg {
-            let box (option_scalar, _) = self.resolve(option_arg)?;
+        if let Some((option_display, option_scalar)) = option_arg {
             let Ok(option_expr) = ConstantExpr::try_from(option_scalar.clone()) else {
                 return Err(ErrorCode::SemanticError(format!(
                     "invalid arguments for search function, option must be a constant string, but got {}",
-                    option_arg
+                    option_display
                 ))
                 .set_span(option_scalar.span()));
             };
             let Some(option_text) = option_expr.value.as_string() else {
                 return Err(ErrorCode::SemanticError(format!(
                     "invalid arguments for search function, option text must be a constant string, but got {}",
-                    option_arg
+                    option_display
                 ))
                 .set_span(option_scalar.span()));
             };
@@ -378,11 +453,10 @@ impl<'a> TypeChecker<'a> {
                 }
                 let option_vals: Vec<&str> = option_str.split('=').collect();
                 if option_vals.len() != 2 {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "invalid arguments for search function, each option must have key and value joined by equal sign, but got {}",
-                        option_arg
-                    ))
-                    .set_span(option_scalar.span()));
+                    let message = format!(
+                        "invalid arguments for search function, each option must have key and value joined by equal sign, but got {option_display}",
+                    );
+                    return Err(ErrorCode::SemanticError(message).set_span(option_scalar.span()));
                 }
                 let option_key = option_vals[0].trim().to_lowercase();
                 let option_val = option_vals[1].trim().to_lowercase();
@@ -425,7 +499,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 return Err(ErrorCode::SemanticError(format!(
                     "invalid arguments for search function, unsupported option: {}",
-                    option_arg
+                    option_display
                 ))
                 .set_span(option_scalar.span()));
             }
