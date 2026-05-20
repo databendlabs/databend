@@ -1264,9 +1264,13 @@ impl QueryCoordinator {
                 let error = executor.execute().await.err();
                 statistics_sender.shutdown(error.clone()).await;
                 let exchange_manager = query_ctx.get_exchange_manager();
-                spawn_blocking(move || {
+                if let Err(cause) = spawn_blocking(move || {
                     exchange_manager.on_finished_query(&query_id, error);
-                });
+                })
+                .await
+                {
+                    warn!("on_finished_query cleanup task failed: {:?}", cause);
+                }
             }
             .in_span(span),
             "Distributed-Executor",
