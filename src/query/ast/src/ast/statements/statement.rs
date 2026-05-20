@@ -458,8 +458,18 @@ impl Statement {
                 let mut clone = stmt.clone();
                 clone.storage_params = clone
                     .storage_params
-                    .keys()
-                    .map(|k| (k.clone(), "***".to_string()))
+                    .iter()
+                    .map(|(k, v)| {
+                        let chars: Vec<char> = v.chars().collect();
+                        let masked = if chars.len() <= 4 {
+                            "***".to_string()
+                        } else {
+                            let head: String = chars[..2].iter().collect();
+                            let tail: String = chars[chars.len() - 2..].iter().collect();
+                            format!("{}***{}", head, tail)
+                        };
+                        (k.clone(), masked)
+                    })
                     .collect();
                 format!("{}", Statement::CreateConnection(clone))
             }
@@ -467,8 +477,18 @@ impl Statement {
                 let mut clone = stmt.clone();
                 if let AlterTableAction::ModifyConnection { new_connection } = &mut clone.action {
                     *new_connection = new_connection
-                        .keys()
-                        .map(|k| (k.clone(), "***".to_string()))
+                        .iter()
+                        .map(|(k, v)| {
+                            let chars: Vec<char> = v.chars().collect();
+                            let masked = if chars.len() <= 4 {
+                                "***".to_string()
+                            } else {
+                                let head: String = chars[..2].iter().collect();
+                                let tail: String = chars[chars.len() - 2..].iter().collect();
+                                format!("{}***{}", head, tail)
+                            };
+                            (k.clone(), masked)
+                        })
                         .collect();
                 }
                 format!("{}", Statement::AlterTable(clone))
