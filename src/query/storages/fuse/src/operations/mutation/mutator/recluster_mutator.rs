@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::cmp;
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -49,12 +48,17 @@ use fastrace::func_path;
 use fastrace::future::FutureExt;
 use indexmap::IndexSet;
 use log::debug;
+use log::info;
 use log::warn;
 use opendal::Operator;
 
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
+use crate::DEFAULT_RECLUSTER_DEPTH;
+use crate::FUSE_OPT_KEY_RECLUSTER_DEPTH;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use crate::FuseTable;
+use crate::MAX_RECLUSTER_DEPTH;
+use crate::MIN_RECLUSTER_DEPTH;
 use crate::SegmentLocation;
 use crate::io::MetaReaders;
 use crate::operations::common::BlockMetaIndex as BlockIndex;
@@ -66,6 +70,26 @@ use crate::statistics::sort_by_cluster_stats;
 /// For two-block layouts, repeated reclustering beyond this level
 /// rarely improves data locality and may cause task churn.
 const MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS: i32 = 2;
+const SMALL_TABLE_RECLUSTER_BLOCK_COUNT: u64 = 1000;
+
+struct LevelReclusterTasks {
+    selected_block_count: usize,
+    min_blocks_per_task: usize,
+    tasks: Vec<(ReclusterTask, Vec<usize>)>,
+}
+
+struct DepthSelection {
+    selected_idx: IndexSet<usize>,
+    average_depth: f64,
+    max_depth: usize,
+    max_point_overlap_count: usize,
+}
+
+struct ReclusterBlock {
+    index: BlockIndex,
+    meta: Arc<BlockMeta>,
+    stats: ClusterStatistics,
+}
 
 #[derive(Clone)]
 pub struct SelectedReclusterSegment {
@@ -97,6 +121,7 @@ pub struct ReclusterMutator {
     pub(crate) cluster_key_id: u32,
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
+    pub(crate) memory_threshold: usize,
     pub(crate) cluster_key_exprs: Vec<Expr<usize>>,
     pub(crate) cluster_key_types: Vec<DataType>,
 }
@@ -111,16 +136,13 @@ impl ReclusterMutator {
         let cluster_key_id = table.cluster_key_id().unwrap();
         let block_thresholds = table.get_block_thresholds();
 
-        let avg_depth_threshold = table.get_option(
-            FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
-            DEFAULT_AVG_DEPTH_THRESHOLD,
-        );
-        let depth_threshold =
-            (snapshot.summary.block_count as f64 * avg_depth_threshold).clamp(1.0, 16.0);
+        let depth_threshold = Self::recluster_depth_threshold(table, snapshot.summary.block_count);
 
+        let settings = ctx.get_settings();
+        let memory_threshold = settings.get_recluster_block_size()? as usize;
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && ctx.get_settings().get_enable_distributed_recluster()? {
+        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
             max_tasks = cluster.nodes.len();
         }
 
@@ -146,6 +168,7 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             max_tasks,
+            memory_threshold,
             cluster_key_exprs,
             cluster_key_types,
         })
@@ -171,6 +194,11 @@ impl ReclusterMutator {
             .iter()
             .map(|expr| expr.data_type().clone())
             .collect();
+        let memory_threshold = ctx
+            .get_settings()
+            .get_recluster_block_size()
+            .expect("get recluster_block_size setting for recluster mutator")
+            as usize;
         Self {
             ctx,
             operator,
@@ -179,6 +207,7 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             max_tasks,
+            memory_threshold,
             cluster_key_exprs,
             cluster_key_types,
         }
@@ -202,46 +231,31 @@ impl ReclusterMutator {
         let mut selected_segs_idx = Vec::with_capacity(compact_segments.len());
         let mut selected_statistics = Vec::with_capacity(compact_segments.len());
         let mut selected_seg_stats = Vec::with_capacity(compact_segments.len());
-        let selected_segments = compact_segments
-            .into_iter()
-            .map(|segment| {
-                selected_statistics.push(segment.info.summary.clone());
-                selected_segs_idx.push(segment.loc.segment_idx);
-                selected_seg_stats.push((
-                    segment.loc.segment_idx,
-                    segment
-                        .info
-                        .summary
-                        .additional_stats_meta
-                        .as_ref()
-                        .map(|v| v.location.clone()),
-                ));
-                (segment.loc.segment_idx, segment.info)
-            })
-            .collect::<Vec<_>>();
+        let mut selected_segments = Vec::with_capacity(compact_segments.len());
+        for segment in compact_segments {
+            selected_statistics.push(segment.info.summary.clone());
+            selected_segs_idx.push(segment.loc.segment_idx);
+            selected_seg_stats.push((
+                segment.loc.segment_idx,
+                segment
+                    .info
+                    .summary
+                    .additional_stats_meta
+                    .as_ref()
+                    .map(|v| v.location.clone()),
+            ));
+            selected_segments.push((segment.loc.segment_idx, segment.info));
+        }
 
         // Gather blocks and create a block map categorized by clustering levels
         let blocks = self.gather_blocks(selected_segments).await?;
-        let block_stats = blocks
-            .iter()
-            .map(|(_, block)| {
-                self.build_cluster_stats_for_recluster(
-                    block.cluster_stats.as_ref(),
-                    &block.col_stats,
-                )
-            })
-            .collect::<Vec<_>>();
-        let mut blocks_map: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
-        for (idx, stats) in block_stats.iter().enumerate() {
-            blocks_map.entry(stats.level).or_default().push(idx);
-        }
+        let selected_segment_count = selected_statistics.len() as u64;
+        let selected_block_count = blocks.len() as u64;
 
-        // Use the configured recluster budget as a stable scheduling target. Runtime
-        // memory usage is intentionally not folded in here because sort spill can
-        // absorb pressure and the available memory snapshot changes during execution.
-        let settings = self.ctx.get_settings();
-        let memory_threshold = settings.get_recluster_block_size()? as usize;
-        let block_per_seg = self.block_thresholds.block_per_segment;
+        let mut blocks_map: BTreeMap<i32, Vec<usize>> = BTreeMap::new();
+        for (idx, block) in blocks.iter().enumerate() {
+            blocks_map.entry(block.stats.level).or_default().push(idx);
+        }
 
         // Prepare task generation parameters
         let arrow_schema = self.schema.as_ref().into();
@@ -250,7 +264,9 @@ impl ReclusterMutator {
         let mut tasks = Vec::new();
         let mut selected_blocks_idx = IndexSet::new();
         let max_level = blocks_map.keys().last().copied();
-        // Process blocks for reclustering based on their level
+        let mut deferred_level_task = None;
+        // Process one clustering level at a time. This avoids mixing blocks whose
+        // clustering stats were produced by different recluster rounds.
         for (level, indices) in blocks_map.into_iter() {
             let block_count = indices.len();
             if level == -1 || block_count < 2 {
@@ -264,216 +280,137 @@ impl ReclusterMutator {
                 && level >= MAX_RECLUSTER_LEVEL_FOR_TWO_BLOCKS
             {
                 debug!(
-                    "recluster: only two blocks remain at level {}, skipping to avoid task churn",
-                    level
+                    "recluster: level selection level={} block_count={} skip_reason=high_level_two_blocks",
+                    level, block_count,
                 );
                 continue;
             }
 
-            let mut total_rows = 0;
-            let mut total_bytes = 0;
-            let mut total_compressed = 0;
-            let mut small_blocks = IndexSet::new();
-            let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
-
-            // Analyze each block's statistics and track min/max points
-            for &i in indices.iter() {
-                let block = &blocks[i];
-                let stats = &block_stats[i];
-                points_map.entry(stats.min().clone()).or_default().0.push(i);
-                points_map.entry(stats.max().clone()).or_default().1.push(i);
-
-                // Track small blocks for potential compaction
-                if self.block_thresholds.check_too_small(
-                    block.1.row_count as usize,
-                    block.1.block_size as usize,
-                    block.1.file_size as usize,
-                ) {
-                    small_blocks.insert(i);
-                }
-
-                total_rows += block.1.row_count;
-                total_bytes += block.1.block_size;
-                total_compressed += block.1.file_size;
-            }
-
-            // If total rows and bytes are too small, compact the blocks into one
-            if self
-                .block_thresholds
-                .check_for_compact(total_rows as usize, total_bytes as usize)
-            {
+            let remaining_budget = self.max_tasks.saturating_sub(tasks.len());
+            if remaining_budget == 0 {
                 debug!(
-                    "recluster: the statistics of blocks are too small, just merge them into one block"
+                    "recluster: level selection level={} block_count={} skip_reason=task_budget_exhausted",
+                    level, block_count,
                 );
-                selected_blocks_idx.extend(indices.iter());
-                let block_metas = indices
-                    .into_iter()
-                    .map(|i| (None, blocks[i].1.clone()))
-                    .collect::<Vec<_>>();
-                tasks.push(self.generate_task(
-                    &block_metas,
-                    &column_nodes,
-                    total_rows as usize,
-                    total_bytes as usize,
-                    total_compressed as usize,
-                    level,
-                ));
                 break;
             }
 
-            let max_blocks_num_per_node =
-                self.max_blocks_num_per_node(total_bytes as usize, block_count, memory_threshold);
-            let max_blocks_num = max_blocks_num_per_node * self.max_tasks;
-            // Fetch enough candidates for all workers. The per-node quota is based
-            // on the observed block size in selected segments instead of the worst
-            // allowed block size, otherwise distributed recluster can under-select.
-            let mut selected_idx =
-                self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
-            if selected_idx.is_empty() {
-                if level != 0 || small_blocks.len() < 2 {
-                    continue;
-                }
-                selected_idx = IndexSet::from_iter(small_blocks);
-            }
+            let Some(level_tasks) = self.build_level_recluster_tasks(
+                level,
+                indices,
+                &blocks,
+                &column_nodes,
+                remaining_budget,
+            )?
+            else {
+                continue;
+            };
 
-            let max_total_bytes = memory_threshold.saturating_mul(self.max_tasks);
-            // Keep the first, highest-depth blocks within the total execution budget.
-            // This is a second-stage guard after candidate selection: the average
-            // block size is only an estimate, while task generation uses real bytes.
-            let selected_total_bytes =
-                Self::limit_selected_blocks_by_budget(&mut selected_idx, &blocks, max_total_bytes);
-            let selected_block_count = selected_idx.len();
-            if selected_block_count < 2 {
+            // When the lowest constructible level batch is too small, defer it
+            // once so the next level gets a chance to consume this round's
+            // budget first.
+            if tasks.is_empty()
+                && deferred_level_task.is_none()
+                && Some(level) != max_level
+                && level_tasks.selected_block_count < level_tasks.min_blocks_per_task
+            {
+                debug!(
+                    "recluster: level selection level={} block_count={} selected_count={} task_count={} skip_reason=deferred_low_level_batch",
+                    level,
+                    block_count,
+                    level_tasks.selected_block_count,
+                    level_tasks.tasks.len(),
+                );
+                deferred_level_task = Some(level_tasks);
                 continue;
             }
 
-            let min_blocks_per_task = (max_blocks_num_per_node / 2).max(2);
-            let target_tasks_by_blocks = selected_block_count / min_blocks_per_task;
-            let target_tasks_by_memory = selected_total_bytes.div_ceil(memory_threshold);
-            // A recluster task needs at least two blocks, so this caps parallelism
-            // when the selected candidate set is too small for every worker.
-            let max_tasks_by_blocks = selected_block_count / 2;
-            let target_tasks = target_tasks_by_blocks
-                .max(target_tasks_by_memory)
-                .max(1)
-                .min(self.max_tasks)
-                .min(max_tasks_by_blocks);
-            let target_task_bytes = selected_total_bytes.div_ceil(target_tasks);
-            let target_task_blocks = selected_block_count.div_ceil(target_tasks);
-
-            // Process selected blocks into recluster tasks based on memory and parallelism targets.
-            let mut task_bytes = 0usize;
-            let mut task_rows = 0;
-            let mut task_compressed = 0;
-            let mut task_indices = Vec::new();
-            let mut selected_blocks = Vec::new();
-            for (processed_blocks, idx) in selected_idx.into_iter().enumerate() {
-                let block = blocks[idx].1.clone();
-                let block_size = block.block_size as usize;
-                let row_count = block.row_count as usize;
-
-                let remaining_tasks = target_tasks.saturating_sub(tasks.len() + 1);
-                let remaining_blocks = selected_block_count.saturating_sub(processed_blocks);
-                // Only split for parallelism when the remaining blocks can still
-                // satisfy the minimum task size for the tasks left to create.
-                let has_enough_remaining_blocks =
-                    remaining_blocks >= remaining_tasks * min_blocks_per_task;
-                let should_split_for_memory = task_bytes.saturating_add(block_size)
-                    > memory_threshold
-                    && selected_blocks.len() > 1;
-                // Memory split is the hard safety guard. Parallel split is a load
-                // balancing target and is allowed only while preserving task size.
-                let should_split_for_parallelism = tasks.len() + 1 < target_tasks
-                    && selected_blocks.len() >= min_blocks_per_task
-                    && has_enough_remaining_blocks
-                    && (task_bytes >= target_task_bytes
-                        || selected_blocks.len() >= target_task_blocks);
-
-                if should_split_for_memory || should_split_for_parallelism {
-                    selected_blocks_idx.extend(std::mem::take(&mut task_indices));
-
-                    tasks.push(self.generate_task(
-                        &selected_blocks,
-                        &column_nodes,
-                        task_rows,
-                        task_bytes,
-                        task_compressed,
-                        level,
-                    ));
-
-                    task_rows = 0;
-                    task_bytes = 0;
-                    task_compressed = 0;
-                    selected_blocks.clear();
-
-                    // Break if maximum task limit is reached
-                    if tasks.len() >= self.max_tasks {
-                        break;
-                    }
-                }
-
-                task_rows += row_count;
-                task_bytes += block_size;
-                task_compressed += block.file_size as usize;
-                task_indices.push(idx);
-                selected_blocks.push((None, block));
-            }
-
-            // Add remaining blocks as a final task if any
-            if selected_blocks.len() > 1 {
+            for (task, task_indices) in level_tasks.tasks {
                 selected_blocks_idx.extend(task_indices);
-                tasks.push(self.generate_task(
-                    &selected_blocks,
-                    &column_nodes,
-                    task_rows,
-                    task_bytes,
-                    task_compressed,
-                    level,
-                ));
+                tasks.push(task);
             }
-            break;
+
+            if tasks.len() >= self.max_tasks {
+                debug!(
+                    "recluster: task budget reached selected_task_count={} max_tasks={}",
+                    tasks.len(),
+                    self.max_tasks,
+                );
+                break;
+            }
         }
 
-        // Determine if reclustering is needed.
-        // Derived stats may participate in ordering/selection even when no block-level rewrite
-        // task is chosen. In that case, a zero-task result is still meaningful: commit will use
-        // `remained_blocks` to rebuild segments in the selected order, rather than treating the
-        // recluster as a no-op.
-        let selected = if selected_blocks_idx.is_empty() {
-            let unordered = || {
-                block_stats.windows(2).any(|w| {
-                    sort_by_cluster_stats(
-                        &Some(w[0].clone()),
-                        &Some(w[1].clone()),
-                        self.cluster_key_id,
-                    ) == Ordering::Greater
-                })
-            };
-            (selected_segs_idx.len() > 1 && blocks.len() <= block_per_seg) || unordered()
-        } else {
-            true
-        };
+        if tasks.len() < self.max_tasks {
+            if let Some(level_tasks) = deferred_level_task {
+                // Backfill deferred low-level work when higher levels did not use
+                // the full budget, so finite low-level data still converges.
+                let remaining_budget = self.max_tasks - tasks.len();
+                for (task, task_indices) in level_tasks.tasks.into_iter().take(remaining_budget) {
+                    debug!(
+                        "recluster: backfill deferred level={} selected_count={}",
+                        task.level,
+                        task_indices.len(),
+                    );
+                    selected_blocks_idx.extend(task_indices);
+                    tasks.push(task);
+                }
+            }
+        }
 
-        // Generate recluster parts based on selected segments
-        let parts = if selected {
-            selected_segs_idx.sort_by(|a, b| b.cmp(a));
+        // Generate recluster parts based on the segments that will actually be
+        // replaced. For block rewrite tasks, keep the mutation scope limited to
+        // the segments containing selected blocks. A zero-task rebuild is kept
+        // only when repacking unchanged blocks can reduce the segment count,
+        // avoiding repeated rebuilds of the active tail segment.
+        let block_per_segment = self.block_thresholds.block_per_segment as u64;
+        let target_segment_count = selected_block_count.div_ceil(block_per_segment);
+        let rebuild_segments_only = selected_blocks_idx.is_empty()
+            && selected_segment_count > 1
+            && target_segment_count < selected_segment_count;
+        let removed_segment_set = if !selected_blocks_idx.is_empty() {
+            selected_blocks_idx
+                .iter()
+                .map(|idx| blocks[*idx].index.segment_idx)
+                .collect::<IndexSet<_>>()
+        } else if rebuild_segments_only {
+            selected_segs_idx.iter().copied().collect()
+        } else {
+            IndexSet::new()
+        };
+        let parts = if !removed_segment_set.is_empty() {
+            let mut removed_segment_indexes =
+                removed_segment_set.iter().copied().collect::<Vec<_>>();
+            removed_segment_indexes.sort_unstable_by(|a, b| b.cmp(a));
 
             let default_cluster_key_id = Some(self.cluster_key_id);
             let mut removed_segment_summary = Statistics::default();
-            selected_statistics.iter().for_each(|v| {
-                merge_statistics_mut(&mut removed_segment_summary, v, default_cluster_key_id)
-            });
+            for (idx, stats) in selected_segs_idx.iter().zip(selected_statistics.iter()) {
+                if removed_segment_set.contains(idx) {
+                    merge_statistics_mut(
+                        &mut removed_segment_summary,
+                        stats,
+                        default_cluster_key_id,
+                    );
+                }
+            }
 
-            let remained_blocks = blocks
+            let mut hll_segment_indexes = IndexSet::new();
+            let mut remained_blocks = Vec::new();
+            for (idx, block) in blocks.into_iter().enumerate() {
+                if !removed_segment_set.contains(&block.index.segment_idx)
+                    || selected_blocks_idx.contains(&idx)
+                {
+                    continue;
+                }
+                let mut block_meta = Arc::unwrap_or_clone(block.meta);
+                block_meta.cluster_stats = Some(block.stats);
+                hll_segment_indexes.insert(block.index.segment_idx);
+                remained_blocks.push((block.index, Arc::new(block_meta)));
+            }
+            let selected_seg_stats = selected_seg_stats
                 .into_iter()
-                .enumerate()
-                .filter_map(|(idx, (block_index, block_meta))| {
-                    if selected_blocks_idx.contains(&idx) {
-                        return None;
-                    }
-                    let mut block_meta = Arc::unwrap_or_clone(block_meta);
-                    block_meta.cluster_stats = Some(block_stats[idx].clone());
-                    Some((block_index, Arc::new(block_meta)))
+                .filter(|(segment_idx, location)| {
+                    location.is_some() && hll_segment_indexes.contains(segment_idx)
                 })
                 .collect::<Vec<_>>();
             let hlls = self.gather_hlls(selected_seg_stats).await?;
@@ -487,14 +424,264 @@ impl ReclusterMutator {
             ReclusterParts {
                 tasks,
                 remained_blocks,
-                removed_segment_indexes: selected_segs_idx,
+                removed_segment_indexes,
                 removed_segment_summary,
             }
         } else {
             ReclusterParts::default()
         };
 
+        debug!(
+            "recluster: target_select result selected_blocks={} tasks={} remained_blocks={} removed_segments={} segment_rebuild={} input_blocks={} target_segments={}",
+            selected_blocks_idx.len(),
+            parts.tasks.len(),
+            parts.remained_blocks.len(),
+            parts.removed_segment_indexes.len(),
+            rebuild_segments_only,
+            selected_block_count,
+            target_segment_count,
+        );
+
         Ok((selected_blocks_idx.len() as u64, parts))
+    }
+
+    fn recluster_depth_threshold(table: &FuseTable, block_count: u64) -> f64 {
+        let options = table.table_info.options();
+        if options.contains_key(FUSE_OPT_KEY_RECLUSTER_DEPTH) {
+            return table.get_option(FUSE_OPT_KEY_RECLUSTER_DEPTH, DEFAULT_RECLUSTER_DEPTH) as f64;
+        }
+
+        if options.contains_key(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD) {
+            let avg_depth_threshold = table.get_option(
+                FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
+                DEFAULT_AVG_DEPTH_THRESHOLD,
+            );
+            return (block_count as f64 * avg_depth_threshold)
+                .clamp(MIN_RECLUSTER_DEPTH as f64, MAX_RECLUSTER_DEPTH as f64);
+        }
+
+        if block_count <= SMALL_TABLE_RECLUSTER_BLOCK_COUNT {
+            MIN_RECLUSTER_DEPTH as f64
+        } else {
+            DEFAULT_RECLUSTER_DEPTH as f64
+        }
+    }
+
+    fn build_level_recluster_tasks(
+        &self,
+        level: i32,
+        indices: Vec<usize>,
+        blocks: &[ReclusterBlock],
+        column_nodes: &ColumnNodes,
+        task_budget: usize,
+    ) -> Result<Option<LevelReclusterTasks>> {
+        let block_count = indices.len();
+        let mut total_rows = 0;
+        let mut total_bytes = 0;
+        let mut total_compressed = 0;
+        let mut points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = HashMap::new();
+
+        // Build a depth map from this level only. Cross-level overlap is handled
+        // by scheduling levels separately, not by mixing them in one task.
+        for &i in indices.iter() {
+            let block = &blocks[i];
+            let stats = &block.stats;
+            points_map.entry(stats.min().clone()).or_default().0.push(i);
+            points_map.entry(stats.max().clone()).or_default().1.push(i);
+
+            total_rows += block.meta.row_count;
+            total_bytes += block.meta.block_size;
+            total_compressed += block.meta.file_size;
+        }
+
+        let max_blocks_num_per_node =
+            self.max_blocks_num_per_node(total_bytes as usize, block_count);
+        let min_blocks_per_task = (max_blocks_num_per_node / 2).max(2);
+
+        // If total rows and bytes are too small, compact the blocks into one.
+        if self
+            .block_thresholds
+            .check_for_compact(total_rows as usize, total_bytes as usize)
+        {
+            debug!(
+                "recluster: level selection detail level={} block_count={} rows={} bytes={} selected_count={} task_count=1 compact_small_blocks=true",
+                level,
+                block_count,
+                total_rows,
+                total_bytes,
+                indices.len(),
+            );
+            let selected_block_count = indices.len();
+            let block_metas = indices
+                .iter()
+                .map(|&i| (None, blocks[i].meta.clone()))
+                .collect::<Vec<_>>();
+            let task = self.generate_task(
+                &block_metas,
+                column_nodes,
+                total_rows as usize,
+                total_bytes as usize,
+                total_compressed as usize,
+                level,
+            );
+
+            return Ok(Some(LevelReclusterTasks {
+                selected_block_count,
+                min_blocks_per_task,
+                tasks: vec![(task, indices)],
+            }));
+        }
+
+        let max_blocks_num = max_blocks_num_per_node * task_budget;
+        // Fetch enough candidates for the remaining workers. The per-node quota is based
+        // on the observed block size in selected segments instead of the worst
+        // allowed block size, otherwise distributed recluster can under-select.
+        let selection = self.fetch_max_depth(points_map, self.depth_threshold, max_blocks_num)?;
+        let average_depth = selection.average_depth;
+        let max_depth = selection.max_depth;
+        let max_point_overlap_count = selection.max_point_overlap_count;
+        let mut selected_idx = selection.selected_idx;
+        let max_total_bytes = self.memory_threshold.saturating_mul(task_budget);
+        // Keep the first, highest-depth blocks within the remaining execution budget.
+        // This is a second-stage guard after candidate selection: the average
+        // block size is only an estimate, while task generation uses real bytes.
+        let selected_total_bytes =
+            Self::limit_selected_blocks_by_budget(&mut selected_idx, blocks, max_total_bytes);
+        let selected_block_count = selected_idx.len();
+        if selected_block_count < 2 {
+            debug!(
+                "recluster: level selection detail level={} block_count={} average_depth={} max_depth={} max_point_overlap_count={} selected_count={} skip_reason=selected_less_than_two_after_budget",
+                level,
+                block_count,
+                average_depth,
+                max_depth,
+                max_point_overlap_count,
+                selected_block_count,
+            );
+            return Ok(None);
+        }
+
+        let target_tasks_by_blocks = selected_block_count / min_blocks_per_task;
+        let target_tasks_by_memory = selected_total_bytes.div_ceil(self.memory_threshold);
+        // A recluster task needs at least two blocks, so this caps parallelism
+        // when the selected candidate set is too small for every worker.
+        let max_tasks_by_blocks = selected_block_count / 2;
+        let target_tasks = target_tasks_by_blocks
+            .max(target_tasks_by_memory)
+            .max(1)
+            .min(task_budget)
+            .min(max_tasks_by_blocks);
+        let target_task_bytes = selected_total_bytes.div_ceil(target_tasks);
+        let target_task_blocks = selected_block_count.div_ceil(target_tasks);
+
+        // Process selected blocks into recluster tasks based on memory and parallelism targets.
+        let mut tasks = Vec::new();
+        let mut task_bytes = 0usize;
+        let mut task_rows = 0;
+        let mut task_compressed = 0;
+        let mut task_indices = Vec::new();
+        let mut selected_blocks = Vec::new();
+        for (processed_blocks, idx) in selected_idx.into_iter().enumerate() {
+            let block = blocks[idx].meta.clone();
+            let block_size = block.block_size as usize;
+            let row_count = block.row_count as usize;
+
+            let remaining_tasks = target_tasks.saturating_sub(tasks.len() + 1);
+            let remaining_blocks = selected_block_count.saturating_sub(processed_blocks);
+            // Only split for parallelism when the remaining blocks can still
+            // satisfy the minimum task size for the tasks left to create.
+            let has_enough_remaining_blocks =
+                remaining_blocks >= remaining_tasks * min_blocks_per_task;
+            let should_split_for_memory = task_bytes.saturating_add(block_size)
+                > self.memory_threshold
+                && selected_blocks.len() > 1;
+            // Memory split is the hard safety guard. Parallel split is a load
+            // balancing target and is allowed only while preserving task size.
+            let should_split_for_parallelism = tasks.len() + 1 < target_tasks
+                && selected_blocks.len() >= min_blocks_per_task
+                && has_enough_remaining_blocks
+                && (task_bytes >= target_task_bytes || selected_blocks.len() >= target_task_blocks);
+
+            if should_split_for_memory || should_split_for_parallelism {
+                let selected_task_indices = std::mem::take(&mut task_indices);
+
+                tasks.push((
+                    self.generate_task(
+                        &selected_blocks,
+                        column_nodes,
+                        task_rows,
+                        task_bytes,
+                        task_compressed,
+                        level,
+                    ),
+                    selected_task_indices,
+                ));
+
+                task_rows = 0;
+                task_bytes = 0;
+                task_compressed = 0;
+                selected_blocks.clear();
+
+                // Break if maximum task limit is reached
+                if tasks.len() >= target_tasks {
+                    break;
+                }
+            }
+
+            task_rows += row_count;
+            task_bytes += block_size;
+            task_compressed += block.file_size as usize;
+            task_indices.push(idx);
+            selected_blocks.push((None, block));
+        }
+
+        // Add remaining blocks as a final task if any. The tail can be a tiny
+        // remainder after splitting; skip it so recluster does not become a
+        // small-block compact path.
+        if selected_blocks.len() > 1 {
+            tasks.push((
+                self.generate_task(
+                    &selected_blocks,
+                    column_nodes,
+                    task_rows,
+                    task_bytes,
+                    task_compressed,
+                    level,
+                ),
+                task_indices,
+            ));
+        }
+
+        if tasks.is_empty() {
+            debug!(
+                "recluster: level selection detail level={} block_count={} average_depth={} max_depth={} max_point_overlap_count={} selected_count={} skip_reason=no_task_after_split",
+                level,
+                block_count,
+                average_depth,
+                max_depth,
+                max_point_overlap_count,
+                selected_block_count,
+            );
+            return Ok(None);
+        }
+
+        info!(
+            "recluster: built level task candidates level={} block_count={} avg_depth={} depth_threshold={} max_depth={} max_point_overlap_count={} selected_count={} task_count={}",
+            level,
+            block_count,
+            average_depth,
+            self.depth_threshold,
+            max_depth,
+            max_point_overlap_count,
+            selected_block_count,
+            tasks.len(),
+        );
+
+        Ok(Some(LevelReclusterTasks {
+            selected_block_count,
+            min_blocks_per_task,
+            tasks,
+        }))
     }
 
     fn generate_task(
@@ -506,17 +693,6 @@ impl ReclusterMutator {
         total_compressed: usize,
         level: i32,
     ) -> ReclusterTask {
-        if log::log_enabled!(log::Level::Debug) {
-            let locations = block_metas
-                .iter()
-                .map(|v| &v.1.location.0)
-                .collect::<Vec<_>>();
-            debug!(
-                "recluster: generate recluster task, the selected blocks: {:?}, level: {}",
-                locations, level
-            );
-        }
-
         let (stats, parts) =
             FuseTable::to_partitions(Some(&self.schema), block_metas, column_nodes, None, None);
         ReclusterTask {
@@ -529,12 +705,7 @@ impl ReclusterMutator {
         }
     }
 
-    fn max_blocks_num_per_node(
-        &self,
-        total_bytes: usize,
-        block_count: usize,
-        memory_threshold: usize,
-    ) -> usize {
+    fn max_blocks_num_per_node(&self, total_bytes: usize, block_count: usize) -> usize {
         let avg_block_bytes = (total_bytes / block_count).max(1);
         // Clamp the observed average to normal block thresholds so tiny fragments
         // do not inflate the candidate count and unusually large blocks do not
@@ -542,18 +713,18 @@ impl ReclusterMutator {
         let target_block_bytes = avg_block_bytes
             .max(self.block_thresholds.min_bytes_per_block)
             .min(self.block_thresholds.max_bytes_per_block);
-        (memory_threshold / target_block_bytes).max(2)
+        (self.memory_threshold / target_block_bytes).max(2)
     }
 
     fn limit_selected_blocks_by_budget(
         selected_idx: &mut IndexSet<usize>,
-        blocks: &[(BlockIndex, Arc<BlockMeta>)],
+        blocks: &[ReclusterBlock],
         max_total_bytes: usize,
     ) -> usize {
         let mut total_bytes = 0usize;
         let mut keep_blocks = 0;
         for idx in selected_idx.iter().copied() {
-            let block_size = blocks[idx].1.block_size as usize;
+            let block_size = blocks[idx].meta.block_size as usize;
             if keep_blocks >= 2 && total_bytes.saturating_add(block_size) > max_total_bytes {
                 break;
             }
@@ -607,7 +778,18 @@ impl ReclusterMutator {
         }
 
         let selected_indices = if indices.len() > 1 && blocks_num > block_per_seg {
-            let selected = self.fetch_max_depth(points_map, 1.0, max_len)?;
+            let selection = self.fetch_max_depth(points_map, 1.0, max_len)?;
+            let selected = selection.selected_idx;
+            debug!(
+                "recluster: segment selection segments={} blocks={} average_depth={} max_depth={} max_point_overlap_count={} selected_count={} small_segment_count={}",
+                indices.len(),
+                blocks_num,
+                selection.average_depth,
+                selection.max_depth,
+                selection.max_point_overlap_count,
+                selected.len(),
+                small_segments.len(),
+            );
             if selected.is_empty() && small_segments.len() > 1 {
                 // If no segments were selected but small segments exist, use those.
                 small_segments
@@ -650,7 +832,7 @@ impl ReclusterMutator {
     async fn gather_blocks(
         &self,
         compact_segments: Vec<(usize, Arc<CompactSegmentInfo>)>,
-    ) -> Result<Vec<(BlockIndex, Arc<BlockMeta>)>> {
+    ) -> Result<Vec<ReclusterBlock>> {
         // combine all the tasks.
         let mut iter = compact_segments.into_iter();
         let tasks = std::iter::from_fn(|| {
@@ -661,11 +843,13 @@ impl ReclusterMutator {
                             .into_iter()
                             .enumerate()
                             .map(|(block_idx, block_meta)| {
-                                let block_index = BlockIndex {
-                                    segment_idx,
-                                    block_idx,
-                                };
-                                (block_index, block_meta)
+                                (
+                                    BlockIndex {
+                                        segment_idx,
+                                        block_idx,
+                                    },
+                                    block_meta,
+                                )
                             })
                             .collect::<Vec<_>>()
                     })
@@ -683,11 +867,27 @@ impl ReclusterMutator {
             "convert-segments-worker".to_owned(),
         )
         .await?;
-        let blocks = joint
+        let block_metas = joint
             .into_iter()
             .collect::<Result<Vec<_>>>()?
             .into_iter()
             .flatten()
+            .collect::<Vec<_>>();
+        let blocks = block_metas
+            .into_iter()
+            .map(|(block_index, block_meta)| {
+                // Normalize cluster stats after gathering blocks. Missing or stale
+                // stats are rebuilt once and reused by selection and remained block rebuild.
+                let stats = self.build_cluster_stats_for_recluster(
+                    block_meta.cluster_stats.as_ref(),
+                    &block_meta.col_stats,
+                );
+                ReclusterBlock {
+                    index: block_index,
+                    meta: block_meta,
+                    stats,
+                }
+            })
             .collect::<Vec<_>>();
         Ok(blocks)
     }
@@ -697,6 +897,10 @@ impl ReclusterMutator {
         &self,
         hlls: Vec<(usize, Option<Location>)>,
     ) -> Result<HashMap<BlockIndex, Option<RawBlockHLL>>> {
+        if hlls.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         // combine all the tasks.
         let mut iter = hlls.into_iter();
         let tasks = std::iter::from_fn(|| {
@@ -756,7 +960,7 @@ impl ReclusterMutator {
         points_map: HashMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)>,
         depth_threshold: f64,
         max_len: usize,
-    ) -> Result<IndexSet<usize>> {
+    ) -> Result<DepthSelection> {
         let mut max_depth = 0;
         let mut max_point = 0;
         let mut interval_depths = HashMap::with_capacity(points_map.len());
@@ -798,7 +1002,9 @@ impl ReclusterMutator {
         let mut selected_idx = IndexSet::with_capacity(max_len);
         if !unfinished_intervals.is_empty() {
             warn!(
-                "Recluster: unfinished_intervals is not empty after calculate the blocks overlaps"
+                "recluster: unfinished intervals remain after calculating block overlaps count={} max_selected={}",
+                unfinished_intervals.len(),
+                max_len,
             );
             // re-sort the unfinished unfinished_intervals firstly.
             unfinished_intervals.keys().for_each(|idx| {
@@ -810,7 +1016,7 @@ impl ReclusterMutator {
         // round the float to 4 decimal places.
         let average_depth =
             (10000.0 * sum_depth as f64 / interval_depths.len() as f64).round() / 10000.0;
-        debug!("recluster: average_depth: {}", average_depth);
+        let max_point_overlap_count = point_overlaps[max_point].len();
 
         // find the max point, gather the indices.
         if average_depth > depth_threshold {
@@ -883,7 +1089,12 @@ impl ReclusterMutator {
         }
 
         selected_idx.truncate(max_len);
-        Ok(selected_idx)
+        Ok(DepthSelection {
+            selected_idx,
+            average_depth,
+            max_depth,
+            max_point_overlap_count,
+        })
     }
 
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.

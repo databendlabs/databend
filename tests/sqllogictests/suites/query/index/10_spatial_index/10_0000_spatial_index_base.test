@@ -150,6 +150,18 @@ SELECT store_id, store_name, category FROM spatial_stores WHERE st_dwithin(locat
 5 Peets Coffee coffee
 6 Lipton tea
 
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE st_covers(to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))'), location) ORDER BY store_id;
+----
+1 Starbucks coffee
+2 Costa coffee
+
+query ITT
+SELECT store_id, store_name, category FROM spatial_stores WHERE st_coveredby(location, to_geometry('POLYGON((9 9, 9 12, 12 12, 12 9, 9 9))')) ORDER BY store_id;
+----
+1 Starbucks coffee
+2 Costa coffee
+
 statement ok
 CREATE TABLE districts (district_id INT, district_name String, geom Geometry);
 

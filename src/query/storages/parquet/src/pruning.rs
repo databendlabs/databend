@@ -61,7 +61,9 @@ impl ParquetPruner {
         partition_columns: Vec<String>,
     ) -> Result<Self> {
         // Build `RangePruner` by `filter`.
-        let filter = push_down.as_ref().and_then(|p| p.filters.as_ref());
+        let filter = push_down
+            .as_ref()
+            .and_then(|p| p.effective_filters(&BUILTIN_FUNCTIONS));
 
         let mut predicate_columns = vec![];
         let range_pruner =

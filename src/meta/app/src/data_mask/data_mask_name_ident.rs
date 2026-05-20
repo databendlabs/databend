@@ -35,9 +35,7 @@ impl DataMaskNameIdentRaw {
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::KeyWithTenant;
     use crate::data_mask::DataMaskId;
     use crate::data_mask::DataMaskNameIdent;
     use crate::tenant_key::resource::TenantResource;
@@ -52,10 +50,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for DataMaskId {
         type KeyType = DataMaskNameIdent;
-
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
     }
 }
 

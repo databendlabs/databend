@@ -100,10 +100,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for ObjectTagIdRefValue {
         type KeyType = ObjectTagIdRefIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     /// Resource marker for tag -> object reference keys.
@@ -117,10 +113,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for EmptyProto {
         type KeyType = TagIdObjectRefIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

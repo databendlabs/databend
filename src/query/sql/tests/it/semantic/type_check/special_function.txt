@@ -1,0 +1,167 @@
+=== current_catalog_rewrites_to_literal ===
+description: A context special function should rewrite to a literal without needing full binder planning.
+sql: current_catalog()
+status: ok
+scalar: 'default'
+type: String
+
+=== current_database_rewrites_to_literal ===
+description: current_database() should use the TypeChecker special function path.
+sql: current_database()
+status: ok
+scalar: 'default'
+type: String
+
+=== version_rewrites_to_literal ===
+description: version() should use the TypeChecker special function path.
+sql: version()
+status: ok
+scalar: ''
+type: String
+
+=== current_user_rewrites_to_literal ===
+description: current_user() should use the TypeChecker special function path.
+sql: current_user()
+status: ok
+scalar: '\'root\'@\'%\''
+type: String
+
+=== current_role_rewrites_to_literal ===
+description: current_role() should use the TypeChecker special function path.
+sql: current_role()
+status: ok
+scalar: ''
+type: String
+
+=== is_role_in_session_matches_effective_role ===
+description: is_role_in_session should compare its argument against effective roles through the type-check adapter.
+sql: is_role_in_session('reader')
+status: ok
+scalar: true
+type: Boolean
+
+=== is_role_in_session_rejects_missing_role ===
+description: is_role_in_session should fold to false when no effective role matches.
+sql: is_role_in_session('owner')
+status: ok
+scalar: false
+type: Boolean
+
+=== timezone_rewrites_to_literal ===
+description: timezone() should read settings through the explicit type-check adapter.
+sql: timezone()
+status: ok
+scalar: 'UTC'
+type: String
+
+=== connection_id_rewrites_to_literal ===
+description: connection_id() should rewrite from context state.
+sql: connection_id()
+status: ok
+scalar: 'lite-conn'
+type: String
+
+=== current_database_rejects_arguments ===
+description: context literal special functions should validate arity while lowering.
+sql: current_database(1)
+status: error
+code: 1065
+message: current_database expects 0 arguments, but got 1
+
+=== coalesce_rewrites_to_if_chain ===
+description: coalesce should remove literal NULLs and rewrite to the IF chain.
+sql: coalesce(NULL, text, pattern)
+status: ok
+scalar: if(is_not_null(text (#1)), assume_not_null(text (#1)), is_not_null(pattern (#2)), assume_not_null(pattern (#2)), NULL)
+type: String NULL
+
+=== decode_rewrites_to_null_safe_if_chain ===
+description: decode should rewrite to a null-safe IF chain.
+sql: decode(number, 1, text, 2, pattern, 'fallback')
+status: ok
+scalar: if(or(eq(number (#0), 1), false), text (#1), or(eq(number (#0), 2), false), pattern (#2), 'fallback')
+type: String NULL
+
+=== array_sort_with_constant_options_rewrites ===
+description: array_sort with constant order options should select the concrete sort function.
+sql: array_sort([3, 1, 2], 'desc', 'nulls last')
+status: ok
+scalar: [3, 2, 1]
+type: Array(UInt8)
+
+=== array_aggregate_with_constant_function_rewrites ===
+description: array_aggregate should rewrite to the selected array aggregate function.
+sql: array_aggregate([1, 2, 3], 'sum')
+status: ok
+scalar: 6
+type: UInt8
+
+=== to_variant_rewrites_to_variant_cast ===
+description: to_variant should use the variant cast rewrite.
+sql: to_variant({'k1': 1})
+status: ok
+scalar: '{"k1":1}'
+type: Variant
+
+=== try_to_variant_rewrites_to_variant_cast ===
+description: try_to_variant should use the fallible variant cast rewrite.
+sql: try_to_variant([number, delta])
+status: ok
+scalar: try_to_variant(array(number (#0), delta (#3)))
+type: Variant NULL
+
+=== greatest_rewrites_through_array_max ===
+description: greatest should rewrite through an array and null-aware max.
+sql: greatest(number, delta, 1)
+status: ok
+scalar: if(array_contains(array(number (#0), delta (#3), 1), NULL), NULL, array_max(array(number (#0), delta (#3), 1)))
+type: Int64 NULL
+
+=== least_rewrites_through_array_min ===
+description: least should rewrite through an array and null-aware min.
+sql: least(number, delta, 1)
+status: ok
+scalar: if(array_contains(array(number (#0), delta (#3), 1), NULL), NULL, array_min(array(number (#0), delta (#3), 1)))
+type: Int64 NULL
+
+=== greatest_ignore_nulls_rewrites_through_array_max ===
+description: greatest_ignore_nulls should rewrite directly to array_max.
+sql: greatest_ignore_nulls(number, delta, 1)
+status: ok
+scalar: array_max(array(number (#0), delta (#3), 1))
+type: Int64 NULL
+
+=== least_ignore_nulls_rewrites_through_array_min ===
+description: least_ignore_nulls should rewrite directly to array_min.
+sql: least_ignore_nulls(number, delta, 1)
+status: ok
+scalar: array_min(array(number (#0), delta (#3), 1))
+type: Int64 NULL
+
+=== getvariable_constant_name_rewrites_to_context_value ===
+description: getvariable should resolve a constant variable name through the explicit type-check adapter.
+sql: getvariable('missing_var')
+status: ok
+scalar: NULL
+type: NULL
+
+=== getvariable_rejects_missing_name ===
+description: getvariable should validate its single-argument shape while lowering.
+sql: getvariable()
+status: error
+code: 1065
+message: getvariable expects 1 argument, but got 0
+
+=== hex_decode_string_rewrites_via_binary_decode ===
+description: hex_decode_string should rewrite through the binary decoder and cast back to string.
+sql: hex_decode_string('64617461')
+status: ok
+scalar: CAST(64617461 AS String)
+type: String
+
+=== try_base64_decode_string_rewrites_via_binary_decode ===
+description: try_base64_decode_string should rewrite through the binary decoder and cast back to string.
+sql: try_base64_decode_string('ZGF0YQ==')
+status: ok
+scalar: CAST(64617461 AS String)
+type: String

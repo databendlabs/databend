@@ -709,43 +709,22 @@ impl PhysicalPlanBuilder {
             None
         };
 
-        let mut is_deterministic = true;
+        let user_predicates = scan.push_down_predicates.as_deref().unwrap_or_default();
+        let secure_predicates = scan.secure_predicates.as_deref().unwrap_or_default();
 
-        let push_down_filter = scan
-            .push_down_predicates
-            .as_ref()
-            .filter(|p| !p.is_empty())
-            .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
-                let predicates = predicates
-                    .iter()
-                    .map(|p| {
-                        p.as_raw_expr()
-                            .type_check(&metadata)?
-                            .project_column_ref(|col| Ok(col.column_name.clone()))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-
-                let expr = predicates
-                    .into_iter()
-                    .try_reduce(|lhs, rhs| {
-                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
-                    })?
-                    .unwrap();
-
-                let expr = cast_expr_to_non_null_boolean(expr)?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-                is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
-
-                let inverted_filter =
-                    check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
-
-                Ok(Filters {
-                    filter: expr.as_remote_expr(),
-                    inverted_filter: inverted_filter.as_remote_expr(),
-                })
-            })
-            .transpose()?;
+        let (secure_filters, secure_is_deterministic) = if secure_predicates.is_empty() {
+            (None, true)
+        } else {
+            let preds = secure_predicates.iter().collect::<Vec<_>>();
+            self.create_scan_push_down_filters(&metadata, &preds)?
+        };
+        let (user_filters, user_is_deterministic) = if user_predicates.is_empty() {
+            (None, true)
+        } else {
+            let preds = user_predicates.iter().collect::<Vec<_>>();
+            self.create_scan_push_down_filters(&metadata, &preds)?
+        };
+        let is_deterministic = user_is_deterministic && secure_is_deterministic;
 
         let prewhere_info = scan
             .prewhere
@@ -802,6 +781,7 @@ impl PhysicalPlanBuilder {
                         .type_check(&metadata)?
                         .project_column_ref(|col| Ok(col.column_name.clone()))?,
                 )?;
+                let (filter, _) = ConstantFolder::fold(&filter, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 let filter = filter.as_remote_expr();
                 let virtual_column_ids =
                     self.build_prewhere_virtual_column_ids(&prewhere.prewhere_columns);
@@ -868,7 +848,7 @@ impl PhysicalPlanBuilder {
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
-            filters: push_down_filter,
+            filters: user_filters,
             is_deterministic,
             prewhere: prewhere_info,
             limit,
@@ -880,7 +860,49 @@ impl PhysicalPlanBuilder {
             inverted_index: scan.inverted_index.clone(),
             vector_index: scan.vector_index.clone(),
             sample: scan.sample.clone(),
+            secure_filters,
         })
+    }
+
+    fn create_scan_push_down_filters(
+        &self,
+        metadata: &Metadata,
+        predicates: &[&ScalarExpr],
+    ) -> Result<(Option<Filters>, bool)> {
+        if predicates.is_empty() {
+            return Ok((None, true));
+        }
+
+        let predicates = predicates
+            .iter()
+            .map(|p| {
+                p.as_raw_expr()
+                    .type_check(metadata)?
+                    .project_column_ref(|col| Ok(col.column_name.clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let expr = predicates
+            .into_iter()
+            .try_reduce(|lhs, rhs| {
+                check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+            })?
+            .unwrap();
+
+        let expr = cast_expr_to_non_null_boolean(expr)?;
+        let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+        let is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+        let inverted_filter =
+            check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
+
+        Ok((
+            Some(Filters {
+                filter: expr.as_remote_expr(),
+                inverted_filter: inverted_filter.as_remote_expr(),
+            }),
+            is_deterministic,
+        ))
     }
 
     fn build_prewhere_virtual_column_ids(&self, indices: &ColumnSet) -> Option<Vec<u32>> {

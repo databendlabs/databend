@@ -141,3 +141,27 @@ select t, tt.1 from cast_ts_csv
 1970-01-01 00:00:00.001000 1970-01-01 00:00:00.001000
 1970-01-01 00:00:00.000001 1970-01-01 00:00:00.000001
 1970-01-01 00:00:00.000000 1970-01-01 00:00:00.000000
+
+statement ok
+CREATE OR REPLACE TABLE cast_date_non_padded_csv (d date)
+
+query error 1046
+copy into cast_date_non_padded_csv from @data/csv/date_non_padded.csv file_format = (type = CSV)
+
+statement ok
+set enable_auto_detect_datetime_format = 1
+
+query TIITI
+copy into cast_date_non_padded_csv from @data/csv/date_non_padded.csv file_format = (type = CSV) force = true
+----
+csv/date_non_padded.csv 3 0 NULL NULL
+
+query ?
+select d from cast_date_non_padded_csv order by d
+----
+2027-01-01
+2027-01-01
+2027-01-01
+
+statement ok
+unset enable_auto_detect_datetime_format

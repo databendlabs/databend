@@ -28,7 +28,7 @@ use crate::tenant_key::resource::TenantResource;
 /// e.g. TableId, DatabaseId as a value.
 ///
 /// `DataId<R>` can be dereferenced to `u64`.
-/// `DataId<R>` will take place of `Id<T>` in the future.
+/// `DataId<R>` replaces the legacy primitive id wrapper.
 ///
 /// When an id is used as a key in a key-value store,
 /// it is serialized in another way to keep order.
@@ -214,10 +214,6 @@ mod prost_message_impl {
 
         impl kvapi::Key for Foo {
             type ValueType = Bar;
-
-            fn parent(&self) -> Option<String> {
-                todo!()
-            }
         }
 
         #[derive(Debug)]
@@ -225,9 +221,6 @@ mod prost_message_impl {
 
         impl kvapi::Value for Bar {
             type KeyType = Foo;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
         }
 
         #[test]
