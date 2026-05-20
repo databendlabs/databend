@@ -202,7 +202,7 @@ pub fn mask_connection_info(sql: &str) -> String {
     // Supports both single-quoted and double-quoted values
     static RE_SECRET_KV: LazyLock<Regex> = LazyLock::new(|| {
         let pattern = format!(
-            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY|CREDENTIAL)\s*=\s*({}|{})",
+            r"(?i)(ACCESS_KEY_ID|ACCESS_KEY_SECRET|SECRET_ACCESS_KEY|AWS_KEY_ID|AWS_KEY_SECRET|AWS_SECRET_KEY|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_TOKEN|AWS_SESSION_TOKEN|MASTER_KEY|ACCOUNT_KEY|ACCOUNT_NAME|PASSWORD|SECURITY_TOKEN|SESSION_TOKEN|SECRET_ID|SECRET_KEY|CREDENTIAL|TOKEN)\s*=\s*({}|{})",
             SINGLE_QUOTED_STR, DOUBLE_QUOTED_STR
         );
         Regex::new(&pattern).unwrap()
@@ -441,10 +441,10 @@ mod tests {
 
     #[test]
     fn test_mask_aws_token() {
-        let sql = "CREATE CONNECTION c STORAGE_TYPE='s3' AWS_TOKEN='tok_value'";
+        let sql = "CREATE CONNECTION c STORAGE_TYPE='s3' AWS_TOKEN='tok_val99'";
         let masked = mask_connection_info(sql);
-        assert!(masked.contains("AWS_TOKEN = 'to***ue'"));
-        assert!(!masked.contains("tok_value"));
+        assert!(masked.contains("AWS_TOKEN = 'to***99'"));
+        assert!(!masked.contains("tok_val99"));
     }
 
     #[test]
