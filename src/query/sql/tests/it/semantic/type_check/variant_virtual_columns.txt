@@ -1,0 +1,18 @@
+=== nested_get_virtual_column_rewrite_skips_intermediate_paths ===
+description: Nested get/get_string calls should resolve a final virtual column without binding intermediate paths.
+sql: get(get(v, 'a'), 0); get(get(v, 'b'), 'c'); get_string(get(v, 'b'), 'c')
+status: ok
+first_scalar: t2.v['a'][0] (#2)
+first_type: Variant NULL
+second_scalar: t2.v['b']['c'] (#3)
+second_type: Variant NULL
+third_scalar: CAST(t2.v['b']['c'] (#3) AS String NULL)
+third_type: String NULL
+bound_virtual_columns:
+- v['a'][0] -> #2
+- v['b']['c'] -> #3
+metadata_columns:
+- #0 base a
+- #1 base v
+- #2 virtual v['a'][0]
+- #3 virtual v['b']['c']

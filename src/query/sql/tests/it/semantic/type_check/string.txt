@@ -1,0 +1,83 @@
+=== substring_from_for_from_tpc_h_binds ===
+description: The TPCH substring(expr FROM start FOR len) form should route to the substring function.
+sql: substring(text FROM 1 FOR 2)
+status: ok
+scalar: substring(text (#1), 1, 2)
+type: String NULL
+
+=== position_in_from_function_tests_binds ===
+description: The POSITION(substr IN str) syntax should type check as locate(substr, str).
+sql: position(pattern IN text)
+status: ok
+scalar: locate(pattern (#2), text (#1))
+type: UInt64 NULL
+
+=== trim_leading_from_function_tests_binds ===
+description: The SQL TRIM LEADING form should type check through trim_leading.
+sql: trim(leading 'a' from text)
+status: ok
+scalar: trim_leading(text (#1), 'a')
+type: String NULL
+
+=== trim_both_dynamic_pattern_binds ===
+description: The SQL TRIM BOTH form should keep dynamic trim patterns supported.
+sql: trim(both pattern from text)
+status: ok
+scalar: trim_both(text (#1), pattern (#2))
+type: String NULL
+
+=== like_prefix_rewrites_to_range ===
+description: A LIKE prefix pattern from comparison tests should type check as a range predicate.
+sql: text LIKE 'ab%'
+status: ok
+scalar: and(gte(text (#1), 'ab'), lt(text (#1), 'ac'))
+type: Boolean NULL
+
+=== non_ascii_like_prefix_rewrites_to_range ===
+description: A non-ASCII LIKE prefix should use the Unicode scalar range rewrite.
+sql: text LIKE '测试%'
+status: ok
+scalar: and(gte(text (#1), '测试'), lt(text (#1), '测诖'))
+type: Boolean NULL
+
+=== latin1_like_prefix_rewrites_without_byte_overflow ===
+description: A LIKE prefix ending at U+00FF should rewrite using the next Unicode scalar.
+sql: text LIKE 'ÿ%'
+status: ok
+scalar: and(gte(text (#1), 'ÿ'), lt(text (#1), 'Ā'))
+type: Boolean NULL
+
+=== like_percent_rewrites_to_is_not_null ===
+description: A LIKE pattern made only of percent wildcards should type check as an IS NOT NULL predicate.
+sql: text LIKE '%%'
+status: ok
+scalar: is_not_null(text (#1))
+type: Boolean
+
+=== like_escape_from_sqllogictest_binds ===
+description: A LIKE ESCAPE expression from sqllogictests should preserve the escape-aware function path.
+sql: text LIKE 'a!_%' ESCAPE '!'
+status: ok
+scalar: like(text (#1), 'a!_%', '!')
+type: Boolean NULL
+
+=== dynamic_like_pattern_keeps_like_function ===
+description: A dynamic LIKE pattern should not be rewritten as a constant-prefix optimization.
+sql: text LIKE pattern
+status: ok
+scalar: like(text (#1), pattern (#2))
+type: Boolean NULL
+
+=== regexp_operator_from_function_tests_binds ===
+description: The regexp operator form from scalar comparison tests should type check as regexp_like.
+sql: text REGEXP pattern
+status: ok
+scalar: regexp(text (#1), pattern (#2))
+type: Boolean NULL
+
+=== rlike_operator_from_function_tests_binds ===
+description: The rlike alias should share the regexp_like type-check path.
+sql: text RLIKE pattern
+status: ok
+scalar: rlike(text (#1), pattern (#2))
+type: Boolean NULL

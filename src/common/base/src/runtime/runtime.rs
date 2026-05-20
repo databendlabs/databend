@@ -392,6 +392,14 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 #[track_caller]
+pub fn block_on_with_handle<F: Future>(handle: &Handle, future: F) -> F::Output {
+    // Call location_future before closure since #[track_caller] doesn't propagate through closures
+    let future = location_future(future, None);
+    #[expect(clippy::disallowed_methods)]
+    tokio::task::block_in_place(|| handle.block_on(future))
+}
+
+#[track_caller]
 pub fn try_block_on<F: Future>(future: F) -> std::result::Result<F::Output, F> {
     match tokio::runtime::Handle::try_current() {
         Err(_) => Err(future),

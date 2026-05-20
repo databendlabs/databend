@@ -14,10 +14,12 @@
 
 use databend_common_ast::Span;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::FunctionCall as ASTFunctionCall;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Window;
-use databend_common_ast::ast::WindowFrame;
 use databend_common_ast::ast::WindowFrameBound;
 use databend_common_ast::ast::WindowFrameUnits;
+use databend_common_ast::ast::WindowSpec;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ConstantFolder;
@@ -29,7 +31,18 @@ use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_functions::GENERAL_WINDOW_FUNCTIONS;
+use databend_common_functions::RANK_WINDOW_FUNCTIONS;
+use smallvec::SmallVec;
+use unicase::Ascii;
 
+use super::CoreExpr;
+use super::CoreExprArena;
+use super::CoreExprArgs;
+use super::CoreExprId;
+use super::CoreFunctionParams;
+use super::CoreOrderByExprs;
+use super::TypeCheckAdapter;
 use super::TypeChecker;
 use crate::binder::ExprContext;
 use crate::plans::CastExpr;
@@ -44,14 +57,306 @@ use crate::plans::WindowFuncFrameUnits;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
 
-impl<'a> TypeChecker<'a> {
+pub(super) struct CoreWindowDesc<'a> {
+    pub(super) ignore_nulls: Option<bool>,
+    pub(super) window: CoreWindow<'a>,
+}
+
+pub(super) enum CoreWindow<'a> {
+    WindowReference(&'a Identifier),
+    WindowSpec(CoreWindowSpec<'a>),
+}
+
+pub(super) struct CoreWindowSpec<'a> {
+    pub(super) existing_window_name: Option<&'a Identifier>,
+    pub(super) partition_by: CoreExprArgs,
+    pub(super) order_by: CoreOrderByExprs,
+    pub(super) window_frame: Option<CoreWindowFrame>,
+}
+
+pub(super) struct CoreWindowFrame {
+    units: WindowFrameUnits,
+    start_bound: CoreWindowFrameBound,
+    end_bound: CoreWindowFrameBound,
+}
+
+pub(super) enum CoreWindowFrameBound {
+    CurrentRow,
+    Preceding(Option<CoreExprId>),
+    Following(Option<CoreExprId>),
+}
+
+impl<'a> CoreExprArena<'a> {
+    pub(super) fn try_lower_general_window_function(
+        &mut self,
+        original_expr: &'a Expr,
+        span: Span,
+        func_name: &str,
+        func: &'a ASTFunctionCall,
+    ) -> Result<Option<CoreExprId>> {
+        if func.lambda.is_some() {
+            return Ok(None);
+        }
+        let func_name = Ascii::new(func_name);
+        let Some(func_name) = GENERAL_WINDOW_FUNCTIONS
+            .iter()
+            .cloned()
+            .find(|name| *name == func_name)
+            .map(Ascii::into_inner)
+        else {
+            return Ok(None);
+        };
+
+        let Some(window) = func.window.as_ref() else {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {func_name} can only be used in window clause"
+            ))
+            .set_span(span));
+        };
+
+        let args = self.lower_expr_args(&func.args)?;
+        let order_by = self.lower_order_by_exprs(&func.order_by)?;
+        let window = CoreWindowDesc {
+            ignore_nulls: window.ignore_nulls,
+            window: self.lower_window(&window.window)?,
+        };
+        Ok(Some(self.alloc(CoreExpr::GeneralWindowFunction {
+            display_name: format!("{original_expr:#}"),
+            span,
+            func_name,
+            args,
+            order_by,
+            window,
+        })))
+    }
+
+    pub(super) fn ensure_window_not_in_lambda(&self, span: Span, has_window: bool) -> Result<()> {
+        if self.in_lambda_function && has_window {
+            return Err(ErrorCode::SemanticError(
+                "window functions can not be used in lambda function".to_string(),
+            )
+            .set_span(span));
+        }
+        Ok(())
+    }
+
+    pub(super) fn ensure_window_function_call(
+        &self,
+        span: Span,
+        func_name: &str,
+        has_window: bool,
+        is_aggregate_function: bool,
+    ) -> Result<()> {
+        if has_window
+            && !is_aggregate_function
+            && !GENERAL_WINDOW_FUNCTIONS.contains(&Ascii::new(func_name))
+        {
+            return Err(ErrorCode::SemanticError(
+                "only window and aggregate functions allowed in window syntax",
+            )
+            .set_span(span));
+        }
+        Ok(())
+    }
+
+    pub(super) fn lower_window(&mut self, window: &'a Window) -> Result<CoreWindow<'a>> {
+        Ok(match window {
+            Window::WindowReference(window_ref) => {
+                CoreWindow::WindowReference(&window_ref.window_name)
+            }
+            Window::WindowSpec(spec) => CoreWindow::WindowSpec(self.lower_window_spec(spec)?),
+        })
+    }
+
+    pub(super) fn lower_window_spec(&mut self, spec: &'a WindowSpec) -> Result<CoreWindowSpec<'a>> {
+        Ok(CoreWindowSpec {
+            existing_window_name: spec.existing_window_name.as_ref(),
+            partition_by: self.lower_expr_args(&spec.partition_by)?,
+            order_by: self.lower_order_by_exprs(&spec.order_by)?,
+            window_frame: spec
+                .window_frame
+                .as_ref()
+                .map(|frame| {
+                    Ok::<_, ErrorCode>(CoreWindowFrame {
+                        units: frame.units.clone(),
+                        start_bound: self.lower_window_frame_bound(&frame.start_bound)?,
+                        end_bound: self.lower_window_frame_bound(&frame.end_bound)?,
+                    })
+                })
+                .transpose()?,
+        })
+    }
+
+    fn lower_window_frame_bound(
+        &mut self,
+        bound: &'a WindowFrameBound,
+    ) -> Result<CoreWindowFrameBound> {
+        Ok(match bound {
+            WindowFrameBound::CurrentRow => CoreWindowFrameBound::CurrentRow,
+            WindowFrameBound::Preceding(expr) => CoreWindowFrameBound::Preceding(
+                expr.as_ref()
+                    .map(|expr| self.lower_ast_expr(expr))
+                    .transpose()?,
+            ),
+            WindowFrameBound::Following(expr) => CoreWindowFrameBound::Following(
+                expr.as_ref()
+                    .map(|expr| self.lower_ast_expr(expr))
+                    .transpose()?,
+            ),
+        })
+    }
+}
+
+impl<'a, A> TypeChecker<'a, A>
+where A: TypeCheckAdapter
+{
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn resolve_core_aggregate_window_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        display_name: &str,
+        span: Span,
+        func_name: &str,
+        distinct: bool,
+        params: &CoreFunctionParams,
+        args: &CoreExprArgs,
+        remove_count_args: bool,
+        order_by: &CoreOrderByExprs,
+        window: &CoreWindowDesc<'_>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let (new_agg_func, _) = self.resolve_aggregate_call(
+            arena,
+            display_name,
+            span,
+            func_name,
+            distinct,
+            params,
+            args,
+            remove_count_args,
+            order_by,
+            true,
+        )?;
+        if window.ignore_nulls.is_some() {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {} not support IGNORE/RESPECT NULLS option",
+                func_name
+            ))
+            .set_span(span));
+        }
+        let func = WindowFuncType::Aggregate(new_agg_func);
+        self.resolve_window(arena, span, display_name.to_string(), &window.window, func)
+    }
+
+    pub(super) fn resolve_core_count_all_window_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        display_name: &str,
+        window: &CoreWindow<'_>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let aggregate_arena = CoreExprArena::new(self.func_ctx.week_start as u64);
+        let params = SmallVec::new();
+        let args = SmallVec::new();
+        let order_by = SmallVec::new();
+        let (new_agg_func, _data_type) = self.resolve_aggregate_call(
+            &aggregate_arena,
+            display_name,
+            span,
+            "count",
+            false,
+            &params,
+            &args,
+            true,
+            &order_by,
+            true,
+        )?;
+        let func = WindowFuncType::Aggregate(new_agg_func);
+        self.resolve_window(arena, span, display_name.to_string(), window, func)
+    }
+
+    pub(super) fn resolve_core_general_window_function(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        display_name: &str,
+        func_name: &str,
+        args: &CoreExprArgs,
+        order_by: &CoreOrderByExprs,
+        window: &CoreWindowDesc<'_>,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !order_by.is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "only aggregate functions allowed in within group syntax",
+            )
+            .set_span(span));
+        }
+        if !RANK_WINDOW_FUNCTIONS.contains(&func_name) && window.ignore_nulls.is_some() {
+            return Err(ErrorCode::SemanticError(format!(
+                "window function {} not support IGNORE/RESPECT NULLS option",
+                func_name
+            ))
+            .set_span(span));
+        }
+        if let Ok(window_func) = WindowFuncType::from_name(func_name) {
+            return self.resolve_window(
+                arena,
+                span,
+                display_name.to_string(),
+                &window.window,
+                window_func,
+            );
+        }
+
+        if self.in_window_function {
+            self.in_window_function = false;
+            return Err(ErrorCode::SemanticError(
+                "window function calls cannot be nested".to_string(),
+            )
+            .set_span(span));
+        }
+
+        self.in_window_function = true;
+        let arguments_result = self.resolve_expr_args(arena, args);
+        self.in_window_function = false;
+        let (arguments, arg_types) = arguments_result?;
+
+        let ignore_null = window.ignore_nulls.unwrap_or(false);
+
+        let func = match func_name {
+            "lag" | "lead" => {
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)?
+            }
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => self
+                .resolve_nth_value_window_function(
+                    func_name,
+                    &arguments,
+                    &arg_types,
+                    ignore_null,
+                )?,
+            "ntile" => self.resolve_ntile_window_function(&arguments)?,
+            _ => {
+                return Err(ErrorCode::UnknownFunction(format!(
+                    "Unknown window function: {func_name}"
+                )));
+            }
+        };
+        self.resolve_window(arena, span, display_name.to_string(), &window.window, func)
+    }
+
     pub(super) fn resolve_window(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         display_name: String,
-        window: &Window,
+        window: &CoreWindow<'_>,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if self.bind_context.expr_context == ExprContext::InSetReturningFunction {
+            return Err(ErrorCode::SemanticError(
+                "window functions cannot be used as set-returning function arguments".to_string(),
+            )
+            .set_span(span));
+        }
         if self.in_aggregate_function {
             // Reset the state
             self.in_aggregate_function = false;
@@ -70,31 +375,59 @@ impl<'a> TypeChecker<'a> {
         }
 
         let spec = match window {
-            Window::WindowSpec(spec) => spec.clone(),
-            Window::WindowReference(w) => self
-                .bind_context
-                .window_definitions
-                .get(&w.window_name.name)
-                .ok_or_else(|| {
-                    ErrorCode::SyntaxException(format!(
-                        "Window definition {} not found",
-                        w.window_name.name
-                    ))
-                })?
-                .value()
-                .clone(),
+            CoreWindow::WindowSpec(spec) => spec,
+            CoreWindow::WindowReference(window_name) => {
+                let spec = self
+                    .bind_context
+                    .window_definitions
+                    .get(&window_name.name)
+                    .ok_or_else(|| {
+                        ErrorCode::SyntaxException(format!(
+                            "Window definition {} not found",
+                            window_name.name
+                        ))
+                    })?
+                    .value()
+                    .clone();
+                let mut named_arena = self.core_expr_arena();
+                let named_spec = named_arena.lower_window_spec(&spec)?;
+                return self.resolve_window_spec(
+                    &named_arena,
+                    span,
+                    display_name,
+                    &named_spec,
+                    func,
+                );
+            }
         };
+        self.resolve_window_spec(arena, span, display_name, spec, func)
+    }
+
+    fn resolve_window_spec(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        display_name: String,
+        spec: &CoreWindowSpec<'_>,
+        func: WindowFuncType,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if spec.existing_window_name.is_some() {
+            return Err(ErrorCode::Unimplemented(
+                "existing window name in window specification is not supported in type check core expression",
+            )
+            .set_span(span));
+        }
 
         self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in &spec.partition_by {
-            let box (part, _part_type) = self.resolve(p)?;
+            let box (part, _part_type) = self.resolve_core(arena, *p)?;
             partitions.push(part);
         }
 
         let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in &spec.order_by {
-            let box (order, _) = self.resolve(&o.expr)?;
+            let box (order, _) = self.resolve_core(arena, o.expr)?;
 
             if matches!(order, ScalarExpr::ConstantExpr(_)) {
                 continue;
@@ -109,7 +442,7 @@ impl<'a> TypeChecker<'a> {
         self.in_window_function = false;
 
         let frame =
-            self.resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())?;
+            self.resolve_window_frame(arena, span, &func, &mut order_by, &spec.window_frame)?;
 
         if matches!(&frame.start_bound, WindowFuncFrameBound::Following(None)) {
             return Err(ErrorCode::SemanticError(
@@ -137,22 +470,24 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((window_func.into(), data_type)))
     }
 
-    // just support integer
-    #[inline]
-    fn resolve_rows_offset(&self, expr: &Expr) -> Result<Scalar> {
-        if let Expr::Literal { value, .. } = expr {
-            let box (value, _) = self.resolve_literal_scalar(value)?;
+    fn resolve_rows_offset(
+        &self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        expr: CoreExprId,
+    ) -> Result<Scalar> {
+        if let CoreExpr::Literal { value, .. } = arena.get(expr) {
             match value {
                 Scalar::Number(NumberScalar::UInt8(v)) => {
-                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                    return Ok(Scalar::Number(NumberScalar::UInt64(*v as u64)));
                 }
                 Scalar::Number(NumberScalar::UInt16(v)) => {
-                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                    return Ok(Scalar::Number(NumberScalar::UInt64(*v as u64)));
                 }
                 Scalar::Number(NumberScalar::UInt32(v)) => {
-                    return Ok(Scalar::Number(NumberScalar::UInt64(v as u64)));
+                    return Ok(Scalar::Number(NumberScalar::UInt64(*v as u64)));
                 }
-                Scalar::Number(NumberScalar::UInt64(_)) => return Ok(value),
+                Scalar::Number(NumberScalar::UInt64(_)) => return Ok(value.clone()),
                 _ => {}
             }
         }
@@ -160,47 +495,40 @@ impl<'a> TypeChecker<'a> {
         Err(ErrorCode::SemanticError(
             "Only unsigned numbers are allowed in ROWS offset".to_string(),
         )
-        .set_span(expr.span()))
+        .set_span(span))
     }
 
-    fn resolve_window_rows_frame(&self, frame: WindowFrame) -> Result<WindowFuncFrame> {
-        let units = match frame.units {
+    fn resolve_window_rows_frame(
+        &self,
+        arena: &CoreExprArena<'_>,
+        span: Span,
+        frame: &CoreWindowFrame,
+    ) -> Result<WindowFuncFrame> {
+        let units = match &frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
         };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Preceding(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Following(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
+        let start = match &frame.start_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(expr) => WindowFuncFrameBound::Preceding(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
+            CoreWindowFrameBound::Following(expr) => WindowFuncFrameBound::Following(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
         };
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Preceding(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Preceding(None)
-                }
-            }
-            WindowFrameBound::Following(f) => {
-                if let Some(box expr) = f {
-                    WindowFuncFrameBound::Following(Some(self.resolve_rows_offset(&expr)?))
-                } else {
-                    WindowFuncFrameBound::Following(None)
-                }
-            }
+        let end = match &frame.end_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(expr) => WindowFuncFrameBound::Preceding(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
+            CoreWindowFrameBound::Following(expr) => WindowFuncFrameBound::Following(
+                expr.map(|expr| self.resolve_rows_offset(arena, span, expr))
+                    .transpose()?,
+            ),
         };
 
         Ok(WindowFuncFrame {
@@ -210,11 +538,15 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    fn resolve_range_offset(&mut self, bound: &WindowFrameBound) -> Result<Option<Scalar>> {
+    fn resolve_range_offset(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        bound: &CoreWindowFrameBound,
+    ) -> Result<Option<Scalar>> {
         match bound {
-            WindowFrameBound::Following(Some(box expr))
-            | WindowFrameBound::Preceding(Some(box expr)) => {
-                let box (expr, _) = self.resolve(expr)?;
+            CoreWindowFrameBound::Following(Some(expr))
+            | CoreWindowFrameBound::Preceding(Some(expr)) => {
+                let box (expr, _) = self.resolve_core(arena, *expr)?;
                 let (expr, _) =
                     ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 match expr.into_constant() {
@@ -229,23 +561,27 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    fn resolve_window_range_frame(&mut self, frame: WindowFrame) -> Result<WindowFuncFrame> {
-        let start_offset = self.resolve_range_offset(&frame.start_bound)?;
-        let end_offset = self.resolve_range_offset(&frame.end_bound)?;
+    fn resolve_window_range_frame(
+        &mut self,
+        arena: &CoreExprArena<'_>,
+        frame: &CoreWindowFrame,
+    ) -> Result<WindowFuncFrame> {
+        let start_offset = self.resolve_range_offset(arena, &frame.start_bound)?;
+        let end_offset = self.resolve_range_offset(arena, &frame.end_bound)?;
 
-        let units = match frame.units {
+        let units = match &frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
             WindowFrameUnits::Range => WindowFuncFrameUnits::Range,
         };
-        let start = match frame.start_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(start_offset),
-            WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(start_offset),
+        let start = match &frame.start_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(start_offset),
+            CoreWindowFrameBound::Following(_) => WindowFuncFrameBound::Following(start_offset),
         };
-        let end = match frame.end_bound {
-            WindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
-            WindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
-            WindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
+        let end = match &frame.end_bound {
+            CoreWindowFrameBound::CurrentRow => WindowFuncFrameBound::CurrentRow,
+            CoreWindowFrameBound::Preceding(_) => WindowFuncFrameBound::Preceding(end_offset),
+            CoreWindowFrameBound::Following(_) => WindowFuncFrameBound::Following(end_offset),
         };
 
         Ok(WindowFuncFrame {
@@ -257,10 +593,11 @@ impl<'a> TypeChecker<'a> {
 
     fn resolve_window_frame(
         &mut self,
+        arena: &CoreExprArena<'_>,
         span: Span,
         func: &WindowFuncType,
         order_by: &mut [WindowOrderBy],
-        window_frame: Option<WindowFrame>,
+        window_frame: &Option<CoreWindowFrame>,
     ) -> Result<WindowFuncFrame> {
         match func {
             WindowFuncType::PercentRank => {
@@ -316,9 +653,9 @@ impl<'a> TypeChecker<'a> {
                         order_by.len()
                     )).set_span(span));
                 }
-                self.resolve_window_range_frame(frame)
+                self.resolve_window_range_frame(arena, frame)
             } else {
-                self.resolve_window_rows_frame(frame)
+                self.resolve_window_rows_frame(arena, span, frame)
             }
         } else if order_by.is_empty() {
             Ok(WindowFuncFrame {
@@ -335,77 +672,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    /// Resolve general window function call.
-    pub(super) fn resolve_general_window_function(
-        &mut self,
-        span: Span,
-        func_name: &str,
-        args: &[&Expr],
-        window_ignore_null: &Option<bool>,
-    ) -> Result<WindowFuncType> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InSetReturningFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "window functions can not be used in set-returning function".to_string(),
-            )
-            .set_span(span));
-        }
-        // try to resolve window function without arguments first
-        if let Ok(window_func) = WindowFuncType::from_name(func_name) {
-            return Ok(window_func);
-        }
-
-        if self.in_window_function {
-            self.in_window_function = false;
-            return Err(ErrorCode::SemanticError(
-                "window function calls cannot be nested".to_string(),
-            )
-            .set_span(span));
-        }
-
-        self.in_window_function = true;
-        let mut arguments = vec![];
-        let mut arg_types = vec![];
-        for arg in args.iter() {
-            let box (argument, arg_type) = self.resolve(arg)?;
-            arguments.push(argument);
-            arg_types.push(arg_type);
-        }
-        self.in_window_function = false;
-
-        // If { IGNORE | RESPECT } NULLS is not specified, the default is RESPECT NULLS
-        // (i.e. a NULL value will be returned if the expression contains a NULL value, and it is the first value in the expression).
-        let ignore_null = if let Some(ignore_null) = window_ignore_null {
-            *ignore_null
-        } else {
-            false
-        };
-
-        match func_name {
-            "lag" | "lead" => {
-                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
-            }
-            "first_value" | "first" | "last_value" | "last" | "nth_value" => self
-                .resolve_nth_value_window_function(func_name, &arguments, &arg_types, ignore_null),
-            "ntile" => self.resolve_ntile_window_function(&arguments),
-            _ => Err(ErrorCode::UnknownFunction(format!(
-                "Unknown window function: {func_name}"
-            ))),
-        }
-    }
-
-    fn resolve_lag_lead_window_function(
+    pub(super) fn resolve_lag_lead_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],
@@ -472,7 +739,7 @@ impl<'a> TypeChecker<'a> {
         }))
     }
 
-    fn resolve_nth_value_window_function(
+    pub(super) fn resolve_nth_value_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],
@@ -548,7 +815,10 @@ impl<'a> TypeChecker<'a> {
         })
     }
 
-    fn resolve_ntile_window_function(&mut self, args: &[ScalarExpr]) -> Result<WindowFuncType> {
+    pub(super) fn resolve_ntile_window_function(
+        &mut self,
+        args: &[ScalarExpr],
+    ) -> Result<WindowFuncType> {
         if args.len() != 1 {
             return Err(ErrorCode::InvalidArgument(
                 "Function ntile can only take one argument".to_string(),
