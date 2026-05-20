@@ -1261,7 +1261,7 @@ impl QueryCoordinator {
         GlobalIORuntime::instance().spawn(
             async move {
                 let error = executor.execute().await.err();
-                statistics_sender.shutdown(error.clone());
+                statistics_sender.shutdown(error.clone()).await;
                 query_ctx
                     .get_exchange_manager()
                     .on_finished_query(&query_id, error);
