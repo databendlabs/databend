@@ -251,7 +251,12 @@ impl Planner {
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
         let mut enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?;
         let planner_cache_key = if enable_planner_cache {
-            Some(Self::planner_cache_key(&stmt.to_string()))
+            let role = self
+                .ctx
+                .get_current_role()
+                .map(|r| r.name)
+                .unwrap_or_default();
+            Some(Self::planner_cache_key(&format!("{}:{}", role, stmt)))
         } else {
             None
         };
