@@ -1,0 +1,56 @@
+#### Test: Data masking WHERE security and constant folding
+#### setup: create table, roles, users, masking policy
+>>>> DROP TABLE IF EXISTS default.mask_test
+>>>> DROP MASKING POLICY IF EXISTS mask_variant_sensitive
+>>>> DROP USER IF EXISTS mask_admin_user
+>>>> DROP USER IF EXISTS mask_reader_user
+>>>> DROP ROLE IF EXISTS mask_admin
+>>>> DROP ROLE IF EXISTS mask_reader
+>>>> CREATE ROLE mask_admin
+>>>> CREATE ROLE mask_reader
+>>>> CREATE USER mask_admin_user IDENTIFIED BY '123' WITH DEFAULT_ROLE='mask_admin'
+>>>> CREATE USER mask_reader_user IDENTIFIED BY '123' WITH DEFAULT_ROLE='mask_reader'
+>>>> GRANT ROLE mask_admin TO mask_admin_user
+>>>> GRANT ROLE mask_reader TO mask_reader_user
+>>>> CREATE TABLE default.mask_test(id INT, data VARIANT)
+>>>> INSERT INTO default.mask_test VALUES (1, '{"name":"alice","content":"secret","age":30}'), (2, '{"name":"bob","content":"private","age":25}')
+2
+>>>> CREATE MASKING POLICY mask_variant_sensitive AS (val VARIANT) RETURNS VARIANT -> CASE WHEN current_role() IN ('mask_admin', 'account_admin') THEN val ELSE object_delete(val, 'content') END
+>>>> ALTER TABLE default.mask_test MODIFY COLUMN data SET MASKING POLICY mask_variant_sensitive
+>>>> GRANT SELECT ON default.mask_test TO ROLE mask_admin
+>>>> GRANT SELECT ON default.mask_test TO ROLE mask_reader
+#### === Constant folding verification ===
+#### test 1: admin EXPLAIN shows no IF, no object_delete (folded to column ref)
+0
+0
+#### test 2: reader EXPLAIN shows no IF, has object_delete (folded to else branch)
+0
+1
+#### === Data correctness ===
+#### test 3: admin sees full data
+{"age":30,"content":"secret","name":"alice"}
+{"age":25,"content":"private","name":"bob"}
+#### test 4: reader sees masked data (no content field)
+{"age":30,"name":"alice"}
+{"age":25,"name":"bob"}
+#### === WHERE security: masked column cannot be exploited ===
+#### test 5: WHERE IS NOT NULL on masked field returns 0 rows
+#### test 6: WHERE equality on masked field returns 0 rows
+#### test 7: WHERE via CAST LIKE cannot detect hidden field
+#### === Access bypass prevention ===
+#### test 8: subfield access returns NULL
+NULL
+NULL
+#### test 9: json_object_keys does not leak hidden field
+["age","name"]
+#### test 10: CAST does not bypass masking
+{"age":30,"name":"alice"}
+{"age":25,"name":"bob"}
+#### cleanup
+>>>> ALTER TABLE default.mask_test MODIFY COLUMN data UNSET MASKING POLICY
+>>>> DROP TABLE IF EXISTS default.mask_test
+>>>> DROP MASKING POLICY IF EXISTS mask_variant_sensitive
+>>>> DROP USER IF EXISTS mask_admin_user
+>>>> DROP USER IF EXISTS mask_reader_user
+>>>> DROP ROLE IF EXISTS mask_admin
+>>>> DROP ROLE IF EXISTS mask_reader

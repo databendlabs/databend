@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -22,9 +23,12 @@ use databend_common_ast::ast::IdentifierType;
 use databend_common_ast::ast::Statement;
 use databend_common_ast::ast::TableReference;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchemaRef;
 use databend_common_functions::is_cacheable_function;
+use databend_common_meta_app::schema::SecurityPolicyColumnMap;
+use databend_common_meta_app::schema::TableMeta;
 use databend_common_settings::ChangeValue;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheValue;
@@ -58,38 +62,84 @@ impl From<PlanCacheItem> for CacheValue<PlanCacheItem> {
 }
 
 impl Planner {
-    pub fn planner_cache_key(format_sql: &str) -> String {
+    pub(crate) fn planner_cache_key(format_sql: &str) -> String {
         // use sha2 to encode the sql
         format!("{:x}", Sha256::digest(format_sql))
     }
 
-    pub fn get_cache(
+    pub(crate) fn build_plan_cache_context(
         &self,
         name_resolution_ctx: NameResolutionContext,
-        key: &str,
         stmt: &Statement,
-    ) -> (bool, Option<PlanCacheItem>) {
-        if !matches!(stmt, Statement::Query(_)) {
-            return (false, None);
-        }
-
+    ) -> PlanCacheContext {
         let mut visitor = TableRefVisitor {
             ctx: self.ctx.clone(),
-            schema_snapshots: vec![],
+            table_snapshots: vec![],
             name_resolution_ctx,
             cache_miss: false,
+            has_security_policy: false,
         };
         stmt.drive(&mut visitor);
 
-        if visitor.schema_snapshots.is_empty() || visitor.cache_miss {
-            return (false, None);
+        PlanCacheContext {
+            table_snapshots: visitor.table_snapshots,
+            cache_miss: visitor.cache_miss,
+            has_security_policy: visitor.has_security_policy,
         }
+    }
+
+    pub(crate) fn planner_cache_key_for_stmt(
+        &self,
+        stmt: &Statement,
+        cache_ctx: &PlanCacheContext,
+    ) -> databend_common_exception::Result<String> {
+        if cache_ctx.has_security_policy {
+            let user = self
+                .ctx
+                .get_current_user()?
+                .identity()
+                .display()
+                .to_string();
+            let role = self
+                .ctx
+                .get_current_role()
+                .map(|r| r.name)
+                .unwrap_or_default();
+            let mut secondary_roles = self.ctx.get_secondary_roles();
+            if let Some(roles) = &mut secondary_roles {
+                roles.sort();
+            }
+            let secondary_roles_key = match secondary_roles {
+                None => "ALL".to_string(),
+                Some(roles) if roles.is_empty() => "NONE".to_string(),
+                Some(roles) => format!("SOME:{}", roles.join(",")),
+            };
+            return Ok(Self::planner_cache_key(&format!(
+                "secure\0{}\0{}\0{}\0{}\0{}",
+                self.ctx.get_tenant().tenant_name(),
+                user,
+                role,
+                secondary_roles_key,
+                stmt
+            )));
+        }
+
+        Ok(Self::planner_cache_key(&stmt.to_string()))
+    }
+
+    pub(crate) fn get_cache(
+        &self,
+        key: &str,
+        cache_ctx: &PlanCacheContext,
+    ) -> Option<PlanCacheItem> {
+        debug_assert!(!cache_ctx.table_snapshots.is_empty());
+        debug_assert!(!cache_ctx.cache_miss);
 
         let cache = LazyLock::force(&PLAN_CACHE);
         if let Some(plan_item) = cache.get(key) {
             let settings = self.ctx.get_settings();
             if settings.changes().len() != plan_item.setting_changes.len() {
-                return (true, None);
+                return None;
             }
 
             let setting_changes = settings
@@ -102,31 +152,33 @@ impl Planner {
             if setting_changes != plan_item.setting_changes
                 || self.ctx.get_all_variables() != plan_item.variables
             {
-                return (true, None);
+                return None;
             }
 
             if let Plan::Query { metadata, .. } = &plan_item.plan {
                 let metadata = metadata.read();
-                if visitor.schema_snapshots.iter().all(|ss| {
+                if cache_ctx.table_snapshots.iter().all(|ss| {
                     metadata.tables().iter().any(|table| {
                         let tbl = table.table();
-                        if tbl.is_temp() || tbl.schema().ne(&ss.0) {
+                        if tbl.is_temp() || tbl.schema().ne(&ss.schema) {
                             return false;
                         }
                         let snapshot = tbl.options().get(OPT_KEY_SNAPSHOT_LOCATION);
-                        snapshot == Some(&ss.1)
+                        if snapshot != Some(&ss.snapshot_location) {
+                            return false;
+                        }
+                        SecurityPolicySnapshot::from(&tbl.get_table_info().meta)
+                            == ss.security_policy
                     })
                 }) {
-                    return (!visitor.cache_miss, Some(plan_item.as_ref().clone()));
+                    return Some(plan_item.as_ref().clone());
                 }
             }
-            (!visitor.cache_miss, None)
-        } else {
-            (!visitor.cache_miss, None)
         }
+        None
     }
 
-    pub fn set_cache(&self, key: String, plan: Plan) {
+    pub(crate) fn set_cache(&self, key: String, plan: Plan) {
         let setting_changes = self
             .ctx
             .get_settings()
@@ -152,9 +204,51 @@ impl Planner {
 #[visitor(TableReference(enter), FunctionCall(enter))]
 struct TableRefVisitor {
     ctx: Arc<dyn TableContext>,
-    schema_snapshots: Vec<(TableSchemaRef, String)>,
+    table_snapshots: Vec<TableSnapshot>,
     name_resolution_ctx: NameResolutionContext,
     cache_miss: bool,
+    has_security_policy: bool,
+}
+
+pub(crate) struct PlanCacheContext {
+    table_snapshots: Vec<TableSnapshot>,
+    cache_miss: bool,
+    has_security_policy: bool,
+}
+
+impl PlanCacheContext {
+    pub(crate) fn is_cacheable(&self) -> bool {
+        !self.cache_miss && !self.table_snapshots.is_empty()
+    }
+}
+
+#[derive(Clone)]
+struct TableSnapshot {
+    schema: TableSchemaRef,
+    snapshot_location: String,
+    security_policy: SecurityPolicySnapshot,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SecurityPolicySnapshot {
+    column_mask_policy_columns_ids: BTreeMap<ColumnId, SecurityPolicyColumnMap>,
+    row_access_policy_columns_ids: Option<SecurityPolicyColumnMap>,
+}
+
+impl SecurityPolicySnapshot {
+    fn has_policy(&self) -> bool {
+        !self.column_mask_policy_columns_ids.is_empty()
+            || self.row_access_policy_columns_ids.is_some()
+    }
+}
+
+impl From<&TableMeta> for SecurityPolicySnapshot {
+    fn from(meta: &TableMeta) -> Self {
+        Self {
+            column_mask_policy_columns_ids: meta.column_mask_policy_columns_ids.clone(),
+            row_access_policy_columns_ids: meta.row_access_policy_columns_ids.clone(),
+        }
+    }
 }
 
 impl TableRefVisitor {
@@ -224,7 +318,16 @@ impl TableRefVisitor {
                     {
                         let snapshot = table_meta.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned();
                         if let Some(sn) = snapshot {
-                            self.schema_snapshots.push((table_meta.schema(), sn));
+                            let table_info = table_meta.get_table_info();
+                            let security_policy = SecurityPolicySnapshot::from(&table_info.meta);
+                            if security_policy.has_policy() {
+                                self.has_security_policy = true;
+                            }
+                            self.table_snapshots.push(TableSnapshot {
+                                schema: table_meta.schema(),
+                                snapshot_location: sn,
+                                security_policy,
+                            });
                             return;
                         }
                     }
