@@ -866,6 +866,54 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_legacy_virtual_column_metadata_keys() -> Result<()> {
+        let string_table = vec![
+            "message\0attribute".to_string(),
+            "".to_string(),
+            "user_id".to_string(),
+        ];
+        let encoded_string_table = serde_json::to_string(&string_table).unwrap();
+        assert_eq!(
+            get_virtual_column_string_table(&encoded_string_table)?,
+            string_table
+        );
+
+        let encoded_nodes = r#"{
+            "5": {
+                "children": {
+                    "4": {"children": {}, "leaf": {"Column": 4}},
+                    "6": {"children": {}, "leaf": {"Shared": 25}},
+                    "7": {
+                        "children": {},
+                        "leaf": {
+                            "TypedShared": {
+                                "data_type": "Boolean",
+                                "index": 325
+                            }
+                        }
+                    }
+                },
+                "leaf": null
+            }
+        }"#;
+        let nodes = get_virtual_column_nodes(encoded_nodes)?;
+        let root = nodes.get(&5).unwrap();
+        assert_column_leaf(root, 4, 4);
+        assert_shared_leaf(root, 6, 25);
+        assert_typed_shared_leaf(root, 7, VirtualColumnSharedDataType::Boolean, 325);
+
+        let shared_ids = get_legacy_virtual_column_shared_ids(r#"{"5":[125,126]}"#)?;
+        assert_eq!(
+            shared_ids
+                .get(&5)
+                .and_then(|ids| ids.get(&VirtualColumnSharedDataType::Jsonb)),
+            Some(&(125, 126))
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_encode_compact_virtual_column_nodes_omits_empty_children_and_shortens_leaf()
     -> Result<()> {
         let mut child = VirtualColumnNode {
