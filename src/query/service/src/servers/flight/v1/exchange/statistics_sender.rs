@@ -154,24 +154,22 @@ impl StatisticsSender {
         }
     }
 
-    pub fn shutdown(&mut self, error: Option<ErrorCode>) {
+    pub async fn shutdown(&mut self, error: Option<ErrorCode>) {
         let shutdown_flag_sender = self.shutdown_flag_sender.clone();
 
         let join_handle = self.join_handle.take();
-        futures::executor::block_on(async move {
-            if let Err(error_code) = shutdown_flag_sender.send(error).await {
-                warn!(
-                    "Cannot send data via flight exchange, cause: {:?}",
-                    error_code
-                );
-            }
+        if let Err(error_code) = shutdown_flag_sender.send(error).await {
+            warn!(
+                "Cannot send data via flight exchange, cause: {:?}",
+                error_code
+            );
+        }
 
-            shutdown_flag_sender.close();
+        shutdown_flag_sender.close();
 
-            if let Some(join_handle) = join_handle {
-                let _ = join_handle.await;
-            }
-        });
+        if let Some(join_handle) = join_handle {
+            let _ = join_handle.await;
+        }
     }
 
     #[async_backtrace::framed]
