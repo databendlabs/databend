@@ -46,7 +46,6 @@ use parking_lot::ReentrantMutex;
 use petgraph::Direction;
 use petgraph::prelude::EdgeRef;
 use tokio::sync::oneshot;
-use tokio::time::Instant;
 use tonic::Status;
 
 use super::exchange_params::BroadcastExchangeParams;
