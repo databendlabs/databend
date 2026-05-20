@@ -15,13 +15,18 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use arrow_schema::Field;
 use databend_common_ast::Span;
 use databend_common_ast::ast::ColumnMatchMode;
+use databend_common_ast::ast::CopySchemaEvolutionOptions;
+use databend_common_base::runtime::execute_futures_in_parallel;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::table::TableExt;
+use databend_common_compress::CompressAlgorithm;
+use databend_common_compress::DecompressDecoder;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -33,11 +38,13 @@ use databend_common_expression::Scalar;
 use databend_common_expression::SendableDataBlockStream;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
+use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int32Type;
 use databend_common_expression::types::StringType;
 use databend_common_meta_app::principal::FileFormatParams;
+use databend_common_meta_app::principal::StageFileCompression;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_meta_app::schema::UpdateStreamMetaReq;
 use databend_common_pipeline::core::Pipeline;
@@ -79,6 +86,93 @@ use crate::sessions::TableContextTableManagement;
 use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;
+use crate::table_functions::infer_schema::InferSchemaSeparator;
+use crate::table_functions::infer_schema::merge_schema;
+
+const NDJSON_SCHEMA_EVOLUTION_AUTO_SAMPLE_FILES: usize = 64;
+const NDJSON_SCHEMA_EVOLUTION_AUTO_RECORDS_PER_FILE: usize = 1000;
+const NDJSON_SCHEMA_EVOLUTION_AUTO_TOTAL_RECORDS: usize = 10000;
+const NDJSON_SCHEMA_EVOLUTION_SAMPLE_BYTES_PER_FILE: usize = 32 * 1024 * 1024;
+
+#[derive(Clone, Copy)]
+struct NdJsonSchemaEvolutionOptions {
+    sample_files: usize,
+    sample_records_per_file: usize,
+    sample_total_records: usize,
+}
+
+impl NdJsonSchemaEvolutionOptions {
+    fn resolve(
+        options: Option<&CopySchemaEvolutionOptions>,
+        total_files: usize,
+        max_threads: usize,
+    ) -> Self {
+        let auto_sample_files = total_files
+            .min(max_threads.max(1) * 4)
+            .min(NDJSON_SCHEMA_EVOLUTION_AUTO_SAMPLE_FILES)
+            .max(1);
+        Self {
+            sample_files: options
+                .and_then(|v| v.sample_files)
+                .unwrap_or(auto_sample_files)
+                .min(total_files)
+                .max(1),
+            sample_records_per_file: options
+                .and_then(|v| v.sample_records_per_file)
+                .unwrap_or(NDJSON_SCHEMA_EVOLUTION_AUTO_RECORDS_PER_FILE),
+            sample_total_records: options
+                .and_then(|v| v.sample_total_records)
+                .unwrap_or(NDJSON_SCHEMA_EVOLUTION_AUTO_TOTAL_RECORDS),
+        }
+    }
+}
+
+fn normalize_schema_field_name(name: &str, case_sensitive: bool) -> String {
+    if case_sensitive {
+        name.to_string()
+    } else {
+        name.to_lowercase()
+    }
+}
+
+fn trim_ndjson_sample_bytes(bytes: &[u8]) -> &[u8] {
+    if bytes.is_empty() || matches!(bytes.last(), Some(b'\n' | b'\r')) {
+        return bytes;
+    }
+    match bytes.iter().rposition(|b| *b == b'\n') {
+        Some(pos) => &bytes[..=pos],
+        None => bytes,
+    }
+}
+
+fn compression_algo_from_path(
+    compression: StageFileCompression,
+    path: &str,
+) -> Result<Option<CompressAlgorithm>> {
+    let algo = match compression {
+        StageFileCompression::Auto => CompressAlgorithm::from_path(path),
+        StageFileCompression::Gzip => Some(CompressAlgorithm::Gzip),
+        StageFileCompression::Bz2 => Some(CompressAlgorithm::Bz2),
+        StageFileCompression::Brotli => Some(CompressAlgorithm::Brotli),
+        StageFileCompression::Zstd => Some(CompressAlgorithm::Zstd),
+        StageFileCompression::Deflate => Some(CompressAlgorithm::Zlib),
+        StageFileCompression::RawDeflate => Some(CompressAlgorithm::Deflate),
+        StageFileCompression::Xz => Some(CompressAlgorithm::Xz),
+        StageFileCompression::Lzo => {
+            return Err(ErrorCode::Unimplemented(
+                "compress type lzo is unimplemented for copy into",
+            ));
+        }
+        StageFileCompression::Snappy => {
+            return Err(ErrorCode::Unimplemented(
+                "compress type snappy is unimplemented for copy into",
+            ));
+        }
+        StageFileCompression::None => None,
+        StageFileCompression::Zip => Some(CompressAlgorithm::Zip),
+    };
+    Ok(algo)
+}
 
 pub struct CopyIntoTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -320,9 +414,220 @@ impl CopyIntoTableInterpreter {
                     return Ok(Some(schema));
                 }
             }
+            FileFormatParams::NdJson(_) => {
+                let settings = ctx.get_settings();
+                let max_threads = settings.get_max_threads()? as usize;
+                let max_memory_usage = settings.get_max_memory_usage()?;
+                let files = stage_table_info.files_to_copy.as_ref().expect(
+                    "StageTableForCopy::do_read_partitions must be called with files_to_copy set",
+                );
+                let mut files = files
+                    .iter()
+                    .filter(|f| f.size > 0)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                files.sort_by(|a, b| a.path.cmp(&b.path));
+                if files.is_empty() {
+                    return Ok(None);
+                }
+
+                let options = NdJsonSchemaEvolutionOptions::resolve(
+                    stage_table_info
+                        .copy_into_table_options
+                        .schema_evolution
+                        .as_ref(),
+                    files.len(),
+                    max_threads,
+                );
+                let sampled_files = Self::sample_ndjson_files(&files, options.sample_files);
+                if sampled_files.is_empty() || options.sample_total_records == 0 {
+                    return Ok(None);
+                }
+
+                ctx.set_status_info("[COPY] Infer NDJSON schema");
+                let start = Instant::now();
+                let operator = init_stage_operator(&stage_table_info.stage_info)?;
+                let compression = stage_table_info.stage_info.file_format_params.compression();
+                let mut remaining_records = options.sample_total_records;
+                let mut tasks = Vec::with_capacity(sampled_files.len());
+                for file in sampled_files {
+                    let max_records = remaining_records.min(options.sample_records_per_file);
+                    if max_records == 0 {
+                        break;
+                    }
+                    remaining_records -= max_records;
+                    let operator = operator.clone();
+                    let path = file.path.clone();
+                    let file_size = file.size;
+                    tasks.push(async move {
+                        let bytes = Self::read_ndjson_sample_bytes(
+                            operator,
+                            &path,
+                            file_size,
+                            compression,
+                            max_memory_usage,
+                        )
+                        .await?;
+                        let bytes = trim_ndjson_sample_bytes(&bytes);
+                        if bytes.is_empty() {
+                            return Ok(None);
+                        }
+                        let schema =
+                            InferSchemaSeparator::infer_ndjson_schema(bytes, Some(max_records))?;
+                        Ok::<_, ErrorCode>(Some((path, max_records, schema)))
+                    });
+                }
+
+                let concurrency = max_threads.max(1).min(tasks.len().max(1));
+                let results = execute_futures_in_parallel(
+                    tasks,
+                    concurrency,
+                    concurrency,
+                    "infer-ndjson-schema-worker".to_owned(),
+                )
+                .await?;
+
+                let mut inferred_schema: Option<TableSchema> = None;
+                let mut sampled_records_limit = 0usize;
+                let mut sampled_file_count = 0usize;
+                for result in results {
+                    let Some((_path, max_records, schema)) = result? else {
+                        continue;
+                    };
+                    sampled_records_limit += max_records;
+                    sampled_file_count += 1;
+                    inferred_schema = Some(match inferred_schema {
+                        None => schema,
+                        Some(existing) => merge_schema(existing, schema),
+                    });
+                }
+
+                let Some(inferred_schema) = inferred_schema else {
+                    return Ok(None);
+                };
+
+                let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
+                    == Some(ColumnMatchMode::CaseSensitive);
+                let mut new_schema = stage_table_info.schema.as_ref().to_owned();
+                let old_fields: HashMap<String, TableDataType> = stage_table_info
+                    .schema
+                    .fields
+                    .iter()
+                    .map(|f| {
+                        (
+                            normalize_schema_field_name(f.name(), case_sensitive),
+                            f.data_type.clone(),
+                        )
+                    })
+                    .collect::<_>();
+                let mut new_fields: HashMap<String, TableField> = HashMap::new();
+                for field in inferred_schema.fields().iter() {
+                    let name = normalize_schema_field_name(field.name(), case_sensitive);
+                    if old_fields.contains_key(&name) {
+                        continue;
+                    }
+                    if let Some(existing) = new_fields.get_mut(&name) {
+                        let merged = merge_schema(
+                            TableSchema::new(vec![existing.clone()]),
+                            TableSchema::new(vec![field.clone()]),
+                        );
+                        *existing = merged.fields()[0].clone();
+                    } else {
+                        new_fields.insert(name, field.clone());
+                    }
+                }
+
+                if new_fields.is_empty() {
+                    return Ok(None);
+                }
+
+                let new_fields = new_fields.into_iter().sorted_by(|a, b| a.0.cmp(&b.0));
+                let new_fields_count = new_fields.len();
+                for (_, mut field) in new_fields {
+                    field.data_type = field.data_type.wrap_nullable();
+                    if let Some(exprs) = &mut stage_table_info.default_exprs {
+                        exprs.push(RemoteDefaultExpr::RemoteExpr(RemoteExpr::Constant {
+                            scalar: Scalar::Null,
+                            data_type: DataType::Null,
+                            span: Span::default(),
+                        }))
+                    }
+                    new_schema.add_column(&field, new_schema.num_fields())?;
+                }
+
+                info!(
+                    "Infer NDJSON schema for COPY: total_files={}, sampled_files={}, sample_records_per_file={}, sample_total_records={}, sampled_records_limit={}, new_columns={}, elapsed={:?}",
+                    files.len(),
+                    sampled_file_count,
+                    options.sample_records_per_file,
+                    options.sample_total_records,
+                    sampled_records_limit,
+                    new_fields_count,
+                    start.elapsed(),
+                );
+
+                let schema = Arc::new(new_schema);
+                stage_table_info.schema = schema.clone();
+                return Ok(Some(schema));
+            }
             _ => {}
         }
         Ok(None)
+    }
+
+    fn sample_ndjson_files(files: &[StageFileInfo], sample_files: usize) -> Vec<StageFileInfo> {
+        if files.len() <= sample_files {
+            return files.to_vec();
+        }
+        if sample_files == 1 {
+            return vec![files[0].clone()];
+        }
+
+        let mut sampled = BTreeMap::new();
+        let last = files.len() - 1;
+        for i in 0..sample_files {
+            let index = i * last / (sample_files - 1);
+            sampled.insert(index, files[index].clone());
+        }
+        sampled.into_values().collect()
+    }
+
+    async fn read_ndjson_sample_bytes(
+        operator: opendal::Operator,
+        path: &str,
+        file_size: u64,
+        compression: StageFileCompression,
+        max_memory_usage: u64,
+    ) -> Result<Vec<u8>> {
+        let algo = compression_algo_from_path(compression, path)?;
+        let bytes = match algo {
+            None => {
+                let read_size = file_size.min(NDJSON_SCHEMA_EVOLUTION_SAMPLE_BYTES_PER_FILE as u64);
+                operator
+                    .read_with(path)
+                    .range(0..read_size)
+                    .await?
+                    .to_bytes()
+                    .to_vec()
+            }
+            Some(algo) => {
+                let compressed = operator.read(path).await?.to_bytes().to_vec();
+                if algo == CompressAlgorithm::Zip {
+                    DecompressDecoder::decompress_all_zip(
+                        &compressed,
+                        path,
+                        max_memory_usage as usize,
+                    )?
+                } else {
+                    let mut decoder = DecompressDecoder::new(algo);
+                    decoder.decompress_all(&compressed)?
+                }
+            }
+        };
+        Ok(bytes
+            .into_iter()
+            .take(NDJSON_SCHEMA_EVOLUTION_SAMPLE_BYTES_PER_FILE)
+            .collect())
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
@@ -599,5 +904,70 @@ impl Interpreter for CopyIntoTableInterpreter {
         };
 
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_ast::ast::CopySchemaEvolutionOptions;
+    use databend_common_storage::StageFileStatus;
+
+    use super::*;
+
+    fn stage_file(path: &str) -> StageFileInfo {
+        StageFileInfo {
+            path: path.to_string(),
+            size: 1,
+            md5: None,
+            last_modified: None,
+            etag: None,
+            status: StageFileStatus::NeedCopy,
+            creator: None,
+        }
+    }
+
+    #[test]
+    fn test_ndjson_schema_evolution_auto_options() {
+        let options = NdJsonSchemaEvolutionOptions::resolve(None, 100, 8);
+        assert_eq!(options.sample_files, 32);
+        assert_eq!(
+            options.sample_records_per_file,
+            NDJSON_SCHEMA_EVOLUTION_AUTO_RECORDS_PER_FILE
+        );
+        assert_eq!(
+            options.sample_total_records,
+            NDJSON_SCHEMA_EVOLUTION_AUTO_TOTAL_RECORDS
+        );
+
+        let explicit = CopySchemaEvolutionOptions {
+            sample_files: Some(3),
+            sample_records_per_file: Some(10),
+            sample_total_records: Some(20),
+        };
+        let options = NdJsonSchemaEvolutionOptions::resolve(Some(&explicit), 100, 8);
+        assert_eq!(options.sample_files, 3);
+        assert_eq!(options.sample_records_per_file, 10);
+        assert_eq!(options.sample_total_records, 20);
+    }
+
+    #[test]
+    fn test_sample_ndjson_files_evenly() {
+        let files = ["a", "b", "c", "d", "e"]
+            .into_iter()
+            .map(stage_file)
+            .collect::<Vec<_>>();
+        let sampled = CopyIntoTableInterpreter::sample_ndjson_files(&files, 3);
+        let paths = sampled.iter().map(|f| f.path.as_str()).collect::<Vec<_>>();
+        assert_eq!(paths, vec!["a", "c", "e"]);
+    }
+
+    #[test]
+    fn test_trim_ndjson_sample_bytes() {
+        assert_eq!(
+            trim_ndjson_sample_bytes(b"{\"a\":1}\n{\"b\""),
+            b"{\"a\":1}\n"
+        );
+        assert_eq!(trim_ndjson_sample_bytes(b"{\"a\":1}\n"), b"{\"a\":1}\n");
+        assert_eq!(trim_ndjson_sample_bytes(b"{\"a\":1}"), b"{\"a\":1}");
     }
 }

@@ -607,6 +607,16 @@ SELECT * from s;"#,
         r#"
             COPY INTO mytable
                 FROM @my_stage
+                FILE_FORMAT = (type = NDJSON)
+                SCHEMA_EVOLUTION = (
+                    sample_files = 64,
+                    sample_records_per_file = AUTO,
+                    sample_total_records = 10000
+                );
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @my_stage
                 FILE_FORMAT = (
                     type = CSV,
                     field_delimiter = ',',
