@@ -35,18 +35,38 @@ use databend_storages_common_cache::TempDirManager;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextQueryIdentity;
-use crate::spillers::Location;
+use crate::spillers::BackpressureSpiller;
+use crate::spillers::SpillReader;
 use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerDiskConfig;
-use crate::spillers::SpillerInner;
 use crate::spillers::SpillerType;
+use crate::spillers::SpillsBufferPool;
 
-pub type MaterializedCteSpiller = SpillerInner<Arc<QueryContext>>;
+pub type MaterializedCteSpiller = BackpressureSpiller;
 
 #[derive(Clone)]
 pub enum MaterializedCtePayload {
     InMemory(DataBlock),
-    Spilled(Location),
+    Spilled(MaterializedCteSpilledPayload),
+}
+
+#[derive(Clone)]
+pub struct MaterializedCteSpilledPayload {
+    reader: SpillReader,
+    row_group: usize,
+}
+
+impl MaterializedCteSpilledPayload {
+    fn restore(mut self) -> Result<DataBlock> {
+        let blocks = self.reader.restore(vec![self.row_group], usize::MAX)?;
+        match blocks.len() {
+            0 => Err(ErrorCode::Internal(
+                "Failed to restore materialized cte spilled block",
+            )),
+            1 => Ok(blocks.into_iter().next().unwrap()),
+            _ => DataBlock::concat(&blocks),
+        }
+    }
 }
 
 pub fn create_materialized_cte_spiller(
@@ -73,7 +93,13 @@ pub fn create_materialized_cte_spiller(
             .saturating_mul(1024 * 1024),
     };
     let operator = DataOperator::instance().spill_operator();
-    SpillerInner::new(ctx, operator, config)
+    BackpressureSpiller::create(
+        ctx,
+        operator,
+        config,
+        SpillsBufferPool::instance(),
+        8 * 1024 * 1024,
+    )
 }
 
 pub struct MaterializedCteSink {
@@ -95,6 +121,23 @@ impl MaterializedCteSink {
             memory_settings,
         })))
     }
+
+    fn spill_data_block(&self, data_block: DataBlock) -> Result<MaterializedCtePayload> {
+        let local_file_size = self
+            .memory_settings
+            .spill_unit_size
+            .max(data_block.memory_size())
+            .max(1);
+        let schema = Arc::new(data_block.infer_schema());
+        let mut writer_creator = self.spiller.new_writer_creator(schema)?;
+        let mut writer = writer_creator.open(Some(local_file_size))?;
+        let row_group = writer.add_row_group(vec![data_block])?;
+        let reader = writer.close()?;
+
+        Ok(MaterializedCtePayload::Spilled(
+            MaterializedCteSpilledPayload { reader, row_group },
+        ))
+    }
 }
 
 #[async_trait::async_trait]
@@ -102,9 +145,9 @@ impl AsyncSink for MaterializedCteSink {
     const NAME: &'static str = "MaterializedCteSink";
 
     async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
-        let payload = if self.memory_settings.check_spill() {
-            let location = self.spiller.spill(vec![data_block]).await?;
-            MaterializedCtePayload::Spilled(location)
+        let can_spill_block = data_block.num_columns() > 0 && !data_block.is_empty();
+        let payload = if can_spill_block && self.memory_settings.check_spill() {
+            self.spill_data_block(data_block)?
         } else {
             MaterializedCtePayload::InMemory(data_block)
         };
@@ -127,7 +170,6 @@ impl AsyncSink for MaterializedCteSink {
 
 pub struct CTESource {
     receiver: Receiver<MaterializedCtePayload>,
-    spiller: MaterializedCteSpiller,
 }
 
 impl CTESource {
@@ -135,12 +177,8 @@ impl CTESource {
         ctx: Arc<QueryContext>,
         output_port: Arc<OutputPort>,
         receiver: Receiver<MaterializedCtePayload>,
-        spiller: MaterializedCteSpiller,
     ) -> Result<ProcessorPtr> {
-        AsyncSourcer::create(ctx.get_scan_progress(), output_port, Self {
-            receiver,
-            spiller,
-        })
+        AsyncSourcer::create(ctx.get_scan_progress(), output_port, Self { receiver })
     }
 }
 
@@ -153,9 +191,7 @@ impl AsyncSource for CTESource {
         if let Ok(payload) = self.receiver.recv().await {
             let data = match payload {
                 MaterializedCtePayload::InMemory(data) => data,
-                MaterializedCtePayload::Spilled(location) => {
-                    self.spiller.read_spilled_file(&location).await?
-                }
+                MaterializedCtePayload::Spilled(spilled) => spilled.restore()?,
             };
             return Ok(Some(data));
         }

@@ -52,6 +52,23 @@ async fn run_materialized_cte_query(ctx: Arc<QueryContext>) -> Result<(u64, u64)
     Ok((scalar_as_u64(&block, 0), scalar_as_u64(&block, 1)))
 }
 
+async fn run_zero_column_materialized_cte_query(ctx: Arc<QueryContext>) -> Result<u64> {
+    let stream = execute_query(
+        ctx,
+        "WITH t AS (
+             SELECT number AS a FROM numbers(64)
+         )
+         SELECT count()
+         FROM t AS x
+         INNER JOIN t AS y ON true",
+    )
+    .await?;
+    let blocks = stream.try_collect::<Vec<DataBlock>>().await?;
+    let block = DataBlock::concat(&blocks)?;
+    assert_eq!(block.num_rows(), 1);
+    Ok(scalar_as_u64(&block, 0))
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_materialized_cte_forced_spill_preserves_results_and_records_progress() -> Result<()> {
     let config = config_with_spill();
@@ -74,6 +91,23 @@ async fn test_materialized_cte_forced_spill_preserves_results_and_records_progre
         bytes > 0,
         "forced MaterializedCTE spill should record bytes"
     );
+
+    let _ = databend_storages_common_cache::TempDirManager::instance()
+        .drop_disk_spill_dir(&ctx.get_id());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_materialized_cte_forced_spill_preserves_zero_column_row_count() -> Result<()> {
+    let config = config_with_spill();
+    let fixture = TestFixture::setup_with_config(&config).await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let settings = ctx.get_settings();
+    settings.set_setting("enable_auto_materialize_cte".into(), "1".into())?;
+    settings.set_setting("force_materialized_cte_spill".into(), "1".into())?;
+
+    let row_count = run_zero_column_materialized_cte_query(ctx.clone()).await?;
+    assert_eq!(row_count, 4096);
 
     let _ = databend_storages_common_cache::TempDirManager::instance()
         .drop_disk_spill_dir(&ctx.get_id());
