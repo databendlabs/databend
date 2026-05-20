@@ -330,6 +330,10 @@ SELECT factorial(5)
 120
 
 statement error 1006
+SELECT factorial(-1)
+
+
+statement error 1006
 SELECT factorial(30)
 
 

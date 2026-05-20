@@ -416,7 +416,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                     vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>>(
                         |val, output, ctx| {
                             let n: i64 = AsPrimitive::<i64>::as_(val);
-                            if n > MAX_FACTORIAL_NUMBER {
+                            if n < 0 {
+                                ctx.set_error(
+                                    output.len(),
+                                    "factorial number is out of range, min is: 0".to_string(),
+                                );
+                                output.push(0);
+                            } else if n > MAX_FACTORIAL_NUMBER {
                                 ctx.set_error(output.len(), format!("factorial number is out of range, max is: {}", MAX_FACTORIAL_NUMBER));
                                 output.push(0);
                             } else {
@@ -530,5 +536,5 @@ type Log10Function = GenericLogFunction<TenBase>;
 type Log2Function = GenericLogFunction<TwoBase>;
 
 fn factorial(n: i64) -> i64 {
-    if n <= 0 { 1 } else { n * factorial(n - 1) }
+    if n == 0 { 1 } else { n * factorial(n - 1) }
 }
