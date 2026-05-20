@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod cluster;
+mod clustering_information;
 mod config;
 mod status;

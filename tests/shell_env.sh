@@ -12,7 +12,14 @@ export QUERY_MYSQL_HANDLER_PORT=${QUERY_MYSQL_HANDLER_PORT:="3307"}
 export QUERY_HTTP_HANDLER_PORT=${QUERY_HTTP_HANDLER_PORT:="8000"}
 
 bendsql_client() {
-	bendsql "$@" 2> >(sed -E 's/ \[v[0-9][^]]*\]$//' >&2)
+	local stderr_file status
+
+	stderr_file=$(mktemp) || return 1
+	bendsql "$@" 2>"$stderr_file"
+	status=$?
+	sed -E 's/ \[v[0-9][^]]*\]$//' "$stderr_file" >&2
+	rm -f "$stderr_file"
+	return "$status"
 }
 
 bendsql_query_http_connect() {

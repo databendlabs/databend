@@ -616,6 +616,10 @@ fn replace_push_downs(
             visit_expr_column(&mut filters.filter, base_block_ids)?;
             visit_expr_column(&mut filters.inverted_filter, base_block_ids)?;
         }
+        if let Some(filters) = &mut push_downs.secure_filters {
+            visit_expr_column(&mut filters.filter, base_block_ids)?;
+            visit_expr_column(&mut filters.inverted_filter, base_block_ids)?;
+        }
         Ok(Some(push_downs))
     } else {
         Ok(None)

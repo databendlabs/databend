@@ -22,12 +22,12 @@ select *  from t09_0014 order by b, a
 1 3
 4 4
 
-query TTI
-select min, max, level from clustering_statistics('default','t09_0014') order by min
+query TTII
+select min, max, level, block_depth from clustering_statistics('default','t09_0014') order by min
 ----
-[1, 1] [3, 0] 0
-[1, 2] [3, 1] 0
-[4, 4] [4, 4] 0
+[1, 1] [3, 0] 0 2
+[1, 2] [3, 1] 0 2
+[4, 4] [4, 4] 0 1
 
 query TT?
 select * exclude(timestamp) from clustering_information('default','t09_0014')
