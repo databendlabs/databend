@@ -24,6 +24,8 @@ use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
+use crate::ast::CopySchemaEvolutionOptions;
+use crate::ast::Identifier;
 use crate::ast::LiteralStringOrVariable;
 use crate::ast::Statement;
 use crate::ast::Statement::CopyIntoLocation;
@@ -220,6 +222,49 @@ fn copy_into_table_option(i: Input) -> IResult<CopyIntoTableOption> {
             rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
             |(_, _, return_failed_only)| CopyIntoTableOption::ReturnFailedOnly(return_failed_only),
         ),
+        map_res(
+            rule! { SCHEMA_EVOLUTION ~ "=" ~ "(" ~ #comma_separated_list0(schema_evolution_option) ~ ")" },
+            |(_, _, _, opts, _)| {
+                let mut schema_evolution = CopySchemaEvolutionOptions::default();
+                for (key, value) in opts {
+                    let target = match key.name.to_lowercase().as_str() {
+                        "sample_files" => &mut schema_evolution.sample_files,
+                        "sample_records_per_file" => {
+                            &mut schema_evolution.sample_records_per_file
+                        }
+                        "sample_total_records" => &mut schema_evolution.sample_total_records,
+                        _ => {
+                            return Err(nom::Err::Failure(ErrorKind::other(format!(
+                                "Unknown schema evolution option {}",
+                                key.name
+                            ))));
+                        }
+                    };
+                    if let Some(value) = value {
+                        if value == 0 {
+                            return Err(nom::Err::Failure(ErrorKind::other(format!(
+                                "Schema evolution option {} must be greater than 0",
+                                key.name
+                            ))));
+                        }
+                        *target = Some(value as usize);
+                    } else {
+                        *target = None;
+                    }
+                }
+                Ok(CopyIntoTableOption::SchemaEvolution(schema_evolution))
+            },
+        ),
+    ))
+    .parse(i)
+}
+
+fn schema_evolution_option(i: Input) -> IResult<(Identifier, Option<u64>)> {
+    alt((
+        map(rule! { #ident ~ "=" ~ AUTO }, |(key, _, _)| (key, None)),
+        map(rule! { #ident ~ "=" ~ #literal_u64 }, |(key, _, value)| {
+            (key, Some(value))
+        }),
     ))
     .parse(i)
 }
