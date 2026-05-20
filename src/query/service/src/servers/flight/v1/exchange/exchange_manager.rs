@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::FlightData;
 use arrow_flight::flight_service_client::FlightServiceClient;
@@ -45,6 +46,7 @@ use parking_lot::ReentrantMutex;
 use petgraph::Direction;
 use petgraph::prelude::EdgeRef;
 use tokio::sync::oneshot;
+use tokio::time::Instant;
 use tonic::Status;
 
 use super::exchange_params::BroadcastExchangeParams;
@@ -709,7 +711,16 @@ impl DataExchangeManager {
 
     #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
+        let lock_start = Instant::now();
         let queries_coordinator_guard = self.queries_coordinator.lock();
+        let lock_wait = lock_start.elapsed();
+        if lock_wait > Duration::from_secs(1) {
+            warn!(
+                "Waited {:?} to acquire queries_coordinator lock in on_finished_query, query_id={}",
+                lock_wait, query_id
+            );
+        }
+
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
