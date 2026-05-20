@@ -1,0 +1,39 @@
+query T
+select conv('a', 16, 10)
+----
+10
+
+query T
+select conv('6E', 18, 8)
+----
+172
+
+query T
+select conv('zz', 36, 10)
+----
+1295
+
+query T
+select conv('11', 2, 36)
+----
+3
+
+query T
+select conv(10, 10, 2)
+----
+1010
+
+query T
+select conv(10, 16, 10)
+----
+16
+
+query T
+select conv(15, 10, 16)
+----
+F
+
+query T
+select conv(-128, 10, 8)
+----
+1777777777777777777600

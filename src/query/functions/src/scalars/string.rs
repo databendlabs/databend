@@ -60,6 +60,7 @@ pub const ALL_STRING_FUNC_NAMES: &[&str] = &[
     "trim_trailing",
     "trim_both",
     "to_hex",
+    "conv",
     "bin",
     "oct",
     "to_hex",
@@ -676,8 +677,46 @@ pub fn register(registry: &mut FunctionRegistry) {
         ))
         .register();
 
-    // TODO: generalize them to be alias of [CONV](https://dev.mysql.com/doc/refman/8.0/en/mathematical-functions.html#function_conv)
-    // Tracking issue: https://github.com/datafuselabs/databend/issues/7242
+    registry.register_passthrough_nullable_3_arg::<
+        StringType,
+        NumberType<i64>,
+        NumberType<i64>,
+        StringType,
+        _,
+        _,
+    >(
+        "conv",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<
+            StringType,
+            NumberType<i64>,
+            NumberType<i64>,
+            StringType,
+        >(|num, from_base, to_base, output, ctx| {
+            conv(num, from_base, to_base, output, ctx);
+        }),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<
+        NumberType<i64>,
+        NumberType<i64>,
+        NumberType<i64>,
+        StringType,
+        _,
+        _,
+    >(
+        "conv",
+        |_, _, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<
+            NumberType<i64>,
+            NumberType<i64>,
+            NumberType<i64>,
+            StringType,
+        >(|num, from_base, to_base, output, ctx| {
+            conv(&num.to_string(), from_base, to_base, output, ctx);
+        }),
+    );
+
     registry
         .scalar_builder("bin")
         .function()
@@ -686,7 +725,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         .calc_domain(|_, _| FunctionDomain::Full)
         .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
             |val, output, _| {
-                write!(output.row_buffer, "{val:b}").unwrap();
+                write_conv_num(val as u64, 2, output);
                 output.commit_row();
             },
         ))
@@ -700,7 +739,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         .calc_domain(|_, _| FunctionDomain::Full)
         .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
             |val, output, _| {
-                write!(output.row_buffer, "{val:o}").unwrap();
+                write_conv_num(val as u64, 8, output);
                 output.commit_row();
             },
         ))
@@ -715,6 +754,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
             |val, output, _| {
                 write!(output.row_buffer, "{val:x}").unwrap();
+                output.commit_row();
+            },
+        ))
+        .register();
+
+    registry
+        .scalar_builder("hex")
+        .function()
+        .typed_1_arg::<NumberType<i64>, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_with_builder_1_arg::<NumberType<i64>, StringType>(
+            |val, output, _| {
+                write_conv_num(val as u64, 16, output);
                 output.commit_row();
             },
         ))
@@ -1077,6 +1130,102 @@ fn substr(builder: &mut StringColumnBuilder, str: &str, pos: i64, len: u64) {
 
     builder.put_char_iter(str.chars().skip(start).take(len as usize));
     builder.commit_row();
+}
+
+fn conv(
+    num: &str,
+    from_base: i64,
+    to_base: i64,
+    output: &mut StringColumnBuilder,
+    ctx: &mut databend_common_expression::EvalContext,
+) {
+    let Some(from_base) = validate_conv_base(from_base) else {
+        ctx.set_error(
+            output.len(),
+            format!("from_base must be between 2 and 36, but got {}", from_base),
+        );
+        output.commit_row();
+        return;
+    };
+
+    let Some(to_base) = validate_conv_base(to_base) else {
+        ctx.set_error(
+            output.len(),
+            format!("to_base must be between 2 and 36, but got {}", to_base),
+        );
+        output.commit_row();
+        return;
+    };
+
+    let num = parse_conv_num(num, from_base);
+    write_conv_num(num, to_base, output);
+    output.commit_row();
+}
+
+fn validate_conv_base(base: i64) -> Option<u32> {
+    if (2..=36).contains(&base) {
+        Some(base as u32)
+    } else {
+        None
+    }
+}
+
+fn parse_conv_num(num: &str, from_base: u32) -> u64 {
+    let num = num.trim_start();
+    let (negative, digits) = if let Some(rest) = num.strip_prefix('-') {
+        (true, rest)
+    } else if let Some(rest) = num.strip_prefix('+') {
+        (false, rest)
+    } else {
+        (false, num)
+    };
+
+    let mut value = 0_u64;
+    for ch in digits.bytes() {
+        let Some(digit) = conv_digit(ch) else {
+            break;
+        };
+        if digit >= from_base {
+            break;
+        }
+
+        value = value
+            .saturating_mul(from_base as u64)
+            .saturating_add(digit as u64);
+    }
+
+    if negative {
+        value.wrapping_neg()
+    } else {
+        value
+    }
+}
+
+fn conv_digit(ch: u8) -> Option<u32> {
+    match ch {
+        b'0'..=b'9' => Some((ch - b'0') as u32),
+        b'a'..=b'z' => Some((ch - b'a' + 10) as u32),
+        b'A'..=b'Z' => Some((ch - b'A' + 10) as u32),
+        _ => None,
+    }
+}
+
+fn write_conv_num(mut num: u64, to_base: u32, output: &mut StringColumnBuilder) {
+    const DIGITS: &[u8; 36] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    if num == 0 {
+        output.put_char('0');
+        return;
+    }
+
+    let mut buf = [0_u8; 64];
+    let mut idx = buf.len();
+    while num > 0 {
+        idx -= 1;
+        buf[idx] = DIGITS[(num % to_base as u64) as usize];
+        num /= to_base as u64;
+    }
+    output.put_slice(&buf[idx..]);
 }
 
 #[inline]

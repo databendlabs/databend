@@ -220,7 +220,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry
         .scalar_builder("to_hex")
-        .aliases(&["hex", "hex_encode"])
+        .aliases(&["hex_encode"])
         .function()
         .typed_1_arg::<BinaryType, StringType>()
         .passthrough_nullable()

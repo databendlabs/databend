@@ -6,12 +6,7 @@ select hex(100)
 query T
 select hex(-100)
 ----
-ffffffffffffff9c
-
-query T
-select hex('abc')
-----
-616263
+FFFFFFFFFFFFFF9C
 
 query ?
 select hex(null)
