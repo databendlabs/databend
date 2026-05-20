@@ -109,13 +109,29 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
         mutation_logs.entries.into_iter().for_each(|entry| {
             self.accumulate_log_entry(entry);
         });
-        self.refresh_status(task_num);
+        if task_num > 0 {
+            if self.finished_tasks == 0 {
+                self.ctx.set_status_info(&format!(
+                    "{}: writing block files, elapsed: {:?}",
+                    self.write_segment_ctx.kind,
+                    self.start_time.elapsed()
+                ));
+            }
+            self.finished_tasks += task_num;
+        }
         Ok(None)
     }
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         self.generate_append_segments().await?;
+        info!(
+            "{}: finished writing block files, tasks: {}, elapsed: {:?}",
+            self.write_segment_ctx.kind,
+            self.finished_tasks,
+            self.start_time.elapsed()
+        );
+
         let mut new_segment_locs = Vec::new();
         new_segment_locs.extend(self.appended_segments.clone());
 
@@ -237,21 +253,6 @@ impl TableMutationAggregator {
             finished_tasks: 0,
             start_time: Instant::now(),
             table_id: table.get_id(),
-        }
-    }
-
-    pub fn refresh_status(&mut self, task_num: usize) {
-        self.finished_tasks += task_num;
-
-        // Refresh status
-        {
-            let status = format!(
-                "{}: run tasks:{}, cost:{:?}",
-                self.write_segment_ctx.kind,
-                self.finished_tasks,
-                self.start_time.elapsed()
-            );
-            self.ctx.set_status_info(&status);
         }
     }
 

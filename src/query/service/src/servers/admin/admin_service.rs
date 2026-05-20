@@ -49,7 +49,7 @@ impl AdminService {
         })
     }
 
-    fn build_router(&self) -> impl Endpoint + use<> {
+    pub fn build_router(&self) -> impl Endpoint + use<> {
         #[cfg_attr(not(feature = "memory-profiling"), allow(unused_mut))]
         let mut route = Route::new()
             .at("/v1/health", get(health_handler))
@@ -122,6 +122,10 @@ impl AdminService {
                 .at(
                     "/v1/tenants/:tenant/procedures/:name",
                     get(super::v1::procedures::get_procedure_by_name),
+                )
+                .at(
+                    "/v1/tenants/:tenant/databases/:database/tables/:table/clustering_information",
+                    get(super::v1::clustering_information::clustering_information_handler),
                 )
                 .at(
                     "/v1/tenants/:tenant/databases/:database/tables/:table/stats",

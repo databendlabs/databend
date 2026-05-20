@@ -1594,6 +1594,21 @@ SELECT array_contains(parse_json('1'), 1), array_contains(parse_json('1'), 4)
 1 0
 
 query ?
+SELECT array_concat(parse_json('[1,2]'), parse_json('[3,4]'))
+----
+[1,2,3,4]
+
+query ?
+SELECT array_concat(parse_json('[1, "a"]'), parse_json('[true, null]'))
+----
+[1,"a",true,null]
+
+query ??
+SELECT array_concat(parse_json('1'), parse_json('[2,3]')), array_concat(parse_json('[1,2]'), parse_json('3'))
+----
+[1,2,3] [1,2,3]
+
+query ?
 SELECT array_flatten(parse_json('[[1,2],[3,4]]'))
 ----
 [1,2,3,4]
@@ -1695,4 +1710,3 @@ query I
 SELECT array_unique(parse_json('["a", "b", "a", null, "c"]'))
 ----
 4
-

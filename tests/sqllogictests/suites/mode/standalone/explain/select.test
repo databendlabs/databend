@@ -107,6 +107,78 @@ TableScan
 └── estimated rows: 1.00
 
 query T
+explain select * from numbers(1) where case when true then number = 0 else number = 1 end
+----
+Filter
+├── output columns: [numbers.number (#0)]
+├── filters: [numbers.number (#0) = 0]
+├── estimated rows: 0.50
+└── TableScan
+    ├── table: default.system.numbers
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [numbers.number (#0) = 0], limit: NONE]
+    └── estimated rows: 1.00
+
+query T
+explain select * from numbers(1) where if(false, number = 1, null, number = 1, true, number = 0, number = 1)
+----
+Filter
+├── output columns: [numbers.number (#0)]
+├── filters: [numbers.number (#0) = 0]
+├── estimated rows: 0.50
+└── TableScan
+    ├── table: default.system.numbers
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [numbers.number (#0) = 0], limit: NONE]
+    └── estimated rows: 1.00
+
+query T
+explain select * from numbers(1) where case when is_role_in_session('account_admin') then number = 0 else number = 1 end
+----
+Filter
+├── output columns: [numbers.number (#0)]
+├── filters: [numbers.number (#0) = 0]
+├── estimated rows: 0.50
+└── TableScan
+    ├── table: default.system.numbers
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [numbers.number (#0) = 0], limit: NONE]
+    └── estimated rows: 1.00
+
+query T
+explain select * from numbers(1) where if(is_role_in_session('role_non_exists'), number = 1, number = 0)
+----
+Filter
+├── output columns: [numbers.number (#0)]
+├── filters: [numbers.number (#0) = 0]
+├── estimated rows: 0.50
+└── TableScan
+    ├── table: default.system.numbers
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 1
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [numbers.number (#0) = 0], limit: NONE]
+    └── estimated rows: 1.00
+
+query T
 explain select * from numbers(1) where number = 0 and false
 ----
 EmptyResultScan
