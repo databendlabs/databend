@@ -43,6 +43,7 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
@@ -79,6 +80,7 @@ use crate::interpreters::common::table_option_validation::is_valid_data_retentio
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -463,6 +465,7 @@ impl CreateTableInterpreter {
 
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
+        is_valid_recluster_depth(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
         is_valid_bloom_index_type(&table_meta.options)?;
@@ -481,6 +484,10 @@ impl CreateTableInterpreter {
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         // check enable auto analyze.
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
+        is_valid_option_of_type::<u64>(
+            &table_meta.options,
+            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+        )?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();

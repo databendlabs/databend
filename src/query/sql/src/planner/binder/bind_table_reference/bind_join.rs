@@ -46,6 +46,7 @@ use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::FunctionCall;
 use crate::plans::HashJoinBuildCacheInfo;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
@@ -60,6 +61,8 @@ pub struct JoinConditions {
     pub(crate) non_equi_conditions: Vec<ScalarExpr>,
     pub(crate) other_conditions: Vec<ScalarExpr>,
 }
+
+const ASOF_USING_RANGE_FUNC: &str = "gte";
 
 impl Binder {
     pub(crate) fn bind_join(
@@ -367,7 +370,7 @@ impl Binder {
                     "Join conditions should be empty in cross join",
                 ));
             }
-            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof
+            JoinType::Asof | JoinType::LeftAsof | JoinType::RightAsof | JoinType::FullAsof
                 if non_equi_conditions.is_empty() =>
             {
                 return Err(ErrorCode::SemanticError("Missing inequality condition!"));
@@ -534,7 +537,9 @@ impl Binder {
                         need_push_down = true;
                         left_push_down.push(predicate.clone());
                     }
-                    JoinType::Full => non_equi_conditions.push(predicate.clone()),
+                    JoinType::Full | JoinType::FullAsof => {
+                        non_equi_conditions.push(predicate.clone())
+                    }
                 },
                 JoinPredicate::Left(_) => {
                     need_push_down = true;
@@ -603,7 +608,10 @@ impl Binder {
                     "cross join should not contain join conditions".to_string(),
                 ));
             }
-            JoinOperator::Asof | JoinOperator::LeftAsof | JoinOperator::RightAsof
+            JoinOperator::Asof
+            | JoinOperator::LeftAsof
+            | JoinOperator::RightAsof
+            | JoinOperator::FullAsof
                 if join_condition == &JoinCondition::None =>
             {
                 return Err(ErrorCode::SemanticError(
@@ -727,6 +735,7 @@ impl<'a> JoinConditionResolver<'a> {
                     using_columns,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     join_op,
                 )?;
             }
@@ -741,6 +750,7 @@ impl<'a> JoinConditionResolver<'a> {
                     using_columns,
                     left_join_conditions,
                     right_join_conditions,
+                    non_equi_conditions,
                     join_op,
                 )?
             }
@@ -902,6 +912,7 @@ impl<'a> JoinConditionResolver<'a> {
         using_columns: Vec<(Span, String)>,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
+        non_equi_conditions: &mut Vec<ScalarExpr>,
         join_op: &JoinOperator,
     ) -> Result<()> {
         bind_join_columns(
@@ -910,7 +921,18 @@ impl<'a> JoinConditionResolver<'a> {
             self.join_context,
         );
         let left_columns_len = self.left_column_bindings.len();
-        for (span, join_key) in using_columns.iter() {
+        let asof_range_column = if matches!(
+            join_op,
+            JoinOperator::Asof
+                | JoinOperator::LeftAsof
+                | JoinOperator::RightAsof
+                | JoinOperator::FullAsof
+        ) {
+            using_columns.len().checked_sub(1)
+        } else {
+            None
+        };
+        for (index, (span, join_key)) in using_columns.iter().enumerate() {
             let join_key_name = join_key.as_str();
             let left_scalar = if let Some(col_binding) = self.join_context.columns
                 [0..left_columns_len]
@@ -945,7 +967,8 @@ impl<'a> JoinConditionResolver<'a> {
                 ))
                 .set_span(*span));
             };
-            let idx = !matches!(join_op, JoinOperator::RightOuter) as usize;
+            let idx =
+                !matches!(join_op, JoinOperator::RightOuter | JoinOperator::RightAsof) as usize;
             if let Some(col_binding) = self
                 .join_context
                 .columns
@@ -956,16 +979,25 @@ impl<'a> JoinConditionResolver<'a> {
                 })
                 .nth(idx)
             {
-                // Always make the second using column in the join_context invisible in unqualified wildcard.
+                // Make the duplicate USING column invisible in unqualified wildcard.
                 col_binding.visibility = Visibility::UnqualifiedWildcardInVisible;
             }
 
-            self.add_equi_conditions(
-                left_scalar,
-                right_scalar,
-                left_join_conditions,
-                right_join_conditions,
-            )?;
+            if Some(index) == asof_range_column {
+                non_equi_conditions.push(ScalarExpr::FunctionCall(FunctionCall {
+                    span: *span,
+                    func_name: ASOF_USING_RANGE_FUNC.to_string(),
+                    params: vec![],
+                    arguments: vec![left_scalar, right_scalar],
+                }));
+            } else {
+                self.add_equi_conditions(
+                    left_scalar,
+                    right_scalar,
+                    left_join_conditions,
+                    right_join_conditions,
+                )?;
+            }
         }
         Ok(())
     }
@@ -1092,6 +1124,7 @@ fn join_type(join_type: &JoinOperator) -> JoinType {
         JoinOperator::Asof => JoinType::Asof,
         JoinOperator::LeftAsof => JoinType::LeftAsof,
         JoinOperator::RightAsof => JoinType::RightAsof,
+        JoinOperator::FullAsof => JoinType::FullAsof,
         JoinOperator::LeftAny => JoinType::LeftAny,
         JoinOperator::RightAny => JoinType::RightAny,
         JoinOperator::InnerAny => JoinType::InnerAny,

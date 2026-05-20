@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::base::BuildInfoRef;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::GLOBAL_QUERIES_MANAGER;
+use databend_common_base::runtime::GlobalControlRuntime;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::GlobalQueryRuntime;
 use databend_common_catalog::catalog::CatalogCreator;
@@ -110,6 +111,7 @@ impl GlobalServices {
 
         // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
+        GlobalControlRuntime::init()?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
         // 4. cluster discovery init.

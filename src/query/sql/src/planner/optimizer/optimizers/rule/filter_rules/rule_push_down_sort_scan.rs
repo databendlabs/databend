@@ -30,9 +30,10 @@ use crate::plans::Sort;
 /// Matches: Sort -> [EvalScalar ->] Scan
 ///
 /// Push down order_by and limit from Sort to Scan.
-/// When `secure_predicates` is present, limit is not pushed down because
-/// storage TopK pruning would return N rows based only on user predicates,
-/// then secure predicates filter them further, yielding fewer rows than requested.
+/// When `secure_predicates` has not been applied by prewhere, limit is not
+/// pushed down because storage TopK pruning would return N rows before RAP row
+/// selection, then secure predicates filter them further, yielding fewer rows
+/// than requested.
 pub struct RulePushDownSortScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -73,9 +74,7 @@ impl Rule for RulePushDownSortScan {
             scan.order_by = Some(sort.items);
         }
 
-        // When row access policy is active, pushing limit is unsafe because
-        // secure predicates are applied after storage-level TopK pruning.
-        let can_push_limit = scan.secure_predicates.is_none();
+        let can_push_limit = !scan.has_secure_predicates_not_applied_by_prewhere();
 
         if can_push_limit {
             if let Some(limit) = sort.limit {

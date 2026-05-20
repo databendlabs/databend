@@ -470,8 +470,13 @@ impl FuseTable {
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
-                    || (p.limit.is_some() && p.filter_only_use_index())
+                (!p.order_by.is_empty()
+                    && p.limit.is_some()
+                    && p.filters.is_none()
+                    && p.secure_filters.is_none())
+                    || (p.limit.is_some()
+                        && p.secure_filters.is_none()
+                        && p.filter_only_use_index())
             })
             .is_some()
         {
@@ -497,7 +502,7 @@ impl FuseTable {
             let pruning_ctx = pruner.pruning_ctx.clone();
             let schema = pruner.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
-            let filters = push_down.filters.clone();
+            let filters = push_down.effective_filters(&BUILTIN_FUNCTIONS);
             let sort = push_down.order_by.clone();
             let limit = push_down.limit;
             let vector_index = push_down.vector_index.clone().unwrap();
@@ -523,7 +528,7 @@ impl FuseTable {
 
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
         let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
         let send_part_state = Arc::new(SendPartState::create(
@@ -595,7 +600,10 @@ impl FuseTable {
                 .flat_map(|c| c.leaf_column_ids.clone())
                 .collect::<Vec<_>>()
         };
-        let filter_column_ids = match push_down.as_ref().and_then(|p| p.filters.as_ref()) {
+        let filter_column_ids = match push_down
+            .as_ref()
+            .and_then(|p| p.effective_filters(&BUILTIN_FUNCTIONS))
+        {
             Some(filters) => {
                 let mut column_ids = HashSet::new();
                 let filter = &filters.filter.as_expr(&BUILTIN_FUNCTIONS);
@@ -844,7 +852,7 @@ impl FuseTable {
     ) -> (PartStatistics, Partitions) {
         let limit = push_downs
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
@@ -912,7 +920,7 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         push_downs
             .as_ref()
-            .is_none_or(|extra| extra.filters.is_none())
+            .is_none_or(|extra| extra.filters.is_none() && extra.secure_filters.is_none())
     }
 
     fn all_columns_partitions(

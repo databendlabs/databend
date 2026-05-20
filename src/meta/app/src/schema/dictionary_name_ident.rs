@@ -58,9 +58,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for DictionaryId {
         type KeyType = super::DictionaryNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

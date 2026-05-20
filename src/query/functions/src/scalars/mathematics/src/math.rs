@@ -81,12 +81,36 @@ pub fn register(registry: &mut FunctionRegistry) {
         |f: F64, _| OrderedFloat(1.0f64) / f.tan(),
     );
 
+    fn unit_domain_bounds(domain: &SimpleDomain<F64>) -> Option<(F64, F64)> {
+        let min = Ord::max(domain.min, OrderedFloat(-1.0));
+        let max = Ord::min(domain.max, OrderedFloat(1.0));
+
+        if min <= max { Some((min, max)) } else { None }
+    }
+
+    fn has_unit_domain_overflow(domain: &SimpleDomain<F64>) -> bool {
+        domain.min < OrderedFloat(-1.0) || domain.max > OrderedFloat(1.0)
+    }
+
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "acos",
-        |_, _| {
+        |_, domain| {
+            let Some((input_min, input_max)) = unit_domain_bounds(domain) else {
+                return FunctionDomain::Domain(SimpleDomain {
+                    min: OrderedFloat(f64::NAN),
+                    max: OrderedFloat(f64::NAN),
+                });
+            };
+
+            let max = if has_unit_domain_overflow(domain) {
+                OrderedFloat(f64::NAN)
+            } else {
+                input_min.acos()
+            };
+
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(PI),
+                min: input_max.acos(),
+                max,
             })
         },
         |f: F64, _| f.acos(),
@@ -94,10 +118,23 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<NumberType<F64>, NumberType<F64>, _>(
         "asin",
-        |_, _| {
+        |_, domain| {
+            let Some((min, max)) = unit_domain_bounds(domain) else {
+                return FunctionDomain::Domain(SimpleDomain {
+                    min: OrderedFloat(f64::NAN),
+                    max: OrderedFloat(f64::NAN),
+                });
+            };
+
+            let max = if has_unit_domain_overflow(domain) {
+                OrderedFloat(f64::NAN)
+            } else {
+                max.asin()
+            };
+
             FunctionDomain::Domain(SimpleDomain {
-                min: OrderedFloat(0.0),
-                max: OrderedFloat(2.0 * PI),
+                min: min.asin(),
+                max,
             })
         },
         |f: F64, _| f.asin(),

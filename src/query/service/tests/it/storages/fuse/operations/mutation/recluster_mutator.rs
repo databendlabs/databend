@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use databend_common_catalog::plan::ReclusterParts;
-use databend_common_exception::ErrorCode;
 use databend_common_expression::BlockThresholds;
 use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
@@ -61,187 +60,229 @@ fn test_cluster_key_expr() -> Expr<usize> {
     })
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+async fn gen_recluster_segments(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    num_segments: usize,
+    blocks_per_segment: usize,
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let mut segment_locations = Vec::with_capacity(num_segments);
+    for _ in 0..num_segments {
+        let mut blocks = Vec::with_capacity(blocks_per_segment);
+        for _ in 0..blocks_per_segment {
+            let block_id = Uuid::new_v4().simple().to_string();
+            let location = (block_id, DataBlock::VERSION);
+            blocks.push(Arc::new(BlockMeta::new(
+                row_count,
+                block_size,
+                file_size,
+                HashMap::default(),
+                HashMap::default(),
+                Some(ClusterStatistics::new(
+                    cluster_key_id,
+                    vec![Scalar::from(1i32)],
+                    vec![Scalar::from(100i32)],
+                    0,
+                    None,
+                )),
+                location,
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                meta::Compression::Lz4Raw,
+                Some(Utc::now()),
+            )));
+        }
 
-    let data_accessor = ctx.get_application_level_data_operator()?.operator();
-
-    let cluster_key_id = 0;
-    let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
-        let block_id = Uuid::new_v4().simple().to_string();
-        let location = (block_id, DataBlock::VERSION);
-        let test_block_meta = Arc::new(BlockMeta::new(
-            1,
-            1,
-            1,
-            HashMap::default(),
-            HashMap::default(),
-            cluster_stats,
-            location.clone(),
-            None,
-            0,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            meta::Compression::Lz4Raw,
-            Some(Utc::now()),
-        ));
-
-        let statistics = reduce_block_metas(
-            &[test_block_meta.as_ref()],
-            BlockThresholds::default(),
-            Some(0),
-        );
-
-        let segment = SegmentInfo::new(vec![test_block_meta], statistics);
+        let block_refs = blocks
+            .iter()
+            .map(|block| block.as_ref())
+            .collect::<Vec<_>>();
+        let statistics = reduce_block_metas(&block_refs, thresholds, Some(cluster_key_id));
+        let segment = SegmentInfo::new(blocks, statistics);
         let segment_location = location_generator
             .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
-        segment
-            .write_meta(&data_accessor, &segment_location)
-            .await?;
-        Ok::<_, ErrorCode>(((segment_location, SegmentInfo::VERSION), location))
-    };
+        segment.write_meta(data_accessor, &segment_location).await?;
+        segment_locations.push((segment_location, SegmentInfo::VERSION));
+    }
+    Ok(segment_locations)
+}
 
-    let mut test_segment_locations = vec![];
-    let mut test_block_locations = vec![];
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
+async fn gen_recluster_segments_by_level(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    level_counts: &[(i32, usize)],
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let total_segments = level_counts.iter().map(|(_, count)| *count).sum();
+    let mut segment_locations = Vec::with_capacity(total_segments);
+    for &(level, count) in level_counts {
+        for _ in 0..count {
+            let block_id = Uuid::new_v4().simple().to_string();
+            let location = (block_id, DataBlock::VERSION);
+            let block = Arc::new(BlockMeta::new(
+                row_count,
+                block_size,
+                file_size,
+                HashMap::default(),
+                HashMap::default(),
+                Some(ClusterStatistics::new(
+                    cluster_key_id,
+                    vec![Scalar::from(1i32)],
+                    vec![Scalar::from(100i32)],
+                    level,
+                    None,
+                )),
+                location,
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                meta::Compression::Lz4Raw,
+                Some(Utc::now()),
+            ));
+            let statistics =
+                reduce_block_metas(&[block.as_ref()], thresholds, Some(cluster_key_id));
+            let segment = SegmentInfo::new(vec![block], statistics);
+            let segment_location = location_generator
+                .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
+            segment.write_meta(data_accessor, &segment_location).await?;
+            segment_locations.push((segment_location, SegmentInfo::VERSION));
+        }
+    }
+    Ok(segment_locations)
+}
+
+async fn gen_recluster_segments_by_ranges(
+    data_accessor: &opendal::Operator,
+    location_generator: &TableMetaLocationGenerator,
+    ranges_by_segment: &[Vec<(i32, i32)>],
+    row_count: u64,
+    block_size: u64,
+    file_size: u64,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+) -> anyhow::Result<Vec<meta::Location>> {
+    let mut segment_locations = Vec::with_capacity(ranges_by_segment.len());
+    for ranges in ranges_by_segment {
+        let mut blocks = Vec::with_capacity(ranges.len());
+        for &(min, max) in ranges {
+            let block_id = Uuid::new_v4().simple().to_string();
+            let location = (block_id, DataBlock::VERSION);
+            blocks.push(Arc::new(BlockMeta::new(
+                row_count,
+                block_size,
+                file_size,
+                HashMap::default(),
+                HashMap::default(),
+                Some(ClusterStatistics::new(
+                    cluster_key_id,
+                    vec![Scalar::from(min)],
+                    vec![Scalar::from(max)],
+                    0,
+                    None,
+                )),
+                location,
+                None,
+                0,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                meta::Compression::Lz4Raw,
+                Some(Utc::now()),
+            )));
+        }
+
+        let block_refs = blocks
+            .iter()
+            .map(|block| block.as_ref())
+            .collect::<Vec<_>>();
+        let statistics = reduce_block_metas(&block_refs, thresholds, Some(cluster_key_id));
+        let segment = SegmentInfo::new(blocks, statistics);
+        let segment_location = location_generator
+            .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
+        segment.write_meta(data_accessor, &segment_location).await?;
+        segment_locations.push((segment_location, SegmentInfo::VERSION));
+    }
+    Ok(segment_locations)
+}
+
+async fn target_select_segments_by_level(
+    level_counts: &[(i32, usize)],
+    thresholds: BlockThresholds,
+    max_tasks: usize,
+) -> anyhow::Result<(u64, ReclusterParts)> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let segment_locations = gen_recluster_segments_by_level(
+        &data_accessor,
+        &location_generator,
+        level_counts,
+        1000,
+        100,
+        100,
+        thresholds,
         cluster_key_id,
-        vec![Scalar::from(1i64)],
-        vec![Scalar::from(3i64)],
-        0,
-        None,
-    )))
-    .await?;
-    test_segment_locations.push(segment_location);
-    test_block_locations.push(block_location);
-
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
-        cluster_key_id,
-        vec![Scalar::from(2i64)],
-        vec![Scalar::from(4i64)],
-        0,
-        None,
-    )))
-    .await?;
-    test_segment_locations.push(segment_location);
-    test_block_locations.push(block_location);
-
-    let schema = TableSchemaRef::new(TableSchema::empty());
-    let (segment_location, block_location) = gen_test_seg(Some(ClusterStatistics::new(
-        cluster_key_id,
-        vec![Scalar::from(4i64)],
-        vec![Scalar::from(5i64)],
-        0,
-        None,
-    )))
-    .await?;
-    test_segment_locations.push(segment_location);
-    test_block_locations.push(block_location);
-
-    let ctx: Arc<dyn TableContext> = ctx.clone();
-    let segment_locations = create_segment_location_vector(test_segment_locations, None);
-    let compact_segments = FuseTable::segment_pruning(
-        &ctx,
-        schema.clone(),
-        data_accessor.clone(),
-        &None,
-        segment_locations,
     )
     .await?;
 
-    let mutator = ReclusterMutator::new(
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations(
         ctx,
         data_accessor,
-        schema,
-        vec![test_cluster_key_expr()],
-        1.0,
-        BlockThresholds::default(),
+        segment_locations,
+        thresholds,
         cluster_key_id,
-        1,
-    );
-
-    let compact_segments = mutator.select_segments(&compact_segments, 8)?;
-    let (_, parts) = mutator.target_select(compact_segments).await?;
-    let need_recluster = !parts.is_empty();
-    assert!(need_recluster);
-    let tasks = parts.tasks;
-    assert_eq!(tasks.len(), 1);
-    let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
-    assert_eq!(total_block_nums, 3);
-
-    Ok(())
+        max_tasks,
+        1000,
+    )
+    .await?;
+    Ok((block_num, parts))
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_recluster_mutator_zero_task_segment_rebuild() -> anyhow::Result<()> {
-    let fixture = TestFixture::setup().await?;
-    let ctx = fixture.new_query_ctx().await?;
-    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
-
-    let data_accessor = ctx.get_application_level_data_operator()?.operator();
-
-    let cluster_key_id = 0;
-    let thresholds = BlockThresholds::new(1000, 1_000_000, 100_000, 10);
-    let gen_test_seg = |cluster_stats: Option<ClusterStatistics>| async {
-        let block_id = Uuid::new_v4().simple().to_string();
-        let location = (block_id, DataBlock::VERSION);
-        let test_block_meta = Arc::new(BlockMeta::new(
-            1000,
-            1_000_000,
-            100_000,
-            HashMap::default(),
-            HashMap::default(),
-            cluster_stats,
-            location.clone(),
-            None,
-            0,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            meta::Compression::Lz4Raw,
-            Some(Utc::now()),
-        ));
-
-        let statistics = reduce_block_metas(&[test_block_meta.as_ref()], thresholds, Some(0));
-
-        let segment = SegmentInfo::new(vec![test_block_meta], statistics);
-        let segment_location = location_generator
-            .gen_segment_info_location(TestFixture::default_table_meta_timestamps(), false);
-        segment
-            .write_meta(&data_accessor, &segment_location)
-            .await?;
-        Ok::<_, ErrorCode>((segment_location, location))
-    };
-
-    let mut test_segment_locations = vec![];
-    for (min, max) in [(1i32, 2i32), (3, 4), (5, 6)] {
-        let (segment_location, _) = gen_test_seg(Some(ClusterStatistics::new(
-            cluster_key_id,
-            vec![Scalar::from(min)],
-            vec![Scalar::from(max)],
-            0,
-            None,
-        )))
-        .await?;
-        test_segment_locations.push((segment_location, SegmentInfo::VERSION));
-    }
-
+async fn target_select_segment_locations(
+    ctx: Arc<dyn TableContext>,
+    data_accessor: opendal::Operator,
+    segment_locations: Vec<meta::Location>,
+    thresholds: BlockThresholds,
+    cluster_key_id: u32,
+    max_tasks: usize,
+    max_segments: usize,
+) -> anyhow::Result<(usize, u64, ReclusterParts)> {
     let schema = TableSchemaRef::new(TableSchema::empty());
-    let ctx: Arc<dyn TableContext> = ctx.clone();
-    let segment_locations = create_segment_location_vector(test_segment_locations, None);
+    let segment_locations = create_segment_location_vector(segment_locations, None);
     let compact_segments = FuseTable::segment_pruning(
         &ctx,
         schema.clone(),
@@ -259,14 +300,191 @@ async fn test_recluster_mutator_zero_task_segment_rebuild() -> anyhow::Result<()
         1.0,
         thresholds,
         cluster_key_id,
-        1,
+        max_tasks,
     );
-    let compact_segments = mutator.select_segments(&compact_segments, 8)?;
-    let (_, parts) = mutator.target_select(compact_segments).await?;
 
-    assert!(parts.tasks.is_empty());
-    assert_eq!(parts.remained_blocks.len(), 3);
-    assert_eq!(parts.removed_segment_indexes.len(), 3);
+    let compact_segments = mutator.select_segments(&compact_segments, max_segments)?;
+    let selected_segments = compact_segments.len();
+    let (block_num, parts) = mutator.target_select(compact_segments).await?;
+    Ok((selected_segments, block_num, parts))
+}
+
+fn task_part_counts(parts: &ReclusterParts) -> Vec<usize> {
+    parts
+        .tasks
+        .iter()
+        .map(|task| task.parts.len())
+        .collect::<Vec<_>>()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_limits_removed_segments_to_selected_blocks() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[
+            vec![(1, 10), (2, 9), (12, 13)],
+            vec![(20, 21), (22, 23)],
+            vec![(30, 31), (32, 33)],
+        ],
+        1000,
+        100,
+        100,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (selected_segments, block_num, parts) = target_select_segment_locations(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        1,
+        1000,
+    )
+    .await?;
+
+    assert_eq!(selected_segments, 3);
+    assert_eq!(block_num, 2);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(task_part_counts(&parts), vec![2]);
+    assert_eq!(parts.removed_segment_indexes, vec![0]);
+    assert_eq!(parts.remained_blocks.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_block_select() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::default();
+    let segment_locations = gen_recluster_segments_by_ranges(
+        &data_accessor,
+        &location_generator,
+        &[vec![(1, 3)], vec![(2, 4)], vec![(4, 5)]],
+        1,
+        1,
+        1,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, _, parts) = target_select_segment_locations(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        1,
+        8,
+    )
+    .await?;
+    let need_recluster = !parts.is_empty();
+    assert!(need_recluster);
+    let tasks = parts.tasks;
+    assert_eq!(tasks.len(), 1);
+    let total_block_nums = tasks.iter().map(|t| t.parts.len()).sum::<usize>();
+    assert_eq!(total_block_nums, 3);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_split_tasks_by_parallel_budget() -> anyhow::Result<()> {
+    let fixture = TestFixture::setup().await?;
+    let ctx = fixture.new_query_ctx().await?;
+    ctx.get_settings().set_recluster_block_size(1000)?;
+
+    let data_accessor = ctx.get_application_level_data_operator()?.operator();
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned());
+    let cluster_key_id = 0;
+    let thresholds = BlockThresholds::new(1000, 10, 10, 1000);
+
+    // 200 small blocks with four workers should be selected and split by the
+    // parallel budget, instead of collapsing into one or two oversized tasks.
+    let segment_locations = gen_recluster_segments(
+        &data_accessor,
+        &location_generator,
+        20,
+        10,
+        1000,
+        10,
+        10,
+        thresholds,
+        cluster_key_id,
+    )
+    .await?;
+
+    let ctx: Arc<dyn TableContext> = ctx.clone();
+    let (_, block_num, parts) = target_select_segment_locations(
+        ctx,
+        data_accessor,
+        segment_locations,
+        thresholds,
+        cluster_key_id,
+        4,
+        1000,
+    )
+    .await?;
+
+    assert_eq!(block_num, 200);
+    assert_eq!(parts.tasks.len(), 4);
+    assert_eq!(task_part_counts(&parts), vec![50, 50, 50, 50]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_only_lowest_small_batch_yields() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        target_select_segments_by_level(&[(0, 3), (1, 3), (2, 10)], thresholds, 1).await?;
+
+    assert_eq!(block_num, 3);
+    assert_eq!(parts.tasks.len(), 1);
+    assert_eq!(parts.tasks[0].level, 1);
+    assert_eq!(task_part_counts(&parts), vec![3]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_recluster_mutator_backfills_deferred_lowest_batch() -> anyhow::Result<()> {
+    let thresholds = BlockThresholds::new(1000, 100, 100, 10);
+    let (block_num, parts) =
+        target_select_segments_by_level(&[(1, 3), (2, 4)], thresholds, 2).await?;
+
+    assert_eq!(block_num, 7);
+    assert_eq!(parts.tasks.len(), 2);
+    assert_eq!(
+        parts
+            .tasks
+            .iter()
+            .map(|task| task.level)
+            .collect::<Vec<_>>(),
+        vec![2, 1]
+    );
+    assert_eq!(task_part_counts(&parts), vec![4, 3]);
 
     Ok(())
 }
@@ -379,7 +597,6 @@ async fn test_safety_for_recluster() -> anyhow::Result<()> {
                 ..
             } = parts;
             assert!(tasks.len() <= max_tasks);
-            assert!(!tasks.is_empty() || !remained_blocks.is_empty());
             eprintln!("tasks_num: {}, max_tasks: {}", tasks.len(), max_tasks);
             let mut blocks = Vec::new();
             for task in tasks.into_iter() {

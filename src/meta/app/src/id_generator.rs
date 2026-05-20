@@ -113,10 +113,6 @@ impl IdGenerator {
 
 impl kvapi::Key for IdGenerator {
     type ValueType = IdGeneratorValue;
-
-    fn parent(&self) -> Option<String> {
-        None
-    }
 }
 
 #[derive(Debug)]
@@ -124,10 +120,6 @@ pub struct IdGeneratorValue;
 
 impl kvapi::Value for IdGeneratorValue {
     type KeyType = IdGenerator;
-
-    fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-        []
-    }
 }
 
 #[cfg(test)]

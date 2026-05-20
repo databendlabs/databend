@@ -384,6 +384,61 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                         domains
                     });
                 }
+
+                if function.signature.name == "if" {
+                    if args_expr.len() < 3 || args_expr.len().is_multiple_of(2) {
+                        return (
+                            Expr::FunctionCall(FunctionCall {
+                                span: *span,
+                                id: id.clone(),
+                                function: function.clone(),
+                                generics: generics.clone(),
+                                args: args_expr,
+                                return_type: return_type.clone(),
+                            }),
+                            None,
+                        );
+                    }
+
+                    let mut simplified_args = Vec::with_capacity(args_expr.len());
+                    let mut found_true_branch = false;
+                    for cond_idx in (0..args_expr.len() - 1).step_by(2) {
+                        match args_expr[cond_idx].as_constant().map(|c| &c.scalar) {
+                            Some(Scalar::Boolean(true)) => {
+                                if simplified_args.is_empty() {
+                                    return (args_expr[cond_idx + 1].clone(), None);
+                                }
+                                simplified_args.push(args_expr[cond_idx + 1].clone());
+                                found_true_branch = true;
+                                break;
+                            }
+                            Some(Scalar::Boolean(false) | Scalar::Null) => {}
+                            _ => {
+                                simplified_args.push(args_expr[cond_idx].clone());
+                                simplified_args.push(args_expr[cond_idx + 1].clone());
+                            }
+                        }
+                    }
+
+                    if simplified_args.is_empty() {
+                        return (args_expr.last().unwrap().clone(), None);
+                    }
+                    if !found_true_branch {
+                        simplified_args.push(args_expr.last().unwrap().clone());
+                    }
+                    if simplified_args.len() != args_expr.len() {
+                        if let Ok(func_expr) = check_function(
+                            *span,
+                            "if",
+                            id.params(),
+                            &simplified_args,
+                            self.fn_registry,
+                        ) {
+                            return (func_expr, None);
+                        }
+                    }
+                }
+
                 let all_args_is_scalar = args_expr.iter().all(|arg| arg.as_constant().is_some());
                 let is_monotonicity = self
                     .fn_registry

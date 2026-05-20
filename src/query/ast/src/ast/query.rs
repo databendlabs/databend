@@ -1058,6 +1058,9 @@ impl Display for TableReference {
                     JoinOperator::RightAsof => {
                         write!(f, " ASOF RIGHT JOIN")?;
                     }
+                    JoinOperator::FullAsof => {
+                        write!(f, " ASOF FULL JOIN")?;
+                    }
                     JoinOperator::InnerAny => {
                         write!(f, " INNER ANY JOIN")?;
                     }
@@ -1149,6 +1152,7 @@ pub enum JoinOperator {
     Asof,
     LeftAsof,
     RightAsof,
+    FullAsof,
     // Any
     InnerAny,
     LeftAny,

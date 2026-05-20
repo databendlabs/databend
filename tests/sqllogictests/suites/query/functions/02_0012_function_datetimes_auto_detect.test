@@ -28,6 +28,16 @@ settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) 
 ----
 2023-03-05
 
+query TTT
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=1) select try_to_date('2027-1-1'), try_to_date('2027-01-1'), try_to_date('2027-1-01');
+----
+2027-01-01 2027-01-01 2027-01-01
+
+query T
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=0) select try_to_date('2027-1-1');
+----
+NULL
+
 # ============================================================
 # Positive: AUTO timestamp formats (DD-MON-YYYY family)
 # ============================================================
@@ -60,6 +70,16 @@ query T
 settings(enable_strict_datetime_parser=0, enable_auto_detect_datetime_format=1) select try_to_timestamp('2/18/2008 02:36:48.123');
 ----
 2008-02-18 02:36:48.123000
+
+query TTT
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=1) select try_to_timestamp('2027-1-1 02:03:04'), try_to_timestamp('2027-01-1 02:03:04'), try_to_timestamp('2027-1-01 02:03:04');
+----
+2027-01-01 02:03:04.000000 2027-01-01 02:03:04.000000 2027-01-01 02:03:04.000000
+
+query T
+settings(enable_strict_datetime_parser=1, enable_auto_detect_datetime_format=0) select try_to_timestamp('2027-1-1 02:03:04');
+----
+NULL
 
 # ============================================================
 # Positive: RFC 2822 (24h, with timezone)

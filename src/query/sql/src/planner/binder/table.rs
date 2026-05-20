@@ -132,13 +132,20 @@ impl Binder {
         on_error_mode: Option<OnErrorMode>,
     ) -> Result<(SExpr, BindContext)> {
         let start = std::time::Instant::now();
-        let max_column_position = self.metadata.read().get_max_column_position();
+        let (max_column_position, has_column_name_ref) = {
+            let metadata = self.metadata.read();
+            (
+                metadata.get_max_column_position(),
+                metadata.has_column_name_ref(),
+            )
+        };
         let table = table_ctx
             .create_stage_table(
                 stage_info,
                 files_info,
                 files_to_copy,
                 max_column_position,
+                has_column_name_ref,
                 on_error_mode,
             )
             .await?;
@@ -555,7 +562,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&res.expr, |nest_expr| {
+        let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match

@@ -53,9 +53,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for RowAccessPolicyNameIdentRaw {
         type KeyType = RowAccessPolicyIdToNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

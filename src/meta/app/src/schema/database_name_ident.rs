@@ -35,9 +35,7 @@ impl DatabaseNameIdentRaw {
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::StructKey;
 
-    use crate::primitive::Id;
     use crate::schema::DatabaseId;
     use crate::schema::database_name_ident::DatabaseNameIdent;
     use crate::tenant_key::resource::TenantResource;
@@ -47,14 +45,11 @@ mod kvapi_impl {
         const PREFIX: &'static str = "__fd_database";
         const TYPE: &'static str = "DatabaseNameIdent";
         const HAS_TENANT: bool = true;
-        type ValueType = Id<DatabaseId>;
+        type ValueType = DatabaseId;
     }
 
-    impl kvapi::Value for Id<DatabaseId> {
+    impl kvapi::Value for DatabaseId {
         type KeyType = DatabaseNameIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.inner().to_string_key()]
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.

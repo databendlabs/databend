@@ -59,14 +59,17 @@ use databend_common_io::geometry_type_name;
 use databend_common_io::read_srid;
 use geo::Area;
 use geo::BoundingRect;
+use geo::Buffer;
 use geo::Centroid;
 use geo::Contains;
 use geo::ConvexHull;
 use geo::Coord;
+use geo::Covers;
 use geo::Distance;
 use geo::Euclidean;
 use geo::Geometry;
 use geo::HasDimensions;
+use geo::HausdorffDistance;
 use geo::Haversine;
 use geo::Intersects;
 use geo::Length;
@@ -78,10 +81,13 @@ use geo::Point;
 use geo::Polygon;
 use geo::Rect;
 use geo::Relate;
+use geo::Simplify;
 use geo::ToDegrees;
 use geo::ToRadians;
 use geo::Triangle;
+use geo::Validation;
 use geo::Within;
+use geo::algorithm::buffer::BufferStyle;
 use geo::coord;
 use geo::dimensions::Dimensions;
 use geohash::decode_bbox;
@@ -859,6 +865,204 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry.register_passthrough_nullable_2_arg::<GeometryType, Float64Type, GeometryType, _, _>(
+        "st_simplify",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, Float64Type, GeometryType>(
+            |ewkb, tolerance, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.commit_row();
+                        return;
+                    }
+                }
+
+                match ewkb_to_geo(&mut Ewkb(ewkb)).and_then(|(geo, srid)| {
+                    let simplified = match geo {
+                        Geometry::LineString(g) => Geometry::LineString(g.simplify(tolerance.0)),
+                        Geometry::Polygon(g) => Geometry::Polygon(g.simplify(tolerance.0)),
+                        Geometry::MultiLineString(g) => {
+                            Geometry::MultiLineString(g.simplify(tolerance.0))
+                        }
+                        Geometry::MultiPolygon(g) => {
+                            Geometry::MultiPolygon(g.simplify(tolerance.0))
+                        }
+                        Geometry::Point(g) => Geometry::Point(g),
+                        Geometry::MultiPoint(g) => Geometry::MultiPoint(g),
+                        Geometry::GeometryCollection(_) => {
+                            return Err(ErrorCode::GeometryError(
+                                "st_simplify is not supported for GeometryCollection".to_string(),
+                            ));
+                        }
+                        other_geo => other_geo,
+                    };
+                    geo_to_ewkb(simplified, srid)
+                }) {
+                    Ok(data) => builder.put_slice(data.as_slice()),
+                    Err(e) => ctx.set_error(row, e.to_string()),
+                }
+                builder.commit_row();
+            },
+        ),
+    );
+
+    geometry_unary_fn::<BooleanType>("st_isvalid", registry, |geo, _| Ok(geo.is_valid()));
+    geometry_unary_fn::<Float64Type>("st_perimeter", registry, |geo, _| {
+        fn polygon_perimeter(p: &Polygon<f64>) -> f64 {
+            let mut len = 0f64;
+            for line in p.exterior().lines() {
+                len += Euclidean.length(&line);
+            }
+            for ring in p.interiors() {
+                for line in ring.lines() {
+                    len += Euclidean.length(&line);
+                }
+            }
+            len
+        }
+        let perimeter = match geo {
+            Geometry::Polygon(ref p) => polygon_perimeter(p),
+            Geometry::MultiPolygon(ref mp) => mp.iter().map(polygon_perimeter).sum(),
+            _ => 0f64,
+        };
+        let perimeter = (perimeter * 1_000_000_000_f64).round() / 1_000_000_000_f64;
+        Ok(perimeter.into())
+    });
+    geometry_binary_fn::<BooleanType>("st_covers", registry, |l, r, _| Ok(l.covers(&r)));
+    geometry_binary_fn::<BooleanType>("st_coveredby", registry, |l, r, _| {
+        Ok(l.relate(&r).is_coveredby())
+    });
+
+    geometry_binary_combine_fn::<Float64Type>("st_azimuth", registry, |l, r, _| match (l, r) {
+        (Geometry::Point(p1), Geometry::Point(p2)) => {
+            if p1 == p2 {
+                Ok(None)
+            } else {
+                let azimuth = f64::atan2(p2.x() - p1.x(), p2.y() - p1.y());
+                let azimuth = if azimuth < 0.0 {
+                    azimuth + 2.0 * std::f64::consts::PI
+                } else {
+                    azimuth
+                };
+                let azimuth = (azimuth * 1_000_000_000_f64).round() / 1_000_000_000_f64;
+                Ok(Some(azimuth.into()))
+            }
+        }
+        _ => Err(ErrorCode::GeometryError(
+            "st_azimuth only accepts Point geometries".to_string(),
+        )),
+    });
+
+    geometry_binary_fn::<Float64Type>("st_hausdorffdistance", registry, |l, r, _| {
+        let distance = l.hausdorff_distance(&r);
+        let distance = (distance * 1_000_000_000_f64).round() / 1_000_000_000_f64;
+        Ok(distance.into())
+    });
+
+    geometry_unary_fn::<GeometryType>("st_makepolygonoriented", registry, |geo, srid| match geo {
+        Geometry::LineString(line_string) => {
+            let points = line_string.into_points();
+            if points.len() < 4 {
+                Err(ErrorCode::GeometryError(format!(
+                    "Input lines must have at least 4 points, but got {}",
+                    points.len()
+                )))
+            } else if points.last() != points.first() {
+                Err(ErrorCode::GeometryError(
+                    "The first point and last point are not equal".to_string(),
+                ))
+            } else {
+                let polygon = Polygon::new(LineString::from(points), vec![]);
+                let geo: Geometry = polygon.into();
+                if !geo.is_valid() {
+                    return Err(ErrorCode::GeometryError(
+                        "Input line does not form a valid polygon".to_string(),
+                    ));
+                }
+                geo_to_ewkb(geo, srid)
+            }
+        }
+        _ => Err(ErrorCode::GeometryError(format!(
+            "Type {} is not supported as argument to st_makepolygonoriented",
+            geometry_type_name(&geo)
+        ))),
+    });
+
+    registry.register_combine_nullable_2_arg::<GeometryType, Float64Type, GeometryType, _, _>(
+        "st_buffer",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, Float64Type, NullableType<GeometryType>>(
+            |ewkb, distance, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.push_null();
+                        return;
+                    }
+                }
+
+                match ewkb_to_geo(&mut Ewkb(ewkb)) {
+                    Ok((geo, srid)) => {
+                        if matches!(geo, Geometry::GeometryCollection(_)) {
+                            ctx.set_error(
+                                row,
+                                "ST_BUFFER is not supported for GeometryCollection".to_string(),
+                            );
+                            builder.push_null();
+                            return;
+                        }
+
+                        let effective = match &geo {
+                            Geometry::Point(_)
+                            | Geometry::MultiPoint(_)
+                            | Geometry::Line(_)
+                            | Geometry::LineString(_)
+                            | Geometry::MultiLineString(_) => distance.0.abs(),
+                            _ => distance.0,
+                        };
+
+                        if effective == 0.0 {
+                            let wrapped = match geo {
+                                Geometry::Polygon(p) => Some(MultiPolygon::new(vec![p])),
+                                Geometry::MultiPolygon(mp) => Some(mp),
+                                _ => None,
+                            };
+                            match wrapped {
+                                Some(mp) => match geo_to_ewkb(Geometry::MultiPolygon(mp), srid) {
+                                    Ok(data) => builder.push(data.as_slice()),
+                                    Err(e) => {
+                                        ctx.set_error(row, e.to_string());
+                                        builder.push_null();
+                                    }
+                                },
+                                None => builder.push_null(),
+                            }
+                            return;
+                        }
+
+                        let buffered = geo.buffer_with_style(BufferStyle::new(effective));
+                        if buffered.0.is_empty() {
+                            builder.push_null();
+                            return;
+                        }
+                        match geo_to_ewkb(Geometry::MultiPolygon(buffered), srid) {
+                            Ok(data) => builder.push(data.as_slice()),
+                            Err(e) => {
+                                ctx.set_error(row, e.to_string());
+                                builder.push_null();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        ctx.set_error(row, e.to_string());
+                        builder.push_null();
+                    }
+                }
+            },
+        ),
+    )
 }
 
 fn st_transform_impl(

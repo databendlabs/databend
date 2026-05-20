@@ -552,8 +552,10 @@ impl ExecuteState {
                                 .with_context(make_error)?;
                         }
                         Err(err) => {
+                            let err = err.with_context(make_error());
+                            Executor::stop(&executor, Err(err.clone()));
                             sender.abort();
-                            return Err(err.with_context(make_error()));
+                            return Err(err);
                         }
                     };
                 }

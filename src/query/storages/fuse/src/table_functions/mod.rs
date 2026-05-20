@@ -34,6 +34,8 @@ mod fuse_virtual_column;
 mod set_cache_capacity;
 
 pub use clustering_information::ClusteringInformationFunc;
+pub use clustering_information::ClusteringInformationResponse;
+pub use clustering_information::get_clustering_information;
 pub use clustering_statistics::ClusteringStatisticsFunc;
 pub use databend_common_catalog::table_args::*;
 use databend_common_catalog::table_function::TableFunction;

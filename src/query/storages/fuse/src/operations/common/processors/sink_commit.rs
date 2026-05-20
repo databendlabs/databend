@@ -514,11 +514,6 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     table_stats_gen,
                 ) {
                     Ok(snapshot) => {
-                        set_compaction_num_block_hint(
-                            self.ctx.as_ref(),
-                            table_info.name.as_str(),
-                            &snapshot.summary,
-                        );
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
                             snapshot,
@@ -630,6 +625,8 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     .location_gen
                     .gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
                 self.dal.write(&location, data).await?;
+                let imperfect_count =
+                    snapshot.summary.block_count - snapshot.summary.perfect_block_count;
 
                 // enable auto analyze.
                 let mut enable_auto_analyze = false;
@@ -661,6 +658,12 @@ where F: SnapshotGenerator + Send + Sync + 'static
                     .await
                 {
                     Ok(_) => {
+                        set_compaction_num_block_hint(
+                            self.ctx.as_ref(),
+                            &table_info,
+                            imperfect_count,
+                        );
+
                         if self.need_truncate() {
                             // Truncate table operation should be executed in the context of ddl,
                             // which implies auto commit mode.

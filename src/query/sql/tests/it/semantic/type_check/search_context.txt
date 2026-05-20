@@ -1,0 +1,13 @@
+=== match_requires_where_context ===
+description: match search should remain restricted to WHERE-clause resolution.
+sql: match(text, 'needle')
+status: error
+code: 1065
+message: search function match can only be used in where clause
+
+=== query_requires_where_context ===
+description: query search should remain restricted to WHERE-clause resolution.
+sql: query('text:needle')
+status: error
+code: 1065
+message: search function query can only be used in where clause

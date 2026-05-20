@@ -1,0 +1,15 @@
+statement ok
+drop stage if exists empty_stage_select_error;
+
+statement ok
+create stage empty_stage_select_error file_format = (type = parquet);
+
+query error 1065.*no files found\. specify a prefix/pattern/files that matches at least one file
+select a from @empty_stage_select_error;
+
+query ?
+select * from @empty_stage_select_error
+----
+
+statement ok
+drop stage empty_stage_select_error;

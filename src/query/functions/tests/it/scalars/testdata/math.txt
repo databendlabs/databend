@@ -159,6 +159,50 @@ output domain  : {1.5707963267..=1.5707963267}
 output         : 1.5707963267
 
 
+ast            : asin(a)
+raw expr       : asin(a::Float64)
+checked expr   : asin<Float64>(a)
+evaluation:
++--------+------------+--------------------------------+
+|        | a          | Output                         |
++--------+------------+--------------------------------+
+| Type   | Float64    | Float64                        |
+| Domain | {-1..=0.5} | {-1.5707963267..=0.5235987755} |
+| Row 0  | -1         | -1.5707963267                  |
+| Row 1  | -0.5       | -0.5235987755                  |
+| Row 2  | 0.5        | 0.5235987755                   |
++--------+------------+--------------------------------+
+evaluation (internal):
++--------+-------------------------------------------------------+
+| Column | Data                                                  |
++--------+-------------------------------------------------------+
+| a      | Column(Float64([-1, -0.5, 0.5]))                      |
+| Output | Float64([-1.5707963267, -0.5235987755, 0.5235987755]) |
++--------+-------------------------------------------------------+
+
+
+ast            : asin(a) > 2
+raw expr       : gt(asin(a::Float64), 2)
+checked expr   : gt<Float64, Float64>(asin<Float64>(a), CAST<UInt8>(2_u8 AS Float64))
+optimized expr : gt<Float64, Float64>(asin<Float64>(a), 2_f64)
+evaluation:
++--------+-------------+---------------+
+|        | a           | Output        |
++--------+-------------+---------------+
+| Type   | Float64     | Boolean       |
+| Domain | {0.5..=1.1} | {FALSE, TRUE} |
+| Row 0  | 0.5         | false         |
+| Row 1  | 1.1         | true          |
++--------+-------------+---------------+
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Float64([0.5, 1.1])) |
+| Output | Boolean([0b______10])       |
++--------+-----------------------------+
+
+
 ast            : acos(0)
 raw expr       : acos(0)
 checked expr   : acos<Float64>(CAST<UInt8>(0_u8 AS Float64))
@@ -166,6 +210,28 @@ optimized expr : 1.5707963267_f64
 output type    : Float64
 output domain  : {1.5707963267..=1.5707963267}
 output         : 1.5707963267
+
+
+ast            : acos(a) > 4
+raw expr       : gt(acos(a::Float64), 4)
+checked expr   : gt<Float64, Float64>(acos<Float64>(a), CAST<UInt8>(4_u8 AS Float64))
+optimized expr : gt<Float64, Float64>(acos<Float64>(a), 4_f64)
+evaluation:
++--------+-------------+---------------+
+|        | a           | Output        |
++--------+-------------+---------------+
+| Type   | Float64     | Boolean       |
+| Domain | {0.5..=1.1} | {FALSE, TRUE} |
+| Row 0  | 0.5         | false         |
+| Row 1  | 1.1         | true          |
++--------+-------------+---------------+
+evaluation (internal):
++--------+-----------------------------+
+| Column | Data                        |
++--------+-----------------------------+
+| a      | Column(Float64([0.5, 1.1])) |
+| Output | Boolean([0b______10])       |
++--------+-----------------------------+
 
 
 ast            : atan(null)

@@ -2166,6 +2166,44 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
+    registry.register_passthrough_nullable_2_arg::<VariantType, VariantType, VariantType, _, _>(
+        "array_concat",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, VariantType, VariantType>(
+            |left, right, output, ctx| {
+                if let Some(validity) = &ctx.validity
+                    && !validity.get_bit(output.len())
+                {
+                    output.commit_row();
+                    return;
+                }
+
+                let left_val = RawJsonb::new(left);
+                let right_val = RawJsonb::new(right);
+                let build_array = || {
+                    let mut new_vals = left_val
+                        .array_values()
+                        .map(|vals_opt| vals_opt.unwrap_or(vec![left_val.to_owned()]))?;
+                    let mut right_vals = right_val
+                        .array_values()
+                        .map(|vals_opt| vals_opt.unwrap_or(vec![right_val.to_owned()]))?;
+                    new_vals.append(&mut right_vals);
+                    OwnedJsonb::build_array(new_vals.iter().map(|v| v.as_raw()))
+                };
+
+                match build_array() {
+                    Ok(owned_jsonb) => {
+                        output.put_slice(owned_jsonb.as_ref());
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                    }
+                }
+                output.commit_row();
+            },
+        ),
+    );
+
     registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _>(
         "array_remove_first",
         |_, _| FunctionDomain::MayThrow,
