@@ -576,7 +576,6 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        // TODO: When the query is not executed for a long time after submission, we need to remove it
         match queries_coordinator.get_mut(&fragments.query_id) {
             None => Err(ErrorCode::Internal(format!(
                 "Query {} not found in cluster.",
