@@ -243,6 +243,13 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
                 0.0
             });
         }
+        if cmp_min == Ordering::Equal && cmp_max == Ordering::Equal {
+            return StatEstimate::exact(if not_eq {
+                0.0
+            } else {
+                self.non_null_cardinality
+            });
+        }
 
         estimate_ndv_true_count(self.stat.ndv, not_eq, self.non_null_cardinality)
     }

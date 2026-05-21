@@ -234,7 +234,7 @@ fn check_histogram_distribution<D>(
     if !num_values.is_finite() || num_values < 0.0 {
         return Err(format!("histogram num_values is invalid: {num_values}"));
     }
-    let histogram_ndv = histogram.num_distinct_values();
+    let histogram_ndv = histogram.ndv().expected;
     if !histogram_ndv.is_finite() || histogram_ndv < 0.0 {
         return Err(format!("histogram ndv is invalid: {histogram_ndv}"));
     }
