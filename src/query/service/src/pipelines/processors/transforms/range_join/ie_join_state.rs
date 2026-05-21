@@ -399,7 +399,7 @@ impl RangeJoinState {
             ));
         }
         for filter in self.other_conditions.iter() {
-            left_result_block = filter_block(left_result_block, filter)?;
+            left_result_block = filter_block(left_result_block, filter, &self.function_context)?;
         }
         if !left_match.is_empty() || !right_match.is_empty() {
             let column = &left_result_block

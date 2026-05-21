@@ -74,6 +74,44 @@ WHERE east.dur < west.time AND east.dur + west.time < east.rev order by 1, 2;
 ----
 
 statement ok
+create table range_join_context_t1(c1 string, c2 string);
+
+statement ok
+insert into range_join_context_t1 values('2000-01-01', '1-1'), ('2020-01-01', '1-2');
+
+statement ok
+create table range_join_context_t2(c1 int, c2 string);
+
+statement ok
+insert into range_join_context_t2 values(1, '2-1'), (1, '2-2');
+
+query I
+select count(*)
+from (
+  select date_sub(year, t2.c1, today()) as d1, t1.c1 as d2
+  from range_join_context_t1 t1 cross join range_join_context_t2 t2
+)
+where d1 >= d2;
+----
+4
+
+query I
+select count(*)
+from (
+  select date_sub(year, t2.c1, today()) as d1, t1.c1 as d2
+  from range_join_context_t1 t1 cross join range_join_context_t2 t2
+)
+where d1 <= d2;
+----
+0
+
+statement ok
+drop table range_join_context_t1;
+
+statement ok
+drop table range_join_context_t2;
+
+statement ok
 drop table east;
 
 statement ok
