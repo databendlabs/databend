@@ -78,7 +78,7 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t2 (a int null, v json null) storage_format = 'parquet'
+create table t2 (a int null, v json null) storage_format = 'parquet' enable_virtual_column = true
 
 statement ok
 insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10},"d":20}'))
@@ -432,14 +432,14 @@ CREATE OR REPLACE TABLE data_source_a (
     metadata_object VARIANT,
     content_object VARIANT,
     refresh_time TIMESTAMP
-);
+) enable_virtual_column = true;
 
 statement ok
 CREATE OR REPLACE TABLE config_table (
     entity_id VARCHAR,
     source_id VARCHAR,
     process_mode VARCHAR
-);
+) enable_virtual_column = true;
 
 statement ok
 INSERT INTO data_source_a VALUES
@@ -641,12 +641,12 @@ CREATE OR REPLACE TABLE data_main (
     record_id VARCHAR,
     category_id VARCHAR,
     data_object VARIANT
-);
+) enable_virtual_column = true;
 
 statement ok
 CREATE OR REPLACE TABLE data_staging (
     data_object VARIANT
-);
+) enable_virtual_column = true;
 
 statement ok
 INSERT INTO data_main (record_id, category_id, data_object) VALUES

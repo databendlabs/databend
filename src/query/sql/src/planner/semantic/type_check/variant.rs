@@ -53,6 +53,9 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 
+// Keep this local to avoid introducing a dependency from common-sql to common-storages-fuse.
+const FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN: &str = "enable_virtual_column";
+
 impl<'a> CoreExprArena<'a> {
     pub(super) fn lower_map_access_expr(
         &mut self,
@@ -527,6 +530,9 @@ where A: super::TypeCheckAdapter
         scalar: &ScalarExpr,
         keypaths: OwnedKeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
+        if !self.bind_context.allow_virtual_column {
+            return None;
+        }
         let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = scalar else {
             return None;
         };
@@ -661,7 +667,14 @@ where A: super::TypeCheckAdapter
         column_name: &str,
         owned_keypaths: OwnedKeyPaths,
     ) -> Option<Box<(ScalarExpr, DataType)>> {
-        if !self.bind_context.allow_virtual_column {
+        if !self
+            .metadata
+            .read()
+            .table(table_index)
+            .table()
+            .get_table_info()
+            .get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
+        {
             return None;
         }
         let key_name = Self::owned_keypaths_to_name(column_name, &owned_keypaths);
@@ -736,21 +749,10 @@ where A: super::TypeCheckAdapter
         let keypaths = KeyPaths { paths: key_paths };
 
         // try rewrite as virtual column and pushdown to storage layer.
-        if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
-            if column.index.as_usize() < self.metadata.read().columns().len() {
-                let column_entry = self.metadata.read().column(column.index).clone();
-                if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
-                    if let Some(box (scalar, data_type)) = self.try_rewrite_owned_virtual_column(
-                        span,
-                        base_column.table_index,
-                        base_column.column_id,
-                        &base_column.column_name,
-                        keypaths.to_owned(),
-                    ) {
-                        return Ok(Box::new((scalar, data_type)));
-                    }
-                }
-            }
+        if let Some(box (scalar, data_type)) =
+            self.try_rewrite_variant_keypaths(span, &scalar, keypaths.to_owned())
+        {
+            return Ok(Box::new((scalar, data_type)));
         }
 
         let keypaths_str = format!("{}", keypaths);

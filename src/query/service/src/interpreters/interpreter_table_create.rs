@@ -78,6 +78,7 @@ use crate::interpreters::common::table_option_validation::is_valid_data_page_byt
 use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
 use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
@@ -437,9 +438,10 @@ impl CreateTableInterpreter {
                 );
             }
         }
-        if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
-            FuseStorageFormat::from_str(storage_format)?;
-        }
+        let storage_format = match options.get(OPT_KEY_STORAGE_FORMAT) {
+            Some(storage_format) => FuseStorageFormat::from_str(storage_format)?,
+            None => FuseStorageFormat::Parquet,
+        };
         if let Some(segment_format) = options.get(OPT_KEY_SEGMENT_FORMAT) {
             FuseSegmentFormat::from_str(segment_format)?;
         }
@@ -477,6 +479,8 @@ impl CreateTableInterpreter {
         is_valid_data_retention_period(&table_meta.options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&table_meta.options, storage_format)?;
         is_valid_data_page_rows(&table_meta.options)?;
         is_valid_data_page_bytes(&table_meta.options)?;
 
