@@ -1,0 +1,508 @@
+=== join_type_cross ===
+description: CROSS cardinality and join-key statistic propagation.
+join type     : CROSS
+case          : cross_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : cross_join
+sql           : SELECT * FROM l CROSS JOIN r
+join          : CROSS cardinality=234.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[1..1:5.000/1.000, 2..2:7.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
+
+case          : cross_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : cross_join
+sql           : SELECT * FROM l CROSS JOIN r
+join          : CROSS cardinality=234.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_inner ===
+description: INNER cardinality and join-key statistic propagation.
+join type     : INNER
+case          : inner_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=58.000, ndv=3.000, buckets=[1..1:11.600/0.600, 2..3:23.200/1.200, 4..5:23.200/1.200]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=58.000, ndv=3.000, buckets=[1..1:11.600/0.600, 2..3:23.200/1.200, 4..5:23.200/1.200]
+
+case          : inner_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : inner_join
+sql           : SELECT * FROM l INNER JOIN r ON l.k = r.k
+join          : INNER cardinality=0.000
+
+
+=== join_type_inner_any ===
+description: INNER ANY cardinality and join-key statistic propagation.
+join type     : INNER ANY
+case          : inner_any_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : inner_any_join
+sql           : SELECT * FROM l INNER ANY JOIN r ON l.k = r.k
+join          : INNER ANY cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : inner_any_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : inner_any_join
+sql           : SELECT * FROM l INNER ANY JOIN r ON l.k = r.k
+join          : INNER ANY cardinality=0.000
+
+
+=== join_type_left_outer ===
+description: LEFT OUTER cardinality and join-key statistic propagation.
+join type     : LEFT OUTER
+case          : left_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : right_join
+sql           : SELECT * FROM l RIGHT JOIN r ON l.k = r.k
+join          : LEFT OUTER cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : left_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : right_join
+sql           : SELECT * FROM l RIGHT JOIN r ON l.k = r.k
+join          : LEFT OUTER cardinality=26.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_left_any ===
+description: LEFT ANY cardinality and join-key statistic propagation.
+join type     : LEFT ANY
+case          : left_any_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : left_any_join
+sql           : SELECT * FROM l LEFT ANY JOIN r ON l.k = r.k
+join          : LEFT ANY cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : left_any_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : left_any_join
+sql           : SELECT * FROM l LEFT ANY JOIN r ON l.k = r.k
+join          : LEFT ANY cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=none
+
+
+=== join_type_right_outer ===
+description: RIGHT OUTER cardinality and join-key statistic propagation.
+join type     : RIGHT OUTER
+case          : right_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : left_join
+sql           : SELECT * FROM l LEFT JOIN r ON l.k = r.k
+join          : RIGHT OUTER cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : right_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : left_join
+sql           : SELECT * FROM l LEFT JOIN r ON l.k = r.k
+join          : RIGHT OUTER cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=none
+
+
+=== join_type_right_any ===
+description: RIGHT ANY cardinality and join-key statistic propagation.
+join type     : RIGHT ANY
+case          : right_any_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : right_any_join
+sql           : SELECT * FROM l RIGHT ANY JOIN r ON l.k = r.k
+join          : RIGHT ANY cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : right_any_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : right_any_join
+sql           : SELECT * FROM l RIGHT ANY JOIN r ON l.k = r.k
+join          : RIGHT ANY cardinality=26.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_full_outer ===
+description: FULL OUTER cardinality and join-key statistic propagation.
+join type     : FULL OUTER
+case          : full_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : full_join
+sql           : SELECT * FROM l FULL JOIN r ON l.k = r.k
+join          : FULL OUTER cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : full_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : full_join
+sql           : SELECT * FROM l FULL JOIN r ON l.k = r.k
+join          : FULL OUTER cardinality=35.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_left_semi ===
+description: LEFT SEMI cardinality and join-key statistic propagation.
+join type     : LEFT SEMI
+case          : left_semi_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : right_semi_join
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
+join          : LEFT SEMI cardinality=26.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[1..1:5.000/1.000, 2..2:7.000/1.000, 3..3:6.000/1.000, 5..5:8.000/1.000]
+
+case          : left_semi_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : right_semi_join
+sql           : SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k
+join          : LEFT SEMI cardinality=0.000
+
+
+=== join_type_right_semi ===
+description: RIGHT SEMI cardinality and join-key statistic propagation.
+join type     : RIGHT SEMI
+case          : right_semi_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : left_semi_join
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k = r.k
+join          : RIGHT SEMI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : right_semi_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : left_semi_join
+sql           : SELECT * FROM l LEFT SEMI JOIN r ON l.k = r.k
+join          : RIGHT SEMI cardinality=0.000
+
+case          : exists_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : exists
+sql           : SELECT * FROM l WHERE EXISTS (SELECT 1 FROM r WHERE l.k = r.k)
+join          : RIGHT SEMI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : exists_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : exists
+sql           : SELECT * FROM l WHERE EXISTS (SELECT 1 FROM r WHERE l.k = r.k)
+join          : RIGHT SEMI cardinality=0.000
+
+
+=== join_type_left_anti ===
+description: LEFT ANTI cardinality and join-key statistic propagation.
+join type     : LEFT ANTI
+case          : left_anti_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : right_anti_join
+sql           : SELECT * FROM l RIGHT ANTI JOIN r ON l.k = r.k
+join          : LEFT ANTI cardinality=26.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : left_anti_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : right_anti_join
+sql           : SELECT * FROM l RIGHT ANTI JOIN r ON l.k = r.k
+join          : LEFT ANTI cardinality=26.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_right_anti ===
+description: RIGHT ANTI cardinality and join-key statistic propagation.
+join type     : RIGHT ANTI
+case          : right_anti_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : left_anti_join
+sql           : SELECT * FROM l LEFT ANTI JOIN r ON l.k = r.k
+join          : RIGHT ANTI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : right_anti_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : left_anti_join
+sql           : SELECT * FROM l LEFT ANTI JOIN r ON l.k = r.k
+join          : RIGHT ANTI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+case          : not_exists_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : not_exists
+sql           : SELECT * FROM l WHERE NOT EXISTS (SELECT 1 FROM r WHERE l.k = r.k)
+join          : RIGHT ANTI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : not_exists_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : not_exists
+sql           : SELECT * FROM l WHERE NOT EXISTS (SELECT 1 FROM r WHERE l.k = r.k)
+join          : RIGHT ANTI cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_asof ===
+description: ASOF cardinality and join-key statistic propagation.
+join type     : ASOF
+case          : asof_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : asof_join
+sql           : SELECT * FROM l ASOF JOIN r ON l.k = r.k AND l.t >= r.t
+join          : ASOF cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : asof_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : asof_join
+sql           : SELECT * FROM l ASOF JOIN r ON l.k = r.k AND l.t >= r.t
+join          : ASOF cardinality=0.000
+
+
+=== join_type_left_asof ===
+description: LEFT ASOF cardinality and join-key statistic propagation.
+join type     : LEFT ASOF
+case          : left_asof_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : asof_left_join
+sql           : SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t
+join          : LEFT ASOF cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : left_asof_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : asof_left_join
+sql           : SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t
+join          : LEFT ASOF cardinality=26.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_right_asof ===
+description: RIGHT ASOF cardinality and join-key statistic propagation.
+join type     : RIGHT ASOF
+case          : right_asof_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : asof_right_join
+sql           : SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t
+join          : RIGHT ASOF cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : right_asof_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : asof_right_join
+sql           : SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t
+join          : RIGHT ASOF cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=none
+
+
+=== join_type_full_asof ===
+description: FULL ASOF cardinality and join-key statistic propagation.
+join type     : FULL ASOF
+case          : full_asof_join_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : asof_full_join
+sql           : SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t
+join          : FULL ASOF cardinality=58.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : full_asof_join_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : asof_full_join
+sql           : SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t
+join          : FULL ASOF cardinality=35.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_left_mark ===
+description: LEFT MARK cardinality and join-key statistic propagation.
+join type     : LEFT MARK
+case          : left_mark_from_any_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : left_mark_from_any_projection
+sql           : SELECT l.k = ANY (SELECT r.k FROM r) FROM l
+join          : LEFT MARK cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : left_mark_from_any_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : left_mark_from_any_projection
+sql           : SELECT l.k = ANY (SELECT r.k FROM r) FROM l
+join          : LEFT MARK cardinality=9.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
+=== join_type_right_mark ===
+description: RIGHT MARK cardinality and join-key statistic propagation.
+join type     : RIGHT MARK
+case          : right_mark_from_any_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : right_mark_from_any_projection
+sql           : SELECT r.k = ANY (SELECT l.k FROM l) FROM r
+join          : RIGHT MARK cardinality=26.000
+stat          : r.k (#0) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : l.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+
+case          : right_mark_from_any_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : right_mark_from_any_projection
+sql           : SELECT r.k = ANY (SELECT l.k FROM l) FROM r
+join          : RIGHT MARK cardinality=26.000
+stat          : r.k (#0) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+stat          : l.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+
+
+=== join_type_left_single ===
+description: LEFT SINGLE cardinality and join-key statistic propagation.
+join type     : LEFT SINGLE
+case          : left_single_from_scalar_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : left_single_from_scalar_projection
+sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
+join          : LEFT SINGLE cardinality=26.000
+stat          : r.k (#0) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+stat          : l.k (#2) min=1, max=5, ndv=0.600, null=0.000, histogram=none
+
+case          : left_single_from_scalar_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : left_single_from_scalar_projection
+sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
+join          : LEFT SINGLE cardinality=26.000
+stat          : r.k (#0) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+stat          : l.k (#2) min=1, max=5, ndv=0.600, null=0.000, histogram=none
+
+
+=== join_type_right_single ===
+description: RIGHT SINGLE cardinality and join-key statistic propagation.
+join type     : RIGHT SINGLE
+case          : right_single_internal_overlap
+description   : Histograms overlap, so join-key estimates should consume and propagate histogram stats.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=1, max=5, ndv=4
+query         : internal_right_single
+input         : optimizer-internal RightSingle branch
+join          : RIGHT SINGLE cardinality=26.000
+stat          : left.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : right.k (#1) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : right_single_internal_no_overlap
+description   : Histograms do not overlap, so inner matches should be zero before preservation rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : internal_right_single
+input         : optimizer-internal RightSingle branch
+join          : RIGHT SINGLE cardinality=26.000
+stat          : left.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : right.k (#1) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
+
+
