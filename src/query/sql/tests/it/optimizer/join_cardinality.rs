@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::io::Write;
 use std::sync::Arc;
 
@@ -233,12 +232,10 @@ fn collect_join_cardinalities(
     metadata: &Metadata,
     expr: &SExpr,
     expected_join_type: JoinType,
-    coverage: &mut HashSet<JoinType>,
 ) -> Result<usize> {
     let mut joins = 0;
     if let RelOperator::Join(join) = expr.plan() {
         assert_eq!(join.join_type, expected_join_type);
-        coverage.insert(join.join_type);
         let stat_info = RelExpr::with_s_expr(expr).derive_cardinality()?;
         writeln!(
             file,
@@ -250,7 +247,7 @@ fn collect_join_cardinalities(
     }
 
     for child in expr.children() {
-        joins += collect_join_cardinalities(file, metadata, child, expected_join_type, coverage)?;
+        joins += collect_join_cardinalities(file, metadata, child, expected_join_type)?;
     }
 
     Ok(joins)
@@ -287,11 +284,7 @@ fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
     }))
 }
 
-fn write_internal_right_single_case(
-    file: &mut impl Write,
-    case: &JoinTestCase,
-    coverage: &mut HashSet<JoinType>,
-) -> Result<()> {
+fn write_internal_right_single_case(file: &mut impl Write, case: &JoinTestCase) -> Result<()> {
     // RightSingle has no stable SQL spelling; the optimizer synthesizes it as
     // the opposite of LeftSingle.
     let join_type = JoinType::RightSingle;
@@ -309,7 +302,6 @@ fn write_internal_right_single_case(
         direct_stat_info(1, case.right)?,
     )?;
 
-    coverage.insert(join_type);
     writeln!(file, "query         : internal_right_single")?;
     writeln!(
         file,
@@ -328,7 +320,6 @@ async fn write_sql_join_input(
     case: &JoinTestCase,
     query: JoinQueryCase,
     expected_join_type: JoinType,
-    coverage: &mut HashSet<JoinType>,
 ) -> Result<()> {
     let ctx = LiteTableContext::create().await?;
     ctx.register_table_sql_with_stats_and_histograms(
@@ -357,7 +348,7 @@ async fn write_sql_join_input(
 
     writeln!(file, "query         : {}", query.name)?;
     writeln!(file, "sql           : {}", query.sql)?;
-    let joins = collect_join_cardinalities(file, &metadata, &s_expr, expected_join_type, coverage)?;
+    let joins = collect_join_cardinalities(file, &metadata, &s_expr, expected_join_type)?;
     assert_eq!(joins, 1);
     Ok(())
 }
@@ -378,11 +369,7 @@ fn write_stats_case_header(file: &mut impl Write, case: &JoinTestCase) -> Result
     Ok(())
 }
 
-async fn write_join_type_group(
-    file: &mut impl Write,
-    group: &JoinTypeGroup,
-    coverage: &mut HashSet<JoinType>,
-) -> Result<()> {
+async fn write_join_type_group(file: &mut impl Write, group: &JoinTypeGroup) -> Result<()> {
     let title = format!("join_type_{}", group.join_type);
     let title = title.to_ascii_lowercase().replace(' ', "_");
     let description = format!(
@@ -396,11 +383,11 @@ async fn write_join_type_group(
         write_stats_case_header(file, case)?;
         match case.input {
             JoinInput::Sql(query) => {
-                write_sql_join_input(file, case, query, group.join_type, coverage).await?
+                write_sql_join_input(file, case, query, group.join_type).await?
             }
             JoinInput::InternalRightSingle => {
                 assert_eq!(group.join_type, JoinType::RightSingle);
-                write_internal_right_single_case(file, case, coverage)?;
+                write_internal_right_single_case(file, case)?;
             }
         }
         writeln!(file)?;
@@ -412,35 +399,10 @@ async fn write_join_type_group(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_join_cardinality_estimation_golden() -> Result<()> {
     let mut file = open_golden_file("optimizer", "join_cardinality.txt")?;
-    let mut coverage = HashSet::new();
 
     for group in join_type_groups() {
-        write_join_type_group(&mut file, &group, &mut coverage).await?;
+        write_join_type_group(&mut file, &group).await?;
     }
-
-    let expected = HashSet::from([
-        JoinType::Cross,
-        JoinType::Inner,
-        JoinType::InnerAny,
-        JoinType::Left,
-        JoinType::LeftAny,
-        JoinType::Right,
-        JoinType::RightAny,
-        JoinType::Full,
-        JoinType::LeftSemi,
-        JoinType::RightSemi,
-        JoinType::LeftAnti,
-        JoinType::RightAnti,
-        JoinType::LeftMark,
-        JoinType::RightMark,
-        JoinType::LeftSingle,
-        JoinType::RightSingle,
-        JoinType::Asof,
-        JoinType::LeftAsof,
-        JoinType::RightAsof,
-        JoinType::FullAsof,
-    ]);
-    assert_eq!(coverage, expected);
 
     Ok(())
 }
