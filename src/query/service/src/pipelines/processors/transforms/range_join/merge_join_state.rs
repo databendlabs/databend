@@ -175,7 +175,8 @@ impl RangeJoinState {
                         ));
                     }
                     for filter in self.other_conditions.iter() {
-                        left_result_block = filter_block(left_result_block, filter)?;
+                        left_result_block =
+                            filter_block(left_result_block, filter, &self.function_context)?;
                     }
                     if track_left_outer && !left_result_block.is_empty() {
                         if let Some(left_match_index) = left_match_index {

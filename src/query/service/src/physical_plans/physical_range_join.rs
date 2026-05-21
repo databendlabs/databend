@@ -45,6 +45,7 @@ use crate::pipelines::PipelineBuilder;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
+use crate::sessions::TableContextSettings;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RangeJoin {
@@ -141,7 +142,12 @@ impl IPhysicalPlan for RangeJoin {
     }
 
     fn build_pipeline2(&self, builder: &mut PipelineBuilder) -> Result<()> {
-        let state = Arc::new(RangeJoinState::new(builder.ctx.clone(), self));
+        let function_context = builder.ctx.get_function_context()?;
+        let state = Arc::new(RangeJoinState::new(
+            builder.ctx.clone(),
+            self,
+            function_context,
+        ));
         self.build_right(state.clone(), builder)?;
         self.build_left(state, builder)
     }
