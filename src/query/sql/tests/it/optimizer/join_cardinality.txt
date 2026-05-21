@@ -73,6 +73,16 @@ join          : LEFT ANY cardinality=58.000
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 
+case          : left_asof_join_partial_overlap
+description   : Join-key histograms partially overlap, so estimated join-key stats should narrow bounds when this join type keeps them.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=30, min=3, max=9, ndv=4
+query         : asof_left_join
+sql           : SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t
+join          : LEFT ASOF cardinality=48.000
+stat          : l.k (#0) min=3, max=5, ndv=2.000, null=0.000, histogram=none
+stat          : r.k (#2) min=3, max=9, ndv=4.000, null=0.000, histogram=none
+
 case          : left_asof_join_no_overlap
 description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
 left stats    : rows=9, min=1, max=5, ndv=3
@@ -106,6 +116,16 @@ sql           : SELECT * FROM l RIGHT ANY JOIN r ON l.k = r.k
 join          : RIGHT ANY cardinality=58.000
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : right_asof_join_partial_overlap
+description   : Join-key histograms partially overlap, so estimated join-key stats should narrow bounds when this join type keeps them.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=30, min=3, max=9, ndv=4
+query         : asof_right_join
+sql           : SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t
+join          : RIGHT ASOF cardinality=48.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
+stat          : r.k (#2) min=3, max=5, ndv=2.000, null=0.000, histogram=none
 
 case          : right_asof_join_no_overlap
 description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
@@ -150,6 +170,16 @@ sql           : SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t
 join          : FULL ASOF cardinality=58.000
 stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
 stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+
+case          : full_asof_join_no_overlap
+description   : Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.
+left stats    : rows=9, min=1, max=5, ndv=3
+right stats   : rows=26, min=20, max=23, ndv=4
+query         : asof_full_join
+sql           : SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t
+join          : FULL ASOF cardinality=35.000
+stat          : l.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=rows=9.000, ndv=3.000, buckets=[1..1:2.000/1.000, 3..3:4.000/1.000, 5..5:3.000/1.000]
+stat          : r.k (#2) min=20, max=23, ndv=4.000, null=0.000, histogram=rows=26.000, ndv=4.000, buckets=[20..20:5.000/1.000, 21..21:7.000/1.000, 22..22:6.000/1.000, 23..23:8.000/1.000]
 
 
 === semi_cardinality_and_histogram_finish ===
@@ -229,15 +259,15 @@ stat          : r.k (#2) min=1, max=5, ndv=4.000, null=0.000, histogram=none
 === fixed_right_cardinality ===
 description: RIGHT-fixed joins return the internal right input cardinality regardless of the inner estimate. RightSingle still rewrites the nullable-side join-key stats from the inner estimate.
 
-case          : right_single_internal_overlap
-description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.
+case          : right_single_internal_partial_overlap
+description   : Join-key histograms partially overlap, so estimated join-key stats should narrow bounds when this join type keeps them.
 left stats    : rows=9, min=1, max=5, ndv=3
-right stats   : rows=26, min=1, max=5, ndv=4
+right stats   : rows=30, min=3, max=9, ndv=4
 query         : internal_right_single
 input         : optimizer-internal RightSingle branch
-join          : RIGHT SINGLE cardinality=26.000
-stat          : left.k (#0) min=1, max=5, ndv=3.000, null=0.000, histogram=none
-stat          : right.k (#1) min=1, max=5, ndv=4.000, null=0.000, histogram=none
+join          : RIGHT SINGLE cardinality=30.000
+stat          : left.k (#0) min=3, max=5, ndv=2.000, null=0.000, histogram=none
+stat          : right.k (#1) min=3, max=9, ndv=4.000, null=0.000, histogram=none
 
 case          : left_mark_from_any_overlap
 description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.

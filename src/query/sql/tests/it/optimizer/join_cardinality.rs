@@ -456,6 +456,24 @@ fn no_overlap_right_stats() -> TableStats {
     }
 }
 
+fn partial_overlap_right_stats() -> TableStats {
+    TableStats {
+        rows: 30,
+        min: 3,
+        max: 9,
+        ndv: 4,
+        histogram_json: r#"{
+            "accuracy": true,
+            "buckets": [
+                {"lower_bound": {"Int": 3}, "upper_bound": {"Int": 3}, "num_values": 6.0, "num_distinct": 1.0},
+                {"lower_bound": {"Int": 5}, "upper_bound": {"Int": 5}, "num_values": 8.0, "num_distinct": 1.0},
+                {"lower_bound": {"Int": 8}, "upper_bound": {"Int": 8}, "num_values": 7.0, "num_distinct": 1.0},
+                {"lower_bound": {"Int": 9}, "upper_bound": {"Int": 9}, "num_values": 9.0, "num_distinct": 1.0}
+            ]
+        }"#,
+    }
+}
+
 fn sql_input(name: &'static str, sql: &'static str) -> JoinInput {
     JoinInput::Sql(JoinQueryCase { name, sql })
 }
@@ -487,6 +505,21 @@ fn no_overlap_case(
         input,
         left: overlap_left_stats(),
         right: no_overlap_right_stats(),
+    }
+}
+
+fn partial_overlap_case(
+    name: &'static str,
+    expected_join_type: JoinType,
+    input: JoinInput,
+) -> JoinTestCase {
+    JoinTestCase {
+        name,
+        description: "Join-key histograms partially overlap, so estimated join-key stats should narrow bounds when this join type keeps them.",
+        expected_join_type,
+        input,
+        left: overlap_left_stats(),
+        right: partial_overlap_right_stats(),
     }
 }
 
@@ -546,6 +579,14 @@ fn join_behavior_groups() -> Vec<JoinBehaviorGroup> {
                         "SELECT * FROM l LEFT ANY JOIN r ON l.k = r.k",
                     ),
                 ),
+                partial_overlap_case(
+                    "left_asof_join_partial_overlap",
+                    JoinType::LeftAsof,
+                    sql_input(
+                        "asof_left_join",
+                        "SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t",
+                    ),
+                ),
                 no_overlap_case(
                     "left_asof_join_no_overlap",
                     JoinType::LeftAsof,
@@ -571,6 +612,14 @@ fn join_behavior_groups() -> Vec<JoinBehaviorGroup> {
                     sql_input(
                         "right_any_join",
                         "SELECT * FROM l RIGHT ANY JOIN r ON l.k = r.k",
+                    ),
+                ),
+                partial_overlap_case(
+                    "right_asof_join_partial_overlap",
+                    JoinType::RightAsof,
+                    sql_input(
+                        "asof_right_join",
+                        "SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t",
                     ),
                 ),
                 no_overlap_case(
@@ -599,6 +648,14 @@ fn join_behavior_groups() -> Vec<JoinBehaviorGroup> {
                 ),
                 overlap_case(
                     "full_asof_join_overlap",
+                    JoinType::FullAsof,
+                    sql_input(
+                        "asof_full_join",
+                        "SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t",
+                    ),
+                ),
+                no_overlap_case(
+                    "full_asof_join_no_overlap",
                     JoinType::FullAsof,
                     sql_input(
                         "asof_full_join",
@@ -679,8 +736,8 @@ fn join_behavior_groups() -> Vec<JoinBehaviorGroup> {
             name: "fixed_right_cardinality",
             description: "RIGHT-fixed joins return the internal right input cardinality regardless of the inner estimate. RightSingle still rewrites the nullable-side join-key stats from the inner estimate.",
             cases: vec![
-                overlap_case(
-                    "right_single_internal_overlap",
+                partial_overlap_case(
+                    "right_single_internal_partial_overlap",
                     JoinType::RightSingle,
                     JoinInput::InternalRightSingle,
                 ),
