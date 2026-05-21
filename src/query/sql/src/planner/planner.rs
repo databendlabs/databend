@@ -249,35 +249,22 @@ impl Planner {
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let mut enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?;
-        let plan_cache_context = if enable_planner_cache {
-            if matches!(stmt, Statement::Query(_)) {
-                let cache_ctx = self.build_plan_cache_context(name_resolution_ctx.clone(), stmt);
-                if cache_ctx.is_cacheable() {
-                    Some(cache_ctx)
-                } else {
-                    enable_planner_cache = false;
-                    None
-                }
-            } else {
-                enable_planner_cache = false;
-                None
-            }
-        } else {
-            None
-        };
-        let planner_cache_key = if let Some(cache_ctx) = &plan_cache_context {
-            Some(self.planner_cache_key_for_stmt(stmt, cache_ctx)?)
-        } else {
-            None
-        };
+        let enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?
+            && matches!(stmt, Statement::Query(_));
 
-        if enable_planner_cache {
-            let plan = self.get_cache(
-                planner_cache_key.as_ref().unwrap(),
-                plan_cache_context.as_ref().unwrap(),
-            );
-            if let Some(plan) = plan {
+        let plan_cache_context = enable_planner_cache
+            .then(|| self.build_plan_cache_context(name_resolution_ctx.clone(), stmt))
+            .filter(|ctx| ctx.is_cacheable());
+
+        let planner_cache_key = plan_cache_context
+            .as_ref()
+            .map(|ctx| self.planner_cache_key_for_stmt(stmt, ctx))
+            .transpose()?;
+
+        if let Some((cache_key, cache_ctx)) =
+            planner_cache_key.as_ref().zip(plan_cache_context.as_ref())
+        {
+            if let Some(plan) = self.get_cache(cache_key, cache_ctx) {
                 info!(
                     "Logical plan retrieved from cache, elapsed: {:?}",
                     start.elapsed()
@@ -332,8 +319,8 @@ impl Planner {
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 
-        if enable_planner_cache {
-            self.set_cache(planner_cache_key.clone().unwrap(), optimized_plan.clone());
+        if let Some(cache_key) = planner_cache_key {
+            self.set_cache(cache_key, optimized_plan.clone());
         }
 
         info!(
