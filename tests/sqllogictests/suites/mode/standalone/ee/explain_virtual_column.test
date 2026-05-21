@@ -78,7 +78,7 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t2 (a int null, v json null) storage_format = 'parquet'
+create table t2 (a int null, v json null) storage_format = 'parquet' enable_virtual_column = true
 
 statement ok
 insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10},"d":20}'))
@@ -432,14 +432,14 @@ CREATE OR REPLACE TABLE data_source_a (
     metadata_object VARIANT,
     content_object VARIANT,
     refresh_time TIMESTAMP
-);
+) enable_virtual_column = true;
 
 statement ok
 CREATE OR REPLACE TABLE config_table (
     entity_id VARCHAR,
     source_id VARCHAR,
     process_mode VARCHAR
-);
+) enable_virtual_column = true;
 
 statement ok
 INSERT INTO data_source_a VALUES
@@ -505,7 +505,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── EvalScalar
             ├── output columns: [event_date (#15), a.entity_id (#0), a.source_id (#1), type_code (#21), primary_category (#22), secondary_category (#23)]
-            ├── expressions: [if(CAST(is_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS Boolean NULL), CAST(assume_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS String NULL), true, 'Unknown', NULL), CAST(data_source_a.content_object['category_a'] (#19) AS String NULL), CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)]
+            ├── expressions: [if(CAST(is_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS Boolean NULL), CAST(assume_not_null(CAST(data_source_a.metadata_object['type'] (#18) AS String NULL)) AS String NULL), 'Unknown'), CAST(data_source_a.content_object['category_a'] (#19) AS String NULL), CAST(data_source_a.content_object['category_b'] (#20) AS String NULL)]
             ├── estimated rows: 0.20
             └── HashJoin
                 ├── output columns: [event_date (#15), a.metadata_object['type'] (#18), a.content_object['category_a'] (#19), a.content_object['category_b'] (#20), a.entity_id (#0), a.source_id (#1)]
@@ -641,12 +641,12 @@ CREATE OR REPLACE TABLE data_main (
     record_id VARCHAR,
     category_id VARCHAR,
     data_object VARIANT
-);
+) enable_virtual_column = true;
 
 statement ok
 CREATE OR REPLACE TABLE data_staging (
     data_object VARIANT
-);
+) enable_virtual_column = true;
 
 statement ok
 INSERT INTO data_main (record_id, category_id, data_object) VALUES

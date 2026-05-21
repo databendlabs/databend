@@ -57,12 +57,14 @@ use fastrace::func_name;
 use log::debug;
 use uuid::Uuid;
 
-use super::name_id_value_api::NameIdValueApi;
 use super::schema_api::mark_index_as_deleted;
 use super::schema_api::mark_table_index_as_deleted;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::CreateIdValueMode;
+use crate::name_id_value_api::CreateIdValueResult;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_seq;
@@ -93,14 +95,17 @@ where
 
         let name_ident = &req.name_ident;
         let meta = &req.meta;
-        let overriding = req.create_option.is_overriding();
+        let create_mode = match req.create_option {
+            CreateOption::Create | CreateOption::CreateIfNotExists => CreateIdValueMode::CreateOnly,
+            CreateOption::CreateOrReplace => CreateIdValueMode::CreateOrReplace,
+        };
         let name_ident_raw = serialize_struct(&IndexNameIdentRaw::from(name_ident))?;
 
         let create_res = self
             .create_id_value(
                 name_ident,
                 meta,
-                overriding,
+                create_mode,
                 |id| {
                     vec![(
                         IndexIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
@@ -116,8 +121,8 @@ where
             .await?;
 
         match create_res {
-            Ok(id) => Ok(CreateIndexReply { index_id: *id }),
-            Err(existent) => match req.create_option {
+            CreateIdValueResult::Created(id) => Ok(CreateIndexReply { index_id: *id }),
+            CreateIdValueResult::Existing(existent) => match req.create_option {
                 CreateOption::Create => {
                     Err(AppError::from(name_ident.exist_error(func_name!())).into())
                 }
@@ -146,7 +151,7 @@ where
             let mut txn = TxnRequest::default();
 
             // remove name->id, id->meta, id->name
-            let get_res = self.get_id_value(name_ident).await?;
+            let get_res = self.get_id_and_value(name_ident).await?;
             let Some((seq_id, seq_meta)) = get_res else {
                 return Ok(None);
             };
@@ -189,7 +194,7 @@ where
     ) -> Result<Option<GetIndexReply>, MetaError> {
         debug!(req :? =name_ident; "SchemaApi: {}", func_name!());
 
-        let res = self.get_id_value(name_ident).await?;
+        let res = self.get_id_and_value(name_ident).await?;
 
         let Some((seq_id, seq_meta)) = res else {
             return Ok(None);

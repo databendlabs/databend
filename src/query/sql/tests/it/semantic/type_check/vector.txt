@@ -1,0 +1,13 @@
+=== vector_distance_without_index_rewrite_falls_back ===
+description: Vector distance functions should preserve the old scalar-function fallback when no vector index rewrite applies.
+sql: l2_distance([1, 2]::vector(2), [3, 4]::vector(2))
+status: ok
+scalar: 2.828427
+type: Float32
+
+=== vector_distance_with_array_args_falls_back ===
+description: Vector distance functions over array arguments should still use regular scalar type checking.
+sql: cosine_distance([1, 0], [0, 1])
+status: ok
+scalar: 1
+type: Float32

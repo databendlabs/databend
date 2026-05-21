@@ -20,6 +20,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
+use std::time::Instant;
 
 use arrow_flight::FlightData;
 use arrow_flight::flight_service_client::FlightServiceClient;
@@ -29,6 +30,7 @@ use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::ExecutorStatsSnapshot;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_base::runtime::QueryPerf;
+use databend_common_base::runtime::spawn_blocking;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -576,7 +578,6 @@ impl DataExchangeManager {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
-        // TODO: When the query is not executed for a long time after submission, we need to remove it
         match queries_coordinator.get_mut(&fragments.query_id) {
             None => Err(ErrorCode::Internal(format!(
                 "Query {} not found in cluster.",
@@ -709,7 +710,16 @@ impl DataExchangeManager {
 
     #[fastrace::trace]
     pub fn on_finished_query(&self, query_id: &str, cause: Option<ErrorCode>) {
+        let lock_start = Instant::now();
         let queries_coordinator_guard = self.queries_coordinator.lock();
+        let lock_wait = lock_start.elapsed();
+        if lock_wait > Duration::from_secs(1) {
+            warn!(
+                "Waited {:?} to acquire queries_coordinator lock in on_finished_query, query_id={}",
+                lock_wait, query_id
+            );
+        }
+
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
 
         if let Some(mut query_coordinator) = queries_coordinator.remove(query_id) {
@@ -1259,15 +1269,21 @@ impl QueryCoordinator {
         } else {
             Span::noop()
         };
-        GlobalIORuntime::instance().spawn(
+        GlobalIORuntime::instance().spawn_named(
             async move {
                 let error = executor.execute().await.err();
-                statistics_sender.shutdown(error.clone());
-                query_ctx
-                    .get_exchange_manager()
-                    .on_finished_query(&query_id, error);
+                statistics_sender.shutdown(error.clone()).await;
+                let exchange_manager = query_ctx.get_exchange_manager();
+                if let Err(cause) = spawn_blocking(move || {
+                    exchange_manager.on_finished_query(&query_id, error);
+                })
+                .await
+                {
+                    warn!("on_finished_query cleanup task failed: {:?}", cause);
+                }
             }
             .in_span(span),
+            "Distributed-Executor",
         );
 
         Ok(())

@@ -492,6 +492,7 @@ impl Binder {
         output_context
             .cte_context
             .set_cte_context(from_context.cte_context.clone());
+        output_context.allow_virtual_column = from_context.allow_virtual_column;
         output_context.columns = from_context.columns;
 
         Ok((s_expr, output_context))

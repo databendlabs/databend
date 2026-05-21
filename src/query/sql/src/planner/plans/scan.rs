@@ -101,7 +101,9 @@ pub struct Scan {
     /// Row Access Policy predicates. Set during binding when a table has an
     /// associated RAP. Carried through the optimizer to physical plan building,
     /// where they are constant-folded and enforced by a Filter [SECURE] pipeline
-    /// operator. Not pushed down to storage.
+    /// operator. They may also be included in storage pushdown/prewhere for
+    /// pruning and row selection, but are redacted from plan display and still
+    /// enforced by the secure filter.
     pub secure_predicates: Option<Vec<ScalarExpr>>,
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
@@ -213,6 +215,23 @@ impl Scan {
 
         used_columns.extend(self.columns.iter());
         used_columns
+    }
+
+    pub fn has_secure_predicates_not_applied_by_prewhere(&self) -> bool {
+        let Some(secure_predicates) = &self.secure_predicates else {
+            return false;
+        };
+        if secure_predicates.is_empty() {
+            return false;
+        }
+
+        let Some(prewhere) = &self.prewhere else {
+            return true;
+        };
+
+        secure_predicates
+            .iter()
+            .any(|secure_predicate| !prewhere.predicates.contains(secure_predicate))
     }
 }
 

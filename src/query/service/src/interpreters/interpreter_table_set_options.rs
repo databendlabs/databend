@@ -30,6 +30,7 @@ use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
@@ -61,7 +62,9 @@ use crate::interpreters::common::table_option_validation::is_valid_data_page_byt
 use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -100,6 +103,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_recluster_depth(&self.plan.set_options)?;
         // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
         // check enable_parquet_encoding
@@ -153,9 +157,9 @@ impl Interpreter for SetOptionsInterpreter {
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
 
+        let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
-            let engine = Engine::from(table.engine());
             if !is_valid_create_opt(&key, &engine) {
                 error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
@@ -164,6 +168,13 @@ impl Interpreter for SetOptionsInterpreter {
             }
             options_map.insert(key, Some(table_option.1.clone()));
         }
+
+        let storage_format = match table.get_table_info().options().get(OPT_KEY_STORAGE_FORMAT) {
+            Some(storage_format) => FuseStorageFormat::from_str(storage_format)?,
+            None => FuseStorageFormat::Parquet,
+        };
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&self.plan.set_options, storage_format)?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 

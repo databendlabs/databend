@@ -35,9 +35,9 @@ use crate::plans::Scan;
 ///             \
 ///             Scan(padding limit)
 ///
-/// When `secure_predicates` is present, limit is not pushed down because
-/// storage would return N rows before secure predicates filter them,
-/// causing fewer results than expected.
+/// When `secure_predicates` has not been applied by prewhere, limit is not
+/// pushed down because storage would return N rows before secure predicates
+/// filter them, causing fewer results than expected.
 pub struct RulePushDownLimitScan {
     id: RuleID,
     matchers: Vec<Matcher>,
@@ -73,8 +73,8 @@ impl Rule for RulePushDownLimitScan {
         let scan_expr = s_expr.child(0)?;
         let mut scan: Scan = scan_expr.plan().clone().try_into()?;
 
-        // When row access policy is active, don't push limit to storage.
-        if scan.secure_predicates.is_some() {
+        // RAP is safe for limit pushdown only after it participates in row selection.
+        if scan.has_secure_predicates_not_applied_by_prewhere() {
             return Ok(());
         }
 
