@@ -74,13 +74,15 @@ enum JoinInput {
 struct JoinTestCase {
     name: &'static str,
     description: &'static str,
+    expected_join_type: JoinType,
     input: JoinInput,
     left: TableStats,
     right: TableStats,
 }
 
-struct JoinTypeGroup {
-    join_type: JoinType,
+struct JoinBehaviorGroup {
+    name: &'static str,
+    description: &'static str,
     cases: Vec<JoinTestCase>,
 }
 
@@ -369,24 +371,18 @@ fn write_stats_case_header(file: &mut impl Write, case: &JoinTestCase) -> Result
     Ok(())
 }
 
-async fn write_join_type_group(file: &mut impl Write, group: &JoinTypeGroup) -> Result<()> {
-    let title = format!("join_type_{}", group.join_type);
-    let title = title.to_ascii_lowercase().replace(' ', "_");
-    let description = format!(
-        "{} cardinality and join-key statistic propagation.",
-        group.join_type
-    );
-    write_case_title(file, &title, &description)?;
-    writeln!(file, "join type     : {}", group.join_type)?;
+async fn write_join_behavior_group(file: &mut impl Write, group: &JoinBehaviorGroup) -> Result<()> {
+    write_case_title(file, group.name, group.description)?;
+    writeln!(file)?;
 
     for case in &group.cases {
         write_stats_case_header(file, case)?;
         match case.input {
             JoinInput::Sql(query) => {
-                write_sql_join_input(file, case, query, group.join_type).await?
+                write_sql_join_input(file, case, query, case.expected_join_type).await?
             }
             JoinInput::InternalRightSingle => {
-                assert_eq!(group.join_type, JoinType::RightSingle);
+                assert_eq!(case.expected_join_type, JoinType::RightSingle);
                 write_internal_right_single_case(file, case)?;
             }
         }
@@ -400,8 +396,8 @@ async fn write_join_type_group(file: &mut impl Write, group: &JoinTypeGroup) -> 
 async fn test_join_cardinality_estimation_golden() -> Result<()> {
     let mut file = open_golden_file("optimizer", "join_cardinality.txt")?;
 
-    for group in join_type_groups() {
-        write_join_type_group(&mut file, &group).await?;
+    for group in join_behavior_groups() {
+        write_join_behavior_group(&mut file, &group).await?;
     }
 
     Ok(())
@@ -464,155 +460,160 @@ fn sql_input(name: &'static str, sql: &'static str) -> JoinInput {
     JoinInput::Sql(JoinQueryCase { name, sql })
 }
 
-fn overlap_case(name: &'static str, input: JoinInput) -> JoinTestCase {
+fn overlap_case(
+    name: &'static str,
+    expected_join_type: JoinType,
+    input: JoinInput,
+) -> JoinTestCase {
     JoinTestCase {
         name,
-        description: "Histograms overlap, so join-key estimates should consume and propagate histogram stats.",
+        description: "Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.",
+        expected_join_type,
         input,
         left: overlap_left_stats(),
         right: overlap_right_stats(),
     }
 }
 
-fn no_overlap_case(name: &'static str, input: JoinInput) -> JoinTestCase {
+fn no_overlap_case(
+    name: &'static str,
+    expected_join_type: JoinType,
+    input: JoinInput,
+) -> JoinTestCase {
     JoinTestCase {
         name,
-        description: "Histograms do not overlap, so inner matches should be zero before preservation rules apply.",
+        description: "Join-key histograms do not overlap, so the inner estimate is zero before join-type rules apply.",
+        expected_join_type,
         input,
         left: overlap_left_stats(),
         right: no_overlap_right_stats(),
     }
 }
 
-fn join_type_groups() -> Vec<JoinTypeGroup> {
+fn join_behavior_groups() -> Vec<JoinBehaviorGroup> {
     vec![
-        JoinTypeGroup {
-            join_type: JoinType::Cross,
+        JoinBehaviorGroup {
+            name: "inner_like_cardinality_and_join_key_stats",
+            description: "INNER-like joins use the inner join estimate as final cardinality. INNER rebuilds join-key histograms, while INNER ANY and ASOF keep estimated min/max/NDV but drop histograms.",
             cases: vec![
-                overlap_case(
-                    "cross_join_overlap",
-                    sql_input("cross_join", "SELECT * FROM l CROSS JOIN r"),
-                ),
                 no_overlap_case(
                     "cross_join_no_overlap",
+                    JoinType::Cross,
                     sql_input("cross_join", "SELECT * FROM l CROSS JOIN r"),
                 ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::Inner,
-            cases: vec![
                 overlap_case(
                     "inner_join_overlap",
+                    JoinType::Inner,
                     sql_input("inner_join", "SELECT * FROM l INNER JOIN r ON l.k = r.k"),
                 ),
                 no_overlap_case(
                     "inner_join_no_overlap",
+                    JoinType::Inner,
                     sql_input("inner_join", "SELECT * FROM l INNER JOIN r ON l.k = r.k"),
                 ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::InnerAny,
-            cases: vec![
                 overlap_case(
                     "inner_any_join_overlap",
+                    JoinType::InnerAny,
                     sql_input(
                         "inner_any_join",
                         "SELECT * FROM l INNER ANY JOIN r ON l.k = r.k",
                     ),
                 ),
-                no_overlap_case(
-                    "inner_any_join_no_overlap",
+                overlap_case(
+                    "asof_join_overlap",
+                    JoinType::Asof,
                     sql_input(
-                        "inner_any_join",
-                        "SELECT * FROM l INNER ANY JOIN r ON l.k = r.k",
+                        "asof_join",
+                        "SELECT * FROM l ASOF JOIN r ON l.k = r.k AND l.t >= r.t",
                     ),
                 ),
             ],
         },
-        JoinTypeGroup {
-            join_type: JoinType::Left,
+        JoinBehaviorGroup {
+            name: "left_preserving_cardinality_and_nullable_stats",
+            description: "LEFT-family joins use max(internal left rows, inner estimate). They estimate nullable-side join-key min/max/NDV from the inner match and drop that side's histogram.",
             cases: vec![
-                overlap_case(
-                    "left_join_overlap",
-                    sql_input("right_join", "SELECT * FROM l RIGHT JOIN r ON l.k = r.k"),
-                ),
                 no_overlap_case(
                     "left_join_no_overlap",
+                    JoinType::Left,
                     sql_input("right_join", "SELECT * FROM l RIGHT JOIN r ON l.k = r.k"),
                 ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::LeftAny,
-            cases: vec![
                 overlap_case(
                     "left_any_join_overlap",
+                    JoinType::LeftAny,
                     sql_input(
                         "left_any_join",
                         "SELECT * FROM l LEFT ANY JOIN r ON l.k = r.k",
                     ),
                 ),
                 no_overlap_case(
-                    "left_any_join_no_overlap",
+                    "left_asof_join_no_overlap",
+                    JoinType::LeftAsof,
                     sql_input(
-                        "left_any_join",
-                        "SELECT * FROM l LEFT ANY JOIN r ON l.k = r.k",
+                        "asof_left_join",
+                        "SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t",
                     ),
                 ),
             ],
         },
-        JoinTypeGroup {
-            join_type: JoinType::Right,
+        JoinBehaviorGroup {
+            name: "right_preserving_cardinality_and_nullable_stats",
+            description: "RIGHT-family joins use max(internal right rows, inner estimate). They estimate nullable-side join-key min/max/NDV from the inner match and drop that side's histogram.",
             cases: vec![
-                overlap_case(
-                    "right_join_overlap",
-                    sql_input("left_join", "SELECT * FROM l LEFT JOIN r ON l.k = r.k"),
-                ),
                 no_overlap_case(
                     "right_join_no_overlap",
+                    JoinType::Right,
                     sql_input("left_join", "SELECT * FROM l LEFT JOIN r ON l.k = r.k"),
                 ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::RightAny,
-            cases: vec![
                 overlap_case(
                     "right_any_join_overlap",
+                    JoinType::RightAny,
                     sql_input(
                         "right_any_join",
                         "SELECT * FROM l RIGHT ANY JOIN r ON l.k = r.k",
                     ),
                 ),
                 no_overlap_case(
-                    "right_any_join_no_overlap",
+                    "right_asof_join_no_overlap",
+                    JoinType::RightAsof,
                     sql_input(
-                        "right_any_join",
-                        "SELECT * FROM l RIGHT ANY JOIN r ON l.k = r.k",
+                        "asof_right_join",
+                        "SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t",
                     ),
                 ),
             ],
         },
-        JoinTypeGroup {
-            join_type: JoinType::Full,
+        JoinBehaviorGroup {
+            name: "full_preserving_cardinality_without_nullable_rewrite",
+            description: "FULL-family joins combine both preserved sides with the inner estimate. They do not keep estimated join-key stats, so histograms are only dropped when the inner estimator touched the join keys.",
             cases: vec![
                 overlap_case(
                     "full_join_overlap",
+                    JoinType::Full,
                     sql_input("full_join", "SELECT * FROM l FULL JOIN r ON l.k = r.k"),
                 ),
                 no_overlap_case(
                     "full_join_no_overlap",
+                    JoinType::Full,
                     sql_input("full_join", "SELECT * FROM l FULL JOIN r ON l.k = r.k"),
+                ),
+                overlap_case(
+                    "full_asof_join_overlap",
+                    JoinType::FullAsof,
+                    sql_input(
+                        "asof_full_join",
+                        "SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t",
+                    ),
                 ),
             ],
         },
-        JoinTypeGroup {
-            join_type: JoinType::LeftSemi,
+        JoinBehaviorGroup {
+            name: "semi_cardinality_and_histogram_finish",
+            description: "SEMI joins use estimated join-key stats, cap final cardinality with the preserved side, keep that side's semi histogram, and drop the other side's histogram.",
             cases: vec![
                 overlap_case(
                     "left_semi_join_overlap",
+                    JoinType::LeftSemi,
                     sql_input(
                         "right_semi_join",
                         "SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k",
@@ -620,39 +621,23 @@ fn join_type_groups() -> Vec<JoinTypeGroup> {
                 ),
                 no_overlap_case(
                     "left_semi_join_no_overlap",
+                    JoinType::LeftSemi,
                     sql_input(
                         "right_semi_join",
                         "SELECT * FROM l RIGHT SEMI JOIN r ON l.k = r.k",
                     ),
                 ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::RightSemi,
-            cases: vec![
                 overlap_case(
                     "right_semi_join_overlap",
+                    JoinType::RightSemi,
                     sql_input(
                         "left_semi_join",
                         "SELECT * FROM l LEFT SEMI JOIN r ON l.k = r.k",
-                    ),
-                ),
-                no_overlap_case(
-                    "right_semi_join_no_overlap",
-                    sql_input(
-                        "left_semi_join",
-                        "SELECT * FROM l LEFT SEMI JOIN r ON l.k = r.k",
-                    ),
-                ),
-                overlap_case(
-                    "exists_overlap",
-                    sql_input(
-                        "exists",
-                        "SELECT * FROM l WHERE EXISTS (SELECT 1 FROM r WHERE l.k = r.k)",
                     ),
                 ),
                 no_overlap_case(
                     "exists_no_overlap",
+                    JoinType::RightSemi,
                     sql_input(
                         "exists",
                         "SELECT * FROM l WHERE EXISTS (SELECT 1 FROM r WHERE l.k = r.k)",
@@ -660,201 +645,60 @@ fn join_type_groups() -> Vec<JoinTypeGroup> {
                 ),
             ],
         },
-        JoinTypeGroup {
-            join_type: JoinType::LeftAnti,
-            cases: vec![
-                overlap_case(
-                    "left_anti_join_overlap",
-                    sql_input(
-                        "right_anti_join",
-                        "SELECT * FROM l RIGHT ANTI JOIN r ON l.k = r.k",
-                    ),
-                ),
-                no_overlap_case(
-                    "left_anti_join_no_overlap",
-                    sql_input(
-                        "right_anti_join",
-                        "SELECT * FROM l RIGHT ANTI JOIN r ON l.k = r.k",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::RightAnti,
-            cases: vec![
-                overlap_case(
-                    "right_anti_join_overlap",
-                    sql_input(
-                        "left_anti_join",
-                        "SELECT * FROM l LEFT ANTI JOIN r ON l.k = r.k",
-                    ),
-                ),
-                no_overlap_case(
-                    "right_anti_join_no_overlap",
-                    sql_input(
-                        "left_anti_join",
-                        "SELECT * FROM l LEFT ANTI JOIN r ON l.k = r.k",
-                    ),
-                ),
-                overlap_case(
-                    "not_exists_overlap",
-                    sql_input(
-                        "not_exists",
-                        "SELECT * FROM l WHERE NOT EXISTS (SELECT 1 FROM r WHERE l.k = r.k)",
-                    ),
-                ),
-                no_overlap_case(
-                    "not_exists_no_overlap",
-                    sql_input(
-                        "not_exists",
-                        "SELECT * FROM l WHERE NOT EXISTS (SELECT 1 FROM r WHERE l.k = r.k)",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::Asof,
-            cases: vec![
-                overlap_case(
-                    "asof_join_overlap",
-                    sql_input(
-                        "asof_join",
-                        "SELECT * FROM l ASOF JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-                no_overlap_case(
-                    "asof_join_no_overlap",
-                    sql_input(
-                        "asof_join",
-                        "SELECT * FROM l ASOF JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::LeftAsof,
-            cases: vec![
-                overlap_case(
-                    "left_asof_join_overlap",
-                    sql_input(
-                        "asof_left_join",
-                        "SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-                no_overlap_case(
-                    "left_asof_join_no_overlap",
-                    sql_input(
-                        "asof_left_join",
-                        "SELECT * FROM l ASOF LEFT JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::RightAsof,
-            cases: vec![
-                overlap_case(
-                    "right_asof_join_overlap",
-                    sql_input(
-                        "asof_right_join",
-                        "SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-                no_overlap_case(
-                    "right_asof_join_no_overlap",
-                    sql_input(
-                        "asof_right_join",
-                        "SELECT * FROM l ASOF RIGHT JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::FullAsof,
-            cases: vec![
-                overlap_case(
-                    "full_asof_join_overlap",
-                    sql_input(
-                        "asof_full_join",
-                        "SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-                no_overlap_case(
-                    "full_asof_join_no_overlap",
-                    sql_input(
-                        "asof_full_join",
-                        "SELECT * FROM l ASOF FULL JOIN r ON l.k = r.k AND l.t >= r.t",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::LeftMark,
-            cases: vec![
-                overlap_case(
-                    "left_mark_from_any_overlap",
-                    sql_input(
-                        "left_mark_from_any_projection",
-                        "SELECT l.k = ANY (SELECT r.k FROM r) FROM l",
-                    ),
-                ),
-                no_overlap_case(
-                    "left_mark_from_any_no_overlap",
-                    sql_input(
-                        "left_mark_from_any_projection",
-                        "SELECT l.k = ANY (SELECT r.k FROM r) FROM l",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::RightMark,
-            cases: vec![
-                overlap_case(
-                    "right_mark_from_any_overlap",
-                    sql_input(
-                        "right_mark_from_any_projection",
-                        "SELECT r.k = ANY (SELECT l.k FROM l) FROM r",
-                    ),
-                ),
-                no_overlap_case(
-                    "right_mark_from_any_no_overlap",
-                    sql_input(
-                        "right_mark_from_any_projection",
-                        "SELECT r.k = ANY (SELECT l.k FROM l) FROM r",
-                    ),
-                ),
-            ],
-        },
-        JoinTypeGroup {
-            join_type: JoinType::LeftSingle,
+        JoinBehaviorGroup {
+            name: "fixed_left_cardinality",
+            description: "LEFT-fixed joins return the internal left input cardinality regardless of the inner estimate. LeftSingle still rewrites the nullable-side join-key stats from the inner estimate.",
             cases: vec![
                 overlap_case(
                     "left_single_from_scalar_overlap",
+                    JoinType::LeftSingle,
                     sql_input(
                         "left_single_from_scalar_projection",
                         "SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r",
                     ),
                 ),
-                no_overlap_case(
-                    "left_single_from_scalar_no_overlap",
+                overlap_case(
+                    "right_mark_from_any_overlap",
+                    JoinType::RightMark,
                     sql_input(
-                        "left_single_from_scalar_projection",
-                        "SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r",
+                        "right_mark_from_any_projection",
+                        "SELECT r.k = ANY (SELECT l.k FROM l) FROM r",
+                    ),
+                ),
+                overlap_case(
+                    "left_anti_join_overlap",
+                    JoinType::LeftAnti,
+                    sql_input(
+                        "right_anti_join",
+                        "SELECT * FROM l RIGHT ANTI JOIN r ON l.k = r.k",
                     ),
                 ),
             ],
         },
-        JoinTypeGroup {
-            join_type: JoinType::RightSingle,
+        JoinBehaviorGroup {
+            name: "fixed_right_cardinality",
+            description: "RIGHT-fixed joins return the internal right input cardinality regardless of the inner estimate. RightSingle still rewrites the nullable-side join-key stats from the inner estimate.",
             cases: vec![
                 overlap_case(
                     "right_single_internal_overlap",
+                    JoinType::RightSingle,
                     JoinInput::InternalRightSingle,
                 ),
-                no_overlap_case(
-                    "right_single_internal_no_overlap",
-                    JoinInput::InternalRightSingle,
+                overlap_case(
+                    "left_mark_from_any_overlap",
+                    JoinType::LeftMark,
+                    sql_input(
+                        "left_mark_from_any_projection",
+                        "SELECT l.k = ANY (SELECT r.k FROM r) FROM l",
+                    ),
+                ),
+                overlap_case(
+                    "right_anti_join_overlap",
+                    JoinType::RightAnti,
+                    sql_input(
+                        "left_anti_join",
+                        "SELECT * FROM l LEFT ANTI JOIN r ON l.k = r.k",
+                    ),
                 ),
             ],
         },
