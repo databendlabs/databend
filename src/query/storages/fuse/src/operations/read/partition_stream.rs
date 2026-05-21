@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::task::Poll;
 
 use async_channel::Receiver;
+use databend_common_base::runtime::profile::Profile;
+use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
@@ -33,8 +36,11 @@ use databend_common_pipeline::core::ProcessorPtr;
 use databend_common_pipeline::core::SyncTaskHandle;
 use databend_common_pipeline::core::SyncTaskSet;
 use databend_common_sql::IndexType;
+use parking_lot::Mutex;
 
+use crate::FuseBlockPartInfo;
 use crate::operations::read::block_partition_meta::BlockPartitionMeta;
+use crate::operations::read::progressive_topk::ProgressiveTopKState;
 use crate::operations::read::runtime_filter_wait::wait_runtime_filters;
 
 #[async_trait::async_trait]
@@ -60,6 +66,47 @@ impl StealPartitionStream {
 impl PartitionStream for StealPartitionStream {
     async fn fetch(&self, id: usize) -> Result<Option<Vec<PartInfoPtr>>> {
         Ok(self.partitions.steal(id, self.max_batch_size))
+    }
+}
+
+pub struct ProgressiveTopKPartitionStream {
+    partitions: Mutex<VecDeque<PartInfoPtr>>,
+    state: Arc<ProgressiveTopKState>,
+}
+
+impl ProgressiveTopKPartitionStream {
+    pub fn new(partitions: Vec<PartInfoPtr>, state: Arc<ProgressiveTopKState>) -> Self {
+        Self {
+            partitions: Mutex::new(VecDeque::from(partitions)),
+            state,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl PartitionStream for ProgressiveTopKPartitionStream {
+    async fn fetch(&self, _id: usize) -> Result<Option<Vec<PartInfoPtr>>> {
+        self.state.wait_for_previous_part().await;
+
+        let mut partitions = self.partitions.lock();
+        let Some(part) = partitions.front() else {
+            return Ok(None);
+        };
+
+        let fuse_part = FuseBlockPartInfo::from_part(part)?;
+        if let Some(sort_min_max) = &fuse_part.sort_min_max
+            && self.state.never_match(sort_min_max)
+        {
+            let skipped_blocks = partitions.len();
+            partitions.clear();
+            self.state.record_skipped_blocks(skipped_blocks);
+            return Ok(None);
+        }
+
+        let part = partitions.pop_front().unwrap();
+        self.state.record_scheduled_part();
+        Profile::record_usize_profile(ProfileStatisticsName::ScanPartitions, 1);
+        Ok(Some(vec![part]))
     }
 }
 

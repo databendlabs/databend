@@ -41,6 +41,7 @@ use databend_common_pipeline::core::ProcessorPtr;
 use roaring::RoaringTreemap;
 
 use super::parquet_data_source::ParquetDataSource;
+use super::progressive_topk::ProgressiveTopKState;
 use super::read_data_source::ReadDataSource;
 use super::read_state::ReadState;
 use super::util::add_data_block_meta;
@@ -72,6 +73,7 @@ pub struct DeserializeDataTransform {
 
     prewhere_info: Option<PrewhereInfo>,
     read_state: Option<ReadState>,
+    progressive_topk: Option<Arc<ProgressiveTopKState>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -85,6 +87,7 @@ impl DeserializeDataTransform {
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
         virtual_reader: Arc<Option<VirtualColumnReader>>,
+        progressive_topk: Option<Arc<ProgressiveTopKState>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
 
@@ -129,6 +132,7 @@ impl DeserializeDataTransform {
             block_meta_options: plan.block_meta_options.clone(),
             prewhere_info,
             read_state: None,
+            progressive_topk,
         })))
     }
 }
@@ -242,6 +246,10 @@ impl Processor for DeserializeDataTransform {
                             virtual_data,
                             row_selection.as_ref().map(|s| s.selection.clone()),
                         )?;
+                    }
+
+                    if let Some(progressive_topk) = &self.progressive_topk {
+                        progressive_topk.complete_part(&data_block);
                     }
 
                     // Perf.

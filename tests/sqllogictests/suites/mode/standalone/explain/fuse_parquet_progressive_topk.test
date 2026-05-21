@@ -1,0 +1,134 @@
+# Fuse parquet progressive TopK scan
+
+statement ok
+DROP DATABASE IF EXISTS test_fuse_parquet_progressive_topk
+
+statement ok
+CREATE DATABASE test_fuse_parquet_progressive_topk
+
+statement ok
+USE test_fuse_parquet_progressive_topk
+
+statement ok
+DROP TABLE IF EXISTS t_progressive_topk
+
+statement ok
+CREATE TABLE t_progressive_topk (
+    start_time INT NOT NULL,
+    tag STRING NOT NULL,
+    span_events VARIANT
+) row_per_block = 2 block_per_segment = 100 storage_format = 'parquet'
+
+statement ok
+INSERT INTO t_progressive_topk VALUES
+    (100, 'aaa', NULL),
+    (99, 'zzz', NULL),
+    (90, 'hit', parse_json('{"event":1}')),
+    (89, 'hit', parse_json('{"event":2}')),
+    (80, 'hit', parse_json('{"event":3}')),
+    (79, 'hit', parse_json('{"event":4}')),
+    (70, 'hit', parse_json('{"event":5}')),
+    (69, 'hit', parse_json('{"event":6}'))
+
+query I
+SELECT COUNT(*) FROM fuse_block('test_fuse_parquet_progressive_topk', 't_progressive_topk')
+----
+4
+
+query IT
+SELECT start_time, tag FROM t_progressive_topk WHERE lower(tag) = 'hit' ORDER BY start_time DESC LIMIT 3
+----
+90 hit
+89 hit
+80 hit
+
+query I
+SELECT start_time FROM t_progressive_topk WHERE span_events IS NOT NULL ORDER BY start_time DESC LIMIT 3
+----
+90
+89
+80
+
+query T
+EXPLAIN ANALYZE SELECT start_time, tag FROM t_progressive_topk WHERE lower(tag) = 'hit' ORDER BY start_time DESC LIMIT 3
+----
+Limit
+├── cpu time: <slt:ignore>
+├── output rows: 3
+├── output bytes: 60.00 B
+├── output columns: [t_progressive_topk.start_time (#0), t_progressive_topk.tag (#1)]
+├── limit: 3
+├── offset: 0
+├── estimated rows: 1.60
+└── Sort(Single)
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 3
+    ├── output bytes: 60.00 B
+    ├── output columns: [t_progressive_topk.start_time (#0), t_progressive_topk.tag (#1)]
+    ├── sort keys: [start_time DESC NULLS LAST]
+    ├── estimated rows: 1.60
+    └── TableScan
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── output rows: 4
+        ├── output bytes: 108.00 B
+        ├── bytes scanned: 108.00 B
+        ├── partitions scanned: 3
+        ├── read from remote: 198.00 B
+        ├── runtime filter bloom time: <slt:ignore>
+        ├── runtime filter inlist/min-max time: <slt:ignore>
+        ├── progressive topk pruned parts: 1
+        ├── table: default.test_fuse_parquet_progressive_topk.t_progressive_topk
+        ├── scan id: 0
+        ├── output columns: [start_time (#0), tag (#1)]
+        ├── read rows: 8
+        ├── read size: < 1 KiB
+        ├── partitions total: 4
+        ├── partitions scanned: 4
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
+        ├── push downs: [filters: [lower(t_progressive_topk.tag (#1)) = 'hit'], limit: 3]
+        └── estimated rows: 1.60
+
+query T
+EXPLAIN ANALYZE SELECT start_time, tag FROM t_progressive_topk WHERE lower(tag) = 'hit' ORDER BY start_time DESC LIMIT 1001
+----
+Limit
+├── cpu time: <slt:ignore>
+├── output rows: 6
+├── output bytes: 120.00 B
+├── output columns: [t_progressive_topk.start_time (#0), t_progressive_topk.tag (#1)]
+├── limit: 1001
+├── offset: 0
+├── estimated rows: 1.60
+└── Sort(Single)
+    ├── cpu time: <slt:ignore>
+    ├── output rows: 6
+    ├── output bytes: 120.00 B
+    ├── output columns: [t_progressive_topk.start_time (#0), t_progressive_topk.tag (#1)]
+    ├── sort keys: [start_time DESC NULLS LAST]
+    ├── estimated rows: 1.60
+    └── TableScan
+        ├── cpu time: <slt:ignore>
+        ├── wait time: <slt:ignore>
+        ├── output rows: 6
+        ├── output bytes: 162.00 B
+        ├── bytes scanned: 162.00 B
+        ├── read from remote: 264.00 B
+        ├── runtime filter bloom time: <slt:ignore>
+        ├── runtime filter inlist/min-max time: <slt:ignore>
+        ├── table: default.test_fuse_parquet_progressive_topk.t_progressive_topk
+        ├── scan id: 0
+        ├── output columns: [start_time (#0), tag (#1)]
+        ├── read rows: 8
+        ├── read size: < 1 KiB
+        ├── partitions total: 4
+        ├── partitions scanned: 4
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 4 to 4 cost: <slt:ignore>>]
+        ├── push downs: [filters: [lower(t_progressive_topk.tag (#1)) = 'hit'], limit: 1001]
+        └── estimated rows: 1.60
+
+statement ok
+DROP TABLE t_progressive_topk
+
+statement ok
+DROP DATABASE test_fuse_parquet_progressive_topk

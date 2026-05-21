@@ -23,6 +23,7 @@ use databend_common_catalog::plan::StealablePartitions;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
+use databend_common_expression::DataSchema;
 use databend_common_expression::TableSchema;
 use databend_common_pipeline::core::OutputPort;
 use databend_common_pipeline::core::Pipeline;
@@ -42,8 +43,10 @@ use crate::operations::read::DeserializeDataTransform;
 use crate::operations::read::NativeDeserializeDataTransform;
 use crate::operations::read::partition_stream::PartitionStream;
 use crate::operations::read::partition_stream::PartitionStreamSource;
+use crate::operations::read::partition_stream::ProgressiveTopKPartitionStream;
 use crate::operations::read::partition_stream::ReceiverPartitionStream;
 use crate::operations::read::partition_stream::StealPartitionStream;
+use crate::operations::read::progressive_topk::ProgressiveTopKState;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_fuse_source_pipeline(
@@ -72,19 +75,39 @@ pub fn build_fuse_source_pipeline(
         max_io_requests = max_io_requests.min(16);
     }
 
+    let progressive_topk = create_progressive_topk_state(
+        storage_format,
+        plan,
+        topk.as_ref(),
+        &block_reader.data_schema(),
+        receiver.is_none(),
+        ctx.get_runtime_filters(plan.scan_id).is_empty(),
+    );
+    if progressive_topk.is_some() {
+        max_threads = 1;
+        max_io_requests = 1;
+    }
+
     let waker = pipeline.get_waker();
     let batch_size = ctx.get_settings().get_storage_fetch_part_num()? as usize;
     let stream: Arc<dyn PartitionStream> = match receiver {
         Some(rx) => Arc::new(ReceiverPartitionStream::new(rx)),
         None => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+            if let Some(progressive_topk) = progressive_topk.clone() {
+                Arc::new(ProgressiveTopKPartitionStream::new(
+                    plan.parts.partitions.clone(),
+                    progressive_topk,
+                ))
+            } else {
+                let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+                let mut partitions = StealablePartitions::new(partitions, ctx.clone());
 
-            if matches!(storage_format, FuseStorageFormat::Native) && topk.is_some() {
-                partitions.disable_steal();
+                if matches!(storage_format, FuseStorageFormat::Native) && topk.is_some() {
+                    partitions.disable_steal();
+                }
+
+                Arc::new(StealPartitionStream::new(partitions.clone(), batch_size))
             }
-
-            Arc::new(StealPartitionStream::new(partitions.clone(), batch_size))
         }
     };
 
@@ -168,12 +191,49 @@ pub fn build_fuse_source_pipeline(
                     transform_output,
                     index_reader.clone(),
                     virtual_reader.clone(),
+                    progressive_topk.clone(),
                 )
             })?;
         }
     }
 
     Ok(())
+}
+
+fn create_progressive_topk_state(
+    storage_format: FuseStorageFormat,
+    plan: &DataSourcePlan,
+    topk: Option<&TopK>,
+    read_schema: &DataSchema,
+    use_local_partitions: bool,
+    no_runtime_filters: bool,
+) -> Option<Arc<ProgressiveTopKState>> {
+    if !matches!(storage_format, FuseStorageFormat::Parquet)
+        || !use_local_partitions
+        || !no_runtime_filters
+        || !progressive_topk_push_downs_supported(plan)
+        || plan.parts.partitions_type() != PartInfoType::BlockLevel
+        || plan.parts.partitions.is_empty()
+        || !plan.parts.partitions.iter().all(|part| {
+            FuseBlockPartInfo::from_part(part).is_ok_and(|part| part.sort_min_max.is_some())
+        })
+    {
+        return None;
+    }
+
+    ProgressiveTopKState::try_create(topk, read_schema)
+}
+
+fn progressive_topk_push_downs_supported(plan: &DataSourcePlan) -> bool {
+    plan.push_downs.as_ref().is_none_or(|push_downs| {
+        !push_downs.lazy_materialization
+            && push_downs.virtual_column.is_none()
+            && push_downs.agg_index.is_none()
+            && push_downs.change_type.is_none()
+            && push_downs.sample.is_none()
+            && push_downs.secure_filters.is_none()
+            && (push_downs.filters.is_none() || push_downs.prewhere.is_some())
+    })
 }
 
 pub fn dispatch_partitions(
