@@ -82,30 +82,30 @@ query T
 explain SELECT * FROM table1 INNER JOIN table2 INNER JOIN table3 ON table1.value = table2.value and table2.value = table3.value;
 ----
 Exchange
-├── output columns: [table1.value (#0), table2.value (#1), table3.value (#2)]
+├── output columns: [table3.value (#2), table2.value (#1), table1.value (#0)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [table1.value (#0), table2.value (#1), table3.value (#2)]
+    ├── output columns: [table3.value (#2), table2.value (#1), table1.value (#0)]
     ├── join type: INNER
-    ├── build keys: [table3.value (#2)]
-    ├── probe keys: [table1.value (#0)]
+    ├── build keys: [table1.value (#0)]
+    ├── probe keys: [table3.value (#2)]
     ├── keys is null equal: [false]
     ├── filters: []
     ├── build join filters:
-    │   └── filter id:1, build key:table3.value (#2), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
+    │   └── filter id:1, build key:table1.value (#0), probe targets:[table3.value (#2)@scan2], filter type:bloom,inlist,min_max
     ├── estimated rows: 250.00
     ├── Exchange(Build)
-    │   ├── output columns: [table3.value (#2), table2.value (#1)]
+    │   ├── output columns: [table1.value (#0), table2.value (#1)]
     │   ├── exchange type: Broadcast
     │   └── HashJoin
-    │       ├── output columns: [table3.value (#2), table2.value (#1)]
+    │       ├── output columns: [table1.value (#0), table2.value (#1)]
     │       ├── join type: INNER
     │       ├── build keys: [table2.value (#1)]
-    │       ├── probe keys: [table3.value (#2)]
+    │       ├── probe keys: [table1.value (#0)]
     │       ├── keys is null equal: [false]
     │       ├── filters: []
     │       ├── build join filters:
-    │       │   └── filter id:0, build key:table2.value (#1), probe targets:[table3.value (#2)@scan2], filter type:bloom,inlist,min_max
+    │       │   └── filter id:0, build key:table2.value (#1), probe targets:[table1.value (#0)@scan0], filter type:bloom,inlist,min_max
     │       ├── estimated rows: 250.00
     │       ├── Exchange(Build)
     │       │   ├── output columns: [table2.value (#1)]
@@ -122,29 +122,29 @@ Exchange
     │       │       ├── push downs: [filters: [is_not_null(table2.value (#1))], limit: NONE]
     │       │       └── estimated rows: 1000.00
     │       └── TableScan(Probe)
-    │           ├── table: default.default.table3
-    │           ├── scan id: 2
-    │           ├── output columns: [value (#2)]
-    │           ├── read rows: 2001
+    │           ├── table: default.default.table1
+    │           ├── scan id: 0
+    │           ├── output columns: [value (#0)]
+    │           ├── read rows: 2000
     │           ├── read size: 3.95 KiB
     │           ├── partitions total: 6
     │           ├── partitions scanned: 3
     │           ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-    │           ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
+    │           ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
     │           ├── apply join filters: [#0]
-    │           └── estimated rows: 2001.00
+    │           └── estimated rows: 2000.00
     └── TableScan(Probe)
-        ├── table: default.default.table1
-        ├── scan id: 0
-        ├── output columns: [value (#0)]
-        ├── read rows: 2000
+        ├── table: default.default.table3
+        ├── scan id: 2
+        ├── output columns: [value (#2)]
+        ├── read rows: 2001
         ├── read size: 3.95 KiB
         ├── partitions total: 6
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 2 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
-        ├── push downs: [filters: [is_not_null(table1.value (#0))], limit: NONE]
+        ├── push downs: [filters: [is_not_null(table3.value (#2))], limit: NONE]
         ├── apply join filters: [#1]
-        └── estimated rows: 2000.00
+        └── estimated rows: 2001.00
 
 
 query T
