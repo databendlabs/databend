@@ -47,6 +47,19 @@ pub struct ColumnStat {
 }
 
 impl ColumnStat {
+    pub(crate) fn refine_ndv_from_histogram(&mut self, histogram: &Histogram) {
+        let histogram_ndv = histogram.ndv();
+        if histogram.accuracy() {
+            self.ndv = self.ndv.min(histogram_ndv);
+            return;
+        }
+
+        // Inaccurate histograms keep derived bucket distinct counts as the best
+        // expected value, but their NDV bounds are only coarse consistency bounds.
+        let expected = self.ndv.expected.min(histogram_ndv.expected);
+        self.ndv = StatEstimate::new(self.ndv.lower, expected.max(self.ndv.lower), self.ndv.upper);
+    }
+
     pub fn to_arg_stat(&self, data_type: &DataType) -> Result<ArgStat<'_>, String> {
         let domain = Domain::from_datum(
             data_type,

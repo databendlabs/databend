@@ -96,6 +96,7 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::Float(TypedHistogram {
             accuracy: false,
+            row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(
                 F64::from(0.0),
                 F64::from(1000.0),
@@ -117,8 +118,8 @@ fn distorted_histogram_comparison_estimate_narrows_range() {
         .expect("distorted histogram comparison should estimate");
     let stat = &estimator.column_stats()[&Symbol::new(0)];
 
-    assert!((estimated_rows - 89.1).abs() < f64::EPSILON);
-    assert_eq!(stat.min, Datum::UInt(100));
+    assert!((estimated_rows - 50.0).abs() < f64::EPSILON);
+    assert_eq!(stat.min, Datum::UInt(101));
     assert_eq!(stat.max, Datum::UInt(1000));
 }
 
@@ -274,11 +275,11 @@ fn assert_estimator_smoke_invariants(
                 "histogram row count must stay non-negative"
             );
             prop_assert!(
-                histogram.num_distinct_values().is_finite(),
+                histogram.ndv().expected.is_finite(),
                 "histogram ndv must stay finite"
             );
             prop_assert!(
-                histogram.num_distinct_values() >= 0.0,
+                histogram.ndv().expected >= 0.0,
                 "histogram ndv must stay non-negative"
             );
         }

@@ -15,23 +15,41 @@
 use std::ops::Bound;
 
 use databend_common_exception::Result;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
-use databend_common_statistics::HistogramBuilder;
+use databend_common_statistics::HistogramBounds;
+use databend_common_statistics::HistogramRangeBounds;
 use databend_common_statistics::StatCount;
 use databend_common_statistics::StatEstimate;
 
 use crate::optimizer::ir::ColumnStat;
-use crate::optimizer::ir::stats::selectivity::Selectivity;
 use crate::plans::ComparisonOp;
 
+// A value constraint is a statistics propagation hint extracted from a
+// column-vs-constant predicate in an AND context. It materializes the predicate
+// into column bounds, null counts, NDV limits, and histograms when that can be
+// represented by column statistics.
+//
+// This is intentionally not a deterministic constraint solver. Predicate
+// truth, mutually-exclusive conditions, and algebraic simplification belong to
+// constant folding or expression rewriting before selectivity estimation. If a
+// predicate cannot be represented as column stats, keep the stats conservative
+// rather than proving facts here.
+#[derive(Clone)]
 pub(super) enum ValueConstraint {
     Eq(Datum),
+    // `!=` is not a range rewrite.
     NotEq,
     Range {
         lower: Bound<Datum>,
         upper: Bound<Datum>,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ConstraintContext {
+    And,
+    Or,
+    Not,
 }
 
 impl ValueConstraint {
@@ -58,106 +76,120 @@ impl ValueConstraint {
         }
     }
 
-    fn range_bounds(&self, column_stat: &ColumnStat) -> Result<Option<(Datum, Datum)>> {
-        let ValueConstraint::Range { lower, upper } = self else {
-            unreachable!()
-        };
-
-        let new_min = match lower {
-            Bound::Unbounded => Some(column_stat.min.clone()),
-            Bound::Included(datum) | Bound::Excluded(datum) => {
-                Datum::max(Some(column_stat.min.clone()), Some(datum.clone()))
-            }
-        };
-        let new_max = match upper {
-            Bound::Unbounded => Some(column_stat.max.clone()),
-            Bound::Included(datum) | Bound::Excluded(datum) => {
-                Datum::min(Some(column_stat.max.clone()), Some(datum.clone()))
-            }
-        };
-
-        let (Some(new_min), Some(new_max)) = (new_min, new_max) else {
-            return Ok(None);
-        };
-        if new_min.compare(&new_max)? == std::cmp::Ordering::Greater {
-            return Ok(None);
-        }
-
-        Ok(Some((new_min, new_max)))
-    }
-
-    pub(super) fn apply(
-        &self,
-        column_stat: &mut ColumnStat,
-        selectivity: Selectivity,
-    ) -> Result<()> {
-        if matches!(selectivity, Selectivity::Zero | Selectivity::N(0.0)) {
-            clear_for_empty_result(column_stat);
-            return Ok(());
-        }
-
+    pub(super) fn apply(&self, column_stat: &mut ColumnStat) -> Result<()> {
         match self {
-            ValueConstraint::Eq(datum) => {
-                *column_stat = ColumnStat::from_const(datum.clone());
-            }
-            ValueConstraint::NotEq => {
-                if let Selectivity::N(selectivity) = selectivity
-                    && selectivity > 0.0
-                {
-                    Self::restrict_to_bounds(
-                        column_stat,
-                        column_stat.min.clone(),
-                        column_stat.max.clone(),
-                        selectivity,
-                    )?;
+            ValueConstraint::Eq(datum) => match self.apply_to_bounds(&HistogramBounds::new(
+                column_stat.min.clone(),
+                column_stat.max.clone(),
+            ))? {
+                HistogramRangeBounds::Bounds(_) => {
+                    *column_stat = ColumnStat::from_const(datum.clone());
                 }
-            }
-            ValueConstraint::Range { .. } => match selectivity {
-                Selectivity::N(selectivity) if selectivity > 0.0 && selectivity < 1.0 => {
-                    if let Some((new_min, new_max)) = self.range_bounds(column_stat)? {
-                        Self::restrict_to_bounds(column_stat, new_min, new_max, selectivity)?;
-                    }
+                HistogramRangeBounds::Empty => {
+                    clear_for_empty_result(column_stat);
                 }
-                _ => {}
+                HistogramRangeBounds::Imprecise => {}
             },
+            ValueConstraint::NotEq => {}
+            ValueConstraint::Range { lower, upper } => {
+                let bounds = HistogramBounds::from_range_constraint(
+                    &column_stat.min,
+                    &column_stat.max,
+                    lower,
+                    upper,
+                )?;
+                match bounds {
+                    HistogramRangeBounds::Bounds(bounds) => {
+                        apply_range_bounds(
+                            column_stat,
+                            bounds.lower_bound().clone(),
+                            bounds.upper_bound().clone(),
+                        )?;
+                    }
+                    HistogramRangeBounds::Empty => {
+                        clear_for_empty_result(column_stat);
+                    }
+                    HistogramRangeBounds::Imprecise => {}
+                }
+            }
         }
-
         Ok(())
     }
 
-    fn restrict_to_bounds(
-        column_stat: &mut ColumnStat,
-        new_min: Datum,
-        new_max: Datum,
-        selectivity: f64,
-    ) -> Result<()> {
-        column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
-        column_stat.min = new_min.clone();
-        column_stat.max = new_max.clone();
-        column_stat.null_count = column_stat.null_count.reduce_by_selectivity(selectivity);
-
-        if let Some(histogram) = &column_stat.histogram {
-            // If selectivity < 0.2, most buckets are invalid and
-            // the accuracy histogram can be discarded.
-            // Todo: support unfixed buckets number for histogram and prune the histogram.
-            if !histogram.accuracy() || selectivity < 0.2 {
-                let num_values = histogram.num_values();
-                let new_num_values = (num_values * selectivity).ceil() as u64;
-                let new_ndv = column_stat.ndv.expected as u64;
-                column_stat.histogram = if new_ndv <= 2 {
-                    None
+    pub(super) fn apply_to_bounds(&self, bounds: &HistogramBounds) -> Result<HistogramRangeBounds> {
+        Ok(match self {
+            ValueConstraint::Eq(datum) => {
+                if contains_bounds_datum(bounds, datum)? {
+                    HistogramRangeBounds::Bounds(HistogramBounds::new(datum.clone(), datum.clone()))
                 } else {
-                    Some(HistogramBuilder::from_ndv(
-                        new_ndv,
-                        new_num_values.max(new_ndv),
-                        Some((new_min, new_max)),
-                        DEFAULT_HISTOGRAM_BUCKETS,
-                    )?)
+                    HistogramRangeBounds::Empty
                 }
             }
+            ValueConstraint::NotEq => HistogramRangeBounds::Imprecise,
+            ValueConstraint::Range { lower, upper } => HistogramBounds::from_range_constraint(
+                bounds.lower_bound(),
+                bounds.upper_bound(),
+                lower,
+                upper,
+            )?,
+        })
+    }
+
+    pub(super) fn apply_all(
+        input_stat: &ColumnStat,
+        constraints: &[ValueConstraint],
+    ) -> Result<ColumnStat> {
+        let mut column_stat = input_stat.clone();
+
+        for constraint in constraints {
+            constraint.apply(&mut column_stat)?;
         }
 
-        Ok(())
+        Ok(column_stat)
+    }
+}
+
+fn contains_bounds_datum(bounds: &HistogramBounds, datum: &Datum) -> Result<bool> {
+    Ok(
+        bounds.lower_bound().compare(datum)? != std::cmp::Ordering::Greater
+            && bounds.upper_bound().compare(datum)? != std::cmp::Ordering::Less,
+    )
+}
+
+fn apply_range_bounds(column_stat: &mut ColumnStat, new_min: Datum, new_max: Datum) -> Result<()> {
+    column_stat.min = new_min.clone();
+    column_stat.max = new_max.clone();
+    column_stat.null_count = StatCount::exact(0);
+    if let Some(ndv_upper) = finite_range_ndv_upper(&new_min, &new_max) {
+        column_stat.ndv = column_stat.ndv.reduce(ndv_upper);
+    }
+
+    if let Some(histogram) = &column_stat.histogram {
+        let restricted_histogram = histogram.restrict_to_bounds(&new_min, &new_max)?;
+        if let Some(histogram) = &restricted_histogram {
+            column_stat.refine_ndv_from_histogram(histogram);
+        }
+        column_stat.histogram = restricted_histogram;
+    }
+
+    Ok(())
+}
+
+fn finite_range_ndv_upper(min: &Datum, max: &Datum) -> Option<f64> {
+    if min == max {
+        return Some(1.0);
+    }
+    match (min, max) {
+        (Datum::Bool(false), Datum::Bool(true)) => Some(2.0),
+        (Datum::Int(min), Datum::Int(max)) => max
+            .checked_sub(*min)
+            .and_then(|diff| diff.checked_add(1))
+            .map(|value| value as f64),
+        (Datum::UInt(min), Datum::UInt(max)) => max
+            .checked_sub(*min)
+            .and_then(|diff| diff.checked_add(1))
+            .map(|value| value as f64),
+        _ => None,
     }
 }
 

@@ -1,0 +1,128 @@
+=== typed_comparison_predicates ===
+description: Typed comparison predicates should respect integer boundaries and nullable inputs.
+expr          : i < 5
+cardinality   : 100
+estimated     : 40
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(1), max: Int(4), ndv: 4.0, null_count: 0, histogram: None }
+
+expr          : i > 5
+cardinality   : 100
+estimated     : 50
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(6), max: Int(10), ndv: 5.0, null_count: 0, histogram: None }
+
+expr          : n > 5
+cardinality   : 100
+estimated     : 35
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 30, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(6), max: Int(10), ndv: 3.5, null_count: 0, histogram: None }
+
+=== typed_constant_compatibility ===
+description: Constant constraints should apply only when the typed comparison is compatible.
+expr          : d = cast(10 as date)
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: Int(20), max: Int(29), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(20), max: Int(29), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : d = cast(25 as date)
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: Int(20), max: Int(29), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(25), max: Int(25), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : number = '5'
+cardinality   : 100
+estimated     : 20
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 2.0, null_count: 0, histogram: None }
+
+expr          : number = UInt64(5)
+cardinality   : 100
+estimated     : 10
+in stats      :
+0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Int(5), max: Int(5), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : dec = cast(5.00 as decimal(10, 2))
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: Float(1.0), max: Float(4.0), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Float(1.0), max: Float(4.0), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : dec = cast(2.00 as decimal(10, 2))
+cardinality   : 100
+estimated     : 25
+in stats      :
+0 ColumnStat { min: Float(1.0), max: Float(4.0), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Float(2.0), max: Float(2.0), ndv: 1.0, null_count: 0, histogram: None }
+
+=== string_comparison_predicates ===
+description: String equality should use domain and function statistics without assuming unbounded strings are impossible.
+expr          : s = 'a'
+cardinality   : 100
+estimated     : 0
+in stats      :
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : s = 'c'
+cardinality   : 100
+estimated     : 25
+in stats      :
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Bytes([99]), max: Bytes([99]), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : 'c' = s
+cardinality   : 100
+estimated     : 25
+in stats      :
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Bytes([99]), max: Bytes([99]), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : s != 'c'
+cardinality   : 100
+estimated     : 75
+in stats      :
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 4.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 3.0, null_count: 0, histogram: None }
+
+=== boolean_comparison_predicates ===
+description: Boolean comparison predicates should keep constrained bounds and NDV consistent.
+expr          : flag = true
+cardinality   : 100
+estimated     : 50
+in stats      :
+0 ColumnStat { min: Bool(false), max: Bool(true), ndv: 2.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Bool(true), max: Bool(true), ndv: 1.0, null_count: 0, histogram: None }
+
+expr          : flag > false
+cardinality   : 100
+estimated     : 50
+in stats      :
+0 ColumnStat { min: Bool(false), max: Bool(true), ndv: 2.0, null_count: 0, histogram: None }
+out stats     :
+0 ColumnStat { min: Bool(true), max: Bool(true), ndv: 1.0, null_count: 0, histogram: None }
+

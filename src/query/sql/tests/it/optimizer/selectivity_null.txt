@@ -4,9 +4,9 @@ expr          : is_not_null(n)
 cardinality   : 8
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: ~8.0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: ~8.0, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: ~8.0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: ~8.0, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
 
 expr          : is_not_null(n)
 cardinality   : 0
@@ -15,6 +15,22 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
 out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+
+expr          : n > 10
+cardinality   : 8
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : n > 1
+cardinality   : exact 0
+estimated     : 0
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 0.0, null_count: 0, histogram: None }
 
 === exact_null_predicates ===
 description: Exact all-null input domains should fold is_not_null to an empty result and clear distributions.
@@ -25,4 +41,12 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 8, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
 out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 0.0, null_count: 0, histogram: None }
+
+expr          : is_not_null(n)
+cardinality   : exact 8
+estimated     : 6
+in stats      :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 6.0, null_count: 2, histogram: Some(UInt(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
+out stats     :
+0 ColumnStat { min: UInt(0), max: UInt(5), ndv: 4.5, null_count: ~1.5, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.75, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 5, num_values: 6.0, num_distinct: 6.0 }], avg_spacing: None })) }
 
