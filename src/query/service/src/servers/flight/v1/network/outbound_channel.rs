@@ -177,7 +177,7 @@ impl OutboundChannel for RemoteChannel {
     fn close(&self) {}
 
     fn is_closed(&self) -> bool {
-        false
+        self.buffer.is_closed(self.dest_idx)
     }
 
     async fn add_block(&self, block: DataBlock) -> Result<()> {

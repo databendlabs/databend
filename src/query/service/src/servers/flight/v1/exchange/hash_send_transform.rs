@@ -28,9 +28,9 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::graph::NodeIndex;
 
-use crate::servers::flight::v1::network::DummyOutboundChannel;
+use super::outbound_send_channels::OutboundSendChannels;
+use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 use crate::servers::flight::v1::scatter::FlightScatter;
 
@@ -42,8 +42,8 @@ pub struct HashSendTransform {
     scatter: Arc<Box<dyn FlightScatter>>,
     partition_stream: BlockPartitionStream,
     tasks: SyncTaskSet,
-    channels: Vec<Arc<dyn OutboundChannel>>,
-    handle: Option<SyncTaskHandle<'static, Result<Vec<()>>>>,
+    channels: OutboundSendChannels,
+    handle: Option<OutboundSendHandle>,
 }
 
 impl HashSendTransform {
@@ -59,6 +59,7 @@ impl HashSendTransform {
         let input = InputPort::create();
         let output = OutputPort::create();
         let scatter_size = channels.len();
+        let channels = OutboundSendChannels::create(channels);
         let processor = ProcessorPtr::create(Box::new(Self {
             scatter,
             channels,
@@ -77,6 +78,10 @@ impl HashSendTransform {
 
         PipeItem::create(processor, vec![input], vec![output])
     }
+
+    fn no_active_downstream(&self) -> bool {
+        self.output.is_finished() && self.channels.all_closed_except(self.local_pos)
+    }
 }
 
 impl Processor for HashSendTransform {
@@ -92,8 +97,13 @@ impl Processor for HashSendTransform {
         // Poll existing handle
         if let Some(mut handle) = self.handle.take() {
             match handle.poll(matches!(cause, EventCause::Other)) {
-                Poll::Ready(Ok(_)) => {}
-                Poll::Ready(Err(cause)) => return Err(cause),
+                Poll::Ready(results) => {
+                    self.channels.handle_send_results(results)?;
+                    if self.no_active_downstream() {
+                        self.input.finish();
+                        return Ok(Event::Finished);
+                    }
+                }
                 Poll::Pending => {
                     self.handle = Some(handle);
                     return Ok(Event::NeedConsume);
@@ -101,11 +111,9 @@ impl Processor for HashSendTransform {
             };
         }
 
-        if self.output.is_finished() {
-            if self.channels.iter().all(|ch| ch.is_closed()) {
-                self.input.finish();
-                return Ok(Event::Finished);
-            }
+        if self.no_active_downstream() {
+            self.input.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input.has_data() {
@@ -134,19 +142,32 @@ impl Processor for HashSendTransform {
                         }
                     }
 
+                    if self.channels.is_closed(partition_id) {
+                        continue;
+                    }
+
                     futures.push({
-                        let channel = self.channels[partition_id].clone();
-                        async move { channel.add_block(block).await }
+                        let channel = self.channels.channel(partition_id).clone();
+                        async move { (partition_id, channel.add_block(block).await) }
                     });
                 }
 
                 if !futures.is_empty() {
-                    let joined = Box::pin(futures::future::try_join_all(futures));
+                    let joined = Box::pin(futures::future::join_all(futures));
                     let mut handle = self.tasks.spawn(self.id, joined);
 
-                    if matches!(handle.poll(true), Poll::Pending) {
-                        self.handle = Some(handle);
-                        return Ok(Event::NeedConsume);
+                    match handle.poll(true) {
+                        Poll::Ready(results) => {
+                            self.channels.handle_send_results(results)?;
+                            if self.no_active_downstream() {
+                                self.input.finish();
+                                return Ok(Event::Finished);
+                            }
+                        }
+                        Poll::Pending => {
+                            self.handle = Some(handle);
+                            return Ok(Event::NeedConsume);
+                        }
                     }
                 }
 
@@ -162,42 +183,39 @@ impl Processor for HashSendTransform {
             let mut futures = Vec::new();
 
             for partition_id in 0..self.channels.len() {
+                if self.channels.is_closed(partition_id) {
+                    continue;
+                }
+
                 if let Some(block) = self.partition_stream.finalize_partition(partition_id) {
                     if block.is_empty() {
                         continue;
                     }
 
                     futures.push({
-                        let channel = self.channels[partition_id].clone();
-                        async move { channel.add_block(block).await }
+                        let channel = self.channels.channel(partition_id).clone();
+                        async move { (partition_id, channel.add_block(block).await) }
                     });
                 }
             }
 
             if futures.is_empty() {
-                for idx in 0..self.channels.len() {
-                    let mut closed = DummyOutboundChannel::create();
-                    std::mem::swap(&mut self.channels[idx], &mut closed);
-                    closed.close();
-                }
-
+                self.channels.close_all();
                 return Ok(Event::Finished);
             }
 
-            let joined = Box::pin(futures::future::try_join_all(futures));
+            let joined = Box::pin(futures::future::join_all(futures));
             let mut handle = self.tasks.spawn(self.id, joined);
 
-            if matches!(handle.poll(true), Poll::Pending) {
-                self.handle = Some(handle);
-                return Ok(Event::NeedConsume);
+            match handle.poll(true) {
+                Poll::Ready(results) => self.channels.handle_send_results(results)?,
+                Poll::Pending => {
+                    self.handle = Some(handle);
+                    return Ok(Event::NeedConsume);
+                }
             }
 
-            for idx in 0..self.channels.len() {
-                let mut closed = DummyOutboundChannel::create();
-                std::mem::swap(&mut self.channels[idx], &mut closed);
-                closed.close();
-            }
-
+            self.channels.close_all();
             return Ok(Event::Finished);
         }
 
