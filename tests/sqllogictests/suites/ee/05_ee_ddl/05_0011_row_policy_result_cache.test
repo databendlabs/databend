@@ -19,7 +19,7 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
-set enable_planner_cache = 0;
+set enable_planner_cache = 1;
 
 statement ok
 drop table if exists rap_cache_test;
