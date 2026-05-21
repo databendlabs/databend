@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp::Ordering;
+use std::fmt;
 
 use databend_common_base::base::OrderedFloat;
 
@@ -20,13 +21,24 @@ mod join;
 
 pub use join::JoinEstimation;
 
-#[derive(Debug, Clone, PartialEq)]
+use crate::Histogram;
+use crate::StatEstimate;
+
+#[derive(Clone, PartialEq)]
 pub struct TypedHistogram<T> {
-    /// Whether buckets come from ANALYZE's observed row-order tiles.
+    /// Whether bucket `num_distinct` values still come directly from ANALYZE
+    /// and may be used as exact NDV facts for the remaining bucket set.
     ///
-    /// `false` means the histogram was synthesized from NDV and min/max bounds
-    /// under a uniform-distribution assumption.
+    /// Histograms synthesized from NDV/min-max bounds mark this flag `false`.
+    /// Row scaling by an independent selectivity also marks it `false`: scaling
+    /// is a row-mass alignment after a filter whose surviving values are
+    /// unknown, so bucket distinct counts can no longer be exact. Range clipping
+    /// and join overlap keep the input accuracy because they do not by
+    /// themselves perform that unknown-value alignment.
     pub accuracy: bool,
+    /// A histogram-level row multiplier used to align row mass with the current
+    /// cardinality without rewriting bucket distinct estimates.
+    pub row_scale: f64,
     /// Buckets are ordered ranges. `num_values` is the row count in the bucket
     /// and `num_distinct` is the distinct-value count represented by it.
     pub buckets: Vec<TypedHistogramBucket<T>>,
@@ -35,10 +47,25 @@ pub struct TypedHistogram<T> {
     pub avg_spacing: Option<f64>,
 }
 
+impl<T: fmt::Debug> fmt::Debug for TypedHistogram<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug = f.debug_struct("TypedHistogram");
+        debug.field("accuracy", &self.accuracy);
+        if self.row_scale != 1.0 {
+            debug.field("row_scale", &self.row_scale);
+        }
+        debug
+            .field("buckets", &self.buckets)
+            .field("avg_spacing", &self.avg_spacing)
+            .finish()
+    }
+}
+
 impl<T> TypedHistogram<T> {
     pub fn new(buckets: Vec<TypedHistogramBucket<T>>, accuracy: bool) -> Self {
         Self {
             accuracy,
+            row_scale: 1.0,
             buckets,
             avg_spacing: None,
         }
@@ -49,21 +76,34 @@ impl<T> TypedHistogram<T> {
     }
 
     pub fn num_values(&self) -> f64 {
-        self.buckets.iter().map(|bucket| bucket.num_values).sum()
+        self.buckets
+            .iter()
+            .map(|bucket| bucket.num_values)
+            .sum::<f64>()
+            * self.row_scale
     }
 
-    pub fn num_distinct_values(&self) -> f64 {
-        self.buckets.iter().map(|bucket| bucket.num_distinct).sum()
+    pub fn ndv(&self) -> StatEstimate {
+        let num_distinct = self
+            .buckets
+            .iter()
+            .map(|bucket| bucket.num_distinct)
+            .sum::<f64>();
+        if self.accuracy {
+            return StatEstimate::exact(num_distinct);
+        }
+
+        let num_values = self.num_values();
+        StatEstimate::new(0.0, num_distinct.min(num_values), num_values)
     }
 
     pub fn scale_counts(&mut self, selectivity: f64) {
-        for bucket in &mut self.buckets {
-            bucket.num_values *= selectivity;
-            bucket.num_distinct *= selectivity;
-        }
+        self.accuracy = false;
+        self.row_scale *= selectivity;
     }
 
     pub fn collapse_counts_to_distinct(&mut self) {
+        self.row_scale = 1.0;
         for bucket in &mut self.buckets {
             bucket.num_values = bucket.num_distinct;
         }
@@ -249,6 +289,7 @@ impl TypedHistogramBuilder {
             } else {
                 Ok(TypedHistogram {
                     accuracy: false,
+                    row_scale: 1.0,
                     buckets: vec![],
                     avg_spacing: None,
                 })
@@ -314,6 +355,7 @@ impl TypedHistogramBuilder {
 
         Ok(TypedHistogram {
             accuracy: false,
+            row_scale: 1.0,
             buckets,
             avg_spacing,
         })
@@ -369,6 +411,9 @@ pub trait Value: Clone + PartialEq {
         left: &TypedHistogramBucket<Self>,
         right: &TypedHistogramBucket<Self>,
     ) -> Option<OverlapCoverage>;
+
+    fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram
+    where Self: Sized;
 }
 
 trait NumericValue: Value {
@@ -495,6 +540,10 @@ impl Value for u64 {
     ) -> Option<OverlapCoverage> {
         Self::estimate_numeric_overlap_coverages(left, right)
     }
+
+    fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
+        Histogram::UInt(histogram)
+    }
 }
 
 impl NumericValue for u64 {
@@ -570,45 +619,15 @@ impl Value for i64 {
     ) -> Option<OverlapCoverage> {
         Self::estimate_numeric_overlap_coverages(left, right)
     }
+
+    fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
+        Histogram::Int(histogram)
+    }
 }
 
 impl NumericValue for i64 {
     fn distance(start: &Self, end: &Self) -> Option<f64> {
         end.checked_sub(*start).map(|distance| distance as f64)
-    }
-}
-
-impl Value for f64 {
-    fn compare(left: &Self, right: &Self) -> Ordering {
-        left.total_cmp(right)
-    }
-
-    fn bucket_upper_bound(
-        min: &Self,
-        max: &Self,
-        num_buckets: usize,
-        bucket_index: usize,
-    ) -> Result<Self, String> {
-        let max = *max + 1.0;
-        let bucket_range = (max - min) / num_buckets as f64;
-        Ok(min + bucket_range * bucket_index as f64)
-    }
-
-    fn avg_spacing(min: &Self, max: &Self, num_buckets: usize) -> Option<f64> {
-        (*max > *min && num_buckets > 0).then(|| (*max - *min) / num_buckets as f64)
-    }
-
-    fn estimate_overlap_coverages(
-        left: &TypedHistogramBucket<Self>,
-        right: &TypedHistogramBucket<Self>,
-    ) -> Option<OverlapCoverage> {
-        Self::estimate_numeric_overlap_coverages(left, right)
-    }
-}
-
-impl NumericValue for f64 {
-    fn distance(start: &Self, end: &Self) -> Option<f64> {
-        Some(end - start)
     }
 }
 
@@ -639,6 +658,10 @@ impl Value for OrderedFloat<f64> {
         right: &TypedHistogramBucket<Self>,
     ) -> Option<OverlapCoverage> {
         Self::estimate_numeric_overlap_coverages(left, right)
+    }
+
+    fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
+        Histogram::Float(histogram)
     }
 }
 
@@ -690,6 +713,26 @@ impl Value for String {
             }),
         }
     }
+
+    fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
+        Histogram::Bytes(TypedHistogram {
+            accuracy: histogram.accuracy,
+            row_scale: histogram.row_scale,
+            buckets: histogram
+                .buckets
+                .into_iter()
+                .map(|bucket| {
+                    TypedHistogramBucket::new(
+                        bucket.lower_bound.into_bytes(),
+                        bucket.upper_bound.into_bytes(),
+                        bucket.num_values,
+                        bucket.num_distinct,
+                    )
+                })
+                .collect(),
+            avg_spacing: histogram.avg_spacing,
+        })
+    }
 }
 
 impl Value for Vec<u8> {
@@ -735,6 +778,10 @@ impl Value for Vec<u8> {
                 right: 1.0,
             }),
         }
+    }
+
+    fn into_histogram(histogram: TypedHistogram<Self>) -> Histogram {
+        Histogram::Bytes(histogram)
     }
 }
 
@@ -797,6 +844,21 @@ mod tests {
     }
 
     #[test]
+    fn test_typed_histogram_scaling_marks_inaccurate() {
+        let mut histogram = TypedHistogram::new(
+            vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)],
+            true,
+        );
+
+        histogram.scale_counts(0.25);
+
+        assert!(!histogram.accuracy);
+        assert_eq!(histogram.num_values(), 25.0);
+        assert_eq!(histogram.buckets[0].num_distinct, 10.0);
+        assert_eq!(histogram.ndv(), StatEstimate::new(0.0, 10.0, 25.0));
+    }
+
+    #[test]
     fn test_typed_histogram_builder_and_intersection() {
         let histogram = TypedHistogramBuilder::from_ndv(8, 16, Some((0_u64, 80_u64)), 4).unwrap();
         let left = TypedHistogramBounds::new(0_u64, 10_u64);
@@ -805,7 +867,7 @@ mod tests {
         assert!(!histogram.accuracy);
         assert_eq!(histogram.num_buckets(), 4);
         assert_eq!(histogram.num_values(), 16.0);
-        assert_eq!(histogram.num_distinct_values(), 8.0);
+        assert_eq!(histogram.ndv().expected, 8.0);
         assert_eq!(histogram.avg_spacing, Some(20.0));
         assert!(left.has_intersection(&right));
         assert_eq!(left.intersection(&right), (Some(5_u64), Some(10_u64)));
@@ -850,7 +912,7 @@ mod tests {
 
         assert_eq!(histogram.num_buckets(), 10);
         assert_eq!(histogram.num_values(), 100.0);
-        assert_eq!(histogram.num_distinct_values(), 100.0);
+        assert_eq!(histogram.ndv().expected, 100.0);
         assert_eq!(histogram.buckets.last().unwrap().upper_bound(), &9);
     }
 
@@ -858,10 +920,14 @@ mod tests {
     fn test_typed_histogram_synthetic_integer_self_join_does_not_overlap_bucket_edges() {
         let histogram = TypedHistogramBuilder::from_ndv(10, 10, Some((0_u64, 9_u64)), 10).unwrap();
 
-        assert_eq!(histogram.estimate_join(&histogram), JoinEstimation {
-            cardinality: StatEstimate::exact(10.0),
-            ndv: StatEstimate::exact(10.0),
-        });
+        let estimation = histogram.estimate_join(&histogram);
+        assert_eq!(estimation.cardinality, StatEstimate::exact(10.0));
+        assert_eq!(estimation.ndv, StatEstimate::exact(10.0));
+        let output = estimation
+            .histogram
+            .expect("self join should produce output histogram");
+        assert_eq!(output.num_values(), 10.0);
+        assert_eq!(output.ndv().expected, 10.0);
     }
 
     #[test]

@@ -229,6 +229,7 @@ mod tests {
     fn test_is_histogram_range_distorted() {
         let histogram = Histogram::Float(TypedHistogram {
             accuracy: false,
+            row_scale: 1.0,
             buckets: vec![],
             avg_spacing: Some(1e13),
         });
@@ -240,11 +241,13 @@ mod tests {
     fn test_estimate_histogram_join() {
         let left = Histogram::UInt(TypedHistogram {
             accuracy: true,
+            row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 10, 10.0, 10.0)],
             avg_spacing: None,
         });
         let right = Histogram::UInt(TypedHistogram {
             accuracy: true,
+            row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(5, 15, 10.0, 10.0)],
             avg_spacing: None,
         });
@@ -259,11 +262,13 @@ mod tests {
     fn test_estimate_histogram_join_rejects_mixed_numeric_types() {
         let left = Histogram::UInt(TypedHistogram {
             accuracy: true,
+            row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 10, 10.0, 10.0)],
             avg_spacing: None,
         });
         let right = Histogram::Int(TypedHistogram {
             accuracy: true,
+            row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(5, 15, 10.0, 10.0)],
             avg_spacing: None,
         });

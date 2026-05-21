@@ -20,6 +20,7 @@ use databend_common_statistics::TypedHistogramBucket;
 fn test_histogram() {
     let histogram = Histogram::UInt(TypedHistogram {
         accuracy: false,
+        row_scale: 1.0,
         buckets: vec![
             TypedHistogramBucket::new(0, 1, 2.0, 1.0),
             TypedHistogramBucket::new(1, 2, 2.0, 1.0),
@@ -29,5 +30,5 @@ fn test_histogram() {
 
     assert_eq!(histogram.num_buckets(), 2);
     assert_eq!(histogram.num_values(), 4.0);
-    assert_eq!(histogram.num_distinct_values(), 2.0);
+    assert_eq!(histogram.ndv().expected, 2.0);
 }
