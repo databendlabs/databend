@@ -24,6 +24,7 @@ pub const FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP: &str =
     "data_retention_num_snapshots_to_keep";
 pub const FUSE_OPT_KEY_ENABLE_AUTO_VACUUM: &str = "enable_auto_vacuum";
 pub const FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE: &str = "enable_auto_analyze";
+pub const FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN: &str = "enable_virtual_column";
 pub const FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD: &str =
     "auto_compaction_imperfect_blocks_threshold";
 pub const FUSE_OPT_KEY_ATTACH_COLUMN_IDS: &str = "attach_column_ids";

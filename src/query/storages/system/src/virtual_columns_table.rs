@@ -69,7 +69,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
         for db in dbs {
             let tables = catalog.list_tables(&tenant, db.name()).await?;
             for table in tables {
-                if !table.support_virtual_columns() {
+                if !table.storage_format_as_parquet() {
                     continue;
                 }
                 let table_info = table.get_table_info();
