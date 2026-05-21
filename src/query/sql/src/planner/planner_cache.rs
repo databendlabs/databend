@@ -304,11 +304,12 @@ impl TableRefVisitor {
             databend_common_base::runtime::block_on(async move {
                 if let Ok(table_meta) = self
                     .ctx
-                    .get_table_with_branch(
+                    .resolve_data_source(
                         &catalog_name,
                         &database_name,
                         &table_name,
                         branch.as_deref(),
+                        None,
                     )
                     .await
                 {
