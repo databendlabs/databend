@@ -1,7 +1,7 @@
 matrix: group_by_alias
 local_dimensions:
   - name: relation
-    values: [input-conflict, no-input]
+    values: [input-conflict, no-input, input-ambiguous]
   - name: scope
     values: [same-list-exact, same-set, separate-set]
   - name: setting
@@ -13,7 +13,7 @@ regions:
       name_shapes: [N0]
       producers: [S1]
     local:
-      relation: [input-conflict, no-input]
+      relation: [input-conflict, no-input, input-ambiguous]
       setting: [alias-first, column-first]
     masks:
       - when:
@@ -48,6 +48,22 @@ regions:
           - "CREATE TABLE t(i Int32)"
         runs:
           - sql: "SELECT i AS k, count(*) FROM t GROUP BY k"
+      - key: G0N0S1_0_20
+        name: group_by_bare_select_alias_ambiguous_input_alias_first
+        setup_sqls:
+          - "CREATE TABLE t(x Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: false
+            sql: "SELECT t1.x AS x, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY x"
+      - key: G0N0S1_0_21
+        name: group_by_bare_select_alias_ambiguous_input_column_first
+        setup_sqls:
+          - "CREATE TABLE t(x Int32)"
+        runs:
+          - settings:
+              enable_group_by_column_first: true
+            sql: "SELECT t1.x AS x, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY x"
   - description: prior GROUP BY aliases reused by later expressions in the same ordinary grouping list
     main:
       consumers: [G0, G2]

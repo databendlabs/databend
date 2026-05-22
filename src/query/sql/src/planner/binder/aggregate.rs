@@ -47,6 +47,7 @@ use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::ClauseAliasBindings;
 use crate::binder::select::SelectList;
 use crate::optimizer::ir::SExpr;
+use crate::planner::semantic::TypeChecker;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateFunctionScalarSortDesc;
@@ -1211,26 +1212,17 @@ impl Binder {
 
             let (preferred_aliases, fallback_aliases) = group_by_aliases.group_item_aliases(expr);
 
-            let mut scalar_binder = ScalarBinder::new(
-                bind_context,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                self.metadata.clone(),
-                preferred_aliases.unwrap_or(&[]),
-            );
-            let (mut scalar_expr, _) = if let Some(fallback_aliases) = fallback_aliases {
-                scalar_binder.bind(expr).or_else(|_| {
-                    let mut fallback_scalar_binder = ScalarBinder::new(
-                        bind_context,
-                        self.ctx.clone(),
-                        &self.name_resolution_ctx,
-                        self.metadata.clone(),
-                        fallback_aliases,
-                    );
-                    fallback_scalar_binder.bind(expr)
-                })?
-            } else {
-                scalar_binder.bind(expr)?
+            let (mut scalar_expr, _) = {
+                let mut type_checker = TypeChecker::try_create_with_alias_fallback(
+                    bind_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    preferred_aliases.unwrap_or(&[]),
+                    fallback_aliases,
+                    false,
+                )?;
+                *type_checker.resolve(expr)?
             };
 
             // If a simple GROUP BY item matched a SELECT alias, remember that

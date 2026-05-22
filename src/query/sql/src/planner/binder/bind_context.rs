@@ -402,6 +402,55 @@ impl BindContext {
         available_aliases: &[(String, ScalarExpr)],
         name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
+        let result = self.resolve_name_candidates(
+            database,
+            table,
+            column,
+            available_aliases,
+            name_resolution_ctx,
+        )?;
+        Self::finish_resolve_name(column, result)
+    }
+
+    pub(crate) fn resolve_name_with_alias_fallback(
+        &self,
+        database: Option<&str>,
+        table: Option<&str>,
+        column: &Identifier,
+        available_aliases: &[(String, ScalarExpr)],
+        fallback_aliases: Option<&[(String, ScalarExpr)]>,
+        name_resolution_ctx: &NameResolutionContext,
+    ) -> Result<NameResolutionResult> {
+        let mut result = self.resolve_name_candidates(
+            database,
+            table,
+            column,
+            available_aliases,
+            name_resolution_ctx,
+        )?;
+        if result.is_empty()
+            && let Some(fallback_aliases) = fallback_aliases
+        {
+            result = self.resolve_name_candidates(
+                database,
+                table,
+                column,
+                fallback_aliases,
+                name_resolution_ctx,
+            )?;
+        }
+
+        Self::finish_resolve_name(column, result)
+    }
+
+    fn resolve_name_candidates(
+        &self,
+        database: Option<&str>,
+        table: Option<&str>,
+        column: &Identifier,
+        available_aliases: &[(String, ScalarExpr)],
+        name_resolution_ctx: &NameResolutionContext,
+    ) -> Result<Vec<NameResolutionResult>> {
         let name = &column.name;
         let column_case_sensitive = name_resolution_ctx.is_case_sensitive(column);
         if name_resolution_ctx.deny_column_reference {
@@ -468,6 +517,14 @@ impl BindContext {
             }
         }
 
+        Ok(result)
+    }
+
+    fn finish_resolve_name(
+        column: &Identifier,
+        mut result: Vec<NameResolutionResult>,
+    ) -> Result<NameResolutionResult> {
+        let name = &column.name;
         if result.len() > 1 && !result.iter().all_equal() {
             return Err(ErrorCode::SemanticError(format!(
                 "column {name} reference or alias is ambiguous, please use another alias name",

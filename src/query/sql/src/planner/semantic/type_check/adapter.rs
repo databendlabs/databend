@@ -450,4 +450,23 @@ impl<'a> TypeChecker<'a, FullTypeCheckAdapter> {
             aliases,
         )
     }
+
+    pub fn try_create_with_alias_fallback(
+        bind_context: &'a mut BindContext,
+        ctx: Arc<dyn TableContext>,
+        name_resolution_ctx: &'a NameResolutionContext,
+        metadata: MetadataRef,
+        aliases: &'a [(String, ScalarExpr)],
+        fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
+        forbid_udf: bool,
+    ) -> Result<Self> {
+        Self::try_create_with_adapter_and_alias_fallback(
+            bind_context,
+            FullTypeCheckAdapter::new(ctx)?.with_forbid_udf(forbid_udf),
+            name_resolution_ctx,
+            metadata,
+            aliases,
+            fallback_aliases,
+        )
+    }
 }

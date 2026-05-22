@@ -47,6 +47,48 @@ EvalScalar
             └── limit: NONE
 
 
+=== group_by_alias__group_by_bare_select_alias_ambiguous_input_alias_first ===
+matrix: group_by_alias
+key: G0N0S1_0_20
+setting: enable_group_by_column_first=0
+sql: SELECT t1.x AS x, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY x
+status: ok
+EvalScalar
+├── scalars: [t.x (#0) AS (#0), COUNT(*) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.x (#0) AS (#0)]
+    ├── aggregate functions: [count() AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.x (#0) AS (#0)]
+        └── Join(Inner)
+            ├── build keys: []
+            ├── probe keys: []
+            ├── other filters: []
+            ├── Filter
+            │   ├── filters: [true]
+            │   └── Scan
+            │       ├── table: default.t (#1)
+            │       ├── filters: []
+            │       ├── order by: []
+            │       └── limit: NONE
+            └── Filter
+                ├── filters: [true]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== group_by_alias__group_by_bare_select_alias_ambiguous_input_column_first ===
+matrix: group_by_alias
+key: G0N0S1_0_21
+setting: enable_group_by_column_first=1
+sql: SELECT t1.x AS x, count(*) FROM t AS t1 INNER JOIN t AS t2 ON true GROUP BY x
+status: error
+code: 1065
+message: column x reference or alias is ambiguous, please use another alias name
+
 === group_by_alias__group_by_expression_uses_prior_group_alias ===
 matrix: group_by_alias
 key: G0N2G0_1_00
