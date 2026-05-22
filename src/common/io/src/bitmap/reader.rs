@@ -225,7 +225,10 @@ impl BitmapReader<'_> {
                 if cardinality <= ARRAY_LIMIT {
                     let container_len = cardinality * 2;
                     if container_start + container_len > self.buf.len() {
-                        return Err(Error::new(ErrorKind::UnexpectedEof, "container out of bounds"));
+                        return Err(Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "container out of bounds",
+                        ));
                     }
                     let container_buf = &self.buf[container_start..container_start + container_len];
 
@@ -246,7 +249,10 @@ impl BitmapReader<'_> {
                 } else {
                     const BITMAP_LENGTH: usize = 8192;
                     if container_start + BITMAP_LENGTH > self.buf.len() {
-                        return Err(Error::new(ErrorKind::UnexpectedEof, "container out of bounds"));
+                        return Err(Error::new(
+                            ErrorKind::UnexpectedEof,
+                            "container out of bounds",
+                        ));
                     }
                     let container_buf = &self.buf[container_start..container_start + BITMAP_LENGTH];
                     let byte_idx = (low >> 3) as usize;
@@ -283,7 +289,10 @@ impl BitmapReader<'_> {
         if cardinality <= ARRAY_LIMIT {
             let last_val_pos = container_start + (cardinality - 1) * 2;
             if last_val_pos + 2 > self.buf.len() {
-                return Err(Error::new(ErrorKind::UnexpectedEof, "container out of bounds"));
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "container out of bounds",
+                ));
             }
             let mut val_bytes = &self.buf[last_val_pos..last_val_pos + 2];
             let low = val_bytes.read_u16::<LittleEndian>()?;
@@ -291,7 +300,10 @@ impl BitmapReader<'_> {
         } else {
             const BITMAP_LENGTH: usize = 8192;
             if container_start + BITMAP_LENGTH > self.buf.len() {
-                return Err(Error::new(ErrorKind::UnexpectedEof, "container out of bounds"));
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "container out of bounds",
+                ));
             }
             let container_buf = &self.buf[container_start..container_start + BITMAP_LENGTH];
             for idx in (0..BITMAP_LENGTH).rev() {
@@ -302,7 +314,10 @@ impl BitmapReader<'_> {
                     return Ok(((high as u32) << 16) | low);
                 }
             }
-            Err(Error::new(ErrorKind::InvalidData, "invalid empty bitmap container"))
+            Err(Error::new(
+                ErrorKind::InvalidData,
+                "invalid empty bitmap container",
+            ))
         }
     }
 
@@ -326,7 +341,10 @@ impl BitmapReader<'_> {
         const ARRAY_LIMIT: usize = 4096;
         if cardinality <= ARRAY_LIMIT {
             if container_start + 2 > self.buf.len() {
-                return Err(Error::new(ErrorKind::UnexpectedEof, "container out of bounds"));
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "container out of bounds",
+                ));
             }
             let mut val_bytes = &self.buf[container_start..container_start + 2];
             let low = val_bytes.read_u16::<LittleEndian>()?;
@@ -334,7 +352,10 @@ impl BitmapReader<'_> {
         } else {
             const BITMAP_LENGTH: usize = 8192;
             if container_start + BITMAP_LENGTH > self.buf.len() {
-                return Err(Error::new(ErrorKind::UnexpectedEof, "container out of bounds"));
+                return Err(Error::new(
+                    ErrorKind::UnexpectedEof,
+                    "container out of bounds",
+                ));
             }
             let container_buf = &self.buf[container_start..container_start + BITMAP_LENGTH];
             for idx in 0..BITMAP_LENGTH {
@@ -345,7 +366,10 @@ impl BitmapReader<'_> {
                     return Ok(((high as u32) << 16) | low);
                 }
             }
-            Err(Error::new(ErrorKind::InvalidData, "invalid empty bitmap container"))
+            Err(Error::new(
+                ErrorKind::InvalidData,
+                "invalid empty bitmap container",
+            ))
         }
     }
 }
