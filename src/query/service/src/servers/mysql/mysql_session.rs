@@ -143,7 +143,7 @@ impl MySQLConnection {
         info!("MySQL connection coming: {}", client_addr);
 
         let query_executor =
-            Runtime::with_worker_threads(1, Some("mysql-query-executor".to_string()))?;
+            Runtime::with_worker_threads(2, Some("mysql-query-executor".to_string()))?;
 
         Thread::spawn(move || {
             let tls_clone = tls.clone();

@@ -216,7 +216,7 @@ impl RuntimeApi for DatabendRuntime {
     fn new(workers: Option<usize>, name: Option<String>) -> Result<Self, String> {
         let rt = match workers {
             Some(n) => runtime::Runtime::with_worker_threads(n, name),
-            None => runtime::Runtime::with_default_worker_threads(),
+            None => runtime::Runtime::with_default_worker_threads(name),
         };
         rt.map(|inner| Self {
             inner: Arc::new(inner),

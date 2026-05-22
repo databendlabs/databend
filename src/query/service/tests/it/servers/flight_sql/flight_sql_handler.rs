@@ -101,7 +101,7 @@ fn prepare_config() -> InnerConfig {
 async fn test_query() -> Result<()> {
     let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("flight-sql-test".to_string()))?;
     runtime.block_on(async {
         let file = NamedTempFile::new().unwrap();
         let path = file.into_temp_path().to_str().unwrap().to_string();

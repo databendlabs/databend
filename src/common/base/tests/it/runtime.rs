@@ -29,16 +29,20 @@ use tokio::time::sleep;
 async fn test_runtime() -> anyhow::Result<()> {
     let counter = Arc::new(Mutex::new(0));
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("runtime-test".to_string()))?;
     let runtime_counter = Arc::clone(&counter);
     let runtime_header = runtime.spawn(async move {
-        let rt1 = Runtime::with_default_worker_threads().unwrap();
+        let rt1 =
+            Runtime::with_default_worker_threads(Some("runtime-test-rt1".to_string())).unwrap();
         let rt1_counter = Arc::clone(&runtime_counter);
         let rt1_header = rt1.spawn(async move {
-            let rt2 = Runtime::with_worker_threads(1, None).unwrap();
+            let rt2 =
+                Runtime::with_worker_threads(1, Some("runtime-test-rt2".to_string())).unwrap();
             let rt2_counter = Arc::clone(&rt1_counter);
             let rt2_header = rt2.spawn(async move {
-                let rt3 = Runtime::with_default_worker_threads().unwrap();
+                let rt3 =
+                    Runtime::with_default_worker_threads(Some("runtime-test-rt3".to_string()))
+                        .unwrap();
                 let rt3_counter = Arc::clone(&rt2_counter);
                 let rt3_header = rt3.spawn(async move {
                     let mut num = rt3_counter.lock().unwrap();
@@ -69,7 +73,7 @@ async fn test_runtime() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("runtime-shutdown-test".to_string()))?;
 
     runtime.spawn(async move {
         tokio::time::sleep(Duration::from_secs(6)).await;
@@ -128,7 +132,7 @@ async fn mock_get_page(i: usize) -> Vec<usize> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime_try_spawn_batch() -> anyhow::Result<()> {
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("runtime-batch-test".to_string()))?;
 
     let mut futs = vec![];
     for i in 0..20 {

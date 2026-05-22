@@ -59,7 +59,7 @@ impl Runtime {
         let (send_stop, recv_stop) = oneshot::channel();
 
         let handle = runtime.handle().clone();
-        let runtime_name = name.clone().unwrap_or_else(|| "unamed".to_string());
+        let runtime_name = name.clone().unwrap_or_else(|| "unnamed".to_string());
         let task_dump_marker = format!("rt-name={runtime_name}");
 
         let n = name.clone();
@@ -92,8 +92,8 @@ impl Runtime {
     /// Spawns a new tokio runtime with a default thread count on a background
     /// thread and returns a `Handle` which can be used to spawn tasks via
     /// its executor.
-    pub fn with_default_worker_threads() -> Result<Self> {
-        Self::create_runtime(None, None)
+    pub fn with_default_worker_threads(thread_name: Option<String>) -> Result<Self> {
+        Self::create_runtime(None, thread_name)
     }
 
     pub fn with_worker_threads(workers: usize, thread_name: Option<String>) -> Result<Self> {
