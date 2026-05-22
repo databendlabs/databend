@@ -42,6 +42,10 @@ pub struct Runtime {
     /// Runtime handle.
     handle: Handle,
 
+    /// Prefix injected into root async-backtrace frames spawned by this wrapper.
+    /// This makes existing task dumps show which named Databend runtime owns a task.
+    task_dump_marker: String,
+
     /// Use to receive a drop signal when dropper is dropped.
     _dropper: Dropper,
 }
@@ -55,6 +59,8 @@ impl Runtime {
         let (send_stop, recv_stop) = oneshot::channel();
 
         let handle = runtime.handle().clone();
+        let runtime_name = name.clone().unwrap_or_else(|| "unamed".to_string());
+        let task_dump_marker = format!("rt-name={runtime_name}");
 
         let n = name.clone();
         // Block the runtime to shutdown.
@@ -74,6 +80,7 @@ impl Runtime {
 
         Ok(Runtime {
             handle,
+            task_dump_marker,
             _dropper: Dropper {
                 name,
                 close: Some(send_stop),
@@ -128,6 +135,10 @@ impl Runtime {
 
     pub fn inner(&self) -> tokio::runtime::Handle {
         self.handle.clone()
+    }
+
+    fn task_location_name(&self, location_name: String) -> String {
+        format!("{} {}", self.task_dump_marker, location_name)
     }
 
     #[track_caller]
@@ -197,9 +208,11 @@ impl Runtime {
             let permit = semaphore.acquire_owned().await.map_err(|e| {
                 ErrorCode::Internal(format!("semaphore closed, acquire permit failure. {}", e))
             })?;
+            let task_location_name =
+                self.task_location_name("Runtime::try_spawn_batch task".to_string());
             #[expect(clippy::disallowed_methods)]
             let handler = self.handle.spawn(ThreadTracker::tracking_future(
-                async_backtrace::location!().frame(async move {
+                async_backtrace::location!(task_location_name).frame(async move {
                     // take the ownership of the permit, (implicitly) drop it when task is done
                     fut(permit).await
                 }),
@@ -261,7 +274,7 @@ impl Runtime {
             Some(query_id) => format!("Running query {} spawn task", query_id),
         });
 
-        let task = async_backtrace::location!(location_name).frame(task);
+        let task = async_backtrace::location!(self.task_location_name(location_name)).frame(task);
 
         #[expect(clippy::disallowed_methods)]
         self.handle.spawn(task)

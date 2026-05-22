@@ -19,6 +19,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::dump_backtrace;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::sync::Semaphore;
@@ -77,6 +78,27 @@ async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
     let instant = Instant::now();
     drop(runtime);
     assert!(instant.elapsed() < Duration::from_secs(6));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_runtime_task_dump_contains_runtime_name() -> anyhow::Result<()> {
+    let runtime = Runtime::with_worker_threads(1, Some("task-marker-runtime".to_string()))?;
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+
+    runtime.spawn_named(
+        async move {
+            started_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        },
+        "task-marker-test".to_string(),
+    );
+    started_rx.recv_timeout(Duration::from_secs(1))?;
+
+    let dump = dump_backtrace(false);
+    assert!(dump.contains("rt-name=task-marker-runtime"));
+    assert!(dump.contains("task-marker-test"));
 
     Ok(())
 }
