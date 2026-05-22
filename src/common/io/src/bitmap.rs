@@ -733,7 +733,9 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
         match buf[3] {
             HYBRID_KIND_SMALL => {
                 if payload.is_empty() {
-                    return Err(ErrorCode::BadBytes("invalid hybrid bitmap: missing small length".to_string()));
+                    return Err(ErrorCode::BadBytes(
+                        "invalid hybrid bitmap: missing small length".to_string(),
+                    ));
                 }
                 Ok(payload[0] as u64)
             }
