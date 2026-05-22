@@ -91,18 +91,66 @@ async fn test_runtime_task_dump_contains_runtime_name() -> anyhow::Result<()> {
     let runtime = Runtime::with_worker_threads(1, Some("task-marker-runtime".to_string()))?;
     let (started_tx, started_rx) = std::sync::mpsc::channel();
 
+    let named_started_tx = started_tx.clone();
+    let named_spawn_line = line!() + 1;
     runtime.spawn_named(
         async move {
-            started_tx.send(()).unwrap();
+            named_started_tx.send(()).unwrap();
             std::future::pending::<()>().await;
         },
         "task-marker-test".to_string(),
     );
+    let global_spawn_line = line!() + 1;
+    runtime.spawn(async move {
+        started_tx.send(()).unwrap();
+        std::future::pending::<()>().await;
+    });
+    started_rx.recv_timeout(Duration::from_secs(1))?;
     started_rx.recv_timeout(Duration::from_secs(1))?;
 
     let dump = dump_backtrace(false);
-    assert!(dump.contains("rt-name=task-marker-runtime"));
-    assert!(dump.contains("task-marker-test"));
+    assert!(dump.contains(&format!(
+        "[task-marker-runtime] task-marker-test at {}:{}:",
+        file!(),
+        named_spawn_line
+    )));
+    assert!(dump.contains(&format!(
+        "[task-marker-runtime] Global spawn task at {}:{}:",
+        file!(),
+        global_spawn_line
+    )));
+    assert!(!dump.contains("task-marker-test at src/common/base/src/runtime/runtime.rs"));
+    assert!(!dump.contains("Global spawn task at src/common/base/src/runtime/runtime.rs"));
+
+    Ok(())
+}
+
+#[test]
+fn test_free_spawn_task_dump_contains_runtime_name() -> anyhow::Result<()> {
+    let runtime = Runtime::with_worker_threads(1, Some("free-spawn-runtime-test".to_string()))?;
+
+    runtime.block_on(async {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let free_spawn_line = line!() + 1;
+        databend_common_base::runtime::spawn(async move {
+            let _ = started_tx.send(());
+            std::future::pending::<()>().await;
+        });
+        started_rx.await.map_err(|err| {
+            databend_common_exception::ErrorCode::Internal(format!(
+                "free spawn marker task did not start: {err}"
+            ))
+        })?;
+
+        let dump = dump_backtrace(false);
+        assert!(dump.lines().any(|line| {
+            line.contains("[free-spawn-runtime-test]")
+                && line.contains(&format!(" at {}:{}:", file!(), free_spawn_line))
+        }));
+        assert!(!dump.contains("[spawn-thread="));
+
+        Ok::<(), databend_common_exception::ErrorCode>(())
+    })?;
 
     Ok(())
 }

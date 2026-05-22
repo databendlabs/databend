@@ -60,7 +60,7 @@ impl Runtime {
 
         let handle = runtime.handle().clone();
         let runtime_name = name.clone().unwrap_or_else(|| "unnamed".to_string());
-        let task_dump_marker = format!("rt-name={runtime_name}");
+        let task_dump_marker = format!("[{runtime_name}]");
 
         let n = name.clone();
         // Block the runtime to shutdown.
@@ -120,7 +120,8 @@ impl Runtime {
         }
 
         if let Some(ref name) = thread_name {
-            builder.thread_name(name);
+            builder.name(name.clone());
+            builder.thread_name(name.clone());
         }
 
         if let Some(n) = workers {
@@ -262,19 +263,18 @@ impl Runtime {
     /// Spawns a new asynchronous task with an optional name, returning a JoinHandle for it.
     ///
     /// If `name` is `None`, generates a default name based on the current query context.
+    #[track_caller]
     fn spawn_with_name<T>(&self, task: T, name: Option<String>) -> JoinHandle<T::Output>
     where
         T: Future + Send + 'static,
         T::Output: Send + 'static,
     {
-        let task = ThreadTracker::tracking_future(task);
-
         let location_name = name.unwrap_or_else(|| match ThreadTracker::query_id() {
             None => String::from(GLOBAL_TASK_DESC),
             Some(query_id) => format!("Running query {} spawn task", query_id),
         });
 
-        let task = async_backtrace::location!(self.task_location_name(location_name)).frame(task);
+        let task = location_future(task, Some(self.task_location_name(location_name)));
 
         #[expect(clippy::disallowed_methods)]
         self.handle.spawn(task)
@@ -349,8 +349,9 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
+    let name = current_runtime_location_name::<F>(None);
     #[expect(clippy::disallowed_methods)]
-    tokio::spawn(location_future(future, None))
+    tokio::spawn(location_future(future, Some(name)))
 }
 
 #[track_caller]
@@ -359,6 +360,7 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
+    let name = current_runtime_location_name::<F>(Some(name));
     #[expect(clippy::disallowed_methods)]
     tokio::spawn(location_future(future, Some(name)))
 }
@@ -369,8 +371,9 @@ where
     F: Future + Send + 'static,
     F::Output: Send + 'static,
 {
+    let name = current_runtime_location_name::<F>(None);
     #[expect(clippy::disallowed_methods)]
-    tokio::task::spawn_local(location_future(future, None))
+    tokio::task::spawn_local(location_future(future, Some(name)))
 }
 
 #[track_caller]
@@ -455,4 +458,21 @@ where
         frame_location.column()
     )
     .frame(future)
+}
+
+fn current_runtime_location_name<F>(frame_name: Option<String>) -> String
+where F: Future {
+    let frame_name = frame_name.unwrap_or_else(|| {
+        std::any::type_name::<F>()
+            .trim_end_matches("::{{closure}}")
+            .to_string()
+    });
+
+    if let Ok(handle) = Handle::try_current()
+        && let Some(name) = handle.name()
+    {
+        return format!("[{name}] {frame_name}");
+    }
+
+    frame_name
 }
