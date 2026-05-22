@@ -738,14 +738,16 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
                 Ok(payload[0] as u64)
             }
             HYBRID_KIND_LARGE => {
-                Ok(reader::bitmap_len(payload)? as u64)
+                let len = reader::bitmap_len(payload).map_err(ErrorCode::from)?;
+                Ok(len as u64)
             }
             kind => Err(ErrorCode::BadBytes(format!(
                 "unknown hybrid bitmap kind: {kind}"
             ))),
         }
     } else {
-        Ok(reader::bitmap_len(buf)? as u64)
+        let len = reader::bitmap_len(buf).map_err(ErrorCode::from)?;
+        Ok(len as u64)
     }
 }
 
@@ -762,16 +764,18 @@ pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
                 Ok(values.binary_search(&value).is_ok())
             }
             HYBRID_KIND_LARGE => {
-                let reader = reader::TreemapReader::new(payload)?;
-                Ok(reader.contains(value)?)
+                let reader = reader::TreemapReader::new(payload).map_err(ErrorCode::from)?;
+                let contains = reader.contains(value).map_err(ErrorCode::from)?;
+                Ok(contains)
             }
             kind => Err(ErrorCode::BadBytes(format!(
                 "unknown hybrid bitmap kind: {kind}"
             ))),
         }
     } else {
-        let reader = reader::TreemapReader::new(buf)?;
-        Ok(reader.contains(value)?)
+        let reader = reader::TreemapReader::new(buf).map_err(ErrorCode::from)?;
+        let contains = reader.contains(value).map_err(ErrorCode::from)?;
+        Ok(contains)
     }
 }
 
@@ -788,16 +792,18 @@ pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
                 Ok(values.last().copied())
             }
             HYBRID_KIND_LARGE => {
-                let reader = reader::TreemapReader::new(payload)?;
-                Ok(reader.max()?)
+                let reader = reader::TreemapReader::new(payload).map_err(ErrorCode::from)?;
+                let max = reader.max().map_err(ErrorCode::from)?;
+                Ok(max)
             }
             kind => Err(ErrorCode::BadBytes(format!(
                 "unknown hybrid bitmap kind: {kind}"
             ))),
         }
     } else {
-        let reader = reader::TreemapReader::new(buf)?;
-        Ok(reader.max()?)
+        let reader = reader::TreemapReader::new(buf).map_err(ErrorCode::from)?;
+        let max = reader.max().map_err(ErrorCode::from)?;
+        Ok(max)
     }
 }
 
@@ -814,16 +820,18 @@ pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
                 Ok(values.first().copied())
             }
             HYBRID_KIND_LARGE => {
-                let reader = reader::TreemapReader::new(payload)?;
-                Ok(reader.min()?)
+                let reader = reader::TreemapReader::new(payload).map_err(ErrorCode::from)?;
+                let min = reader.min().map_err(ErrorCode::from)?;
+                Ok(min)
             }
             kind => Err(ErrorCode::BadBytes(format!(
                 "unknown hybrid bitmap kind: {kind}"
             ))),
         }
     } else {
-        let reader = reader::TreemapReader::new(buf)?;
-        Ok(reader.min()?)
+        let reader = reader::TreemapReader::new(buf).map_err(ErrorCode::from)?;
+        let min = reader.min().map_err(ErrorCode::from)?;
+        Ok(min)
     }
 }
 
