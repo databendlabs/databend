@@ -30,5 +30,5 @@ where
     F: Future + Send,
     F::Output: Send,
 {
-    py.allow_threads(|| RUNTIME.block_on(f))
+    py.detach(|| RUNTIME.block_on(f))
 }

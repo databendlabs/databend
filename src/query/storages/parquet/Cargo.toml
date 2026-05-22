@@ -38,7 +38,6 @@ opendal = { workspace = true }
 parquet = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
-thrift = { workspace = true }
 typetag = { workspace = true }
 
 [dev-dependencies]

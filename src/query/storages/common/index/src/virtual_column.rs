@@ -23,7 +23,7 @@ use databend_common_exception::Result;
 use databend_common_expression::DataSchema;
 use databend_common_expression::types::DataType;
 use databend_storages_common_table_meta::meta::SingleColumnMeta;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaData;
 use serde::ser::SerializeMap;
 
 pub const VIRTUAL_COLUMN_STRING_TABLE_KEY: &str = "string_table";
@@ -514,10 +514,10 @@ impl TryFrom<Bytes> for VirtualColumnFileMeta {
 // - VIRTUAL_COLUMN_SHARED_COLUMN_IDS_KEY: compact shared/typed-shared column id mapping.
 // Legacy metadata keys are still accepted as a fallback for old virtual column files.
 // Column offsets/lengths/num_values and shared map columns are derived from parquet metadata.
-impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
+impl TryFrom<ParquetMetaData> for VirtualColumnFileMeta {
     type Error = ErrorCode;
 
-    fn try_from(mut meta: FileMetaData) -> std::result::Result<Self, Self::Error> {
+    fn try_from(meta: ParquetMetaData) -> std::result::Result<Self, Self::Error> {
         let mut arrow_schema = None;
         let mut string_table = None;
         let mut json_string_table = None;
@@ -527,7 +527,11 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
         let mut typed_shared_column_ids = None;
         let mut legacy_typed_shared_column_ids = None;
 
-        let key_value_metadata = meta.key_value_metadata.unwrap_or_default();
+        let key_value_metadata = meta
+            .file_metadata()
+            .key_value_metadata()
+            .cloned()
+            .unwrap_or_default();
         for key_value in &key_value_metadata {
             if key_value.key == "ARROW:schema" {
                 let encoded_meta = key_value.value.as_ref().unwrap();
@@ -579,31 +583,17 @@ impl TryFrom<FileMetaData> for VirtualColumnFileMeta {
             .or(legacy_typed_shared_column_ids)
             .unwrap_or_default();
 
-        let rg = meta.row_groups.remove(0);
-        let mut column_metas = Vec::with_capacity(rg.columns.len());
-        for (column_idx, column) in rg.columns.iter().enumerate() {
-            let chunk_meta = column.meta_data.as_ref().ok_or_else(|| {
-                ErrorCode::Internal(
-                    "expecting chunk meta data while converting ThriftFileMetaData to VirtualColumnFileMeta",
-                )
-            })?;
-            let col_start = if let Some(dict_page_offset) = chunk_meta.dictionary_page_offset {
-                dict_page_offset
-            } else {
-                chunk_meta.data_page_offset
-            };
-            let col_len = chunk_meta.total_compressed_size;
-            assert!(
-                col_start >= 0 && col_len >= 0,
-                "column start and length should not be negative"
-            );
-            let num_values = chunk_meta.num_values as u64;
+        let row_group = &meta.row_groups()[0];
+        let mut column_metas = Vec::with_capacity(row_group.columns().len());
+        for (column_idx, chunk_meta) in row_group.columns().iter().enumerate() {
+            let (offset, len) = chunk_meta.byte_range();
+            let num_values = chunk_meta.num_values() as u64;
             let res = SingleColumnMeta {
-                offset: col_start as u64,
-                len: col_len as u64,
+                offset,
+                len,
                 num_values,
             };
-            let data_type = data_type_from_path(&data_schema, &chunk_meta.path_in_schema)?;
+            let data_type = data_type_from_path(&data_schema, chunk_meta.column_path().parts())?;
             let column_id = column_idx as u32;
             column_metas.push(VirtualColumnIdWithMeta {
                 column_id,
