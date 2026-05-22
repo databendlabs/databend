@@ -728,14 +728,102 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
         return Ok(0);
     }
 
-    if buf.len() > 3
-        && buf[3] == HYBRID_KIND_LARGE
-        && buf[..2] == HYBRID_MAGIC
-        && buf[2] == HYBRID_VERSION
-    {
-        Ok(reader::bitmap_len(&buf[HYBRID_HEADER_LEN..])? as u64)
+    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+        let payload = &buf[HYBRID_HEADER_LEN..];
+        match buf[3] {
+            HYBRID_KIND_SMALL => {
+                if payload.is_empty() {
+                    return Err(ErrorCode::BadBytes("invalid hybrid bitmap: missing small length".to_string()));
+                }
+                Ok(payload[0] as u64)
+            }
+            HYBRID_KIND_LARGE => {
+                Ok(reader::bitmap_len(payload)? as u64)
+            }
+            kind => Err(ErrorCode::BadBytes(format!(
+                "unknown hybrid bitmap kind: {kind}"
+            ))),
+        }
     } else {
-        Ok(deserialize_bitmap(buf)?.len())
+        Ok(reader::bitmap_len(buf)? as u64)
+    }
+}
+
+pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
+    if buf.is_empty() {
+        return Ok(false);
+    }
+
+    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+        let payload = &buf[HYBRID_HEADER_LEN..];
+        match buf[3] {
+            HYBRID_KIND_SMALL => {
+                let values = decode_small_values(payload)?;
+                Ok(values.binary_search(&value).is_ok())
+            }
+            HYBRID_KIND_LARGE => {
+                let reader = reader::TreemapReader::new(payload)?;
+                Ok(reader.contains(value)?)
+            }
+            kind => Err(ErrorCode::BadBytes(format!(
+                "unknown hybrid bitmap kind: {kind}"
+            ))),
+        }
+    } else {
+        let reader = reader::TreemapReader::new(buf)?;
+        Ok(reader.contains(value)?)
+    }
+}
+
+pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
+    if buf.is_empty() {
+        return Ok(None);
+    }
+
+    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+        let payload = &buf[HYBRID_HEADER_LEN..];
+        match buf[3] {
+            HYBRID_KIND_SMALL => {
+                let values = decode_small_values(payload)?;
+                Ok(values.last().copied())
+            }
+            HYBRID_KIND_LARGE => {
+                let reader = reader::TreemapReader::new(payload)?;
+                Ok(reader.max()?)
+            }
+            kind => Err(ErrorCode::BadBytes(format!(
+                "unknown hybrid bitmap kind: {kind}"
+            ))),
+        }
+    } else {
+        let reader = reader::TreemapReader::new(buf)?;
+        Ok(reader.max()?)
+    }
+}
+
+pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
+    if buf.is_empty() {
+        return Ok(None);
+    }
+
+    if buf.len() >= HYBRID_HEADER_LEN && buf[..2] == HYBRID_MAGIC && buf[2] == HYBRID_VERSION {
+        let payload = &buf[HYBRID_HEADER_LEN..];
+        match buf[3] {
+            HYBRID_KIND_SMALL => {
+                let values = decode_small_values(payload)?;
+                Ok(values.first().copied())
+            }
+            HYBRID_KIND_LARGE => {
+                let reader = reader::TreemapReader::new(payload)?;
+                Ok(reader.min()?)
+            }
+            kind => Err(ErrorCode::BadBytes(format!(
+                "unknown hybrid bitmap kind: {kind}"
+            ))),
+        }
+    } else {
+        let reader = reader::TreemapReader::new(buf)?;
+        Ok(reader.min()?)
     }
 }
 
@@ -1428,5 +1516,68 @@ mod tests {
 
         let decoded = deserialize_bitmap(&legacy).unwrap();
         assert_eq!(decoded.into_iter().collect::<Vec<_>>(), vec![1, 5, 42]);
+    }
+
+    #[test]
+    fn test_hybrid_bitmap_ops() {
+        // Test kinds:
+        // 1. Empty
+        // 2. Hybrid Small
+        // 3. Hybrid Large
+        // 4. Legacy (pure roaring)
+
+        // 1. Empty
+        let empty_buf = Vec::new();
+        assert_eq!(bitmap_len(&empty_buf).unwrap(), 0);
+        assert!(!bitmap_contains(&empty_buf, 42).unwrap());
+        assert_eq!(bitmap_max(&empty_buf).unwrap(), None);
+        assert_eq!(bitmap_min(&empty_buf).unwrap(), None);
+
+        // 2. Hybrid Small
+        let mut small = HybridBitmap::new();
+        small.insert(10);
+        small.insert(20);
+        small.insert(30);
+        let mut small_buf = Vec::new();
+        small.serialize_into(&mut small_buf).unwrap();
+
+        assert_eq!(bitmap_len(&small_buf).unwrap(), 3);
+        assert!(bitmap_contains(&small_buf, 10).unwrap());
+        assert!(bitmap_contains(&small_buf, 20).unwrap());
+        assert!(bitmap_contains(&small_buf, 30).unwrap());
+        assert!(!bitmap_contains(&small_buf, 15).unwrap());
+        assert_eq!(bitmap_max(&small_buf).unwrap(), Some(30));
+        assert_eq!(bitmap_min(&small_buf).unwrap(), Some(10));
+
+        // 3. Hybrid Large
+        let mut large = HybridBitmap::new();
+        for i in 0..100 {
+            large.insert(i * 1000);
+        }
+        let mut large_buf = Vec::new();
+        large.serialize_into(&mut large_buf).unwrap();
+
+        assert_eq!(bitmap_len(&large_buf).unwrap(), 100);
+        assert!(bitmap_contains(&large_buf, 0).unwrap());
+        assert!(bitmap_contains(&large_buf, 99000).unwrap());
+        assert!(!bitmap_contains(&large_buf, 42).unwrap());
+        assert_eq!(bitmap_max(&large_buf).unwrap(), Some(99000));
+        assert_eq!(bitmap_min(&large_buf).unwrap(), Some(0));
+
+        // 4. Legacy (roaring)
+        let mut roaring = RoaringTreemap::new();
+        roaring.insert(5);
+        roaring.insert(50);
+        roaring.insert(500);
+        let mut roaring_buf = Vec::new();
+        roaring.serialize_into(&mut roaring_buf).unwrap();
+
+        assert_eq!(bitmap_len(&roaring_buf).unwrap(), 3);
+        assert!(bitmap_contains(&roaring_buf, 5).unwrap());
+        assert!(bitmap_contains(&roaring_buf, 50).unwrap());
+        assert!(bitmap_contains(&roaring_buf, 500).unwrap());
+        assert!(!bitmap_contains(&roaring_buf, 42).unwrap());
+        assert_eq!(bitmap_max(&roaring_buf).unwrap(), Some(500));
+        assert_eq!(bitmap_min(&roaring_buf).unwrap(), Some(5));
     }
 }

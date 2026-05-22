@@ -37,7 +37,10 @@ use databend_common_expression::vectorize_with_builder_3_arg;
 use databend_common_expression::with_signed_integer_mapped_type;
 use databend_common_expression::with_unsigned_integer_mapped_type;
 use databend_common_io::HybridBitmap;
+use databend_common_io::bitmap::bitmap_contains;
 use databend_common_io::bitmap::bitmap_len;
+use databend_common_io::bitmap::bitmap_max;
+use databend_common_io::bitmap::bitmap_min;
 use databend_common_io::deserialize_bitmap;
 use databend_common_io::parse_bitmap;
 use itertools::join;
@@ -269,9 +272,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     return;
                 }
-                match deserialize_bitmap(b) {
-                    Ok(rb) => {
-                        builder.push(rb.contains(item));
+                match bitmap_contains(b, item) {
+                    Ok(contains) => {
+                        builder.push(contains);
                     }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
@@ -443,14 +446,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(0);
                     return;
                 }
-                let val = match deserialize_bitmap(b) {
-                    Ok(rb) => match rb.max() {
-                        Some(val) => val,
-                        None => {
-                            ctx.set_error(builder.len(), "The bitmap is empty");
-                            0
-                        }
-                    },
+                let val = match bitmap_max(b) {
+                    Ok(Some(val)) => val,
+                    Ok(None) => {
+                        ctx.set_error(builder.len(), "The bitmap is empty");
+                        0
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         0
@@ -475,14 +476,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(0);
                     return;
                 }
-                let val = match deserialize_bitmap(b) {
-                    Ok(rb) => match rb.min() {
-                        Some(val) => val,
-                        None => {
-                            ctx.set_error(builder.len(), "The bitmap is empty");
-                            0
-                        }
-                    },
+                let val = match bitmap_min(b) {
+                    Ok(Some(val)) => val,
+                    Ok(None) => {
+                        ctx.set_error(builder.len(), "The bitmap is empty");
+                        0
+                    }
                     Err(e) => {
                         ctx.set_error(builder.len(), e.to_string());
                         0
