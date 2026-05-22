@@ -740,7 +740,7 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
                 Ok(payload[0] as u64)
             }
             HYBRID_KIND_LARGE => {
-                let len = reader::bitmap_len(payload).map_err(ErrorCode::from)?;
+                let len = reader::bitmap_len(payload)?;
                 Ok(len as u64)
             }
             kind => Err(ErrorCode::BadBytes(format!(
@@ -748,7 +748,7 @@ pub fn bitmap_len(buf: &[u8]) -> Result<u64> {
             ))),
         }
     } else {
-        let len = reader::bitmap_len(buf).map_err(ErrorCode::from)?;
+        let len = reader::bitmap_len(buf)?;
         Ok(len as u64)
     }
 }
@@ -766,8 +766,8 @@ pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
                 Ok(values.binary_search(&value).is_ok())
             }
             HYBRID_KIND_LARGE => {
-                let reader = reader::TreemapReader::new(payload).map_err(ErrorCode::from)?;
-                let contains = reader.contains(value).map_err(ErrorCode::from)?;
+                let reader = reader::TreemapReader::new(payload)?;
+                let contains = reader.contains(value)?;
                 Ok(contains)
             }
             kind => Err(ErrorCode::BadBytes(format!(
@@ -775,8 +775,8 @@ pub fn bitmap_contains(buf: &[u8], value: u64) -> Result<bool> {
             ))),
         }
     } else {
-        let reader = reader::TreemapReader::new(buf).map_err(ErrorCode::from)?;
-        let contains = reader.contains(value).map_err(ErrorCode::from)?;
+        let reader = reader::TreemapReader::new(buf)?;
+        let contains = reader.contains(value)?;
         Ok(contains)
     }
 }
@@ -794,8 +794,8 @@ pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
                 Ok(values.last().copied())
             }
             HYBRID_KIND_LARGE => {
-                let reader = reader::TreemapReader::new(payload).map_err(ErrorCode::from)?;
-                let max = reader.max().map_err(ErrorCode::from)?;
+                let reader = reader::TreemapReader::new(payload)?;
+                let max = reader.max()?;
                 Ok(max)
             }
             kind => Err(ErrorCode::BadBytes(format!(
@@ -803,8 +803,8 @@ pub fn bitmap_max(buf: &[u8]) -> Result<Option<u64>> {
             ))),
         }
     } else {
-        let reader = reader::TreemapReader::new(buf).map_err(ErrorCode::from)?;
-        let max = reader.max().map_err(ErrorCode::from)?;
+        let reader = reader::TreemapReader::new(buf)?;
+        let max = reader.max()?;
         Ok(max)
     }
 }
@@ -822,8 +822,8 @@ pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
                 Ok(values.first().copied())
             }
             HYBRID_KIND_LARGE => {
-                let reader = reader::TreemapReader::new(payload).map_err(ErrorCode::from)?;
-                let min = reader.min().map_err(ErrorCode::from)?;
+                let reader = reader::TreemapReader::new(payload)?;
+                let min = reader.min()?;
                 Ok(min)
             }
             kind => Err(ErrorCode::BadBytes(format!(
@@ -831,8 +831,8 @@ pub fn bitmap_min(buf: &[u8]) -> Result<Option<u64>> {
             ))),
         }
     } else {
-        let reader = reader::TreemapReader::new(buf).map_err(ErrorCode::from)?;
-        let min = reader.min().map_err(ErrorCode::from)?;
+        let reader = reader::TreemapReader::new(buf)?;
+        let min = reader.min()?;
         Ok(min)
     }
 }
