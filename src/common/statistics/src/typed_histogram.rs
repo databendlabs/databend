@@ -120,8 +120,8 @@ impl<T: Clone> TypedHistogram<T> {
         let first = self.buckets.first()?;
         let last = self.buckets.last()?;
         Some(TypedHistogramBounds::new(
-            first.lower_bound().clone(),
-            last.upper_bound().clone(),
+            first.lower_bound.clone(),
+            last.upper_bound.clone(),
         ))
     }
 }
@@ -196,7 +196,7 @@ impl<T: Value> TypedHistogramBucket<T> {
 
     fn is_singleton_value(&self) -> bool {
         matches!(
-            T::compare(self.lower_bound(), self.upper_bound()),
+            T::compare(&self.lower_bound, &self.upper_bound),
             Ordering::Equal
         )
     }
@@ -436,8 +436,8 @@ trait NumericValue: Value {
                 };
 
                 let overlap_width = Self::distance(&lower_bound, &upper_bound)?;
-                let left_width = Self::distance(left.lower_bound(), left.upper_bound())?;
-                let right_width = Self::distance(right.lower_bound(), right.upper_bound())?;
+                let left_width = Self::distance(&left.lower_bound, left.upper_bound())?;
+                let right_width = Self::distance(&right.lower_bound, right.upper_bound())?;
                 if overlap_width <= 0.0 || left_width <= 0.0 || right_width <= 0.0 {
                     return None;
                 }
@@ -770,9 +770,7 @@ impl Value for Vec<u8> {
     ) -> Option<OverlapCoverage> {
         match left.intersection_kind(right) {
             Intersection::None => None,
-            Intersection::Point => {
-                OverlapCoverage::point(left.num_distinct(), right.num_distinct())
-            }
+            Intersection::Point => OverlapCoverage::point(left.num_distinct, right.num_distinct),
             Intersection::Range => Some(OverlapCoverage {
                 left: 1.0,
                 right: 1.0,
@@ -888,7 +886,7 @@ mod tests {
         let bounds = histogram
             .buckets
             .iter()
-            .map(|bucket| (*bucket.lower_bound(), *bucket.upper_bound()))
+            .map(|bucket| (bucket.lower_bound, bucket.upper_bound))
             .collect::<Vec<_>>();
 
         assert_eq!(bounds, vec![

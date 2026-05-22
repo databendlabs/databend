@@ -112,10 +112,10 @@ impl<T: Value> TypedHistogramBucket<T> {
         };
         if self.is_singleton_value()
             && other.is_singleton_value()
-            && T::compare(self.lower_bound(), other.lower_bound()) == Ordering::Equal
+            && T::compare(&self.lower_bound, &other.lower_bound) == Ordering::Equal
         {
             let cardinality =
-                self.num_values() * left_row_scale * other.num_values() * right_row_scale;
+                (self.num_values * left_row_scale) * (other.num_values * right_row_scale);
             return JoinContribution {
                 cardinality: StatEstimate::exact(cardinality),
                 ndv: StatEstimate::exact(1.0),
@@ -128,20 +128,20 @@ impl<T: Value> TypedHistogramBucket<T> {
             };
         }
 
+        let upper_cardinality =
+            (self.num_values * left_row_scale) * (other.num_values * right_row_scale);
         let (expected_cardinality, expected_ndv) = T::estimate_overlap_coverages(self, other)
             .and_then(|coverage| {
-                self.estimate_expected_join_counts(other, coverage, left_row_scale, right_row_scale)
+                self.estimate_expected_join_counts(other, coverage, upper_cardinality)
             })
             .unwrap_or((0.0, 0.0));
 
         let upper_ndv = match intersection {
             Intersection::None => 0.0,
             Intersection::Point => 1.0,
-            Intersection::Range => self.num_distinct().min(other.num_distinct()),
+            Intersection::Range => self.num_distinct.min(other.num_distinct),
         };
 
-        let upper_cardinality =
-            self.num_values() * left_row_scale * other.num_values() * right_row_scale;
         debug_assert!(
             expected_cardinality <= upper_cardinality,
             "join expected cardinality exceeds cartesian upper: {expected_cardinality:?} > {upper_cardinality:?}"
@@ -171,25 +171,26 @@ impl<T: Value> TypedHistogramBucket<T> {
         &self,
         other: &TypedHistogramBucket<T>,
         coverage: OverlapCoverage,
-        left_row_scale: f64,
-        right_row_scale: f64,
+        upper_cardinality: f64,
     ) -> Option<(f64, f64)> {
-        let left_num_rows = self.num_values() * left_row_scale * coverage.left;
-        let left_ndv = self.num_distinct() * coverage.left;
-        let right_num_rows = other.num_values() * right_row_scale * coverage.right;
-        let right_ndv = other.num_distinct() * coverage.right;
+        let left_ndv = self.num_distinct * coverage.left;
+        let right_ndv = other.num_distinct * coverage.right;
         let max_ndv = left_ndv.max(right_ndv);
         if max_ndv <= 0.0 {
             return None;
         }
         // The equality denominator is a value count. Fractional NDV estimates
         // below one would otherwise produce more rows than the cartesian upper.
-        let effective_max_ndv = if max_ndv < 1.0 { 1.0 } else { max_ndv };
+        let effective_max_ndv = max_ndv.max(1.0);
 
-        Some((
-            left_num_rows * right_num_rows / effective_max_ndv,
-            left_ndv.min(right_ndv),
-        ))
+        let match_factor = coverage.left * coverage.right / effective_max_ndv;
+        debug_assert!(
+            (0.0..=1.0).contains(&match_factor),
+            "invalid join match factor: {match_factor:?}"
+        );
+        let expected_cardinality =
+            (upper_cardinality / effective_max_ndv) * coverage.left * coverage.right;
+        Some((expected_cardinality, left_ndv.min(right_ndv)))
     }
 }
 
@@ -372,15 +373,38 @@ mod tests {
             avg_spacing: None,
         };
 
-        let raw_expected = left.buckets[0].num_values() * right.buckets[0].num_values()
-            / left.buckets[0].num_distinct();
-        let cartesian_upper = left.buckets[0].num_values() * right.buckets[0].num_values();
+        let raw_expected =
+            left.buckets[0].num_values * right.buckets[0].num_values / left.buckets[0].num_distinct;
+        let cartesian_upper = left.buckets[0].num_values * right.buckets[0].num_values;
         assert!(raw_expected > cartesian_upper);
 
         let estimation = left.estimate_join(&right);
         estimation.cardinality.check_consistency().unwrap();
         estimation.ndv.check_consistency().unwrap();
         assert_eq!(estimation.cardinality.upper, cartesian_upper);
+        assert_eq!(
+            estimation.cardinality.expected,
+            estimation.cardinality.upper
+        );
+    }
+
+    #[test]
+    fn test_typed_histogram_estimate_join_uses_same_scaled_upper_for_expected_count() {
+        let left = TypedHistogram {
+            accuracy: true,
+            row_scale: 0.1,
+            buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.1, 0.1)],
+            avg_spacing: None,
+        };
+        let right = TypedHistogram {
+            accuracy: true,
+            row_scale: 0.1,
+            buckets: vec![TypedHistogramBucket::new(0_i64, 10_i64, 0.1, 0.1)],
+            avg_spacing: None,
+        };
+
+        let estimation = left.estimate_join(&right);
+        estimation.cardinality.check_consistency().unwrap();
         assert_eq!(
             estimation.cardinality.expected,
             estimation.cardinality.upper

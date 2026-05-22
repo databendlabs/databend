@@ -12,19 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
-
 use databend_common_exception::Result;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
-use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::DatumKind;
 use databend_common_statistics::Histogram;
-use databend_common_statistics::HistogramBuilder;
 use databend_common_statistics::UniformSampleSet;
 
 use super::ColumnStat;
@@ -474,27 +470,23 @@ impl JoinKeyStatUpdate {
     pub(crate) fn finish_join_histograms(
         statistics: &mut Statistics,
         joined_column: Symbol,
-        join_card: Option<f64>,
+        keep_join_histogram: bool,
     ) -> Result<()> {
         for (idx, stat) in statistics.column_stats.iter_mut() {
-            stat.histogram = if stat.histogram.is_some()
-                && *idx == joined_column
-                && stat.ndv.expected as u64 > 2
-                && let Some(join_card) = join_card
-            {
-                let ndv = stat.ndv.expected as u64;
-                Some(HistogramBuilder::from_ndv(
-                    ndv,
-                    max(join_card as u64, ndv),
-                    Some((stat.min.clone(), stat.max.clone())),
-                    DEFAULT_HISTOGRAM_BUCKETS,
-                )?)
-            } else {
+            if !keep_join_histogram || *idx != joined_column {
                 // Other columns' histograms are inaccurate after the join cardinality update.
-                None
-            };
+                stat.histogram = None;
+            }
         }
         Ok(())
+    }
+
+    fn drop_non_join_histograms(statistics: &mut Statistics, joined_column: Symbol) {
+        for (idx, stat) in statistics.column_stats.iter_mut() {
+            if *idx != joined_column {
+                stat.histogram = None;
+            }
+        }
     }
 
     pub(crate) fn finish_semi_join_histogram(
@@ -503,6 +495,8 @@ impl JoinKeyStatUpdate {
         joined_column: Symbol,
         cardinality: f64,
     ) -> Result<()> {
+        Self::drop_non_join_histograms(statistics, joined_column);
+
         let Some(stat) = statistics.column_stats.get_mut(&joined_column) else {
             return Ok(());
         };
@@ -642,8 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn test_finish_join_histograms_rebuilds_join_key_histogram_from_join_cardinality() -> Result<()>
-    {
+    fn test_finish_join_histograms_keeps_join_key_histogram_and_drops_others() -> Result<()> {
         let mut statistics = Statistics {
             precise_cardinality: None,
             column_stats: HashMap::from([
@@ -674,14 +667,63 @@ mod tests {
             ]),
         };
 
-        JoinKeyStatUpdate::finish_join_histograms(&mut statistics, Symbol::new(0), Some(50.0))?;
+        JoinKeyStatUpdate::finish_join_histograms(&mut statistics, Symbol::new(0), true)?;
 
         let join_histogram = statistics.column_stats[&Symbol::new(0)]
             .histogram
             .as_ref()
             .expect("join key histogram should be propagated");
-        assert!((join_histogram.num_values() - 50.0).abs() < 1e-9);
-        assert!((join_histogram.ndv().expected - 5.0).abs() < 1e-9);
+        assert!((join_histogram.num_values() - 1000.0).abs() < 1e-9);
+        assert!((join_histogram.ndv().expected - 10.0).abs() < 1e-9);
+        assert!(statistics.column_stats[&Symbol::new(1)].histogram.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn test_finish_semi_join_histogram_drops_non_join_histograms() -> Result<()> {
+        let original_statistics = Statistics {
+            precise_cardinality: None,
+            column_stats: HashMap::from([
+                (Symbol::new(0), ColumnStat {
+                    min: Datum::Int(1),
+                    max: Datum::Int(10),
+                    ndv: StatEstimate::exact(10.0),
+                    null_count: StatCount::exact(0),
+                    histogram: Some(Histogram::Int(TypedHistogram {
+                        accuracy: true,
+                        row_scale: 1.0,
+                        buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
+                        avg_spacing: None,
+                    })),
+                }),
+                (Symbol::new(1), ColumnStat {
+                    min: Datum::Int(1),
+                    max: Datum::Int(10),
+                    ndv: StatEstimate::exact(10.0),
+                    null_count: StatCount::exact(0),
+                    histogram: Some(Histogram::Int(TypedHistogram {
+                        accuracy: true,
+                        row_scale: 1.0,
+                        buckets: vec![TypedHistogramBucket::new(1, 10, 10.0, 10.0)],
+                        avg_spacing: None,
+                    })),
+                }),
+            ]),
+        };
+        let mut statistics = original_statistics.clone();
+        let join_stat = statistics.column_stats.get_mut(&Symbol::new(0)).unwrap();
+        join_stat.min = Datum::Int(1);
+        join_stat.max = Datum::Int(5);
+        join_stat.ndv = StatEstimate::exact(5.0);
+
+        JoinKeyStatUpdate::finish_semi_join_histogram(
+            &mut statistics,
+            &original_statistics,
+            Symbol::new(0),
+            5.0,
+        )?;
+
+        assert!(statistics.column_stats[&Symbol::new(0)].histogram.is_some());
         assert!(statistics.column_stats[&Symbol::new(1)].histogram.is_none());
         Ok(())
     }

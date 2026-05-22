@@ -522,14 +522,14 @@ impl Join {
                     JoinKeyStatUpdate::finish_join_histograms(
                         &mut right_statistics,
                         columns.right,
-                        None,
+                        false,
                     )?;
                 }
                 JoinType::RightSemi => {
                     JoinKeyStatUpdate::finish_join_histograms(
                         &mut left_statistics,
                         columns.left,
-                        None,
+                        false,
                     )?;
                     JoinKeyStatUpdate::finish_semi_join_histogram(
                         &mut right_statistics,
@@ -539,16 +539,15 @@ impl Join {
                     )?;
                 }
                 _ => {
-                    let join_key_cardinality = rebuild_join_key_histograms.then_some(cardinality);
                     JoinKeyStatUpdate::finish_join_histograms(
                         &mut left_statistics,
                         columns.left,
-                        join_key_cardinality,
+                        rebuild_join_key_histograms,
                     )?;
                     JoinKeyStatUpdate::finish_join_histograms(
                         &mut right_statistics,
                         columns.right,
-                        join_key_cardinality,
+                        rebuild_join_key_histograms,
                     )?;
                 }
             }
@@ -1655,7 +1654,7 @@ mod tests {
         let left_stat = &stat_info.statistics.column_stats[&Symbol::new(0)];
         assert_eq!(left_stat.min, Datum::Int(1));
         assert_eq!(left_stat.max, Datum::Int(10));
-        assert_eq!(left_stat.ndv, StatEstimate::new(0.0, 10.0, 10.0));
+        assert_eq!(left_stat.ndv, StatEstimate::exact(10.0));
         assert_eq!(left_stat.null_count, StatCount::exact(0));
         let histogram = left_stat
             .histogram
@@ -1715,7 +1714,7 @@ mod tests {
         let right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(right_stat.min, Datum::Int(1));
         assert_eq!(right_stat.max, Datum::Int(10));
-        assert_eq!(right_stat.ndv, StatEstimate::new(0.0, 10.0, 10.0));
+        assert_eq!(right_stat.ndv, StatEstimate::exact(10.0));
         assert_eq!(right_stat.null_count, StatCount::exact(0));
         let histogram = right_stat
             .histogram
