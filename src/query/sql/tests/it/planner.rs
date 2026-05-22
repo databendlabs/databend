@@ -162,6 +162,7 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
 
     for sql in [
         "SELECT 'a' LIKE 'a' ESCAPE ''",
+        "SELECT '%++' NOT LIKE '*%++' ESCAPE '*'",
         "SELECT 'a' LIKE concat('a') ESCAPE ''",
         "SELECT '%' LIKE '\\\\%' ESCAPE ''",
         "SELECT like_any('%', '\\\\%', '')",
@@ -171,6 +172,42 @@ async fn test_like_escape_preserves_existing_binding_semantics() -> Result<()> {
         ctx.bind_sql(sql).await?;
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_subquery_project_set_keeps_lambda_udf_argument_columns() -> Result<()> {
+    let ctx = LiteTableContext::create().await?;
+    ctx.register_setup_sql(
+        "CREATE FUNCTION ddb_string_split_compat AS (s, delim) -> CASE
+            WHEN s IS NULL THEN NULL
+            WHEN delim IS NULL THEN [s]
+            WHEN delim = '' THEN REGEXP_SPLIT_TO_ARRAY(s, '')
+            ELSE SPLIT(s, delim)
+        END",
+    )
+    .await?;
+    ctx.register_setup_sql("CREATE TABLE documents(id INT, s VARCHAR)")
+        .await?;
+
+    let plan = ctx
+        .bind_sql(
+            "SELECT ss FROM (
+                SELECT id, UNNEST(ddb_string_split_compat(s, 'bb')) AS ss
+                FROM documents WHERE 1
+            ) AS q ORDER BY id",
+        )
+        .await?;
+    let plan = ctx.optimize_plan(plan).await?;
+    let plan = plan.format_indent(Default::default())?;
+    assert!(
+        plan.contains("split(documents.s"),
+        "ProjectSet should keep the lambda UDF body bound to documents.s:\n{plan}"
+    );
+    assert!(
+        !plan.contains("split('bb'"),
+        "UDF parameter replacement should not overwrite outer column references:\n{plan}"
+    );
     Ok(())
 }
 
