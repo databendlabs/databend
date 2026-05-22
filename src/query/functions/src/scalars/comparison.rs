@@ -384,10 +384,6 @@ where T: ComparisonStatType
     fn domain(domain: &Domain) -> Result<T::Domain, String> {
         T::try_downcast_domain(domain).map_err(|e| e.to_string())
     }
-
-    fn compare(left: &T::Scalar, right: &T::Scalar) -> Ordering {
-        T::compare(T::to_scalar_ref(left), T::to_scalar_ref(right))
-    }
 }
 
 trait ComparisonStatType: ArgType {

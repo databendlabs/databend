@@ -421,25 +421,6 @@ impl SelectivityVisitor<'_> {
                 self.overrides.insert(column_index, column_stat);
                 return Ok(selectivity);
             }
-            (Expr::FunctionCall(func), Expr::Constant(val))
-                if op == ComparisonOp::Equal && func.function.signature.name == "modulo" =>
-            {
-                if let Expr::Constant(mod_num) = &func.args[1]
-                    && let Some(mod_num) = mod_num.scalar.clone().to_datum()
-                {
-                    let mod_num = mod_num.as_double()?;
-                    if mod_num == 0.0 {
-                        return Err(ErrorCode::SemanticError("modulus by zero".to_string()));
-                    }
-                    return if let Some(remainder) = val.scalar.clone().to_datum()
-                        && remainder.as_double()? >= mod_num
-                    {
-                        Ok(Selectivity::Zero)
-                    } else {
-                        Selectivity::checked_estimate(1.0 / mod_num)
-                    };
-                }
-            }
             _ => (),
         }
 
