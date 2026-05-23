@@ -50,6 +50,7 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
 use itertools::Itertools;
+use parking_lot::RwLock;
 use serde_json::json;
 use serde_json::to_string;
 use unicase::Ascii;
@@ -65,6 +66,7 @@ use super::UdfAdapter;
 use super::rewrite_function::rewrite_function_name;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
+use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::Symbol;
 use crate::Visibility;
@@ -742,13 +744,17 @@ where A: super::TypeCheckAdapter
         parameters: Vec<(String, DataType, ScalarExpr)>,
         return_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // TODO: UDF definitions are not validated thoroughly before expansion.
+        // Recursive or mutually recursive UDFs can recurse during type checking and
+        // overflow the stack; other unchecked definition risks may exist as well.
         let sql_tokens = tokenize_sql(definition)?;
         let expr = parse_expr(&sql_tokens, self.adapter.settings().get_sql_dialect()?)?;
 
         let mut bind_context = BindContext::new();
+        let mut metadata = Metadata::default();
         let mut replacements = HashMap::new();
         for (name, data_type, scalar) in parameters {
-            let column_index = bind_context.next_column_index();
+            let column_index = metadata.add_derived_column(name.clone(), data_type.clone());
             bind_context.add_column_binding(
                 ColumnBindingBuilder::new(
                     name,
@@ -769,8 +775,8 @@ where A: super::TypeCheckAdapter
             &mut bind_context,
             self.adapter.clone(),
             &name_resolution_ctx,
-            self.metadata.clone(),
-            self.aliases,
+            RwLock::new(metadata).into(),
+            &[],
         )?
         .resolve(&expr)?;
 
@@ -795,7 +801,14 @@ where A: super::TypeCheckAdapter
         impl VisitorMut<'_> for HashMap<Symbol, ScalarExpr> {
             fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
                 if let ScalarExpr::BoundColumnRef(column) = expr {
-                    *expr = self[&column.column.index].clone();
+                    let Some(replacement) = self.get(&column.column.index) else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "UDF definition references unresolved column {}",
+                            column.column.column_name
+                        ))
+                        .set_span(column.span));
+                    };
+                    *expr = replacement.clone();
                     Ok(())
                 } else {
                     walk_expr_mut(self, expr)

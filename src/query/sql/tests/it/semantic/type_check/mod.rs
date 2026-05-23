@@ -346,6 +346,15 @@ fn resolve_type_check_sql(
     adapter: TestTypeCheckAdapter,
     bind_context: &mut BindContext,
 ) -> Result<(ScalarExpr, DataType)> {
+    resolve_type_check_sql_with_aliases(sql, adapter, bind_context, &[])
+}
+
+fn resolve_type_check_sql_with_aliases(
+    sql: &str,
+    adapter: TestTypeCheckAdapter,
+    bind_context: &mut BindContext,
+    aliases: &[(String, ScalarExpr)],
+) -> Result<(ScalarExpr, DataType)> {
     init_testing_globals();
     let tokens = tokenize_sql(sql)?;
     let dialect = adapter.settings().get_sql_dialect()?;
@@ -358,7 +367,7 @@ fn resolve_type_check_sql(
         adapter,
         &name_resolution_ctx,
         metadata,
-        &[],
+        aliases,
     )?;
     type_checker.resolve(&expr).map(|resolved| *resolved)
 }
