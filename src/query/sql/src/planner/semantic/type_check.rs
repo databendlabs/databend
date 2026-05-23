@@ -426,6 +426,7 @@ pub struct TypeChecker<'a, A> {
     metadata: MetadataRef,
 
     aliases: &'a [(String, ScalarExpr)],
+    fallback_aliases: Option<&'a [(String, ScalarExpr)]>,
 
     // true if current expr is inside an aggregate function.
     // This is used to check if there is nested aggregate function.

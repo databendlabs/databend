@@ -91,6 +91,7 @@ databend-storages-common-session = { workspace = true }
 divan = { workspace = true }
 goldenfile = { workspace = true }
 proptest = { workspace = true }
+serde_yaml = { workspace = true }
 
 [[bench]]
 name = "type_check"
