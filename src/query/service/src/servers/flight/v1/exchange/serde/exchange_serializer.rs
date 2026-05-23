@@ -21,6 +21,7 @@ use arrow_array::RecordBatchOptions;
 use arrow_flight::FlightData;
 use arrow_flight::SchemaAsIpc;
 use arrow_ipc::CompressionType;
+use arrow_ipc::writer::CompressionContext;
 use arrow_ipc::writer::DictionaryTracker;
 use arrow_ipc::writer::IpcDataGenerator;
 use arrow_ipc::writer::IpcWriteOptions;
@@ -240,10 +241,15 @@ pub fn batches_to_flight_data_with_options(
 
     let data_gen = IpcDataGenerator::default();
     let mut dictionary_tracker = DictionaryTracker::new(false);
+    let mut compression_context = CompressionContext::default();
 
     for batch in batches.iter() {
-        let (encoded_dictionaries, encoded_batch) =
-            data_gen.encoded_batch(batch, &mut dictionary_tracker, options)?;
+        let (encoded_dictionaries, encoded_batch) = data_gen.encode(
+            batch,
+            &mut dictionary_tracker,
+            options,
+            &mut compression_context,
+        )?;
 
         dictionaries.extend(encoded_dictionaries.into_iter().map(Into::into));
         flight_data.push(encoded_batch.into());

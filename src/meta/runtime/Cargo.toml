@@ -15,8 +15,9 @@ databend-common-tracing = { workspace = true }
 databend-meta = { workspace = true }
 databend-meta-client = { workspace = true }
 fastrace = { workspace = true }
+hyper-util = { workspace = true }
 tokio = { workspace = true }
-tonic = { workspace = true }
+tonic_013 = { package = "tonic", version = "0.13.1", features = ["transport", "tls-native-roots"] }
 
 [lints]
 workspace = true

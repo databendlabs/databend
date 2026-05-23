@@ -1194,6 +1194,8 @@ pub enum TokenKind {
     SATURDAY,
     #[token("SCHEMA", ignore(ascii_case))]
     SCHEMA,
+    #[token("SCHEMA_EVOLUTION", ignore(ascii_case))]
+    SCHEMA_EVOLUTION,
     #[token("SCHEMAS", ignore(ascii_case))]
     SCHEMAS,
     #[token("SECOND", ignore(ascii_case))]

@@ -29,6 +29,7 @@ mod exchange_transform_shuffle;
 mod hash_send_sink;
 mod hash_send_source;
 mod hash_send_transform;
+mod outbound_send_channels;
 mod statistics_receiver;
 mod statistics_sender;
 

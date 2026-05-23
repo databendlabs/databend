@@ -123,6 +123,7 @@ use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -369,6 +370,10 @@ impl FuseTable {
                 .map(|(&k, &v)| (k, v as usize))
                 .collect(),
         }
+    }
+
+    pub fn enable_virtual_column(&self) -> bool {
+        self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
     }
 
     /// Get max page size.
@@ -1347,20 +1352,6 @@ impl Table for FuseTable {
 
     fn support_index(&self) -> bool {
         true
-    }
-
-    fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
-            // ignore persistent system tables {
-            if let Ok(database_name) = self.table_info.database_name() {
-                if database_name == "persistent_system" || database_name == "system_history" {
-                    return false;
-                }
-            }
-            true
-        } else {
-            false
-        }
     }
 
     fn result_can_be_cached(&self) -> bool {

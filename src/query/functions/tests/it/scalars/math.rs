@@ -141,7 +141,12 @@ fn test_cbrt(file: &mut impl Write) {
 
 fn test_factorial(file: &mut impl Write) {
     run_ast(file, "factorial(5)", &[]);
+    run_ast(file, "factorial(-1)", &[]);
     run_ast(file, "factorial(30)", &[]);
+    run_ast(file, "factorial(u)", &[(
+        "u",
+        UInt64Type::from_data(vec![u64::MAX]),
+    )]);
     run_ast(file, "factorial(a)", &[(
         "a",
         Int64Type::from_data(vec![3, 12, 16]),

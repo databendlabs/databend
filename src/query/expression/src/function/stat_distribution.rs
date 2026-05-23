@@ -54,6 +54,14 @@ impl<D: DistributionInvariant> StatDistribution<D> {
             }
             self.domain.check_data_type(data_type)?;
         }
+        if let Some(domain_cardinality) = self.domain.finite_cardinality_upper()
+            && self.ndv.upper > domain_cardinality as f64
+        {
+            return Err(format!(
+                "ndv upper bound exceeds finite domain cardinality: ndv {:?}, domain cardinality {domain_cardinality:?}, domain {:?}",
+                self.ndv, self.domain
+            ));
+        }
         self.null_count.check_consistency()?;
         if let Domain::Nullable(domain) = &self.domain {
             if self.null_count.upper() > 0.0 && !domain.has_null {
@@ -284,6 +292,8 @@ mod tests {
 
     use super::*;
     use crate::types::boolean::BooleanDomain;
+    use crate::types::number::NumberDomain;
+    use crate::types::number::SimpleDomain;
 
     #[test]
     fn test_empty_histogram_requires_non_null_value_domain() {
@@ -342,7 +352,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::new(0.0, 1.0, 1.0),
+            ndv: StatEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: OwnedDistribution::Boolean(BooleanDistribution {
                 true_count: StatEstimate::new(0.0, 0.5, 1.0),
@@ -351,6 +361,46 @@ mod tests {
 
         let err = invalid.check_consistency().unwrap_err();
         assert!(err.contains("boolean non-null value domain"));
+    }
+
+    #[test]
+    fn test_ndv_must_fit_finite_domain_cardinality() {
+        let invalid = ReturnStat {
+            domain: Domain::Number(NumberDomain::Int8(SimpleDomain { min: -1, max: 1 })),
+            ndv: StatEstimate::exact(4.0),
+            null_count: StatCount::exact(0),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        let err = invalid.check_consistency().unwrap_err();
+        assert!(err.contains("finite domain cardinality"));
+
+        let valid_nullable_all_null = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: None,
+            }),
+            ndv: StatEstimate::exact(0.0),
+            null_count: StatCount::exact(10),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        valid_nullable_all_null.check_consistency().unwrap();
+
+        let valid_nullable_boolean = ReturnStat {
+            domain: Domain::Nullable(NullableDomain {
+                has_null: true,
+                value: Some(Box::new(Domain::Boolean(BooleanDomain {
+                    has_true: true,
+                    has_false: true,
+                }))),
+            }),
+            ndv: StatEstimate::exact(2.0),
+            null_count: StatCount::exact(1),
+            distribution: OwnedDistribution::Unknown,
+        };
+
+        valid_nullable_boolean.check_consistency().unwrap();
     }
 
     #[test]

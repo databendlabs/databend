@@ -27,9 +27,9 @@ use databend_common_pipeline::core::Processor;
 use databend_common_pipeline::core::ProcessorPtr;
 use petgraph::prelude::NodeIndex;
 
-use crate::servers::flight::v1::network::DummyOutboundChannel;
+use super::outbound_send_channels::OutboundSendChannels;
+use super::outbound_send_channels::OutboundSendHandle;
 use crate::servers::flight::v1::network::OutboundChannel;
-use crate::servers::flight::v1::network::SyncTaskHandle;
 use crate::servers::flight::v1::network::SyncTaskSet;
 
 pub struct BroadcastSendTransform {
@@ -39,8 +39,8 @@ pub struct BroadcastSendTransform {
 
     local_pos: usize,
     tasks: SyncTaskSet,
-    channels: Vec<Arc<dyn OutboundChannel>>,
-    handle: Option<SyncTaskHandle<'static, Result<Vec<()>>>>,
+    channels: OutboundSendChannels,
+    handle: Option<OutboundSendHandle>,
 }
 
 impl BroadcastSendTransform {
@@ -54,7 +54,7 @@ impl BroadcastSendTransform {
         let output = OutputPort::create();
 
         let processor = ProcessorPtr::create(Box::new(Self {
-            channels,
+            channels: OutboundSendChannels::create(channels),
             local_pos,
             input: input.clone(),
             output: output.clone(),
@@ -65,6 +65,10 @@ impl BroadcastSendTransform {
         }));
 
         PipeItem::create(processor, vec![input], vec![output])
+    }
+
+    fn no_active_downstream(&self) -> bool {
+        self.output.is_finished() && self.channels.all_closed_except(self.local_pos)
     }
 }
 
@@ -81,9 +85,12 @@ impl Processor for BroadcastSendTransform {
         // Poll existing handle
         if let Some(mut handle) = self.handle.take() {
             match handle.poll(matches!(cause, EventCause::Other)) {
-                Poll::Ready(Ok(_)) => {}
-                Poll::Ready(Err(cause)) => {
-                    return Err(cause);
+                Poll::Ready(results) => {
+                    self.channels.handle_send_results(results)?;
+                    if self.no_active_downstream() {
+                        self.input.finish();
+                        return Ok(Event::Finished);
+                    }
                 }
                 Poll::Pending => {
                     self.handle = Some(handle);
@@ -92,11 +99,9 @@ impl Processor for BroadcastSendTransform {
             };
         }
 
-        if self.output.is_finished() {
-            if self.channels.iter().all(|ch| ch.is_closed()) {
-                self.input.finish();
-                return Ok(Event::Finished);
-            }
+        if self.no_active_downstream() {
+            self.input.finish();
+            return Ok(Event::Finished);
         }
 
         if self.input.has_data() {
@@ -104,7 +109,11 @@ impl Processor for BroadcastSendTransform {
 
             let mut futures = Vec::new();
 
-            for (idx, output_channel) in self.channels.iter().enumerate() {
+            for (idx, output_channel) in self.channels.iter() {
+                if output_channel.is_closed() {
+                    continue;
+                }
+
                 if idx == self.local_pos {
                     if self.output.is_finished() {
                         continue;
@@ -119,20 +128,26 @@ impl Processor for BroadcastSendTransform {
                 futures.push({
                     let data_block = data_block.clone();
                     let output_channel = output_channel.clone();
-                    async move { output_channel.add_block(data_block).await }
+                    async move { (idx, output_channel.add_block(data_block).await) }
                 });
             }
 
             if !futures.is_empty() {
-                let joined = Box::pin(futures::future::try_join_all(futures));
+                let joined = Box::pin(futures::future::join_all(futures));
                 let mut handle = self.tasks.spawn(self.id, joined);
 
-                if matches!(
-                    handle.poll(matches!(cause, EventCause::Other)),
-                    Poll::Pending
-                ) {
-                    self.handle = Some(handle);
-                    return Ok(Event::NeedConsume);
+                match handle.poll(matches!(cause, EventCause::Other)) {
+                    Poll::Ready(results) => {
+                        self.channels.handle_send_results(results)?;
+                        if self.no_active_downstream() {
+                            self.input.finish();
+                            return Ok(Event::Finished);
+                        }
+                    }
+                    Poll::Pending => {
+                        self.handle = Some(handle);
+                        return Ok(Event::NeedConsume);
+                    }
                 }
             }
 
@@ -145,12 +160,7 @@ impl Processor for BroadcastSendTransform {
         if self.input.is_finished() {
             self.output.finish();
 
-            for idx in 0..self.channels.len() {
-                let mut closed_channel = DummyOutboundChannel::create();
-                std::mem::swap(&mut self.channels[idx], &mut closed_channel);
-                closed_channel.close();
-            }
-
+            self.channels.close_all();
             return Ok(Event::Finished);
         }
 
@@ -164,7 +174,7 @@ impl Processor for BroadcastSendTransform {
             self.handle.is_some(),
             self.channels
                 .iter()
-                .map(|x| x.is_closed())
+                .map(|(_, x)| x.is_closed())
                 .collect::<Vec<_>>()
         ))
     }

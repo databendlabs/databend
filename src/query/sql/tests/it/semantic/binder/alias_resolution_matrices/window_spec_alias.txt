@@ -1,0 +1,91 @@
+=== window_spec_alias__window_order_reuses_having_aggregate_alias ===
+matrix: window_spec_alias
+key: W0N0S2_0_
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY s) FROM t HAVING s > 0
+status: ok
+EvalScalar
+├── scalars: [sum(number) (#1) AS (#1), row_number() OVER (ORDER BY s) (#2) AS (#2)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [sum(number) (#1) AS (#1)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+        ├── limit: [NONE]
+        └── EvalScalar
+            ├── scalars: [sum(number) (#1) AS (#1)]
+            └── Filter
+                ├── filters: [gt(sum(number) (#1), 0)]
+                └── Aggregate(Initial)
+                    ├── group items: []
+                    ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+                    └── EvalScalar
+                        ├── scalars: [t.number (#0) AS (#0)]
+                        └── Scan
+                            ├── table: default.t (#0)
+                            ├── filters: []
+                            ├── order by: []
+                            └── limit: NONE
+
+
+=== window_spec_alias__window_spec_reuses_group_item_alias ===
+matrix: window_spec_alias
+key: W0N2G0_0_
+setting: enable_group_by_column_first=0
+sql: SELECT number % 3 AS a, number % 4 AS b, row_number() OVER (PARTITION BY b % 2 ORDER BY a) FROM t GROUP BY a, b
+status: ok
+EvalScalar
+├── scalars: [row_number() OVER (PARTITION BY b % 2 ORDER BY a) (#5) AS (#5), a (#1) AS (#6), b (#2) AS (#7)]
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: [modulo(b (#2), 2) AS (#3)]
+    ├── order by items: [a (#1) AS (#4)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Sort
+        ├── sort keys: [row_number_part_0 (#3) ASC NULLS LAST, row_number_order_0 (#4) ASC NULLS LAST]
+        ├── limit: [NONE]
+        ├── window top: NONE
+        ├── window function: RowNumber
+        └── EvalScalar
+            ├── scalars: [modulo(b (#2), 2) AS (#3), a (#1) AS (#4)]
+            └── Aggregate(Initial)
+                ├── group items: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
+                ├── aggregate functions: []
+                └── EvalScalar
+                    ├── scalars: [modulo(t.number (#0), 3) AS (#1), modulo(t.number (#0), 4) AS (#2)]
+                    └── Scan
+                        ├── table: default.t (#0)
+                        ├── filters: []
+                        ├── order by: []
+                        └── limit: NONE
+
+
+=== window_spec_alias__window_order_rejects_recursive_window_alias ===
+matrix: window_spec_alias
+key: W0N0S3_1_
+setting: enable_group_by_column_first=0
+sql: SELECT row_number() OVER () AS rn, row_number() OVER (ORDER BY rn) FROM t
+status: error
+code: 1065
+message: Window function cannot contain another window function
+
+=== window_spec_alias__window_spec_qualified_name_does_not_consume_group_alias ===
+matrix: window_spec_alias
+key: W0N1G0_3_
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k, row_number() OVER (ORDER BY t.k) FROM t AS t GROUP BY k
+status: error
+code: 1065
+message: column k doesn't exist
+
+=== window_spec_alias__window_spec_qualified_name_does_not_consume_aggregate_alias ===
+matrix: window_spec_alias
+key: W0N1S2_3_
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) AS s, row_number() OVER (ORDER BY t.s) FROM t AS t
+status: error
+code: 1065
+message: column s doesn't exist
+

@@ -84,35 +84,6 @@ fn run_case_with_predicates(
     run_scalar_case_with_predicates(file, expr_texts, &exprs, column_stats, cardinality)
 }
 
-fn run_error_case_with_predicates(
-    file: &mut impl Write,
-    expr_texts: &[&str],
-    columns: &[(&str, DataType)],
-    column_stats: ColumnStatSet,
-    cardinality: StatCardinality,
-) -> Result<()> {
-    let exprs = expr_texts
-        .iter()
-        .map(|expr_text| {
-            let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
-            raw_expr_to_scalar(&raw_expr, columns)
-        })
-        .collect::<Vec<_>>();
-
-    writeln!(file, "expr          : {}", expr_texts.join(", "))?;
-    writeln!(
-        file,
-        "cardinality   : {}",
-        cardinality_to_string(cardinality)
-    )?;
-    let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
-    let err = estimator.apply(&exprs).unwrap_err();
-    writeln!(file, "error         : {}", err.message())?;
-    writeln!(file)?;
-
-    Ok(())
-}
-
 fn run_scalar_case_with_predicates(
     file: &mut impl Write,
     expr_texts: &[&str],
@@ -1259,11 +1230,41 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             StatCardinality::estimate(100.0),
         )?;
     }
-    run_error_case_with_predicates(
+    run_case_with_predicates(
         &mut file,
         &["a % 0 = 0"],
         &[("a", UInt64Type::data_type())],
         mod_stats,
+        StatCardinality::estimate(100.0),
+    )?;
+    let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(-9),
+        max: Datum::Int(9),
+        ndv: StatEstimate::exact(19.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in ["i % 4 = -1", "i % 4 = 5", "i % -4 = -1", "i % -4 = 5"] {
+        run_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[("i", Int64Type::data_type())],
+            signed_mod_stats.clone(),
+            StatCardinality::estimate(100.0),
+        )?;
+    }
+    let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(i64::MIN),
+        max: Datum::Int(9),
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["i % -1 = 0"],
+        &[("i", Int64Type::data_type())],
+        signed_min_mod_stats,
         StatCardinality::estimate(100.0),
     )?;
 

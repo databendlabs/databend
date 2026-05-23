@@ -727,7 +727,7 @@ impl TableContextAuthorization for CtxDelegation {
     }
 
     fn get_current_role(&self) -> Option<RoleInfo> {
-        todo!()
+        None
     }
 
     fn get_secondary_roles(&self) -> Option<Vec<String>> {

@@ -43,16 +43,17 @@ Databend is an open-source enterprise data warehouse built in Rust.
 [Start for free on Databend Cloud](https://docs.databend.com/guides/cloud/) — Production-ready in 60 seconds.
 
 ### 2. Local (Python)
-Ideal for development and testing:
+Ideal for development and testing. Requires Python 3.12 or 3.13 and `databend-driver` 0.34.0 or later:
 
 ```bash
-pip install databend
+pip install "databend-driver[local]>=0.34.0"
 ```
 
 ```python
-import databend
-ctx = databend.SessionContext()
-ctx.sql("SELECT 'Hello, Databend!'").show()
+from databend_driver import connect
+
+conn = connect("databend+local:///./local-state")
+print(conn.query_row("SELECT 'Hello, Databend!'").values())
 ```
 
 ### 3. Docker

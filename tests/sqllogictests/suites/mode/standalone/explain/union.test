@@ -277,7 +277,7 @@ UnionAll
     ├── scan id: 1
     ├── output columns: [b (#1)]
     ├── read rows: 10000
-    ├── read size: 10.59 KiB
+    ├── read size: 10.60 KiB
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
@@ -296,7 +296,7 @@ UnionAll
 │   ├── scan id: 0
 │   ├── output columns: [a (#0)]
 │   ├── read rows: 10000
-│   ├── read size: 10.59 KiB
+│   ├── read size: 10.60 KiB
 │   ├── partitions total: 1
 │   ├── partitions scanned: 1
 │   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]

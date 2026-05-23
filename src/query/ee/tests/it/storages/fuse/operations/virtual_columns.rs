@@ -87,6 +87,13 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         .set_enable_experimental_virtual_column(0)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {}.{} set options(enable_virtual_column = false)",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        ))
+        .await?;
 
     let number_of_block = 2;
     append_variant_sample_data(number_of_block, &fixture).await?;
@@ -95,6 +102,13 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         .default_session()
         .get_settings()
         .set_enable_experimental_virtual_column(1)?;
+    fixture
+        .execute_command(&format!(
+            "alter table {}.{} set options(enable_virtual_column = true)",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        ))
+        .await?;
 
     let table_ctx = fixture.new_query_ctx().await?;
 

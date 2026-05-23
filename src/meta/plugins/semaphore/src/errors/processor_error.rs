@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use tonic::Status;
+use tonic_013::Status;
 
 use crate::errors::AcquirerClosed;
 use crate::errors::ConnectionClosed;

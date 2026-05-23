@@ -137,6 +137,30 @@ impl InferSchemaSeparator {
         }
     }
 
+    pub(crate) fn infer_ndjson_schema(
+        file_bytes: &[u8],
+        max_records: Option<usize>,
+    ) -> Result<TableSchema> {
+        TableSchema::try_from(&Self::infer_ndjson_arrow_schema(file_bytes, max_records)?)
+    }
+
+    fn infer_ndjson_arrow_schema(
+        file_bytes: &[u8],
+        max_records: Option<usize>,
+    ) -> std::result::Result<Schema, ArrowError> {
+        let mut records = ValueIter::new(Cursor::new(file_bytes), max_records);
+        if let Some(max_record) = max_records {
+            let mut tmp: Vec<std::result::Result<_, ArrowError>> = Vec::with_capacity(max_record);
+
+            for result in records {
+                tmp.push(Ok(result?));
+            }
+            infer_json_schema_from_iterator(tmp.into_iter())
+        } else {
+            infer_json_schema_from_iterator(&mut records)
+        }
+    }
+
     fn infer_tsv_schema(
         bytes: &[u8],
         params: &TextFileFormatParams,
@@ -438,29 +462,33 @@ impl AccumulatingTransform for InferSchemaSeparator {
             return Ok(vec![DataBlock::empty()]);
         }
         let file_bytes = bytes.as_slice();
-        let result = match &self.file_format_params {
+        enum InferError {
+            Incomplete,
+            Arrow(ArrowError),
+            Error(ErrorCode),
+        }
+
+        let result: std::result::Result<TableSchema, InferError> = match &self.file_format_params {
             FileFormatParams::Csv(params) => {
                 Self::infer_csv_schema(file_bytes, params, batch.is_eof, self.max_records)
+                    .map_err(|err| match err {
+                        Some(err) => InferError::Arrow(err),
+                        None => InferError::Incomplete,
+                    })
+                    .and_then(|schema| TableSchema::try_from(&schema).map_err(InferError::Error))
             }
             FileFormatParams::Text(params) => {
                 Self::infer_tsv_schema(file_bytes, params, batch.is_eof, self.max_records)
+                    .map_err(|err| match err {
+                        Some(err) => InferError::Arrow(err),
+                        None => InferError::Incomplete,
+                    })
+                    .and_then(|schema| TableSchema::try_from(&schema).map_err(InferError::Error))
             }
             FileFormatParams::NdJson(_) => {
-                let mut records = ValueIter::new(Cursor::new(file_bytes), self.max_records);
-                let fn_ndjson = |max_records| -> std::result::Result<Schema, Option<ArrowError>> {
-                    if let Some(max_record) = max_records {
-                        let mut tmp: Vec<std::result::Result<_, ArrowError>> =
-                            Vec::with_capacity(max_record);
-
-                        for result in records {
-                            tmp.push(Ok(result.map_err(|_| None)?));
-                        }
-                        infer_json_schema_from_iterator(tmp.into_iter()).map_err(Some)
-                    } else {
-                        infer_json_schema_from_iterator(&mut records).map_err(Some)
-                    }
-                };
-                fn_ndjson(self.max_records)
+                Self::infer_ndjson_arrow_schema(file_bytes, self.max_records)
+                    .map_err(InferError::Arrow)
+                    .and_then(|schema| TableSchema::try_from(&schema).map_err(InferError::Error))
             }
             _ => {
                 return Err(ErrorCode::BadArguments(
@@ -468,25 +496,31 @@ impl AccumulatingTransform for InferSchemaSeparator {
                 ));
             }
         };
-        let arrow_schema = match result {
+        let table_schema = match result {
             Ok(schema) => schema,
-            Err(None) => return Ok(vec![DataBlock::empty()]),
-            Err(Some(err)) => {
-                if matches!(err, ArrowError::CsvError(_))
-                    && self.max_records.is_some()
+            Err(InferError::Incomplete) => return Ok(vec![DataBlock::empty()]),
+            Err(InferError::Arrow(err)) => {
+                if self.max_records.is_some()
                     && !batch.is_eof
+                    && (matches!(err, ArrowError::CsvError(_))
+                        || is_ndjson_incomplete_parse_error(
+                            &err,
+                            file_bytes,
+                            &self.file_format_params,
+                        ))
                 {
                     return Ok(vec![DataBlock::empty()]);
                 }
                 return Err(err.into());
             }
+            Err(InferError::Error(err)) => return Err(err),
         };
         self.files.remove(&batch.path);
         self.filenames.push(batch.path);
 
         let merge_schema = match self.schemas.take() {
-            None => TableSchema::try_from(&arrow_schema)?,
-            Some(schema) => merge_schema(schema, TableSchema::try_from(&arrow_schema)?),
+            None => table_schema,
+            Some(schema) => merge_schema(schema, table_schema),
         };
         self.schemas = Some(merge_schema);
 
@@ -547,9 +581,20 @@ fn trim_ascii_space(data: &[u8]) -> &[u8] {
     data.trim_ascii()
 }
 
+fn is_ndjson_incomplete_parse_error(
+    err: &ArrowError,
+    file_bytes: &[u8],
+    file_format_params: &FileFormatParams,
+) -> bool {
+    matches!(file_format_params, FileFormatParams::NdJson(_))
+        && matches!(err, ArrowError::JsonError(_))
+        && !matches!(file_bytes.last(), Some(b'\n' | b'\r'))
+}
+
 #[cfg(test)]
 mod tests {
     use databend_common_meta_app::principal::CsvFileFormatParams;
+    use databend_common_meta_app::principal::NdJsonFileFormatParams;
     use databend_common_meta_app::principal::TextFileFormatParams;
 
     use super::*;
@@ -642,6 +687,33 @@ mod tests {
         let schema =
             InferSchemaSeparator::infer_tsv_schema(b"1\ntext\n", &params, true, None).unwrap();
         assert_eq!(schema.field(0).data_type(), &DataType::Utf8);
+    }
+
+    #[test]
+    fn test_infer_ndjson_incomplete_parse_error_waits_for_next_batch() -> Result<()> {
+        let mut separator = InferSchemaSeparator::create(
+            FileFormatParams::NdJson(NdJsonFileFormatParams::default()),
+            Some(2),
+            1,
+        );
+        let output = separator.transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
+            data: b"{\"a\":1}\n{\"a\"".to_vec(),
+            path: "sample.ndjson".to_string(),
+            offset: 0,
+            is_eof: false,
+        })))?;
+        assert_eq!(output.len(), 1);
+        assert!(output[0].is_empty());
+
+        let output = separator.transform(DataBlock::empty_with_meta(Box::new(BytesBatch {
+            data: b":2}\n".to_vec(),
+            path: "sample.ndjson".to_string(),
+            offset: 13,
+            is_eof: true,
+        })))?;
+        assert_eq!(output.len(), 1);
+        assert!(!output[0].is_empty());
+        Ok(())
     }
 
     #[test]

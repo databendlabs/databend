@@ -96,7 +96,12 @@ fn build_position_select(col_names: &[String]) -> PyResult<String> {
         .join(", "))
 }
 
-#[pyclass(name = "SessionContext", module = "databend", subclass)]
+#[pyclass(
+    name = "SessionContext",
+    module = "databend",
+    subclass,
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
     pub(crate) session: Arc<Session>,

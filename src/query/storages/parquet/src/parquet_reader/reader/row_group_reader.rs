@@ -53,7 +53,7 @@ use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::file::metadata::RowGroupMetaData;
-use parquet::format::PageLocation;
+use parquet::file::page_index::offset_index::PageLocation;
 use parquet::schema::types::SchemaDescPtr;
 
 use crate::DeleteType;

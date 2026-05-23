@@ -130,6 +130,7 @@ fn virtual_column_bind_context(metadata: Arc<RwLock<Metadata>>) -> Result<BindCo
                 TableField::new_from_column_id("v", TableDataType::Variant, 1),
             ]),
             engine: "Null".to_string(),
+            options: [("enable_virtual_column".to_string(), "true".to_string())].into(),
             virtual_schema: Some(VirtualDataSchema {
                 fields: vec![
                     VirtualDataField {

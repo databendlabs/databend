@@ -1,0 +1,107 @@
+=== aggregate_argument_alias__aggregate_argument_prefers_input_column ===
+matrix: aggregate_argument_alias
+key: A0N0S0_0_0
+setting: enable_group_by_column_first=0
+sql: SELECT a AS c2, sum(c2) FROM t GROUP BY a
+status: ok
+EvalScalar
+├── scalars: [t.a (#0) AS (#0), sum(c2) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: [t.a (#0) AS (#0)]
+    ├── aggregate functions: [sum(t.c2 (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.a (#0) AS (#0), t.c2 (#1) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__aggregate_argument_falls_back_to_prior_select_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S0_0_1
+setting: enable_group_by_column_first=0
+sql: SELECT number % 3 AS c1, sum(c1) FROM t GROUP BY number % 3
+status: ok
+EvalScalar
+├── scalars: [sum(c1) (#2) AS (#2), number % 3 (#1) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: [modulo(t.number (#0), 3) AS (#1)]
+    ├── aggregate functions: [sum(number % 3 (#1)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [modulo(t.number (#0), 3) AS (#1)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__aggregate_argument_prefers_input_column_over_prior_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S2_1_00
+setting: enable_group_by_column_first=0
+sql: SELECT count(*) AS c, sum(c) FROM t
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#1) AS (#1), sum(c) (#2) AS (#2)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#1), sum(t.c (#0)) AS (#2)]
+    └── EvalScalar
+        ├── scalars: [t.c (#0) AS (#0)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__aggregate_argument_consumes_unique_prior_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S2_1_10
+setting: enable_group_by_column_first=0
+sql: SELECT count(*) AS c, sum(c) FROM t
+status: ok
+EvalScalar
+├── scalars: [COUNT(*) (#1) AS (#1), sum(c) (#3) AS (#3)]
+└── Aggregate(Initial)
+    ├── group items: []
+    ├── aggregate functions: [count() AS (#1), sum(sum_arg_0 (#2)) AS (#3)]
+    └── EvalScalar
+        ├── scalars: [count() AS (#2)]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
+
+
+=== aggregate_argument_alias__aggregate_argument_rejects_duplicate_prior_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N0S2_1_11
+setting: enable_group_by_column_first=0
+sql: SELECT count(*) AS c, max(number) AS c, sum(c) FROM t
+status: error
+code: 1065
+message: column c reference or alias is ambiguous, please use another alias name
+
+=== aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_prior_select_alias ===
+matrix: aggregate_argument_alias
+key: A0N1S0_3_
+setting: enable_group_by_column_first=0
+sql: SELECT number % 3 AS c1, sum(t.c1) FROM t AS t GROUP BY number % 3
+status: error
+code: 1065
+message: column c1 doesn't exist
+
+=== aggregate_argument_alias__aggregate_argument_qualified_name_does_not_consume_aggregate_alias ===
+matrix: aggregate_argument_alias
+key: A0N1S2_3_
+setting: enable_group_by_column_first=0
+sql: SELECT count(*) AS c, sum(t.c) FROM t AS t
+status: error
+code: 1065
+message: column c doesn't exist
+

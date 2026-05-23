@@ -20,6 +20,7 @@ use std::sync::atomic::Ordering;
 
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Thread;
+use fastrace::collector::SpanContext;
 use fastrace::prelude::*;
 use log::LevelFilter;
 use logforth::filter::EnvFilter;

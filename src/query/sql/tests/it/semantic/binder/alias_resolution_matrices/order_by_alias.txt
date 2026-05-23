@@ -1,0 +1,105 @@
+=== order_by_alias__order_by_scalar_alias_conflict_prefers_select_alias ===
+matrix: order_by_alias
+key: O0N0S1_0_0
+setting: enable_group_by_column_first=0
+sql: SELECT i AS x FROM t ORDER BY x
+status: ok
+Sort
+├── sort keys: [t.i (#0) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.i (#0) AS (#0)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== order_by_alias__order_by_aggregate_alias_no_input ===
+matrix: order_by_alias
+key: O0N0S2_1_1
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) AS s FROM t ORDER BY s
+status: ok
+Sort
+├── sort keys: [sum(number) (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [sum(number) (#1) AS (#1)]
+    └── Aggregate(Initial)
+        ├── group items: []
+        ├── aggregate functions: [sum(t.number (#0)) AS (#1)]
+        └── EvalScalar
+            ├── scalars: [t.number (#0) AS (#0)]
+            └── Scan
+                ├── table: default.t (#0)
+                ├── filters: []
+                ├── order by: []
+                └── limit: NONE
+
+
+=== order_by_alias__order_by_duplicate_aggregate_alias_is_ambiguous ===
+matrix: order_by_alias
+key: O0N0S2_2_
+setting: enable_group_by_column_first=0
+sql: SELECT sum(number) AS s, max(number) AS s FROM t ORDER BY s
+status: error
+code: 1065
+message: column s reference or alias is ambiguous, please use another alias name
+
+=== order_by_alias__order_by_window_alias_expression ===
+matrix: order_by_alias
+key: O0N2S3_3_1
+setting: enable_group_by_column_first=0
+sql: SELECT number, row_number() OVER (ORDER BY number) AS rn FROM t ORDER BY rn + 1
+status: ok
+Sort
+├── sort keys: [rn + 1 (#2) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.number (#0) AS (#0), row_number() OVER (ORDER BY number) (#1) AS (#1), plus(row_number() OVER (ORDER BY number) (#1), 1) AS (#2)]
+    └── Window
+        ├── aggregate function: row_number
+        ├── partition items: []
+        ├── order by items: [t.number (#0) AS (#0)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Sort
+            ├── sort keys: [t.number (#0) ASC NULLS LAST]
+            ├── limit: [NONE]
+            └── EvalScalar
+                ├── scalars: [t.number (#0) AS (#0)]
+                └── Scan
+                    ├── table: default.t (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+
+
+=== order_by_alias__order_by_qualified_name_binds_input_column ===
+matrix: order_by_alias
+key: O0N1I0_5_
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k FROM t ORDER BY t.k
+status: ok
+Sort
+├── sort keys: [t.k (#1) ASC NULLS LAST]
+├── limit: [NONE]
+└── EvalScalar
+    ├── scalars: [t.i (#0) AS (#0), t.k (#1) AS (#1)]
+    └── Scan
+        ├── table: default.t (#0)
+        ├── filters: []
+        ├── order by: []
+        └── limit: NONE
+
+
+=== order_by_alias__order_by_qualified_name_binds_relation_not_select_alias ===
+matrix: order_by_alias
+key: O0N1S1_5_
+setting: enable_group_by_column_first=0
+sql: SELECT i AS k FROM t ORDER BY t.k
+status: error
+code: 1065
+message: column k doesn't exist
+
