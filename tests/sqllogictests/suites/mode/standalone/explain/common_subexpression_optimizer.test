@@ -99,7 +99,7 @@ Sequence
 │   └── Filter
 │       ├── output columns: [cse_left.a (#0), cse_right.b (#1)]
 │       ├── filters: [cse_left.a (#0) < 1 and cse_right.b (#1) < 1 or cse_left.a (#0) < 2 and cse_right.b (#1) < 2]
-│       ├── estimated rows: 1.67
+│       ├── estimated rows: 1.41
 │       └── HashJoin
 │           ├── output columns: [cse_left.a (#0), cse_right.b (#1)]
 │           ├── join type: INNER
@@ -109,7 +109,7 @@ Sequence
 │           ├── filters: []
 │           ├── build join filters:
 │           │   └── filter id:0, build key:cse_right.b (#1), probe targets:[cse_left.a (#0)@scan0], filter type:bloom,inlist,min_max
-│           ├── estimated rows: 2.33
+│           ├── estimated rows: 1.81
 │           ├── Filter(Build)
 │           │   ├── output columns: [cse_right.b (#1)]
 │           │   ├── filters: [cse_right.b (#1) < 1 or cse_right.b (#1) < 2]
@@ -161,11 +161,11 @@ Sequence
     │       └── Filter
     │           ├── output columns: []
     │           ├── filters: [is_true(cse_left.a (#3) < 2), is_true(cse_right.b (#4) < 2), is_true(cse_left.a (#3) = cse_right.b (#4))]
-    │           ├── estimated rows: 0.33
+    │           ├── estimated rows: 0.28
     │           └── MaterializeCTERef
     │               ├── cte_name: cte_cse_0
     │               ├── cte_schema: [a (#3), b (#4)]
-    │               └── estimated rows: 1.67
+    │               └── estimated rows: 1.41
     └── AggregateFinal(Probe)
         ├── output columns: [COUNT(*) (#2)]
         ├── group by: []
@@ -178,11 +178,11 @@ Sequence
             └── Filter
                 ├── output columns: []
                 ├── filters: [is_true(cse_left.a (#0) < 1), is_true(cse_right.b (#1) < 1), is_true(cse_left.a (#0) = cse_right.b (#1))]
-                ├── estimated rows: 0.33
+                ├── estimated rows: 1.00
                 └── MaterializeCTERef
                     ├── cte_name: cte_cse_0
                     ├── cte_schema: [a (#0), b (#1)]
-                    └── estimated rows: 1.67
+                    └── estimated rows: 1.41
 
 statement ok
 drop table cse_left;
