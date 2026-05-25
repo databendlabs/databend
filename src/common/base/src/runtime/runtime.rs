@@ -27,9 +27,10 @@ use tokio::runtime::Builder;
 use tokio::runtime::Handle;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
-use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
+use super::watchdog::WatchdogEvent;
+use super::watchdog::run_watchdog_loop;
 use crate::runtime::Thread;
 use crate::runtime::ThreadJoinHandle;
 use crate::runtime::ThreadTracker;
@@ -42,9 +43,8 @@ pub struct Runtime {
     /// Runtime handle.
     handle: Handle,
 
-    /// Prefix injected into root async-backtrace frames spawned by this wrapper.
-    /// This makes existing task dumps show which named Databend runtime owns a task.
-    task_dump_marker: String,
+    /// Prefix injected into task frames and used to filter task dumps.
+    task_marker: String,
 
     /// Use to receive a drop signal when dropper is dropped.
     _dropper: Dropper,
@@ -56,17 +56,29 @@ impl Runtime {
             .build()
             .map_err(|tokio_error| ErrorCode::TokioError(tokio_error.to_string()))?;
 
-        let (send_stop, recv_stop) = oneshot::channel();
+        let (watchdog_tx, watchdog_rx) = std::sync::mpsc::channel::<WatchdogEvent>();
 
         let handle = runtime.handle().clone();
         let runtime_name = name.clone().unwrap_or_else(|| "unnamed".to_string());
-        let task_dump_marker = format!("[{runtime_name}]");
+        let runtime_id = handle.id().to_string();
+        let runtime_label = format!("{runtime_name} id={runtime_id}");
+        let task_marker = format!("[{runtime_label}]");
 
         let n = name.clone();
-        // Block the runtime to shutdown.
+        let watchdog_handle = handle.clone();
+        let watchdog_marker = task_marker.clone();
+        let watchdog_event_tx = watchdog_tx.clone();
+        // The wait-to-drop thread blocks until the runtime is dropped, and in
+        // the meantime periodically probes the runtime to check that tasks are
+        // still being scheduled in a timely manner.
         let join_handler =
             Thread::named_spawn(n.as_ref().map(|n| format!("wait-to-drop-{n}")), move || {
-                let _ = runtime.block_on(recv_stop);
+                run_watchdog_loop(
+                    &watchdog_handle,
+                    &watchdog_marker,
+                    &watchdog_event_tx,
+                    &watchdog_rx,
+                );
 
                 if cfg!(debug_assertions) {
                     let instant = Instant::now();
@@ -80,10 +92,10 @@ impl Runtime {
 
         Ok(Runtime {
             handle,
-            task_dump_marker,
+            task_marker,
             _dropper: Dropper {
                 name,
-                close: Some(send_stop),
+                close: Some(watchdog_tx),
                 join_handler: Some(join_handler),
             },
         })
@@ -139,7 +151,7 @@ impl Runtime {
     }
 
     fn task_location_name(&self, location_name: String) -> String {
-        format!("{} {}", self.task_dump_marker, location_name)
+        format!("{} {}", self.task_marker, location_name)
     }
 
     #[track_caller]
@@ -284,7 +296,7 @@ impl Runtime {
 /// Dropping the dropper will cause runtime to shutdown.
 pub struct Dropper {
     name: Option<String>,
-    close: Option<oneshot::Sender<()>>,
+    close: Option<std::sync::mpsc::Sender<WatchdogEvent>>,
     join_handler: Option<ThreadJoinHandle<bool>>,
 }
 
@@ -293,7 +305,7 @@ impl Drop for Dropper {
         drop_guard(move || {
             // Send a signal to say i am dropping.
             if let Some(close_sender) = self.close.take()
-                && close_sender.send(()).is_ok()
+                && close_sender.send(WatchdogEvent::Stop).is_ok()
             {
                 match self.join_handler.take().unwrap().join() {
                     Err(e) => warn!("Runtime dropper panic, {:?}", e),
@@ -468,11 +480,14 @@ where F: Future {
             .to_string()
     });
 
-    if let Ok(handle) = Handle::try_current()
-        && let Some(name) = handle.name()
-    {
-        return format!("[{name}] {frame_name}");
+    if let Ok(handle) = Handle::try_current() {
+        return format!("{} {frame_name}", current_runtime_marker(&handle));
     }
 
     frame_name
+}
+
+fn current_runtime_marker(handle: &Handle) -> String {
+    let runtime_name = handle.name().unwrap_or("unnamed");
+    format!("[{} id={}]", runtime_name, handle.id())
 }
