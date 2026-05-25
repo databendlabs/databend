@@ -99,7 +99,7 @@ RowFetch
                     ├── filters: []
                     ├── build join filters:
                     │   └── filter id:0, build key:t1.id (#0), probe targets:[t2.id (#4)@scan1], filter type:bloom,inlist,min_max
-                    ├── estimated rows: 2.67
+                    ├── estimated rows: 2.00
                     ├── Exchange(Build)
                     │   ├── output columns: [t1.id (#0), t1._row_id (#7)]
                     │   ├── exchange type: Broadcast
