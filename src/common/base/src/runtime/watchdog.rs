@@ -139,17 +139,53 @@ fn wait_probe_scheduled_for(
     }
 }
 
+/// Dump only the tasks whose stack frames contain `task_dump_marker`
+/// (i.e. tasks owned by this runtime). Returns an empty-style placeholder
+/// when no matching task is found.
+fn dump_runtime_tasks(task_dump_marker: &str) -> String {
+    let (tasks, polling_tasks) = get_all_tasks(false);
+
+    let mut output = String::new();
+    let mut matched = 0usize;
+    for mut tasks in [tasks, polling_tasks] {
+        tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
+
+        for item in tasks.into_iter().rev() {
+            if !item
+                .stack_frames
+                .iter()
+                .any(|frame| frame.contains(task_dump_marker))
+            {
+                continue;
+            }
+
+            matched += 1;
+            for frame in item.stack_frames {
+                writeln!(output, "{}", frame).unwrap();
+            }
+            writeln!(output).unwrap();
+        }
+    }
+
+    if matched == 0 {
+        format!("<no tasks tagged with {task_dump_marker} were found>\n")
+    } else {
+        output
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::mpsc;
     use std::thread;
 
     use super::*;
+    use crate::runtime::Thread;
 
     #[test]
     fn test_wait_probe_scheduled_returns_stop_immediately() {
         let (event_tx, event_rx) = mpsc::channel();
-        thread::spawn(move || {
+        let _join = Thread::spawn(move || {
             thread::sleep(Duration::from_millis(20));
             event_tx.send(WatchdogEvent::Stop).unwrap();
         });
@@ -200,40 +236,5 @@ mod tests {
         let should_stop = wait_probe_interval_for(&event_rx, Duration::from_secs(5));
 
         assert!(should_stop);
-    }
-}
-
-/// Dump only the tasks whose stack frames contain `task_dump_marker`
-/// (i.e. tasks owned by this runtime). Returns an empty-style placeholder
-/// when no matching task is found.
-fn dump_runtime_tasks(task_dump_marker: &str) -> String {
-    let (tasks, polling_tasks) = get_all_tasks(false);
-
-    let mut output = String::new();
-    let mut matched = 0usize;
-    for mut tasks in [tasks, polling_tasks] {
-        tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
-
-        for item in tasks.into_iter().rev() {
-            if !item
-                .stack_frames
-                .iter()
-                .any(|frame| frame.contains(task_dump_marker))
-            {
-                continue;
-            }
-
-            matched += 1;
-            for frame in item.stack_frames {
-                writeln!(output, "{}", frame).unwrap();
-            }
-            writeln!(output).unwrap();
-        }
-    }
-
-    if matched == 0 {
-        format!("<no tasks tagged with {task_dump_marker} were found>\n")
-    } else {
-        output
     }
 }
