@@ -50,7 +50,7 @@ pub(super) fn run_watchdog_loop(
     let mut probe_id = 0u64;
 
     loop {
-        if wait_probe_interval(event_rx) {
+        if wait_probe_interval_for(event_rx, RUNTIME_WATCHDOG_PROBE_INTERVAL) {
             return;
         }
 
@@ -64,7 +64,11 @@ pub(super) fn run_watchdog_loop(
             let _ = probe_tx.send(WatchdogEvent::ProbeScheduled(current_probe_id));
         });
 
-        match wait_probe_scheduled(event_rx, current_probe_id) {
+        match wait_probe_scheduled_for(
+            event_rx,
+            current_probe_id,
+            RUNTIME_WATCHDOG_UNHEALTHY_THRESHOLD,
+        ) {
             ProbeWaitResult::Stop => return,
             ProbeWaitResult::Scheduled => {}
             ProbeWaitResult::Timeout => {
@@ -86,10 +90,6 @@ enum ProbeWaitResult {
     Timeout,
 }
 
-fn wait_probe_interval(event_rx: &Receiver<WatchdogEvent>) -> bool {
-    wait_probe_interval_for(event_rx, RUNTIME_WATCHDOG_PROBE_INTERVAL)
-}
-
 fn wait_probe_interval_for(event_rx: &Receiver<WatchdogEvent>, interval: Duration) -> bool {
     let wait_until = Instant::now() + interval;
 
@@ -107,10 +107,6 @@ fn wait_probe_interval_for(event_rx: &Receiver<WatchdogEvent>, interval: Duratio
             Err(RecvTimeoutError::Disconnected) => return true,
         }
     }
-}
-
-fn wait_probe_scheduled(event_rx: &Receiver<WatchdogEvent>, probe_id: u64) -> ProbeWaitResult {
-    wait_probe_scheduled_for(event_rx, probe_id, RUNTIME_WATCHDOG_UNHEALTHY_THRESHOLD)
 }
 
 fn wait_probe_scheduled_for(
