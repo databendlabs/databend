@@ -195,7 +195,7 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     let stream_info = table.get_table_info();
                     let stream_table = StreamTable::try_from_table(table.as_ref())?;
 
-                    let source_db_id = stream_table.source_database_id(ctl.as_ref()).await.ok();
+                    let source_db_id = stream_table.source_database_id().ok();
                     if let Some(source_db_id) = source_db_id {
                         source_db_id_set.insert(source_db_id);
                     }

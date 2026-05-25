@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -46,7 +47,6 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_storages_common_table_meta::table::ChangeType;
-use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
@@ -231,35 +231,32 @@ impl StreamTable {
     }
 
     pub fn offset(&self) -> Result<u64> {
-        let table_version = self
-            .info
-            .options()
-            .get(OPT_KEY_TABLE_VER)
-            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
-            .parse::<u64>()?;
-        Ok(table_version)
+        self.get_option(OPT_KEY_TABLE_VER)
     }
 
     pub fn mode(&self) -> StreamMode {
-        self.info
-            .options()
-            .get(OPT_KEY_MODE)
-            .and_then(|s| s.parse::<StreamMode>().ok())
-            .unwrap_or(StreamMode::AppendOnly)
+        self.info.get_option(OPT_KEY_MODE, StreamMode::AppendOnly)
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
         self.info.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
     }
 
-    pub fn source_table_id(&self) -> Result<u64> {
-        let table_id = self
-            .info
+    fn get_option<T>(&self, opt_key: &str) -> Result<T>
+    where
+        T: FromStr,
+        T::Err: std::fmt::Display,
+    {
+        self.info
             .options()
-            .get(OPT_KEY_SOURCE_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("source table id must be set"))?
-            .parse::<u64>()?;
-        Ok(table_id)
+            .get(opt_key)
+            .ok_or_else(|| ErrorCode::Internal(format!("stream option '{}' must be set", opt_key)))?
+            .parse::<T>()
+            .map_err(|e| ErrorCode::Internal(format!("Invalid stream option '{}': {}", opt_key, e)))
+    }
+
+    pub fn source_table_id(&self) -> Result<u64> {
+        self.get_option(OPT_KEY_SOURCE_TABLE_ID)
     }
 
     pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
@@ -274,40 +271,12 @@ impl StreamTable {
             })
     }
 
-    pub async fn source_database_id(&self, catalog: &dyn Catalog) -> Result<u64> {
-        let source_db_id_opt = self
-            .info
-            .options()
-            .get(OPT_KEY_SOURCE_DATABASE_ID)
-            .map(|s| s.parse::<u64>().map_err(|e| e.to_string()))
-            .transpose()?;
-
-        let source_db_id = match source_db_id_opt {
-            Some(v) => v,
-            None => {
-                let source_table_id = self.source_table_id()?;
-                let source_table_meta = catalog
-                    .get_table_meta_by_id(source_table_id)
-                    .await?
-                    .ok_or_else(|| ErrorCode::Internal("source database id must be set"))?;
-                source_table_meta
-                    .data
-                    .options
-                    .get(OPT_KEY_DATABASE_ID)
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "Invalid fuse table, table option {} not found when getting source database id",
-                            OPT_KEY_DATABASE_ID
-                        ))
-                    })?
-                    .parse::<u64>()?
-            }
-        };
-        Ok(source_db_id)
+    pub fn source_database_id(&self) -> Result<u64> {
+        self.get_option(OPT_KEY_SOURCE_DATABASE_ID)
     }
 
     pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        let source_db_id = self.source_database_id(catalog).await?;
+        let source_db_id = self.source_database_id()?;
         catalog.get_db_name_by_id(source_db_id).await
     }
 
