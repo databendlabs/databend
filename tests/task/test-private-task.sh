@@ -71,6 +71,18 @@ check_response_error() {
     fi
 }
 
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK task_missing_wh WAREHOUSE = 'missing_wh' SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
+state=$(echo "$response" | jq -r '.state')
+error_msg=$(echo "$response" | jq -r '.error.message // ""')
+if [ "$state" = "Failed" ] && [[ "$error_msg" == *"warehouse missing_wh not exists"* ]]; then
+    echo "✅ CREATE TASK rejects unknown warehouse"
+else
+    echo "❌ Expected CREATE TASK with unknown warehouse to fail"
+    echo "State: $state"
+    echo "Error: $error_msg"
+    exit 1
+fi
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')
@@ -85,6 +97,21 @@ response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-
 check_response_error "$response"
 create_task_3_query_id=$(echo $response | jq -r '.id')
 echo "Create Task 3 ID: $create_task_3_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SHOW TASKS\"}")
+check_response_error "$response"
+task_ids=$(echo "$response" | jq -r '.data[] | select(.[1] == "my_task_1" or .[1] == "my_task_2" or .[1] == "my_task_3") | .[2]')
+task_id_count=$(echo "$task_ids" | sed '/^$/d' | wc -l)
+zero_task_id_count=$(echo "$task_ids" | awk '$1 == "0" { count++ } END { print count + 0 }')
+unique_task_id_count=$(echo "$task_ids" | sed '/^$/d' | sort -u | wc -l)
+if [ "$task_id_count" -eq 3 ] && [ "$zero_task_id_count" -eq 0 ] && [ "$unique_task_id_count" -eq 3 ]; then
+    echo "✅ Private task ids are assigned"
+else
+    echo "❌ Expected private task ids to be non-zero and unique"
+    echo "Task IDs:"
+    echo "$task_ids"
+    exit 1
+fi
 
 sleep 5
 
