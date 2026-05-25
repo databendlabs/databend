@@ -20,6 +20,7 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
 use databend_common_ast::ast::ScheduleOptions;
+use databend_common_ast::ast::TaskSql;
 use databend_common_meta_api::fetch_id;
 use databend_common_meta_api::kv_pb_api::KVPbApi;
 use databend_common_meta_api::kv_pb_api::UpsertPB;
@@ -31,6 +32,7 @@ use databend_common_meta_app::principal::TaskIdent;
 use databend_common_meta_app::principal::task;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task::TaskMessage;
+use databend_common_meta_app::principal::task::TaskSql as MetaTaskSql;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
@@ -145,7 +147,7 @@ impl TaskMgr {
                 todo!()
             }
             AlterTaskOptions::ModifyAs(sql) => {
-                task.query_text = sql.to_string();
+                task.task_sql = Self::make_task_sql(sql);
             }
             AlterTaskOptions::ModifyWhen(sql) => {
                 task.when_condition = Some(sql.to_string());
@@ -348,6 +350,13 @@ impl TaskMgr {
         task::WarehouseOptions {
             warehouse: opt,
             using_warehouse_size: None,
+        }
+    }
+
+    pub fn make_task_sql(sql: &TaskSql) -> MetaTaskSql {
+        match sql {
+            TaskSql::SingleStatement(stmt) => MetaTaskSql::Sql(stmt.clone()),
+            TaskSql::ScriptBlock(sqls) => MetaTaskSql::Script(sqls.clone()),
         }
     }
 }

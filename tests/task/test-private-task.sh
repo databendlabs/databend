@@ -71,6 +71,11 @@ check_response_error() {
     fi
 }
 
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t_script (c1 int)\"}")
+check_response_error "$response"
+create_script_table_query_id=$(echo $response | jq -r '.id')
+echo "Create Script Table Query ID: $create_script_table_query_id"
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK task_missing_wh WAREHOUSE = 'missing_wh' SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 state=$(echo "$response" | jq -r '.state')
 error_msg=$(echo "$response" | jq -r '.error.message // ""')
@@ -80,6 +85,33 @@ else
     echo "❌ Expected CREATE TASK with unknown warehouse to fail"
     echo "State: $state"
     echo "Error: $error_msg"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_script_task SCHEDULE = 3600 SECOND AS BEGIN insert into t_script values(10); insert into t_script values(20); END;\"}")
+check_response_error "$response"
+create_script_task_query_id=$(echo $response | jq -r '.id')
+echo "Create Script Task Query ID: $create_script_task_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK my_script_task\"}")
+check_response_error "$response"
+execute_script_task_query_id=$(echo $response | jq -r '.id')
+echo "Execute Script Task Query ID: $execute_script_task_query_id"
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t_script ORDER BY c1\"}")
+check_response_error "$response"
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["10"],["20"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Private task executes multiple statements"
+else
+    echo "❌ Expected private task script block to execute all statements"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
     exit 1
 fi
 

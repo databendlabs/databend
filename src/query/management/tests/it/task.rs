@@ -16,12 +16,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::TaskSql;
 use databend_common_exception::Result;
 use databend_common_management::TaskMgr;
 use databend_common_meta_app::principal::Status;
 use databend_common_meta_app::principal::Task;
 use databend_common_meta_app::principal::WarehouseOptions;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
+use databend_common_meta_app::principal::task::TaskSql as MetaTaskSql;
 use databend_common_meta_app::schema::CreateOption;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStore;
@@ -67,9 +69,25 @@ async fn test_create_or_replace_task_assigns_new_task_id() -> anyhow::Result<()>
 
     assert_ne!(new_task.task_id, EMPTY_TASK_ID);
     assert_ne!(new_task.task_id, old_task.task_id);
-    assert_eq!(new_task.query_text, "select 2");
+    assert_eq!(new_task.task_sql, MetaTaskSql::Sql("select 2".to_string()));
 
     Ok(())
+}
+
+#[test]
+fn test_make_task_sql_preserves_script_sql() {
+    let sql = TaskSql::ScriptBlock(vec![
+        "INSERT INTO t VALUES(1)".to_string(),
+        "INSERT INTO t VALUES(2)".to_string(),
+    ]);
+
+    assert_eq!(
+        TaskMgr::make_task_sql(&sql),
+        MetaTaskSql::Script(vec![
+            "INSERT INTO t VALUES(1)".to_string(),
+            "INSERT INTO t VALUES(2)".to_string()
+        ])
+    );
 }
 
 fn test_task(name: &str, query_text: &str) -> Task {
@@ -78,7 +96,7 @@ fn test_task(name: &str, query_text: &str) -> Task {
     Task {
         task_id: EMPTY_TASK_ID,
         task_name: name.to_string(),
-        query_text: query_text.to_string(),
+        task_sql: MetaTaskSql::Sql(query_text.to_string()),
         when_condition: None,
         after: vec![],
         comment: None,
