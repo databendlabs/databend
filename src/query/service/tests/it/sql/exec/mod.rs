@@ -143,7 +143,7 @@ pub async fn test_snapshot_consistency() -> anyhow::Result<()> {
     let db2 = db.clone();
     let tbl2 = tbl.clone();
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("sql-exec-test".to_string()))?;
 
     // 1. insert into tbl
     let mut planner = Planner::new(ctx.clone());
