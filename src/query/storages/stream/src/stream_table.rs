@@ -49,6 +49,7 @@ use databend_common_storages_fuse::io::MetaReaders;
 use databend_common_storages_fuse::io::SnapshotHistoryReader;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_storages_common_table_meta::table::ChangeType;
+use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_BASE_TABLE_ID;
@@ -273,8 +274,30 @@ impl StreamTable {
         self.get_option(OPT_KEY_SOURCE_TABLE_ID)
     }
 
-    pub fn source_database_id(&self) -> Result<u64> {
-        self.get_option(OPT_KEY_SOURCE_DATABASE_ID)
+    pub async fn source_database_id(&self, catalog: &dyn Catalog) -> Result<u64> {
+        let source_db_id_opt = self.get_option(OPT_KEY_SOURCE_DATABASE_ID).ok();
+        let source_db_id = match source_db_id_opt {
+            Some(v) => v,
+            None => {
+                let source_table_id = self.source_table_id()?;
+                let source_table_meta = catalog
+                    .get_table_meta_by_id(source_table_id)
+                    .await?
+                    .ok_or_else(|| ErrorCode::Internal("source database id must be set"))?;
+                source_table_meta
+                    .data
+                    .options
+                    .get(OPT_KEY_DATABASE_ID)
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Invalid fuse table, table option {} not found when getting source database id",
+                            OPT_KEY_DATABASE_ID
+                        ))
+                    })?
+                    .parse::<u64>()?
+            }
+        };
+        Ok(source_db_id)
     }
 
     pub fn source_base_table_id(&self) -> Result<Option<u64>> {
@@ -293,7 +316,7 @@ impl StreamTable {
     }
 
     pub async fn source_table_reference(&self, catalog: &dyn Catalog) -> Result<StreamSourceRef> {
-        let source_db_id = self.source_database_id()?;
+        let source_db_id = self.source_database_id(catalog).await?;
         let database = catalog.get_db_name_by_id(source_db_id).await?;
 
         let source_table_id = self.source_table_id()?;

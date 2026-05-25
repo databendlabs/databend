@@ -200,17 +200,19 @@ impl<const T: bool> AsyncSystemTable for StreamsTable<T> {
                     names.push(stream_table.name().to_string());
                     mode.push(stream_table.mode().to_string());
 
-                    let source_db_tb_id = || -> Result<(u64, u64, Option<u64>)> {
+                    let source_db_tb_id: Result<(u64, u64, Option<u64>)> = async {
                         let source_tb_id = stream_table.source_table_id()?;
-                        let source_db_id = stream_table.source_database_id()?;
+                        let source_db_id = stream_table.source_database_id(ctl.as_ref()).await?;
                         let source_base_id = stream_table.source_base_table_id()?;
+
                         Ok((
                             source_db_id,
                             source_base_id.unwrap_or(source_tb_id),
                             source_base_id.map(|_| source_tb_id),
                         ))
-                    };
-                    let (source_db_tb_id, source_reason) = match source_db_tb_id() {
+                    }
+                    .await;
+                    let (source_db_tb_id, source_reason) = match source_db_tb_id {
                         Ok(source_db_tb_id) => (Some(source_db_tb_id), None),
                         Err(err) => (None, Some(err.display_text())),
                     };

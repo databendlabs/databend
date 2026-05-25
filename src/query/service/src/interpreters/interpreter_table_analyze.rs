@@ -79,11 +79,11 @@ impl AnalyzeTableInterpreter {
         Ok((select_plan, bind_context))
     }
 
-    fn analyze_target(&self) -> String {
+    fn analyze_target(&self, quote: char) -> String {
         if let Some(branch) = &self.plan.branch {
-            format!("{}.{}/{}", self.plan.database, self.plan.table, branch)
+            format!("{quote}{}{quote}.{quote}{}{quote}/{quote}{branch}{quote}", self.plan.database, self.plan.table)
         } else {
-            format!("{}.{}", self.plan.database, self.plan.table)
+            format!("{quote}{}{quote}.{quote}{}{quote}", self.plan.database, self.plan.table)
         }
     }
 }
@@ -137,7 +137,7 @@ impl Interpreter for AnalyzeTableInterpreter {
         if self.ctx.get_settings().get_enable_analyze_histogram()?
             && self.ctx.get_settings().get_enable_table_snapshot_stats()?
         {
-            let analyze_target = self.analyze_target();
+            let analyze_target = self.analyze_target(quote);
             let histogram_sqls = table
                     .schema()
                     .fields()
