@@ -301,13 +301,14 @@ impl<'a> CoreExprArena<'a> {
                 right,
                 is_not,
                 escape,
-            } => self.lower_like_escape_expr(
-                *span,
-                if *is_not { "notlike" } else { "like" },
-                left,
-                right,
-                Some(escape),
-            )?,
+            } => {
+                let like = self.lower_like_escape_expr(*span, "like", left, right, Some(escape))?;
+                if *is_not {
+                    self.call(*span, "not", smallvec![like])
+                } else {
+                    like
+                }
+            }
             Expr::Case {
                 span,
                 operand,
@@ -924,6 +925,21 @@ mod tests {
 
         assert_sql_lowers_to("a LIKE 'x' ESCAPE '!'", |arena, root| {
             assert!(matches!(arena.get(root), CoreExpr::Call {
+                func_name: "like",
+                ..
+            }));
+        });
+
+        assert_sql_lowers_to("a NOT LIKE 'x' ESCAPE '!'", |arena, root| {
+            let CoreExpr::Call {
+                func_name: "not",
+                args,
+                ..
+            } = arena.get(root)
+            else {
+                panic!("NOT LIKE ESCAPE should lower to a not call");
+            };
+            assert!(matches!(arena.get(args[0]), CoreExpr::Call {
                 func_name: "like",
                 ..
             }));

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use databend_common_ast::Span;
@@ -49,6 +50,7 @@ use databend_common_meta_app::principal::UserDefinedFunction;
 use databend_common_meta_app::storage::StorageParams;
 use databend_common_storage::init_stage_operator;
 use itertools::Itertools;
+use parking_lot::RwLock;
 use serde_json::json;
 use serde_json::to_string;
 use unicase::Ascii;
@@ -64,7 +66,9 @@ use super::UdfAdapter;
 use super::rewrite_function::rewrite_function_name;
 use crate::BindContext;
 use crate::ColumnBindingBuilder;
+use crate::Metadata;
 use crate::NameResolutionContext;
+use crate::Symbol;
 use crate::Visibility;
 use crate::binder::resolve_file_location;
 use crate::binder::resolve_stage_locations;
@@ -81,6 +85,8 @@ use crate::plans::UDFLambdaCall;
 use crate::plans::UDFLanguage;
 use crate::plans::UDFScriptCode;
 use crate::plans::UDFType;
+use crate::plans::VisitorMut;
+use crate::plans::walk_expr_mut;
 
 #[derive(Debug, Clone)]
 struct UdfAsset {
@@ -700,19 +706,19 @@ where A: super::TypeCheckAdapter
                 func_name,
                 definition,
                 parameters,
-            } => self.resolve_lambda_udf_definition(span, func_name, &definition, parameters),
+            } => self.resolve_udf_definition(span, func_name, &definition, parameters, None),
             UdfResolveResult::ScalarDefinition {
                 span,
                 func_name,
                 definition,
                 parameters,
                 return_type,
-            } => self.resolve_scalar_udf_definition(
+            } => self.resolve_udf_definition(
                 span,
                 func_name,
                 &definition,
                 parameters,
-                return_type,
+                Some(return_type),
             ),
         }
     }
@@ -732,16 +738,23 @@ where A: super::TypeCheckAdapter
 
     fn resolve_udf_definition(
         &mut self,
+        span: Span,
+        func_name: String,
         definition: &str,
         parameters: Vec<(String, DataType, ScalarExpr)>,
+        return_type: Option<DataType>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        // TODO: UDF definitions are not validated thoroughly before expansion.
+        // Recursive or mutually recursive UDFs can recurse during type checking and
+        // overflow the stack; other unchecked definition risks may exist as well.
         let sql_tokens = tokenize_sql(definition)?;
         let expr = parse_expr(&sql_tokens, self.adapter.settings().get_sql_dialect()?)?;
 
-        let mut bind_context = BindContext::with_parent(self.bind_context.clone())?;
-        let mut replacements = Vec::with_capacity(parameters.len());
+        let mut bind_context = BindContext::new();
+        let mut metadata = Metadata::default();
+        let mut replacements = HashMap::new();
         for (name, data_type, scalar) in parameters {
-            let column_index = bind_context.next_column_index();
+            let column_index = metadata.add_derived_column(name.clone(), data_type.clone());
             bind_context.add_column_binding(
                 ColumnBindingBuilder::new(
                     name,
@@ -751,72 +764,61 @@ where A: super::TypeCheckAdapter
                 )
                 .build(),
             );
-            replacements.push((column_index, scalar));
+            replacements.insert(column_index, scalar);
         }
 
         let name_resolution_ctx = NameResolutionContext {
             deny_column_reference: false,
             ..self.name_resolution_ctx.clone()
         };
-        let box (mut scalar, data_type) = TypeChecker::try_create_with_adapter(
+        let box (scalar, data_type) = TypeChecker::try_create_with_adapter(
             &mut bind_context,
             self.adapter.clone(),
             &name_resolution_ctx,
-            self.metadata.clone(),
-            self.aliases,
+            RwLock::new(metadata).into(),
+            &[],
         )?
         .resolve(&expr)?;
 
-        for (column_index, arg) in replacements {
-            scalar.replace_column_with_scalar(column_index, &arg)?;
+        let (scalar, data_type) = if let Some(return_type) = return_type {
+            let expr = CastExpr {
+                span,
+                is_try: false,
+                argument: Box::new(scalar),
+                target_type: Box::new(return_type.clone()),
+            };
+            (expr.into(), return_type)
+        } else {
+            (scalar, data_type)
+        };
+        let mut scalar = UDFLambdaCall {
+            span,
+            func_name,
+            scalar: Box::new(scalar),
+        }
+        .into();
+
+        impl VisitorMut<'_> for HashMap<Symbol, ScalarExpr> {
+            fn visit(&mut self, expr: &mut ScalarExpr) -> Result<()> {
+                if let ScalarExpr::BoundColumnRef(column) = expr {
+                    let Some(replacement) = self.get(&column.column.index) else {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "UDF definition references unresolved column {}",
+                            column.column.column_name
+                        ))
+                        .set_span(column.span));
+                    };
+                    *expr = replacement.clone();
+                    Ok(())
+                } else {
+                    walk_expr_mut(self, expr)
+                }
+            }
         }
 
+        let mut visitor = replacements;
+        visitor.visit(&mut scalar)?;
         Ok(Box::new((scalar, data_type)))
-    }
-
-    fn resolve_lambda_udf_definition(
-        &mut self,
-        span: Span,
-        func_name: String,
-        definition: &str,
-        parameters: Vec<(String, DataType, ScalarExpr)>,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (scalar, data_type) = self.resolve_udf_definition(definition, parameters)?;
-        Ok(Box::new((
-            UDFLambdaCall {
-                span,
-                func_name,
-                scalar: Box::new(scalar),
-            }
-            .into(),
-            data_type,
-        )))
-    }
-
-    fn resolve_scalar_udf_definition(
-        &mut self,
-        span: Span,
-        func_name: String,
-        definition: &str,
-        parameters: Vec<(String, DataType, ScalarExpr)>,
-        return_type: DataType,
-    ) -> Result<Box<(ScalarExpr, DataType)>> {
-        let box (expr, _) = self.resolve_udf_definition(definition, parameters)?;
-        let expr = CastExpr {
-            span,
-            is_try: false,
-            argument: Box::new(expr),
-            target_type: Box::new(return_type.clone()),
-        };
-        Ok(Box::new((
-            UDFLambdaCall {
-                span,
-                func_name,
-                scalar: Box::new(expr.into()),
-            }
-            .into(),
-            return_type,
-        )))
     }
 }
 

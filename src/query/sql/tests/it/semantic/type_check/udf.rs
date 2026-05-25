@@ -4,6 +4,7 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_meta_app::principal::ScalarUDF;
 use databend_common_meta_app::principal::UDAFScript;
 use databend_common_meta_app::principal::UDFDefinition;
+use databend_common_sql::plans::BoundColumnRef;
 
 use super::*;
 
@@ -107,6 +108,7 @@ struct UdfGoldenCase {
     case: SqlTestCase,
     adapter: TestTypeCheckAdapter,
     cached_udf: Option<UserDefinedFunction>,
+    aliases: &'static [(&'static str, &'static str)],
 }
 
 async fn run_udf_golden_cases(cases: &[UdfGoldenCase]) -> Result<()> {
@@ -124,10 +126,12 @@ async fn run_udf_golden_cases(cases: &[UdfGoldenCase]) -> Result<()> {
                 .write()
                 .insert(udf.name.clone(), Some(udf.clone()));
         }
-        let outcome = match resolve_type_check_sql(
+        let aliases = aliases_from_columns(&bind_context, golden_case.aliases);
+        let outcome = match resolve_type_check_sql_with_aliases(
             golden_case.case.sql,
             golden_case.adapter.clone(),
             &mut bind_context,
+            &aliases,
         ) {
             Ok((scalar, data_type)) => SqlTestOutcome::Plan(format!(
                 "scalar: {}\ntype: {}",
@@ -172,11 +176,25 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
         DataType::String,
         "x",
     );
+    let scope_probe = UserDefinedFunction::create_lambda_udf(
+        "scope_probe",
+        vec!["x".to_string(), "arr".to_string()],
+        "array_transform(arr, y -> x + y)",
+        "",
+    );
+    let variant_probe = UserDefinedFunction::create_lambda_udf(
+        "variant_probe",
+        vec!["x".to_string()],
+        "x::variant",
+        "",
+    );
 
     let (main_adapter, _) = adapter_with_udfs([
         lambda_one,
         lambda_two,
         scalar_to_string,
+        scope_probe,
+        variant_probe,
         server_udf(),
         script_udf(),
         udaf_script("udaf_script"),
@@ -198,6 +216,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: unknown_adapter,
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -208,6 +227,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: blocked_adapter,
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -218,6 +238,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: cache_adapter,
             cached_udf: Some(cached_udf()),
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -228,6 +249,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: main_adapter.clone(),
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -238,6 +260,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: main_adapter.clone(),
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -248,6 +271,29 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: main_adapter.clone(),
             cached_udf: None,
+            aliases: &[],
+        },
+        UdfGoldenCase {
+            case: SqlTestCase {
+                name: "lambda_udf_definition_ignores_alias_scope",
+                description: "Lambda UDF definition should resolve against its own parameters even when call-site aliases use the same names.",
+                setup_sqls: &[],
+                sql: "scope_probe(delta, [number])",
+            },
+            adapter: main_adapter.clone(),
+            cached_udf: None,
+            aliases: &[("x", "number"), ("arr", "text"), ("y", "delta")],
+        },
+        UdfGoldenCase {
+            case: SqlTestCase {
+                name: "lambda_udf_definition_registers_parameter_metadata",
+                description: "Lambda UDF parameters should be present in the isolated metadata used while resolving the definition.",
+                setup_sqls: &[],
+                sql: "variant_probe((number, delta))",
+            },
+            adapter: main_adapter.clone(),
+            cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -258,6 +304,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: main_adapter.clone(),
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -268,6 +315,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: main_adapter.clone(),
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -278,6 +326,7 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: cloud_adapter,
             cached_udf: None,
+            aliases: &[],
         },
         UdfGoldenCase {
             case: SqlTestCase {
@@ -288,10 +337,32 @@ async fn test_type_check_udf_behaviors() -> Result<()> {
             },
             adapter: main_adapter,
             cached_udf: None,
+            aliases: &[],
         },
     ];
 
     run_udf_golden_cases(&cases).await
+}
+
+fn aliases_from_columns(
+    bind_context: &BindContext,
+    aliases: &[(&str, &str)],
+) -> Vec<(String, ScalarExpr)> {
+    aliases
+        .iter()
+        .map(|(alias, column_name)| {
+            let column = bind_context
+                .all_column_bindings()
+                .iter()
+                .find(|column| column.column_name == *column_name)
+                .unwrap_or_else(|| panic!("missing test column {column_name}"))
+                .clone();
+            (
+                (*alias).to_string(),
+                BoundColumnRef { span: None, column }.into(),
+            )
+        })
+        .collect()
 }
 
 #[tokio::test(flavor = "current_thread")]
