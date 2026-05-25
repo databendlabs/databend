@@ -79,6 +79,7 @@ pub(super) fn run_watchdog_loop(
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
 enum ProbeWaitResult {
     Stop,
     Scheduled,
@@ -86,7 +87,11 @@ enum ProbeWaitResult {
 }
 
 fn wait_probe_interval(event_rx: &Receiver<WatchdogEvent>) -> bool {
-    let wait_until = Instant::now() + RUNTIME_WATCHDOG_PROBE_INTERVAL;
+    wait_probe_interval_for(event_rx, RUNTIME_WATCHDOG_PROBE_INTERVAL)
+}
+
+fn wait_probe_interval_for(event_rx: &Receiver<WatchdogEvent>, interval: Duration) -> bool {
+    let wait_until = Instant::now() + interval;
 
     loop {
         let Some(timeout) = wait_until.checked_duration_since(Instant::now()) else {
@@ -105,7 +110,15 @@ fn wait_probe_interval(event_rx: &Receiver<WatchdogEvent>) -> bool {
 }
 
 fn wait_probe_scheduled(event_rx: &Receiver<WatchdogEvent>, probe_id: u64) -> ProbeWaitResult {
-    let wait_until = Instant::now() + RUNTIME_WATCHDOG_UNHEALTHY_THRESHOLD;
+    wait_probe_scheduled_for(event_rx, probe_id, RUNTIME_WATCHDOG_UNHEALTHY_THRESHOLD)
+}
+
+fn wait_probe_scheduled_for(
+    event_rx: &Receiver<WatchdogEvent>,
+    probe_id: u64,
+    threshold: Duration,
+) -> ProbeWaitResult {
+    let wait_until = Instant::now() + threshold;
 
     loop {
         let Some(timeout) = wait_until.checked_duration_since(Instant::now()) else {
@@ -123,6 +136,70 @@ fn wait_probe_scheduled(event_rx: &Receiver<WatchdogEvent>, probe_id: u64) -> Pr
             Err(RecvTimeoutError::Timeout) => return ProbeWaitResult::Timeout,
             Err(RecvTimeoutError::Disconnected) => return ProbeWaitResult::Stop,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::thread;
+
+    use super::*;
+
+    #[test]
+    fn test_wait_probe_scheduled_returns_stop_immediately() {
+        let (event_tx, event_rx) = mpsc::channel();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            event_tx.send(WatchdogEvent::Stop).unwrap();
+        });
+
+        let started_at = Instant::now();
+        let result = wait_probe_scheduled_for(&event_rx, 1, Duration::from_secs(5));
+
+        assert_eq!(result, ProbeWaitResult::Stop);
+        assert!(started_at.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn test_wait_probe_scheduled_ignores_stale_probe_events() {
+        let (event_tx, event_rx) = mpsc::channel();
+        event_tx.send(WatchdogEvent::ProbeScheduled(1)).unwrap();
+        event_tx.send(WatchdogEvent::ProbeScheduled(2)).unwrap();
+
+        let result = wait_probe_scheduled_for(&event_rx, 2, Duration::from_millis(100));
+
+        assert_eq!(result, ProbeWaitResult::Scheduled);
+    }
+
+    #[test]
+    fn test_wait_probe_scheduled_times_out_on_stale_probe_events() {
+        let (event_tx, event_rx) = mpsc::channel();
+        event_tx.send(WatchdogEvent::ProbeScheduled(1)).unwrap();
+
+        let result = wait_probe_scheduled_for(&event_rx, 2, Duration::from_millis(20));
+
+        assert_eq!(result, ProbeWaitResult::Timeout);
+    }
+
+    #[test]
+    fn test_wait_probe_interval_ignores_stale_probe_events() {
+        let (event_tx, event_rx) = mpsc::channel();
+        event_tx.send(WatchdogEvent::ProbeScheduled(1)).unwrap();
+
+        let should_stop = wait_probe_interval_for(&event_rx, Duration::from_millis(20));
+
+        assert!(!should_stop);
+    }
+
+    #[test]
+    fn test_wait_probe_interval_returns_stop() {
+        let (event_tx, event_rx) = mpsc::channel();
+        event_tx.send(WatchdogEvent::Stop).unwrap();
+
+        let should_stop = wait_probe_interval_for(&event_rx, Duration::from_secs(5));
+
+        assert!(should_stop);
     }
 }
 
