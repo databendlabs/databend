@@ -58,7 +58,7 @@ in stats      :
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 9.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 9.0, null_count: ~9.0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : is_not_null(a + 1)
 cardinality   : 100

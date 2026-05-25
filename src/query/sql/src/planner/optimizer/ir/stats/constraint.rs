@@ -25,9 +25,9 @@ use crate::optimizer::ir::ColumnStat;
 use crate::plans::ComparisonOp;
 
 // A value constraint is a statistics propagation hint extracted from a
-// column-vs-constant predicate in an AND context. It materializes the predicate
-// into column bounds, null counts, NDV limits, and histograms when that can be
-// represented by column statistics.
+// column predicate in an AND context. It materializes the predicate into column
+// bounds, null counts, NDV limits, and histograms when that can be represented
+// by column statistics.
 //
 // This is intentionally not a deterministic constraint solver. Predicate
 // truth, mutually-exclusive conditions, and algebraic simplification belong to
@@ -39,6 +39,7 @@ pub(super) enum ValueConstraint {
     Eq(Datum),
     // `!=` is not a range rewrite.
     NotEq,
+    NotNull,
     Range {
         lower: Bound<Datum>,
         upper: Bound<Datum>,
@@ -78,18 +79,17 @@ impl ValueConstraint {
 
     pub(super) fn apply(&self, column_stat: &mut ColumnStat) -> Result<()> {
         match self {
-            ValueConstraint::Eq(datum) => match self.apply_to_bounds(&HistogramBounds::new(
-                column_stat.min.clone(),
-                column_stat.max.clone(),
-            ))? {
-                HistogramRangeBounds::Bounds(_) => {
+            ValueConstraint::NotNull => {
+                column_stat.null_count = StatCount::exact(0);
+            }
+            ValueConstraint::Eq(datum) => {
+                let bounds = HistogramBounds::new(column_stat.min.clone(), column_stat.max.clone());
+                if contains_bounds_datum(&bounds, datum)? {
                     *column_stat = ColumnStat::from_const(datum.clone());
-                }
-                HistogramRangeBounds::Empty => {
+                } else {
                     clear_for_empty_result(column_stat);
                 }
-                HistogramRangeBounds::Imprecise => {}
-            },
+            }
             ValueConstraint::NotEq => {}
             ValueConstraint::Range { lower, upper } => {
                 let bounds = HistogramBounds::from_range_constraint(
@@ -114,25 +114,6 @@ impl ValueConstraint {
             }
         }
         Ok(())
-    }
-
-    pub(super) fn apply_to_bounds(&self, bounds: &HistogramBounds) -> Result<HistogramRangeBounds> {
-        Ok(match self {
-            ValueConstraint::Eq(datum) => {
-                if contains_bounds_datum(bounds, datum)? {
-                    HistogramRangeBounds::Bounds(HistogramBounds::new(datum.clone(), datum.clone()))
-                } else {
-                    HistogramRangeBounds::Empty
-                }
-            }
-            ValueConstraint::NotEq => HistogramRangeBounds::Imprecise,
-            ValueConstraint::Range { lower, upper } => HistogramBounds::from_range_constraint(
-                bounds.lower_bound(),
-                bounds.upper_bound(),
-                lower,
-                upper,
-            )?,
-        })
     }
 
     pub(super) fn apply_all(

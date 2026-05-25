@@ -35,6 +35,7 @@ use super::constraint::ConstraintContext;
 use super::constraint::ValueConstraint;
 use super::constraint::clear_for_empty_result;
 use crate::ColumnBinding;
+use crate::ColumnSet;
 use crate::Symbol;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
@@ -129,7 +130,8 @@ impl SelectivityEstimator {
                     // Non-boolean constants can survive folding in legacy SQL
                     // truthiness paths. Leave the exact interpretation to
                     // execution and use the normal unknown-filter fallback.
-                    Ok(self.apply_selectivity_to_column_stats(Selectivity::Unknown))
+                    Ok(self
+                        .apply_selectivity_to_column_stats(Selectivity::Unknown, &ColumnSet::new()))
                 }
             };
         }
@@ -159,8 +161,10 @@ impl SelectivityEstimator {
             constraints,
             ..
         } = visitor;
+        let not_null_columns = constraints.not_null_columns();
         self.overrides = constraints.apply_to_column_stats(&self.column_stats)?;
-        let output_cardinality = self.apply_selectivity_to_column_stats(selectivity);
+        let output_cardinality =
+            self.apply_selectivity_to_column_stats(selectivity, &not_null_columns);
 
         Ok(output_cardinality)
     }
@@ -231,7 +235,11 @@ impl SelectivityEstimator {
     }
 
     // Apply the predicate estimate to column stats and return output rows.
-    fn apply_selectivity_to_column_stats(&mut self, selectivity: Selectivity) -> f64 {
+    fn apply_selectivity_to_column_stats(
+        &mut self,
+        selectivity: Selectivity,
+        not_null_columns: &ColumnSet,
+    ) -> f64 {
         let input_cardinality = self.cardinality.value();
         let selectivity = match selectivity {
             Selectivity::Unknown => DEFAULT_SELECTIVITY,
@@ -255,6 +263,16 @@ impl SelectivityEstimator {
         let mut final_cardinality = estimated_cardinality;
         for (index, column_stat) in &self.column_stats {
             if let Some(override_stat) = self.overrides.get_mut(index) {
+                if not_null_columns.contains(index) {
+                    override_stat.null_count = StatCount::exact(0);
+                    override_stat.ndv = override_stat.ndv.reduce(estimated_cardinality);
+                    if let Some(aligned_cardinality) =
+                        align_histogram_with_cardinality(override_stat, estimated_cardinality)
+                    {
+                        final_cardinality = final_cardinality.min(aligned_cardinality);
+                    }
+                    continue;
+                }
                 // Value constraints have already been materialized into
                 // `override_stat`. If a constrained histogram is still
                 // available, use it as the row-mass boundary for the output;
@@ -358,6 +376,18 @@ struct MaterializedColumnStats {
 }
 
 impl ValueConstraintState {
+    fn not_null_columns(&self) -> ColumnSet {
+        self.pending
+            .iter()
+            .filter_map(|(index, constraints)| {
+                constraints
+                    .iter()
+                    .any(|constraint| matches!(constraint, ValueConstraint::NotNull))
+                    .then_some(*index)
+            })
+            .collect()
+    }
+
     fn apply_to_column_stat(&self, index: Symbol, column_stat: &ColumnStat) -> Result<ColumnStat> {
         let Some(constraints) = self.pending.get(&index) else {
             return Ok(column_stat.clone());
@@ -898,6 +928,15 @@ impl SelectivityVisitor<'_> {
 
             "is_not_null" => {
                 self.selectivity = self.compute_is_not_null(&func.args[0])?;
+                if matches!(self.constraint_context, ConstraintContext::And)
+                    && let Expr::ColumnRef(column_ref) = &func.args[0]
+                {
+                    self.constraints.add(
+                        self.column_stats,
+                        column_ref.id.index,
+                        ValueConstraint::NotNull,
+                    )?;
+                }
             }
 
             _ => {
