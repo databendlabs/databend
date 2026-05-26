@@ -19,6 +19,7 @@ use std::time::Duration;
 use std::time::Instant;
 
 use databend_common_base::runtime::Runtime;
+use databend_common_base::runtime::dump_backtrace;
 use rand::distributions::Distribution;
 use rand::distributions::Uniform;
 use tokio::sync::Semaphore;
@@ -28,16 +29,20 @@ use tokio::time::sleep;
 async fn test_runtime() -> anyhow::Result<()> {
     let counter = Arc::new(Mutex::new(0));
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("runtime-test".to_string()))?;
     let runtime_counter = Arc::clone(&counter);
     let runtime_header = runtime.spawn(async move {
-        let rt1 = Runtime::with_default_worker_threads().unwrap();
+        let rt1 =
+            Runtime::with_default_worker_threads(Some("runtime-test-rt1".to_string())).unwrap();
         let rt1_counter = Arc::clone(&runtime_counter);
         let rt1_header = rt1.spawn(async move {
-            let rt2 = Runtime::with_worker_threads(1, None).unwrap();
+            let rt2 =
+                Runtime::with_worker_threads(1, Some("runtime-test-rt2".to_string())).unwrap();
             let rt2_counter = Arc::clone(&rt1_counter);
             let rt2_header = rt2.spawn(async move {
-                let rt3 = Runtime::with_default_worker_threads().unwrap();
+                let rt3 =
+                    Runtime::with_default_worker_threads(Some("runtime-test-rt3".to_string()))
+                        .unwrap();
                 let rt3_counter = Arc::clone(&rt2_counter);
                 let rt3_header = rt3.spawn(async move {
                     let mut num = rt3_counter.lock().unwrap();
@@ -68,7 +73,7 @@ async fn test_runtime() -> anyhow::Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("runtime-shutdown-test".to_string()))?;
 
     runtime.spawn(async move {
         tokio::time::sleep(Duration::from_secs(6)).await;
@@ -77,6 +82,75 @@ async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
     let instant = Instant::now();
     drop(runtime);
     assert!(instant.elapsed() < Duration::from_secs(6));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_runtime_task_dump_contains_runtime_name() -> anyhow::Result<()> {
+    let runtime = Runtime::with_worker_threads(1, Some("task-marker-runtime".to_string()))?;
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+
+    let named_started_tx = started_tx.clone();
+    let named_spawn_line = line!() + 1;
+    runtime.spawn_named(
+        async move {
+            named_started_tx.send(()).unwrap();
+            std::future::pending::<()>().await;
+        },
+        "task-marker-test".to_string(),
+    );
+    let global_spawn_line = line!() + 1;
+    runtime.spawn(async move {
+        started_tx.send(()).unwrap();
+        std::future::pending::<()>().await;
+    });
+    started_rx.recv_timeout(Duration::from_secs(1))?;
+    started_rx.recv_timeout(Duration::from_secs(1))?;
+
+    let dump = dump_backtrace(false);
+    assert!(dump.contains(&format!(
+        "[task-marker-runtime] task-marker-test at {}:{}:",
+        file!(),
+        named_spawn_line
+    )));
+    assert!(dump.contains(&format!(
+        "[task-marker-runtime] Global spawn task at {}:{}:",
+        file!(),
+        global_spawn_line
+    )));
+    assert!(!dump.contains("task-marker-test at src/common/base/src/runtime/runtime.rs"));
+    assert!(!dump.contains("Global spawn task at src/common/base/src/runtime/runtime.rs"));
+
+    Ok(())
+}
+
+#[test]
+fn test_free_spawn_task_dump_contains_runtime_name() -> anyhow::Result<()> {
+    let runtime = Runtime::with_worker_threads(1, Some("free-spawn-runtime-test".to_string()))?;
+
+    runtime.block_on(async {
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let free_spawn_line = line!() + 1;
+        databend_common_base::runtime::spawn(async move {
+            let _ = started_tx.send(());
+            std::future::pending::<()>().await;
+        });
+        started_rx.await.map_err(|err| {
+            databend_common_exception::ErrorCode::Internal(format!(
+                "free spawn marker task did not start: {err}"
+            ))
+        })?;
+
+        let dump = dump_backtrace(false);
+        assert!(dump.lines().any(|line| {
+            line.contains("[free-spawn-runtime-test]")
+                && line.contains(&format!(" at {}:{}:", file!(), free_spawn_line))
+        }));
+        assert!(!dump.contains("[spawn-thread="));
+
+        Ok::<(), databend_common_exception::ErrorCode>(())
+    })?;
 
     Ok(())
 }
@@ -106,7 +180,7 @@ async fn mock_get_page(i: usize) -> Vec<usize> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_runtime_try_spawn_batch() -> anyhow::Result<()> {
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("runtime-batch-test".to_string()))?;
 
     let mut futs = vec![];
     for i in 0..20 {

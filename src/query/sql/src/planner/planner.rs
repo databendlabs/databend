@@ -249,22 +249,12 @@ impl Planner {
         let settings = self.ctx.get_settings();
         // Step 3: Bind AST with catalog, and generate a pure logical SExpr
         let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let enable_planner_cache = self.ctx.get_settings().get_enable_planner_cache()?
-            && matches!(stmt, Statement::Query(_));
 
-        let plan_cache_context = enable_planner_cache
-            .then(|| self.build_plan_cache_context(name_resolution_ctx.clone(), stmt))
-            .filter(|ctx| ctx.is_cacheable());
+        let plan_cache_context =
+            self.build_plan_cache_context(name_resolution_ctx.clone(), stmt)?;
 
-        let planner_cache_key = plan_cache_context
-            .as_ref()
-            .map(|ctx| self.planner_cache_key_for_stmt(stmt, ctx))
-            .transpose()?;
-
-        if let Some((cache_key, cache_ctx)) =
-            planner_cache_key.as_ref().zip(plan_cache_context.as_ref())
-        {
-            if let Some(plan) = self.get_cache(cache_key, cache_ctx) {
+        if let Some(cache_ctx) = &plan_cache_context {
+            if let Some(plan) = self.get_cache(cache_ctx) {
                 info!(
                     "Logical plan retrieved from cache, elapsed: {:?}",
                     start.elapsed()
@@ -319,8 +309,8 @@ impl Planner {
 
         let optimized_plan = optimize(opt_ctx, plan).await?;
 
-        if let Some(cache_key) = planner_cache_key {
-            self.set_cache(cache_key, optimized_plan.clone());
+        if let Some(cache_ctx) = plan_cache_context {
+            self.set_cache(cache_ctx, optimized_plan.clone());
         }
 
         info!(

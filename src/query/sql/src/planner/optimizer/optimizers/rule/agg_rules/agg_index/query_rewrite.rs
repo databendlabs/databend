@@ -1279,15 +1279,19 @@ fn format_scalar(scalar: &ScalarExpr, column_map: &HashMap<Symbol, ScalarExpr>) 
             s => format_scalar(s, column_map),
         },
         ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
-        ScalarExpr::FunctionCall(func) => format!(
-            "{}({})",
-            &func.func_name,
-            func.arguments
+        ScalarExpr::FunctionCall(func) => {
+            let params = func.params.iter().map(|param| param.to_string()).join(", ");
+            let args = func
+                .arguments
                 .iter()
-                .map(|arg| { format_scalar(arg, column_map) })
-                .collect::<Vec<String>>()
-                .join(", ")
-        ),
+                .map(|arg| format_scalar(arg, column_map))
+                .join(", ");
+            if !params.is_empty() {
+                format!("{}({})({})", &func.func_name, params, args)
+            } else {
+                format!("{}({})", &func.func_name, args)
+            }
+        }
         ScalarExpr::CastExpr(cast) => {
             let func_name = if cast.is_try { "try_cast" } else { "cast" };
             format!(
