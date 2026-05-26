@@ -33,6 +33,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::Pipeline;
+use parking_lot::Mutex;
 
 pub const PROXY_OPT_KEY_TARGETS: &str = "targets";
 pub const PROXY_OPT_KEY_DEFAULT: &str = "default";
@@ -41,6 +42,7 @@ pub struct ProxyTable {
     table_info: TableInfo,
     targets: Vec<String>,
     default_target: String,
+    delegated_target_table: Mutex<Option<Arc<dyn Table>>>,
 }
 
 #[derive(Clone)]
@@ -60,7 +62,10 @@ struct Candidate {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProxyPartInfo {
     target: String,
-    target_table_info: TableInfo,
+    // Stored only in the leading header partition to avoid cloning full table
+    // metadata into every wrapped target partition.
+    target_table_info: Option<TableInfo>,
+    is_lazy: bool,
     inner: Option<PartInfoPtr>,
 }
 
@@ -89,6 +94,7 @@ impl ProxyTable {
             table_info,
             targets,
             default_target,
+            delegated_target_table: Mutex::new(None),
         }))
     }
 
@@ -248,29 +254,29 @@ impl ProxyTable {
         target_table_info: TableInfo,
         partitions: Partitions,
     ) -> Partitions {
-        if partitions.partitions.is_empty() {
-            return Partitions::create(partitions.kind, vec![Arc::new(Box::new(ProxyPartInfo {
-                target: target.to_string(),
-                target_table_info,
-                inner: None,
-            })
-                as Box<dyn PartInfo>)]);
-        }
+        let is_lazy = partitions
+            .partitions
+            .first()
+            .is_some_and(|part| part.part_type() == PartInfoType::LazyLevel);
+        let mut wrapped_parts = Vec::with_capacity(partitions.partitions.len() + 1);
+        wrapped_parts.push(Arc::new(Box::new(ProxyPartInfo {
+            target: target.to_string(),
+            target_table_info: Some(target_table_info),
+            is_lazy,
+            inner: None,
+        }) as Box<dyn PartInfo>));
 
-        Partitions::create(
-            partitions.kind,
-            partitions
-                .partitions
-                .into_iter()
-                .map(|part| {
-                    Arc::new(Box::new(ProxyPartInfo {
-                        target: target.to_string(),
-                        target_table_info: target_table_info.clone(),
-                        inner: Some(part),
-                    }) as Box<dyn PartInfo>)
-                })
-                .collect(),
-        )
+        wrapped_parts.extend(partitions.partitions.into_iter().map(|part| {
+            let is_lazy = part.part_type() == PartInfoType::LazyLevel;
+            Arc::new(Box::new(ProxyPartInfo {
+                target: target.to_string(),
+                target_table_info: None,
+                is_lazy,
+                inner: Some(part),
+            }) as Box<dyn PartInfo>)
+        }));
+
+        Partitions::create(partitions.kind, wrapped_parts)
     }
 
     fn unwrap_partitions(
@@ -278,7 +284,7 @@ impl ProxyTable {
         partitions: &Partitions,
     ) -> Result<(String, TableInfo, Partitions)> {
         let mut target = None;
-        let mut target_table_info = None;
+        let mut target_table_info: Option<TableInfo> = None;
         let mut inner_parts = Vec::with_capacity(partitions.partitions.len());
 
         for part in &partitions.partitions {
@@ -301,7 +307,18 @@ impl ProxyTable {
                 None => target = Some(proxy_part.target.clone()),
                 _ => {}
             }
-            target_table_info.get_or_insert_with(|| proxy_part.target_table_info.clone());
+            if let Some(info) = &proxy_part.target_table_info {
+                if let Some(existing) = &target_table_info {
+                    if existing.ident != info.ident {
+                        return Err(ErrorCode::Internal(
+                            "PROXY table partitions contain multiple target table infos"
+                                .to_string(),
+                        ));
+                    }
+                } else {
+                    target_table_info = Some(info.clone());
+                }
+            }
             if let Some(inner) = &proxy_part.inner {
                 inner_parts.push(inner.clone());
             }
@@ -316,6 +333,27 @@ impl ProxyTable {
             target_table_info,
             Partitions::create(partitions.kind.clone(), inner_parts),
         ))
+    }
+
+    fn build_target_plan(&self, plan: &DataSourcePlan) -> Result<(String, DataSourcePlan)> {
+        let (target, target_table_info, partitions) = self.unwrap_partitions(&plan.parts)?;
+        let mut target_plan = plan.clone();
+        target_plan.source_info = DataSourceInfo::TableSource(target_table_info);
+        target_plan.parts = partitions;
+        Ok((target, target_plan))
+    }
+
+    fn take_delegated_target_table(&self, target_plan: &DataSourcePlan) -> Option<Arc<dyn Table>> {
+        let DataSourceInfo::TableSource(target_table_info) = &target_plan.source_info else {
+            return None;
+        };
+
+        let delegated_table = self.delegated_target_table.lock().take()?;
+        if delegated_table.get_table_info().ident == target_table_info.ident {
+            Some(delegated_table)
+        } else {
+            None
+        }
     }
 }
 
@@ -357,14 +395,34 @@ impl Table for ProxyTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
-        let (_target, target_table_info, partitions) = self.unwrap_partitions(&plan.parts)?;
-        let mut target_plan = plan.clone();
-        target_plan.source_info = DataSourceInfo::TableSource(target_table_info);
-        target_plan.parts = partitions.clone();
-        ctx.set_partitions(partitions)?;
+        let (_target, target_plan) = self.build_target_plan(plan)?;
+        ctx.set_partitions(target_plan.parts.clone())?;
 
-        let table = ctx.build_table_from_source_plan(&target_plan)?;
+        let table = self
+            .take_delegated_target_table(&target_plan)
+            .map(Ok)
+            .unwrap_or_else(|| ctx.build_table_from_source_plan(&target_plan))?;
         table.read_data(ctx, &target_plan, pipeline, put_cache)
+    }
+
+    fn build_prune_pipeline(
+        &self,
+        table_ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        source_pipeline: &mut Pipeline,
+        plan_id: u32,
+    ) -> Result<Option<Pipeline>> {
+        let (_target, target_plan) = self.build_target_plan(plan)?;
+        let table = table_ctx.build_table_from_source_plan(&target_plan)?;
+        let prune_pipeline =
+            table.build_prune_pipeline(table_ctx, &target_plan, source_pipeline, plan_id)?;
+
+        // FUSE stores the receiver side of a lazy pruning pipeline inside the
+        // table instance used to build that pipeline. Reuse the same delegated
+        // target in read_data so lazy segment partitions can dispatch blocks.
+        self.delegated_target_table.lock().replace(table);
+
+        Ok(prune_pipeline)
     }
 }
 
@@ -379,7 +437,9 @@ impl PartInfo for ProxyPartInfo {
             .downcast_ref::<ProxyPartInfo>()
             .is_some_and(|other| {
                 self.target == other.target
-                    && self.target_table_info.ident == other.target_table_info.ident
+                    && self.target_table_info.as_ref().map(|info| info.ident)
+                        == other.target_table_info.as_ref().map(|info| info.ident)
+                    && self.is_lazy == other.is_lazy
                     && match (&self.inner, &other.inner) {
                         (Some(left), Some(right)) => left.equals(right),
                         (None, None) => true,
@@ -391,7 +451,11 @@ impl PartInfo for ProxyPartInfo {
     fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.target.hash(&mut hasher);
-        self.target_table_info.ident.table_id.hash(&mut hasher);
+        self.target_table_info
+            .as_ref()
+            .map(|info| info.ident.table_id)
+            .hash(&mut hasher);
+        self.is_lazy.hash(&mut hasher);
         self.inner
             .as_ref()
             .map(|inner| inner.hash())
@@ -400,9 +464,11 @@ impl PartInfo for ProxyPartInfo {
     }
 
     fn part_type(&self) -> PartInfoType {
-        self.inner
-            .as_ref()
-            .map_or(PartInfoType::BlockLevel, |inner| inner.part_type())
+        if self.is_lazy {
+            PartInfoType::LazyLevel
+        } else {
+            PartInfoType::BlockLevel
+        }
     }
 }
 
@@ -464,6 +530,28 @@ mod tests {
     use super::*;
     use crate::RandomPartInfo;
 
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct LazyTestPartInfo;
+
+    #[typetag::serde(name = "proxy_lazy_test")]
+    impl PartInfo for LazyTestPartInfo {
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+
+        fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+            info.as_any().is::<LazyTestPartInfo>()
+        }
+
+        fn hash(&self) -> u64 {
+            0
+        }
+
+        fn part_type(&self) -> PartInfoType {
+            PartInfoType::LazyLevel
+        }
+    }
+
     fn proxy_table_info(options: BTreeMap<String, String>) -> TableInfo {
         let mut table_info =
             TableInfo::simple("default", "proxy", TableSchemaRefExt::create(vec![]));
@@ -521,6 +609,63 @@ mod tests {
         );
         let (_, _, unwrapped) = proxy.unwrap_partitions(&wrapped)?;
         assert_eq!(unwrapped.partitions.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_partition_wraps_table_info_once() -> Result<()> {
+        let mut options = BTreeMap::new();
+        options.insert(PROXY_OPT_KEY_TARGETS.to_string(), "target".to_string());
+        let table = ProxyTable::try_create(proxy_table_info(options))?;
+        let proxy = table.as_any().downcast_ref::<ProxyTable>().unwrap();
+        let target_info = TableInfo::simple("default", "target", TableSchemaRefExt::create(vec![]));
+
+        let wrapped = proxy.wrap_partitions(
+            "target",
+            target_info,
+            Partitions::create(PartitionsShuffleKind::Seq, vec![
+                RandomPartInfo::create(1),
+                RandomPartInfo::create(2),
+            ]),
+        );
+
+        let table_info_parts = wrapped
+            .partitions
+            .iter()
+            .filter(|part| {
+                part.as_any()
+                    .downcast_ref::<ProxyPartInfo>()
+                    .is_some_and(|part| part.target_table_info.is_some())
+            })
+            .count();
+
+        assert_eq!(wrapped.partitions.len(), 3);
+        assert_eq!(table_info_parts, 1);
+
+        let (_, _, unwrapped) = proxy.unwrap_partitions(&wrapped)?;
+        assert_eq!(unwrapped.partitions.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_partition_keeps_lazy_part_type() -> Result<()> {
+        let mut options = BTreeMap::new();
+        options.insert(PROXY_OPT_KEY_TARGETS.to_string(), "target".to_string());
+        let table = ProxyTable::try_create(proxy_table_info(options))?;
+        let proxy = table.as_any().downcast_ref::<ProxyTable>().unwrap();
+        let target_info = TableInfo::simple("default", "target", TableSchemaRefExt::create(vec![]));
+
+        let wrapped = proxy.wrap_partitions(
+            "target",
+            target_info,
+            Partitions::create(PartitionsShuffleKind::Seq, vec![Arc::new(
+                Box::new(LazyTestPartInfo) as Box<dyn PartInfo>,
+            )]),
+        );
+
+        assert!(matches!(wrapped.partitions_type(), PartInfoType::LazyLevel));
 
         Ok(())
     }

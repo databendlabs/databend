@@ -38,6 +38,46 @@ select chat_id, span_id from proxy_spans where chat_id = 'chat-2'
 chat-2 span-2
 
 statement ok
+drop table if exists proxy_column_proxy
+
+statement ok
+drop table if exists proxy_column_target
+
+statement ok
+set enable_prune_pipeline = 1
+
+statement ok
+create table proxy_column_target(id int, v string)
+row_per_block=1 block_per_segment=2 segment_format='column_oriented'
+
+statement ok
+insert into proxy_column_target values
+    (1, 'a'),
+    (2, 'b'),
+    (3, 'c'),
+    (4, 'd')
+
+statement ok
+create table proxy_column_proxy(id int, v string)
+engine = proxy targets='proxy_column_target' default='proxy_column_target'
+
+query I
+select count(*) from proxy_column_proxy where id >= 2
+----
+3
+
+query IT
+select id, v from proxy_column_proxy where id = 3
+----
+3 c
+
+statement ok
+drop table proxy_column_proxy
+
+statement ok
+drop table proxy_column_target
+
+statement ok
 drop table proxy_spans
 
 statement ok
