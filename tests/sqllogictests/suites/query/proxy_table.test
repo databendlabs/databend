@@ -1,0 +1,47 @@
+statement ok
+drop table if exists proxy_spans
+
+statement ok
+drop table if exists proxy_spans_by_trace
+
+statement ok
+drop table if exists proxy_spans_by_chat
+
+statement ok
+create table proxy_spans_by_trace(start_time timestamp, trace_id string, chat_id string, span_id string, payload variant) cluster by(trace_id)
+
+statement ok
+create table proxy_spans_by_chat(start_time timestamp, trace_id string, chat_id string, span_id string, payload variant) cluster by(chat_id)
+
+statement ok
+insert into proxy_spans_by_trace values
+    ('2024-01-01 00:00:00', 'trace-1', 'chat-1', 'span-1', parse_json('{"route":"trace"}')),
+    ('2024-01-01 00:00:01', 'trace-2', 'chat-2', 'span-2', parse_json('{"route":"trace"}'))
+
+statement ok
+insert into proxy_spans_by_chat values
+    ('2024-01-01 00:00:00', 'trace-1', 'chat-1', 'span-1', parse_json('{"route":"chat"}')),
+    ('2024-01-01 00:00:01', 'trace-2', 'chat-2', 'span-2', parse_json('{"route":"chat"}'))
+
+statement ok
+create table proxy_spans(start_time timestamp, trace_id string, chat_id string, span_id string, payload variant)
+engine = proxy targets='proxy_spans_by_trace,proxy_spans_by_chat' default='proxy_spans_by_trace'
+
+query TT
+select trace_id, span_id from proxy_spans where trace_id = 'trace-1'
+----
+trace-1 span-1
+
+query TT
+select chat_id, span_id from proxy_spans where chat_id = 'chat-2'
+----
+chat-2 span-2
+
+statement ok
+drop table proxy_spans
+
+statement ok
+drop table proxy_spans_by_trace
+
+statement ok
+drop table proxy_spans_by_chat
