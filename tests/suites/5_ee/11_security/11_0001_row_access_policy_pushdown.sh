@@ -23,9 +23,9 @@ echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_C
 comment "test 2: limit pushdown with RAP and user WHERE after RAP enters prewhere"
 echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0 LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "push downs:" | grep -v "limit: NONE" | sed 's/^[[:space:]]*//g'
 
-comment "test 3: verify Filter [SECURE] node exists for RAP enforcement"
-comment "Filter [SECURE] should appear in the plan; secure predicates are enforced by pipeline Filter"
-echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_CONNECT | grep -c "Filter \[SECURE\]"
+comment "test 3: verify Filter [SECURE] is skipped when prewhere covers all secure predicates"
+comment "Filter [SECURE] should NOT appear because secure predicates are fully applied by prewhere"
+echo "EXPLAIN SELECT * FROM rap_pushdown_test WHERE id > 0;" | $BENDSQL_CLIENT_CONNECT | grep -c "Filter \[SECURE\]" || echo "0"
 
 comment "test 4: limit pushdown with RAP and no user WHERE after RAP enters prewhere"
 echo "EXPLAIN SELECT * FROM rap_pushdown_test LIMIT 1;" | $BENDSQL_CLIENT_CONNECT | grep "push downs:" | grep -v "limit: NONE" | sed 's/^[[:space:]]*//g'
