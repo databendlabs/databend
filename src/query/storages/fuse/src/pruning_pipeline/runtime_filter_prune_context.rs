@@ -15,6 +15,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_catalog::table_context::TableContext;
@@ -35,6 +37,7 @@ pub struct RuntimeFilterPruneContext {
     table_schema: TableSchemaRef,
     runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
     min_max_column_ids: Vec<ColumnId>,
+    runtime_filter_wait_finished: Arc<AtomicBool>,
     runtime_min_max_pruner: Arc<OnceLock<Option<Arc<RuntimeMinMaxPruner>>>>,
 }
 
@@ -58,6 +61,7 @@ impl RuntimeFilterPruneContext {
             table_schema,
             runtime_filter_ready,
             min_max_column_ids,
+            runtime_filter_wait_finished: Arc::new(AtomicBool::new(false)),
             runtime_min_max_pruner: Arc::new(OnceLock::new()),
         }))
     }
@@ -71,12 +75,18 @@ impl RuntimeFilterPruneContext {
             return Ok(pruner.clone());
         }
 
-        wait_runtime_filters_for_pruning(
-            self.scan_id,
-            self.ctx.get_abort_notify(),
-            &self.runtime_filter_ready,
-        )
-        .await?;
+        if !self.runtime_filter_wait_finished.load(Ordering::Acquire)
+            && !Self::all_runtime_filters_ready(&self.runtime_filter_ready)
+        {
+            wait_runtime_filters_for_pruning(
+                self.scan_id,
+                self.ctx.get_abort_notify(),
+                &self.runtime_filter_ready,
+            )
+            .await?;
+            self.runtime_filter_wait_finished
+                .store(true, Ordering::Release);
+        }
 
         let runtime_filters = self.ctx.get_runtime_filters(self.scan_id);
         let pruner = RuntimeMinMaxPruner::try_create(
@@ -84,9 +94,12 @@ impl RuntimeFilterPruneContext {
             self.table_schema.clone(),
             &runtime_filters,
         );
-        let _ = self.runtime_min_max_pruner.set(pruner.clone());
 
-        Ok(self.runtime_min_max_pruner.get().cloned().unwrap_or(pruner))
+        Ok(Self::cache_runtime_min_max_pruner(
+            &self.runtime_min_max_pruner,
+            pruner,
+            Self::all_runtime_filters_ready(&self.runtime_filter_ready),
+        ))
     }
 
     fn min_max_ready(
@@ -106,12 +119,30 @@ impl RuntimeFilterPruneContext {
         let mut column_ids = BTreeSet::new();
         for ready in runtime_filter_ready {
             for column_name in ready.min_max_column_names() {
-                let field = table_schema.field_with_name(column_name)?;
-                column_ids.extend(field.leaf_column_ids());
+                column_ids.extend(table_schema.leaf_columns_of(column_name));
             }
         }
 
         Ok(column_ids.into_iter().collect())
+    }
+
+    fn all_runtime_filters_ready(runtime_filter_ready: &[Arc<RuntimeFilterReady>]) -> bool {
+        runtime_filter_ready
+            .iter()
+            .all(|ready| ready.runtime_filter_watcher.subscribe().borrow().is_some())
+    }
+
+    fn cache_runtime_min_max_pruner(
+        cache: &OnceLock<Option<Arc<RuntimeMinMaxPruner>>>,
+        pruner: Option<Arc<RuntimeMinMaxPruner>>,
+        runtime_filter_ready: bool,
+    ) -> Option<Arc<RuntimeMinMaxPruner>> {
+        if pruner.is_some() || runtime_filter_ready {
+            let _ = cache.set(pruner.clone());
+            return cache.get().cloned().unwrap_or(pruner);
+        }
+
+        pruner
     }
 }
 
@@ -155,5 +186,44 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn min_max_column_ids_ignore_probe_names_not_in_table_schema() -> Result<()> {
+        let table_schema = Arc::new(TableSchema::new(vec![TableField::new(
+            "number",
+            TableDataType::Number(NumberDataType::UInt64),
+        )]));
+        let ready = vec![Arc::new(RuntimeFilterReady::with_min_max_column_names([
+            "subquery_2".to_string(),
+            "number".to_string(),
+        ]))];
+
+        assert_eq!(
+            RuntimeFilterPruneContext::min_max_column_ids_from_ready(&table_schema, &ready)?,
+            vec![table_schema.column_id_of("number")?]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn runtime_min_max_pruner_does_not_cache_none_before_filters_ready() {
+        let cache = OnceLock::new();
+
+        assert!(
+            RuntimeFilterPruneContext::cache_runtime_min_max_pruner(&cache, None, false).is_none()
+        );
+        assert!(cache.get().is_none());
+    }
+
+    #[test]
+    fn runtime_min_max_pruner_caches_none_after_filters_ready() {
+        let cache = OnceLock::new();
+
+        assert!(
+            RuntimeFilterPruneContext::cache_runtime_min_max_pruner(&cache, None, true).is_none()
+        );
+        assert!(cache.get().is_some_and(|cached| cached.is_none()));
     }
 }

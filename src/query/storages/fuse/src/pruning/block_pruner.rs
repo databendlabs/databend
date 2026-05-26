@@ -409,7 +409,7 @@ impl BlockPruner {
             let keep_by_range = pruning_cost.measure(PruningCostKind::BlocksRange, || {
                 range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
             });
-            if keep_by_range {
+            if keep_by_range && limit_pruner.within_limit(row_count) {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_after(1);
@@ -421,10 +421,6 @@ impl BlockPruner {
                 if runtime_min_max_pruner.as_ref().is_some_and(|pruner| {
                     pruner.should_prune(Some(&block_meta.col_stats), row_count as usize)
                 }) {
-                    continue;
-                }
-
-                if !limit_pruner.within_limit(row_count) {
                     continue;
                 }
 
