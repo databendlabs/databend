@@ -127,6 +127,7 @@ fn env_filter(level: &str) -> EnvFilter {
             .filter(Some("databend::log::structlog"), LevelFilter::Off)
             .filter(Some("databend::log::time_series"), LevelFilter::Off)
             .filter(Some("databend::log::access"), LevelFilter::Off)
+            .filter(Some("databend::log::dump_graph"), LevelFilter::Off)
             .parse(level),
     )
 }
@@ -460,4 +461,36 @@ pub fn init_logging(
     }
 
     _drop_guards
+}
+
+#[cfg(test)]
+mod tests {
+    use log::Level;
+    use log::Metadata;
+    use logforth::Filter;
+    use logforth::filter::FilterResult;
+
+    use super::env_filter;
+
+    #[test]
+    fn test_dump_graph_filter_is_off_by_default() {
+        let filter = env_filter("TRACE");
+        let metadata = Metadata::builder()
+            .target("databend::log::dump_graph")
+            .level(Level::Trace)
+            .build();
+
+        assert_eq!(filter.enabled(&metadata), FilterResult::Reject);
+    }
+
+    #[test]
+    fn test_dump_graph_filter_can_be_enabled_by_level() {
+        let filter = env_filter("WARN,databend::log::dump_graph=TRACE");
+        let metadata = Metadata::builder()
+            .target("databend::log::dump_graph")
+            .level(Level::Trace)
+            .build();
+
+        assert_eq!(filter.enabled(&metadata), FilterResult::Neutral);
+    }
 }
