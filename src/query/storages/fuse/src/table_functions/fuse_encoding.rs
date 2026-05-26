@@ -140,9 +140,11 @@ impl SimpleArgFunc for FuseEncoding {
         plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
         let filters = plan.push_downs.as_ref().and_then(|x| x.filters.clone());
+        let mut table_name_filter = args.table_name.clone();
         if let Some(table_name) = &args.table_name {
             let (base_table_name, branch_name) =
                 parse_table_ref_arg(table_name, ctx.get_settings().as_ref())?;
+            table_name_filter = Some(base_table_name.clone());
             if branch_name.is_some() {
                 let tbl = ctx
                     .get_table_with_branch(
@@ -186,7 +188,7 @@ impl SimpleArgFunc for FuseEncoding {
             ctx.clone(),
             fuse_tables,
             filters,
-            args.table_name.clone(),
+            table_name_filter,
             args.column_name.clone(),
         )
         .get_blocks()

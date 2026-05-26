@@ -81,9 +81,15 @@ impl AnalyzeTableInterpreter {
 
     fn analyze_target(&self, quote: char) -> String {
         if let Some(branch) = &self.plan.branch {
-            format!("{quote}{}{quote}.{quote}{}{quote}/{quote}{branch}{quote}", self.plan.database, self.plan.table)
+            format!(
+                "{quote}{}{quote}.{quote}{}{quote}/{quote}{branch}{quote}",
+                self.plan.database, self.plan.table
+            )
         } else {
-            format!("{quote}{}{quote}.{quote}{}{quote}", self.plan.database, self.plan.table)
+            format!(
+                "{quote}{}{quote}.{quote}{}{quote}",
+                self.plan.database, self.plan.table
+            )
         }
     }
 }

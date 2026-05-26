@@ -89,4 +89,15 @@ select * exclude(block_location) from fuse_encoding('db_09_0027', 't_parquet', '
 t_parquet Parquet c2 INT NULL (INT32) NULL 202 429 plain,rle zstd
 
 statement ok
+create table `t/slash`(e int) storage_format = 'native' compression = 'lz4';
+
+statement ok
+insert into `t/slash` select number from numbers(128);
+
+query TI
+select table_name, count(*) from fuse_encoding('db_09_0027', '`t/slash`') group by table_name;
+----
+t/slash 1
+
+statement ok
 DROP DATABASE db_09_0027
