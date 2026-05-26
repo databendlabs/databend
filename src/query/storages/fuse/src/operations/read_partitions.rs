@@ -643,11 +643,10 @@ impl FuseTable {
                 block_prune_column_ids.push(*column_id);
             }
         }
-        if runtime_filter_prune_context.is_some() {
-            for field in table_schema.leaf_fields() {
-                let column_id = field.column_id();
-                if !block_prune_column_ids.contains(&column_id) {
-                    block_prune_column_ids.push(column_id);
+        if let Some(runtime_filter_prune_context) = &runtime_filter_prune_context {
+            for column_id in runtime_filter_prune_context.min_max_column_ids() {
+                if !block_prune_column_ids.contains(column_id) {
+                    block_prune_column_ids.push(*column_id);
                 }
             }
         }

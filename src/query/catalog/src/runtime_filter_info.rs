@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -164,14 +165,82 @@ pub struct RuntimeFilterReady {
     pub runtime_filter_watcher: Sender<Option<()>>,
     /// A dummy receiver to make runtime_filter_watcher channel open.
     pub _runtime_filter_dummy_receiver: Receiver<Option<()>>,
+    min_max_column_names: Vec<String>,
+}
+
+impl RuntimeFilterReady {
+    pub fn with_min_max_column_names(
+        column_names: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        let (watcher, dummy_receiver) = watch::channel(None);
+        let min_max_column_names = column_names
+            .into_iter()
+            .map(Into::into)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        Self {
+            runtime_filter_watcher: watcher,
+            _runtime_filter_dummy_receiver: dummy_receiver,
+            min_max_column_names,
+        }
+    }
+
+    pub fn for_min_max_probe_exprs<'a>(
+        enable_min_max: bool,
+        probe_exprs: impl IntoIterator<Item = &'a Expr<String>>,
+    ) -> Self {
+        if !enable_min_max {
+            return Self::default();
+        }
+
+        let min_max_column_names = probe_exprs
+            .into_iter()
+            .flat_map(|expr| expr.column_refs().into_keys())
+            .collect::<BTreeSet<_>>();
+        Self::with_min_max_column_names(min_max_column_names)
+    }
+
+    pub fn has_min_max(&self) -> bool {
+        !self.min_max_column_names.is_empty()
+    }
+
+    pub fn min_max_column_names(&self) -> &[String] {
+        &self.min_max_column_names
+    }
 }
 
 impl Default for RuntimeFilterReady {
     fn default() -> Self {
-        let (watcher, dummy_receiver) = watch::channel(None);
-        Self {
-            runtime_filter_watcher: watcher,
-            _runtime_filter_dummy_receiver: dummy_receiver,
-        }
+        Self::with_min_max_column_names(Vec::<String>::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Expr;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn runtime_filter_ready_tracks_min_max_probe_columns() {
+        let probe_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "probe_col".to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: "probe_col".to_string(),
+        });
+
+        let ready = RuntimeFilterReady::for_min_max_probe_exprs(true, [&probe_expr, &probe_expr]);
+        assert_eq!(ready.min_max_column_names(), ["probe_col"]);
+        assert!(ready.has_min_max());
+
+        let ready = RuntimeFilterReady::for_min_max_probe_exprs(false, [&probe_expr]);
+        assert!(ready.min_max_column_names().is_empty());
+        assert!(!ready.has_min_max());
     }
 }

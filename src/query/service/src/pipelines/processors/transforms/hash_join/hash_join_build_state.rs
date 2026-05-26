@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeSet;
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::ops::ControlFlow;
 use std::sync::Arc;
@@ -31,6 +31,7 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::Evaluator;
+use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
 use databend_common_expression::HashMethod;
 use databend_common_expression::HashMethodKind;
@@ -868,21 +869,32 @@ impl HashJoinBuildState {
         Ok(())
     }
 
-    pub fn add_runtime_filter_ready(&self) {
-        let mut scan_ids = HashSet::new();
+    pub fn add_runtime_filter_ready(&self) -> Result<()> {
+        let min_max_threshold = self
+            .ctx
+            .get_settings()
+            .get_min_max_runtime_filter_threshold()? as usize;
+        let mut min_max_probe_exprs_by_scan_id: HashMap<usize, Vec<&Expr<String>>> = HashMap::new();
         for rf in self.runtime_filter_desc() {
-            for (_probe_key, scan_id) in &rf.probe_targets {
-                scan_ids.insert(*scan_id);
+            for (probe_key, scan_id) in &rf.probe_targets {
+                let probe_exprs = min_max_probe_exprs_by_scan_id.entry(*scan_id).or_default();
+                if rf.enable_min_max_runtime_filter && min_max_threshold > 0 {
+                    probe_exprs.push(probe_key);
+                }
             }
         }
 
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let runtime_filter_ready = &mut build_state.runtime_filter_ready;
-        for scan_id in scan_ids.into_iter() {
-            let ready = Arc::new(RuntimeFilterReady::default());
+        for (scan_id, probe_exprs) in min_max_probe_exprs_by_scan_id.into_iter() {
+            let ready = Arc::new(RuntimeFilterReady::for_min_max_probe_exprs(
+                !probe_exprs.is_empty(),
+                probe_exprs,
+            ));
             runtime_filter_ready.push(ready.clone());
             self.ctx.set_runtime_filter_ready(scan_id, ready);
         }
+        Ok(())
     }
 
     pub fn set_bloom_filter_ready(&self) -> Result<()> {

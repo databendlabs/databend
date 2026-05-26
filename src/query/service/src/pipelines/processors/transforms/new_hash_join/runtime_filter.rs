@@ -59,8 +59,11 @@ impl RuntimeFiltersDesc {
         for filter_desc in &join.runtime_filter.filters {
             let filter_desc = RuntimeFilterDesc::from(filter_desc);
 
-            for (_probe_key, scan_id) in &filter_desc.probe_targets {
-                let ready = Arc::new(RuntimeFilterReady::default());
+            for (probe_key, scan_id) in &filter_desc.probe_targets {
+                let ready = Arc::new(RuntimeFilterReady::for_min_max_probe_exprs(
+                    filter_desc.enable_min_max_runtime_filter && min_max_threshold > 0,
+                    [probe_key],
+                ));
                 runtime_filters_ready.push(ready.clone());
                 ctx.set_runtime_filter_ready(*scan_id, ready);
             }
