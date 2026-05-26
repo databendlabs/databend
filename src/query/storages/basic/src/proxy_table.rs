@@ -33,6 +33,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::Pipeline;
+use databend_common_pipeline::sources::EmptySource;
 use parking_lot::Mutex;
 
 pub const PROXY_OPT_KEY_TARGETS: &str = "targets";
@@ -398,6 +399,11 @@ impl Table for ProxyTable {
         pipeline: &mut Pipeline,
         put_cache: bool,
     ) -> Result<()> {
+        if plan.parts.is_empty() {
+            pipeline.add_source(EmptySource::create, 1)?;
+            return Ok(());
+        }
+
         let (_target, target_plan) = self.build_target_plan(plan)?;
         ctx.set_partitions(target_plan.parts.clone())?;
 
@@ -415,6 +421,10 @@ impl Table for ProxyTable {
         source_pipeline: &mut Pipeline,
         plan_id: u32,
     ) -> Result<Option<Pipeline>> {
+        if plan.parts.is_empty() {
+            return Ok(None);
+        }
+
         let (_target, target_plan) = self.build_target_plan(plan)?;
         let table = table_ctx.build_table_from_source_plan(&target_plan)?;
         let prune_pipeline =
