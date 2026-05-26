@@ -12,6 +12,11 @@ SELECT REGEXP_INSTR('dog cat dog', 'dog', 2)
 9
 
 query I
+SELECT REGEXP_INSTR('abc', 'a', 5)
+----
+0
+
+query I
 SELECT REGEXP_INSTR('dog cat dog', 'dog', 1, 2)
 ----
 9
@@ -73,4 +78,3 @@ dog cat dog
 
 statement ok
 DROP TABLE t1
-
