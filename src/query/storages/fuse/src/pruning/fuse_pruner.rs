@@ -119,8 +119,7 @@ impl PruningContext {
 
         let filter_expr = push_down.as_ref().and_then(|extra| {
             extra
-                .filters
-                .as_ref()
+                .effective_filters(&BUILTIN_FUNCTIONS)
                 .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
@@ -128,7 +127,7 @@ impl PruningContext {
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
 
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
@@ -568,8 +567,13 @@ impl FusePruner {
         if push_down
             .as_ref()
             .filter(|p| {
-                (!p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
-                    || (p.limit.is_some() && p.filter_only_use_index())
+                (!p.order_by.is_empty()
+                    && p.limit.is_some()
+                    && p.filters.is_none()
+                    && p.secure_filters.is_none())
+                    || (p.limit.is_some()
+                        && p.secure_filters.is_none()
+                        && p.filter_only_use_index())
             })
             .is_some()
         {
@@ -621,7 +625,7 @@ impl FusePruner {
         {
             let schema = self.table_schema.clone();
             let push_down = push_down.as_ref().unwrap();
-            let filters = push_down.filters.clone();
+            let filters = push_down.effective_filters(&BUILTIN_FUNCTIONS);
             let sort = push_down.order_by.clone();
             let limit = push_down.limit;
             let vector_index = push_down.vector_index.clone().unwrap();

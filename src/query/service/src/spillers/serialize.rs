@@ -38,10 +38,10 @@ use opendal::Buffer;
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::basic::Compression;
+use parquet::file::metadata::ParquetMetaData;
 use parquet::file::properties::EnabledStatistics;
 use parquet::file::properties::WriterProperties;
 use parquet::file::reader::ChunkReader;
-use parquet::format::FileMetaData;
 
 #[derive(Debug, Clone)]
 pub enum Layout {
@@ -171,7 +171,7 @@ fn bare_blocks_from_parquet<R: ChunkReader + 'static>(data: R) -> Result<DataBlo
 fn bare_blocks_to_parquet<W: Write + Send>(
     blocks: Vec<DataBlock>,
     write_buffer: W,
-) -> Result<FileMetaData> {
+) -> Result<ParquetMetaData> {
     assert!(!blocks.is_empty());
 
     let data_schema = blocks.first().unwrap().infer_schema();

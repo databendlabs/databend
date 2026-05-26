@@ -44,6 +44,7 @@ use crate::MetadataRef;
 use crate::binder::AsyncFunctionDesc;
 use crate::binder::wrap_cast;
 use crate::planner::binder::BindContext;
+use crate::planner::semantic::FullTypeCheckAdapter;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
 use crate::plans::AsyncFunctionArgument;
@@ -174,17 +175,16 @@ impl DefaultExprBinder {
         ast: &AExpr,
         skip_sequence_check: bool,
     ) -> Result<(ScalarExpr, DataType)> {
-        let mut type_checker = TypeChecker::try_create(
+        let adapter = FullTypeCheckAdapter::new(self.ctx.clone())?
+            .with_forbid_udf(true)
+            .with_skip_sequence_check(skip_sequence_check);
+        let mut type_checker = TypeChecker::try_create_with_adapter(
             &mut self.bind_context,
-            self.ctx.clone(),
+            adapter,
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            true,
         )?;
-        if skip_sequence_check {
-            type_checker.set_skip_sequence_check(true);
-        }
         let (scalar_expr, data_type) = *type_checker.resolve(ast)?;
         Ok((scalar_expr, data_type))
     }

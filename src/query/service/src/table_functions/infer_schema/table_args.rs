@@ -58,7 +58,7 @@ impl InferSchemaArgsParsed {
                 "file_format" => {
                     file_format = Some(string_value(v)?);
                 }
-                "max_records_pre_file" => {
+                "max_records_per_file" => {
                     max_records = Some(i64_value(v)? as usize);
                 }
                 "max_file_count" => {

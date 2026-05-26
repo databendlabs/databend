@@ -38,6 +38,26 @@ expr      : st_within<Geometry, Geometry>(g, CAST<String>("POINT(1 1)" AS Geomet
 spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
 keep      : true
 
+text      : st_covers(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))
+expr      : st_covers<Geometry, Geometry>(g, CAST<String>("POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : false
+
+text      : st_covers(g, to_geometry('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'))
+expr      : st_covers<Geometry, Geometry>(g, CAST<String>("POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_coveredby(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))
+expr      : st_coveredby<Geometry, Geometry>(g, CAST<String>("POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
+text      : st_coveredby(g, to_geometry('POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))'))
+expr      : st_coveredby<Geometry, Geometry>(g, CAST<String>("POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))" AS Geometry))
+spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})
+keep      : true
+
 text      : st_dwithin(g, to_geometry('POINT(20 20)'), 9.9)
 expr      : st_dwithin<Geometry, Geometry, Float64>(g, CAST<String>("POINT(20 20)" AS Geometry), CAST<Decimal(2, 1)>(9.9_d64(2,1) AS Float64))
 spatial   : Some({0: SpatialStatistics { min_x: 0.0, min_y: 0.0, max_x: 10.0, max_y: 10.0, srid: 0, has_null: false, has_empty_rect: false, is_valid: true }})

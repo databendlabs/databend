@@ -113,31 +113,31 @@ id BIGINT 1 csv/max_records.csv 0
 value VARCHAR 1 csv/max_records.csv 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.csv 0
 value BIGINT 1 csv/max_records.csv 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.zip', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.zip', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.zip 0
 value BIGINT 1 csv/max_records.zip 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.zst', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.zst 0
 value BIGINT 1 csv/max_records.zst 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.csv', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.csv 0
 value BIGINT 1 csv/max_records.csv 1
 
 query TTBTI
-select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/csv/max_records.xz', file_format => 'head_csv_format', max_records_per_file => 5);
 ----
 id BIGINT 1 csv/max_records.xz 0
 value BIGINT 1 csv/max_records.xz 1
@@ -200,31 +200,31 @@ id BIGINT 1 ndjson/max_records.ndjson 0
 value VARCHAR 1 ndjson/max_records.ndjson 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.ndjson 0
 value BIGINT 1 ndjson/max_records.ndjson 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.zip', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.zip', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.zip 0
 value BIGINT 1 ndjson/max_records.zip 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.zst', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.zst 0
 value BIGINT 1 ndjson/max_records.zst 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_pre_file => 5);
+select * from infer_schema(location => '@data/ndjson/max_records.ndjson', file_format => 'NDJSON', max_records_per_file => 5);
 ----
 id BIGINT 1 ndjson/max_records.ndjson 0
 value BIGINT 1 ndjson/max_records.ndjson 1
 
 query TTBTI
-select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_pre_file => 5)
+select * from infer_schema(location => '@data/ndjson/max_records.xz', file_format => 'NDJSON', max_records_per_file => 5)
 ----
 id BIGINT 1 ndjson/max_records.xz 0
 value BIGINT 1 ndjson/max_records.xz 1

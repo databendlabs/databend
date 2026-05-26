@@ -19,3 +19,5 @@ mod separator;
 mod table_args;
 
 pub use infer_schema_table::InferSchemaTable;
+pub(crate) use merge::merge_schema;
+pub(crate) use separator::InferSchemaSeparator;

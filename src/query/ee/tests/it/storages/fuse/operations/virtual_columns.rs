@@ -71,7 +71,7 @@ async fn setup_table_with_virtual_columns(num_blocks: usize) -> anyhow::Result<T
             pipelines.push(build_res.main_pipeline);
             let executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
             ctx.set_executor(executor.get_inner())?;
-            executor.execute()?;
+            executor.execute().await?;
         }
     }
     Ok(fixture)
@@ -87,6 +87,13 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         .set_enable_experimental_virtual_column(0)?;
     fixture.create_default_database().await?;
     fixture.create_variant_table().await?;
+    fixture
+        .execute_command(&format!(
+            "alter table {}.{} set options(enable_virtual_column = false)",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        ))
+        .await?;
 
     let number_of_block = 2;
     append_variant_sample_data(number_of_block, &fixture).await?;
@@ -95,6 +102,13 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
         .default_session()
         .get_settings()
         .set_enable_experimental_virtual_column(1)?;
+    fixture
+        .execute_command(&format!(
+            "alter table {}.{} set options(enable_virtual_column = true)",
+            fixture.default_db_name(),
+            fixture.default_table_name()
+        ))
+        .await?;
 
     let table_ctx = fixture.new_query_ctx().await?;
 
@@ -125,7 +139,7 @@ async fn test_fuse_do_refresh_virtual_column() -> anyhow::Result<()> {
 
         let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
         table_ctx.set_executor(complete_executor.get_inner())?;
-        complete_executor.execute()?;
+        complete_executor.execute().await?;
     }
 
     let table = fixture.latest_default_table().await?;

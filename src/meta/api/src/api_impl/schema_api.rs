@@ -86,11 +86,10 @@ use super::database_util::get_db_or_err;
 use super::dictionary_api::DictionaryApi;
 use super::garbage_collection_api::GarbageCollectionApi;
 use super::index_api::IndexApi;
-use super::lock_api::LockApi;
+use super::lock_api2::LockApi2;
 use super::security_api::SecurityApi;
 use super::table_api::TableApi;
 use crate::error_util::db_id_has_to_exist;
-use crate::get_u64_value;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
 use crate::serialize_struct;
@@ -101,7 +100,6 @@ use crate::txn_core_util::send_txn;
 use crate::txn_del;
 use crate::txn_op_builder_util::txn_put_pb_with_ttl;
 use crate::txn_put_pb;
-use crate::txn_put_u64;
 
 impl<KV> SchemaApi for KV
 where
@@ -112,7 +110,7 @@ where
     Self: DictionaryApi,
     Self: GarbageCollectionApi,
     Self: IndexApi,
-    Self: LockApi,
+    Self: LockApi2,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -133,7 +131,7 @@ where
     Self: DictionaryApi,
     Self: GarbageCollectionApi,
     Self: IndexApi,
-    Self: LockApi,
+    Self: LockApi2,
     Self: SecurityApi,
     Self: TableApi,
 {
@@ -208,7 +206,7 @@ pub async fn construct_drop_table_txn_operations(
 
     let db_id = dbid_tbname.db_id;
     let tbname = dbid_tbname.table_name.clone();
-    let (tb_id_seq, _) = get_u64_value(kv_api, &dbid_tbname).await?;
+    let (tb_id_seq, _) = kv_api.get_pb_seq_and_value(&dbid_tbname).await?;
     if tb_id_seq == 0 {
         return if if_exists {
             Ok((0, 0))
@@ -503,10 +501,10 @@ pub async fn handle_undrop_table(
             table_name: tenant_dbname_tbname.table_name.clone(),
         };
 
-        let (dbid_tbname_seq, table_id) = get_u64_value(kv_api, &dbid_tbname).await?;
+        let (dbid_tbname_seq, table_id) = kv_api.get_pb_seq_and_value(&dbid_tbname).await?;
         if !req.force_replace() {
             // If table id already exists, return error.
-            if dbid_tbname_seq > 0 || table_id > 0 {
+            if dbid_tbname_seq > 0 || table_id.is_some() {
                 return Err(KVAppError::AppError(AppError::UndropTableAlreadyExists(
                     UndropTableAlreadyExists::new(&tenant_dbname_tbname.table_name),
                 )));
@@ -609,7 +607,7 @@ pub async fn handle_undrop_table(
                         // Changing a table in a db has to update the seq of db_meta,
                         // to block the batch-delete-tables when deleting a db.
                         txn_put_pb_with_ttl(&DatabaseId { db_id }, &seq_db_meta.data, None)?, // (db_id) -> db_meta
-                        txn_put_u64(&dbid_tbname, table_id)?, // (tenant, db_id, tb_name) -> tb_id
+                        txn_put_pb(&dbid_tbname, &TableId::new(table_id))?, // (tenant, db_id, tb_name) -> tb_id
                         txn_put_pb_with_ttl(&tbid, &seq_table_meta.data, None)?, // (tenant, db_id, tb_id) -> tb_meta
                     ],
                     policy_restore_ops,

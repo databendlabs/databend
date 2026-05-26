@@ -28,7 +28,7 @@ use crate::tenant_key::resource::TenantResource;
 /// e.g. TableId, DatabaseId as a value.
 ///
 /// `DataId<R>` can be dereferenced to `u64`.
-/// `DataId<R>` will take place of `Id<T>` in the future.
+/// `DataId<R>` replaces the legacy primitive id wrapper.
 ///
 /// When an id is used as a key in a key-value store,
 /// it is serialized in another way to keep order.
@@ -137,6 +137,11 @@ mod prost_message_impl {
     use crate::data_id::DataId;
     use crate::tenant_key::resource::TenantResource;
 
+    #[allow(deprecated)]
+    fn decode_error(message: impl Into<String>) -> DecodeError {
+        DecodeError::new(message.into())
+    }
+
     impl<R> prost::Message for DataId<R>
     where R: TenantResource + Sync + Send
     {
@@ -150,7 +155,7 @@ mod prost_message_impl {
             let mut b = [0; 64];
             let len = buf.remaining();
             if len > b.len() {
-                return Err(DecodeError::new(format!(
+                return Err(decode_error(format!(
                     "buffer(len={}) is too large, max={}",
                     len,
                     b.len()
@@ -159,7 +164,7 @@ mod prost_message_impl {
 
             buf.copy_to_slice(&mut b[..len]);
             let id: u64 = serde_json::from_slice(&b[..len])
-                .map_err(|e| DecodeError::new(format!("failed to decode u64 as json: {}", e)))?;
+                .map_err(|e| decode_error(format!("failed to decode u64 as json: {}", e)))?;
             Ok(DataId::new(id))
         }
 
@@ -209,10 +214,6 @@ mod prost_message_impl {
 
         impl kvapi::Key for Foo {
             type ValueType = Bar;
-
-            fn parent(&self) -> Option<String> {
-                todo!()
-            }
         }
 
         #[derive(Debug)]
@@ -220,9 +221,6 @@ mod prost_message_impl {
 
         impl kvapi::Value for Bar {
             type KeyType = Foo;
-            fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-                []
-            }
         }
 
         #[test]

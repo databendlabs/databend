@@ -48,6 +48,7 @@ fn asof_hash_join_type(join_type: JoinType) -> JoinType {
         // to preserve the original SQL null-preserving side.
         JoinType::LeftAsof => JoinType::Right,
         JoinType::RightAsof => JoinType::Left,
+        JoinType::FullAsof => JoinType::Full,
         _ => join_type,
     }
 }

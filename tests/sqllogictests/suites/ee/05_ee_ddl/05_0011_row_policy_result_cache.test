@@ -19,7 +19,7 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
-set enable_planner_cache = 0;
+set enable_planner_cache = 1;
 
 statement ok
 drop table if exists rap_cache_test;
@@ -74,7 +74,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 2
-└── Result size: 119
+└── Result size: 205
 
 ## ========================================
 ## Step 2: SET var=b, EXPLAIN SELECT (should NOT hit cache)
@@ -104,8 +104,8 @@ Sort(Single)
         ├── read size: < 1 KiB
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: 1 ms>, blocks: <range pruning: 1 to 1 cost: 1 ms>]
-        ├── push downs: [filters: [], limit: NONE]
+        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+        ├── push downs: [filters: [], secure_filters: REDACTED, limit: NONE]
         └── estimated rows: 2.50
 
 ## ========================================
@@ -128,7 +128,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 3
-└── Result size: 177
+└── Result size: 241
 
 ## ========================================
 ## Step 4: Switch back to var=a, verify it still has its own cache
@@ -144,7 +144,7 @@ EXPLAIN SELECT * FROM rap_cache_test ORDER BY id;
 ReadQueryResultCache
 ├── SQL: SELECT * FROM rap_cache_test ORDER BY id
 ├── Number of rows: 2
-└── Result size: 119
+└── Result size: 205
 
 ## Verify data is correct for app_a
 query ITT

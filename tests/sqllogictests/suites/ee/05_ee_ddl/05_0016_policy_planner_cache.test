@@ -1,0 +1,177 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+SET GLOBAL enable_experimental_row_access_policy = 1
+
+statement ok
+SET enable_experimental_row_access_policy = 1
+
+statement ok
+SET enable_planner_cache = 1
+
+statement ok
+SET enable_query_result_cache = 0
+
+statement ok
+DROP TABLE IF EXISTS pc_rap_add_test
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS pc_rap_add_policy
+
+statement ok
+CREATE TABLE pc_rap_add_test(id INT, region STRING)
+
+statement ok
+INSERT INTO pc_rap_add_test VALUES (1, 'EMEA'), (2, 'APAC')
+
+query I
+SELECT id FROM pc_rap_add_test ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM pc_rap_add_test ORDER BY id
+----
+1
+2
+
+statement ok
+CREATE ROW ACCESS POLICY pc_rap_add_policy AS (region STRING) RETURNS BOOLEAN -> region = 'APAC'
+
+statement ok
+ALTER TABLE pc_rap_add_test ADD ROW ACCESS POLICY pc_rap_add_policy ON (region)
+
+query I
+SELECT id FROM pc_rap_add_test ORDER BY id
+----
+2
+
+query I
+SELECT id FROM pc_rap_add_test ORDER BY id
+----
+2
+
+statement ok
+DROP TABLE IF EXISTS pc_rap_add_test
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS pc_rap_add_policy
+
+statement ok
+DROP TABLE IF EXISTS pc_rap_drop_test
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS pc_rap_drop_policy
+
+statement ok
+CREATE TABLE pc_rap_drop_test(id INT, region STRING)
+
+statement ok
+INSERT INTO pc_rap_drop_test VALUES (1, 'EMEA'), (2, 'APAC')
+
+statement ok
+CREATE ROW ACCESS POLICY pc_rap_drop_policy AS (region STRING) RETURNS BOOLEAN -> region = 'APAC'
+
+statement ok
+ALTER TABLE pc_rap_drop_test ADD ROW ACCESS POLICY pc_rap_drop_policy ON (region)
+
+query I
+SELECT id FROM pc_rap_drop_test ORDER BY id
+----
+2
+
+query I
+SELECT id FROM pc_rap_drop_test ORDER BY id
+----
+2
+
+statement ok
+ALTER TABLE pc_rap_drop_test DROP ROW ACCESS POLICY pc_rap_drop_policy
+
+query I
+SELECT id FROM pc_rap_drop_test ORDER BY id
+----
+1
+2
+
+query I
+SELECT id FROM pc_rap_drop_test ORDER BY id
+----
+1
+2
+
+statement ok
+DROP TABLE IF EXISTS pc_rap_drop_test
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS pc_rap_drop_policy
+
+statement ok
+DROP TABLE IF EXISTS pc_mask_toggle_test
+
+statement ok
+DROP MASKING POLICY IF EXISTS pc_mask_toggle_policy
+
+statement ok
+CREATE TABLE pc_mask_toggle_test(id INT, secret STRING)
+
+statement ok
+INSERT INTO pc_mask_toggle_test VALUES (1, 'plain')
+
+query IT
+SELECT id, secret FROM pc_mask_toggle_test ORDER BY id
+----
+1 plain
+
+query IT
+SELECT id, secret FROM pc_mask_toggle_test ORDER BY id
+----
+1 plain
+
+statement ok
+CREATE MASKING POLICY pc_mask_toggle_policy AS (val STRING) RETURNS STRING -> 'MASKED'
+
+statement ok
+ALTER TABLE pc_mask_toggle_test MODIFY COLUMN secret SET MASKING POLICY pc_mask_toggle_policy
+
+query IT
+SELECT id, secret FROM pc_mask_toggle_test ORDER BY id
+----
+1 MASKED
+
+query IT
+SELECT id, secret FROM pc_mask_toggle_test ORDER BY id
+----
+1 MASKED
+
+statement ok
+ALTER TABLE pc_mask_toggle_test MODIFY COLUMN secret UNSET MASKING POLICY
+
+query IT
+SELECT id, secret FROM pc_mask_toggle_test ORDER BY id
+----
+1 plain
+
+query IT
+SELECT id, secret FROM pc_mask_toggle_test ORDER BY id
+----
+1 plain
+
+statement ok
+DROP TABLE IF EXISTS pc_mask_toggle_test
+
+statement ok
+DROP MASKING POLICY IF EXISTS pc_mask_toggle_policy

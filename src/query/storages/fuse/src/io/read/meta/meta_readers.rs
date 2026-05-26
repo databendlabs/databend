@@ -44,8 +44,8 @@ use futures::AsyncSeek;
 use futures_util::AsyncSeekExt;
 use opendal::Buffer;
 use opendal::Operator;
-use parquet::format::FileMetaData;
-use parquet::thrift::TSerializable;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 
 pub use self::thrift_file_meta_read::read_thrift_file_metadata;
 
@@ -362,7 +362,6 @@ pub async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> R
 
 mod thrift_file_meta_read {
     use parquet::errors::ParquetError;
-    use thrift::protocol::TCompactInputProtocol;
 
     use super::*;
 
@@ -395,7 +394,7 @@ mod thrift_file_meta_read {
         op: Operator,
         path: &str,
         len_hint: Option<u64>,
-    ) -> Result<FileMetaData> {
+    ) -> Result<ParquetMetaData> {
         let file_size = if let Some(len) = len_hint {
             len
         } else {
@@ -443,11 +442,8 @@ mod thrift_file_meta_read {
         if (footer_len as usize) < buffer.len() {
             // the whole metadata is in the bytes we already read
             let remaining = buffer.len() - footer_len as usize;
-
-            let mut prot = TCompactInputProtocol::new(&buffer[remaining..]);
-            let meta = FileMetaData::read_from_in_protocol(&mut prot)
-                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-            Ok(meta)
+            ParquetMetaDataReader::decode_metadata(&buffer[remaining..])
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))
         } else {
             // the end of file read by default is not long enough, read again including the metadata.
             let buffer = op
@@ -455,11 +451,9 @@ mod thrift_file_meta_read {
                 .range(file_size - footer_len..file_size)
                 .await
                 .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-
-            let mut prot = TCompactInputProtocol::new(buffer.reader());
-            let meta = FileMetaData::read_from_in_protocol(&mut prot)
-                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))?;
-            Ok(meta)
+            let buffer = buffer.to_vec();
+            ParquetMetaDataReader::decode_metadata(&buffer)
+                .map_err(|err| ErrorCode::ParquetFileInvalid(err.to_string()))
         }
     }
 }

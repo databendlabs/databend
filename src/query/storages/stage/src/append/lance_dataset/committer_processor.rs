@@ -37,6 +37,7 @@ use lance_io::object_store::ObjectStoreParams;
 use lance_io::object_store::ObjectStoreRegistry;
 use lance_io::object_writer::ObjectWriter;
 use lance_io::traits::WriteExt;
+use lance_io::traits::Writer;
 use lance_table::format::DataStorageFormat;
 use lance_table::format::Fragment;
 use lance_table::format::Manifest;

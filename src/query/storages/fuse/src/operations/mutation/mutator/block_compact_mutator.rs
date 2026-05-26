@@ -457,6 +457,12 @@ struct CompactTaskBuilder {
     total_compressed: usize,
 }
 
+enum TailMergeSource {
+    None,
+    UnchangedBlock,
+    CompactTask,
+}
+
 impl CompactTaskBuilder {
     fn new(dal: Operator, cluster_key_id: Option<u32>, thresholds: BlockThresholds) -> Self {
         Self {
@@ -526,16 +532,43 @@ impl CompactTaskBuilder {
         &self,
         tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
         unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
-        block_idx: BlockIndex,
+        block_idx: &mut BlockIndex,
         blocks: Vec<BlockMetaWithHLL>,
-    ) -> bool {
+    ) -> TailMergeSource {
+        let index = *block_idx;
+        *block_idx += 1;
+
         if blocks.len() == 1 {
-            unchanged_blocks.push((block_idx, blocks[0].clone()));
-            true
+            unchanged_blocks.push((index, blocks[0].clone()));
+            TailMergeSource::UnchangedBlock
         } else {
             let blocks = blocks.into_iter().map(|v| v.0).collect();
-            tasks.push_back((block_idx, blocks));
-            false
+            tasks.push_back((index, blocks));
+            TailMergeSource::CompactTask
+        }
+    }
+
+    fn can_start_compact(&self, block_meta: &BlockMeta) -> bool {
+        let Some(default_cluster_key) = self.cluster_key_id else {
+            return true;
+        };
+        match block_meta.cluster_stats.as_ref() {
+            Some(stats) if stats.cluster_key_id == default_cluster_key => stats.level == 0,
+            _ => true,
+        }
+    }
+
+    fn flush_pending(
+        &mut self,
+        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
+        unchanged_blocks: &mut Vec<(BlockIndex, BlockMetaWithHLL)>,
+        block_idx: &mut BlockIndex,
+    ) -> TailMergeSource {
+        if self.is_empty() {
+            TailMergeSource::None
+        } else {
+            let blocks = self.take_blocks();
+            self.build_task(tasks, unchanged_blocks, block_idx, blocks)
         }
     }
 
@@ -549,8 +582,8 @@ impl CompactTaskBuilder {
         semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PartInfoPtr>> {
         let mut block_idx = 0;
-        // Used to identify whether the latest block is unchanged or needs to be compacted.
-        let mut latest_flag = true;
+        // Tracks the last output that can be merged back with the final tail.
+        let mut tail_merge_source = TailMergeSource::None;
         let mut unchanged_blocks = Vec::new();
         let mut removed_segment_summary = Statistics::default();
 
@@ -601,27 +634,39 @@ impl CompactTaskBuilder {
 
         let mut tasks = VecDeque::new();
         for (block_meta, hlls) in blocks.iter() {
+            if self.is_empty() {
+                if !self.can_start_compact(block_meta) {
+                    // Reclustered blocks can be carried by an existing compact group,
+                    // but they should not start one by themselves.
+                    let blocks = vec![(block_meta.clone(), hlls.clone())];
+                    tail_merge_source =
+                        self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
+                    continue;
+                }
+            }
+
             let (unchanged, need_take) = self.add(block_meta, hlls);
             if need_take {
-                let blocks = self.take_blocks();
-                latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                block_idx += 1;
+                tail_merge_source =
+                    self.flush_pending(&mut tasks, &mut unchanged_blocks, &mut block_idx);
             }
             if unchanged {
                 let blocks = vec![(block_meta.clone(), hlls.clone())];
-                latest_flag = self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                block_idx += 1;
+                tail_merge_source =
+                    self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
             }
         }
 
         if !self.is_empty() {
             let tail = self.take_blocks();
-            let mut blocks = if latest_flag {
-                unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
-            } else {
-                tasks
-                    .pop_back()
-                    .map_or(vec![], |(_, v)| v.into_iter().map(|v| (v, None)).collect())
+            let mut blocks = match tail_merge_source {
+                TailMergeSource::None => Vec::new(),
+                TailMergeSource::UnchangedBlock => unchanged_blocks
+                    .pop()
+                    .map_or_else(Vec::new, |(_, v)| vec![v]),
+                TailMergeSource::CompactTask => tasks.pop_back().map_or_else(Vec::new, |(_, v)| {
+                    v.into_iter().map(|v| (v, None)).collect()
+                }),
             };
 
             let (total_rows, total_size, total_compressed) =
@@ -636,11 +681,13 @@ impl CompactTaskBuilder {
                     });
             if self.check_for_compact(total_rows, total_size, total_compressed) {
                 blocks.extend(tail);
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
             } else {
                 // blocks >= 2N
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
-                self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
+                if !blocks.is_empty() {
+                    self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, blocks);
+                }
+                self.build_task(&mut tasks, &mut unchanged_blocks, &mut block_idx, tail);
             }
         }
 

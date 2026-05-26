@@ -21719,6 +21719,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22059,6 +22060,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -22129,6 +22131,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -22198,6 +22201,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22276,6 +22280,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22354,6 +22359,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22436,6 +22442,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22518,6 +22525,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -22954,6 +22962,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -23011,6 +23020,77 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
+            size_limit: 0,
+            split_size: 0,
+            validation_mode: "",
+        },
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
+    FROM @my_stage
+    FILE_FORMAT = (type = NDJSON)
+    SCHEMA_EVOLUTION = (
+        sample_files = 64,
+        sample_records_per_file = AUTO,
+        sample_total_records = 10000
+    );
+---------- Output ---------
+COPY INTO mytable FROM '@my_stage' FILE_FORMAT = (type = NDJSON)  PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = abort RETURN_FAILED_ONLY = false SCHEMA_EVOLUTION = (sample_files = 64, sample_total_records = 10000)
+---------- AST ------------
+CopyIntoTable(
+    CopyIntoTableStmt {
+        with: None,
+        src: Location(
+            Stage(
+                "my_stage",
+            ),
+        ),
+        catalog: None,
+        database: None,
+        table: Identifier {
+            span: Some(
+                10..17,
+            ),
+            name: "mytable",
+            quote: None,
+            ident_type: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: FileFormatOptions {
+            options: {
+                "type": Keyword(
+                    "NDJSON",
+                ),
+            },
+        },
+        files: None,
+        pattern: None,
+        options: CopyIntoTableOptions {
+            on_error: AbortNum(
+                1,
+            ),
+            max_files: 0,
+            force: false,
+            purge: false,
+            disable_variant_check: false,
+            return_failed_only: false,
+            column_match_mode: None,
+            schema_evolution: Some(
+                CopySchemaEvolutionOptions {
+                    sample_files: Some(
+                        64,
+                    ),
+                    sample_records_per_file: None,
+                    sample_total_records: Some(
+                        10000,
+                    ),
+                },
+            ),
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -23084,6 +23164,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23444,6 +23525,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23513,6 +23595,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23582,6 +23665,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23651,6 +23735,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -23729,6 +23814,7 @@ CopyIntoTable(
             disable_variant_check: true,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 10,
             split_size: 0,
             validation_mode: "",
@@ -23801,6 +23887,7 @@ CopyIntoTable(
             disable_variant_check: false,
             return_failed_only: false,
             column_match_mode: None,
+            schema_evolution: None,
             size_limit: 0,
             split_size: 0,
             validation_mode: "",
@@ -30634,6 +30721,7 @@ CreatePipe(
                 disable_variant_check: false,
                 return_failed_only: false,
                 column_match_mode: None,
+                schema_evolution: None,
                 size_limit: 0,
                 split_size: 0,
                 validation_mode: "",
@@ -30697,6 +30785,7 @@ CreatePipe(
                 disable_variant_check: false,
                 return_failed_only: false,
                 column_match_mode: None,
+                schema_evolution: None,
                 size_limit: 0,
                 split_size: 0,
                 validation_mode: "",

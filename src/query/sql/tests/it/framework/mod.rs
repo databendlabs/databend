@@ -17,3 +17,4 @@ pub(crate) mod golden;
 mod lite_context;
 
 pub(crate) use lite_context::LiteTableContext;
+pub(crate) use lite_context::init_testing_globals;

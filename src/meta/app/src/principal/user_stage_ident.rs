@@ -51,9 +51,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for StageInfo {
         type KeyType = StageIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 

@@ -19,9 +19,9 @@ use std::io::Write;
 
 use arrow_array::RecordBatch;
 use arrow_cast::pretty::pretty_format_batches;
+use arrow_flight::error::FlightError;
 use arrow_flight::flight_service_server::FlightServiceServer;
 use arrow_flight::sql::client::FlightSqlServiceClient;
-use arrow_schema::ArrowError;
 use databend_common_base::runtime::Runtime;
 use databend_common_config::InnerConfig;
 use databend_common_config::UserAuthConfig;
@@ -66,7 +66,7 @@ async fn client_with_uds(path: String) -> FlightSqlServiceClient<Channel> {
 async fn run_query(
     client: &mut FlightSqlServiceClient<Channel>,
     sql: &str,
-) -> std::result::Result<String, ArrowError> {
+) -> std::result::Result<String, FlightError> {
     let mut stmt = client.prepare(sql.to_string(), None).await?;
     let res = if stmt.dataset_schema()?.fields.is_empty() {
         let affected_rows = client.execute_update(sql.to_string(), None).await?;
@@ -76,7 +76,9 @@ async fn run_query(
         let ticket = flight_info.endpoint[0].ticket.as_ref().unwrap().clone();
         let flight_data = client.do_get(ticket).await?;
         let batches: Vec<RecordBatch> = flight_data.try_collect().await.unwrap();
-        pretty_format_batches(batches.as_slice())?.to_string()
+        pretty_format_batches(batches.as_slice())
+            .map_err(FlightError::from)?
+            .to_string()
     };
     Ok(res)
 }
@@ -101,7 +103,7 @@ fn prepare_config() -> InnerConfig {
 async fn test_query() -> Result<()> {
     let _fixture = TestFixture::setup_with_config(&prepare_config()).await?;
 
-    let runtime = Runtime::with_default_worker_threads()?;
+    let runtime = Runtime::with_default_worker_threads(Some("flight-sql-test".to_string()))?;
     runtime.block_on(async {
         let file = NamedTempFile::new().unwrap();
         let path = file.into_temp_path().to_str().unwrap().to_string();

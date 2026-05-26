@@ -1,0 +1,83 @@
+=== count_star_removes_count_args ===
+description: count(*) should type check through the aggregate path that removes redundant count arguments.
+sql: count(*)
+status: ok
+scalar: COUNT(*)
+type: UInt64
+
+=== count_distinct_rewrites_to_count_distinct ===
+description: count(distinct x) should select the count_distinct aggregate implementation.
+sql: count(distinct number)
+status: ok
+scalar: count(DISTINCT number)
+type: UInt64
+
+=== sum_distinct_uses_distinct_aggregate_name ===
+description: A non-count DISTINCT aggregate should append the _distinct suffix during type checking.
+sql: sum(distinct number)
+status: ok
+scalar: sum(DISTINCT number)
+type: Int64 NULL
+
+=== aggregate_display_name_preserves_original_call ===
+description: Aggregate display names should keep the original SQL spelling while resolving arguments.
+sql: SUM(number + delta)
+status: ok
+scalar: SUM(number + delta)
+type: Int64 NULL
+
+=== string_agg_delimiter_becomes_param ===
+description: string_agg with a constant delimiter should move the delimiter into aggregate params.
+sql: string_agg(text, '|')
+status: ok
+scalar: string_agg(text, '|')
+type: String NULL
+
+=== listagg_within_group_preserves_sort_desc ===
+description: WITHIN GROUP should resolve aggregate sort descriptors at type-check time.
+sql: listagg(text, '|') WITHIN GROUP (ORDER BY number DESC NULLS LAST)
+status: ok
+scalar: listagg(text, '|') WITHIN GROUP ( ORDER BY number DESC NULLS LAST )
+type: String NULL
+
+=== listagg_within_group_lowers_order_expression ===
+description: WITHIN GROUP order expressions should keep resolving through aggregate sort descriptors.
+sql: listagg(text, '|') WITHIN GROUP (ORDER BY number + delta DESC NULLS LAST)
+status: ok
+scalar: listagg(text, '|') WITHIN GROUP ( ORDER BY number + delta DESC NULLS LAST )
+type: String NULL
+
+=== histogram_bucket_argument_becomes_param ===
+description: histogram(expr, buckets) should fold the bucket count into aggregate params.
+sql: histogram(number, 10)
+status: ok
+scalar: histogram(number, 10)
+type: String NULL
+
+=== aggregate_parameterized_call_binds ===
+description: Parameterized aggregate syntax should fold constant params and resolve aggregate arguments.
+sql: quantile_cont(0.6)(number)
+status: ok
+scalar: quantile_cont(0.6)(number)
+type: Float64 NULL
+
+=== nested_aggregate_errors ===
+description: Nested grouped aggregates should be rejected while resolving aggregate arguments.
+sql: sum(count(number))
+status: error
+code: 1065
+message: aggregate function calls cannot be nested
+
+=== non_aggregate_function_rejects_within_group ===
+description: WITHIN GROUP syntax should remain limited to aggregate functions.
+sql: abs(number) WITHIN GROUP (ORDER BY number)
+status: error
+code: 1065
+message: only aggregate functions allowed in within group syntax
+
+=== aggregate_parameter_must_be_constant ===
+description: Parameterized aggregate arguments should be constant before aggregate resolution.
+sql: quantile_cont(number)(number)
+status: error
+code: 1065
+message: invalid parameter number for aggregate function, expected constant

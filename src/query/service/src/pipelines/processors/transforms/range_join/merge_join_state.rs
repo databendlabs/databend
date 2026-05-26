@@ -40,8 +40,12 @@ impl RangeJoinState {
         let partition_count = self.partition_count.load(Ordering::SeqCst) as usize;
         if task_id >= partition_count {
             if !self.left_match.read().is_empty() {
-                return Ok(vec![self.fill_outer(task_id, true)?]);
-            } else if !self.right_match.read().is_empty() {
+                let left_fill_end = partition_count + self.left_sorted_blocks.read().len();
+                if task_id < left_fill_end {
+                    return Ok(vec![self.fill_outer(task_id, true)?]);
+                }
+            }
+            if !self.right_match.read().is_empty() {
                 return Ok(vec![self.fill_outer(task_id, false)?]);
             }
             return Ok(vec![DataBlock::empty()]);
@@ -171,7 +175,8 @@ impl RangeJoinState {
                         ));
                     }
                     for filter in self.other_conditions.iter() {
-                        left_result_block = filter_block(left_result_block, filter)?;
+                        left_result_block =
+                            filter_block(left_result_block, filter, &self.function_context)?;
                     }
                     if track_left_outer && !left_result_block.is_empty() {
                         if let Some(left_match_index) = left_match_index {

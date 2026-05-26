@@ -1,0 +1,34 @@
+=== array_index_access_binds ===
+description: Array index access should preserve the existing get-function rewrite and nullable result type.
+sql: [10, 20, 30][1]
+status: ok
+scalar: get([10, 20, 30], 1)
+type: UInt8 NULL
+
+=== map_key_access_binds ===
+description: Map key access should preserve the existing get-function rewrite.
+sql: {'k1': 1, 'k2': delta}['k1']
+status: ok
+scalar: get(map(['k1', 'k2'], array(1, delta (#3))), 'k1')
+type: Int32 NULL
+
+=== variant_colon_access_binds ===
+description: Variant colon access should preserve the get_by_keypath rewrite.
+sql: to_variant({'k1': 1}):k1
+status: ok
+scalar: get_by_keypath('{"k1":1}', '{"k1"}')
+type: Variant NULL
+
+=== variant_get_with_quoted_unicode_key_stays_get ===
+description: A plain get call should not be lowered into a keypath expression before virtual-column resolution.
+sql: get(to_variant({'测试"💎': 'a'}), '测试"💎')
+status: ok
+scalar: '"a"'
+type: Variant
+
+=== map_accessor_requires_literal_path ===
+description: Map and variant accessors should reject unsupported bracket expressions during lowering.
+sql: to_variant({'k1': 1})[true]
+status: error
+code: 1065
+message: Unsupported accessor: Boolean(true)

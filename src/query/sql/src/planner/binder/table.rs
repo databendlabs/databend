@@ -205,7 +205,6 @@ impl Binder {
             vector_index_map: Box::default(),
             allow_virtual_column: false,
             expr_context: ExprContext::default(),
-            group_by_column_first: bind_context.group_by_column_first,
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };
@@ -562,7 +561,7 @@ impl Binder {
             }
         });
 
-        let expr = TypeChecker::clone_expr_with_replacement(&res.expr, |nest_expr| {
+        let expr = TypeChecker::<()>::clone_expr_with_replacement(&res.expr, |nest_expr| {
             if let Expr::ColumnRef { column, .. } = nest_expr {
                 // Parameter names are normalized to lowercase in row_access_policy.rs
                 // So we need to normalize the lookup key to match

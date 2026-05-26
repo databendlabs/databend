@@ -23,6 +23,7 @@ current_date -> today
 current_timestamp -> now
 date -> to_date
 date_format -> to_string
+datefromparts -> date_from_parts
 day -> to_day_of_month
 dayofmonth -> to_day_of_month
 dayofyear -> to_day_of_year
@@ -30,7 +31,6 @@ diff_dows -> diff_days
 diff_doys -> diff_days
 diff_epochs -> diff_seconds
 diff_isodows -> diff_days
-hex -> to_hex
 hex_decode_binary -> from_hex
 hex_encode -> to_hex
 intdiv -> div
@@ -94,6 +94,8 @@ substr_utf8 -> substr
 substring -> substr
 substring_utf8 -> substr
 subtract -> minus
+timestampfromparts -> timestamp_from_parts
+timestamptzfromparts -> timestamp_tz_from_parts
 to_char -> to_string
 to_datetime -> to_timestamp
 to_number -> to_decimal
@@ -184,10 +186,12 @@ Functions overloads:
 3 array_compact(Array(Nothing) NULL) :: Array(Nothing) NULL
 4 array_compact(Array(T0)) :: Array(T0)
 5 array_compact(Array(T0) NULL) :: Array(T0) NULL
-0 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
-1 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
-2 array_concat(Array(T0), Array(T0)) :: Array(T0)
-3 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
+0 array_concat(Variant, Variant) :: Variant
+1 array_concat(Variant NULL, Variant NULL) :: Variant NULL
+2 array_concat(Array(Nothing), Array(Nothing)) :: Array(Nothing)
+3 array_concat(Array(Nothing) NULL, Array(Nothing) NULL) :: Array(Nothing) NULL
+4 array_concat(Array(T0), Array(T0)) :: Array(T0)
+5 array_concat(Array(T0) NULL, Array(T0) NULL) :: Array(T0) NULL
 0 array_construct FACTORY
 0 array_count FACTORY
 0 array_distinct(Variant) :: Variant
@@ -1350,6 +1354,10 @@ Functions overloads:
 28 contains(Array(Boolean), Boolean) :: Boolean
 29 contains(Array(Boolean) NULL, Boolean NULL) :: Boolean NULL
 30 contains(Array(T0) NULL, T0) :: Boolean
+0 conv(String, Int64, Int64) :: String
+1 conv(String NULL, Int64 NULL, Int64 NULL) :: String NULL
+2 conv(Int64, Int64, Int64) :: String
+3 conv(Int64 NULL, Int64 NULL, Int64 NULL) :: String NULL
 0 convert_timezone(String, Timestamp) :: Timestamp
 1 convert_timezone(String NULL, Timestamp NULL) :: Timestamp NULL
 0 cos(Float64) :: Float64
@@ -1374,6 +1382,8 @@ Functions overloads:
 1 date_add_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_add_months(Timestamp, Int64) :: Timestamp
 3 date_add_months(Timestamp NULL, Int64 NULL) :: Timestamp NULL
+0 date_from_parts(Int64, Int64, Int64) :: Date
+1 date_from_parts(Int64 NULL, Int64 NULL, Int64 NULL) :: Date NULL
 0 date_subtract_months(Date, Int64) :: Date
 1 date_subtract_months(Date NULL, Int64 NULL) :: Date NULL
 2 date_subtract_months(Timestamp, Int64) :: Timestamp
@@ -2252,6 +2262,12 @@ Functions overloads:
 1 h3_unidirectional_edge_is_valid(UInt64 NULL) :: Boolean NULL
 0 haversine(Float64, Float64, Float64, Float64) :: Float64
 1 haversine(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float64 NULL
+0 hex(String) :: String
+1 hex(String NULL) :: String NULL
+2 hex(Int64) :: String
+3 hex(Int64 NULL) :: String NULL
+4 hex(Binary) :: String
+5 hex(Binary NULL) :: String NULL
 0 hilbert_range_index FACTORY
 0 humanize_number(Float64) :: String
 1 humanize_number(Float64 NULL) :: String NULL
@@ -4092,6 +4108,8 @@ Functions overloads:
 1 time_slot(Timestamp NULL) :: Timestamp NULL
 0 timestamp_diff(Timestamp, Timestamp) :: Interval
 1 timestamp_diff(Timestamp NULL, Timestamp NULL) :: Interval NULL
+0 timestamp_from_parts FACTORY
+0 timestamp_tz_from_parts FACTORY
 0 to_base64(Binary) :: String
 1 to_base64(Binary NULL) :: String NULL
 0 to_binary(Variant) :: Binary NULL

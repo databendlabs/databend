@@ -1,0 +1,6 @@
+=== virtual_column_resolves_expression ===
+description: A column binding with a virtual expression should preserve the old recursive expression resolution.
+sql: computed
+status: ok
+scalar: plus(number (#0), delta (#3))
+type: Int64 NULL

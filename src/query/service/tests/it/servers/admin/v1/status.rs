@@ -101,9 +101,8 @@ async fn test_status() -> anyhow::Result<()> {
                 status.inflight_queries_count,
                 status.running_queries_count,
                 status.last_query_started_at.is_some(),
-                status.last_query_finished_at.is_some(),
             ),
-            (1, 1, true, false),
+            (1, 1, true),
             "running"
         );
 

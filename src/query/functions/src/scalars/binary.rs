@@ -220,7 +220,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry
         .scalar_builder("to_hex")
-        .aliases(&["hex", "hex_encode"])
+        .aliases(&["hex_encode"])
         .function()
         .typed_1_arg::<BinaryType, StringType>()
         .passthrough_nullable()
@@ -228,9 +228,22 @@ pub fn register(registry: &mut FunctionRegistry) {
         .vectorized(vectorize_binary_to_string(
             |col| col.total_bytes_len() * 2,
             |val, output, _| {
-                let extra_len = val.len() * 2;
-                output.row_buffer.resize(extra_len, 0);
-                hex::encode_to_slice(val, &mut output.row_buffer).unwrap();
+                write_hex_lower(val, output);
+                output.commit_row();
+            },
+        ))
+        .register();
+
+    registry
+        .scalar_builder("hex")
+        .function()
+        .typed_1_arg::<BinaryType, StringType>()
+        .passthrough_nullable()
+        .calc_domain(|_, _| FunctionDomain::Full)
+        .vectorized(vectorize_binary_to_string(
+            |col| col.total_bytes_len() * 2,
+            |val, output, _| {
+                write_hex_lower(val, output);
                 output.commit_row();
             },
         ))
@@ -347,6 +360,12 @@ fn eval_unhex(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType
             output.commit_row();
         },
     )(val, ctx)
+}
+
+pub fn write_hex_lower(bytes: &[u8], output: &mut StringColumnBuilder) {
+    let old_len = output.row_buffer.len();
+    output.row_buffer.resize(old_len + bytes.len() * 2, 0);
+    hex::encode_to_slice(bytes, &mut output.row_buffer[old_len..]).unwrap();
 }
 
 fn eval_from_base64(val: Value<StringType>, ctx: &mut EvalContext) -> Value<BinaryType> {
