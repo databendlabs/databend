@@ -1,0 +1,45 @@
+Aggregate(Final)
+├── group items: []
+├── aggregate functions: [sum(lineitem.l_extendedprice (#2)) AS (#6)]
+└── Aggregate(Partial)
+    ├── group items: []
+    ├── aggregate functions: [sum(lineitem.l_extendedprice (#2)) AS (#6)]
+    └── Exchange(Merge)
+        └── EvalScalar
+            ├── scalars: [lineitem.l_extendedprice (#2) AS (#2), part.p_partkey (#3) AS (#13), lineitem.l_partkey (#0) AS (#14), part.p_brand (#4) AS (#15), part.p_container (#5) AS (#16), lineitem.l_quantity (#1) AS (#17), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12) AS (#18)]
+            └── Join(Inner)
+                ├── build keys: [lineitem.l_partkey (#7)]
+                ├── probe keys: [lineitem.l_partkey (#0)]
+                ├── other filters: [lt(lineitem.l_quantity (#1), 0.2 * (sum(s.l_quantity) / if(count(s.l_quantity) = 0, 1, count(s.l_quantity))) (#12))]
+                ├── Exchange(Broadcast)
+                │   └── Join(Inner)
+                │       ├── build keys: [lineitem.l_partkey (#7)]
+                │       ├── probe keys: [part.p_partkey (#3)]
+                │       ├── other filters: []
+                │       ├── Exchange(Broadcast)
+                │       │   └── EvalScalar
+                │       │       ├── scalars: [lineitem.l_partkey (#7) AS (#7), multiply(0.2, divide(sum(s.l_quantity) (#10), if(eq(count(s.l_quantity) (#11), 0), 1, count(s.l_quantity) (#11)))) AS (#12)]
+                │       │       └── Aggregate(Final)
+                │       │           ├── group items: [lineitem.l_partkey (#7) AS (#7)]
+                │       │           ├── aggregate functions: [sum(lineitem.l_quantity (#8)) AS (#10), count() AS (#11)]
+                │       │           └── Aggregate(Partial)
+                │       │               ├── group items: [lineitem.l_partkey (#7) AS (#7)]
+                │       │               ├── aggregate functions: [sum(lineitem.l_quantity (#8)) AS (#10), count() AS (#11)]
+                │       │               └── Exchange(Hash)
+                │       │                   ├── Exchange(Hash): keys: [lineitem.l_partkey (#7)]
+                │       │                   └── Scan
+                │       │                       ├── table: default.lineitem (#2)
+                │       │                       ├── filters: []
+                │       │                       ├── order by: []
+                │       │                       └── limit: NONE
+                │       └── Scan
+                │           ├── table: default.part (#1)
+                │           ├── filters: [eq(part.p_brand (#4), 'Brand#23'), eq(part.p_container (#5), 'MED BOX')]
+                │           ├── order by: []
+                │           └── limit: NONE
+                └── Scan
+                    ├── table: default.lineitem (#0)
+                    ├── filters: []
+                    ├── order by: []
+                    └── limit: NONE
+

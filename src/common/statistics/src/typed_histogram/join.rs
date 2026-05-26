@@ -130,16 +130,32 @@ impl<T: Value> TypedHistogramBucket<T> {
 
         let upper_cardinality =
             (self.num_values * left_row_scale) * (other.num_values * right_row_scale);
-        let (expected_cardinality, expected_ndv) = T::estimate_overlap_coverages(self, other)
+        let coverage = T::estimate_overlap_coverages(self, other);
+        let (expected_cardinality, expected_ndv) = coverage
             .and_then(|coverage| {
-                self.estimate_expected_join_counts(other, coverage, upper_cardinality)
+                self.estimate_expected_join_counts(
+                    other,
+                    coverage,
+                    left_row_scale,
+                    right_row_scale,
+                    upper_cardinality,
+                )
             })
             .unwrap_or((0.0, 0.0));
 
         let upper_ndv = match intersection {
             Intersection::None => 0.0,
             Intersection::Point => 1.0,
-            Intersection::Range => self.num_distinct.min(other.num_distinct),
+            Intersection::Range => coverage
+                .map(|coverage| {
+                    let left_rows = self.num_values * left_row_scale * coverage.left;
+                    let right_rows = other.num_values * right_row_scale * coverage.right;
+                    (self.num_distinct * coverage.left)
+                        .min(other.num_distinct * coverage.right)
+                        .min(left_rows)
+                        .min(right_rows)
+                })
+                .unwrap_or_else(|| self.num_distinct.min(other.num_distinct)),
         };
 
         debug_assert!(
@@ -171,10 +187,14 @@ impl<T: Value> TypedHistogramBucket<T> {
         &self,
         other: &TypedHistogramBucket<T>,
         coverage: OverlapCoverage,
+        left_row_scale: f64,
+        right_row_scale: f64,
         upper_cardinality: f64,
     ) -> Option<(f64, f64)> {
-        let left_ndv = self.num_distinct * coverage.left;
-        let right_ndv = other.num_distinct * coverage.right;
+        let left_rows = self.num_values * left_row_scale * coverage.left;
+        let right_rows = other.num_values * right_row_scale * coverage.right;
+        let left_ndv = (self.num_distinct * coverage.left).min(left_rows);
+        let right_ndv = (other.num_distinct * coverage.right).min(right_rows);
         let max_ndv = left_ndv.max(right_ndv);
         if max_ndv <= 0.0 {
             return None;
@@ -277,6 +297,33 @@ mod tests {
             .expect("singleton overlap should produce output histogram");
         assert_eq!(histogram.num_values(), 6.0);
         assert_eq!(histogram.ndv().expected, 1.0);
+    }
+
+    #[test]
+    fn test_typed_histogram_estimate_join_caps_range_ndv_by_scaled_rows() {
+        let mut filtered = TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0_i64, 999_i64, 2000.0, 1800.0)],
+            avg_spacing: None,
+        };
+        let grouped = TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0_i64, 999_i64, 1800.0, 1800.0)],
+            avg_spacing: None,
+        };
+        filtered.scale_counts(0.025);
+
+        let estimation = filtered.estimate_join(&grouped);
+
+        assert_eq!(estimation.cardinality.expected, 50.0);
+        assert_eq!(estimation.ndv.expected, 50.0);
+        let histogram = estimation
+            .histogram
+            .expect("range overlap should produce output histogram");
+        assert_eq!(histogram.num_values(), 50.0);
+        assert_eq!(histogram.ndv().expected, 50.0);
     }
 
     #[test]
