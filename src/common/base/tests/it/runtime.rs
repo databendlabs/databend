@@ -87,8 +87,9 @@ async fn test_shutdown_long_run_runtime() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_runtime_task_dump_contains_runtime_name() -> anyhow::Result<()> {
+async fn test_runtime_task_dump_contains_runtime_id() -> anyhow::Result<()> {
     let runtime = Runtime::with_worker_threads(1, Some("task-marker-runtime".to_string()))?;
+    let runtime_marker = format!("[task-marker-runtime id={}]", runtime.inner().id());
     let (started_tx, started_rx) = std::sync::mpsc::channel();
 
     let named_started_tx = started_tx.clone();
@@ -110,12 +111,14 @@ async fn test_runtime_task_dump_contains_runtime_name() -> anyhow::Result<()> {
 
     let dump = dump_backtrace(false);
     assert!(dump.contains(&format!(
-        "[task-marker-runtime] task-marker-test at {}:{}:",
+        "{} task-marker-test at {}:{}:",
+        runtime_marker,
         file!(),
         named_spawn_line
     )));
     assert!(dump.contains(&format!(
-        "[task-marker-runtime] Global spawn task at {}:{}:",
+        "{} Global spawn task at {}:{}:",
+        runtime_marker,
         file!(),
         global_spawn_line
     )));
@@ -126,8 +129,9 @@ async fn test_runtime_task_dump_contains_runtime_name() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_free_spawn_task_dump_contains_runtime_name() -> anyhow::Result<()> {
+fn test_free_spawn_task_dump_contains_runtime_id() -> anyhow::Result<()> {
     let runtime = Runtime::with_worker_threads(1, Some("free-spawn-runtime-test".to_string()))?;
+    let runtime_marker = format!("[free-spawn-runtime-test id={}]", runtime.inner().id());
 
     runtime.block_on(async {
         let (started_tx, started_rx) = tokio::sync::oneshot::channel();
@@ -144,7 +148,7 @@ fn test_free_spawn_task_dump_contains_runtime_name() -> anyhow::Result<()> {
 
         let dump = dump_backtrace(false);
         assert!(dump.lines().any(|line| {
-            line.contains("[free-spawn-runtime-test]")
+            line.contains(&runtime_marker)
                 && line.contains(&format!(" at {}:{}:", file!(), free_spawn_line))
         }));
         assert!(!dump.contains("[spawn-thread="));
