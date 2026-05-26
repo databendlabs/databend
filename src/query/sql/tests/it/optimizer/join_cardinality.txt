@@ -233,7 +233,7 @@ query         : left_single_from_scalar_projection
 sql           : SELECT (SELECT l.k FROM l WHERE l.k = r.k) FROM r
 join          : LEFT SINGLE cardinality=26.000
 stat          : r.k (#0) min=1, max=5, ndv=4.000, null=0.000, histogram=none
-stat          : l.k (#2) min=1, max=5, ndv=0.600, null=0.000, histogram=none
+stat          : l.k (#2) min=1, max=5, ndv=1.438, null=0.000, histogram=none
 
 case          : right_mark_from_any_overlap
 description   : Join-key histograms overlap, so the inner estimate has non-zero matches when this join type uses it.

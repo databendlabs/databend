@@ -84,17 +84,26 @@ impl<T> TypedHistogram<T> {
     }
 
     pub fn ndv(&self) -> StatEstimate {
-        let num_distinct = self
+        let possible_distinct = self
             .buckets
             .iter()
             .map(|bucket| bucket.num_distinct)
             .sum::<f64>();
         if self.accuracy {
-            return StatEstimate::exact(num_distinct);
+            return StatEstimate::exact(possible_distinct);
         }
 
+        let expected_distinct = self
+            .buckets
+            .iter()
+            .map(|bucket| bucket.expected_distinct_after_row_scale(self.row_scale))
+            .sum::<f64>();
         let num_values = self.num_values();
-        StatEstimate::new(0.0, num_distinct.min(num_values), num_values)
+        StatEstimate::new(
+            0.0,
+            expected_distinct.min(possible_distinct).min(num_values),
+            possible_distinct.min(num_values),
+        )
     }
 
     pub fn scale_counts(&mut self, selectivity: f64) {
@@ -158,6 +167,21 @@ impl<T> TypedHistogramBucket<T> {
 
     pub fn num_distinct(&self) -> f64 {
         self.num_distinct
+    }
+
+    pub(crate) fn expected_distinct_after_row_scale(&self, row_scale: f64) -> f64 {
+        if self.num_values <= 0.0 || self.num_distinct <= 0.0 || row_scale <= 0.0 {
+            return 0.0;
+        }
+        if row_scale >= 1.0 {
+            return self.num_distinct.min(self.num_values * row_scale);
+        }
+
+        let rows_per_distinct = self.num_values / self.num_distinct;
+        let survival_probability = 1.0 - (1.0 - row_scale).powf(rows_per_distinct);
+        (self.num_distinct * survival_probability)
+            .min(self.num_distinct)
+            .min(self.num_values * row_scale)
     }
 }
 
@@ -853,7 +877,10 @@ mod tests {
         assert!(!histogram.accuracy);
         assert_eq!(histogram.num_values(), 25.0);
         assert_eq!(histogram.buckets[0].num_distinct, 10.0);
-        assert_eq!(histogram.ndv(), StatEstimate::new(0.0, 10.0, 25.0));
+        assert_eq!(
+            histogram.ndv(),
+            StatEstimate::new(0.0, 9.436864852905273, 10.0)
+        );
     }
 
     #[test]

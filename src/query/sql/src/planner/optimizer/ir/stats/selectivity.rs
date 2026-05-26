@@ -294,14 +294,16 @@ impl SelectivityEstimator {
                 continue;
             }
             let mut column_stat = column_stat.clone();
-            column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
             column_stat.null_count = column_stat.null_count.reduce_by_selectivity(selectivity);
             if let Some(histogram) = &mut column_stat.histogram {
+                let ndv_upper = column_stat.ndv.upper;
+                histogram.scale_counts(selectivity);
+                column_stat.ndv = scaled_histogram_ndv(ndv_upper, histogram.ndv());
                 if column_stat.ndv.expected <= 2.0 {
                     column_stat.histogram = None;
-                } else {
-                    histogram.scale_counts(selectivity);
                 }
+            } else {
+                column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
             }
 
             self.overrides.insert(*index, column_stat);
@@ -309,6 +311,11 @@ impl SelectivityEstimator {
 
         final_cardinality
     }
+}
+
+fn scaled_histogram_ndv(original_upper: f64, histogram_ndv: StatEstimate) -> StatEstimate {
+    let upper = histogram_ndv.upper.min(original_upper);
+    StatEstimate::new(0.0, histogram_ndv.expected.min(upper), upper)
 }
 
 // Align a histogram before it is consumed as a row distribution.

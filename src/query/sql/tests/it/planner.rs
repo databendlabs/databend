@@ -127,6 +127,12 @@ const LITE_REPLAY_CASE_SPECS: &[LiteReplayCaseSpec] = &[
         optimizer_skip_list: &[],
         default_node_num: 1,
     },
+    LiteReplayCaseSpec {
+        name: "q10_scaled_join_ndv",
+        warehouse_distribution: true,
+        optimizer_skip_list: &[],
+        default_node_num: 1,
+    },
 ];
 
 impl TestCaseRunner for LiteRunner {

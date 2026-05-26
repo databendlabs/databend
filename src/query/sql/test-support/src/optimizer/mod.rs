@@ -460,7 +460,8 @@ impl SExprVisitor for StatsApplier<'_> {
             if let Some(stats) = self.table_stats.get(table.name()) {
                 let column_stats =
                     self.build_column_stats(&metadata, scan.table_index, table.name());
-                let histograms = self.build_histograms(&metadata, scan.table_index, table.name())?;
+                let histograms =
+                    self.build_histograms(&metadata, scan.table_index, table.name())?;
                 let table_stats = TableStatistics {
                     num_rows: stats.num_rows,
                     data_size: stats.data_size,

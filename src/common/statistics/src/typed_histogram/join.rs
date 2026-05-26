@@ -150,8 +150,10 @@ impl<T: Value> TypedHistogramBucket<T> {
                 .map(|coverage| {
                     let left_rows = self.num_values * left_row_scale * coverage.left;
                     let right_rows = other.num_values * right_row_scale * coverage.right;
-                    (self.num_distinct * coverage.left)
-                        .min(other.num_distinct * coverage.right)
+                    let left_distinct = self.num_distinct * coverage.left;
+                    let right_distinct = other.num_distinct * coverage.right;
+                    left_distinct
+                        .min(right_distinct)
                         .min(left_rows)
                         .min(right_rows)
                 })
@@ -193,8 +195,10 @@ impl<T: Value> TypedHistogramBucket<T> {
     ) -> Option<(f64, f64)> {
         let left_rows = self.num_values * left_row_scale * coverage.left;
         let right_rows = other.num_values * right_row_scale * coverage.right;
-        let left_ndv = (self.num_distinct * coverage.left).min(left_rows);
-        let right_ndv = (other.num_distinct * coverage.right).min(right_rows);
+        let left_ndv =
+            (self.expected_distinct_after_row_scale(left_row_scale) * coverage.left).min(left_rows);
+        let right_ndv = (other.expected_distinct_after_row_scale(right_row_scale) * coverage.right)
+            .min(right_rows);
         let max_ndv = left_ndv.max(right_ndv);
         if max_ndv <= 0.0 {
             return None;
@@ -317,13 +321,45 @@ mod tests {
 
         let estimation = filtered.estimate_join(&grouped);
 
-        assert_eq!(estimation.cardinality.expected, 50.0);
-        assert_eq!(estimation.ndv.expected, 50.0);
+        assert!((estimation.cardinality.expected - 50.0).abs() < 1e-9);
+        assert!((estimation.ndv.expected - 49.930034990281634).abs() < 1e-9);
         let histogram = estimation
             .histogram
             .expect("range overlap should produce output histogram");
         assert_eq!(histogram.num_values(), 50.0);
-        assert_eq!(histogram.ndv().expected, 50.0);
+        assert!((histogram.ndv().expected - 49.930034990281634).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_typed_histogram_estimate_join_uses_scaled_expected_ndv_for_dense_ranges() {
+        let orders = TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(
+                1_i64,
+                6_000_000_i64,
+                57_356.61,
+                57_356.61,
+            )],
+            avg_spacing: None,
+        };
+        let mut lineitem = TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(
+                1_i64,
+                6_000_000_i64,
+                6_001_215.0,
+                1_601_092.0,
+            )],
+            avg_spacing: None,
+        };
+        lineitem.scale_counts(2_000_405.0 / 6_001_215.0);
+
+        let estimation = orders.estimate_join(&lineitem);
+
+        assert!((estimation.cardinality.expected - 91_728.1213324728).abs() < 1e-6);
+        assert!((estimation.ndv.expected - 57_356.61).abs() < 1e-9);
     }
 
     #[test]
