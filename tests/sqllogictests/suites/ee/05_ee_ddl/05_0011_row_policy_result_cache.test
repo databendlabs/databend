@@ -92,21 +92,17 @@ Sort(Single)
 ├── output columns: [rap_cache_test.id (#0), rap_cache_test.app_name (#1), rap_cache_test.data (#2)]
 ├── sort keys: [id ASC NULLS LAST]
 ├── estimated rows: 2.50
-└── Filter [SECURE]
-    ├── output columns: [rap_cache_test.id (#0), rap_cache_test.app_name (#1), rap_cache_test.data (#2)]
-    ├── filters: [ROW ACCESS POLICY APPLIED]
-    ├── estimated rows: 2.50
-    └── TableScan
-        ├── table: default.default.rap_cache_test
-        ├── scan id: 0
-        ├── output columns: [id (#0), app_name (#1), data (#2)]
-        ├── read rows: 5
-        ├── read size: < 1 KiB
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
-        ├── push downs: [filters: [], secure_filters: REDACTED, limit: NONE]
-        └── estimated rows: 2.50
+└── TableScan
+    ├── table: default.default.rap_cache_test
+    ├── scan id: 0
+    ├── output columns: [id (#0), app_name (#1), data (#2)]
+    ├── read rows: 5
+    ├── read size: < 1 KiB
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], secure_filters: REDACTED, limit: NONE]
+    └── estimated rows: 2.50
 
 ## ========================================
 ## Step 3: SELECT, EXPLAIN SELECT (should hit cache now)
