@@ -356,6 +356,16 @@ fn constant_filter_truthiness(scalar: &Scalar) -> Option<bool> {
     }
 }
 
+// SelectivityVisitor consumes the expression after ConstantFolder has applied
+// expression/domain reasoning. Deterministic predicate truth, boolean
+// short-circuiting, and contradictions visible from input domains should already
+// be represented as constants or expression domains here.
+//
+// The visitor estimates the remaining predicates and records ValueConstraints
+// only as column-statistics propagation hints for AND-context predicates. Those
+// constraints may refine bounds, null counts, NDV limits, and histograms, but
+// they must not become a second deterministic solver for predicate truth or
+// filter cardinality.
 #[derive(Clone)]
 struct SelectivityVisitor<'a> {
     cardinality: StatCardinality,
@@ -449,16 +459,6 @@ impl Selectivity {
         log::warn!(msg; "Invalid selectivity estimate");
         Ok(Selectivity::Unknown)
     }
-}
-
-fn is_distorted_range_comparison(column_stat: &ColumnStat, op: ComparisonOp) -> bool {
-    matches!(
-        op,
-        ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE
-    ) && column_stat
-        .histogram
-        .as_ref()
-        .is_some_and(|histogram| !histogram.accuracy() && histogram.is_range_distorted())
 }
 
 fn constrained_column_cardinality(
@@ -601,7 +601,6 @@ impl SelectivityVisitor<'_> {
                 }
                 let column_stat = &self.column_stats[&column_index];
                 let op = if left.is_constant() { op.reverse() } else { op };
-                let distorted_range = is_distorted_range_comparison(column_stat, op);
 
                 let can_apply_constant_constraint = {
                     use DataType::*;
@@ -626,29 +625,34 @@ impl SelectivityVisitor<'_> {
                     return self.derive_function_selectivity(func);
                 };
 
-                if distorted_range {
-                    if matches!(self.constraint_context, ConstraintContext::And) {
-                        let constraint = ValueConstraint::from_comparison(op, const_datum);
-                        self.constraints
-                            .add(self.column_stats, column_index, constraint)?;
-                    }
-                    return Ok(Selectivity::LowerBound);
-                }
-
+                let distorted_range = matches!(
+                    op,
+                    ComparisonOp::GT | ComparisonOp::GTE | ComparisonOp::LT | ComparisonOp::LTE
+                ) && column_stat
+                    .histogram
+                    .as_ref()
+                    .is_some_and(|histogram| histogram.is_range_distorted());
                 if matches!(self.constraint_context, ConstraintContext::And) {
-                    let constraint = ValueConstraint::from_comparison(op, const_datum);
-                    self.constraints
-                        .add(self.column_stats, column_index, constraint)?;
-                    let selectivity = self.derive_function_selectivity(func)?;
-                    return if matches!(selectivity, Selectivity::Unknown) {
-                        self.derive_materialized_constraint_selectivity(&Expr::FunctionCall(
-                            func.clone(),
-                        ))
-                    } else {
-                        Ok(selectivity)
+                    self.constraints.add(
+                        self.column_stats,
+                        column_index,
+                        ValueConstraint::from_comparison(op, const_datum),
+                    )?;
+                    if distorted_range {
+                        return Ok(Selectivity::LowerBound);
+                    }
+                    return match self.derive_function_selectivity(func)? {
+                        Selectivity::Unknown => self.derive_materialized_constraint_selectivity(
+                            &Expr::FunctionCall(func.clone()),
+                        ),
+                        selectivity => Ok(selectivity),
                     };
                 }
-                return self.derive_function_selectivity(func);
+                return if distorted_range {
+                    Ok(Selectivity::LowerBound)
+                } else {
+                    self.derive_function_selectivity(func)
+                };
             }
             _ => (),
         }

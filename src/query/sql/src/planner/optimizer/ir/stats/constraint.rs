@@ -24,16 +24,10 @@ use databend_common_statistics::StatEstimate;
 use crate::optimizer::ir::ColumnStat;
 use crate::plans::ComparisonOp;
 
-// A value constraint is a statistics propagation hint extracted from a
-// column predicate in an AND context. It materializes the predicate into column
+// A value constraint materializes a surviving AND-context predicate into column
 // bounds, null counts, NDV limits, and histograms when that can be represented
-// by column statistics.
-//
-// This is intentionally not a deterministic constraint solver. Predicate
-// truth, mutually-exclusive conditions, and algebraic simplification belong to
-// constant folding or expression rewriting before selectivity estimation. If a
-// predicate cannot be represented as column stats, keep the stats conservative
-// rather than proving facts here.
+// by column statistics. If a predicate cannot be represented as column stats,
+// keep the stats conservative rather than proving facts here.
 #[derive(Clone)]
 pub(super) enum ValueConstraint {
     Eq(Datum),
