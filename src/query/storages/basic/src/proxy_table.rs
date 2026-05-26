@@ -169,7 +169,22 @@ impl ProxyTable {
             )));
         }
 
-        let (statistics, partitions) = table.read_partitions(ctx, push_downs, true).await?;
+        let settings = ctx.get_settings();
+        let distributed_pruning_enabled = settings.get_enable_distributed_pruning()?;
+        if distributed_pruning_enabled {
+            settings.set_setting("enable_distributed_pruning".to_string(), "0".to_string())?;
+        }
+
+        // PROXY wraps target partitions to remember the selected table. FUSE lazy
+        // segment partitions are consumed by its distributed pruning pipeline
+        // before block reads, so route with block-pruned partitions for now.
+        let read_res = table.read_partitions(ctx, push_downs, false).await;
+
+        if distributed_pruning_enabled {
+            settings.set_setting("enable_distributed_pruning".to_string(), "1".to_string())?;
+        }
+
+        let (statistics, partitions) = read_res?;
 
         Ok(Candidate {
             target: target.to_string(),
