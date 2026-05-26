@@ -20,13 +20,14 @@ use super::TypedHistogram;
 use super::TypedHistogramBucket;
 use super::Value;
 use crate::Histogram;
+use crate::NdvEstimate;
 use crate::StatEstimate;
 
 #[must_use]
 #[derive(Debug, Clone, PartialEq)]
 pub struct JoinEstimation {
     pub cardinality: StatEstimate,
-    pub ndv: StatEstimate,
+    pub ndv: NdvEstimate,
     pub histogram: Option<Histogram>,
 }
 
@@ -34,7 +35,7 @@ impl JoinEstimation {
     pub fn zero() -> Self {
         Self {
             cardinality: StatEstimate::exact(0.0),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             histogram: None,
         }
     }
@@ -43,7 +44,7 @@ impl JoinEstimation {
 impl<T: Value> TypedHistogram<T> {
     pub fn estimate_join(&self, other: &TypedHistogram<T>) -> JoinEstimation {
         let mut cardinality = StatEstimate::exact(0.0);
-        let mut ndv = StatEstimate::exact(0.0);
+        let mut ndv = NdvEstimate::exact(0.0);
         let mut output_buckets = Vec::new();
 
         for left_bucket in &self.buckets {
@@ -80,7 +81,7 @@ impl<T: Value> TypedHistogram<T> {
 
 struct JoinContribution<T> {
     cardinality: StatEstimate,
-    ndv: StatEstimate,
+    ndv: NdvEstimate,
     bucket: Option<TypedHistogramBucket<T>>,
 }
 
@@ -88,7 +89,7 @@ impl<T> JoinContribution<T> {
     fn zero() -> Self {
         Self {
             cardinality: StatEstimate::exact(0.0),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             bucket: None,
         }
     }
@@ -118,7 +119,7 @@ impl<T: Value> TypedHistogramBucket<T> {
                 (self.num_values * left_row_scale) * (other.num_values * right_row_scale);
             return JoinContribution {
                 cardinality: StatEstimate::exact(cardinality),
-                ndv: StatEstimate::exact(1.0),
+                ndv: NdvEstimate::exact(1.0),
                 bucket: Some(TypedHistogramBucket::new(
                     lower_bound.clone(),
                     upper_bound.clone(),
@@ -180,7 +181,7 @@ impl<T: Value> TypedHistogramBucket<T> {
 
         JoinContribution {
             cardinality: StatEstimate::new(0.0, expected_cardinality, upper_cardinality),
-            ndv: StatEstimate::new(0.0, expected_ndv, upper_ndv),
+            ndv: NdvEstimate::new(expected_ndv, upper_ndv),
             bucket,
         }
     }
@@ -239,7 +240,7 @@ mod tests {
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::new(0.0, 1.0, 100.0),
-            ndv: StatEstimate::new(0.0, 1.0, 1.0),
+            ndv: NdvEstimate::new(1.0, 1.0),
             histogram: Some(crate::Histogram::UInt(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
@@ -266,7 +267,7 @@ mod tests {
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::exact(12.0),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             histogram: Some(crate::Histogram::Int(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
@@ -295,12 +296,12 @@ mod tests {
         let estimation = left.estimate_join(&right);
 
         assert_eq!(estimation.cardinality, StatEstimate::exact(6.0));
-        assert_eq!(estimation.ndv, StatEstimate::exact(1.0));
+        assert_eq!(estimation.ndv, NdvEstimate::exact(1.0));
         let histogram = estimation
             .histogram
             .expect("singleton overlap should produce output histogram");
         assert_eq!(histogram.num_values(), 6.0);
-        assert_eq!(histogram.ndv().expected, 1.0);
+        assert_eq!(histogram.ndv().expected, Some(1.0));
     }
 
     #[test]
@@ -322,12 +323,12 @@ mod tests {
         let estimation = filtered.estimate_join(&grouped);
 
         assert!((estimation.cardinality.expected - 50.0).abs() < 1e-9);
-        assert!((estimation.ndv.expected - 49.930034990281634).abs() < 1e-9);
+        assert!((estimation.ndv.expected.unwrap() - 49.930034990281634).abs() < 1e-9);
         let histogram = estimation
             .histogram
             .expect("range overlap should produce output histogram");
         assert_eq!(histogram.num_values(), 50.0);
-        assert!((histogram.ndv().expected - 49.930034990281634).abs() < 1e-9);
+        assert!((histogram.ndv().expected.unwrap() - 49.930034990281634).abs() < 1e-9);
     }
 
     #[test]
@@ -359,7 +360,7 @@ mod tests {
         let estimation = orders.estimate_join(&lineitem);
 
         assert!((estimation.cardinality.expected - 91_728.1213324728).abs() < 1e-6);
-        assert!((estimation.ndv.expected - 57_356.61).abs() < 1e-9);
+        assert!((estimation.ndv.expected.unwrap() - 57_356.61).abs() < 1e-9);
     }
 
     #[test]
@@ -386,7 +387,7 @@ mod tests {
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::exact(34.0),
-            ndv: StatEstimate::exact(2.0),
+            ndv: NdvEstimate::exact(2.0),
             histogram: Some(crate::Histogram::UInt(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,
@@ -426,7 +427,7 @@ mod tests {
 
         assert_eq!(left.estimate_join(&right), JoinEstimation {
             cardinality: StatEstimate::exact(6.0),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             histogram: Some(crate::Histogram::Bytes(TypedHistogram {
                 accuracy: true,
                 row_scale: 1.0,

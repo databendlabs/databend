@@ -255,7 +255,7 @@ mod tests {
         let estimation = left.estimate_join(&right).unwrap();
 
         assert_eq!(estimation.cardinality.expected, 5.0);
-        assert_eq!(estimation.ndv.expected, 5.0);
+        assert_eq!(estimation.ndv.expected, Some(5.0));
     }
 
     #[test]

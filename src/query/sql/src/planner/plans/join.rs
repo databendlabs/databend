@@ -931,8 +931,8 @@ impl Operator for Join {
 #[cfg(test)]
 mod tests {
     use databend_common_expression::Scalar;
+    use databend_common_expression::stat_distribution::NdvEstimate;
     use databend_common_expression::stat_distribution::StatCount;
-    use databend_common_expression::stat_distribution::StatEstimate;
     use databend_common_expression::types::DataType;
     use databend_common_expression::types::NumberDataType;
     use databend_common_expression::types::NumberScalar;
@@ -1009,7 +1009,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::UInt(0),
                     max: Datum::UInt(24),
-                    ndv: StatEstimate::exact(25.0),
+                    ndv: NdvEstimate::exact(25.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::UInt(TypedHistogram {
                         accuracy: true,
@@ -1027,7 +1027,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::UInt(0),
                     max: Datum::UInt(24),
-                    ndv: StatEstimate::exact(25.0),
+                    ndv: NdvEstimate::exact(25.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::UInt(TypedHistogram {
                         accuracy: true,
@@ -1056,7 +1056,7 @@ mod tests {
 
         assert_eq!(stat_info.cardinality, 10_000.0);
         assert_eq!(left_histogram.num_values(), 10_000.0);
-        assert_eq!(left_histogram.ndv().expected, 25.0);
+        assert_eq!(left_histogram.ndv().expected, Some(25.0));
         Ok(())
     }
 
@@ -1070,7 +1070,7 @@ mod tests {
                     column_stats: HashMap::from([(Symbol::new(column), ColumnStat {
                         min: Datum::UInt(0),
                         max: Datum::UInt(24),
-                        ndv: StatEstimate::exact(25.0),
+                        ndv: NdvEstimate::exact(25.0),
                         null_count: StatCount::exact(0),
                         histogram: Some(Histogram::UInt(TypedHistogram {
                             accuracy: true,
@@ -1139,7 +1139,7 @@ mod tests {
                     column_stats: HashMap::from([(Symbol::new(column), ColumnStat {
                         min: Datum::UInt(0),
                         max: Datum::UInt(24),
-                        ndv: StatEstimate::exact(25.0),
+                        ndv: NdvEstimate::exact(25.0),
                         null_count: StatCount::exact(0),
                         histogram: Some(Histogram::UInt(TypedHistogram {
                             accuracy: true,
@@ -1209,7 +1209,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(100),
-                    ndv: StatEstimate::exact(100.0),
+                    ndv: NdvEstimate::exact(100.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1227,7 +1227,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(1000),
-                    ndv: StatEstimate::exact(1000.0),
+                    ndv: NdvEstimate::exact(1000.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1254,12 +1254,12 @@ mod tests {
         let left_stat = &stat_info.statistics.column_stats[&Symbol::new(0)];
         assert_eq!(left_stat.min, Datum::Int(1));
         assert_eq!(left_stat.max, Datum::Int(100));
-        assert_eq!(left_stat.ndv, StatEstimate::exact(100.0));
+        assert_eq!(left_stat.ndv, NdvEstimate::exact(100.0));
         assert!(left_stat.histogram.is_none());
         let right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(right_stat.min, Datum::Int(1));
         assert_eq!(right_stat.max, Datum::Int(100));
-        assert!(right_stat.ndv.expected < 1000.0);
+        assert!(right_stat.ndv.expected.unwrap() < 1000.0);
         assert!(right_stat.histogram.is_none());
         Ok(())
     }
@@ -1274,14 +1274,14 @@ mod tests {
                     (Symbol::new(0), ColumnStat {
                         min: Datum::Int(1),
                         max: Datum::Int(100),
-                        ndv: StatEstimate::exact(100.0),
+                        ndv: NdvEstimate::exact(100.0),
                         null_count: StatCount::exact(0),
                         histogram: None,
                     }),
                     (Symbol::new(2), ColumnStat {
                         min: Datum::Int(1),
                         max: Datum::Int(50),
-                        ndv: StatEstimate::exact(50.0),
+                        ndv: NdvEstimate::exact(50.0),
                         null_count: StatCount::exact(0),
                         histogram: None,
                     }),
@@ -1296,14 +1296,14 @@ mod tests {
                     (Symbol::new(1), ColumnStat {
                         min: Datum::Int(1),
                         max: Datum::Int(1000),
-                        ndv: StatEstimate::exact(1000.0),
+                        ndv: NdvEstimate::exact(1000.0),
                         null_count: StatCount::exact(0),
                         histogram: None,
                     }),
                     (Symbol::new(3), ColumnStat {
                         min: Datum::Int(1),
                         max: Datum::Int(500),
-                        ndv: StatEstimate::exact(500.0),
+                        ndv: NdvEstimate::exact(500.0),
                         null_count: StatCount::exact(0),
                         histogram: None,
                     }),
@@ -1333,11 +1333,11 @@ mod tests {
         let first_right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(first_right_stat.min, Datum::Int(1));
         assert_eq!(first_right_stat.max, Datum::Int(100));
-        assert_eq!(first_right_stat.ndv, StatEstimate::exact(100.0));
+        assert_eq!(first_right_stat.ndv, NdvEstimate::exact(100.0));
         let second_right_stat = &stat_info.statistics.column_stats[&Symbol::new(3)];
         assert_eq!(second_right_stat.min, Datum::Int(1));
         assert_eq!(second_right_stat.max, Datum::Int(50));
-        assert_eq!(second_right_stat.ndv, StatEstimate::exact(50.0));
+        assert_eq!(second_right_stat.ndv, NdvEstimate::exact(50.0));
         Ok(())
     }
 
@@ -1350,7 +1350,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(1000),
-                    ndv: StatEstimate::exact(1000.0),
+                    ndv: NdvEstimate::exact(1000.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1368,7 +1368,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(100),
-                    ndv: StatEstimate::exact(100.0),
+                    ndv: NdvEstimate::exact(100.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1395,12 +1395,12 @@ mod tests {
         let left_stat = &stat_info.statistics.column_stats[&Symbol::new(0)];
         assert_eq!(left_stat.min, Datum::Int(1));
         assert_eq!(left_stat.max, Datum::Int(100));
-        assert!(left_stat.ndv.expected < 1000.0);
+        assert!(left_stat.ndv.expected.unwrap() < 1000.0);
         assert!(left_stat.histogram.is_none());
         let right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(right_stat.min, Datum::Int(1));
         assert_eq!(right_stat.max, Datum::Int(100));
-        assert_eq!(right_stat.ndv, StatEstimate::exact(100.0));
+        assert_eq!(right_stat.ndv, NdvEstimate::exact(100.0));
         assert!(right_stat.histogram.is_none());
         Ok(())
     }
@@ -1414,7 +1414,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1427,7 +1427,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(1000),
-                    ndv: StatEstimate::exact(1000.0),
+                    ndv: NdvEstimate::exact(1000.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1449,7 +1449,7 @@ mod tests {
         let right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(right_stat.min, Datum::Int(1));
         assert_eq!(right_stat.max, Datum::Int(10));
-        assert_eq!(right_stat.ndv, StatEstimate::exact(10.0));
+        assert_eq!(right_stat.ndv, NdvEstimate::exact(10.0));
         assert!(right_stat.histogram.is_none());
         Ok(())
     }
@@ -1463,7 +1463,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(1000),
-                    ndv: StatEstimate::exact(1000.0),
+                    ndv: NdvEstimate::exact(1000.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1476,7 +1476,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1498,7 +1498,7 @@ mod tests {
         let left_stat = &stat_info.statistics.column_stats[&Symbol::new(0)];
         assert_eq!(left_stat.min, Datum::Int(1));
         assert_eq!(left_stat.max, Datum::Int(10));
-        assert_eq!(left_stat.ndv, StatEstimate::exact(10.0));
+        assert_eq!(left_stat.ndv, NdvEstimate::exact(10.0));
         assert!(left_stat.histogram.is_none());
         Ok(())
     }
@@ -1512,7 +1512,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(100),
-                    ndv: StatEstimate::exact(100.0),
+                    ndv: NdvEstimate::exact(100.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1525,7 +1525,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(1000),
-                    ndv: StatEstimate::exact(1000.0),
+                    ndv: NdvEstimate::exact(1000.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1547,7 +1547,7 @@ mod tests {
         let right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(right_stat.min, Datum::Int(1));
         assert_eq!(right_stat.max, Datum::Int(100));
-        assert_eq!(right_stat.ndv, StatEstimate::exact(100.0));
+        assert_eq!(right_stat.ndv, NdvEstimate::exact(100.0));
         Ok(())
     }
 
@@ -1560,7 +1560,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(100),
-                    ndv: StatEstimate::exact(100.0),
+                    ndv: NdvEstimate::exact(100.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1578,7 +1578,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1600,7 +1600,7 @@ mod tests {
         let left_stat = &stat_info.statistics.column_stats[&Symbol::new(0)];
         assert_eq!(left_stat.min, Datum::Int(1));
         assert_eq!(left_stat.max, Datum::Int(100));
-        assert_eq!(left_stat.ndv, StatEstimate::exact(100.0));
+        assert_eq!(left_stat.ndv, NdvEstimate::exact(100.0));
         assert!(left_stat.histogram.is_none());
         Ok(())
     }
@@ -1614,7 +1614,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(100),
-                    ndv: StatEstimate::exact(100.0),
+                    ndv: NdvEstimate::exact(100.0),
                     null_count: StatCount::exact(1),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1632,7 +1632,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1654,14 +1654,14 @@ mod tests {
         let left_stat = &stat_info.statistics.column_stats[&Symbol::new(0)];
         assert_eq!(left_stat.min, Datum::Int(1));
         assert_eq!(left_stat.max, Datum::Int(10));
-        assert_eq!(left_stat.ndv, StatEstimate::exact(10.0));
+        assert_eq!(left_stat.ndv, NdvEstimate::exact(10.0));
         assert_eq!(left_stat.null_count, StatCount::exact(0));
         let histogram = left_stat
             .histogram
             .as_ref()
             .expect("left semi should keep the preserved left histogram");
         assert_eq!(histogram.num_values(), 10.0);
-        assert_eq!(histogram.ndv().expected, 10.0);
+        assert_eq!(histogram.ndv().expected, Some(10.0));
         Ok(())
     }
 
@@ -1674,7 +1674,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: None,
                 })]),
@@ -1687,7 +1687,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(100),
-                    ndv: StatEstimate::exact(100.0),
+                    ndv: NdvEstimate::exact(100.0),
                     null_count: StatCount::exact(1),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -1714,14 +1714,14 @@ mod tests {
         let right_stat = &stat_info.statistics.column_stats[&Symbol::new(1)];
         assert_eq!(right_stat.min, Datum::Int(1));
         assert_eq!(right_stat.max, Datum::Int(10));
-        assert_eq!(right_stat.ndv, StatEstimate::exact(10.0));
+        assert_eq!(right_stat.ndv, NdvEstimate::exact(10.0));
         assert_eq!(right_stat.null_count, StatCount::exact(0));
         let histogram = right_stat
             .histogram
             .as_ref()
             .expect("right semi should keep the preserved right histogram");
         assert_eq!(histogram.num_values(), 10.0);
-        assert_eq!(histogram.ndv().expected, 10.0);
+        assert_eq!(histogram.ndv().expected, Some(10.0));
         Ok(())
     }
 
@@ -1732,7 +1732,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
+                ndv: NdvEstimate::exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1742,7 +1742,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
+                ndv: NdvEstimate::exact(2.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1780,7 +1780,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
+                ndv: NdvEstimate::exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1790,7 +1790,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
-                ndv: StatEstimate::exact(3.0),
+                ndv: NdvEstimate::exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1828,7 +1828,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Bool(false),
                 max: Datum::Bool(true),
-                ndv: StatEstimate::exact(2.0),
+                ndv: NdvEstimate::exact(2.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1838,7 +1838,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Bool(false),
                 max: Datum::Bool(true),
-                ndv: StatEstimate::exact(2.0),
+                ndv: NdvEstimate::exact(2.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1876,7 +1876,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
+                ndv: NdvEstimate::exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1886,7 +1886,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
+                ndv: NdvEstimate::exact(2.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1925,7 +1925,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                     min: Datum::Int(42),
                     max: Datum::Int(44),
-                    ndv: StatEstimate::exact(2.0),
+                    ndv: NdvEstimate::exact(2.0),
                     null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
@@ -1938,7 +1938,7 @@ mod tests {
                 column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                     min: Datum::Int(42),
                     max: Datum::Int(45),
-                    ndv: StatEstimate::exact(3.0),
+                    ndv: NdvEstimate::exact(3.0),
                     null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
@@ -1971,7 +1971,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
+                ndv: NdvEstimate::exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -1981,7 +1981,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
+                ndv: NdvEstimate::exact(2.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -2022,7 +2022,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(0), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(3),
-                ndv: StatEstimate::exact(3.0),
+                ndv: NdvEstimate::exact(3.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
@@ -2032,7 +2032,7 @@ mod tests {
             column_stats: HashMap::from([(Symbol::new(1), ColumnStat {
                 min: Datum::Int(1),
                 max: Datum::Int(2),
-                ndv: StatEstimate::exact(2.0),
+                ndv: NdvEstimate::exact(2.0),
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),

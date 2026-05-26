@@ -18,8 +18,8 @@ use databend_common_exception::Result;
 use databend_common_statistics::Datum;
 use databend_common_statistics::HistogramBounds;
 use databend_common_statistics::HistogramRangeBounds;
+use databend_common_statistics::NdvEstimate;
 use databend_common_statistics::StatCount;
-use databend_common_statistics::StatEstimate;
 
 use crate::optimizer::ir::ColumnStat;
 use crate::plans::ComparisonOp;
@@ -169,7 +169,7 @@ fn finite_range_ndv_upper(min: &Datum, max: &Datum) -> Option<f64> {
 }
 
 pub(super) fn clear_for_empty_result(column_stat: &mut ColumnStat) {
-    column_stat.ndv = StatEstimate::exact(0.0);
+    column_stat.ndv = NdvEstimate::exact(0.0);
     column_stat.null_count = StatCount::exact(0);
     column_stat.histogram = None;
 }

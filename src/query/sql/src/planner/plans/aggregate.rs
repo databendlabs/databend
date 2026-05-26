@@ -160,12 +160,14 @@ impl Aggregate {
             }));
         }
 
-        if self.group_items.iter().any(|item| {
-            column_stats
-                .get(&item.index)
-                .map(|stat| stat.ndv.lower == 0.0 && stat.ndv.upper >= stat_info.cardinality)
-                .unwrap_or(true)
-        }) {
+        if self
+            .group_items
+            .iter()
+            .any(|item| match column_stats.get(&item.index) {
+                Some(stat) => stat.ndv.is_upper_only(),
+                None => true,
+            })
+        {
             return Ok(Arc::new(StatInfo {
                 cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
                 statistics: Statistics {
@@ -178,7 +180,12 @@ impl Aggregate {
         let groups_ndv = self
             .group_items
             .iter()
-            .map(|group| column_stats[&group.index].ndv.expected)
+            .map(|group| {
+                column_stats[&group.index]
+                    .ndv
+                    .expected
+                    .expect("upper-only group NDV should have used aggregate fallback")
+            })
             .collect::<Vec<_>>();
 
         let cardinality = groups_ndv
@@ -206,7 +213,11 @@ impl Aggregate {
             };
             // When there is a high probability that eager aggregation
             // is better, we will update the histogram.
-            if histogram.num_values() >= histogram.ndv().expected * 10.0 {
+            if histogram
+                .ndv()
+                .expected
+                .is_some_and(|ndv| histogram.num_values() >= ndv * 10.0)
+            {
                 histogram.collapse_counts_to_distinct();
             }
         }

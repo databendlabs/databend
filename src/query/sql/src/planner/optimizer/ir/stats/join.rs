@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -132,10 +132,7 @@ impl JoinStatsEstimator {
 }
 
 fn join_key_null_count_for_cardinality(stat: &ColumnStat, cardinality: f64) -> f64 {
-    // Keep at least known NDV rows for non-null values; derived filters may
-    // leave a stale null_count that would otherwise be subtracted again.
-    let max_null_count = (cardinality - stat.ndv.lower).max(0.0);
-    stat.null_count.expected().min(max_null_count)
+    stat.null_count.expected().min(cardinality)
 }
 
 #[derive(Clone, Copy)]
@@ -232,7 +229,7 @@ enum JoinConditionStats {
 struct JoinColumnInput<'a> {
     min: Datum,
     max: Datum,
-    ndv: StatEstimate,
+    ndv: NdvEstimate,
     histogram: Option<&'a Histogram>,
 }
 
@@ -270,7 +267,7 @@ struct JoinEstimate {
     min: Option<Datum>,
     max: Option<Datum>,
     card: f64,
-    ndv: Option<StatEstimate>,
+    ndv: Option<NdvEstimate>,
     histogram: Option<Histogram>,
 }
 
@@ -301,22 +298,16 @@ impl JoinEstimate {
             }));
         }
 
-        let (max_ndv, ndv) = {
-            let left = left.ndv;
-            let right = right.ndv;
-            fn is_missing_ndv(ndv: StatEstimate) -> bool {
-                ndv.lower == 0.0 && ndv.expected == ndv.upper && ndv.upper > 0.0
-            }
-            match (is_missing_ndv(left), is_missing_ndv(right)) {
-                (false, false) => (left.expected.max(right.expected), Some(left.min(right))),
-                (false, true) => (left.expected, Some(left.min(right))),
-                (true, false) => (right.expected, Some(left.min(right))),
-                (true, true) => {
-                    if left.upper == 0.0 && right.upper == 0.0 {
-                        (0.0, Some(StatEstimate::exact(0.0)))
-                    } else {
-                        (left_cardinality * right_cardinality, None)
-                    }
+        let ndv = left.ndv.min(right.ndv);
+        let max_ndv = match (left.ndv.expected, right.ndv.expected) {
+            (Some(left), Some(right)) => left.max(right),
+            (Some(left), None) => left,
+            (None, Some(right)) => right,
+            (None, None) => {
+                if left.ndv.upper == 0.0 && right.ndv.upper == 0.0 {
+                    0.0
+                } else {
+                    left_cardinality * right_cardinality
                 }
             }
         };
@@ -331,7 +322,7 @@ impl JoinEstimate {
             min,
             max,
             card,
-            ndv,
+            ndv: Some(ndv),
             histogram: None,
         }))
     }
@@ -383,7 +374,7 @@ pub(crate) struct JoinKeyStatUpdate {
     left_max: Option<Datum>,
     right_min: Option<Datum>,
     right_max: Option<Datum>,
-    ndv: Option<StatEstimate>,
+    ndv: Option<NdvEstimate>,
     histogram: Option<Histogram>,
 }
 
@@ -391,7 +382,7 @@ impl JoinKeyStatUpdate {
     fn same_type(
         min: Option<Datum>,
         max: Option<Datum>,
-        ndv: Option<StatEstimate>,
+        ndv: Option<NdvEstimate>,
         histogram: Option<Histogram>,
     ) -> Self {
         Self {
@@ -409,7 +400,7 @@ impl JoinKeyStatUpdate {
         max: Option<Datum>,
         left_stat: &ColumnStat,
         right_stat: &ColumnStat,
-        ndv: Option<StatEstimate>,
+        ndv: Option<NdvEstimate>,
         histogram: Option<Histogram>,
     ) -> Self {
         let (left_min, left_max) =
@@ -538,14 +529,14 @@ mod tests {
         let left_stat = ColumnStat {
             min: Datum::Int(0),
             max: Datum::Int(100),
-            ndv: StatEstimate::exact(100.0),
+            ndv: NdvEstimate::exact(100.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
         let right_stat = ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(10),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
@@ -555,7 +546,7 @@ mod tests {
             Some(Datum::Int(2)),
             &left_stat,
             &right_stat,
-            Some(StatEstimate::exact(2.0)),
+            Some(NdvEstimate::exact(2.0)),
             None,
         );
 
@@ -570,14 +561,14 @@ mod tests {
         let int_stat = ColumnStat {
             min: Datum::Int(0),
             max: Datum::Int(100),
-            ndv: StatEstimate::exact(100.0),
+            ndv: NdvEstimate::exact(100.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
         let float_stat = ColumnStat {
             min: Datum::Float(F64::from(1.2)),
             max: Datum::Float(F64::from(8.8)),
-            ndv: StatEstimate::exact(8.0),
+            ndv: NdvEstimate::exact(8.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
@@ -587,7 +578,7 @@ mod tests {
             Some(Datum::Float(F64::from(8.8))),
             &int_stat,
             &float_stat,
-            Some(StatEstimate::exact(8.0)),
+            Some(NdvEstimate::exact(8.0)),
             None,
         );
 
@@ -602,14 +593,14 @@ mod tests {
         let left_stat = ColumnStat {
             min: Datum::Int(0),
             max: Datum::Int(100),
-            ndv: StatEstimate::exact(100.0),
+            ndv: NdvEstimate::exact(100.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
         let right_stat = ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(10),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         };
@@ -636,6 +627,52 @@ mod tests {
     }
 
     #[test]
+    fn test_join_fallback_uses_known_ndv_when_other_side_is_upper_only() -> Result<()> {
+        let left = JoinColumnInput {
+            min: Datum::Int(1),
+            max: Datum::Int(100),
+            ndv: NdvEstimate::exact(10.0),
+            histogram: None,
+        };
+        let right = JoinColumnInput {
+            min: Datum::Int(1),
+            max: Datum::Int(100),
+            ndv: NdvEstimate::upper_bound(200.0),
+            histogram: None,
+        };
+
+        let estimate =
+            JoinEstimate::from_inputs(&left, &right, 100.0, 200.0)?.expect("join ranges overlap");
+
+        assert_eq!(estimate.card, 2000.0);
+        assert_eq!(estimate.ndv, Some(NdvEstimate::exact(10.0)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_join_fallback_does_not_use_upper_only_ndv_as_expected() -> Result<()> {
+        let left = JoinColumnInput {
+            min: Datum::Int(1),
+            max: Datum::Int(100),
+            ndv: NdvEstimate::upper_bound(100.0),
+            histogram: None,
+        };
+        let right = JoinColumnInput {
+            min: Datum::Int(1),
+            max: Datum::Int(100),
+            ndv: NdvEstimate::upper_bound(200.0),
+            histogram: None,
+        };
+
+        let estimate =
+            JoinEstimate::from_inputs(&left, &right, 100.0, 200.0)?.expect("join ranges overlap");
+
+        assert_eq!(estimate.card, 1.0);
+        assert_eq!(estimate.ndv, Some(NdvEstimate::upper_bound(100.0)));
+        Ok(())
+    }
+
+    #[test]
     fn test_finish_join_histograms_keeps_join_key_histogram_and_drops_others() -> Result<()> {
         let mut statistics = Statistics {
             precise_cardinality: None,
@@ -643,7 +680,7 @@ mod tests {
                 (Symbol::new(0), ColumnStat {
                     min: Datum::Int(5),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(5.0),
+                    ndv: NdvEstimate::exact(5.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -655,7 +692,7 @@ mod tests {
                 (Symbol::new(1), ColumnStat {
                     min: Datum::Int(0),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -674,7 +711,7 @@ mod tests {
             .as_ref()
             .expect("join key histogram should be propagated");
         assert!((join_histogram.num_values() - 1000.0).abs() < 1e-9);
-        assert!((join_histogram.ndv().expected - 10.0).abs() < 1e-9);
+        assert!((join_histogram.ndv().expected.unwrap() - 10.0).abs() < 1e-9);
         assert!(statistics.column_stats[&Symbol::new(1)].histogram.is_none());
         Ok(())
     }
@@ -687,7 +724,7 @@ mod tests {
                 (Symbol::new(0), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -699,7 +736,7 @@ mod tests {
                 (Symbol::new(1), ColumnStat {
                     min: Datum::Int(1),
                     max: Datum::Int(10),
-                    ndv: StatEstimate::exact(10.0),
+                    ndv: NdvEstimate::exact(10.0),
                     null_count: StatCount::exact(0),
                     histogram: Some(Histogram::Int(TypedHistogram {
                         accuracy: true,
@@ -714,7 +751,7 @@ mod tests {
         let join_stat = statistics.column_stats.get_mut(&Symbol::new(0)).unwrap();
         join_stat.min = Datum::Int(1);
         join_stat.max = Datum::Int(5);
-        join_stat.ndv = StatEstimate::exact(5.0);
+        join_stat.ndv = NdvEstimate::exact(5.0);
 
         JoinKeyStatUpdate::finish_semi_join_histogram(
             &mut statistics,

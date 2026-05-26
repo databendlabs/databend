@@ -30,5 +30,5 @@ fn test_histogram() {
 
     assert_eq!(histogram.num_buckets(), 2);
     assert_eq!(histogram.num_values(), 4.0);
-    assert_eq!(histogram.ndv().expected, 2.0);
+    assert_eq!(histogram.ndv().expected, Some(2.0));
 }

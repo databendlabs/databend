@@ -22,7 +22,7 @@ estimated     : 90
 in stats      :
 0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: ~9.0[0.0, 10.0], null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: false, row_scale: 0.9, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: Int(1), max: Int(10), ndv: ~9.999999999[..10.0], null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: false, row_scale: 0.9, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : u > 4
 cardinality   : 100
@@ -114,7 +114,7 @@ estimated     : 30
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 50, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~3.0[0.0, 6.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~5.994140625[..6.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }], avg_spacing: None })) }
 
 === distorted_histogram_ranges ===
 description: Distorted histograms should still record precise range constraints while using the lower-bound selectivity fallback.
@@ -124,7 +124,7 @@ estimated     : 50
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(1000), ndv: 100.0, null_count: 0, histogram: Some(Float(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 0.0, upper_bound: 1000.0, num_values: 100.0, num_distinct: 100.0 }], avg_spacing: Some(10000000000000.0) })) }
 out stats     :
-0 ColumnStat { min: UInt(500), max: UInt(1000), ndv: 100.0, null_count: 0, histogram: Some(Float(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 500.0, upper_bound: 1000.0, num_values: 50.0, num_distinct: 50.0 }], avg_spacing: Some(10000000000000.0) })) }
+0 ColumnStat { min: UInt(500), max: UInt(1000), ndv: 50.0, null_count: 0, histogram: Some(Float(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: 500.0, upper_bound: 1000.0, num_values: 50.0, num_distinct: 50.0 }], avg_spacing: Some(10000000000000.0) })) }
 
 === histogram_accuracy_provenance ===
 description: Whole-bucket range pruning may trust ANALYZE distinct counts, but derived bucket distinct values are only estimates.
@@ -140,9 +140,9 @@ expr          : s >= 'm'
 cardinality   : 50
 estimated     : 20
 in stats      :
-0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: ~13.0[0.0, 26.0], null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: ~13.0[..26.0], null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 30.0, num_distinct: 3.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: ~10.0[0.0, 26.0], null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: Bytes([109]), max: Bytes([122]), ndv: 10.0, null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: false, buckets: [TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 20.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : s > 'p'
 cardinality   : 100
@@ -150,5 +150,5 @@ estimated     : 20
 in stats      :
 0 ColumnStat { min: Bytes([97]), max: Bytes([122]), ndv: 26.0, null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: [97], upper_bound: [102], num_values: 60.0, num_distinct: 6.0 }, TypedHistogramBucket { lower_bound: [109], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: Bytes([112]), max: Bytes([122]), ndv: ~10.0[0.0, 20.0], null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: [112], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None })) }
+0 ColumnStat { min: Bytes([112]), max: Bytes([122]), ndv: ~15.0[..20.0], null_count: 0, histogram: Some(Bytes(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: [112], upper_bound: [122], num_values: 40.0, num_distinct: 20.0 }], avg_spacing: None })) }
 

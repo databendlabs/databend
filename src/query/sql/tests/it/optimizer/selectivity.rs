@@ -17,9 +17,9 @@ use std::io::Write;
 use databend_common_exception::Result;
 use databend_common_expression::RawExpr;
 use databend_common_expression::Scalar;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
@@ -189,7 +189,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
     let comparison_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(10),
         max: Datum::UInt(19),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -257,7 +257,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -272,7 +272,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(30),
         histogram: None,
     })]);
@@ -291,7 +291,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let date_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(20),
         max: Datum::Int(29),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -306,7 +306,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let number_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -351,7 +351,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let decimal_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Float(1.0.into()),
         max: Datum::Float(4.0.into()),
-        ndv: StatEstimate::exact(4.0),
+        ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -375,7 +375,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let string_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes(b"b".to_vec()),
         max: Datum::Bytes(b"e".to_vec()),
-        ndv: StatEstimate::exact(4.0),
+        ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -396,7 +396,7 @@ fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
     let bool_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bool(false),
         max: Datum::Bool(true),
-        ndv: StatEstimate::exact(2.0),
+        ndv: NdvEstimate::exact(2.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -427,7 +427,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::Int(TypedHistogram {
             accuracy: true,
@@ -447,7 +447,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -465,7 +465,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let multi_bucket_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(19),
-        ndv: StatEstimate::exact(20.0),
+        ndv: NdvEstimate::exact(20.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -488,7 +488,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let skewed_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -510,7 +510,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let nullable_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(30),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -529,7 +529,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let tail_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(737),
-        ndv: StatEstimate::exact(738.0),
+        ndv: NdvEstimate::exact(738.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -556,7 +556,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let float_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Float(F64::from(0.0)),
         max: Datum::Float(F64::from(20.0)),
-        ndv: StatEstimate::exact(20.0),
+        ndv: NdvEstimate::exact(20.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::Float(TypedHistogram {
             accuracy: true,
@@ -622,7 +622,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let row_count_mismatch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(50),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -647,7 +647,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let distorted_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(1000),
-        ndv: StatEstimate::exact(100.0),
+        ndv: NdvEstimate::exact(100.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::Float(TypedHistogram {
             accuracy: false,
@@ -678,7 +678,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
             min: Datum::Bytes(b"a".to_vec()),
             max: Datum::Bytes(b"z".to_vec()),
-            ndv: StatEstimate::exact(26.0),
+            ndv: NdvEstimate::exact(26.0),
             null_count: StatCount::exact(0),
             histogram: Some(Histogram::Bytes(TypedHistogram {
                 accuracy: true,
@@ -703,7 +703,7 @@ fn test_selectivity_histogram_outcomes() -> Result<()> {
     let derived_string_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes(b"a".to_vec()),
         max: Datum::Bytes(b"z".to_vec()),
-        ndv: StatEstimate::new(0.0, 13.0, 26.0),
+        ndv: NdvEstimate::new(13.0, 26.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::Bytes(TypedHistogram {
             accuracy: false,
@@ -745,14 +745,14 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(10),
             histogram: None,
         }),
@@ -817,7 +817,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
     let histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -872,7 +872,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: Some(Histogram::UInt(TypedHistogram {
                 accuracy: true,
@@ -884,7 +884,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: Some(Histogram::UInt(TypedHistogram {
                 accuracy: true,
@@ -914,7 +914,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: Some(Histogram::UInt(TypedHistogram {
                 accuracy: true,
@@ -926,7 +926,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(4),
-            ndv: StatEstimate::exact(5.0),
+            ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: Some(Histogram::UInt(TypedHistogram {
                 accuracy: true,
@@ -993,7 +993,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
     let nested_constant_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(3),
-        ndv: StatEstimate::exact(4.0),
+        ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -1022,28 +1022,28 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(0),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(0),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(2), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(4),
-            ndv: StatEstimate::exact(5.0),
+            ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(3), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(4),
-            ndv: StatEstimate::exact(5.0),
+            ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
@@ -1075,7 +1075,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let estimated_zero_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::estimate(8.0, 8.0),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: false,
@@ -1095,7 +1095,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(5),
-            ndv: StatEstimate::exact(6.0),
+            ndv: NdvEstimate::exact(6.0),
             null_count: StatCount::exact(2),
             histogram: Some(Histogram::UInt(TypedHistogram {
                 accuracy: false,
@@ -1114,7 +1114,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let unsatisfiable_range_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(2),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -1133,7 +1133,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let exact_zero_cardinality_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(2),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: true,
@@ -1158,7 +1158,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let exact_all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(8),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: false,
@@ -1177,7 +1177,7 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let exact_nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(2),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: false,
@@ -1209,14 +1209,14 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(10),
             histogram: None,
         }),
@@ -1240,7 +1240,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
     let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(-9),
         max: Datum::Int(9),
-        ndv: StatEstimate::exact(19.0),
+        ndv: NdvEstimate::exact(19.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -1256,7 +1256,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
     let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(i64::MIN),
         max: Datum::Int(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -1276,7 +1276,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
     let like_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes("aa".as_bytes().to_vec()),
         max: Datum::Bytes("zz".as_bytes().to_vec()),
-        ndv: StatEstimate::exact(40.0),
+        ndv: NdvEstimate::exact(40.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -1298,14 +1298,14 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::Bytes("aa".as_bytes().to_vec()),
             max: Datum::Bytes("zz".as_bytes().to_vec()),
-            ndv: StatEstimate::exact(40.0),
+            ndv: NdvEstimate::exact(40.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::Bytes("a%".as_bytes().to_vec()),
             max: Datum::Bytes("z%".as_bytes().to_vec()),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),

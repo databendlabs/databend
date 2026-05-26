@@ -17,8 +17,8 @@ use std::collections::HashMap;
 use databend_common_expression::Domain;
 use databend_common_expression::stat_distribution::ArgStat;
 use databend_common_expression::stat_distribution::BorrowedDistribution;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
@@ -37,7 +37,7 @@ pub struct ColumnStat {
     pub max: Datum,
 
     /// Number of distinct values
-    pub ndv: StatEstimate,
+    pub ndv: NdvEstimate,
 
     /// Count of null values
     pub null_count: StatCount,
@@ -54,10 +54,11 @@ impl ColumnStat {
             return;
         }
 
-        // Inaccurate histograms keep derived bucket distinct counts as the best
-        // expected value, but their NDV bounds are only coarse consistency bounds.
-        let expected = self.ndv.expected.min(histogram_ndv.expected);
-        self.ndv = StatEstimate::new(self.ndv.lower, expected.max(self.ndv.lower), self.ndv.upper);
+        let upper = self.ndv.upper.min(histogram_ndv.upper);
+        self.ndv = match histogram_ndv.expected {
+            Some(expected) => NdvEstimate::new(expected.min(upper), upper),
+            None => NdvEstimate::upper_bound(upper),
+        };
     }
 
     pub fn to_arg_stat(&self, data_type: &DataType) -> Result<ArgStat<'_>, String> {
@@ -83,7 +84,7 @@ impl ColumnStat {
         Self {
             min: datum.clone(),
             max: datum,
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }

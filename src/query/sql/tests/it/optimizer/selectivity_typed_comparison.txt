@@ -22,7 +22,7 @@ estimated     : 35
 in stats      :
 0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 30, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(6), max: Int(10), ndv: 3.5, null_count: 0, histogram: None }
+0 ColumnStat { min: Int(6), max: Int(10), ndv: 5.0, null_count: 0, histogram: None }
 
 === typed_constant_compatibility ===
 description: Constant constraints should apply only when the typed comparison is compatible.
@@ -48,7 +48,7 @@ estimated     : 20
 in stats      :
 0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 2.0, null_count: 0, histogram: None }
+0 ColumnStat { min: Int(1), max: Int(10), ndv: ~8.926258176[..10.0], null_count: 0, histogram: None }
 
 expr          : number = UInt64(5)
 cardinality   : 100
@@ -106,7 +106,7 @@ estimated     : 75
 in stats      :
 0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 4.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: 3.0, null_count: 0, histogram: None }
+0 ColumnStat { min: Bytes([98]), max: Bytes([101]), ndv: ~3.9999999999999964[..4.0], null_count: 0, histogram: None }
 
 === boolean_comparison_predicates ===
 description: Boolean comparison predicates should keep constrained bounds and NDV consistent.

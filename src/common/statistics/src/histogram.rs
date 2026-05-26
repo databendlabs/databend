@@ -21,7 +21,7 @@ use databend_common_exception::Result as ExceptionResult;
 use crate::Datum;
 use crate::F64;
 use crate::JoinEstimation;
-use crate::StatEstimate;
+use crate::NdvEstimate;
 use crate::TypedHistogram;
 use crate::TypedHistogramBucket;
 
@@ -159,7 +159,7 @@ impl Histogram {
         }
     }
 
-    pub fn ndv(&self) -> StatEstimate {
+    pub fn ndv(&self) -> NdvEstimate {
         match self {
             Self::Int(histogram) => histogram.ndv(),
             Self::UInt(histogram) => histogram.ndv(),
@@ -863,7 +863,7 @@ mod tests {
             .expect("mixed numeric histograms should use a float view");
 
         assert_eq!(estimation.cardinality.expected, 6.0);
-        assert_eq!(estimation.ndv.expected, 1.0);
+        assert_eq!(estimation.ndv.expected, Some(1.0));
         Ok(())
     }
 }

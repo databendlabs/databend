@@ -2280,6 +2280,7 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 mod tests {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
+    use databend_common_expression::stat_distribution::NdvEstimate;
     use databend_common_expression::stat_distribution::StatCardinality;
     use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::stat_distribution::StatEstimate;
@@ -2313,7 +2314,7 @@ mod tests {
     fn test_null_constant_comparison_returns_all_null_stat() {
         let column_stat = ArgStat {
             domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2322,7 +2323,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2354,7 +2355,7 @@ mod tests {
                 min: "".to_string(),
                 max: None,
             }),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2363,7 +2364,7 @@ mod tests {
                 min: "x".to_string(),
                 max: Some("x".to_string()),
             }),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };

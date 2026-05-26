@@ -20,8 +20,8 @@ use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::NumberDataType;
 use databend_common_sql::ColumnBindingBuilder;
@@ -165,7 +165,7 @@ fn histogram_summary(histogram: &Histogram) -> String {
     format!(
         "rows={:.3}, ndv={:.3}, buckets=[{}]",
         histogram.num_values(),
-        histogram.ndv().expected,
+        histogram.ndv().expected.unwrap_or(histogram.ndv().upper),
         buckets
     )
 }
@@ -190,7 +190,7 @@ fn write_join_stat_info(
             column_label(metadata, *column),
             stat.min,
             stat.max,
-            stat.ndv.expected,
+            stat.ndv.expected.unwrap_or(stat.ndv.upper),
             stat.null_count.expected(),
             histogram
         )?;
@@ -220,7 +220,7 @@ fn write_direct_join_stat_info(file: &mut impl Write, stat_info: &StatInfo) -> R
             label,
             stat.min,
             stat.max,
-            stat.ndv.expected,
+            stat.ndv.expected.unwrap_or(stat.ndv.upper),
             stat.null_count.expected(),
             histogram
         )?;
@@ -278,7 +278,7 @@ fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
             column_stats: HashMap::from([(Symbol::new(column), ColumnStat {
                 min: Datum::Int(stats.min),
                 max: Datum::Int(stats.max),
-                ndv: StatEstimate::exact(stats.ndv as f64),
+                ndv: NdvEstimate::exact(stats.ndv as f64),
                 null_count: StatCount::exact(0),
                 histogram: Some(histogram_from_json(stats.histogram_json)?),
             })]),

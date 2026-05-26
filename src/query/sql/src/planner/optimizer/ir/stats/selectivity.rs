@@ -24,9 +24,9 @@ use databend_common_expression::FunctionContext;
 use databend_common_expression::Scalar;
 use databend_common_expression::StatEvaluator;
 use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::nullable::NullableDomain;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -278,11 +278,15 @@ impl SelectivityEstimator {
                 // available, use it as the row-mass boundary for the output;
                 // otherwise only apply the remaining global selectivity to the
                 // coarse stats.
-                if override_stat.histogram.is_none() || column_stat.histogram.is_none() {
+                if override_stat.histogram.is_none() {
                     if override_stat.min != override_stat.max {
-                        override_stat.ndv = override_stat
-                            .ndv
-                            .min(column_stat.ndv.reduce_by_selectivity(selectivity));
+                        let input_non_null =
+                            non_null_values(input_cardinality, column_stat.null_count);
+                        override_stat.ndv = override_stat.ndv.min(
+                            column_stat
+                                .ndv
+                                .reduce_by_selectivity(input_non_null, selectivity),
+                        );
                         override_stat.null_count =
                             override_stat.null_count.reduce_by_selectivity(selectivity);
                     }
@@ -294,16 +298,19 @@ impl SelectivityEstimator {
                 continue;
             }
             let mut column_stat = column_stat.clone();
+            let input_non_null = non_null_values(input_cardinality, column_stat.null_count);
             column_stat.null_count = column_stat.null_count.reduce_by_selectivity(selectivity);
             if let Some(histogram) = &mut column_stat.histogram {
                 let ndv_upper = column_stat.ndv.upper;
                 histogram.scale_counts(selectivity);
                 column_stat.ndv = scaled_histogram_ndv(ndv_upper, histogram.ndv());
-                if column_stat.ndv.expected <= 2.0 {
+                if column_stat.ndv.expected.is_some_and(|ndv| ndv <= 2.0) {
                     column_stat.histogram = None;
                 }
             } else {
-                column_stat.ndv = column_stat.ndv.reduce_by_selectivity(selectivity);
+                column_stat.ndv = column_stat
+                    .ndv
+                    .reduce_by_selectivity(input_non_null, selectivity);
             }
 
             self.overrides.insert(*index, column_stat);
@@ -313,9 +320,18 @@ impl SelectivityEstimator {
     }
 }
 
-fn scaled_histogram_ndv(original_upper: f64, histogram_ndv: StatEstimate) -> StatEstimate {
+fn scaled_histogram_ndv(original_upper: f64, histogram_ndv: NdvEstimate) -> NdvEstimate {
     let upper = histogram_ndv.upper.min(original_upper);
-    StatEstimate::new(0.0, histogram_ndv.expected.min(upper), upper)
+    match histogram_ndv.expected {
+        Some(expected) => NdvEstimate::new(expected.min(upper), upper),
+        None => NdvEstimate::upper_bound(upper),
+    }
+}
+
+fn non_null_values(cardinality: f64, null_count: StatCount) -> f64 {
+    (cardinality - null_count.expected())
+        .max(0.0)
+        .min(cardinality)
 }
 
 // Align a histogram before it is consumed as a row distribution.
@@ -325,8 +341,8 @@ fn scaled_histogram_ndv(original_upper: f64, histogram_ndv: StatEstimate) -> Sta
 // decide how to derive the histogram row target.
 //
 // Only oversized histograms are scaled down. Scaling is an unknown-value filter:
-// it aligns row mass but does not prove which values survived, so NDV keeps its
-// upper bound, scales only expected, and drops the lower bound.
+// it aligns row mass but does not prove which values survived, so NDV is derived
+// from histogram row scaling while preserving the previous upper cap.
 fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f64) -> Option<f64> {
     if !cardinality.is_finite() || cardinality < 0.0 {
         return None;
@@ -343,10 +359,10 @@ fn align_histogram_with_cardinality(column_stat: &mut ColumnStat, cardinality: f
     }
 
     let factor = target_num_values / current_num_values;
-    let ndv = column_stat.ndv;
-    column_stat.ndv = StatEstimate::new(0.0, ndv.expected * factor, ndv.upper);
+    let ndv_upper = column_stat.ndv.upper;
     if let Some(histogram) = &mut column_stat.histogram {
         histogram.scale_counts(factor);
+        column_stat.ndv = scaled_histogram_ndv(ndv_upper, histogram.ndv());
     }
     Some(cardinality)
 }
@@ -482,17 +498,14 @@ fn constrained_column_cardinality(
     if let Some(histogram) = &constrained_stat.histogram {
         return Some(histogram.num_values() + constrained_stat.null_count.expected());
     }
-    if input_stat.ndv.expected <= 0.0 {
+    let input_ndv = input_stat.ndv.expected?;
+    let constrained_ndv = constrained_stat.ndv.expected?;
+    if input_ndv <= 0.0 {
         return None;
     }
 
-    let input_non_null = (input_cardinality - input_stat.null_count.expected())
-        .max(0.0)
-        .min(input_cardinality);
-    Some(
-        constrained_stat.null_count.expected()
-            + input_non_null * (constrained_stat.ndv.expected / input_stat.ndv.expected),
-    )
+    let input_non_null = non_null_values(input_cardinality, input_stat.null_count);
+    Some(constrained_stat.null_count.expected() + input_non_null * (constrained_ndv / input_ndv))
 }
 
 impl SelectivityVisitor<'_> {

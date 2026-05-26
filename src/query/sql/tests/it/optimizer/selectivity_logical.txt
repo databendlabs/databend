@@ -8,7 +8,7 @@ in stats      :
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(5), max: UInt(5), ndv: 1.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 1.0, null_count: ~1.0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~6.1257951099999985[..9.0], null_count: ~1.0, histogram: None }
 
 expr          : and_filters(a != 5, a = 5)
 cardinality   : 100
@@ -37,8 +37,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 1.9, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 1.9, null_count: ~1.9, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~8.784233454094307[..10.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~8.499053647030008[..10.0], null_count: ~1.9, histogram: None }
 
 expr          : not(a = 5)
 cardinality   : 100
@@ -47,8 +47,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 9.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 9.0, null_count: ~9.0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999999999[..10.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999999990000001[..10.0], null_count: ~9.0, histogram: None }
 
 expr          : is_not_null(b)
 cardinality   : 100
@@ -57,7 +57,7 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 9.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999999999[..10.0], null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : is_not_null(a + 1)
@@ -77,8 +77,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 5.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 5.0, null_count: ~5.0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.98046875[..10.0], null_count: ~5.0, histogram: None }
 
 expr          : cast(a as uint64)
 cardinality   : 100
@@ -87,8 +87,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: None }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 5.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 5.0, null_count: ~5.0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.98046875[..10.0], null_count: ~5.0, histogram: None }
 
 expr          : a > 3, a < 6
 cardinality   : 100
@@ -98,7 +98,7 @@ in stats      :
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 10, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(4), max: UInt(5), ndv: 2.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 2.0, null_count: ~2.0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~8.657822719999999[..10.0], null_count: ~2.0, histogram: None }
 
 expr          : a != 5, a >= 5, a <= 5
 cardinality   : 100
@@ -126,7 +126,7 @@ estimated     : 80
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999998976[0.0, 10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.8, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.999998976[..10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.8, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : not(a > 3)
 cardinality   : 100
@@ -134,7 +134,7 @@ estimated     : 40
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[0.0, 10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[..10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : or_filters(missing = 1, a = 5)
 cardinality   : 100
@@ -142,7 +142,7 @@ estimated     : 50
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[0.0, 10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : missing = 1
 cardinality   : 100
@@ -150,7 +150,7 @@ estimated     : 50
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[0.0, 10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : and_filters(missing = 1, true)
 cardinality   : 100
@@ -158,7 +158,7 @@ estimated     : 50
 in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[0.0, 10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.990234375[..10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.5, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 
 expr          : a >= 5, b >= 8
 cardinality   : 100
@@ -167,7 +167,7 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 1 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~2.0[0.0, 5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 1 ColumnStat { min: UInt(8), max: UInt(9), ndv: 2.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 8, upper_bound: 9, num_values: 20.0, num_distinct: 2.0 }], avg_spacing: None })) }
 
 === constant_folded_distribution_predicates ===
@@ -179,8 +179,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~4.0[0.0, 6.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.6666666666666666, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }], avg_spacing: None })) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[0.0, 5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(4), max: UInt(9), ndv: ~5.99989838947315[..6.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.6666666666666666, buckets: [TypedHistogramBucket { lower_bound: 4, upper_bound: 9, num_values: 60.0, num_distinct: 6.0 }], avg_spacing: None })) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 
 expr          : or_filters(and_filters(a > 7, 1 = 0), a + 1 > 6)
 cardinality   : 100
@@ -189,8 +189,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[0.0, 10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[0.0, 5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(0), max: UInt(9), ndv: ~9.939533824[..10.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 
 expr          : and_filters(a > 4, a + b > 10)
 cardinality   : 100
@@ -199,8 +199,8 @@ in stats      :
 0 ColumnStat { min: UInt(0), max: UInt(9), ndv: 10.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 9, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
 1 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~2.0[0.0, 5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
-1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.463129088[0.0, 5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.2, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
+0 ColumnStat { min: UInt(5), max: UInt(9), ndv: ~4.969766912[..5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.4, buckets: [TypedHistogramBucket { lower_bound: 5, upper_bound: 9, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
+1 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.463129088[..5.0], null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: false, row_scale: 0.2, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 4, num_values: 50.0, num_distinct: 5.0 }], avg_spacing: None })) }
 
 === constant_logical_predicates ===
 description: Constant predicates should preserve Zero and All through logical composition.
@@ -327,8 +327,8 @@ in stats      :
 2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
 3 ColumnStat { min: UInt(0), max: UInt(4), ndv: 5.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(0), max: UInt(0), ndv: 0.8, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(0), max: UInt(0), ndv: 0.8, null_count: 0, histogram: None }
-2 ColumnStat { min: UInt(0), max: UInt(4), ndv: 4.0, null_count: 0, histogram: None }
-3 ColumnStat { min: UInt(0), max: UInt(4), ndv: 4.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999998976[..1.0], null_count: 0, histogram: None }
+1 ColumnStat { min: UInt(0), max: UInt(0), ndv: ~0.9999998976[..1.0], null_count: 0, histogram: None }
+2 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.8[..5.0], null_count: 0, histogram: None }
+3 ColumnStat { min: UInt(0), max: UInt(4), ndv: ~4.8[..5.0], null_count: 0, histogram: None }
 

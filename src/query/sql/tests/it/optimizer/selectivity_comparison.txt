@@ -30,7 +30,7 @@ estimated     : 90
 in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 9.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~9.999999999[..10.0], null_count: 0, histogram: None }
 
 expr          : a > 5
 cardinality   : 100
@@ -198,7 +198,7 @@ estimated     : 10
 in stats      :
 0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 1.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~6.513215599[..10.0], null_count: 0, histogram: None }
 
 === reversed_comparison_predicates ===
 description: Comparison predicates should apply the same column constraint when the constant is on the left.

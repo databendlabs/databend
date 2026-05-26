@@ -22,7 +22,8 @@ mod join;
 pub use join::JoinEstimation;
 
 use crate::Histogram;
-use crate::StatEstimate;
+use crate::NdvEstimate;
+use crate::estimate_distinct_count_after_row_scale;
 
 #[derive(Clone, PartialEq)]
 pub struct TypedHistogram<T> {
@@ -83,14 +84,14 @@ impl<T> TypedHistogram<T> {
             * self.row_scale
     }
 
-    pub fn ndv(&self) -> StatEstimate {
+    pub fn ndv(&self) -> NdvEstimate {
         let possible_distinct = self
             .buckets
             .iter()
             .map(|bucket| bucket.num_distinct)
             .sum::<f64>();
         if self.accuracy {
-            return StatEstimate::exact(possible_distinct);
+            return NdvEstimate::exact(possible_distinct);
         }
 
         let expected_distinct = self
@@ -99,8 +100,7 @@ impl<T> TypedHistogram<T> {
             .map(|bucket| bucket.expected_distinct_after_row_scale(self.row_scale))
             .sum::<f64>();
         let num_values = self.num_values();
-        StatEstimate::new(
-            0.0,
+        NdvEstimate::new(
             expected_distinct.min(possible_distinct).min(num_values),
             possible_distinct.min(num_values),
         )
@@ -170,18 +170,7 @@ impl<T> TypedHistogramBucket<T> {
     }
 
     pub(crate) fn expected_distinct_after_row_scale(&self, row_scale: f64) -> f64 {
-        if self.num_values <= 0.0 || self.num_distinct <= 0.0 || row_scale <= 0.0 {
-            return 0.0;
-        }
-        if row_scale >= 1.0 {
-            return self.num_distinct.min(self.num_values * row_scale);
-        }
-
-        let rows_per_distinct = self.num_values / self.num_distinct;
-        let survival_probability = 1.0 - (1.0 - row_scale).powf(rows_per_distinct);
-        (self.num_distinct * survival_probability)
-            .min(self.num_distinct)
-            .min(self.num_values * row_scale)
+        estimate_distinct_count_after_row_scale(self.num_values, self.num_distinct, row_scale)
     }
 }
 
@@ -877,10 +866,27 @@ mod tests {
         assert!(!histogram.accuracy);
         assert_eq!(histogram.num_values(), 25.0);
         assert_eq!(histogram.buckets[0].num_distinct, 10.0);
-        assert_eq!(
-            histogram.ndv(),
-            StatEstimate::new(0.0, 9.436864852905273, 10.0)
+        assert_eq!(histogram.ndv(), NdvEstimate::new(9.436864852905273, 10.0));
+    }
+
+    #[test]
+    fn test_typed_histogram_scaling_keeps_original_bucket_basis() {
+        let mut sequential = TypedHistogram::new(
+            vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)],
+            true,
         );
+        sequential.scale_counts(0.5);
+        sequential.scale_counts(0.5);
+
+        let mut combined = TypedHistogram::new(
+            vec![TypedHistogramBucket::new(0_u64, 10_u64, 100.0, 10.0)],
+            true,
+        );
+        combined.scale_counts(0.25);
+
+        assert_eq!(sequential.num_values(), combined.num_values());
+        assert_eq!(sequential.ndv(), combined.ndv());
+        assert_eq!(sequential.ndv(), NdvEstimate::new(9.436864852905273, 10.0));
     }
 
     #[test]
@@ -892,7 +898,7 @@ mod tests {
         assert!(!histogram.accuracy);
         assert_eq!(histogram.num_buckets(), 4);
         assert_eq!(histogram.num_values(), 16.0);
-        assert_eq!(histogram.ndv().expected, 8.0);
+        assert_eq!(histogram.ndv().expected, Some(8.0));
         assert_eq!(histogram.avg_spacing, Some(20.0));
         assert!(left.has_intersection(&right));
         assert_eq!(left.intersection(&right), (Some(5_u64), Some(10_u64)));
@@ -937,7 +943,7 @@ mod tests {
 
         assert_eq!(histogram.num_buckets(), 10);
         assert_eq!(histogram.num_values(), 100.0);
-        assert_eq!(histogram.ndv().expected, 100.0);
+        assert_eq!(histogram.ndv().expected, Some(100.0));
         assert_eq!(histogram.buckets.last().unwrap().upper_bound(), &9);
     }
 
@@ -947,12 +953,12 @@ mod tests {
 
         let estimation = histogram.estimate_join(&histogram);
         assert_eq!(estimation.cardinality, StatEstimate::exact(10.0));
-        assert_eq!(estimation.ndv, StatEstimate::exact(10.0));
+        assert_eq!(estimation.ndv, NdvEstimate::exact(10.0));
         let output = estimation
             .histogram
             .expect("self join should produce output histogram");
         assert_eq!(output.num_values(), 10.0);
-        assert_eq!(output.ndv().expected, 10.0);
+        assert_eq!(output.ndv().expected, Some(10.0));
     }
 
     #[test]
