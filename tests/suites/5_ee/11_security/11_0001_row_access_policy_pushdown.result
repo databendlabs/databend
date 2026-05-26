@@ -13,9 +13,9 @@
 ├── push downs: [filters: [is_true(rap_pushdown_test.id (#0) > 0)], secure_filters: REDACTED, limit: NONE]
 #### test 2: limit pushdown with RAP and user WHERE after RAP enters prewhere
 ├── push downs: [filters: [is_true(rap_pushdown_test.id (#0) > 0)], secure_filters: REDACTED, limit: 1]
-#### test 3: verify Filter [SECURE] node exists for RAP enforcement
-#### Filter [SECURE] should appear in the plan; secure predicates are enforced by pipeline Filter
-1
+#### test 3: verify Filter [SECURE] is skipped when prewhere covers all secure predicates
+#### Filter [SECURE] should NOT appear because secure predicates are fully applied by prewhere
+0
 #### test 4: limit pushdown with RAP and no user WHERE after RAP enters prewhere
 ├── push downs: [filters: [], secure_filters: REDACTED, limit: 1]
 #### test 5: sort (ORDER BY + LIMIT) pushdown with RAP after RAP enters prewhere
