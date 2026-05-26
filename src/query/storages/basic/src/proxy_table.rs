@@ -181,9 +181,8 @@ impl ProxyTable {
             settings.set_setting("enable_distributed_pruning".to_string(), "0".to_string())?;
         }
 
-        // PROXY wraps target partitions to remember the selected table. FUSE lazy
-        // segment partitions are consumed by its distributed pruning pipeline
-        // before block reads, so route with block-pruned partitions for now.
+        // PROXY forwards pushdowns to the target FUSE table, so target pruning
+        // decisions, including TABLESAMPLE, are reflected in these partitions.
         let read_res = table.read_partitions(ctx, push_downs, false).await;
 
         if distributed_pruning_enabled {
@@ -368,6 +367,10 @@ impl Table for ProxyTable {
     }
 
     fn support_column_projection(&self) -> bool {
+        true
+    }
+
+    fn use_own_sample_block(&self) -> bool {
         true
     }
 
@@ -666,6 +669,17 @@ mod tests {
         );
 
         assert!(matches!(wrapped.partitions_type(), PartInfoType::LazyLevel));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_uses_target_sampled_partitions() -> Result<()> {
+        let mut options = BTreeMap::new();
+        options.insert(PROXY_OPT_KEY_TARGETS.to_string(), "target".to_string());
+        let table = ProxyTable::try_create(proxy_table_info(options))?;
+
+        assert!(table.use_own_sample_block());
 
         Ok(())
     }
