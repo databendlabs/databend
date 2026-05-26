@@ -35,6 +35,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use super::SegmentLocation;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
+use crate::pruning::RuntimeMinMaxPruner;
 
 pub struct BlockPruner {
     pub pruning_ctx: Arc<PruningContext>,
@@ -61,11 +62,11 @@ impl BlockPruner {
             || self.pruning_ctx.virtual_column_pruner.is_some()
         {
             // async pruning with bloom index, inverted index or virtual columns.
-            self.block_pruning(segment_location, block_metas, block_meta_indexes)
+            self.block_pruning(segment_location, block_metas, block_meta_indexes, None)
                 .await
         } else {
             // sync pruning without a bloom index, inverted index and virtual columns.
-            self.block_pruning_sync(segment_location, block_metas, block_meta_indexes)
+            self.block_pruning_sync(segment_location, block_metas, block_meta_indexes, None)
         }
     }
 
@@ -98,6 +99,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        runtime_min_max_pruner: Option<Arc<RuntimeMinMaxPruner>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
@@ -124,6 +126,7 @@ impl BlockPruner {
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
             let pruning_stats = pruning_stats.clone();
+            let runtime_min_max_pruner = runtime_min_max_pruner.clone();
             block_meta_indexes.next().map(|(block_idx, block_meta)| {
                 // Perf.
                 {
@@ -150,6 +153,14 @@ impl BlockPruner {
                         pruning_stats.set_blocks_range_pruning_after(1);
                     }
 
+                    if runtime_min_max_pruner.as_ref().is_some_and(|pruner| {
+                        pruner.should_prune(Some(&block_meta.col_stats), row_count as usize)
+                    }) {
+                        prune_result.keep = false;
+                    }
+                }
+
+                if prune_result.keep {
                     // not pruned by block zone map index,
                     let bloom_pruner = bloom_pruner.clone();
                     let limit_pruner = limit_pruner.clone();
@@ -368,6 +379,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
+        runtime_min_max_pruner: Option<Arc<RuntimeMinMaxPruner>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
@@ -397,13 +409,23 @@ impl BlockPruner {
             let keep_by_range = pruning_cost.measure(PruningCostKind::BlocksRange, || {
                 range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
             });
-            if keep_by_range && limit_pruner.within_limit(row_count) {
+            if keep_by_range {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_after(1);
                     metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
 
                     pruning_stats.set_blocks_range_pruning_after(1);
+                }
+
+                if runtime_min_max_pruner.as_ref().is_some_and(|pruner| {
+                    pruner.should_prune(Some(&block_meta.col_stats), row_count as usize)
+                }) {
+                    continue;
+                }
+
+                if !limit_pruner.within_limit(row_count) {
+                    continue;
                 }
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);

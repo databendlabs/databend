@@ -27,11 +27,13 @@ use databend_storages_common_pruner::BlockMetaIndex;
 use databend_storages_common_table_meta::meta::BlockMeta;
 
 use crate::pruning::BlockPruner;
+use crate::pruning_pipeline::RuntimeFilterPruneContext;
 use crate::pruning_pipeline::block_metas_meta::BlockMetasMeta;
 use crate::pruning_pipeline::block_prune_result_meta::BlockPruneResult;
 
 pub struct AsyncBlockPruneTransform {
     pub block_pruner: Arc<BlockPruner>,
+    runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
 }
 
 impl AsyncBlockPruneTransform {
@@ -39,11 +41,15 @@ impl AsyncBlockPruneTransform {
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         block_pruner: Arc<BlockPruner>,
+        runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
             input,
             output,
-            AsyncBlockPruneTransform { block_pruner },
+            AsyncBlockPruneTransform {
+                block_pruner,
+                runtime_filter_prune_context,
+            },
         )))
     }
 }
@@ -57,10 +63,19 @@ impl AsyncAccumulatingTransform for AsyncBlockPruneTransform {
             if let Some(meta) = BlockMetasMeta::downcast_from(ptr) {
                 let block_meta_indexes =
                     self.block_pruner.internal_column_pruning(&meta.block_metas);
+                let runtime_min_max_pruner = match self.runtime_filter_prune_context.as_ref() {
+                    Some(context) => context.runtime_min_max_pruner().await?,
+                    None => None,
+                };
 
                 let result: Vec<(BlockMetaIndex, Arc<BlockMeta>)> = self
                     .block_pruner
-                    .block_pruning(meta.segment_location, meta.block_metas, block_meta_indexes)
+                    .block_pruning(
+                        meta.segment_location,
+                        meta.block_metas,
+                        block_meta_indexes,
+                        runtime_min_max_pruner,
+                    )
                     .await?;
 
                 if result.is_empty() {
