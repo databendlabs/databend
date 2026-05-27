@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
+use std::collections::HashMap;
 
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterBuilder;
 use databend_common_expression::ColumnVec;
 use databend_common_expression::DataBlock;
 use databend_common_expression::types::DataType;
@@ -26,7 +26,7 @@ pub struct BuildState {
     pub(crate) outer_scan_map: Vec<Vec<bool>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Vec<Vec<u8>>,
-    pub(crate) runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
+    pub(crate) runtime_filter_builders: HashMap<usize, RuntimeFilterBuilder>,
 }
 
 impl BuildState {
@@ -35,7 +35,7 @@ impl BuildState {
             generation_state: BuildBlockGenerationState::new(),
             outer_scan_map: Vec::new(),
             mark_scan_map: Vec::new(),
-            runtime_filter_ready: Vec::new(),
+            runtime_filter_builders: HashMap::new(),
         }
     }
 }

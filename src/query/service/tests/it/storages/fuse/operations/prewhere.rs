@@ -98,6 +98,7 @@ async fn run_prewhere_test_with_threshold(
         scan_id,
         Some(&prewhere_info),
         block_reader.clone(),
+        None,
     )?;
     assert_eq!(read_state.use_single_prewhere_reader, expect_single_reader);
 

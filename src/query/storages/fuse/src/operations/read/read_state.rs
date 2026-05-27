@@ -21,8 +21,9 @@ use databend_common_base::runtime::profile::Profile;
 use databend_common_base::runtime::profile::ProfileStatisticsName;
 use databend_common_catalog::plan::PrewhereInfo;
 use databend_common_catalog::plan::Projection;
-use databend_common_catalog::runtime_filter_info::RuntimeBloomFilter;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterStats;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilter;
+use databend_common_catalog::runtime_filter_info::RowRuntimeFilters;
+use databend_common_catalog::runtime_filter_info::RuntimeFilterSource;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
@@ -42,20 +43,17 @@ use crate::fuse_part::FuseBlockPartInfo;
 use crate::io::BlockReader;
 use crate::io::DataItem;
 use crate::io::RowSelection;
-use crate::pruning::ExprBloomFilter;
 
-#[derive(Clone)]
-pub struct BloomRuntimeFilterRef {
-    pub column_index: FieldIndex,
-    pub filter: RuntimeBloomFilter,
-    pub stats: Arc<RuntimeFilterStats>,
+struct ResolvedRowFilter {
+    column_index: FieldIndex,
+    filter: Arc<dyn RowRuntimeFilter>,
 }
 
 pub struct ReadState {
     pub pre_reader: Arc<BlockReader>,
     pub remain_reader: Arc<BlockReader>,
     pub filters: Option<Expr>,
-    pub runtime_filters: Vec<BloomRuntimeFilterRef>,
+    resolved_row_filters: Vec<ResolvedRowFilter>,
     pub pre_column_ids: HashSet<ColumnId>,
     pub remain_column_ids: HashSet<ColumnId>,
     pub func_ctx: FunctionContext,
@@ -67,9 +65,10 @@ pub struct ReadState {
 impl ReadState {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        scan_id: usize,
+        _scan_id: usize,
         prewhere_info: Option<&PrewhereInfo>,
         block_reader: Arc<BlockReader>,
+        rf_source: Option<&Arc<RuntimeFilterSource>>,
     ) -> Result<Self> {
         let prewhere_selectivity_threshold =
             ctx.get_settings().get_prewhere_selectivity_threshold()?;
@@ -77,11 +76,13 @@ impl ReadState {
             prewhere_info.is_some() && prewhere_selectivity_threshold == 0;
         let original_schema = block_reader.original_schema.as_ref();
 
-        let runtime_filter_entries = ctx.get_runtime_filters(scan_id);
-        let runtime_filter_column_names: Vec<_> = runtime_filter_entries
+        // Extract bloom filter column names from RuntimeFilterSource for preread projection
+        let row_filters: RowRuntimeFilters =
+            rf_source.map(|s| s.get_row_filters()).unwrap_or_default();
+        let runtime_filter_column_names: Vec<_> = row_filters
             .iter()
-            .filter_map(|entry| {
-                let column_name = entry.bloom.as_ref().map(|bloom| &bloom.column_name)?;
+            .filter_map(|filter| {
+                let column_name = filter.column_name();
                 if original_schema.index_of(column_name).is_ok() {
                     Some(column_name)
                 } else {
@@ -112,15 +113,13 @@ impl ReadState {
 
         let prewhere_schema: DataSchema = (prewhere_reader.schema().as_ref()).into();
 
-        let runtime_filters: Vec<BloomRuntimeFilterRef> = runtime_filter_entries
+        let resolved_row_filters: Vec<ResolvedRowFilter> = row_filters
             .into_iter()
-            .filter_map(|entry| {
-                let bloom = entry.bloom?;
-                let column_index = prewhere_schema.index_of(bloom.column_name.as_str()).ok()?;
-                Some(BloomRuntimeFilterRef {
+            .filter_map(|filter| {
+                let column_index = prewhere_schema.index_of(filter.column_name()).ok()?;
+                Some(ResolvedRowFilter {
                     column_index,
-                    filter: bloom.filter,
-                    stats: entry.stats,
+                    filter,
                 })
             })
             .collect();
@@ -139,7 +138,7 @@ impl ReadState {
             pre_reader: prewhere_reader,
             remain_reader,
             filters: prewhere_filter,
-            runtime_filters,
+            resolved_row_filters,
             pre_column_ids,
             remain_column_ids,
             func_ctx: ctx.get_function_context()?,
@@ -167,19 +166,19 @@ impl ReadState {
         block: &DataBlock,
         _num_rows: usize,
     ) -> Result<Option<MutableBitmap>> {
-        let bloom_start = Instant::now();
-
-        let mut bitmaps = vec![];
-        for runtime_filter in &self.runtime_filters {
-            let probe_column = block.get_by_offset(runtime_filter.column_index).to_column();
-            let bitmap = ExprBloomFilter::new(&runtime_filter.filter).apply(probe_column)?;
-            bitmaps.push(bitmap);
+        if self.resolved_row_filters.is_empty() {
+            return Ok(None);
         }
 
-        let result_bitmap = bitmaps.into_iter().reduce(|acc, b| {
-            let rhs: Bitmap = b.into();
-            acc & &rhs
-        });
+        let bloom_start = Instant::now();
+
+        let mut bitmaps: Vec<Bitmap> = vec![];
+        for rf in &self.resolved_row_filters {
+            let column = block.get_by_offset(rf.column_index).to_column();
+            bitmaps.push(rf.filter.apply(column)?);
+        }
+
+        let result_bitmap = bitmaps.into_iter().reduce(|acc, b| &acc & &b);
 
         let bloom_duration = bloom_start.elapsed();
         Profile::record_usize_profile(
@@ -187,7 +186,7 @@ impl ReadState {
             bloom_duration.as_nanos() as usize,
         );
 
-        Ok(result_bitmap)
+        Ok(result_bitmap.map(|bm| bm.make_mut()))
     }
 
     pub fn deserialize_and_filter(

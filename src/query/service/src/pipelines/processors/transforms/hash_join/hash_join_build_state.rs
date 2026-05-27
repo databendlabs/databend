@@ -22,7 +22,6 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use databend_common_catalog::runtime_filter_info::RuntimeFilterReady;
 use databend_common_column::bitmap::Bitmap;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -877,22 +876,18 @@ impl HashJoinBuildState {
         }
 
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
-        let runtime_filter_ready = &mut build_state.runtime_filter_ready;
+        let runtime_filter_builders = &mut build_state.runtime_filter_builders;
         for scan_id in scan_ids.into_iter() {
-            let ready = Arc::new(RuntimeFilterReady::default());
-            runtime_filter_ready.push(ready.clone());
-            self.ctx.set_runtime_filter_ready(scan_id, ready);
+            runtime_filter_builders
+                .entry(scan_id)
+                .or_insert_with(|| self.ctx.get_runtime_filter_builder(scan_id));
         }
     }
 
     pub fn set_bloom_filter_ready(&self) -> Result<()> {
+        // In the old path, drop the builders to signal readiness.
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
-        for runtime_filter_ready in build_state.runtime_filter_ready.iter() {
-            runtime_filter_ready
-                .runtime_filter_watcher
-                .send(Some(()))
-                .map_err(|_| ErrorCode::TokioError("watcher channel is closed"))?;
-        }
+        build_state.runtime_filter_builders.clear();
         Ok(())
     }
 
