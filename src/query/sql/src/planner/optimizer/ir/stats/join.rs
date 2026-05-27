@@ -132,7 +132,9 @@ impl JoinStatsEstimator {
 }
 
 fn join_key_null_count_for_cardinality(stat: &ColumnStat, cardinality: f64) -> f64 {
-    stat.null_count.expected().min(cardinality)
+    let known_non_null_count = stat.ndv.expected.unwrap_or(0.0);
+    let max_null_count = (cardinality - known_non_null_count).max(0.0);
+    stat.null_count.expected().min(max_null_count)
 }
 
 #[derive(Clone, Copy)]
@@ -655,7 +657,7 @@ mod tests {
             JoinEstimate::from_inputs(&left, &right, 100.0, 200.0)?.expect("join ranges overlap");
 
         assert_eq!(estimate.card, 2000.0);
-        assert_eq!(estimate.ndv, Some(NdvEstimate::exact(10.0)));
+        assert_eq!(estimate.ndv, Some(NdvEstimate::upper_bound(10.0)));
         Ok(())
     }
 

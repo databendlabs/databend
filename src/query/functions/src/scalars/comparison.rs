@@ -2379,7 +2379,7 @@ mod tests {
             .unwrap();
         let true_count = output.boolean_distribution().unwrap().true_count;
 
-        assert_eq!(true_count, StatEstimate::exact(10.0));
+        assert_eq!(true_count, StatEstimate::new(0.0, 10.0, 100.0));
     }
 
     #[test]

@@ -294,7 +294,7 @@ impl TypedHistogramBuilder {
         bounds: Option<(T, T)>,
         num_buckets: usize,
     ) -> Result<TypedHistogram<T>, String> {
-        if ndv <= 2 {
+        if ndv == 0 {
             return if num_rows != 0 {
                 Err(format!(
                     "NDV must be greater than 0 when the number of rows is greater than 0, got NDV: {ndv}, num_rows: {num_rows}"

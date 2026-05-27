@@ -1630,7 +1630,7 @@ TableScan
 ├── partitions scanned: 1
 ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
 ├── push downs: [filters: [is_true(t.a:"1" (#2) > 1)], limit: NONE]
-└── estimated rows: 2.00
+└── estimated rows: 1.33
 
 query T
 EXPLAIN SELECT * FROM t WHERE a.2 > 1;
