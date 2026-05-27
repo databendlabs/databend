@@ -644,7 +644,7 @@ impl FuseTable {
             }
         }
         if let Some(runtime_filter_prune_context) = &runtime_filter_prune_context {
-            for column_id in runtime_filter_prune_context.min_max_column_ids() {
+            for column_id in runtime_filter_prune_context.statistics_column_ids() {
                 if !block_prune_column_ids.contains(column_id) {
                     block_prune_column_ids.push(*column_id);
                 }

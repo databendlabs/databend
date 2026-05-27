@@ -874,11 +874,21 @@ impl HashJoinBuildState {
             .ctx
             .get_settings()
             .get_min_max_runtime_filter_threshold()? as usize;
-        let mut min_max_probe_exprs_by_scan_id: HashMap<usize, Vec<&Expr<String>>> = HashMap::new();
+        let inlist_threshold = self
+            .ctx
+            .get_settings()
+            .get_inlist_runtime_filter_threshold()? as usize;
+        let mut statistics_probe_exprs_by_scan_id: HashMap<usize, Vec<&Expr<String>>> =
+            HashMap::new();
         for rf in self.runtime_filter_desc() {
+            let enable_statistics_pruning = (rf.enable_min_max_runtime_filter
+                && min_max_threshold > 0)
+                || (rf.enable_inlist_runtime_filter && inlist_threshold > 0);
             for (probe_key, scan_id) in &rf.probe_targets {
-                let probe_exprs = min_max_probe_exprs_by_scan_id.entry(*scan_id).or_default();
-                if rf.enable_min_max_runtime_filter && min_max_threshold > 0 {
+                let probe_exprs = statistics_probe_exprs_by_scan_id
+                    .entry(*scan_id)
+                    .or_default();
+                if enable_statistics_pruning {
                     probe_exprs.push(probe_key);
                 }
             }
@@ -886,8 +896,8 @@ impl HashJoinBuildState {
 
         let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let runtime_filter_ready = &mut build_state.runtime_filter_ready;
-        for (scan_id, probe_exprs) in min_max_probe_exprs_by_scan_id.into_iter() {
-            let ready = Arc::new(RuntimeFilterReady::for_min_max_probe_exprs(
+        for (scan_id, probe_exprs) in statistics_probe_exprs_by_scan_id.into_iter() {
+            let ready = Arc::new(RuntimeFilterReady::for_statistics_probe_exprs(
                 !probe_exprs.is_empty(),
                 probe_exprs,
             ));

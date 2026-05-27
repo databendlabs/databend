@@ -27,7 +27,7 @@ use databend_common_expression::TableSchemaRef;
 use databend_common_sql::IndexType;
 
 use crate::operations::read::runtime_filter_wait::wait_runtime_filters_for_pruning;
-use crate::pruning::RuntimeMinMaxPruner;
+use crate::pruning::RuntimeStatsPruner;
 
 #[derive(Clone)]
 pub struct RuntimeFilterPruneContext {
@@ -36,9 +36,9 @@ pub struct RuntimeFilterPruneContext {
     func_ctx: FunctionContext,
     table_schema: TableSchemaRef,
     runtime_filter_ready: Vec<Arc<RuntimeFilterReady>>,
-    min_max_column_ids: Vec<ColumnId>,
+    statistics_column_ids: Vec<ColumnId>,
     runtime_filter_wait_finished: Arc<AtomicBool>,
-    runtime_min_max_pruner: Arc<OnceLock<Option<Arc<RuntimeMinMaxPruner>>>>,
+    runtime_stats_pruner: Arc<OnceLock<Option<Arc<RuntimeStatsPruner>>>>,
 }
 
 impl RuntimeFilterPruneContext {
@@ -47,12 +47,12 @@ impl RuntimeFilterPruneContext {
         scan_id: IndexType,
         table_schema: TableSchemaRef,
     ) -> Result<Option<Self>> {
-        let runtime_filter_ready = Self::min_max_ready(&ctx.get_runtime_filter_ready(scan_id));
+        let runtime_filter_ready = Self::statistics_ready(&ctx.get_runtime_filter_ready(scan_id));
         if runtime_filter_ready.is_empty() {
             return Ok(None);
         }
-        let min_max_column_ids =
-            Self::min_max_column_ids_from_ready(&table_schema, &runtime_filter_ready)?;
+        let statistics_column_ids =
+            Self::statistics_column_ids_from_ready(&table_schema, &runtime_filter_ready)?;
 
         Ok(Some(Self {
             func_ctx: ctx.get_function_context()?,
@@ -60,18 +60,18 @@ impl RuntimeFilterPruneContext {
             scan_id,
             table_schema,
             runtime_filter_ready,
-            min_max_column_ids,
+            statistics_column_ids,
             runtime_filter_wait_finished: Arc::new(AtomicBool::new(false)),
-            runtime_min_max_pruner: Arc::new(OnceLock::new()),
+            runtime_stats_pruner: Arc::new(OnceLock::new()),
         }))
     }
 
-    pub fn min_max_column_ids(&self) -> &[ColumnId] {
-        &self.min_max_column_ids
+    pub fn statistics_column_ids(&self) -> &[ColumnId] {
+        &self.statistics_column_ids
     }
 
-    pub async fn runtime_min_max_pruner(&self) -> Result<Option<Arc<RuntimeMinMaxPruner>>> {
-        if let Some(pruner) = self.runtime_min_max_pruner.get() {
+    pub async fn runtime_stats_pruner(&self) -> Result<Option<Arc<RuntimeStatsPruner>>> {
+        if let Some(pruner) = self.runtime_stats_pruner.get() {
             return Ok(pruner.clone());
         }
 
@@ -89,36 +89,36 @@ impl RuntimeFilterPruneContext {
         }
 
         let runtime_filters = self.ctx.get_runtime_filters(self.scan_id);
-        let pruner = RuntimeMinMaxPruner::try_create(
+        let pruner = RuntimeStatsPruner::try_create(
             self.func_ctx.clone(),
             self.table_schema.clone(),
             &runtime_filters,
         );
 
-        Ok(Self::cache_runtime_min_max_pruner(
-            &self.runtime_min_max_pruner,
+        Ok(Self::cache_runtime_stats_pruner(
+            &self.runtime_stats_pruner,
             pruner,
             Self::all_runtime_filters_ready(&self.runtime_filter_ready),
         ))
     }
 
-    fn min_max_ready(
+    fn statistics_ready(
         runtime_filter_ready: &[Arc<RuntimeFilterReady>],
     ) -> Vec<Arc<RuntimeFilterReady>> {
         runtime_filter_ready
             .iter()
-            .filter(|ready| ready.has_min_max())
+            .filter(|ready| ready.has_statistics_pruning())
             .cloned()
             .collect()
     }
 
-    fn min_max_column_ids_from_ready(
+    fn statistics_column_ids_from_ready(
         table_schema: &TableSchemaRef,
         runtime_filter_ready: &[Arc<RuntimeFilterReady>],
     ) -> Result<Vec<ColumnId>> {
         let mut column_ids = BTreeSet::new();
         for ready in runtime_filter_ready {
-            for column_name in ready.min_max_column_names() {
+            for column_name in ready.statistics_column_names() {
                 column_ids.extend(table_schema.leaf_columns_of(column_name));
             }
         }
@@ -132,12 +132,12 @@ impl RuntimeFilterPruneContext {
             .all(|ready| ready.runtime_filter_watcher.subscribe().borrow().is_some())
     }
 
-    fn cache_runtime_min_max_pruner(
-        cache: &OnceLock<Option<Arc<RuntimeMinMaxPruner>>>,
-        pruner: Option<Arc<RuntimeMinMaxPruner>>,
+    fn cache_runtime_stats_pruner(
+        cache: &OnceLock<Option<Arc<RuntimeStatsPruner>>>,
+        pruner: Option<Arc<RuntimeStatsPruner>>,
         runtime_filter_ready: bool,
-    ) -> Option<Arc<RuntimeMinMaxPruner>> {
-        if pruner.is_some() || runtime_filter_ready {
+    ) -> Option<Arc<RuntimeStatsPruner>> {
+        if runtime_filter_ready {
             let _ = cache.set(pruner.clone());
             return cache.get().cloned().unwrap_or(pruner);
         }
@@ -157,14 +157,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn min_max_ready_ignores_filters_without_min_max_metadata() {
+    fn statistics_ready_ignores_filters_without_statistics_metadata() {
         let ready = vec![Arc::new(RuntimeFilterReady::default())];
 
-        assert!(RuntimeFilterPruneContext::min_max_ready(&ready).is_empty());
+        assert!(RuntimeFilterPruneContext::statistics_ready(&ready).is_empty());
     }
 
     #[test]
-    fn min_max_column_ids_only_include_runtime_min_max_probe_columns() -> Result<()> {
+    fn statistics_column_ids_only_include_runtime_filter_probe_columns() -> Result<()> {
         let table_schema = Arc::new(TableSchema::new(vec![
             TableField::new(
                 "projected_col",
@@ -175,13 +175,13 @@ mod tests {
         ]));
         let ready = vec![
             Arc::new(RuntimeFilterReady::default()),
-            Arc::new(RuntimeFilterReady::with_min_max_column_names([
+            Arc::new(RuntimeFilterReady::with_statistics_column_names([
                 "runtime_col".to_string(),
             ])),
         ];
 
         assert_eq!(
-            RuntimeFilterPruneContext::min_max_column_ids_from_ready(&table_schema, &ready)?,
+            RuntimeFilterPruneContext::statistics_column_ids_from_ready(&table_schema, &ready)?,
             vec![table_schema.column_id_of("runtime_col")?]
         );
 
@@ -189,18 +189,17 @@ mod tests {
     }
 
     #[test]
-    fn min_max_column_ids_ignore_probe_names_not_in_table_schema() -> Result<()> {
+    fn statistics_column_ids_ignore_probe_names_not_in_table_schema() -> Result<()> {
         let table_schema = Arc::new(TableSchema::new(vec![TableField::new(
             "number",
             TableDataType::Number(NumberDataType::UInt64),
         )]));
-        let ready = vec![Arc::new(RuntimeFilterReady::with_min_max_column_names([
-            "subquery_2".to_string(),
-            "number".to_string(),
-        ]))];
+        let ready = vec![Arc::new(RuntimeFilterReady::with_statistics_column_names(
+            ["subquery_2".to_string(), "number".to_string()],
+        ))];
 
         assert_eq!(
-            RuntimeFilterPruneContext::min_max_column_ids_from_ready(&table_schema, &ready)?,
+            RuntimeFilterPruneContext::statistics_column_ids_from_ready(&table_schema, &ready)?,
             vec![table_schema.column_id_of("number")?]
         );
 
@@ -208,21 +207,37 @@ mod tests {
     }
 
     #[test]
-    fn runtime_min_max_pruner_does_not_cache_none_before_filters_ready() {
+    fn runtime_stats_pruner_does_not_cache_none_before_filters_ready() {
         let cache = OnceLock::new();
 
         assert!(
-            RuntimeFilterPruneContext::cache_runtime_min_max_pruner(&cache, None, false).is_none()
+            RuntimeFilterPruneContext::cache_runtime_stats_pruner(&cache, None, false).is_none()
         );
         assert!(cache.get().is_none());
     }
 
     #[test]
-    fn runtime_min_max_pruner_caches_none_after_filters_ready() {
+    fn runtime_stats_pruner_does_not_cache_partial_pruner_before_filters_ready() {
+        let cache = OnceLock::new();
+        let schema = Arc::new(TableSchema::new(vec![]));
+        let pruner = Some(Arc::new(RuntimeStatsPruner::new(
+            FunctionContext::default(),
+            schema,
+            vec![],
+        )));
+
+        assert!(
+            RuntimeFilterPruneContext::cache_runtime_stats_pruner(&cache, pruner, false).is_some()
+        );
+        assert!(cache.get().is_none());
+    }
+
+    #[test]
+    fn runtime_stats_pruner_caches_none_after_filters_ready() {
         let cache = OnceLock::new();
 
         assert!(
-            RuntimeFilterPruneContext::cache_runtime_min_max_pruner(&cache, None, true).is_none()
+            RuntimeFilterPruneContext::cache_runtime_stats_pruner(&cache, None, true).is_none()
         );
         assert!(cache.get().is_some_and(|cached| cached.is_none()));
     }

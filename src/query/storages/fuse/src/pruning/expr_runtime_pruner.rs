@@ -89,25 +89,38 @@ impl RuntimeFilterExpr {
         exprs
     }
 
-    pub fn min_max_from_entry(entry: &RuntimeFilterEntry) -> Option<Self> {
-        entry.min_max.clone().map(|expr| Self {
-            filter_id: entry.id,
-            kind: RuntimeFilterExprKind::MinMax,
-            inlist_value_count: 0,
-            expr,
-            stats: entry.stats.clone(),
-        })
+    pub fn statistics_from_entry(entry: &RuntimeFilterEntry) -> Vec<Self> {
+        let mut exprs = Vec::new();
+        if let Some(expr) = entry.min_max.clone() {
+            exprs.push(Self {
+                filter_id: entry.id,
+                kind: RuntimeFilterExprKind::MinMax,
+                inlist_value_count: 0,
+                expr,
+                stats: entry.stats.clone(),
+            });
+        }
+        if let Some(expr) = entry.inlist.clone() {
+            exprs.push(Self {
+                filter_id: entry.id,
+                kind: RuntimeFilterExprKind::Inlist,
+                inlist_value_count: entry.inlist_value_count,
+                expr,
+                stats: entry.stats.clone(),
+            });
+        }
+        exprs
     }
 }
 
 #[derive(Clone)]
-pub struct RuntimeMinMaxPruner {
+pub struct RuntimeStatsPruner {
     func_ctx: FunctionContext,
     table_schema: TableSchemaRef,
     exprs: Vec<RuntimeFilterExpr>,
 }
 
-impl RuntimeMinMaxPruner {
+impl RuntimeStatsPruner {
     pub fn new(
         func_ctx: FunctionContext,
         table_schema: TableSchemaRef,
@@ -116,10 +129,7 @@ impl RuntimeMinMaxPruner {
         Self {
             func_ctx,
             table_schema,
-            exprs: exprs
-                .into_iter()
-                .filter(|expr| matches!(expr.kind, RuntimeFilterExprKind::MinMax))
-                .collect(),
+            exprs,
         }
     }
 
@@ -130,7 +140,7 @@ impl RuntimeMinMaxPruner {
     ) -> Option<Arc<Self>> {
         let exprs = entries
             .iter()
-            .filter_map(RuntimeFilterExpr::min_max_from_entry)
+            .flat_map(RuntimeFilterExpr::statistics_from_entry)
             .collect::<Vec<_>>();
         (!exprs.is_empty()).then(|| Arc::new(Self::new(func_ctx, table_schema, exprs)))
     }
@@ -448,10 +458,10 @@ mod tests {
     }
 
     #[test]
-    fn test_runtime_min_max_pruner_prunes_block_by_statistics() -> Result<()> {
+    fn test_runtime_stats_pruner_prunes_block_by_min_max_statistics() -> Result<()> {
         let schema = test_schema();
         let stats = Arc::new(RuntimeFilterStats::default());
-        let pruner = RuntimeMinMaxPruner::new(FunctionContext::default(), schema.clone(), vec![
+        let pruner = RuntimeStatsPruner::new(FunctionContext::default(), schema.clone(), vec![
             RuntimeFilterExpr {
                 filter_id: 0,
                 kind: RuntimeFilterExprKind::MinMax,
@@ -472,10 +482,10 @@ mod tests {
     }
 
     #[test]
-    fn test_runtime_min_max_pruner_keeps_overlapping_block() -> Result<()> {
+    fn test_runtime_stats_pruner_keeps_overlapping_block() -> Result<()> {
         let schema = test_schema();
         let stats = Arc::new(RuntimeFilterStats::default());
-        let pruner = RuntimeMinMaxPruner::new(FunctionContext::default(), schema.clone(), vec![
+        let pruner = RuntimeStatsPruner::new(FunctionContext::default(), schema.clone(), vec![
             RuntimeFilterExpr {
                 filter_id: 0,
                 kind: RuntimeFilterExprKind::MinMax,

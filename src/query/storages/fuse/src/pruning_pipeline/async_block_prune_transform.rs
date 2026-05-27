@@ -63,8 +63,8 @@ impl AsyncAccumulatingTransform for AsyncBlockPruneTransform {
             if let Some(meta) = BlockMetasMeta::downcast_from(ptr) {
                 let block_meta_indexes =
                     self.block_pruner.internal_column_pruning(&meta.block_metas);
-                let runtime_min_max_pruner = match self.runtime_filter_prune_context.as_ref() {
-                    Some(context) => context.runtime_min_max_pruner().await?,
+                let runtime_stats_pruner = match self.runtime_filter_prune_context.as_ref() {
+                    Some(context) => context.runtime_stats_pruner().await?,
                     None => None,
                 };
 
@@ -74,7 +74,7 @@ impl AsyncAccumulatingTransform for AsyncBlockPruneTransform {
                         meta.segment_location,
                         meta.block_metas,
                         block_meta_indexes,
-                        runtime_min_max_pruner,
+                        runtime_stats_pruner,
                     )
                     .await?;
 

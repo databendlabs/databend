@@ -93,8 +93,8 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
         let bloom_pruner = &self.block_pruner.pruning_ctx.bloom_pruner;
-        let runtime_min_max_pruner = match self.runtime_filter_prune_context.as_ref() {
-            Some(context) => context.runtime_min_max_pruner().await?,
+        let runtime_stats_pruner = match self.runtime_filter_prune_context.as_ref() {
+            Some(context) => context.runtime_stats_pruner().await?,
             None => None,
         };
 
@@ -140,7 +140,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let create_on_col = create_on_col.clone();
             let bloom_index_location_col = bloom_index_location_col.clone();
             let bloom_index_size_col = bloom_index_size_col.clone();
-            let runtime_min_max_pruner = runtime_min_max_pruner.clone();
+            let runtime_stats_pruner = runtime_stats_pruner.clone();
 
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
@@ -183,7 +183,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         return Ok::<_, ()>(());
                     }
 
-                    if runtime_min_max_pruner.as_ref().is_some_and(|pruner| {
+                    if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
                         pruner.should_prune(Some(&columns_stat), row_count as usize)
                     }) {
                         return Ok(());

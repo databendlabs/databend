@@ -35,7 +35,7 @@ use tokio::sync::OwnedSemaphorePermit;
 use super::SegmentLocation;
 use crate::pruning::PruningContext;
 use crate::pruning::PruningCostKind;
-use crate::pruning::RuntimeMinMaxPruner;
+use crate::pruning::RuntimeStatsPruner;
 
 pub struct BlockPruner {
     pub pruning_ctx: Arc<PruningContext>,
@@ -99,7 +99,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
-        runtime_min_max_pruner: Option<Arc<RuntimeMinMaxPruner>>,
+        runtime_stats_pruner: Option<Arc<RuntimeStatsPruner>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
@@ -126,7 +126,7 @@ impl BlockPruner {
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
             let pruning_stats = pruning_stats.clone();
-            let runtime_min_max_pruner = runtime_min_max_pruner.clone();
+            let runtime_stats_pruner = runtime_stats_pruner.clone();
             block_meta_indexes.next().map(|(block_idx, block_meta)| {
                 // Perf.
                 {
@@ -153,7 +153,7 @@ impl BlockPruner {
                         pruning_stats.set_blocks_range_pruning_after(1);
                     }
 
-                    if runtime_min_max_pruner.as_ref().is_some_and(|pruner| {
+                    if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
                         pruner.should_prune(Some(&block_meta.col_stats), row_count as usize)
                     }) {
                         prune_result.keep = false;
@@ -379,7 +379,7 @@ impl BlockPruner {
         segment_location: SegmentLocation,
         block_metas: Arc<Vec<Arc<BlockMeta>>>,
         block_meta_indexes: Vec<(usize, Arc<BlockMeta>)>,
-        runtime_min_max_pruner: Option<Arc<RuntimeMinMaxPruner>>,
+        runtime_stats_pruner: Option<Arc<RuntimeStatsPruner>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_cost = self.pruning_ctx.pruning_cost.clone();
@@ -418,7 +418,7 @@ impl BlockPruner {
                     pruning_stats.set_blocks_range_pruning_after(1);
                 }
 
-                if runtime_min_max_pruner.as_ref().is_some_and(|pruner| {
+                if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
                     pruner.should_prune(Some(&block_meta.col_stats), row_count as usize)
                 }) {
                     continue;
