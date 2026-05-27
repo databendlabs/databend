@@ -216,6 +216,16 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    /// Estimate the read cost for routing decisions without requiring the
+    /// engine to materialize executable partitions.
+    async fn estimate_read_statistics(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<Option<PartStatistics>> {
+        Ok(None)
+    }
+
     fn table_args(&self) -> Option<TableArgs> {
         None
     }

@@ -97,6 +97,7 @@ pub struct PruningContext {
 
     pub pruning_stats: Arc<FusePruningStatistics>,
     pub pruning_cost: PruningCostController,
+    pub enable_range_pruner_only: bool,
 }
 
 impl PruningContext {
@@ -113,6 +114,7 @@ impl PruningContext {
         spatial_index_columns: HashSet<ColumnId>,
         max_concurrency: usize,
         bloom_index_builder: Option<BloomIndexRebuilder>,
+        enable_range_pruner_only: bool,
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
         let collect_pruning_cost = matches!(ctx.get_query_kind(), QueryKind::Explain);
@@ -161,16 +163,20 @@ impl PruningContext {
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = BloomPrunerCreator::create(
-            func_ctx.clone(),
-            &table_schema,
-            dal.clone(),
-            ReadSettings::from_ctx(ctx)?,
-            filter_expr.as_ref(),
-            bloom_index_cols,
-            ngram_args,
-            bloom_index_builder,
-        )?;
+        let bloom_pruner = if enable_range_pruner_only {
+            None
+        } else {
+            BloomPrunerCreator::create(
+                func_ctx.clone(),
+                &table_schema,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+                filter_expr.as_ref(),
+                bloom_index_cols,
+                ngram_args,
+                bloom_index_builder,
+            )?
+        };
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -182,19 +188,31 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
+        let inverted_index_pruner = if enable_range_pruner_only {
+            None
+        } else {
+            InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?
+        };
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
-        let virtual_column_pruner = VirtualColumnPruner::try_create(dal.clone(), push_down)?;
+        let virtual_column_pruner = if enable_range_pruner_only {
+            None
+        } else {
+            VirtualColumnPruner::try_create(dal.clone(), push_down)?
+        };
 
-        let spatial_index_pruner = SpatialIndexPruner::create(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            &spatial_index_columns,
-            dal.clone(),
-            ReadSettings::from_ctx(ctx)?,
-        )?;
+        let spatial_index_pruner = if enable_range_pruner_only {
+            None
+        } else {
+            SpatialIndexPruner::create(
+                func_ctx.clone(),
+                &table_schema,
+                filter_expr.as_ref(),
+                &spatial_index_columns,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+            )?
+        };
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
@@ -229,6 +247,7 @@ impl PruningContext {
             spatial_index_pruner,
             pruning_stats,
             pruning_cost,
+            enable_range_pruner_only,
         });
         Ok(pruning_ctx)
     }
@@ -256,7 +275,7 @@ impl FusePruner {
         spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
-        Self::create_with_pages(
+        Self::create_with_pages_and_options(
             ctx,
             dal,
             table_schema,
@@ -267,6 +286,7 @@ impl FusePruner {
             ngram_args,
             spatial_index_columns,
             bloom_index_builder,
+            false,
         )
     }
 
@@ -282,6 +302,60 @@ impl FusePruner {
         ngram_args: Vec<NgramArgs>,
         spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
+    ) -> Result<Self> {
+        Self::create_with_pages_and_options(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+            ngram_args,
+            spatial_index_columns,
+            bloom_index_builder,
+            false,
+        )
+    }
+
+    // Create a pruner for routing estimates. It keeps metadata-only range
+    // pruning, but skips pruners that may load extra index files.
+    pub fn create_range_pruner_only_with_pages(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+    ) -> Result<Self> {
+        Self::create_with_pages_and_options(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            cluster_key_meta,
+            cluster_keys,
+            BloomIndexColumns::None,
+            vec![],
+            HashSet::new(),
+            None,
+            true,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_with_pages_and_options(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
+        ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
+        enable_range_pruner_only: bool,
     ) -> Result<Self> {
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -313,6 +387,7 @@ impl FusePruner {
             spatial_index_columns,
             max_concurrency,
             bloom_index_builder,
+            enable_range_pruner_only,
         )?;
 
         Ok(FusePruner {
@@ -618,6 +693,9 @@ impl FusePruner {
         metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let push_down = self.push_down.clone();
+        if self.pruning_ctx.enable_range_pruner_only {
+            return Ok(metas);
+        }
         if push_down
             .as_ref()
             .filter(|p| p.vector_index.is_some())

@@ -60,6 +60,12 @@ struct Candidate {
     partitions: Partitions,
 }
 
+struct RoutingCandidate {
+    target: String,
+    table: Arc<dyn Table>,
+    statistics: PartStatistics,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ProxyPartInfo {
     target: String,
@@ -118,20 +124,19 @@ impl ProxyTable {
                 .await;
         }
 
-        let mut selected: Option<Candidate> = None;
-        let mut default_candidate: Option<Candidate> = None;
+        let mut selected: Option<RoutingCandidate> = None;
+        let mut default_candidate: Option<RoutingCandidate> = None;
 
         for target in &self.targets {
             let candidate = self
-                .read_target_partitions(ctx.clone(), target, push_downs.clone())
+                .estimate_target_statistics(ctx.clone(), target, push_downs.clone())
                 .await?;
 
             if target == &self.default_target {
-                default_candidate = Some(Candidate {
+                default_candidate = Some(RoutingCandidate {
                     target: candidate.target.clone(),
                     table: candidate.table.clone(),
                     statistics: candidate.statistics.clone(),
-                    partitions: candidate.partitions.clone(),
                 });
             }
 
@@ -150,11 +155,50 @@ impl ProxyTable {
             if statistics_cost(&default_candidate.statistics)
                 == statistics_cost(&selected.statistics)
             {
-                return Ok(default_candidate);
+                return self
+                    .read_target_partitions_from_table(
+                        ctx,
+                        default_candidate.target,
+                        default_candidate.table,
+                        push_downs,
+                    )
+                    .await;
             }
         }
 
-        Ok(selected)
+        self.read_target_partitions_from_table(ctx, selected.target, selected.table, push_downs)
+            .await
+    }
+
+    async fn estimate_target_statistics(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target: &str,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<RoutingCandidate> {
+        let table = self.get_target_table(ctx.clone(), target).await?;
+        let statistics = match table
+            .estimate_read_statistics(ctx.clone(), push_downs.clone())
+            .await?
+        {
+            Some(statistics) => statistics,
+            None => {
+                self.read_target_partitions_from_table(
+                    ctx,
+                    target.to_string(),
+                    table.clone(),
+                    push_downs,
+                )
+                .await?
+                .statistics
+            }
+        };
+
+        Ok(RoutingCandidate {
+            target: target.to_string(),
+            table,
+            statistics,
+        })
     }
 
     async fn read_target_partitions(
@@ -163,6 +207,16 @@ impl ProxyTable {
         target: &str,
         push_downs: Option<PushDownInfo>,
     ) -> Result<Candidate> {
+        let table = self.get_target_table(ctx.clone(), target).await?;
+        self.read_target_partitions_from_table(ctx, target.to_string(), table, push_downs)
+            .await
+    }
+
+    async fn get_target_table(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target: &str,
+    ) -> Result<Arc<dyn Table>> {
         let target_ref = self.resolve_target(ctx.clone(), target)?;
         let table = ctx
             .get_table(&target_ref.catalog, &target_ref.database, &target_ref.table)
@@ -175,7 +229,16 @@ impl ProxyTable {
                 table.engine()
             )));
         }
+        Ok(table)
+    }
 
+    async fn read_target_partitions_from_table(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target: String,
+        table: Arc<dyn Table>,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<Candidate> {
         let settings = ctx.get_settings();
         let distributed_pruning_enabled = settings.get_enable_distributed_pruning()?;
         if distributed_pruning_enabled {
@@ -193,7 +256,7 @@ impl ProxyTable {
         let (statistics, partitions) = read_res?;
 
         Ok(Candidate {
-            target: target.to_string(),
+            target,
             table,
             statistics,
             partitions,
