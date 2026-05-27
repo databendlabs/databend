@@ -597,6 +597,10 @@ impl PartInfo for ProxyPartInfo {
             PartInfoType::BlockLevel
         }
     }
+
+    fn is_reshuffle_header(&self) -> bool {
+        self.target_table_info.is_some() && self.inner.is_none()
+    }
 }
 
 fn parse_targets(value: &str) -> Result<Vec<String>> {
@@ -660,6 +664,7 @@ mod tests {
     use databend_common_expression::TableSchemaRefExt;
     use databend_common_meta_app::schema::TableInfo;
     use databend_common_meta_app::schema::TableMeta;
+    use databend_meta_client::types::NodeInfo;
 
     use super::*;
     use crate::RandomPartInfo;
@@ -695,6 +700,18 @@ mod tests {
             ..Default::default()
         };
         table_info
+    }
+
+    fn create_node(id: &str) -> Arc<NodeInfo> {
+        Arc::new(NodeInfo::create(
+            id.to_string(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            String::new(),
+            id.to_string(),
+        ))
     }
 
     #[test]
@@ -779,6 +796,62 @@ mod tests {
 
         let (_, _, unwrapped) = proxy.unwrap_partitions(&wrapped)?;
         assert_eq!(unwrapped.partitions.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_partition_reshuffle_keeps_target_info_per_executor() -> Result<()> {
+        let mut options = BTreeMap::new();
+        options.insert(PROXY_OPT_KEY_TARGETS.to_string(), "target".to_string());
+        let table = ProxyTable::try_create(proxy_table_info(options))?;
+        let proxy = table.as_any().downcast_ref::<ProxyTable>().unwrap();
+        let target_info = TableInfo::simple("default", "target", TableSchemaRefExt::create(vec![]));
+
+        let wrapped = proxy.wrap_partitions(
+            "target",
+            target_info.clone(),
+            Partitions::create(PartitionsShuffleKind::Seq, vec![
+                RandomPartInfo::create(1),
+                RandomPartInfo::create(2),
+            ]),
+        );
+        let executors = vec![
+            create_node("node-1"),
+            create_node("node-2"),
+            create_node("node-3"),
+        ];
+        let shuffled = wrapped.reshuffle(executors.clone())?;
+
+        let mut non_empty_executors = 0;
+        let mut inner_partitions = 0;
+        for executor in executors {
+            let partitions = shuffled.get(&executor.id).unwrap();
+            if partitions.partitions.is_empty() {
+                continue;
+            }
+
+            non_empty_executors += 1;
+            let table_info_parts = partitions
+                .partitions
+                .iter()
+                .filter(|part| {
+                    part.as_any()
+                        .downcast_ref::<ProxyPartInfo>()
+                        .is_some_and(|part| part.target_table_info.is_some())
+                })
+                .count();
+            assert_eq!(table_info_parts, 1);
+
+            let (target, unwrapped_info, unwrapped) = proxy.unwrap_partitions(partitions)?;
+            assert_eq!(target, "target");
+            assert_eq!(unwrapped_info.name, target_info.name);
+            assert!(!unwrapped.partitions.is_empty());
+            inner_partitions += unwrapped.partitions.len();
+        }
+
+        assert_eq!(non_empty_executors, 2);
+        assert_eq!(inner_partitions, 2);
 
         Ok(())
     }
