@@ -129,7 +129,7 @@ impl ProxyTable {
 
         for target in &self.targets {
             let Some(candidate) = self
-                .read_target_partitions(ctx.clone(), target, range_pruner_only(push_downs.clone()))
+                .read_target_partitions(ctx.clone(), target, push_downs.clone())
                 .await?
             else {
                 continue;
@@ -631,13 +631,6 @@ fn normalize_target(value: &str) -> Result<String> {
 fn has_filter(push_downs: &Option<PushDownInfo>) -> bool {
     push_downs.as_ref().is_some_and(|push_downs| {
         push_downs.filters.is_some() || push_downs.secure_filters.is_some()
-    })
-}
-
-fn range_pruner_only(push_downs: Option<PushDownInfo>) -> Option<PushDownInfo> {
-    push_downs.map(|mut push_downs| {
-        push_downs.enable_range_pruner_only = true;
-        push_downs
     })
 }
 

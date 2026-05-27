@@ -300,7 +300,6 @@ impl FuseTable {
             HashSet::new(),
             max_concurrency,
             bloom_index_builder,
-            false,
         )?;
 
         let segment_pruner =

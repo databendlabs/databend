@@ -101,7 +101,6 @@ static DELETES_FILE_PUSHDOWN_INFO: LazyLock<PushDownInfo> = LazyLock::new(|| Pus
     inverted_index: None,
     vector_index: None,
     sample: None,
-    enable_range_pruner_only: false,
     secure_filters: None,
 });
 
