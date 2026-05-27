@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use databend_common_base::base::GlobalInstance;
+use databend_common_catalog::table_context::TableContextCluster;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_management::WarehouseInfo;
+use databend_enterprise_resources_management::ResourcesManagement;
 use databend_query_task_support::TaskContext;
 
 use crate::sessions::QueryContext;
@@ -48,6 +55,38 @@ impl TaskContext for QueryContext {
 
     fn query_id(&self) -> String {
         self.get_id()
+    }
+
+    async fn validate_warehouse_exists(&self, warehouse: Option<&str>) -> Result<()> {
+        let Some(warehouse) = warehouse else {
+            return Ok(());
+        };
+
+        if matches!(self.get_cluster().get_warehouse_id(), Ok(current) if current == warehouse) {
+            return Ok(());
+        }
+
+        let warehouses = GlobalInstance::get::<Arc<dyn ResourcesManagement>>()
+            .list_warehouses()
+            .await
+            .map_err(|err| {
+                if err.code() == ErrorCode::Unimplemented("").code() {
+                    ErrorCode::UnknownWarehouse(format!("warehouse {warehouse} not exists"))
+                } else {
+                    err
+                }
+            })?;
+
+        if warehouses.iter().any(|info| match info {
+            WarehouseInfo::SelfManaged(id) => id == warehouse,
+            WarehouseInfo::SystemManaged(info) => info.id == warehouse,
+        }) {
+            return Ok(());
+        }
+
+        Err(ErrorCode::UnknownWarehouse(format!(
+            "warehouse {warehouse} not exists"
+        )))
     }
 
     async fn available_role_identities(&self) -> Result<Vec<String>> {

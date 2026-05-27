@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use databend_common_exception::Result;
+use databend_common_expression::conversion::ConversionClass;
+use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
-use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_statistics::Datum;
 use databend_common_statistics::DatumKind;
 use databend_common_statistics::Histogram;
@@ -344,14 +344,24 @@ fn mixed_numeric_stat_kind(
         return Ok(None);
     }
 
-    let cast_rules = &BUILTIN_FUNCTIONS.get_auto_cast_rules("eq");
-    let Some(common_type) = common_super_type(left_type.clone(), right_type.clone(), cast_rules)
-    else {
+    let Some(conversion) = common_super_type_with_conversion(left_type, right_type) else {
         return Ok(None);
     };
     if !matches!(
-        common_type.remove_nullable(),
+        conversion.common_type.remove_nullable(),
         DataType::Number(_) | DataType::Decimal(_)
+    ) {
+        return Ok(None);
+    }
+    if matches!(
+        (conversion.left, conversion.right),
+        (
+            ConversionClass::ValueDependent | ConversionClass::TryOnly,
+            _
+        ) | (
+            _,
+            ConversionClass::ValueDependent | ConversionClass::TryOnly
+        )
     ) {
         return Ok(None);
     }

@@ -409,13 +409,13 @@ struct PrivateTaskInterpreter;
 #[async_trait::async_trait]
 impl<C: TaskContext> TaskInterpreter<C> for PrivateTaskInterpreter {
     async fn create_task(&self, ctx: &Arc<C>, plan: &CreateTaskPlan) -> Result<()> {
+        ctx.validate_warehouse_exists(plan.warehouse.as_deref())
+            .await?;
+
         let task = databend_common_meta_app::principal::Task {
             task_id: EMPTY_TASK_ID,
             task_name: plan.task_name.clone(),
-            query_text: match &plan.sql {
-                TaskSql::SingleStatement(s) => s.clone(),
-                TaskSql::ScriptBlock(_) => format!("{}", plan.sql),
-            },
+            task_sql: TaskMgr::make_task_sql(&plan.sql),
             when_condition: plan.when_condition.clone(),
             after: plan.after.clone(),
             comment: plan.comment.clone(),

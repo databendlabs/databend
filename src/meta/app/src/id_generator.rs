@@ -31,6 +31,7 @@ pub(crate) const ID_GEN_ROW_POLICY: &str = "row_access";
 pub(crate) const ID_GEN_BACKGROUND_JOB: &str = "background_job";
 
 pub(crate) const ID_GEN_PROCEDURE: &str = "procedure_id";
+pub(crate) const ID_GEN_TASK: &str = "task_id";
 
 /// Key for resource id generator
 ///
@@ -109,6 +110,11 @@ impl IdGenerator {
     pub fn procedure_id() -> Self {
         Self::new(ID_GEN_PROCEDURE)
     }
+
+    /// Create a key for generating task id with kvapi::KVApi
+    pub fn task_id() -> Self {
+        Self::new(ID_GEN_TASK)
+    }
 }
 
 impl kvapi::Key for IdGenerator {
@@ -143,6 +149,7 @@ mod t {
         assert_round_trip(IdGenerator::data_mask_id(), "__fd_id_gen/data_mask");
         assert_round_trip(IdGenerator::table_lock_id(), "__fd_id_gen/table_lock_id");
         assert_round_trip(IdGenerator::procedure_id(), "__fd_id_gen/procedure_id");
+        assert_round_trip(IdGenerator::task_id(), "__fd_id_gen/task_id");
     }
 
     #[test]

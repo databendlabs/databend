@@ -187,6 +187,17 @@ impl Processor for HashSendSink {
         Ok(Event::NeedData)
     }
 
+    fn details_status(&self) -> Option<String> {
+        Some(format!(
+            "handle_pending={}, closed_channels={}/{}, closed={:?}, buffered_partitions={:?}",
+            self.handle.is_some(),
+            self.channels.closed_count(),
+            self.channels.len(),
+            self.channels.closed_status(),
+            self.partition_stream.partition_ids(),
+        ))
+    }
+
     fn set_id(&mut self, id: NodeIndex) {
         self.id = id;
     }

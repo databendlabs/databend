@@ -220,7 +220,7 @@ mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
 mod interpreter_virtual_column_vacuum;
-mod util;
+pub(crate) mod util;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;

@@ -549,7 +549,7 @@ impl PhysicalPlanBuilder {
         }
 
         if let Some(secure_preds) = &scan.secure_predicates {
-            if !secure_preds.is_empty() {
+            if !secure_preds.is_empty() && scan.has_secure_predicates_not_applied_by_prewhere() {
                 let input_schema = plan.output_schema()?;
                 let retained = self.metadata.read().get_retained_column().clone();
                 let mut projections = BTreeSet::new();
