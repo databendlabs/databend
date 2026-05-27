@@ -92,6 +92,7 @@ async fn apply_snapshot_pruning(
         fuse_pruner.clone(),
         &mut prune_pipeline,
         ctx.clone(),
+        0,
         segment_rx,
         res_tx,
         cache_key,
