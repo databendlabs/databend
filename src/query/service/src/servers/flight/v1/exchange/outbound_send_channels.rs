@@ -61,6 +61,14 @@ impl OutboundSendChannels {
             .all(|(idx, ch)| idx == except_idx || ch.is_closed())
     }
 
+    pub(super) fn closed_status(&self) -> Vec<bool> {
+        self.channels.iter().map(|ch| ch.is_closed()).collect()
+    }
+
+    pub(super) fn closed_count(&self) -> usize {
+        self.channels.iter().filter(|ch| ch.is_closed()).count()
+    }
+
     pub(super) fn close(&mut self, idx: usize) {
         if !self.channels[idx].is_closed() {
             let mut closed = DummyOutboundChannel::create();
