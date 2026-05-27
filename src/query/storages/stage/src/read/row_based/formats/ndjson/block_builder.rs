@@ -69,12 +69,19 @@ impl NdJsonDecoder {
             serde_json::from_slice(buf).map_err(|e| map_json_error(e, buf, file_full_path))?;
         // todo: this is temporary
         if self.field_decoder.is_select {
-            self.field_decoder
-                .read_field(&mut columns[0], &json)
-                .map_err(|e| FileParseError::InvalidRow {
+            if let ColumnBuilder::Variant(column) = &mut columns[0] {
+                let value = jsonb::Value::from(&json);
+                value.write_to_vec(&mut column.data);
+                column.commit_row();
+            } else {
+                return Err(FileParseError::InvalidRow {
                     format: "NDJSON".to_string(),
-                    message: e.to_string(),
-                })?;
+                    message: format!(
+                        "Invalid NDJSON select schema: expect Variant column, but got {}",
+                        columns[0].data_type()
+                    ),
+                });
+            }
         } else {
             let object_keys = json.as_object().map(|object| object.len()).unwrap_or(0);
             let object_values =
@@ -151,15 +158,15 @@ impl NdJsonDecoder {
                         {
                             column.push_default();
                         } else {
-                            self.field_decoder.read_field(column, value).map_err(|e| {
-                                FileParseError::ColumnDecodeError {
+                            self.field_decoder
+                                .read_field_with_data_type(column, value, field.data_type())
+                                .map_err(|e| FileParseError::ColumnDecodeError {
                                     column_index,
                                     column_name: field.name().to_owned(),
                                     column_type: field.data_type.to_string(),
                                     decode_error: e.to_string(),
                                     column_data: truncate_column_data(value.to_string()),
-                                }
-                            })?;
+                                })?;
                         }
                     }
                 }
