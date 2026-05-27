@@ -177,7 +177,12 @@ impl HttpQueryContext {
             .map_err(|err| ErrorCode::Internal(format!("Failed to upgrade session: {err}")))?;
 
         if let Some(cid) = session.get_client_session_id() {
-            ClientSessionManager::instance().on_query_start(&cid, &self.user_name, &session);
+            ClientSessionManager::instance().on_query_start(
+                &session.get_current_tenant(),
+                &cid,
+                &self.user_name,
+                &session,
+            );
         };
         if let Some(session_conf) = http_session_conf {
             session_conf.restore(&session, self).await?;
