@@ -860,6 +860,7 @@ impl PhysicalPlanBuilder {
             inverted_index: scan.inverted_index.clone(),
             vector_index: scan.vector_index.clone(),
             sample: scan.sample.clone(),
+            read_partitions_pruning_mode: Default::default(),
             secure_filters,
         })
     }

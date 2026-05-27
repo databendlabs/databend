@@ -18,6 +18,7 @@ use std::sync::Arc;
 use databend_common_base::runtime::GlobalIORuntime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Partitions;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::BLOCK_NAME_COL_NAME;
@@ -90,7 +91,14 @@ impl RefreshIndexInterpreter {
             let ctx = self.ctx.clone();
 
             let (_statistics, partitions) = fuse_table
-                .prune_snapshot_blocks(ctx, push_downs, table_schema, lazy_init_segments, 0)
+                .prune_snapshot_blocks(
+                    ctx,
+                    push_downs,
+                    table_schema,
+                    lazy_init_segments,
+                    0,
+                    ReadPartitionsPruningMode::Normal,
+                )
                 .await?;
 
             return Ok(Some(partitions));
@@ -111,7 +119,14 @@ impl RefreshIndexInterpreter {
         let ctx = self.ctx.clone();
 
         let (_statistics, partitions) = fuse_table
-            .prune_snapshot_blocks(ctx, push_downs, table_schema, segments, 0)
+            .prune_snapshot_blocks(
+                ctx,
+                push_downs,
+                table_schema,
+                segments,
+                0,
+                ReadPartitionsPruningMode::Normal,
+            )
             .await?;
 
         Ok(Some(partitions))

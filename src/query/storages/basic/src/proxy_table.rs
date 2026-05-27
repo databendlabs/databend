@@ -28,6 +28,7 @@ use databend_common_catalog::plan::PartInfoType;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -59,6 +60,12 @@ struct SelectedTarget {
     table: Arc<dyn Table>,
     statistics: PartStatistics,
     partitions: Partitions,
+}
+
+struct RoutingCandidate {
+    target: String,
+    table: Arc<dyn Table>,
+    statistics: PartStatistics,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -124,23 +131,22 @@ impl ProxyTable {
             return self.select_default_target(ctx, push_downs).await;
         }
 
-        let mut selected: Option<SelectedTarget> = None;
-        let mut default_candidate: Option<SelectedTarget> = None;
+        let mut selected: Option<RoutingCandidate> = None;
+        let mut default_candidate: Option<RoutingCandidate> = None;
 
         for target in &self.targets {
             let Some(candidate) = self
-                .read_target_partitions(ctx.clone(), target, push_downs.clone())
+                .estimate_target(ctx.clone(), target, push_downs.clone())
                 .await?
             else {
                 continue;
             };
 
             if target == &self.default_target {
-                default_candidate = Some(SelectedTarget {
+                default_candidate = Some(RoutingCandidate {
                     target: candidate.target.clone(),
                     table: candidate.table.clone(),
                     statistics: candidate.statistics.clone(),
-                    partitions: candidate.partitions.clone(),
                 });
             }
 
@@ -157,11 +163,19 @@ impl ProxyTable {
             if statistics_cost(&default_candidate.statistics)
                 == statistics_cost(&selected.statistics)
             {
-                return Ok(default_candidate);
+                return self
+                    .read_target_partitions_from_table(
+                        ctx,
+                        default_candidate.target,
+                        default_candidate.table,
+                        push_downs,
+                    )
+                    .await;
             }
         }
 
-        Ok(selected)
+        self.read_target_partitions_from_table(ctx, selected.target, selected.table, push_downs)
+            .await
     }
 
     async fn select_default_target(
@@ -203,6 +217,31 @@ impl ProxyTable {
         self.read_target_partitions_from_table(ctx, target.to_string(), table, push_downs)
             .await
             .map(Some)
+    }
+
+    async fn estimate_target(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target: &str,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<Option<RoutingCandidate>> {
+        let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
+            return Ok(None);
+        };
+        let candidate = self
+            .read_target_partitions_from_table(
+                ctx,
+                target.to_string(),
+                table,
+                lightweight_push_downs(push_downs),
+            )
+            .await?;
+
+        Ok(Some(RoutingCandidate {
+            target: candidate.target,
+            table: candidate.table,
+            statistics: candidate.statistics,
+        }))
     }
 
     async fn get_target_table(
@@ -631,6 +670,13 @@ fn normalize_target(value: &str) -> Result<String> {
 fn has_filter(push_downs: &Option<PushDownInfo>) -> bool {
     push_downs.as_ref().is_some_and(|push_downs| {
         push_downs.filters.is_some() || push_downs.secure_filters.is_some()
+    })
+}
+
+fn lightweight_push_downs(push_downs: Option<PushDownInfo>) -> Option<PushDownInfo> {
+    push_downs.map(|mut push_downs| {
+        push_downs.read_partitions_pruning_mode = ReadPartitionsPruningMode::Lightweight;
+        push_downs
     })
 }
 

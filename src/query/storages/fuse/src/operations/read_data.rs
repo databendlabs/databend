@@ -19,6 +19,7 @@ use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
@@ -157,6 +158,7 @@ impl FuseTable {
                                 table_schema,
                                 lazy_init_segments,
                                 0,
+                                ReadPartitionsPruningMode::Normal,
                             )
                             .await
                         {

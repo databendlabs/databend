@@ -33,6 +33,7 @@ use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::plan::PruningStatistics;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
 use databend_common_catalog::table::Table;
@@ -130,6 +131,13 @@ impl SnapshotReadInfo {
     }
 }
 
+fn read_partitions_pruning_mode(push_downs: &Option<PushDownInfo>) -> ReadPartitionsPruningMode {
+    push_downs
+        .as_ref()
+        .map(|push_downs| push_downs.read_partitions_pruning_mode)
+        .unwrap_or_default()
+}
+
 impl FuseTable {
     async fn read_snapshot_info(
         &self,
@@ -172,6 +180,7 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        let pruning_mode = read_partitions_pruning_mode(&push_downs);
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
@@ -202,7 +211,11 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented() || (segment_len > nodes_num && distributed_pruning) {
+                if self.is_column_oriented()
+                    || (pruning_mode == ReadPartitionsPruningMode::Normal
+                        && segment_len > nodes_num
+                        && distributed_pruning)
+                {
                     let snapshot_location = read_info.snapshot_location;
                     let mut segments = Vec::with_capacity(read_info.segment_locations.len());
                     for (idx, segment_location) in
@@ -233,6 +246,7 @@ impl FuseTable {
                     table_schema,
                     segments_location,
                     summary,
+                    pruning_mode,
                 )
                 .await
             }
@@ -402,6 +416,7 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
+        pruning_mode: ReadPartitionsPruningMode,
     ) -> Result<(PartStatistics, Partitions)> {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
@@ -415,7 +430,9 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
+        let derterministic_cache_key = if pruning_mode == ReadPartitionsPruningMode::Lightweight {
+            None
+        } else {
             push_downs
                 .as_ref()
                 .filter(|p| p.is_deterministic)
@@ -424,7 +441,8 @@ impl FuseTable {
                         "{:x}",
                         Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
                     )
-                });
+                })
+        };
 
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
             info!("Retrieved snapshot block pruning result from cache");
@@ -446,15 +464,28 @@ impl FuseTable {
             ctx.get_cluster().local_id,
         );
 
-        let schema = self.schema_with_stream();
-        let result = self.read_partitions_with_metas(
-            ctx.clone(),
-            schema,
-            push_downs,
-            &block_metas,
-            summary,
-            pruning_stats,
-        )?;
+        let result = if pruning_mode == ReadPartitionsPruningMode::Lightweight {
+            (
+                self.read_statistics_with_metas(
+                    table_schema.clone(),
+                    push_downs,
+                    &block_metas,
+                    summary,
+                    pruning_stats,
+                )?,
+                Partitions::default(),
+            )
+        } else {
+            let schema = self.schema_with_stream();
+            self.read_partitions_with_metas(
+                ctx.clone(),
+                schema,
+                push_downs,
+                &block_metas,
+                summary,
+                pruning_stats,
+            )?
+        };
 
         if let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
@@ -898,6 +929,29 @@ impl FuseTable {
         Ok((statistics, parts))
     }
 
+    fn read_statistics_with_metas(
+        &self,
+        schema: TableSchemaRef,
+        push_downs: Option<PushDownInfo>,
+        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        partitions_total: usize,
+        pruning_stats: PruningStatistics,
+    ) -> Result<PartStatistics> {
+        let arrow_schema = schema.as_ref().into();
+        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
+        let partitions_scanned = block_metas.len();
+        let mut statistics = Self::statistics_from_metas(block_metas, &column_nodes, &push_downs)?;
+
+        Self::fill_partition_statistics(
+            &mut statistics,
+            partitions_total,
+            partitions_scanned,
+            pruning_stats,
+        );
+
+        Ok(statistics)
+    }
+
     fn fill_partition_statistics(
         statistics: &mut PartStatistics,
         partitions_total: usize,
@@ -907,6 +961,116 @@ impl FuseTable {
         statistics.partitions_total = partitions_total;
         statistics.partitions_scanned = partitions_scanned;
         statistics.pruning_stats = pruning_stats;
+    }
+
+    fn statistics_from_metas(
+        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        column_nodes: &ColumnNodes,
+        push_downs: &Option<PushDownInfo>,
+    ) -> Result<PartStatistics> {
+        let limit = push_downs
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
+            .and_then(|p| p.limit)
+            .unwrap_or(usize::MAX);
+
+        let mut statistics = PartStatistics::default_exact();
+        if limit == 0 {
+            return Ok(statistics);
+        }
+
+        let mut remaining = limit;
+        match push_downs
+            .as_ref()
+            .and_then(|extras| extras.projection.as_ref())
+        {
+            None => {
+                for (_, block_meta) in block_metas {
+                    let rows = block_meta.row_count as usize;
+                    statistics.read_rows += rows;
+                    statistics.read_bytes += block_meta.block_size as usize;
+
+                    if remaining > rows {
+                        remaining -= rows;
+                    } else {
+                        if remaining != rows {
+                            statistics.is_exact = false;
+                        }
+                        break;
+                    }
+                }
+            }
+            Some(projection) => {
+                let extras = push_downs.as_ref().expect("checked above");
+                let columns = if let Some(output_columns) = &extras.output_columns {
+                    output_columns.project_column_nodes(column_nodes).unwrap()
+                } else {
+                    projection.project_column_nodes(column_nodes).unwrap()
+                };
+
+                for (block_meta_index, block_meta) in block_metas {
+                    let rows = block_meta.row_count as usize;
+                    statistics.read_rows += rows;
+
+                    for column in &columns {
+                        for column_id in &column.leaf_column_ids {
+                            if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
+                                let (_, len) = col_metas.offset_length();
+                                statistics.read_bytes += len as usize;
+                            }
+                        }
+                    }
+
+                    let virtual_block_meta = block_meta_index
+                        .as_ref()
+                        .and_then(|block_meta_index| block_meta_index.virtual_block_meta.as_ref());
+                    if let Some(virtual_column) = &extras.virtual_column {
+                        if let Some(virtual_block_meta) = virtual_block_meta {
+                            for virtual_column_meta in
+                                virtual_block_meta.virtual_column_metas.values()
+                            {
+                                let (_, len) = virtual_column_meta.offset_length();
+                                statistics.read_bytes += len as usize;
+                            }
+
+                            for source_column_id in &virtual_column.source_column_ids {
+                                if virtual_block_meta
+                                    .ignored_source_column_ids
+                                    .contains(source_column_id)
+                                {
+                                    continue;
+                                }
+                                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id)
+                                {
+                                    let (_, len) = col_metas.offset_length();
+                                    statistics.read_bytes += len as usize;
+                                }
+                            }
+                        } else {
+                            for source_column_id in &virtual_column.source_column_ids {
+                                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id)
+                                {
+                                    let (_, len) = col_metas.offset_length();
+                                    statistics.read_bytes += len as usize;
+                                }
+                            }
+                        }
+                    }
+
+                    if remaining > rows {
+                        remaining -= rows;
+                    } else {
+                        if remaining != rows {
+                            statistics.is_exact = false;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        statistics.is_exact = statistics.is_exact && Self::is_exact(push_downs);
+        Ok(statistics)
     }
 
     pub fn to_partitions(

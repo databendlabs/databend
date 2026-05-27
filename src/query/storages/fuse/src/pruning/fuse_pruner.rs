@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -161,16 +162,24 @@ impl PruningContext {
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = BloomPrunerCreator::create(
-            func_ctx.clone(),
-            &table_schema,
-            dal.clone(),
-            ReadSettings::from_ctx(ctx)?,
-            filter_expr.as_ref(),
-            bloom_index_cols,
-            ngram_args,
-            bloom_index_builder,
-        )?;
+        let lightweight_pruning = push_down.as_ref().is_some_and(|push_down| {
+            push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::Lightweight
+        });
+
+        let bloom_pruner = if lightweight_pruning {
+            None
+        } else {
+            BloomPrunerCreator::create(
+                func_ctx.clone(),
+                &table_schema,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+                filter_expr.as_ref(),
+                bloom_index_cols,
+                ngram_args,
+                bloom_index_builder,
+            )?
+        };
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -182,19 +191,31 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
+        let inverted_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?
+        };
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
-        let virtual_column_pruner = VirtualColumnPruner::try_create(dal.clone(), push_down)?;
+        let virtual_column_pruner = if lightweight_pruning {
+            None
+        } else {
+            VirtualColumnPruner::try_create(dal.clone(), push_down)?
+        };
 
-        let spatial_index_pruner = SpatialIndexPruner::create(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            &spatial_index_columns,
-            dal.clone(),
-            ReadSettings::from_ctx(ctx)?,
-        )?;
+        let spatial_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            SpatialIndexPruner::create(
+                func_ctx.clone(),
+                &table_schema,
+                filter_expr.as_ref(),
+                &spatial_index_columns,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+            )?
+        };
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
