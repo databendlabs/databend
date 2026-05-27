@@ -61,12 +61,6 @@ struct SelectedTarget {
     partitions: Partitions,
 }
 
-struct EstimatedTarget {
-    target: String,
-    table: Arc<dyn Table>,
-    statistics: PartStatistics,
-}
-
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct DelegatedTableKey {
     query_id: String,
@@ -130,22 +124,23 @@ impl ProxyTable {
             return self.select_default_target(ctx, push_downs).await;
         }
 
-        let mut selected: Option<EstimatedTarget> = None;
-        let mut default_candidate: Option<EstimatedTarget> = None;
+        let mut selected: Option<SelectedTarget> = None;
+        let mut default_candidate: Option<SelectedTarget> = None;
 
         for target in &self.targets {
             let Some(candidate) = self
-                .estimate_target_statistics(ctx.clone(), target, push_downs.clone())
+                .read_target_partitions(ctx.clone(), target, range_pruner_only(push_downs.clone()))
                 .await?
             else {
                 continue;
             };
 
             if target == &self.default_target {
-                default_candidate = Some(EstimatedTarget {
+                default_candidate = Some(SelectedTarget {
                     target: candidate.target.clone(),
                     table: candidate.table.clone(),
                     statistics: candidate.statistics.clone(),
+                    partitions: candidate.partitions.clone(),
                 });
             }
 
@@ -162,19 +157,11 @@ impl ProxyTable {
             if statistics_cost(&default_candidate.statistics)
                 == statistics_cost(&selected.statistics)
             {
-                return self
-                    .read_target_partitions_from_table(
-                        ctx,
-                        default_candidate.target,
-                        default_candidate.table,
-                        push_downs,
-                    )
-                    .await;
+                return Ok(default_candidate);
             }
         }
 
-        self.read_target_partitions_from_table(ctx, selected.target, selected.table, push_downs)
-            .await
+        Ok(selected)
     }
 
     async fn select_default_target(
@@ -202,39 +189,6 @@ impl ProxyTable {
         }
 
         Err(self.no_available_target_error())
-    }
-
-    async fn estimate_target_statistics(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        target: &str,
-        push_downs: Option<PushDownInfo>,
-    ) -> Result<Option<EstimatedTarget>> {
-        let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
-            return Ok(None);
-        };
-        let statistics = match table
-            .estimate_read_statistics(ctx.clone(), push_downs.clone())
-            .await?
-        {
-            Some(statistics) => statistics,
-            None => {
-                self.read_target_partitions_from_table(
-                    ctx,
-                    target.to_string(),
-                    table.clone(),
-                    push_downs,
-                )
-                .await?
-                .statistics
-            }
-        };
-
-        Ok(Some(EstimatedTarget {
-            target: target.to_string(),
-            table,
-            statistics,
-        }))
     }
 
     async fn read_target_partitions(
@@ -673,6 +627,13 @@ fn normalize_target(value: &str) -> Result<String> {
 fn has_filter(push_downs: &Option<PushDownInfo>) -> bool {
     push_downs.as_ref().is_some_and(|push_downs| {
         push_downs.filters.is_some() || push_downs.secure_filters.is_some()
+    })
+}
+
+fn range_pruner_only(push_downs: Option<PushDownInfo>) -> Option<PushDownInfo> {
+    push_downs.map(|mut push_downs| {
+        push_downs.enable_range_pruner_only = true;
+        push_downs
     })
 }
 

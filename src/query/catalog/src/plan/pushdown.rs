@@ -186,6 +186,11 @@ pub struct PushDownInfo {
     pub vector_index: Option<VectorIndexInfo>,
     /// Used by table sample
     pub sample: Option<SampleConfig>,
+    /// Only use range/cluster pruning when collecting FUSE partitions.
+    /// This is used by PROXY routing to compare target layouts without invoking
+    /// heavier secondary index pruners.
+    #[serde(default)]
+    pub enable_range_pruner_only: bool,
     /// Optional secure filters from Row Access Policy, kept separate for display redaction.
     #[serde(default)]
     pub secure_filters: Option<Filters>,

@@ -951,16 +951,6 @@ impl Table for FuseTable {
     }
 
     #[fastrace::trace]
-    #[async_backtrace::framed]
-    async fn estimate_read_statistics(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-    ) -> Result<Option<PartStatistics>> {
-        self.do_estimate_read_statistics(ctx, push_downs).await
-    }
-
-    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,

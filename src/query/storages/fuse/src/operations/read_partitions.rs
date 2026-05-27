@@ -172,6 +172,9 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        let enable_range_pruner_only = push_downs
+            .as_ref()
+            .is_some_and(|push_downs| push_downs.enable_range_pruner_only);
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
             // For "ANALYZE TABLE" statement, we need set the default change type to "Insert".
@@ -233,51 +236,12 @@ impl FuseTable {
                     table_schema,
                     segments_location,
                     summary,
+                    enable_range_pruner_only,
                 )
                 .await
             }
             None => Ok((PartStatistics::default(), Partitions::default())),
         }
-    }
-
-    #[fastrace::trace]
-    #[async_backtrace::framed]
-    pub async fn do_estimate_read_statistics(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-    ) -> Result<Option<PartStatistics>> {
-        if self.changes_desc.is_some() || self.is_column_oriented() {
-            return Ok(None);
-        }
-
-        let Some(read_info) = self.read_snapshot_info(&ctx).await? else {
-            return Ok(Some(PartStatistics::default()));
-        };
-
-        let table_schema = self.schema_with_stream();
-        let summary = read_info.block_count;
-        let segments_location = read_info.into_pruning_segments();
-
-        let pruner = self.build_fuse_range_pruner(
-            ctx.clone(),
-            push_downs.clone(),
-            table_schema.clone(),
-            self.operator.clone(),
-        )?;
-        let (block_metas, pruning_stats) = self
-            .prune_blocks_with_pruner(pruner, segments_location)
-            .await?;
-
-        self.read_statistics_with_metas(
-            ctx,
-            table_schema,
-            push_downs,
-            &block_metas,
-            summary,
-            pruning_stats,
-        )
-        .map(Some)
     }
 
     async fn prune_blocks_with_pruner(
@@ -442,6 +406,7 @@ impl FuseTable {
         table_schema: TableSchemaRef,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
+        enable_range_pruner_only: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
@@ -455,7 +420,9 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
+        let derterministic_cache_key = if enable_range_pruner_only {
+            None
+        } else {
             push_downs
                 .as_ref()
                 .filter(|p| p.is_deterministic)
@@ -464,15 +431,24 @@ impl FuseTable {
                         "{:x}",
                         Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
                     )
-                });
+                })
+        };
 
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
             info!("Retrieved snapshot block pruning result from cache");
             return Ok(cached_result);
         }
 
-        let pruner =
-            self.build_fuse_pruner(ctx.clone(), push_downs.clone(), table_schema.clone(), dal)?;
+        let pruner = if enable_range_pruner_only {
+            self.build_fuse_range_pruner(
+                ctx.clone(),
+                push_downs.clone(),
+                table_schema.clone(),
+                dal,
+            )?
+        } else {
+            self.build_fuse_pruner(ctx.clone(), push_downs.clone(), table_schema.clone(), dal)?
+        };
 
         let (block_metas, pruning_stats) = self
             .prune_blocks_with_pruner(pruner, segments_location)
@@ -938,7 +914,6 @@ impl FuseTable {
     ) -> Result<(PartStatistics, Partitions)> {
         let arrow_schema = schema.as_ref().into();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
-
         let partitions_scanned = block_metas.len();
 
         let top_k = push_downs
@@ -969,43 +944,6 @@ impl FuseTable {
             .inc_partitions_scanned(partitions_scanned as u64);
 
         Ok((statistics, parts))
-    }
-
-    pub fn read_statistics_with_metas(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        schema: TableSchemaRef,
-        push_downs: Option<PushDownInfo>,
-        block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
-        partitions_total: usize,
-        pruning_stats: PruningStatistics,
-    ) -> Result<PartStatistics> {
-        let arrow_schema = schema.as_ref().into();
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
-        let partitions_scanned = block_metas.len();
-
-        let top_k = push_downs
-            .as_ref()
-            .filter(|_| self.is_native())
-            .and_then(|p| p.top_k(self.schema().as_ref()))
-            .map(|topk| {
-                DefaultExprBinder::try_new(ctx.clone())?
-                    .get_scalar(&topk.field)
-                    .map(|d| (topk, d))
-            })
-            .transpose()?;
-
-        let (mut statistics, _) =
-            Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
-
-        Self::fill_partition_statistics(
-            &mut statistics,
-            partitions_total,
-            partitions_scanned,
-            pruning_stats,
-        );
-
-        Ok(statistics)
     }
 
     fn fill_partition_statistics(
