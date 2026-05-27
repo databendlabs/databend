@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -43,7 +44,7 @@ pub struct ProxyTable {
     table_info: TableInfo,
     targets: Vec<String>,
     default_target: String,
-    delegated_target_table: Mutex<Option<Arc<dyn Table>>>,
+    delegated_target_tables: Mutex<HashMap<DelegatedTableKey, Arc<dyn Table>>>,
 }
 
 #[derive(Clone)]
@@ -53,17 +54,24 @@ struct RoutedTarget {
     table: String,
 }
 
-struct Candidate {
+struct SelectedTarget {
     target: String,
     table: Arc<dyn Table>,
     statistics: PartStatistics,
     partitions: Partitions,
 }
 
-struct RoutingCandidate {
+struct EstimatedTarget {
     target: String,
     table: Arc<dyn Table>,
     statistics: PartStatistics,
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct DelegatedTableKey {
+    query_id: String,
+    scan_id: usize,
+    table_index: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -101,7 +109,7 @@ impl ProxyTable {
             table_info,
             targets,
             default_target,
-            delegated_target_table: Mutex::new(None),
+            delegated_target_tables: Mutex::new(HashMap::new()),
         }))
     }
 
@@ -117,23 +125,24 @@ impl ProxyTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Candidate> {
+    ) -> Result<SelectedTarget> {
         if !has_filter(&push_downs) {
-            return self
-                .read_target_partitions(ctx, &self.default_target, push_downs)
-                .await;
+            return self.select_default_target(ctx, push_downs).await;
         }
 
-        let mut selected: Option<RoutingCandidate> = None;
-        let mut default_candidate: Option<RoutingCandidate> = None;
+        let mut selected: Option<EstimatedTarget> = None;
+        let mut default_candidate: Option<EstimatedTarget> = None;
 
         for target in &self.targets {
-            let candidate = self
+            let Some(candidate) = self
                 .estimate_target_statistics(ctx.clone(), target, push_downs.clone())
-                .await?;
+                .await?
+            else {
+                continue;
+            };
 
             if target == &self.default_target {
-                default_candidate = Some(RoutingCandidate {
+                default_candidate = Some(EstimatedTarget {
                     target: candidate.target.clone(),
                     table: candidate.table.clone(),
                     statistics: candidate.statistics.clone(),
@@ -147,9 +156,7 @@ impl ProxyTable {
             }
         }
 
-        let selected = selected.ok_or_else(|| {
-            ErrorCode::TableOptionInvalid("PROXY table requires at least one target".to_string())
-        })?;
+        let selected = selected.ok_or_else(|| self.no_available_target_error())?;
 
         if let Some(default_candidate) = default_candidate {
             if statistics_cost(&default_candidate.statistics)
@@ -170,13 +177,42 @@ impl ProxyTable {
             .await
     }
 
+    async fn select_default_target(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<SelectedTarget> {
+        if let Some(selected) = self
+            .read_target_partitions(ctx.clone(), &self.default_target, push_downs.clone())
+            .await?
+        {
+            return Ok(selected);
+        }
+
+        for target in &self.targets {
+            if target == &self.default_target {
+                continue;
+            }
+            if let Some(selected) = self
+                .read_target_partitions(ctx.clone(), target, push_downs.clone())
+                .await?
+            {
+                return Ok(selected);
+            }
+        }
+
+        Err(self.no_available_target_error())
+    }
+
     async fn estimate_target_statistics(
         &self,
         ctx: Arc<dyn TableContext>,
         target: &str,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<RoutingCandidate> {
-        let table = self.get_target_table(ctx.clone(), target).await?;
+    ) -> Result<Option<EstimatedTarget>> {
+        let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
+            return Ok(None);
+        };
         let statistics = match table
             .estimate_read_statistics(ctx.clone(), push_downs.clone())
             .await?
@@ -194,11 +230,11 @@ impl ProxyTable {
             }
         };
 
-        Ok(RoutingCandidate {
+        Ok(Some(EstimatedTarget {
             target: target.to_string(),
             table,
             statistics,
-        })
+        }))
     }
 
     async fn read_target_partitions(
@@ -206,21 +242,36 @@ impl ProxyTable {
         ctx: Arc<dyn TableContext>,
         target: &str,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Candidate> {
-        let table = self.get_target_table(ctx.clone(), target).await?;
+    ) -> Result<Option<SelectedTarget>> {
+        let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
+            return Ok(None);
+        };
         self.read_target_partitions_from_table(ctx, target.to_string(), table, push_downs)
             .await
+            .map(Some)
     }
 
     async fn get_target_table(
         &self,
         ctx: Arc<dyn TableContext>,
         target: &str,
-    ) -> Result<Arc<dyn Table>> {
+    ) -> Result<Option<Arc<dyn Table>>> {
         let target_ref = self.resolve_target(ctx.clone(), target)?;
-        let table = ctx
+        let table = match ctx
             .get_table(&target_ref.catalog, &target_ref.database, &target_ref.table)
-            .await?;
+            .await
+        {
+            Ok(table) => table,
+            Err(error) if Self::is_unavailable_target_error(&error) => {
+                log::warn!(
+                    "PROXY table target '{}' is not available and will be skipped: {}",
+                    target,
+                    error
+                );
+                return Ok(None);
+            }
+            Err(error) => return Err(error),
+        };
 
         if !table.engine().eq_ignore_ascii_case("FUSE") {
             return Err(ErrorCode::TableOptionInvalid(format!(
@@ -229,7 +280,7 @@ impl ProxyTable {
                 table.engine()
             )));
         }
-        Ok(table)
+        Ok(Some(table))
     }
 
     async fn read_target_partitions_from_table(
@@ -238,7 +289,7 @@ impl ProxyTable {
         target: String,
         table: Arc<dyn Table>,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Candidate> {
+    ) -> Result<SelectedTarget> {
         let settings = ctx.get_settings();
         let distributed_pruning_enabled = settings.get_enable_distributed_pruning()?;
         if distributed_pruning_enabled {
@@ -255,12 +306,26 @@ impl ProxyTable {
 
         let (statistics, partitions) = read_res?;
 
-        Ok(Candidate {
+        Ok(SelectedTarget {
             target,
             table,
             statistics,
             partitions,
         })
+    }
+
+    fn is_unavailable_target_error(error: &ErrorCode) -> bool {
+        matches!(
+            error.code(),
+            ErrorCode::UNKNOWN_TABLE | ErrorCode::UNKNOWN_TABLE_ID
+        )
+    }
+
+    fn no_available_target_error(&self) -> ErrorCode {
+        ErrorCode::TableOptionInvalid(format!(
+            "PROXY table '{}' has no available target table",
+            self.table_info.name
+        ))
     }
 
     fn resolve_target(&self, ctx: Arc<dyn TableContext>, target: &str) -> Result<RoutedTarget> {
@@ -406,16 +471,42 @@ impl ProxyTable {
         Ok((target, target_plan))
     }
 
-    fn take_delegated_target_table(&self, target_plan: &DataSourcePlan) -> Option<Arc<dyn Table>> {
+    fn take_delegated_target_table(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target_plan: &DataSourcePlan,
+    ) -> Option<Arc<dyn Table>> {
         let DataSourceInfo::TableSource(target_table_info) = &target_plan.source_info else {
             return None;
         };
 
-        let delegated_table = self.delegated_target_table.lock().take()?;
+        let delegated_table = self
+            .delegated_target_tables
+            .lock()
+            .remove(&Self::delegated_table_key(ctx, target_plan))?;
         if delegated_table.get_table_info().ident == target_table_info.ident {
             Some(delegated_table)
         } else {
             None
+        }
+    }
+
+    fn store_delegated_target_table(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target_plan: &DataSourcePlan,
+        table: Arc<dyn Table>,
+    ) {
+        self.delegated_target_tables
+            .lock()
+            .insert(Self::delegated_table_key(ctx, target_plan), table);
+    }
+
+    fn delegated_table_key(ctx: Arc<dyn TableContext>, plan: &DataSourcePlan) -> DelegatedTableKey {
+        DelegatedTableKey {
+            query_id: ctx.get_id(),
+            scan_id: plan.scan_id,
+            table_index: plan.table_index,
         }
     }
 }
@@ -471,7 +562,7 @@ impl Table for ProxyTable {
         ctx.set_partitions(target_plan.parts.clone())?;
 
         let table = self
-            .take_delegated_target_table(&target_plan)
+            .take_delegated_target_table(ctx.clone(), &target_plan)
             .map(Ok)
             .unwrap_or_else(|| ctx.build_table_from_source_plan(&target_plan))?;
         table.read_data(ctx, &target_plan, pipeline, put_cache)
@@ -490,13 +581,19 @@ impl Table for ProxyTable {
 
         let (_target, target_plan) = self.build_target_plan(plan)?;
         let table = table_ctx.build_table_from_source_plan(&target_plan)?;
-        let prune_pipeline =
-            table.build_prune_pipeline(table_ctx, &target_plan, source_pipeline, plan_id)?;
+        let prune_pipeline = table.build_prune_pipeline(
+            table_ctx.clone(),
+            &target_plan,
+            source_pipeline,
+            plan_id,
+        )?;
 
         // FUSE stores the receiver side of a lazy pruning pipeline inside the
         // table instance used to build that pipeline. Reuse the same delegated
         // target in read_data so lazy segment partitions can dispatch blocks.
-        self.delegated_target_table.lock().replace(table);
+        if prune_pipeline.is_some() {
+            self.store_delegated_target_table(table_ctx, &target_plan, table);
+        }
 
         Ok(prune_pipeline)
     }
