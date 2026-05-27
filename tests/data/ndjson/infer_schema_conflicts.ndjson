@@ -1,0 +1,2 @@
+{"scalar_conflict":1,"scalar_array_conflict":1,"object_conflict":{"a":1},"nested":{"leaf":{"x":1}},"arr":[1]}
+{"scalar_conflict":"text","scalar_array_conflict":[1],"object_conflict":"text","nested":{"leaf":{"y":"s"}},"arr":["s"]}
