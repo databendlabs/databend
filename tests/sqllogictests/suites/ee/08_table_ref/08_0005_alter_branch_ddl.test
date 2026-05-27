@@ -44,8 +44,25 @@ NULL
 query error 1065
 SELECT c FROM t1
 
-statement error Cannot add non-deterministic default column to branch table
-ALTER TABLE t1/dev ADD COLUMN ts TIMESTAMP DEFAULT now()
+statement ok
+CREATE OR REPLACE TABLE t_default(a INT)
+
+statement ok
+INSERT INTO t_default VALUES (1)
+
+statement ok
+ALTER TABLE t_default CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t_default/dev ADD COLUMN ts TIMESTAMP DEFAULT now()
+
+query IB
+SELECT a, ts IS NOT NULL FROM t_default/dev ORDER BY a
+----
+1 1
+
+query error 1065
+SELECT ts FROM t_default
 
 statement ok
 ALTER TABLE t1/dev DROP COLUMN b
@@ -63,6 +80,12 @@ ALTER TABLE t1/dev MODIFY COLUMN c STRING
 
 query TTTTT
 DESCRIBE t1/dev
+----
+a INT YES NULL (empty)
+c VARCHAR YES NULL (empty)
+
+query TTTTT
+SHOW FIELDS FROM t1/dev
 ----
 a INT YES NULL (empty)
 c VARCHAR YES NULL (empty)
@@ -115,6 +138,37 @@ ALTER TABLE t1/dev DROP CLUSTER KEY
 
 query error 1118.*Unclustered table 'test_branch_alter'.'t1'/'dev'
 SELECT cluster_key, type FROM clustering_information('test_branch_alter', 't1/dev')
+
+statement ok
+DROP TABLE IF EXISTS t_flashback
+
+statement ok
+CREATE TABLE t_flashback(a INT)
+
+statement ok
+INSERT INTO t_flashback VALUES (1)
+
+statement ok
+ALTER TABLE t_flashback CREATE BRANCH dev
+
+statement ok
+INSERT INTO t_flashback/dev VALUES (2)
+
+statement ok
+INSERT INTO t_flashback/dev VALUES (3)
+
+statement ok
+ALTER TABLE t_flashback/dev FLASHBACK TO (SNAPSHOT => (SELECT snapshot_id FROM fuse_snapshot('test_branch_alter', 't_flashback/dev') WHERE row_count = 2 LIMIT 1))
+
+query I
+SELECT count() FROM t_flashback/dev
+----
+2
+
+query I
+SELECT count() FROM t_flashback
+----
+1
 
 statement ok
 DROP TABLE IF EXISTS t_constraint
@@ -273,7 +327,7 @@ SELECT id FROM t2 ORDER BY id
 1
 
 statement ok
-ALTER TABLE t2/dev DROP ROW ACCESS POLICY rap_branch_filter
+ALTER TABLE t2/dev DROP ALL ROW ACCESS POLICIES
 
 query II
 SELECT * FROM t2/dev ORDER BY id

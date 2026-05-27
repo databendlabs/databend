@@ -32,6 +32,8 @@ use databend_common_meta_app::schema::TableMeta;
 use databend_common_storages_fuse::TableContext;
 use itertools::Itertools;
 
+use crate::columns_table::DumpedTable;
+use crate::columns_table::dump_tables;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 
@@ -50,9 +52,8 @@ impl AsyncSystemTable for VirtualColumnsTable {
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
-        let tenant = ctx.get_tenant();
         let session_state = ctx.session_state()?;
 
         let catalog_mgr = CatalogManager::instance();
@@ -60,15 +61,20 @@ impl AsyncSystemTable for VirtualColumnsTable {
 
         let mut database_names = Vec::new();
         let mut table_names = Vec::new();
+        let mut branch_names = Vec::new();
         let mut source_column_names = Vec::new();
         let mut virtual_column_ids = Vec::new();
         let mut virtual_column_names = Vec::new();
         let mut virtual_column_types = Vec::new();
 
-        let dbs = catalog.list_databases(&tenant).await?;
-        for db in dbs {
-            let tables = catalog.list_tables(&tenant, db.name()).await?;
-            for table in tables {
+        let database_and_tables = dump_tables(&ctx, push_downs, &catalog).await?;
+        for (database, table_sources) in database_and_tables {
+            for table_source in table_sources {
+                let DumpedTable {
+                    table_name,
+                    branch_name,
+                    table,
+                } = table_source;
                 if !table.support_virtual_columns() {
                     continue;
                 }
@@ -83,8 +89,9 @@ impl AsyncSystemTable for VirtualColumnsTable {
                     else {
                         continue;
                     };
-                    database_names.push(db.name().to_owned());
-                    table_names.push(table.name().to_owned());
+                    database_names.push(database.clone());
+                    table_names.push(table_name.clone());
+                    branch_names.push(branch_name.clone());
                     source_column_names.push(source_field.name().clone());
                     virtual_column_ids.push(virtual_field.column_id);
                     virtual_column_names.push(virtual_field.name.clone());
@@ -102,6 +109,7 @@ impl AsyncSystemTable for VirtualColumnsTable {
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(database_names),
             StringType::from_data(table_names),
+            StringType::from_data(branch_names),
             StringType::from_data(source_column_names),
             UInt32Type::from_data(virtual_column_ids),
             StringType::from_data(virtual_column_names),
@@ -115,6 +123,7 @@ impl VirtualColumnsTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("database", TableDataType::String),
             TableField::new("table", TableDataType::String),
+            TableField::new("branch", TableDataType::String),
             TableField::new("source_column", TableDataType::String),
             TableField::new(
                 "virtual_column_id",

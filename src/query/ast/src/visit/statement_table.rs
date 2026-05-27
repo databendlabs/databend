@@ -57,7 +57,13 @@ impl Walk for CreateTableSource {
                 catalog,
                 database,
                 table,
-            } => try_walk!((catalog, database, table).walk(visitor)),
+                branch,
+            } => {
+                try_walk!(catalog.walk(visitor));
+                try_walk!(database.walk(visitor));
+                try_walk!(table.walk(visitor));
+                try_walk!(branch.walk(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -101,7 +107,13 @@ impl WalkMut for CreateTableSource {
                 catalog,
                 database,
                 table,
-            } => try_walk!((catalog, database, table).walk_mut(visitor)),
+                branch,
+            } => {
+                try_walk!(catalog.walk_mut(visitor));
+                try_walk!(database.walk_mut(visitor));
+                try_walk!(table.walk_mut(visitor));
+                try_walk!(branch.walk_mut(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }

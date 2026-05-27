@@ -339,6 +339,7 @@ pub enum CreateTableSource {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
+        branch: Option<Identifier>,
     },
 }
 
@@ -368,9 +369,14 @@ impl Display for CreateTableSource {
                 catalog,
                 database,
                 table,
+                branch,
             } => {
                 write!(f, "LIKE ")?;
-                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))?;
+                if let Some(branch) = branch {
+                    write!(f, "/{branch}")?;
+                }
+                Ok(())
             }
         }
     }

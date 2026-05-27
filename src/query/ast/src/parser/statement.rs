@@ -1650,19 +1650,23 @@ pub fn statement_body(i: Input) -> IResult<Statement> {
 
     let show_virtual_columns = map(
         rule! {
-            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #ident )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
+            SHOW ~ VIRTUAL ~ COLUMNS ~ ( ( FROM | IN ) ~ #table_ref )? ~ ( ( FROM | IN ) ~ ^#dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, _, _, opt_table, opt_db, limit)| {
-            let table = opt_table.map(|(_, table)| table);
+            let table_ref = opt_table.map(|(_, table)| table);
             let (catalog, database) = match opt_db {
                 Some((_, (Some(c), d))) => (Some(c), Some(d)),
                 Some((_, (None, d))) => (None, Some(d)),
-                _ => (None, None),
+                _ => table_ref
+                    .as_ref()
+                    .map(|table_ref| (table_ref.catalog.clone(), table_ref.database.clone()))
+                    .unwrap_or((None, None)),
             };
             Statement::ShowVirtualColumns(ShowVirtualColumnsStmt {
                 catalog,
                 database,
-                table,
+                table: table_ref.as_ref().map(|table_ref| table_ref.table.clone()),
+                branch: table_ref.and_then(|table_ref| table_ref.branch),
                 limit,
             })
         },
@@ -4402,12 +4406,13 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     );
     let like = map(
         rule! {
-            LIKE ~ #dot_separated_idents_1_to_3
+            LIKE ~ #table_ref
         },
-        |(_, (catalog, database, table))| CreateTableSource::Like {
-            catalog,
-            database,
-            table,
+        |(_, table_ref)| CreateTableSource::Like {
+            catalog: table_ref.catalog,
+            database: table_ref.database,
+            table: table_ref.table,
+            branch: table_ref.branch,
         },
     );
 
@@ -4490,13 +4495,14 @@ fn alter_object_tag_target(i: Input) -> IResult<AlterObjectTagTarget> {
         ),
         map(
             rule! {
-                TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+                TABLE ~ ( IF ~ ^EXISTS )? ~ #table_ref
             },
-            |(_, opt_if_exists, (catalog, database, table))| AlterObjectTagTarget::Table {
+            |(_, opt_if_exists, table_ref)| AlterObjectTagTarget::Table {
                 if_exists: opt_if_exists.is_some(),
-                catalog,
-                database,
-                table,
+                catalog: table_ref.catalog,
+                database: table_ref.database,
+                table: table_ref.table,
+                branch: table_ref.branch,
             },
         ),
         map(

@@ -21,6 +21,7 @@ use super::query::with;
 use crate::ast::CopyIntoLocationOption;
 use crate::ast::CopyIntoLocationSource;
 use crate::ast::CopyIntoLocationStmt;
+use crate::ast::CopyIntoLocationTableSource;
 use crate::ast::CopyIntoTableOption;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
@@ -93,12 +94,15 @@ pub fn copy_into_table(i: Input) -> IResult<Statement> {
 fn copy_into_location(i: Input) -> IResult<Statement> {
     let copy_into_location_source = alt((
         map(
-            rule! { #dot_separated_idents_1_to_3 ~ #with_options? },
-            |((catalog, database, table), with_options)| CopyIntoLocationSource::Table {
-                catalog,
-                database,
-                table,
-                with_options,
+            rule! { #table_ref ~ #with_options? },
+            |(table_ref, with_options)| {
+                CopyIntoLocationSource::Table(Box::new(CopyIntoLocationTableSource {
+                    catalog: table_ref.catalog,
+                    database: table_ref.database,
+                    table: table_ref.table,
+                    branch: table_ref.branch,
+                    with_options,
+                }))
             },
         ),
         map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {

@@ -67,6 +67,7 @@ pub struct ShowVirtualColumnsStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Option<Identifier>,
+    pub branch: Option<Identifier>,
     pub limit: Option<ShowLimit>,
 }
 
@@ -75,6 +76,9 @@ impl Display for ShowVirtualColumnsStmt {
         write!(f, "SHOW VIRTUAL COLUMNS")?;
         if let Some(table) = &self.table {
             write!(f, " FROM {}", table)?;
+            if let Some(branch) = &self.branch {
+                write!(f, "/{branch}")?;
+            }
         }
         if let Some(database) = &self.database {
             write!(f, " FROM ")?;

@@ -30,6 +30,7 @@ use opendal::ErrorKind;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::check_table_ref_access;
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::wrap_cast;
@@ -45,22 +46,29 @@ impl Binder {
         stmt: &CopyIntoLocationStmt,
     ) -> Result<Plan> {
         let query = match &stmt.src {
-            CopyIntoLocationSource::Table {
-                catalog,
-                database,
-                table,
-                with_options,
-            } => {
-                let (catalog_name, database_name, table_name) =
-                    self.normalize_object_identifier_triple(catalog, database, table);
-                let with_options_str = with_options
+            CopyIntoLocationSource::Table(source) => {
+                let (catalog_name, database_name, table_name) = self
+                    .normalize_object_identifier_triple(
+                        &source.catalog,
+                        &source.database,
+                        &source.table,
+                    );
+                let branch_name = source
+                    .branch
+                    .as_ref()
+                    .map(|branch| self.normalize_identifier(branch).name);
+                if branch_name.is_some() {
+                    check_table_ref_access(self.ctx.as_ref())?;
+                }
+                let with_options_str = source
+                    .with_options
                     .as_ref()
                     .map_or(String::new(), |with_options| format!(" {with_options}"));
 
                 let quoted_ident_case_sensitive =
                     self.ctx.get_settings().get_quoted_ident_case_sensitive()?;
-                let subquery = format!(
-                    "SELECT * FROM {}.{}.{}{with_options_str}",
+                let mut table_ref = format!(
+                    "{}.{}.{}",
                     display_ident(
                         &catalog_name,
                         false,
@@ -80,6 +88,16 @@ impl Binder {
                         self.dialect
                     ),
                 );
+                if let Some(branch_name) = branch_name {
+                    table_ref.push('/');
+                    table_ref.push_str(&display_ident(
+                        &branch_name,
+                        false,
+                        quoted_ident_case_sensitive,
+                        self.dialect,
+                    ));
+                }
+                let subquery = format!("SELECT * FROM {table_ref}{with_options_str}");
                 let tokens = tokenize_sql(&subquery)?;
                 let sub_stmt_msg = parse_sql(&tokens, self.dialect)?;
                 let sub_stmt = sub_stmt_msg.0;

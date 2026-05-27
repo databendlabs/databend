@@ -2375,10 +2375,20 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                branch,
             } => {
                 let (catalog, database, table) =
                     self.normalize_object_identifier_triple(catalog, database, table);
-                let table = self.ctx.get_table(&catalog, &database, &table).await?;
+                let branch = branch
+                    .as_ref()
+                    .map(|branch| self.normalize_identifier(branch).name);
+                if branch.is_some() {
+                    check_table_ref_access(self.ctx.as_ref())?;
+                }
+                let table = self
+                    .ctx
+                    .get_table_with_branch(&catalog, &database, &table, branch.as_deref())
+                    .await?;
 
                 if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {

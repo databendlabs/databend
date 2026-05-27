@@ -58,6 +58,7 @@ use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::core::processor::ProcessorPtr;
 use databend_common_pipeline::sources::AsyncSource;
 use databend_common_pipeline::sources::AsyncSourcer;
+use databend_common_sql::check_table_ref_access;
 use databend_common_sql::planner::NameResolutionContext;
 use databend_common_sql::planner::normalize_identifier;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
@@ -258,11 +259,17 @@ async fn collect_tag_references(
             )
         }
         "TABLE" => {
-            let (catalog_name, db_name, table_name) = parse_table_name(&ctx, &object_name)?;
+            let (catalog_name, db_name, table_name, branch_name) =
+                parse_table_name(&ctx, &object_name)?;
+            if branch_name.is_some() {
+                check_table_ref_access(ctx.as_ref())?;
+            }
             let catalog = ctx.get_catalog(&catalog_name).await?;
             let db = catalog.get_database(&tenant, &db_name).await?;
             let db_id = db.get_db_info().database_id.db_id;
-            let table = catalog.get_table(&tenant, &db_name, &table_name).await?;
+            let table = catalog
+                .get_table_with_branch(&tenant, &db_name, &table_name, branch_name.as_deref())
+                .await?;
             let table_id = table.get_table_info().ident.table_id;
             // Check table visibility
             let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
@@ -283,7 +290,9 @@ async fn collect_tag_references(
                 TaggableObject::Table { table_id },
                 Some(db_name),
                 Some(table_id),
-                table_name,
+                branch_name
+                    .map(|branch_name| format!("{table_name}/{branch_name}"))
+                    .unwrap_or(table_name),
             )
         }
         "STAGE" => {
@@ -411,7 +420,13 @@ async fn collect_tag_references(
             )
         }
         "VIEW" => {
-            let (catalog_name, db_name, view_name) = parse_table_name(&ctx, &object_name)?;
+            let (catalog_name, db_name, view_name, branch_name) =
+                parse_table_name(&ctx, &object_name)?;
+            if branch_name.is_some() {
+                return Err(ErrorCode::BadArguments(
+                    "branch-qualified object_name is only supported for TABLE domain",
+                ));
+            }
             let catalog = ctx.get_catalog(&catalog_name).await?;
             let db = catalog.get_database(&tenant, &db_name).await?;
             let db_id = db.get_db_info().database_id.db_id;
@@ -445,7 +460,13 @@ async fn collect_tag_references(
             )
         }
         "STREAM" => {
-            let (catalog_name, db_name, stream_name) = parse_table_name(&ctx, &object_name)?;
+            let (catalog_name, db_name, stream_name, branch_name) =
+                parse_table_name(&ctx, &object_name)?;
+            if branch_name.is_some() {
+                return Err(ErrorCode::BadArguments(
+                    "branch-qualified object_name is only supported for TABLE domain",
+                ));
+            }
             let catalog = ctx.get_catalog(&catalog_name).await?;
             let db = catalog.get_database(&tenant, &db_name).await?;
             let db_id = db.get_db_info().database_id.db_id;
@@ -650,10 +671,14 @@ fn parse_database_name(ctx: &Arc<dyn TableContext>, name: &str) -> Result<(Strin
     Ok((catalog, database))
 }
 
-/// Parse table name in format "table", "db.table", or "catalog.db.table".
+/// Parse table name in format "table", "db.table", or "catalog.db.table",
+/// with an optional "/branch" suffix.
 /// Correctly handles quoted identifiers and normalizes them according to session settings.
-/// Returns (catalog, database, table).
-fn parse_table_name(ctx: &Arc<dyn TableContext>, name: &str) -> Result<(String, String, String)> {
+/// Returns (catalog, database, table, branch).
+fn parse_table_name(
+    ctx: &Arc<dyn TableContext>,
+    name: &str,
+) -> Result<(String, String, String, Option<String>)> {
     let trimmed = name.trim();
     if trimmed.is_empty() {
         return Err(ErrorCode::BadArguments("object_name must not be empty"));
@@ -675,6 +700,9 @@ fn parse_table_name(ctx: &Arc<dyn TableContext>, name: &str) -> Result<(String, 
         .map(|i| normalize_identifier(&i, &name_resolution_ctx).name)
         .unwrap_or_else(|| ctx.get_current_database());
     let table = normalize_identifier(&table_ref.table, &name_resolution_ctx).name;
+    let branch = table_ref
+        .branch
+        .map(|branch| normalize_identifier(&branch, &name_resolution_ctx).name);
 
-    Ok((catalog, database, table))
+    Ok((catalog, database, table, branch))
 }

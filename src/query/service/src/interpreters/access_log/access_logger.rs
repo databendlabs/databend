@@ -458,10 +458,13 @@ impl AccessLogger {
                 ObjectDomain::Database,
                 format!("{}.{}", target.catalog, target.database),
             ),
-            TagSetObject::Table(target) => (
-                ObjectDomain::Table,
-                format!("{}.{}.{}", target.catalog, target.database, target.table),
-            ),
+            TagSetObject::Table(target) => (ObjectDomain::Table, match &target.branch {
+                Some(branch) => format!(
+                    "{}.{}.{}/{}",
+                    target.catalog, target.database, target.table, branch
+                ),
+                None => format!("{}.{}.{}", target.catalog, target.database, target.table),
+            }),
             TagSetObject::Stage(target) => (ObjectDomain::Stage, target.stage_name.clone()),
             TagSetObject::User(_)
             | TagSetObject::Role(_)

@@ -56,6 +56,31 @@ SHOW BRANCHES IN test_branch.t1 WHERE name = 'dev' LIMIT 1
 dev <slt:ignore> <slt:ignore> NULL
 
 statement ok
+CREATE TAG branch_object_tag ALLOWED_VALUES = ('dev', 'prod')
+
+statement ok
+ALTER TABLE t1/dev SET TAG branch_object_tag = 'dev'
+
+query TTTTT
+SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1/dev', 'TABLE')
+----
+branch_object_tag dev test_branch t1/dev TABLE
+
+query TTTTT
+SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1', 'TABLE') WHERE tag_name = 'branch_object_tag'
+----
+
+statement ok
+ALTER TABLE t1/dev UNSET TAG branch_object_tag
+
+query TTTTT
+SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1/dev', 'TABLE')
+----
+
+statement ok
+DROP TAG branch_object_tag
+
+statement ok
 ALTER TABLE t1 CREATE TAG v1
 
 query IT
@@ -167,6 +192,14 @@ SELECT * FROM t_schema_guard/old_schema_branch ORDER BY a
 ----
 1
 
+statement ok
+CREATE OR REPLACE TABLE t_like_branch LIKE t_schema_guard/old_schema_branch
+
+query TTTTT
+DESCRIBE t_like_branch
+----
+a INT YES NULL (empty)
+
 query error
 WITH t AS (SELECT * FROM t1) SELECT * FROM t/dev
 
@@ -199,6 +232,7 @@ SELECT name, ok FROM (
     UNION ALL SELECT 'fuse_column', sum(row_count) = 2 FROM fuse_column('test_branch', 't_tf/dev') WHERE column_name = 'id'
     UNION ALL SELECT 'fuse_dump_snapshots', count() = 1 FROM fuse_dump_snapshots('test_branch', 't_tf/dev')
     UNION ALL SELECT 'fuse_encoding', count() = 4 FROM fuse_encoding('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_page', count() > 0 FROM fuse_page('test_branch', 't_tf/dev')
     UNION ALL SELECT 'fuse_segment', sum(row_count) = 2 FROM fuse_segment('test_branch', 't_tf/dev')
     UNION ALL SELECT 'fuse_snapshot', max(row_count) = 2 FROM fuse_snapshot('test_branch', 't_tf/dev')
     UNION ALL SELECT 'fuse_statistic', count() > 0 FROM fuse_statistic('test_branch', 't_tf/dev')
@@ -212,6 +246,7 @@ fuse_block_statistics 1
 fuse_column 1
 fuse_dump_snapshots 1
 fuse_encoding 1
+fuse_page 1
 fuse_segment 1
 fuse_snapshot 1
 fuse_statistic 1

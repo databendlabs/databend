@@ -520,6 +520,16 @@ INSERT INTO t_branch_refresh/b1 VALUES
 statement ok
 REFRESH VIRTUAL COLUMN FOR t_branch_refresh/b1;
 
+query TTTITT
+SHOW VIRTUAL COLUMNS FROM t_branch_refresh/b1
+----
+test_table_ref_virtual_column t_branch_refresh v 3000000000 ['k'] String
+
+query T
+SELECT branch FROM system.virtual_columns WHERE database = 'test_table_ref_virtual_column' AND table = 't_branch_refresh' AND branch = 'b1'
+----
+b1
+
 query I
 select count() from list_stage(location=> '@vc_branch_refresh_stage') where name like '%_vb_v2%';
 ----

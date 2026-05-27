@@ -170,6 +170,29 @@ SELECT * FROM export_check ORDER BY id
 10 copy_branch
 
 statement ok
+DROP STAGE IF EXISTS branch_dml_export_stage_direct
+
+statement ok
+CREATE STAGE branch_dml_export_stage_direct
+
+statement ok
+REMOVE @branch_dml_export_stage_direct PATTERN='.*'
+
+statement ok
+COPY INTO @branch_dml_export_stage_direct FROM copy_t/dev FILE_FORMAT=(TYPE=CSV)
+
+statement ok
+CREATE OR REPLACE TABLE export_check_direct(id INT, val STRING)
+
+statement ok
+COPY INTO export_check_direct FROM @branch_dml_export_stage_direct FILE_FORMAT=(TYPE=CSV) PURGE=true
+
+query IT
+SELECT * FROM export_check_direct ORDER BY id
+----
+10 copy_branch
+
+statement ok
 CREATE OR REPLACE TABLE ctas_t AS SELECT * FROM copy_t/dev
 
 query IT

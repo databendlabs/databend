@@ -4121,6 +4121,7 @@ CreateTable(
                     quote: None,
                     ident_type: None,
                 },
+                branch: None,
             },
         ),
         engine: None,
@@ -4165,6 +4166,7 @@ CreateTable(
                     quote: None,
                     ident_type: None,
                 },
+                branch: None,
             },
         ),
         engine: Some(
@@ -22749,6 +22751,7 @@ CopyIntoLocation(
                 quote: None,
                 ident_type: None,
             },
+            branch: None,
             with_options: None,
         },
         dst: Stage(
@@ -23328,6 +23331,7 @@ CopyIntoLocation(
                 quote: None,
                 ident_type: None,
             },
+            branch: None,
             with_options: None,
         },
         dst: Uri(
@@ -23391,6 +23395,7 @@ CopyIntoLocation(
                 quote: None,
                 ident_type: None,
             },
+            branch: None,
             with_options: None,
         },
         dst: Stage(
@@ -23439,6 +23444,7 @@ CopyIntoLocation(
                 quote: None,
                 ident_type: None,
             },
+            branch: None,
             with_options: None,
         },
         dst: Stage(
@@ -28256,6 +28262,7 @@ CreateDynamicTable(
                     quote: None,
                     ident_type: None,
                 },
+                branch: None,
             },
         ),
         cluster_by: None,
@@ -29459,6 +29466,7 @@ CopyIntoLocation(
                 quote: None,
                 ident_type: None,
             },
+            branch: None,
             with_options: None,
         },
         dst: Stage(
@@ -30817,6 +30825,7 @@ ShowVirtualColumns(
                 ident_type: None,
             },
         ),
+        branch: None,
         limit: Some(
             Like {
                 pattern: "v%",

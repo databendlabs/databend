@@ -194,12 +194,6 @@ impl Interpreter for AddTableColumnInterpreter {
         }
 
         let need_update = num_rows > 0 && !self.plan.is_deterministic;
-        if self.plan.branch.is_some() && need_update {
-            return Err(ErrorCode::AlterTableError(format!(
-                "Cannot add non-deterministic default column to branch table '{}', UPDATE is not supported on branch tables yet",
-                table_info.desc
-            )));
-        }
         if need_update && tbl.change_tracking_enabled() {
             // Rebuild table while change tracking is active may break the consistency
             // of tracked changes, leading to incorrect change records.
@@ -231,10 +225,14 @@ impl Interpreter for AddTableColumnInterpreter {
                 tbl_name,
                 self.plan.branch.as_deref(),
             )?;
+            let table_ref = if let Some(branch) = &self.plan.branch {
+                format!("`{}`.`{}`/`{}`", db_name, tbl_name, branch)
+            } else {
+                format!("`{}`.`{}`", db_name, tbl_name)
+            };
             let query = format!(
-                "UPDATE `{}`.`{}` SET `{}` = {};",
-                db_name,
-                tbl_name,
+                "UPDATE {} SET `{}` = {};",
+                table_ref,
                 field.name(),
                 field.default_expr().unwrap()
             );

@@ -53,6 +53,7 @@ pub struct TableTagSetTarget {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -28,6 +28,7 @@ use log::debug;
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
+use crate::binder::check_table_ref_access;
 use crate::binder::util::TableIdentifier;
 use crate::normalize_identifier;
 use crate::plans::Plan;
@@ -83,6 +84,7 @@ impl Binder {
             catalog,
             database,
             table,
+            branch,
             limit,
         } = stmt;
 
@@ -119,6 +121,11 @@ impl Binder {
         if let Some(table) = table {
             let table = normalize_identifier(table, &self.name_resolution_ctx).name;
             select_builder.with_filter(format!("table = '{table}'"));
+        }
+        if let Some(branch) = branch {
+            check_table_ref_access(self.ctx.as_ref())?;
+            let branch = normalize_identifier(branch, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("branch = '{branch}'"));
         }
 
         let query = match limit {

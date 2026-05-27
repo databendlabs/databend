@@ -184,6 +184,7 @@ async fn resolve_table_id_object(
     catalog_name: &str,
     database: &str,
     table_name: &str,
+    branch: Option<&str>,
     if_exists: bool,
     expected_engine: Option<&str>,
 ) -> Result<Option<TaggableObject>> {
@@ -204,7 +205,10 @@ async fn resolve_table_id_object(
         )));
     }
 
-    match catalog.get_table(tenant, database, table_name).await {
+    match catalog
+        .get_table_with_branch(tenant, database, table_name, branch)
+        .await
+    {
         Ok(table) => {
             if let Some(engine) = expected_engine {
                 if table.engine() != engine {
@@ -238,6 +242,7 @@ async fn resolve_table_object(
         &target.catalog,
         &target.database,
         &target.table,
+        target.branch.as_deref(),
         target.if_exists,
         None,
     )
@@ -319,6 +324,7 @@ async fn resolve_view_object(
         &target.catalog,
         &target.database,
         &target.view,
+        None,
         target.if_exists,
         Some(VIEW_ENGINE),
     )
