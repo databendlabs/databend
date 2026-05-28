@@ -22,17 +22,6 @@ insert into new_hash_join_l values (1, 10), (2, 20), (3, 30), (null, 99)
 statement ok
 insert into new_hash_join_r values (1, 5), (2, 25), (4, 40), (null, 50)
 
-# Cross join does not need a hash table but still goes through the new join pipeline.
-query II rowsort
-select l.k, r.v
-from (select * from new_hash_join_l where k in (1, 2)) l
-cross join (select * from new_hash_join_r where k in (1, 4)) r
-----
-1 40
-1 5
-2 40
-2 5
-
 # Full join keeps left and right unmatched rows when the residual predicate is false.
 query TTTT rowsort
 select

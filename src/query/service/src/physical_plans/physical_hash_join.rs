@@ -303,7 +303,6 @@ impl IPhysicalPlan for HashJoin {
         if matches!(
             self.join_type,
             JoinType::Inner
-                | JoinType::Cross
                 | JoinType::Full
                 | JoinType::Left
                 | JoinType::LeftSemi
@@ -504,7 +503,7 @@ impl HashJoin {
                 build_input.clone(),
                 probe_input.clone(),
                 joined_output.clone(),
-                factory.create_hash_join(self.join_type, 0, output_len)?,
+                factory.create_hash_join(self.join_type, 0)?,
                 stage_sync_barrier.clone(),
                 self.projections.clone(),
                 rf_desc.clone(),
@@ -552,7 +551,6 @@ impl HashJoin {
             ctx.func_ctx.clone(),
             DataBlock::choose_hash_method_with_types(&hash_key_types)?,
             desc,
-            self.build_side_cache_info.is_some(),
         ))
     }
 }

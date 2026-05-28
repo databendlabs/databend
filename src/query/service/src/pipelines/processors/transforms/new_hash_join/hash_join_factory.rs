@@ -40,9 +40,6 @@ use crate::pipelines::processors::transforms::InnerHashJoin;
 use crate::pipelines::processors::transforms::Join;
 use crate::pipelines::processors::transforms::memory::AntiLeftHashJoin;
 use crate::pipelines::processors::transforms::memory::AntiRightHashJoin;
-use crate::pipelines::processors::transforms::memory::CrossHashJoin;
-use crate::pipelines::processors::transforms::memory::CrossJoinShared;
-use crate::pipelines::processors::transforms::memory::CrossStateMap;
 use crate::pipelines::processors::transforms::memory::FullHashJoin;
 use crate::pipelines::processors::transforms::memory::InnerSingleHashJoin;
 use crate::pipelines::processors::transforms::memory::LeftMarkHashJoin;
@@ -62,11 +59,9 @@ pub struct HashJoinFactory {
     desc: Arc<HashJoinDesc>,
     hash_method: HashMethodKind,
     function_ctx: FunctionContext,
-    need_build_cache: bool,
     grace_state: CStyleCell<HashMap<usize, Weak<GraceHashJoinState>>>,
     basic_state: CStyleCell<HashMap<usize, Weak<BasicHashJoinState>>>,
     hybrid_state: CStyleCell<HashMap<usize, Weak<HybridHashJoinState>>>,
-    cross_state: CStyleCell<CrossStateMap>,
 }
 
 impl HashJoinFactory {
@@ -75,44 +70,17 @@ impl HashJoinFactory {
         function_ctx: FunctionContext,
         method: HashMethodKind,
         desc: Arc<HashJoinDesc>,
-        need_build_cache: bool,
     ) -> Arc<HashJoinFactory> {
         Arc::new(HashJoinFactory {
             ctx,
             desc,
             function_ctx,
             hash_method: method,
-            need_build_cache,
             mutex: Mutex::new(()),
             grace_state: CStyleCell::new(HashMap::new()),
             basic_state: CStyleCell::new(HashMap::new()),
             hybrid_state: CStyleCell::new(HashMap::new()),
-            cross_state: CStyleCell::new(HashMap::new()),
         })
-    }
-
-    pub fn create_cross_state(
-        self: &Arc<Self>,
-        id: usize,
-        processor_count: usize,
-    ) -> Result<Arc<CrossJoinShared>> {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-
-        match self.cross_state.as_mut().entry(id) {
-            Entry::Occupied(v) => match v.get().upgrade() {
-                Some(v) => Ok(v),
-                None => Err(ErrorCode::Internal(format!(
-                    "Error state: The level {} cross join state has been destroyed.",
-                    id
-                ))),
-            },
-            Entry::Vacant(v) => {
-                let state = CrossJoinShared::create(id, self.clone(), processor_count);
-                v.insert(Arc::downgrade(&state));
-                Ok(state)
-            }
-        }
     }
 
     pub fn create_grace_state(self: &Arc<Self>, id: usize) -> Result<Arc<GraceHashJoinState>> {
@@ -191,35 +159,12 @@ impl HashJoinFactory {
         self.grace_state.as_mut().remove(&id);
     }
 
-    pub fn remove_cross_state(&self, id: usize) {
-        let locked = self.mutex.lock();
-        let _locked = locked.unwrap_or_else(PoisonError::into_inner);
-        self.cross_state.as_mut().remove(&id);
-    }
-
-    pub fn create_hash_join(
-        self: &Arc<Self>,
-        typ: JoinType,
-        id: usize,
-        processor_count: usize,
-    ) -> Result<Box<dyn Join>> {
+    pub fn create_hash_join(self: &Arc<Self>, typ: JoinType, id: usize) -> Result<Box<dyn Join>> {
         // let settings = self.ctx.get_settings();
         //
         // if settings.get_force_join_data_spill()? {
         //     return self.create_grace_join(typ, id);
         // }
-
-        if matches!(typ, JoinType::Cross) {
-            return Ok(Box::new(CrossHashJoin::create(
-                self.ctx.clone(),
-                self.desc.clone(),
-                self.create_cross_state(id, processor_count)?,
-                self.need_build_cache
-                    .then(|| self.create_basic_state(id))
-                    .transpose()?,
-                MemorySettings::from_join_settings(&self.ctx)?,
-            )?));
-        }
 
         Ok(Box::new(self.create_hybrid_join(typ, id)?))
     }
