@@ -90,7 +90,7 @@ impl RefreshIndexInterpreter {
             let push_downs = plan.push_downs.clone();
             let ctx = self.ctx.clone();
 
-            let (_statistics, partitions) = fuse_table
+            let (_statistics, partitions, _) = fuse_table
                 .prune_snapshot_blocks(
                     ctx,
                     push_downs,
@@ -98,6 +98,7 @@ impl RefreshIndexInterpreter {
                     lazy_init_segments,
                     0,
                     ReadPartitionsPruningMode::Normal,
+                    None,
                 )
                 .await?;
 
@@ -118,7 +119,7 @@ impl RefreshIndexInterpreter {
         let push_downs = plan.push_downs.clone();
         let ctx = self.ctx.clone();
 
-        let (_statistics, partitions) = fuse_table
+        let (_statistics, partitions, _) = fuse_table
             .prune_snapshot_blocks(
                 ctx,
                 push_downs,
@@ -126,6 +127,7 @@ impl RefreshIndexInterpreter {
                 segments,
                 0,
                 ReadPartitionsPruningMode::Normal,
+                None,
             )
             .await?;
 

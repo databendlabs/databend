@@ -159,10 +159,11 @@ impl FuseTable {
                                 lazy_init_segments,
                                 0,
                                 ReadPartitionsPruningMode::Normal,
+                                None,
                             )
                             .await
                         {
-                            Ok((_, partitions)) => {
+                            Ok((_, partitions, _)) => {
                                 for part in partitions.partitions {
                                     // the sql may be killed or early stop, ignore the error
                                     if let Err(_e) = tx.send(Ok(part)).await {

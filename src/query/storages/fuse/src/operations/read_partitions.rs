@@ -36,6 +36,7 @@ use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::plan::TopK;
 use databend_common_catalog::plan::VirtualColumnInfo;
+use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -121,6 +122,8 @@ struct SnapshotReadInfo {
     block_count: usize,
 }
 
+type PrunedBlockMetas = Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)>;
+
 impl SnapshotReadInfo {
     fn segment_count(&self) -> usize {
         self.segment_locations.len()
@@ -136,6 +139,22 @@ fn read_partitions_pruning_mode(push_downs: &Option<PushDownInfo>) -> ReadPartit
         .as_ref()
         .map(|push_downs| push_downs.read_partitions_pruning_mode)
         .unwrap_or_default()
+}
+
+fn deterministic_prune_cache_key(
+    segments_location: &[SegmentLocation],
+    push_downs: &Option<PushDownInfo>,
+    pruning_mode: ReadPartitionsPruningMode,
+) -> Option<String> {
+    let mut push_downs = push_downs.as_ref()?.clone();
+    if !push_downs.is_deterministic {
+        return None;
+    }
+    push_downs.read_partitions_pruning_mode = pruning_mode;
+    Some(format!(
+        "{:x}",
+        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+    ))
 }
 
 impl FuseTable {
@@ -180,6 +199,19 @@ impl FuseTable {
         push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
+        let (statistics, partitions, _) = self
+            .do_read_partitions_with_reusable_pruned_metas(ctx, push_downs, _dry_run, None)
+            .await?;
+        Ok((statistics, partitions))
+    }
+
+    pub async fn do_read_partitions_with_reusable_pruned_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _dry_run: bool,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
         let pruning_mode = read_partitions_pruning_mode(&push_downs);
         let distributed_pruning = ctx.get_settings().get_enable_distributed_pruning()?;
         if let Some(changes_desc) = &self.changes_desc {
@@ -189,7 +221,8 @@ impl FuseTable {
             });
             return self
                 .do_read_changes_partitions(ctx, push_downs, change_type, &changes_desc.location)
-                .await;
+                .await
+                .map(|(statistics, partitions)| (statistics, partitions, None));
         }
 
         let read_info = self.read_snapshot_info(&ctx).await?;
@@ -233,6 +266,7 @@ impl FuseTable {
                             segment_len,
                         ),
                         Partitions::create(PartitionsShuffleKind::Mod, segments),
+                        None,
                     ));
                 }
 
@@ -247,10 +281,11 @@ impl FuseTable {
                     segments_location,
                     summary,
                     pruning_mode,
+                    reusable_pruned_metas,
                 )
                 .await
             }
-            None => Ok((PartStatistics::default(), Partitions::default())),
+            None => Ok((PartStatistics::default(), Partitions::default(), None)),
         }
     }
 
@@ -258,11 +293,35 @@ impl FuseTable {
         &self,
         mut pruner: FusePruner,
         segments_location: Vec<SegmentLocation>,
-    ) -> Result<(
-        Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)>,
-        PruningStatistics,
-    )> {
+    ) -> Result<(PrunedBlockMetas, PruningStatistics)> {
         let block_metas = pruner.read_pruning(segments_location).await?;
+        let pruning_stats = pruner.pruning_stats();
+        let block_metas = block_metas
+            .into_iter()
+            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .collect::<Vec<_>>();
+        Ok((block_metas, pruning_stats))
+    }
+
+    async fn refine_blocks_with_pruner(
+        &self,
+        pruner: FusePruner,
+        block_metas: PrunedBlockMetas,
+    ) -> Result<(PrunedBlockMetas, PruningStatistics)> {
+        let block_metas = block_metas
+            .into_iter()
+            .map(|(block_meta_index, block_meta)| {
+                block_meta_index
+                    .map(|block_meta_index| (block_meta_index, block_meta))
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(
+                            "Block meta index is required to refine pruned FUSE blocks",
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let block_metas = pruner.refine_pruned_blocks(block_metas).await?;
         let pruning_stats = pruner.pruning_stats();
         let block_metas = block_metas
             .into_iter()
@@ -417,7 +476,8 @@ impl FuseTable {
         segments_location: Vec<SegmentLocation>,
         summary: usize,
         pruning_mode: ReadPartitionsPruningMode,
-    ) -> Result<(PartStatistics, Partitions)> {
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
         let num_segments_to_prune = segments_location.len();
         let start = Instant::now();
         info!(
@@ -430,27 +490,62 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key = if pruning_mode == ReadPartitionsPruningMode::Lightweight {
-            None
-        } else {
-            push_downs
-                .as_ref()
-                .filter(|p| p.is_deterministic)
-                .map(|push_downs| {
-                    format!(
-                        "{:x}",
-                        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
-                    )
-                })
-        };
-
+        let derterministic_cache_key =
+            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
             info!("Retrieved snapshot block pruning result from cache");
-            return Ok(cached_result);
+            return Ok((cached_result.0, cached_result.1, None));
         }
 
-        let pruner =
-            self.build_fuse_pruner(ctx.clone(), push_downs.clone(), table_schema.clone(), dal)?;
+        let pruner = self.build_fuse_pruner(
+            ctx.clone(),
+            push_downs.clone(),
+            table_schema.clone(),
+            dal.clone(),
+        )?;
+
+        if pruning_mode == ReadPartitionsPruningMode::Normal {
+            if let Some(reusable_pruned_metas) = reusable_pruned_metas {
+                let lightweight_block_metas: Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)> =
+                    reusable_pruned_metas
+                        .as_ref()
+                        .downcast_ref::<PrunedBlockMetas>()
+                        .ok_or_else(|| {
+                            ErrorCode::Internal(
+                                "Invalid reusable pruned metas payload for FUSE table",
+                            )
+                        })?
+                        .clone();
+                let (block_metas, pruning_stats) = self
+                    .refine_blocks_with_pruner(pruner, lightweight_block_metas)
+                    .await?;
+
+                info!(
+                    "refine lightweight snapshot block pruning result, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
+                    block_metas.len(),
+                    num_segments_to_prune,
+                    start.elapsed(),
+                    ctx.get_cluster().local_id,
+                );
+
+                let schema = self.schema_with_stream();
+                let result = self.read_partitions_with_metas(
+                    ctx.clone(),
+                    schema,
+                    push_downs,
+                    &block_metas,
+                    summary,
+                    pruning_stats,
+                )?;
+
+                if let Some(cache_key) = derterministic_cache_key {
+                    if let Some(cache) = CacheItem::cache() {
+                        cache.insert(cache_key, result.clone());
+                    }
+                }
+                return Ok((result.0, result.1, None));
+            }
+        }
 
         let (block_metas, pruning_stats) = self
             .prune_blocks_with_pruner(pruner, segments_location)
@@ -474,22 +569,24 @@ impl FuseTable {
                     pruning_stats,
                 )?,
                 Partitions::default(),
+                Some(Arc::new(block_metas) as ReusablePrunedMetas),
             )
         } else {
             let schema = self.schema_with_stream();
-            self.read_partitions_with_metas(
+            let (statistics, partitions) = self.read_partitions_with_metas(
                 ctx.clone(),
                 schema,
                 push_downs,
                 &block_metas,
                 summary,
                 pruning_stats,
-            )?
+            )?;
+            (statistics, partitions, None)
         };
 
         if let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
-                cache.insert(cache_key, result.clone());
+                cache.insert(cache_key, (result.0.clone(), result.1.clone()));
             }
         }
         Ok(result)

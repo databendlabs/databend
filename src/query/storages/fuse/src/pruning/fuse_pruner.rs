@@ -605,6 +605,17 @@ impl FusePruner {
         self.vector_pruning(metas).await
     }
 
+    #[async_backtrace::framed]
+    pub async fn refine_pruned_blocks(
+        &self,
+        block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let block_pruner = BlockPruner::create(self.pruning_ctx.clone())?;
+        let metas = block_pruner.refine_pruning(block_metas).await?;
+        let metas = self.topn_pruning(metas)?;
+        self.vector_pruning(metas).await
+    }
+
     // topn pruner:
     // if there are ordering + limit clause and no filters, use topn pruner
     fn topn_pruning(

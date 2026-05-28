@@ -29,6 +29,7 @@ use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::plan::ReadPartitionsPruningMode;
+use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -60,12 +61,14 @@ struct SelectedTarget {
     table: Arc<dyn Table>,
     statistics: PartStatistics,
     partitions: Partitions,
+    reusable_pruned_metas: Option<ReusablePrunedMetas>,
 }
 
 struct RoutingCandidate {
     target: String,
     table: Arc<dyn Table>,
     statistics: PartStatistics,
+    reusable_pruned_metas: Option<ReusablePrunedMetas>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -147,6 +150,7 @@ impl ProxyTable {
                     target: candidate.target.clone(),
                     table: candidate.table.clone(),
                     statistics: candidate.statistics.clone(),
+                    reusable_pruned_metas: candidate.reusable_pruned_metas.clone(),
                 });
             }
 
@@ -169,13 +173,20 @@ impl ProxyTable {
                         default_candidate.target,
                         default_candidate.table,
                         push_downs,
+                        default_candidate.reusable_pruned_metas,
                     )
                     .await;
             }
         }
 
-        self.read_target_partitions_from_table(ctx, selected.target, selected.table, push_downs)
-            .await
+        self.read_target_partitions_from_table(
+            ctx,
+            selected.target,
+            selected.table,
+            push_downs,
+            selected.reusable_pruned_metas,
+        )
+        .await
     }
 
     async fn select_default_target(
@@ -214,7 +225,7 @@ impl ProxyTable {
         let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
             return Ok(None);
         };
-        self.read_target_partitions_from_table(ctx, target.to_string(), table, push_downs)
+        self.read_target_partitions_from_table(ctx, target.to_string(), table, push_downs, None)
             .await
             .map(Some)
     }
@@ -234,6 +245,7 @@ impl ProxyTable {
                 target.to_string(),
                 table,
                 lightweight_push_downs(push_downs),
+                None,
             )
             .await?;
 
@@ -241,6 +253,7 @@ impl ProxyTable {
             target: candidate.target,
             table: candidate.table,
             statistics: candidate.statistics,
+            reusable_pruned_metas: candidate.reusable_pruned_metas,
         }))
     }
 
@@ -282,6 +295,7 @@ impl ProxyTable {
         target: String,
         table: Arc<dyn Table>,
         push_downs: Option<PushDownInfo>,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
     ) -> Result<SelectedTarget> {
         let settings = ctx.get_settings();
         let distributed_pruning_enabled = settings.get_enable_distributed_pruning()?;
@@ -291,19 +305,27 @@ impl ProxyTable {
 
         // PROXY forwards pushdowns to the target FUSE table, so target pruning
         // decisions, including TABLESAMPLE, are reflected in these partitions.
-        let read_res = table.read_partitions(ctx, push_downs, false).await;
+        let read_res = table
+            .read_partitions_with_reusable_pruned_metas(
+                ctx,
+                push_downs,
+                false,
+                reusable_pruned_metas,
+            )
+            .await;
 
         if distributed_pruning_enabled {
             settings.set_setting("enable_distributed_pruning".to_string(), "1".to_string())?;
         }
 
-        let (statistics, partitions) = read_res?;
+        let (statistics, partitions, reusable_pruned_metas) = read_res?;
 
         Ok(SelectedTarget {
             target,
             table,
             statistics,
             partitions,
+            reusable_pruned_metas,
         })
     }
 
