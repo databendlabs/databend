@@ -16,14 +16,19 @@ use std::io::Write;
 
 use databend_common_exception::Result;
 use databend_common_expression::RawExpr;
+use databend_common_expression::Scalar;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::DataType;
 use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
+use databend_common_expression::types::decimal::DecimalSize;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBindingBuilder;
 use databend_common_sql::ScalarExpr;
@@ -34,10 +39,12 @@ use databend_common_sql::optimizer::ir::ColumnStatSet;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::CastExpr;
+use databend_common_sql::plans::ComparisonOp;
 use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql_test_support::parse_raw_expr;
 use databend_common_statistics::Datum;
+use databend_common_statistics::F64;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::TypedHistogram;
 use databend_common_statistics::TypedHistogramBucket;
@@ -67,9 +74,6 @@ fn run_case_with_predicates(
     column_stats: ColumnStatSet,
     cardinality: StatCardinality,
 ) -> Result<()> {
-    writeln!(file, "expr          : {}", expr_texts.join(", "))?;
-
-    let in_stats = column_stats_to_string(&column_stats);
     let exprs = expr_texts
         .iter()
         .map(|expr_text| {
@@ -77,9 +81,22 @@ fn run_case_with_predicates(
             raw_expr_to_scalar(&raw_expr, columns)
         })
         .collect::<Vec<_>>();
+    run_scalar_case_with_predicates(file, expr_texts, &exprs, column_stats, cardinality)
+}
+
+fn run_scalar_case_with_predicates(
+    file: &mut impl Write,
+    expr_texts: &[&str],
+    predicates: &[ScalarExpr],
+    column_stats: ColumnStatSet,
+    cardinality: StatCardinality,
+) -> Result<()> {
+    writeln!(file, "expr          : {}", expr_texts.join(", "))?;
+
+    let in_stats = column_stats_to_string(&column_stats);
     let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
-    let estimated_rows = estimator.apply(&exprs)?;
-    let out_stats = estimator.column_stats();
+    let estimated_rows = estimator.apply(predicates)?;
+    let out_stats = estimator.into_column_stats();
 
     writeln!(
         file,
@@ -169,22 +186,13 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "comparison_predicates",
         "Comparison predicates should update estimated rows and column stats consistently.",
     )?;
-    let comparison_stats = ColumnStatSet::from_iter([
-        (Symbol::new(0), ColumnStat {
-            min: Datum::UInt(10),
-            max: Datum::UInt(20),
-            ndv: StatEstimate::exact(10.0),
-            null_count: StatCount::exact(0),
-            histogram: None,
-        }),
-        (Symbol::new(1), ColumnStat {
-            min: Datum::UInt(10),
-            max: Datum::UInt(20),
-            ndv: StatEstimate::exact(10.0),
-            null_count: StatCount::exact(10),
-            histogram: None,
-        }),
-    ]);
+    let comparison_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(10),
+        max: Datum::UInt(19),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
     let comparison_columns = &[("a", UInt64Type::data_type())];
     for expr in [
         "a = 5",
@@ -193,23 +201,23 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "a != 15",
         "a > 5",
         "a > 10",
-        "a > 17",
-        "a > 20",
+        "a > 16",
+        "a > 19",
         "a > 25",
         "a >= 5",
         "a >= 10",
-        "a >= 17",
-        "a >= 20",
+        "a >= 16",
+        "a >= 19",
         "a >= 25",
         "a < 5",
         "a < 10",
-        "a < 17",
-        "a < 20",
+        "a < 16",
+        "a < 19",
         "a < 25",
         "a <= 5",
         "a <= 10",
-        "a <= 17",
-        "a <= 20",
+        "a <= 16",
+        "a <= 19",
         "a <= 25",
         "a + 1 = 15",
     ] {
@@ -226,7 +234,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         "reversed_comparison_predicates",
         "Comparison predicates should apply the same column constraint when the constant is on the left.",
     )?;
-    for expr in ["15 = a", "17 < a", "17 <= a", "17 > a", "17 >= a"] {
+    for expr in ["15 = a", "16 < a", "16 <= a", "16 > a", "16 >= a"] {
         run_case(
             &mut file,
             expr,
@@ -235,15 +243,21 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         )?;
     }
 
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_typed_comparison_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_typed_comparison.txt")?;
     write_case_title(
         &mut file,
         "typed_comparison_predicates",
-        "Typed comparison predicates should respect integer boundaries, nullable inputs, and histogram constants.",
+        "Typed comparison predicates should respect integer boundaries and nullable inputs.",
     )?;
     let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -258,7 +272,7 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
     let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(1),
         max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(30),
         histogram: None,
     })]);
@@ -268,42 +282,90 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
         &[("n", Int64Type::data_type().wrap_nullable())],
         nullable_stats,
     )?;
-    let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::Int(1),
-        max: Datum::Int(10),
-        ndv: StatEstimate::exact(10.0),
+
+    write_case_title(
+        &mut file,
+        "typed_constant_compatibility",
+        "Constant constraints should apply only when the typed comparison is compatible.",
+    )?;
+    let date_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(20),
+        max: Datum::Int(29),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::Int(TypedHistogram {
-            accuracy: true,
-            buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
-            avg_spacing: None,
-        })),
+        histogram: None,
     })]);
-    for expr in ["h >= 10", "h < 10"] {
+    for expr in ["d = cast(10 as date)", "d = cast(25 as date)"] {
         run_case(
             &mut file,
             expr,
-            &[("h", Int64Type::data_type())],
-            edge_histogram_stats.clone(),
+            &[("d", DataType::Date)],
+            date_stats.clone(),
         )?;
     }
-    let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
-        min: Datum::UInt(0),
-        max: Datum::UInt(10),
-        ndv: StatEstimate::exact(11.0),
+    let number_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
-        histogram: Some(Histogram::UInt(TypedHistogram {
-            accuracy: true,
-            buckets: vec![TypedHistogramBucket::new(0, 10, 100.0, 11.0)],
-            avg_spacing: None,
-        })),
+        histogram: None,
     })]);
     run_case(
         &mut file,
-        "u > 5",
-        &[("u", UInt8Type::data_type())],
-        uint8_histogram_stats,
+        "number = '5'",
+        &[("number", DataType::Number(NumberDataType::Int32))],
+        number_stats.clone(),
     )?;
+    let typed_number_predicate = ScalarExpr::FunctionCall(FunctionCall {
+        span: None,
+        func_name: ComparisonOp::Equal.to_func_name().to_string(),
+        params: vec![],
+        arguments: vec![
+            ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: ColumnBindingBuilder::new(
+                    "number".to_string(),
+                    Symbol::new(0),
+                    Box::new(DataType::Number(NumberDataType::Int32)),
+                    Visibility::Visible,
+                )
+                .build(),
+            }),
+            ScalarExpr::TypedConstantExpr(
+                ConstantExpr {
+                    span: None,
+                    value: Scalar::Number(NumberScalar::UInt64(5)),
+                },
+                DataType::Number(NumberDataType::UInt64),
+            ),
+        ],
+    });
+    run_scalar_case_with_predicates(
+        &mut file,
+        &["number = UInt64(5)"],
+        &[typed_number_predicate],
+        number_stats.clone(),
+        StatCardinality::estimate(100.0),
+    )?;
+    let decimal_size = DecimalSize::new(10, 2).unwrap();
+    let decimal_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Float(1.0.into()),
+        max: Datum::Float(4.0.into()),
+        ndv: NdvEstimate::exact(4.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in [
+        "dec = cast(5.00 as decimal(10, 2))",
+        "dec = cast(2.00 as decimal(10, 2))",
+    ] {
+        run_case(
+            &mut file,
+            expr,
+            &[("dec", DataType::Decimal(decimal_size))],
+            decimal_stats.clone(),
+        )?;
+    }
 
     write_case_title(
         &mut file,
@@ -312,8 +374,8 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
     )?;
     let string_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes(b"b".to_vec()),
-        max: Datum::Bytes(b"d".to_vec()),
-        ndv: StatEstimate::exact(3.0),
+        max: Datum::Bytes(b"e".to_vec()),
+        ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -325,6 +387,348 @@ fn test_selectivity_comparison_outcomes() -> Result<()> {
             string_stats.clone(),
         )?;
     }
+
+    write_case_title(
+        &mut file,
+        "boolean_comparison_predicates",
+        "Boolean comparison predicates should keep constrained bounds and NDV consistent.",
+    )?;
+    let bool_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Bool(false),
+        max: Datum::Bool(true),
+        ndv: NdvEstimate::exact(2.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    run_case(
+        &mut file,
+        "flag = true",
+        &[("flag", BooleanType::data_type())],
+        bool_stats.clone(),
+    )?;
+    run_case(
+        &mut file,
+        "flag > false",
+        &[("flag", BooleanType::data_type())],
+        bool_stats,
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_histogram_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_histogram.txt")?;
+    write_case_title(
+        &mut file,
+        "histogram_comparison_predicates",
+        "Histogram comparisons should restrict bucket ranges, counts, and accuracy consistently.",
+    )?;
+    let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::Int(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    for expr in ["h >= 10", "h < 10", "h != 5"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("h", Int64Type::data_type())],
+            edge_histogram_stats.clone(),
+        )?;
+    }
+    let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(9),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case(
+        &mut file,
+        "u > 4",
+        &[("u", UInt8Type::data_type())],
+        uint8_histogram_stats,
+    )?;
+    let multi_bucket_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(19),
+        ndv: NdvEstimate::exact(20.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![
+                TypedHistogramBucket::new(0, 9, 50.0, 10.0),
+                TypedHistogramBucket::new(10, 19, 50.0, 10.0),
+            ],
+            avg_spacing: None,
+        })),
+    })]);
+    for expr in ["m >= 5", "m < 15"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("m", UInt64Type::data_type())],
+            multi_bucket_histogram_stats.clone(),
+        )?;
+    }
+    let skewed_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(9),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![
+                TypedHistogramBucket::new(0, 4, 50.0, 5.0),
+                TypedHistogramBucket::new(5, 9, 5.0, 5.0),
+            ],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["s >= 2"],
+        &[("s", UInt64Type::data_type())],
+        skewed_histogram_stats,
+        StatCardinality::estimate(55.0),
+    )?;
+    let nullable_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(9),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(30),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 9, 70.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["n >= 5"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        nullable_histogram_stats,
+        StatCardinality::estimate(100.0),
+    )?;
+    let tail_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(737),
+        ndv: NdvEstimate::exact(738.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 737, 738.0, 738.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    for expr in ["tail > 731", "tail > 700", "tail > 737"] {
+        run_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[("tail", UInt64Type::data_type())],
+            tail_histogram_stats.clone(),
+            StatCardinality::estimate(738.0),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "histogram_multi_step_propagation",
+        "Partial numeric buckets should keep row-mass alignment and accumulated range constraints visible across AND predicates.",
+    )?;
+    let float_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Float(F64::from(0.0)),
+        max: Datum::Float(F64::from(20.0)),
+        ndv: NdvEstimate::exact(20.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::Float(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![
+                TypedHistogramBucket::new(F64::from(0.0), F64::from(10.0), 100.0, 10.0),
+                TypedHistogramBucket::new(F64::from(10.0), F64::from(20.0), 100.0, 10.0),
+            ],
+            avg_spacing: None,
+        })),
+    })]);
+    let float_column = || {
+        ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: ColumnBindingBuilder::new(
+                "f".to_string(),
+                Symbol::new(0),
+                Box::new(DataType::Number(NumberDataType::Float64)),
+                Visibility::Visible,
+            )
+            .build(),
+        })
+    };
+    let float_constant = |value| {
+        ScalarExpr::TypedConstantExpr(
+            ConstantExpr {
+                span: None,
+                value: Scalar::Number(NumberScalar::Float64(F64::from(value))),
+            },
+            DataType::Number(NumberDataType::Float64),
+        )
+    };
+    let float_predicate = |op: ComparisonOp, value| {
+        ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: op.to_func_name().to_string(),
+            params: vec![],
+            arguments: vec![float_column(), float_constant(value)],
+        })
+    };
+    let float_gte_15 = float_predicate(ComparisonOp::GTE, 15.0);
+    let float_lte_19 = float_predicate(ComparisonOp::LTE, 19.0);
+    run_scalar_case_with_predicates(
+        &mut file,
+        &["f >= Float64(15)"],
+        std::slice::from_ref(&float_gte_15),
+        float_histogram_stats.clone(),
+        StatCardinality::estimate(200.0),
+    )?;
+    run_scalar_case_with_predicates(
+        &mut file,
+        &["f >= Float64(15)", "f <= Float64(19)"],
+        &[float_gte_15, float_lte_19],
+        float_histogram_stats,
+        StatCardinality::estimate(200.0),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "histogram_row_count_mismatch",
+        "Histograms with row counts above the non-null cardinality should scale output row mass without trusting bucket distincts as exact.",
+    )?;
+    let row_count_mismatch_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(9),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(50),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["mismatch > 3"],
+        &[("mismatch", UInt64Type::data_type().wrap_nullable())],
+        row_count_mismatch_stats,
+        StatCardinality::estimate(100.0),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "distorted_histogram_ranges",
+        "Distorted histograms should still record precise range constraints while using the lower-bound selectivity fallback.",
+    )?;
+    let distorted_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(1000),
+        ndv: NdvEstimate::exact(100.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::Float(TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(
+                F64::from(0.0),
+                F64::from(1000.0),
+                100.0,
+                100.0,
+            )],
+            avg_spacing: Some(1e13),
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["d >= 500"],
+        &[("d", UInt64Type::data_type())],
+        distorted_histogram_stats,
+        StatCardinality::estimate(100.0),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "histogram_accuracy_provenance",
+        "Whole-bucket range pruning may trust ANALYZE distinct counts, but derived bucket distinct values are only estimates.",
+    )?;
+    let analyzed_string_histogram_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+            min: Datum::Bytes(b"a".to_vec()),
+            max: Datum::Bytes(b"z".to_vec()),
+            ndv: NdvEstimate::exact(26.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(Histogram::Bytes(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![
+                    TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 60.0, 6.0),
+                    TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 40.0, 20.0),
+                ],
+                avg_spacing: None,
+            })),
+        })]);
+    run_case_with_predicates(
+        &mut file,
+        &["s >= 'm'"],
+        &[("s", DataType::String)],
+        analyzed_string_histogram_stats.clone(),
+        StatCardinality::estimate(100.0),
+    )?;
+    // A previous independent filter may scale the analyzed histogram without
+    // observing which values survived. The [m,z] bucket's derived distinct count
+    // is 10, but a real filtered input can still keep all 20 values in that range.
+    let derived_string_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Bytes(b"a".to_vec()),
+        max: Datum::Bytes(b"z".to_vec()),
+        ndv: NdvEstimate::new(13.0, 26.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::Bytes(TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![
+                TypedHistogramBucket::new(b"a".to_vec(), b"f".to_vec(), 30.0, 3.0),
+                TypedHistogramBucket::new(b"m".to_vec(), b"z".to_vec(), 20.0, 10.0),
+            ],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["s >= 'm'"],
+        &[("s", DataType::String)],
+        derived_string_histogram_stats,
+        StatCardinality::estimate(50.0),
+    )?;
+    run_case_with_predicates(
+        &mut file,
+        &["s > 'p'"],
+        &[("s", DataType::String)],
+        analyzed_string_histogram_stats,
+        StatCardinality::estimate(100.0),
+    )?;
 
     Ok(())
 }
@@ -341,20 +745,22 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
     for expr in [
         "and_filters(a = 5, a > 3)",
+        "and_filters(a != 5, a = 5)",
+        "and_filters(a = 5, a != 5)",
         "or_filters(a = 5, a = 6)",
         "not(a = 5)",
     ] {
@@ -374,6 +780,20 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         ],
         logical_stats.clone(),
     )?;
+    run_case(
+        &mut file,
+        "is_not_null(a + 1)",
+        &[("a", UInt64Type::data_type())],
+        logical_stats.clone(),
+    )?;
+    for expr in ["a", "cast(a as uint64)"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("a", UInt64Type::data_type())],
+            logical_stats.clone(),
+        )?;
+    }
     run_case_with_predicates(
         &mut file,
         &["a > 3", "a < 6"],
@@ -381,13 +801,186 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         logical_stats.clone(),
         StatCardinality::estimate(100.0),
     )?;
+    run_case_with_predicates(
+        &mut file,
+        &["a != 5", "a >= 5", "a <= 5"],
+        &[("a", UInt64Type::data_type())],
+        logical_stats.clone(),
+        StatCardinality::estimate(100.0),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "histogram_logical_predicates",
+        "AND constraints should be visible to later predicates, while OR and NOT should only affect final selectivity.",
+    )?;
+    let histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(9),
+        ndv: NdvEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["a > 3", "a > 4"],
+        &[("a", UInt64Type::data_type())],
+        histogram_stats.clone(),
+        StatCardinality::estimate(100.0),
+    )?;
+    for expr in ["or_filters(a > 3, a > 4)", "not(a > 3)"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("a", UInt64Type::data_type())],
+            histogram_stats.clone(),
+        )?;
+    }
+    run_case(
+        &mut file,
+        "or_filters(missing = 1, a = 5)",
+        &[
+            ("a", UInt64Type::data_type()),
+            ("missing", UInt64Type::data_type()),
+        ],
+        histogram_stats.clone(),
+    )?;
+    run_case(
+        &mut file,
+        "missing = 1",
+        &[
+            ("a", UInt64Type::data_type()),
+            ("missing", UInt64Type::data_type()),
+        ],
+        histogram_stats.clone(),
+    )?;
+    run_case(
+        &mut file,
+        "and_filters(missing = 1, true)",
+        &[
+            ("a", UInt64Type::data_type()),
+            ("missing", UInt64Type::data_type()),
+        ],
+        histogram_stats.clone(),
+    )?;
+    let combined_histogram_stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(9),
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(Histogram::UInt(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
+                avg_spacing: None,
+            })),
+        }),
+        (Symbol::new(1), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(9),
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(Histogram::UInt(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
+                avg_spacing: None,
+            })),
+        }),
+    ]);
+    run_case_with_predicates(
+        &mut file,
+        &["a >= 5", "b >= 8"],
+        &[
+            ("a", UInt64Type::data_type()),
+            ("b", UInt64Type::data_type()),
+        ],
+        combined_histogram_stats,
+        StatCardinality::estimate(100.0),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "constant_folded_distribution_predicates",
+        "Constant folding should compose with arithmetic distribution predicates and visible AND constraints.",
+    )?;
+    let distribution_stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(9),
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(Histogram::UInt(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 9, 100.0, 10.0)],
+                avg_spacing: None,
+            })),
+        }),
+        (Symbol::new(1), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(4),
+            ndv: NdvEstimate::exact(5.0),
+            null_count: StatCount::exact(0),
+            histogram: Some(Histogram::UInt(TypedHistogram {
+                accuracy: true,
+                row_scale: 1.0,
+                buckets: vec![TypedHistogramBucket::new(0, 4, 50.0, 5.0)],
+                avg_spacing: None,
+            })),
+        }),
+    ]);
+    run_case_with_predicates(
+        &mut file,
+        &["a > 3", "a + 1 > 6", "1 + 1 = 2"],
+        &[
+            ("a", UInt64Type::data_type()),
+            ("b", UInt64Type::data_type()),
+        ],
+        distribution_stats.clone(),
+        StatCardinality::estimate(100.0),
+    )?;
+    run_case(
+        &mut file,
+        "or_filters(and_filters(a > 7, 1 = 0), a + 1 > 6)",
+        &[
+            ("a", UInt64Type::data_type()),
+            ("b", UInt64Type::data_type()),
+        ],
+        distribution_stats.clone(),
+    )?;
+    run_case(
+        &mut file,
+        "and_filters(a > 4, a + b > 10)",
+        &[
+            ("a", UInt64Type::data_type()),
+            ("b", UInt64Type::data_type()),
+        ],
+        distribution_stats,
+    )?;
 
     write_case_title(
         &mut file,
         "constant_logical_predicates",
         "Constant predicates should preserve Zero and All through logical composition.",
     )?;
-    for expr in ["1", "0", "-1", "true", "false", "not(false)", "not(true)"] {
+    for expr in [
+        "1",
+        "0",
+        "-1",
+        "true",
+        "false",
+        "null",
+        "'not-a-number'",
+        "not(false)",
+        "not(true)",
+    ] {
         run_case_with_predicates(
             &mut file,
             &[expr],
@@ -400,7 +993,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
     let nested_constant_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(3),
-        ndv: StatEstimate::exact(4.0),
+        ndv: NdvEstimate::exact(4.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -429,28 +1022,28 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(0),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(0),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(2), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(4),
-            ndv: StatEstimate::exact(5.0),
+            ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(3), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(4),
-            ndv: StatEstimate::exact(5.0),
+            ndv: NdvEstimate::exact(5.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
@@ -465,7 +1058,7 @@ fn test_selectivity_logical_outcomes() -> Result<()> {
             ("d", UInt64Type::data_type()),
         ],
         domain_folded_stats,
-        StatCardinality::estimate(4.4),
+        StatCardinality::estimate(10.0),
     )?;
 
     Ok(())
@@ -482,9 +1075,14 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let estimated_zero_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::estimate(8.0, 8.0),
-        histogram: None,
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+            avg_spacing: None,
+        })),
     })]);
     run_case_with_predicates(
         &mut file,
@@ -497,10 +1095,11 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(5),
-            ndv: StatEstimate::exact(6.0),
+            ndv: NdvEstimate::exact(6.0),
             null_count: StatCount::exact(2),
             histogram: Some(Histogram::UInt(TypedHistogram {
                 accuracy: false,
+                row_scale: 1.0,
                 buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
                 avg_spacing: None,
             })),
@@ -512,6 +1111,44 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         estimated_zero_cardinality_stats,
         StatCardinality::estimate(0.0),
     )?;
+    let unsatisfiable_range_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: NdvEstimate::exact(6.0),
+        null_count: StatCount::exact(2),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["n > 10"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        unsatisfiable_range_stats,
+        StatCardinality::estimate(8.0),
+    )?;
+    let exact_zero_cardinality_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: NdvEstimate::exact(6.0),
+        null_count: StatCount::exact(2),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["n > 1"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        exact_zero_cardinality_stats,
+        StatCardinality::exact(0),
+    )?;
 
     write_case_title(
         &mut file,
@@ -521,10 +1158,11 @@ fn test_selectivity_null_outcomes() -> Result<()> {
     let exact_all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::UInt(0),
         max: Datum::UInt(5),
-        ndv: StatEstimate::exact(6.0),
+        ndv: NdvEstimate::exact(6.0),
         null_count: StatCount::exact(8),
         histogram: Some(Histogram::UInt(TypedHistogram {
             accuracy: false,
+            row_scale: 1.0,
             buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
             avg_spacing: None,
         })),
@@ -534,6 +1172,25 @@ fn test_selectivity_null_outcomes() -> Result<()> {
         &["is_not_null(n)"],
         &[("n", UInt64Type::data_type().wrap_nullable())],
         exact_all_null_stats,
+        StatCardinality::exact(8),
+    )?;
+    let exact_nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: NdvEstimate::exact(6.0),
+        null_count: StatCount::exact(2),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: false,
+            row_scale: 1.0,
+            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["is_not_null(n)"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        exact_nullable_stats,
         StatCardinality::exact(8),
     )?;
 
@@ -552,14 +1209,14 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(10),
             histogram: None,
         }),
@@ -573,10 +1230,17 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             StatCardinality::estimate(100.0),
         )?;
     }
+    run_case_with_predicates(
+        &mut file,
+        &["a % 0 = 0"],
+        &[("a", UInt64Type::data_type())],
+        mod_stats,
+        StatCardinality::estimate(100.0),
+    )?;
     let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(-9),
         max: Datum::Int(9),
-        ndv: StatEstimate::exact(19.0),
+        ndv: NdvEstimate::exact(19.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -592,7 +1256,7 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
     let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Int(i64::MIN),
         max: Datum::Int(9),
-        ndv: StatEstimate::exact(10.0),
+        ndv: NdvEstimate::exact(10.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
@@ -612,11 +1276,16 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
     let like_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes("aa".as_bytes().to_vec()),
         max: Datum::Bytes("zz".as_bytes().to_vec()),
-        ndv: StatEstimate::exact(52.0),
+        ndv: NdvEstimate::exact(40.0),
         null_count: StatCount::exact(0),
         histogram: None,
     })]);
-    for expr in ["s like 'ab%'", "s like '%ab_'"] {
+    for expr in [
+        "s like 'ab%'",
+        "s like '%ab_'",
+        "s like 'a\\_b'",
+        "s like '%%%%'",
+    ] {
         run_case_with_predicates(
             &mut file,
             &[expr],
@@ -625,6 +1294,29 @@ fn test_selectivity_special_predicate_outcomes() -> Result<()> {
             StatCardinality::estimate(100.0),
         )?;
     }
+    let dynamic_like_stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat {
+            min: Datum::Bytes("aa".as_bytes().to_vec()),
+            max: Datum::Bytes("zz".as_bytes().to_vec()),
+            ndv: NdvEstimate::exact(40.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(1), ColumnStat {
+            min: Datum::Bytes("a%".as_bytes().to_vec()),
+            max: Datum::Bytes("z%".as_bytes().to_vec()),
+            ndv: NdvEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+    ]);
+    run_case_with_predicates(
+        &mut file,
+        &["s like p"],
+        &[("s", DataType::String), ("p", DataType::String)],
+        dynamic_like_stats,
+        StatCardinality::estimate(100.0),
+    )?;
 
     Ok(())
 }

@@ -185,6 +185,7 @@ mod tests {
                 1,
                 Histogram::Float(TypedHistogram {
                     accuracy: false,
+                    row_scale: 1.0,
                     buckets: vec![TypedHistogramBucket::new(
                         F64::from(1.0),
                         F64::from(2.0),
