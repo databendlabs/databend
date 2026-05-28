@@ -43,6 +43,7 @@ pub enum SpillerType {
     Window,
     OrderBy,
     Aggregation,
+    MaterializedCTE,
     ResultSet,
 }
 
@@ -54,6 +55,7 @@ impl Display for SpillerType {
             SpillerType::Window => write!(f, "Window"),
             SpillerType::OrderBy => write!(f, "OrderBy"),
             SpillerType::Aggregation => write!(f, "Aggregation"),
+            SpillerType::MaterializedCTE => write!(f, "MaterializedCTE"),
             SpillerType::ResultSet => write!(f, "ResultSet"),
         }
     }

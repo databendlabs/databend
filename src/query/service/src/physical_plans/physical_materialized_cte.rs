@@ -30,7 +30,9 @@ use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::MaterializedCTEFormatter;
 use crate::physical_plans::format::PhysicalFormat;
 use crate::pipelines::PipelineBuilder;
+use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::transforms::MaterializedCteSink;
+use crate::pipelines::processors::transforms::create_materialized_cte_spiller;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MaterializedCTE {
@@ -119,9 +121,16 @@ impl IPhysicalPlan for MaterializedCTE {
             self.ref_count,
             self.channel_size,
         );
-        builder
-            .main_pipeline
-            .add_sink(|input| MaterializedCteSink::create(input, tx.clone()))
+        let spiller =
+            create_materialized_cte_spiller(builder.ctx.clone(), builder.settings.clone())?;
+        let memory_settings =
+            databend_common_pipeline_transforms::MemorySettings::from_materialized_cte_settings(
+                &builder.ctx,
+                &builder.settings,
+            )?;
+        builder.main_pipeline.add_sink(|input| {
+            MaterializedCteSink::create(input, tx.clone(), spiller.clone(), memory_settings.clone())
+        })
     }
 }
 

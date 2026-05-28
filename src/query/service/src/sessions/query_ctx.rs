@@ -164,6 +164,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::servers::http::v1::ClientSessionManager;
@@ -929,7 +930,7 @@ impl QueryContext {
         cte_name: &str,
         cte_ref_count: usize,
         channel_size: Option<usize>,
-    ) -> Vec<Sender<DataBlock>> {
+    ) -> Vec<Sender<MaterializedCtePayload>> {
         let mut senders = vec![];
         let mut receivers = vec![];
         for _ in 0..cte_ref_count {
@@ -948,7 +949,10 @@ impl QueryContext {
         senders
     }
 
-    pub fn get_materialized_cte_receiver(&self, cte_name: &str) -> Receiver<DataBlock> {
+    pub fn get_materialized_cte_receiver(
+        &self,
+        cte_name: &str,
+    ) -> Receiver<MaterializedCtePayload> {
         let mut receivers = self.shared.materialized_cte_receivers.lock();
         let receivers = receivers.get_mut(cte_name).unwrap();
         receivers.pop().unwrap()
