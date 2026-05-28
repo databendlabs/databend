@@ -55,3 +55,41 @@ NULL 229 NULL 249
 query TIITI
 copy into t1 from @data/parquet/diff_schema/ file_format=(type=parquet  missing_field_as = FIELD_DEFAULT) pattern='.*[.]parquet'
 ----
+
+statement ok
+drop table if exists parquet_array_tuple_src
+
+statement ok
+drop table if exists parquet_array_tuple_dst
+
+statement ok
+drop stage if exists parquet_array_tuple_stage
+
+statement ok
+create table parquet_array_tuple_src(a array(tuple(x int, y int)))
+
+statement ok
+insert into parquet_array_tuple_src values ([(1, 10), (2, 20)]), ([null, (3, 30)]), ([])
+
+statement ok
+create stage parquet_array_tuple_stage file_format=(type=parquet)
+
+statement ok
+remove @parquet_array_tuple_stage
+
+statement ok
+copy into @parquet_array_tuple_stage from parquet_array_tuple_src file_format=(type=parquet)
+
+statement ok
+create table parquet_array_tuple_dst(a array(tuple(y int, z int, x int)))
+
+query TIITI
+copy into parquet_array_tuple_dst from @parquet_array_tuple_stage file_format=(type=parquet missing_field_as=field_default) force=true return_failed_only=true
+----
+
+query T
+select to_string(a) from parquet_array_tuple_dst order by to_string(a)
+----
+[]
+[(10,0,1),(20,0,2)]
+[NULL,(30,0,3)]
