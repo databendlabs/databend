@@ -96,6 +96,20 @@ async fn test_set_settings() {
         }
 
         {
+            assert!(!settings.get_enable_proxy_bloom_pruning().unwrap());
+            settings
+                .set_setting("enable_proxy_bloom_pruning".to_string(), "1".to_string())
+                .unwrap();
+            assert!(settings.get_enable_proxy_bloom_pruning().unwrap());
+
+            let result =
+                settings.set_setting("enable_proxy_bloom_pruning".to_string(), "2".to_string());
+            let expect =
+                "WrongValueForVariable. Code: 2803, Text = Value 2 is not within the range [0, 1].";
+            assert_eq!(expect, format!("{}", result.unwrap_err()));
+        }
+
+        {
             settings
                 .set_setting(
                     "prewhere_selectivity_threshold".to_string(),

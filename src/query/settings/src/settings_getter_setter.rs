@@ -1025,6 +1025,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_prune_cache")? == 1)
     }
 
+    pub fn get_enable_proxy_bloom_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_proxy_bloom_pruning")? == 1)
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }

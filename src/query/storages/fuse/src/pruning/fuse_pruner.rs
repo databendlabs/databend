@@ -165,8 +165,9 @@ impl PruningContext {
         let lightweight_pruning = push_down.as_ref().is_some_and(|push_down| {
             push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::Lightweight
         });
+        let enable_proxy_bloom_pruning = ctx.get_settings().get_enable_proxy_bloom_pruning()?;
 
-        let bloom_pruner = if lightweight_pruning {
+        let bloom_pruner = if lightweight_pruning && !enable_proxy_bloom_pruning {
             None
         } else {
             BloomPrunerCreator::create(

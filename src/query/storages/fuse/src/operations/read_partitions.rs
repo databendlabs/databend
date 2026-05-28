@@ -145,15 +145,21 @@ fn deterministic_prune_cache_key(
     segments_location: &[SegmentLocation],
     push_downs: &Option<PushDownInfo>,
     pruning_mode: ReadPartitionsPruningMode,
+    enable_proxy_bloom_pruning: bool,
 ) -> Option<String> {
     let mut push_downs = push_downs.as_ref()?.clone();
     if !push_downs.is_deterministic {
         return None;
     }
     push_downs.read_partitions_pruning_mode = pruning_mode;
+    let lightweight_bloom_pruning =
+        pruning_mode == ReadPartitionsPruningMode::Lightweight && enable_proxy_bloom_pruning;
     Some(format!(
         "{:x}",
-        Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+        Sha256::digest(format!(
+            "{:?}_{:?}_{:?}",
+            segments_location, push_downs, lightweight_bloom_pruning
+        ))
     ))
 }
 
@@ -490,8 +496,12 @@ impl FuseTable {
 
         type CacheItem = (PartStatistics, Partitions);
 
-        let derterministic_cache_key =
-            deterministic_prune_cache_key(&segments_location, &push_downs, pruning_mode);
+        let derterministic_cache_key = deterministic_prune_cache_key(
+            &segments_location,
+            &push_downs,
+            pruning_mode,
+            ctx.get_settings().get_enable_proxy_bloom_pruning()?,
+        );
         if let Some(cached_result) = Self::check_prune_cache(&derterministic_cache_key) {
             info!("Retrieved snapshot block pruning result from cache");
             return Ok((cached_result.0, cached_result.1, None));

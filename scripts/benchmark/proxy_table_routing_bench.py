@@ -16,8 +16,8 @@
 """Diagnose PROXY table routing against its physical target tables.
 
 The script creates five FUSE tables with identical logical data and single,
-two-column, and three-column cluster keys, then checks that PROXY routing follows
-the lowest scan cost reported by EXPLAIN for each predicate shape.
+two-column, and three-column cluster keys, then compares PROXY routing with the
+scan costs reported by EXPLAIN for each predicate shape.
 """
 
 import argparse
@@ -71,6 +71,9 @@ class RouteResult:
     actual_count: int
     stats_by_route: dict[str, ScanStats]
     query_ms_by_route: dict[str, float]
+    route_rank: int | None
+    top1_match: bool
+    acceptable_route: bool
     passed: bool
     reason: str
 
@@ -240,6 +243,8 @@ class Databend:
         }
         if args.disable_distributed_pruning:
             self.settings["enable_distributed_pruning"] = "0"
+        if args.enable_proxy_bloom_pruning:
+            self.settings["enable_proxy_bloom_pruning"] = "1"
 
     def close(self) -> None:
         self.conn.close()
@@ -616,14 +621,14 @@ def run_case(
     best_cost = min(stats_by_route[name].cost for name in physical_routes)
     best_routes = [name for name in physical_routes if stats_by_route[name].cost == best_cost]
     best_route = "trace" if "trace" in best_routes else best_routes[0]
+    route_ranks = rank_routes(stats_by_route, physical_routes)
+    route_rank = route_ranks.get(actual_route)
+    top1_match = actual_route in best_routes
+    acceptable_route = route_rank is not None and route_rank <= args.max_acceptable_rank
 
     reasons = []
     if actual_route not in physical_routes:
         reasons.append(f"proxy route={actual_route!r} is not a physical target route")
-    elif actual_route != best_route:
-        reasons.append(
-            f"proxy selected {actual_route}, but lowest statistics cost selects {best_route}"
-        )
     if actual_count != case.expected_count:
         reasons.append(f"proxy count={actual_count}, expected {case.expected_count}")
     for name in physical_routes:
@@ -648,6 +653,9 @@ def run_case(
         best_routes=best_routes,
         stats_by_route=stats_by_route,
         query_ms_by_route=query_ms_by_route,
+        route_rank=route_rank,
+        top1_match=top1_match,
+        acceptable_route=acceptable_route,
         passed=not reasons,
         reason="; ".join(reasons),
     )
@@ -661,6 +669,9 @@ def run_case(
         actual_count=actual_count,
         stats_by_route=stats_by_route,
         query_ms_by_route=query_ms_by_route,
+        route_rank=route_rank,
+        top1_match=top1_match,
+        acceptable_route=acceptable_route,
         passed=not reasons,
         reason="; ".join(reasons),
     )
@@ -689,6 +700,19 @@ def format_cost_delta(stats: ScanStats, best: ScanStats) -> str:
     )
 
 
+def rank_routes(
+    stats_by_route: dict[str, ScanStats],
+    routes: list[str],
+) -> dict[str, int]:
+    return {
+        name: rank
+        for rank, name in enumerate(
+            sorted(routes, key=lambda route: stats_by_route[route].cost),
+            start=1,
+        )
+    }
+
+
 def print_case_report(
     case: BenchCase,
     actual_route: str,
@@ -697,6 +721,9 @@ def print_case_report(
     best_routes: list[str],
     stats_by_route: dict[str, ScanStats],
     query_ms_by_route: dict[str, float],
+    route_rank: int | None,
+    top1_match: bool,
+    acceptable_route: bool,
     passed: bool,
     reason: str,
 ) -> None:
@@ -705,19 +732,14 @@ def print_case_report(
     print(
         f"best_by_stats={best_route} tied={','.join(best_routes)} "
         f"proxy_route={actual_route} count={actual_count}/{case.expected_count} "
-        f"passed={passed}"
+        f"route_rank={route_rank or '-'} top1_match={top1_match} "
+        f"acceptable_route={acceptable_route} passed={passed}"
     )
     best_stats = stats_by_route[best_route]
-    ranks = {
-        name: rank
-        for rank, name in enumerate(
-            sorted(
-                ["trace", "chat", "user", "trace_chat", "trace_chat_user"],
-                key=lambda route: stats_by_route[route].cost,
-            ),
-            start=1,
-        )
-    }
+    ranks = rank_routes(
+        stats_by_route,
+        ["trace", "chat", "user", "trace_chat", "trace_chat_user"],
+    )
     print(
         f"{'route':<18} {'pick':<18} {'rank':>4} {'query_ms(p50)':>13} "
         f"{'partitions':>14} {'read_rows':>12} {'read_size':>12} "
@@ -750,7 +772,7 @@ def print_summary(results: list[RouteResult]) -> None:
     print(
         "case,best_by_stats,tied_best,actual_route,count,"
         "best_cost,proxy_cost,selected_cost,selected_delta,"
-        "best_ms,proxy_ms,selected_ms,passed"
+        "best_ms,proxy_ms,selected_ms,route_rank,top1_match,acceptable_route,passed"
     )
     for result in results:
         selected_cost = (
@@ -779,10 +801,26 @@ def print_summary(results: list[RouteResult]) -> None:
             f"{selected_cost},{selected_delta},"
             f"{result.query_ms_by_route[result.best_route]:.2f},"
             f"{result.query_ms_by_route['proxy']:.2f},"
-            f"{selected_ms},{result.passed}"
+            f"{selected_ms},{result.route_rank},{result.top1_match},"
+            f"{result.acceptable_route},{result.passed}"
         )
         if not result.passed:
             print(f"  reason: {result.reason}")
+
+
+def print_route_quality(results: list[RouteResult]) -> tuple[float, float]:
+    total = len(results)
+    top1_hits = sum(result.top1_match for result in results)
+    acceptable_hits = sum(result.acceptable_route for result in results)
+    top1_hit_ratio = top1_hits / total if total else 0.0
+    acceptable_hit_ratio = acceptable_hits / total if total else 0.0
+
+    print("\nroute quality:")
+    print(
+        f"top1_hit_ratio={top1_hits}/{total}={top1_hit_ratio:.2%}, "
+        f"acceptable_hit_ratio={acceptable_hits}/{total}={acceptable_hit_ratio:.2%}"
+    )
+    return top1_hit_ratio, acceptable_hit_ratio
 
 
 def parse_args() -> argparse.Namespace:
@@ -815,6 +853,34 @@ def parse_args() -> argparse.Namespace:
         help="Query rounds per route/case used to report median latency.",
     )
     parser.add_argument(
+        "--max-acceptable-rank",
+        type=int,
+        default=2,
+        help=(
+            "Treat a selected physical target as acceptable if its statistics "
+            "rank is no worse than this value. The exact best route can be "
+            "fuzzy when routing is intentionally based on cheap/range pruning."
+        ),
+    )
+    parser.add_argument(
+        "--min-top1-hit-ratio",
+        type=float,
+        default=0.85,
+        help=(
+            "Minimum fraction of cases where PROXY should select one of the "
+            "lowest statistics-cost routes."
+        ),
+    )
+    parser.add_argument(
+        "--min-acceptable-hit-ratio",
+        type=float,
+        default=1.0,
+        help=(
+            "Minimum fraction of cases where PROXY should select an acceptable "
+            "ranked route."
+        ),
+    )
+    parser.add_argument(
         "--skip-setup",
         action="store_true",
         help="Reuse existing proxy benchmark tables.",
@@ -826,6 +892,11 @@ def parse_args() -> argparse.Namespace:
         help="Leave enable_distributed_pruning unchanged for the session.",
     )
     parser.set_defaults(disable_distributed_pruning=True)
+    parser.add_argument(
+        "--enable-proxy-bloom-pruning",
+        action="store_true",
+        help="Enable bloom index pruning during PROXY lightweight route estimation.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -849,6 +920,12 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--warmup-rounds cannot be negative")
     if args.measure_rounds < 1:
         raise ValueError("--measure-rounds must be positive")
+    if args.max_acceptable_rank < 1:
+        raise ValueError("--max-acceptable-rank must be positive")
+    if not 0 <= args.min_top1_hit_ratio <= 1:
+        raise ValueError("--min-top1-hit-ratio must be between 0 and 1")
+    if not 0 <= args.min_acceptable_hit_ratio <= 1:
+        raise ValueError("--min-acceptable-hit-ratio must be between 0 and 1")
 
 
 def main() -> int:
@@ -878,10 +955,25 @@ def main() -> int:
 
         results = [run_case(db, case, args) for case in cases]
         print_summary(results)
+        top1_hit_ratio, acceptable_hit_ratio = print_route_quality(results)
 
         failed = [result for result in results if not result.passed]
         if failed:
             print(f"\nfailed cases: {len(failed)}", file=sys.stderr)
+            return 1
+        if top1_hit_ratio < args.min_top1_hit_ratio:
+            print(
+                f"\ntop1 hit ratio {top1_hit_ratio:.2%} is below "
+                f"required {args.min_top1_hit_ratio:.2%}",
+                file=sys.stderr,
+            )
+            return 1
+        if acceptable_hit_ratio < args.min_acceptable_hit_ratio:
+            print(
+                f"\nacceptable hit ratio {acceptable_hit_ratio:.2%} is below "
+                f"required {args.min_acceptable_hit_ratio:.2%}",
+                file=sys.stderr,
+            )
             return 1
 
         print("\nall proxy routing benchmark cases passed")
