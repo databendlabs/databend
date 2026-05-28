@@ -22,7 +22,7 @@ csv/data_UUID_0000_00000000.csv	20	0	NULL	NULL
 Error: APIError: QueryFailed: [1063]Permission denied: privilege [Read] is required on STAGE s2 for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
 data_UUID_0000_00000000.csv	20	0	NULL	NULL
 ==== check schema evolution alter priv ===
-Error: APIError: QueryFailed: [1063]Permission denied: privilege [Alter] is required on 'default'.'default'.'se_table' for user 'u1'@'%' with roles [public]. Note: Please ensure that your current role have the appropriate permissions to create a new Object
+Error: APIError: QueryFailed: [1063]Permission denied: privilege [Alter] is required on 'default'.'default'.'se_table' for user 'u1'@'%' with roles [public]
 data_UUID_0000_00000000.ndjson	1	0	NULL	NULL
 1	2
 data_UUID_0000_00000000.ndjson	1	0	NULL	NULL
