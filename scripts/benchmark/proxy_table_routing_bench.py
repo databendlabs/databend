@@ -41,6 +41,11 @@ TABLE_USER = "proxy_bench_spans_by_user"
 TABLE_TRACE_CHAT = "proxy_bench_spans_by_trace_chat"
 TABLE_TRACE_CHAT_USER = "proxy_bench_spans_by_trace_chat_user"
 
+MAX_ACCEPTABLE_RANK = 2
+RANGE_ONLY_MIN_TOP1_HIT_RATIO = 0.85
+BLOOM_MIN_TOP1_HIT_RATIO = 1.0
+MIN_ACCEPTABLE_HIT_RATIO = 1.0
+
 
 @dataclass(frozen=True)
 class BenchCase:
@@ -624,7 +629,7 @@ def run_case(
     route_ranks = rank_routes(stats_by_route, physical_routes)
     route_rank = route_ranks.get(actual_route)
     top1_match = actual_route in best_routes
-    acceptable_route = route_rank is not None and route_rank <= args.max_acceptable_rank
+    acceptable_route = route_rank is not None and route_rank <= MAX_ACCEPTABLE_RANK
 
     reasons = []
     if actual_route not in physical_routes:
@@ -808,7 +813,10 @@ def print_summary(results: list[RouteResult]) -> None:
             print(f"  reason: {result.reason}")
 
 
-def print_route_quality(results: list[RouteResult]) -> tuple[float, float]:
+def print_route_quality(
+    results: list[RouteResult],
+    required_top1_hit_ratio: float,
+) -> tuple[float, float]:
     total = len(results)
     top1_hits = sum(result.top1_match for result in results)
     acceptable_hits = sum(result.acceptable_route for result in results)
@@ -818,6 +826,7 @@ def print_route_quality(results: list[RouteResult]) -> tuple[float, float]:
     print("\nroute quality:")
     print(
         f"top1_hit_ratio={top1_hits}/{total}={top1_hit_ratio:.2%}, "
+        f"required_top1_hit_ratio={required_top1_hit_ratio:.2%}, "
         f"acceptable_hit_ratio={acceptable_hits}/{total}={acceptable_hit_ratio:.2%}"
     )
     return top1_hit_ratio, acceptable_hit_ratio
@@ -851,34 +860,6 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=5,
         help="Query rounds per route/case used to report median latency.",
-    )
-    parser.add_argument(
-        "--max-acceptable-rank",
-        type=int,
-        default=2,
-        help=(
-            "Treat a selected physical target as acceptable if its statistics "
-            "rank is no worse than this value. The exact best route can be "
-            "fuzzy when routing is intentionally based on cheap/range pruning."
-        ),
-    )
-    parser.add_argument(
-        "--min-top1-hit-ratio",
-        type=float,
-        default=0.85,
-        help=(
-            "Minimum fraction of cases where PROXY should select one of the "
-            "lowest statistics-cost routes."
-        ),
-    )
-    parser.add_argument(
-        "--min-acceptable-hit-ratio",
-        type=float,
-        default=1.0,
-        help=(
-            "Minimum fraction of cases where PROXY should select an acceptable "
-            "ranked route."
-        ),
     )
     parser.add_argument(
         "--skip-setup",
@@ -920,12 +901,12 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--warmup-rounds cannot be negative")
     if args.measure_rounds < 1:
         raise ValueError("--measure-rounds must be positive")
-    if args.max_acceptable_rank < 1:
-        raise ValueError("--max-acceptable-rank must be positive")
-    if not 0 <= args.min_top1_hit_ratio <= 1:
-        raise ValueError("--min-top1-hit-ratio must be between 0 and 1")
-    if not 0 <= args.min_acceptable_hit_ratio <= 1:
-        raise ValueError("--min-acceptable-hit-ratio must be between 0 and 1")
+
+
+def min_top1_hit_ratio(args: argparse.Namespace) -> float:
+    if args.enable_proxy_bloom_pruning:
+        return BLOOM_MIN_TOP1_HIT_RATIO
+    return RANGE_ONLY_MIN_TOP1_HIT_RATIO
 
 
 def main() -> int:
@@ -955,23 +936,27 @@ def main() -> int:
 
         results = [run_case(db, case, args) for case in cases]
         print_summary(results)
-        top1_hit_ratio, acceptable_hit_ratio = print_route_quality(results)
+        required_top1_hit_ratio = min_top1_hit_ratio(args)
+        top1_hit_ratio, acceptable_hit_ratio = print_route_quality(
+            results,
+            required_top1_hit_ratio,
+        )
 
         failed = [result for result in results if not result.passed]
         if failed:
             print(f"\nfailed cases: {len(failed)}", file=sys.stderr)
             return 1
-        if top1_hit_ratio < args.min_top1_hit_ratio:
+        if top1_hit_ratio < required_top1_hit_ratio:
             print(
                 f"\ntop1 hit ratio {top1_hit_ratio:.2%} is below "
-                f"required {args.min_top1_hit_ratio:.2%}",
+                f"required {required_top1_hit_ratio:.2%}",
                 file=sys.stderr,
             )
             return 1
-        if acceptable_hit_ratio < args.min_acceptable_hit_ratio:
+        if acceptable_hit_ratio < MIN_ACCEPTABLE_HIT_RATIO:
             print(
                 f"\nacceptable hit ratio {acceptable_hit_ratio:.2%} is below "
-                f"required {args.min_acceptable_hit_ratio:.2%}",
+                f"required {MIN_ACCEPTABLE_HIT_RATIO:.2%}",
                 file=sys.stderr,
             )
             return 1

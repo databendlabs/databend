@@ -1,0 +1,87 @@
+name: Proxy Benchmark
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+      - backport/*
+    paths:
+      - ".github/workflows/proxy_benchmark.yml"
+      - "scripts/benchmark/proxy_table_routing_bench.py"
+      - "scripts/ci/ci-run-proxy-routing-benchmark.sh"
+      - "src/query/catalog/src/table.rs"
+      - "src/query/settings/src/**"
+      - "src/query/storages/basic/src/proxy_table.rs"
+      - "src/query/storages/fuse/src/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 16c
+      - aws
+    env:
+      BUILD_PROFILE: ci
+      RUNNER_PROVIDER: aws
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/build_linux
+        timeout-minutes: 60
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          artifacts: meta,query
+          trim_debug: "false"
+
+  proxy-routing-benchmark:
+    needs: build
+    runs-on:
+      - self-hosted
+      - X64
+      - Linux
+      - 2c
+      - aws
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: range-only
+            enable_proxy_bloom_pruning: "0"
+          - name: with-bloom
+            enable_proxy_bloom_pruning: "1"
+    name: PROXY routing benchmark (${{ matrix.name }})
+    env:
+      BUILD_PROFILE: ci
+      RUNNER_PROVIDER: aws
+      BINARY_DIR: target/ci
+      ROWS: "300000"
+      ENABLE_PROXY_BLOOM_PRUNING: ${{ matrix.enable_proxy_bloom_pruning }}
+      PAYLOAD_BYTES: "64"
+      WARMUP_ROUNDS: "1"
+      MEASURE_ROUNDS: "2"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          artifacts: meta,query
+
+      - name: Run PROXY routing benchmark
+        timeout-minutes: 20
+        run: bash scripts/ci/ci-run-proxy-routing-benchmark.sh
