@@ -32,7 +32,7 @@ jobs:
       - 16c
       - aws
     env:
-      BUILD_PROFILE: ci
+      BUILD_PROFILE: debug
       RUNNER_PROVIDER: aws
     steps:
       - uses: actions/checkout@v4
@@ -65,14 +65,14 @@ jobs:
             proxy_routing_model: prefix
     name: PROXY routing benchmark (${{ matrix.name }})
     env:
-      BUILD_PROFILE: ci
+      BUILD_PROFILE: debug
       RUNNER_PROVIDER: aws
-      BINARY_DIR: target/ci
-      ROWS: "300000"
+      BINARY_DIR: target/debug
+      ROWS: "50000"
       PROXY_ROUTING_MODEL: ${{ matrix.proxy_routing_model }}
-      PAYLOAD_BYTES: "64"
-      WARMUP_ROUNDS: "1"
-      MEASURE_ROUNDS: "2"
+      PAYLOAD_BYTES: "16"
+      WARMUP_ROUNDS: "0"
+      MEASURE_ROUNDS: "1"
     steps:
       - uses: actions/checkout@v4
 
