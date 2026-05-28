@@ -250,10 +250,9 @@ impl FuseTable {
                     nodes_num = cluster.nodes.len();
                 }
 
-                if self.is_column_oriented()
-                    || (pruning_mode == ReadPartitionsPruningMode::Normal
-                        && segment_len > nodes_num
-                        && distributed_pruning)
+                if pruning_mode == ReadPartitionsPruningMode::Normal
+                    && (self.is_column_oriented()
+                        || (segment_len > nodes_num && distributed_pruning))
                 {
                     let snapshot_location = read_info.snapshot_location;
                     let mut segments = Vec::with_capacity(read_info.segment_locations.len());
