@@ -42,8 +42,7 @@ TABLE_TRACE_CHAT = "proxy_bench_spans_by_trace_chat"
 TABLE_TRACE_CHAT_USER = "proxy_bench_spans_by_trace_chat_user"
 
 MAX_ACCEPTABLE_RANK = 2
-RANGE_ONLY_MIN_TOP1_HIT_RATIO = 0.85
-BLOOM_MIN_TOP1_HIT_RATIO = 1.0
+MIN_TOP1_HIT_RATIO = 0.85
 MIN_ACCEPTABLE_HIT_RATIO = 1.0
 
 
@@ -248,6 +247,8 @@ class Databend:
         }
         if args.disable_distributed_pruning:
             self.settings["enable_distributed_pruning"] = "0"
+        if args.proxy_routing_model:
+            self.settings["proxy_routing_model"] = args.proxy_routing_model
         if args.enable_proxy_bloom_pruning:
             self.settings["enable_proxy_bloom_pruning"] = "1"
 
@@ -274,8 +275,10 @@ class Databend:
     def execute(self, sql: str) -> list[tuple]:
         payload = {
             "sql": sql,
-            "database": self.args.database,
-            "settings": self.settings,
+            "session": {
+                "database": self.args.database,
+                "settings": self.settings,
+            },
             "pagination": {"wait_time_secs": 60},
         }
         data = self.request_json("POST", "/v1/query", payload)
@@ -301,6 +304,27 @@ def run_statements(db: Databend, statements: Iterable[str], dry_run: bool) -> No
         print(sql if dry_run else f"running: {sql.splitlines()[0][:100]}")
         if not dry_run:
             db.execute(sql)
+
+
+def verify_session_settings(db: Databend, args: argparse.Namespace) -> None:
+    value = db.query_one(
+        "select value from system.settings where name = 'proxy_routing_model'"
+    )[0]
+    if value != args.proxy_routing_model:
+        raise RuntimeError(
+            "proxy_routing_model setting is not applied: "
+            f"expected {args.proxy_routing_model!r}, got {value!r}"
+        )
+
+    if args.disable_distributed_pruning:
+        value = db.query_one(
+            "select value from system.settings where name = 'enable_distributed_pruning'"
+        )[0]
+        if value != "0":
+            raise RuntimeError(
+                "enable_distributed_pruning setting is not applied: "
+                f"expected '0', got {value!r}"
+            )
 
 
 def setup_data(db: Databend, args: argparse.Namespace) -> None:
@@ -878,6 +902,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable bloom index pruning during PROXY lightweight route estimation.",
     )
+    parser.add_argument(
+        "--proxy-routing-model",
+        choices=("statistics", "prefix"),
+        default="statistics",
+        help="PROXY routing model to benchmark.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -904,9 +934,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def min_top1_hit_ratio(args: argparse.Namespace) -> float:
-    if args.enable_proxy_bloom_pruning:
-        return BLOOM_MIN_TOP1_HIT_RATIO
-    return RANGE_ONLY_MIN_TOP1_HIT_RATIO
+    return MIN_TOP1_HIT_RATIO
 
 
 def main() -> int:
@@ -928,11 +956,14 @@ def main() -> int:
 
     db = Databend(args)
     try:
+        if args.dry_run:
+            if not args.skip_setup:
+                setup_data(db, args)
+            return 0
+
+        verify_session_settings(db, args)
         if not args.skip_setup:
             setup_data(db, args)
-
-        if args.dry_run:
-            return 0
 
         results = [run_case(db, case, args) for case in cases]
         print_summary(results)

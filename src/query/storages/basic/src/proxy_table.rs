@@ -14,11 +14,13 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
+use databend_common_ast::ast;
 use databend_common_catalog::catalog::StorageDescription;
 use databend_common_catalog::plan::DataSourceInfo;
 use databend_common_catalog::plan::DataSourcePlan;
@@ -34,6 +36,7 @@ use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::RemoteExpr;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
@@ -41,6 +44,25 @@ use parking_lot::Mutex;
 
 pub const PROXY_OPT_KEY_TARGETS: &str = "targets";
 pub const PROXY_OPT_KEY_DEFAULT: &str = "default";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ProxyRoutingModel {
+    Statistics,
+    Prefix,
+}
+
+impl ProxyRoutingModel {
+    fn from_setting(value: String) -> Result<Self> {
+        match value.to_lowercase().as_str() {
+            "statistics" => Ok(Self::Statistics),
+            "prefix" => Ok(Self::Prefix),
+            _ => Err(ErrorCode::BadArguments(format!(
+                "Unsupported PROXY routing model '{}'",
+                value
+            ))),
+        }
+    }
+}
 
 pub struct ProxyTable {
     table_info: TableInfo,
@@ -69,6 +91,24 @@ struct RoutingCandidate {
     table: Arc<dyn Table>,
     statistics: PartStatistics,
     reusable_pruned_metas: Option<ReusablePrunedMetas>,
+}
+
+struct PrefixRoutingCandidate {
+    target: String,
+    table: Arc<dyn Table>,
+    score: PrefixRouteScore,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+struct PrefixRouteScore {
+    matched_prefix: usize,
+    equality_prefix: usize,
+}
+
+#[derive(Default)]
+struct PredicateColumns {
+    equality: HashSet<String>,
+    range: HashSet<String>,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -134,6 +174,12 @@ impl ProxyTable {
             return self.select_default_target(ctx, push_downs).await;
         }
 
+        if ProxyRoutingModel::from_setting(ctx.get_settings().get_proxy_routing_model()?)?
+            == ProxyRoutingModel::Prefix
+        {
+            return self.select_target_by_prefix(ctx, push_downs).await;
+        }
+
         let mut selected: Option<RoutingCandidate> = None;
         let mut default_candidate: Option<RoutingCandidate> = None;
 
@@ -185,6 +231,63 @@ impl ProxyTable {
             selected.table,
             push_downs,
             selected.reusable_pruned_metas,
+        )
+        .await
+    }
+
+    async fn select_target_by_prefix(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<SelectedTarget> {
+        let predicate_columns = predicate_columns(&push_downs);
+        let mut selected: Option<PrefixRoutingCandidate> = None;
+        let mut default_candidate: Option<PrefixRoutingCandidate> = None;
+
+        for target in &self.targets {
+            let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
+                continue;
+            };
+            let score = cluster_prefix_score(table.as_ref(), &predicate_columns);
+            let candidate = PrefixRoutingCandidate {
+                target: target.clone(),
+                table,
+                score,
+            };
+
+            if target == &self.default_target {
+                default_candidate = Some(PrefixRoutingCandidate {
+                    target: candidate.target.clone(),
+                    table: candidate.table.clone(),
+                    score: candidate.score,
+                });
+            }
+
+            if selected
+                .as_ref()
+                .is_none_or(|selected| candidate.score > selected.score)
+            {
+                selected = Some(candidate);
+            }
+        }
+
+        let selected = selected.ok_or_else(|| self.no_available_target_error())?;
+        let selected = if let Some(default_candidate) = default_candidate {
+            if default_candidate.score == selected.score {
+                default_candidate
+            } else {
+                selected
+            }
+        } else {
+            selected
+        };
+
+        self.read_target_partitions_from_table(
+            ctx,
+            selected.target,
+            selected.table,
+            push_downs,
+            None,
         )
         .await
     }
@@ -715,6 +818,119 @@ fn lightweight_push_downs(push_downs: Option<PushDownInfo>) -> Option<PushDownIn
     })
 }
 
+fn predicate_columns(push_downs: &Option<PushDownInfo>) -> PredicateColumns {
+    let mut columns = PredicateColumns::default();
+    if let Some(push_downs) = push_downs {
+        if let Some(filters) = &push_downs.filters {
+            collect_predicate_columns(&filters.filter, &mut columns);
+        }
+        if let Some(filters) = &push_downs.secure_filters {
+            collect_predicate_columns(&filters.filter, &mut columns);
+        }
+    }
+    columns
+}
+
+fn collect_predicate_columns(expr: &RemoteExpr<String>, columns: &mut PredicateColumns) {
+    let RemoteExpr::FunctionCall { id, args, .. } = expr else {
+        return;
+    };
+
+    let name = id.name();
+    if matches!(name.as_ref(), "or" | "or_filters") {
+        return;
+    }
+
+    if let Some(column) = comparison_predicate_column(name.as_ref(), args) {
+        match name.as_ref() {
+            "eq" => {
+                columns.equality.insert(column);
+            }
+            "gt" | "gte" | "lt" | "lte" => {
+                columns.range.insert(column);
+            }
+            _ => {}
+        }
+    }
+
+    for arg in args {
+        collect_predicate_columns(arg, columns);
+    }
+}
+
+fn comparison_predicate_column(name: &str, args: &[RemoteExpr<String>]) -> Option<String> {
+    if !matches!(name, "eq" | "gt" | "gte" | "lt" | "lte") || args.len() != 2 {
+        return None;
+    }
+
+    match (&args[0], &args[1]) {
+        (left, right) if is_constant_expr(right) => column_expr_name(left).map(ToString::to_string),
+        (left, right) if is_constant_expr(left) => column_expr_name(right).map(ToString::to_string),
+        _ => None,
+    }
+}
+
+fn column_expr_name(expr: &RemoteExpr<String>) -> Option<&str> {
+    match expr {
+        RemoteExpr::ColumnRef { id, .. } => Some(id.as_str()),
+        RemoteExpr::Cast { expr, .. } => column_expr_name(expr),
+        _ => None,
+    }
+}
+
+fn is_constant_expr(expr: &RemoteExpr<String>) -> bool {
+    match expr {
+        RemoteExpr::Constant { .. } => true,
+        RemoteExpr::Cast { expr, .. } => is_constant_expr(expr),
+        _ => false,
+    }
+}
+
+fn cluster_prefix_score(
+    table: &dyn Table,
+    predicate_columns: &PredicateColumns,
+) -> PrefixRouteScore {
+    cluster_prefix_score_for_columns(cluster_key_columns(table), predicate_columns)
+}
+
+fn cluster_prefix_score_for_columns(
+    cluster_key_columns: Vec<String>,
+    predicate_columns: &PredicateColumns,
+) -> PrefixRouteScore {
+    let mut score = PrefixRouteScore::default();
+    for column in cluster_key_columns {
+        if predicate_columns.equality.contains(&column) {
+            score.matched_prefix += 1;
+            score.equality_prefix += 1;
+            continue;
+        }
+        if predicate_columns.range.contains(&column) {
+            score.matched_prefix += 1;
+        }
+        break;
+    }
+    score
+}
+
+fn cluster_key_columns(table: &dyn Table) -> Vec<String> {
+    table
+        .resolve_cluster_keys()
+        .unwrap_or_default()
+        .iter()
+        .map(simple_cluster_key_column)
+        .collect::<Option<Vec<_>>>()
+        .unwrap_or_default()
+}
+
+fn simple_cluster_key_column(expr: &ast::Expr) -> Option<String> {
+    match expr {
+        ast::Expr::ColumnRef { column, .. } if column.table.is_none() => {
+            Some(column.column.name().to_string())
+        }
+        _ => None,
+    }
+}
+
 fn statistics_cost(statistics: &PartStatistics) -> (usize, usize, usize) {
     (
         statistics.partitions_scanned,
@@ -734,11 +950,15 @@ fn database_from_desc(desc: &str) -> Option<String> {
 mod tests {
     use std::collections::BTreeMap;
 
+    use databend_common_catalog::plan::Filters;
     use databend_common_catalog::plan::PartitionsShuffleKind;
+    use databend_common_expression::FunctionID;
+    use databend_common_expression::Scalar;
     use databend_common_expression::TableDataType;
     use databend_common_expression::TableField;
     use databend_common_expression::TableSchemaRef;
     use databend_common_expression::TableSchemaRefExt;
+    use databend_common_expression::types::DataType;
     use databend_common_meta_app::schema::TableInfo;
     use databend_meta_client::types::NodeInfo;
 
@@ -793,6 +1013,55 @@ mod tests {
         ))
     }
 
+    fn column(name: &str) -> RemoteExpr<String> {
+        RemoteExpr::ColumnRef {
+            span: None,
+            id: name.to_string(),
+            data_type: DataType::String,
+            display_name: name.to_string(),
+        }
+    }
+
+    fn string_literal(value: &str) -> RemoteExpr<String> {
+        RemoteExpr::Constant {
+            span: None,
+            scalar: Scalar::String(value.to_string()),
+            data_type: DataType::String,
+        }
+    }
+
+    fn bool_literal(value: bool) -> RemoteExpr<String> {
+        RemoteExpr::Constant {
+            span: None,
+            scalar: Scalar::Boolean(value),
+            data_type: DataType::Boolean,
+        }
+    }
+
+    fn function(name: &str, args: Vec<RemoteExpr<String>>) -> RemoteExpr<String> {
+        RemoteExpr::FunctionCall {
+            span: None,
+            id: Box::new(FunctionID::Builtin {
+                name: name.to_string(),
+                id: 0,
+            }),
+            generics: vec![],
+            args,
+            return_type: DataType::Boolean,
+        }
+    }
+
+    fn comparison(name: &str, column_name: &str) -> RemoteExpr<String> {
+        function(name, vec![column(column_name), string_literal("v")])
+    }
+
+    fn filter(expr: RemoteExpr<String>) -> Filters {
+        Filters {
+            filter: expr,
+            inverted_filter: bool_literal(false),
+        }
+    }
+
     #[test]
     fn test_proxy_table_options() -> Result<()> {
         let mut options = BTreeMap::new();
@@ -811,6 +1080,62 @@ mod tests {
         assert_eq!(proxy.default_target, "spans_by_chat");
 
         Ok(())
+    }
+
+    #[test]
+    fn test_proxy_prefix_route_predicate_columns() {
+        let filters = filter(function("and_filters", vec![
+            comparison("eq", "trace_id"),
+            comparison("gte", "chat_id"),
+            function("or_filters", vec![
+                comparison("eq", "user_id"),
+                comparison("eq", "span_id"),
+            ]),
+        ]));
+        let push_downs = Some(PushDownInfo {
+            filters: Some(filters),
+            ..Default::default()
+        });
+
+        let columns = predicate_columns(&push_downs);
+        assert!(columns.equality.contains("trace_id"));
+        assert!(columns.range.contains("chat_id"));
+        assert!(!columns.equality.contains("user_id"));
+        assert!(!columns.equality.contains("span_id"));
+    }
+
+    #[test]
+    fn test_proxy_prefix_route_score_uses_leftmost_prefix() {
+        let mut columns = PredicateColumns::default();
+        columns.equality.insert("trace_id".to_string());
+        columns.range.insert("chat_id".to_string());
+        columns.equality.insert("user_id".to_string());
+
+        let trace_chat_user = cluster_prefix_score_for_columns(
+            vec![
+                "trace_id".to_string(),
+                "chat_id".to_string(),
+                "user_id".to_string(),
+            ],
+            &columns,
+        );
+        assert_eq!(trace_chat_user.matched_prefix, 2);
+        assert_eq!(trace_chat_user.equality_prefix, 1);
+
+        let chat_trace = cluster_prefix_score_for_columns(
+            vec!["chat_id".to_string(), "trace_id".to_string()],
+            &columns,
+        );
+        assert_eq!(chat_trace.matched_prefix, 1);
+        assert_eq!(chat_trace.equality_prefix, 0);
+
+        let user_trace = cluster_prefix_score_for_columns(
+            vec!["user_id".to_string(), "trace_id".to_string()],
+            &columns,
+        );
+        assert_eq!(user_trace.matched_prefix, 2);
+        assert_eq!(user_trace.equality_prefix, 2);
+        assert!(user_trace > trace_chat_user);
     }
 
     #[test]

@@ -1029,6 +1029,10 @@ impl Settings {
         Ok(self.try_get_u64("enable_proxy_bloom_pruning")? == 1)
     }
 
+    pub fn get_proxy_routing_model(&self) -> Result<String> {
+        self.try_get_string("proxy_routing_model")
+    }
+
     pub fn get_enable_distributed_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_pruning")? == 1)
     }

@@ -59,17 +59,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: range-only
-            enable_proxy_bloom_pruning: "0"
-          - name: with-bloom
-            enable_proxy_bloom_pruning: "1"
+          - name: statistics
+            proxy_routing_model: statistics
+          - name: prefix
+            proxy_routing_model: prefix
     name: PROXY routing benchmark (${{ matrix.name }})
     env:
       BUILD_PROFILE: ci
       RUNNER_PROVIDER: aws
       BINARY_DIR: target/ci
       ROWS: "300000"
-      ENABLE_PROXY_BLOOM_PRUNING: ${{ matrix.enable_proxy_bloom_pruning }}
+      PROXY_ROUTING_MODEL: ${{ matrix.proxy_routing_model }}
       PAYLOAD_BYTES: "64"
       WARMUP_ROUNDS: "1"
       MEASURE_ROUNDS: "2"

@@ -110,6 +110,19 @@ async fn test_set_settings() {
         }
 
         {
+            assert_eq!(settings.get_proxy_routing_model().unwrap(), "statistics");
+            settings
+                .set_setting("proxy_routing_model".to_string(), "prefix".to_string())
+                .unwrap();
+            assert_eq!(settings.get_proxy_routing_model().unwrap(), "prefix");
+
+            let result =
+                settings.set_setting("proxy_routing_model".to_string(), "unknown".to_string());
+            let expect = "WrongValueForVariable. Code: 2803, Text = Value unknown is not within the allowed values [\"statistics\", \"prefix\"].";
+            assert_eq!(expect, format!("{}", result.unwrap_err()));
+        }
+
+        {
             settings
                 .set_setting(
                     "prewhere_selectivity_threshold".to_string(),
