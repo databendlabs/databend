@@ -51,6 +51,7 @@ use databend_common_meta_app::schema::TableIndexType;
 use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::DefaultExprBinder;
+use databend_common_storage::ColumnNode;
 use databend_common_storage::ColumnNodes;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CachedObject;
@@ -122,6 +123,7 @@ struct SnapshotReadInfo {
     block_count: usize,
 }
 
+type IndexedBlockMetas = Vec<(BlockMetaIndex, Arc<BlockMeta>)>;
 type PrunedBlockMetas = Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)>;
 
 impl SnapshotReadInfo {
@@ -292,47 +294,6 @@ impl FuseTable {
             }
             None => Ok((PartStatistics::default(), Partitions::default(), None)),
         }
-    }
-
-    async fn prune_blocks_with_pruner(
-        &self,
-        mut pruner: FusePruner,
-        segments_location: Vec<SegmentLocation>,
-    ) -> Result<(PrunedBlockMetas, PruningStatistics)> {
-        let block_metas = pruner.read_pruning(segments_location).await?;
-        let pruning_stats = pruner.pruning_stats();
-        let block_metas = block_metas
-            .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
-            .collect::<Vec<_>>();
-        Ok((block_metas, pruning_stats))
-    }
-
-    async fn refine_blocks_with_pruner(
-        &self,
-        pruner: FusePruner,
-        block_metas: PrunedBlockMetas,
-    ) -> Result<(PrunedBlockMetas, PruningStatistics)> {
-        let block_metas = block_metas
-            .into_iter()
-            .map(|(block_meta_index, block_meta)| {
-                block_meta_index
-                    .map(|block_meta_index| (block_meta_index, block_meta))
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(
-                            "Block meta index is required to refine pruned FUSE blocks",
-                        )
-                    })
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let block_metas = pruner.refine_pruned_blocks(block_metas).await?;
-        let pruning_stats = pruner.pruning_stats();
-        let block_metas = block_metas
-            .into_iter()
-            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
-            .collect::<Vec<_>>();
-        Ok((block_metas, pruning_stats))
     }
 
     pub fn do_build_prune_pipeline(
@@ -506,7 +467,7 @@ impl FuseTable {
             return Ok((cached_result.0, cached_result.1, None));
         }
 
-        let pruner = self.build_fuse_pruner(
+        let mut pruner = self.build_fuse_pruner(
             ctx.clone(),
             push_downs.clone(),
             table_schema.clone(),
@@ -515,19 +476,15 @@ impl FuseTable {
 
         if pruning_mode == ReadPartitionsPruningMode::Normal {
             if let Some(reusable_pruned_metas) = reusable_pruned_metas {
-                let lightweight_block_metas: Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)> =
-                    reusable_pruned_metas
-                        .as_ref()
-                        .downcast_ref::<PrunedBlockMetas>()
-                        .ok_or_else(|| {
-                            ErrorCode::Internal(
-                                "Invalid reusable pruned metas payload for FUSE table",
-                            )
-                        })?
-                        .clone();
-                let (block_metas, pruning_stats) = self
-                    .refine_blocks_with_pruner(pruner, lightweight_block_metas)
-                    .await?;
+                let lightweight_block_metas = reusable_pruned_metas
+                    .as_ref()
+                    .downcast_ref::<IndexedBlockMetas>()
+                    .ok_or_else(|| {
+                        ErrorCode::Internal("Invalid reusable pruned metas payload for FUSE table")
+                    })?
+                    .clone();
+                let block_metas = pruner.refine_pruned_blocks(lightweight_block_metas).await?;
+                let pruning_stats = pruner.pruning_stats();
 
                 info!(
                     "refine lightweight snapshot block pruning result, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
@@ -538,11 +495,12 @@ impl FuseTable {
                 );
 
                 let schema = self.schema_with_stream();
+                let pruned_block_metas = Self::attach_optional_block_meta_indexes(block_metas);
                 let result = self.read_partitions_with_metas(
                     ctx.clone(),
                     schema,
                     push_downs,
-                    &block_metas,
+                    &pruned_block_metas,
                     summary,
                     pruning_stats,
                 )?;
@@ -556,9 +514,8 @@ impl FuseTable {
             }
         }
 
-        let (block_metas, pruning_stats) = self
-            .prune_blocks_with_pruner(pruner, segments_location)
-            .await?;
+        let block_metas = pruner.read_pruning(segments_location).await?;
+        let pruning_stats = pruner.pruning_stats();
 
         info!(
             "prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
@@ -569,11 +526,12 @@ impl FuseTable {
         );
 
         let result = if pruning_mode == ReadPartitionsPruningMode::Lightweight {
+            let pruned_block_metas = Self::clone_with_optional_block_meta_indexes(&block_metas);
             (
                 self.read_statistics_with_metas(
                     table_schema.clone(),
                     push_downs,
-                    &block_metas,
+                    &pruned_block_metas,
                     summary,
                     pruning_stats,
                 )?,
@@ -582,11 +540,12 @@ impl FuseTable {
             )
         } else {
             let schema = self.schema_with_stream();
+            let pruned_block_metas = Self::attach_optional_block_meta_indexes(block_metas);
             let (statistics, partitions) = self.read_partitions_with_metas(
                 ctx.clone(),
                 schema,
                 push_downs,
-                &block_metas,
+                &pruned_block_metas,
                 summary,
                 pruning_stats,
             )?;
@@ -599,6 +558,22 @@ impl FuseTable {
             }
         }
         Ok(result)
+    }
+
+    fn attach_optional_block_meta_indexes(block_metas: IndexedBlockMetas) -> PrunedBlockMetas {
+        block_metas
+            .into_iter()
+            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
+            .collect()
+    }
+
+    fn clone_with_optional_block_meta_indexes(block_metas: &IndexedBlockMetas) -> PrunedBlockMetas {
+        block_metas
+            .iter()
+            .map(|(block_meta_index, block_meta)| {
+                (Some(block_meta_index.clone()), block_meta.clone())
+            })
+            .collect()
     }
 
     pub fn prune_segments_with_pipeline(
@@ -1069,16 +1044,93 @@ impl FuseTable {
         statistics.pruning_stats = pruning_stats;
     }
 
+    fn limit_without_order_or_filters(push_downs: &Option<PushDownInfo>) -> usize {
+        push_downs
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
+            .and_then(|p| p.limit)
+            .unwrap_or(usize::MAX)
+    }
+
+    fn consume_limit(statistics: &mut PartStatistics, remaining: &mut usize, rows: usize) -> bool {
+        if *remaining > rows {
+            *remaining -= rows;
+            true
+        } else {
+            if *remaining != rows {
+                statistics.is_exact = false;
+            }
+            false
+        }
+    }
+
+    fn add_projected_column_read_bytes(
+        statistics: &mut PartStatistics,
+        block_meta: &BlockMeta,
+        columns: &[&ColumnNode],
+    ) {
+        for column in columns {
+            for column_id in &column.leaf_column_ids {
+                // ignore all deleted field
+                if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
+                }
+            }
+        }
+    }
+
+    fn add_virtual_column_read_bytes(
+        statistics: &mut PartStatistics,
+        block_meta_index: &Option<BlockMetaIndex>,
+        block_meta: &BlockMeta,
+        virtual_column: &Option<VirtualColumnInfo>,
+    ) {
+        let Some(virtual_column) = virtual_column else {
+            return;
+        };
+
+        let virtual_block_meta = block_meta_index
+            .as_ref()
+            .and_then(|block_meta_index| block_meta_index.virtual_block_meta.as_ref());
+
+        if let Some(virtual_block_meta) = virtual_block_meta {
+            // Add bytes of virtual columns.
+            for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
+                let (_, len) = virtual_column_meta.offset_length();
+                statistics.read_bytes += len as usize;
+            }
+
+            // Check whether source columns can be ignored. If not, add bytes of source columns.
+            for source_column_id in &virtual_column.source_column_ids {
+                if virtual_block_meta
+                    .ignored_source_column_ids
+                    .contains(source_column_id)
+                {
+                    continue;
+                }
+                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
+                }
+            }
+        } else {
+            // If virtual column meta not exist, all source columns are needed.
+            for source_column_id in &virtual_column.source_column_ids {
+                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
+                    let (_, len) = col_metas.offset_length();
+                    statistics.read_bytes += len as usize;
+                }
+            }
+        }
+    }
+
     fn statistics_from_metas(
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
         push_downs: &Option<PushDownInfo>,
     ) -> Result<PartStatistics> {
-        let limit = push_downs
-            .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
-            .and_then(|p| p.limit)
-            .unwrap_or(usize::MAX);
+        let limit = Self::limit_without_order_or_filters(push_downs);
 
         let mut statistics = PartStatistics::default_exact();
         if limit == 0 {
@@ -1096,12 +1148,7 @@ impl FuseTable {
                     statistics.read_rows += rows;
                     statistics.read_bytes += block_meta.block_size as usize;
 
-                    if remaining > rows {
-                        remaining -= rows;
-                    } else {
-                        if remaining != rows {
-                            statistics.is_exact = false;
-                        }
+                    if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
                         break;
                     }
                 }
@@ -1118,57 +1165,15 @@ impl FuseTable {
                     let rows = block_meta.row_count as usize;
                     statistics.read_rows += rows;
 
-                    for column in &columns {
-                        for column_id in &column.leaf_column_ids {
-                            if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
-                                let (_, len) = col_metas.offset_length();
-                                statistics.read_bytes += len as usize;
-                            }
-                        }
-                    }
+                    Self::add_projected_column_read_bytes(&mut statistics, block_meta, &columns);
+                    Self::add_virtual_column_read_bytes(
+                        &mut statistics,
+                        block_meta_index,
+                        block_meta,
+                        &extras.virtual_column,
+                    );
 
-                    let virtual_block_meta = block_meta_index
-                        .as_ref()
-                        .and_then(|block_meta_index| block_meta_index.virtual_block_meta.as_ref());
-                    if let Some(virtual_column) = &extras.virtual_column {
-                        if let Some(virtual_block_meta) = virtual_block_meta {
-                            for virtual_column_meta in
-                                virtual_block_meta.virtual_column_metas.values()
-                            {
-                                let (_, len) = virtual_column_meta.offset_length();
-                                statistics.read_bytes += len as usize;
-                            }
-
-                            for source_column_id in &virtual_column.source_column_ids {
-                                if virtual_block_meta
-                                    .ignored_source_column_ids
-                                    .contains(source_column_id)
-                                {
-                                    continue;
-                                }
-                                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id)
-                                {
-                                    let (_, len) = col_metas.offset_length();
-                                    statistics.read_bytes += len as usize;
-                                }
-                            }
-                        } else {
-                            for source_column_id in &virtual_column.source_column_ids {
-                                if let Some(col_metas) = &block_meta.col_metas.get(source_column_id)
-                                {
-                                    let (_, len) = col_metas.offset_length();
-                                    statistics.read_bytes += len as usize;
-                                }
-                            }
-                        }
-                    }
-
-                    if remaining > rows {
-                        remaining -= rows;
-                    } else {
-                        if remaining != rows {
-                            statistics.is_exact = false;
-                        }
+                    if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
                         break;
                     }
                 }
@@ -1186,11 +1191,7 @@ impl FuseTable {
         top_k: Option<(TopK, Scalar)>,
         push_downs: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
-        let limit = push_downs
-            .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
-            .and_then(|p| p.limit)
-            .unwrap_or(usize::MAX);
+        let limit = Self::limit_without_order_or_filters(&push_downs);
 
         let mut block_metas = block_metas.to_vec();
         if let Some((top_k, default)) = &top_k {
@@ -1284,13 +1285,7 @@ impl FuseTable {
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
 
-            if remaining > rows {
-                remaining -= rows;
-            } else {
-                // the last block we shall take
-                if remaining != rows {
-                    statistics.is_exact = false;
-                }
+            if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
                 break;
             }
         }
@@ -1335,61 +1330,15 @@ impl FuseTable {
             let rows = block_meta.row_count as usize;
 
             statistics.read_rows += rows;
-            for column in &columns {
-                for column_id in &column.leaf_column_ids {
-                    // ignore all deleted field
-                    if let Some(col_metas) = &block_meta.col_metas.get(column_id) {
-                        let (_, len) = col_metas.offset_length();
-                        statistics.read_bytes += len as usize;
-                    }
-                }
-            }
+            Self::add_projected_column_read_bytes(&mut statistics, block_meta, &columns);
+            Self::add_virtual_column_read_bytes(
+                &mut statistics,
+                block_meta_index,
+                block_meta,
+                virtual_column,
+            );
 
-            let virtual_block_meta = if let Some(block_meta_index) = block_meta_index {
-                &block_meta_index.virtual_block_meta
-            } else {
-                &None
-            };
-            if let Some(virtual_column) = virtual_column {
-                if let Some(virtual_block_meta) = virtual_block_meta {
-                    // Add bytes of virtual columns
-                    for virtual_column_meta in virtual_block_meta.virtual_column_metas.values() {
-                        let (_, len) = virtual_column_meta.offset_length();
-                        statistics.read_bytes += len as usize;
-                    }
-
-                    // Check whether source columns can be ignored.
-                    // If not, add bytes of source columns.
-                    for source_column_id in &virtual_column.source_column_ids {
-                        if virtual_block_meta
-                            .ignored_source_column_ids
-                            .contains(source_column_id)
-                        {
-                            continue;
-                        }
-                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
-                            let (_, len) = col_metas.offset_length();
-                            statistics.read_bytes += len as usize;
-                        }
-                    }
-                } else {
-                    // If virtual column meta not exist, all source columns are needed.
-                    for source_column_id in &virtual_column.source_column_ids {
-                        if let Some(col_metas) = &block_meta.col_metas.get(source_column_id) {
-                            let (_, len) = col_metas.offset_length();
-                            statistics.read_bytes += len as usize;
-                        }
-                    }
-                }
-            }
-
-            if remaining > rows {
-                remaining -= rows;
-            } else {
-                // the last block we shall take
-                if remaining != rows {
-                    statistics.is_exact = false;
-                }
+            if !Self::consume_limit(&mut statistics, &mut remaining, rows) {
                 break;
             }
         }
