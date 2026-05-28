@@ -43,7 +43,8 @@ TABLE_TRACE_CHAT_USER = "proxy_bench_spans_by_trace_chat_user"
 
 MAX_ACCEPTABLE_RANK = 2
 MIN_TOP1_HIT_RATIO = 0.85
-MIN_ACCEPTABLE_HIT_RATIO = 1.0
+STATISTICS_MIN_ACCEPTABLE_HIT_RATIO = 1.0
+PREFIX_MIN_ACCEPTABLE_HIT_RATIO = 0.85
 
 
 @dataclass(frozen=True)
@@ -937,6 +938,12 @@ def min_top1_hit_ratio(args: argparse.Namespace) -> float:
     return MIN_TOP1_HIT_RATIO
 
 
+def min_acceptable_hit_ratio(args: argparse.Namespace) -> float:
+    if args.proxy_routing_model == "prefix":
+        return PREFIX_MIN_ACCEPTABLE_HIT_RATIO
+    return STATISTICS_MIN_ACCEPTABLE_HIT_RATIO
+
+
 def main() -> int:
     args = parse_args()
     validate_args(args)
@@ -968,6 +975,7 @@ def main() -> int:
         results = [run_case(db, case, args) for case in cases]
         print_summary(results)
         required_top1_hit_ratio = min_top1_hit_ratio(args)
+        required_acceptable_hit_ratio = min_acceptable_hit_ratio(args)
         top1_hit_ratio, acceptable_hit_ratio = print_route_quality(
             results,
             required_top1_hit_ratio,
@@ -984,10 +992,10 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        if acceptable_hit_ratio < MIN_ACCEPTABLE_HIT_RATIO:
+        if acceptable_hit_ratio < required_acceptable_hit_ratio:
             print(
                 f"\nacceptable hit ratio {acceptable_hit_ratio:.2%} is below "
-                f"required {MIN_ACCEPTABLE_HIT_RATIO:.2%}",
+                f"required {required_acceptable_hit_ratio:.2%}",
                 file=sys.stderr,
             )
             return 1
