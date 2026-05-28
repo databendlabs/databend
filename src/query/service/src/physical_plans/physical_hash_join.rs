@@ -416,7 +416,7 @@ impl HashJoin {
             output_len,
             self.broadcast_id,
         )?;
-        build_state.add_runtime_filter_ready();
+        build_state.add_runtime_filter_ready()?;
 
         let create_sink_processor = |input| {
             Ok(ProcessorPtr::create(TransformHashJoinBuild::try_create(

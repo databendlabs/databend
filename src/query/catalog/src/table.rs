@@ -55,7 +55,6 @@ use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
-use crate::plan::ReclusterParts;
 use crate::plan::StreamColumn;
 use crate::statistics::BasicColumnStatistics;
 use crate::table_args::TableArgs;
@@ -401,23 +400,6 @@ pub trait Table: Sync + Send {
 
         Err(ErrorCode::Unimplemented(format!(
             "The 'compact_blocks' operation is not supported for the table '{}'. Table engine: '{}'.",
-            self.name(),
-            self.get_table_info().engine(),
-        )))
-    }
-
-    // return the selected block num.
-    #[async_backtrace::framed]
-    async fn recluster(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
-    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        let (_, _, _) = (ctx, push_downs, limit);
-
-        Err(ErrorCode::Unimplemented(format!(
-            "The 'recluster' operation is not supported for the table '{}'. Table engine: '{}'.",
             self.name(),
             self.get_table_info().engine(),
         )))
