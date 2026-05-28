@@ -286,7 +286,19 @@ impl ProxyTable {
                 table.engine()
             )));
         }
+        self.validate_target_schema(target, table.get_table_info())?;
         Ok(Some(table))
+    }
+
+    fn validate_target_schema(&self, target: &str, target_table_info: &TableInfo) -> Result<()> {
+        if self.table_info.schema().as_ref() != target_table_info.schema().as_ref() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "PROXY table target '{}' schema must match proxy table '{}' schema",
+                target, self.table_info.name
+            )));
+        }
+
+        Ok(())
     }
 
     async fn read_target_partitions_from_table(
@@ -603,10 +615,11 @@ impl Table for ProxyTable {
             plan_id,
         )?;
 
-        // FUSE stores the receiver side of a lazy pruning pipeline inside the
-        // table instance used to build that pipeline. Reuse the same delegated
-        // target in read_data so lazy segment partitions can dispatch blocks.
-        if prune_pipeline.is_some() {
+        // FUSE stores the receiver side of lazy pruning inside the table
+        // instance used to build the pipeline. A prune-cache hit returns no
+        // pipeline after wiring the receiver, so any lazy target plan must
+        // reuse this delegated table in read_data.
+        if target_plan.parts.partitions_type() == PartInfoType::LazyLevel {
             self.store_delegated_target_table(table_ctx, &target_plan, table);
         }
 
@@ -722,9 +735,11 @@ mod tests {
     use std::collections::BTreeMap;
 
     use databend_common_catalog::plan::PartitionsShuffleKind;
+    use databend_common_expression::TableDataType;
+    use databend_common_expression::TableField;
+    use databend_common_expression::TableSchemaRef;
     use databend_common_expression::TableSchemaRefExt;
     use databend_common_meta_app::schema::TableInfo;
-    use databend_common_meta_app::schema::TableMeta;
     use databend_meta_client::types::NodeInfo;
 
     use super::*;
@@ -753,13 +768,16 @@ mod tests {
     }
 
     fn proxy_table_info(options: BTreeMap<String, String>) -> TableInfo {
-        let mut table_info =
-            TableInfo::simple("default", "proxy", TableSchemaRefExt::create(vec![]));
-        table_info.meta = TableMeta {
-            engine: "PROXY".to_string(),
-            options,
-            ..Default::default()
-        };
+        proxy_table_info_with_schema(options, TableSchemaRefExt::create(vec![]))
+    }
+
+    fn proxy_table_info_with_schema(
+        options: BTreeMap<String, String>,
+        schema: TableSchemaRef,
+    ) -> TableInfo {
+        let mut table_info = TableInfo::simple("default", "proxy", schema);
+        table_info.meta.engine = "PROXY".to_string();
+        table_info.meta.options = options;
         table_info
     }
 
@@ -791,6 +809,52 @@ mod tests {
         let proxy = table.as_any().downcast_ref::<ProxyTable>().unwrap();
         assert_eq!(proxy.targets, vec!["spans_by_trace", "spans_by_chat"]);
         assert_eq!(proxy.default_target, "spans_by_chat");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_proxy_rejects_target_schema_mismatch() -> Result<()> {
+        let mut options = BTreeMap::new();
+        options.insert(PROXY_OPT_KEY_TARGETS.to_string(), "target".to_string());
+        let proxy_schema = TableSchemaRefExt::create(vec![
+            TableField::new("a", TableDataType::String),
+            TableField::new("b", TableDataType::Boolean),
+        ]);
+        let table =
+            ProxyTable::try_create(proxy_table_info_with_schema(options, proxy_schema.clone()))?;
+        let proxy = table.as_any().downcast_ref::<ProxyTable>().unwrap();
+
+        let matching_target = TableInfo::simple("default", "target", proxy_schema);
+        proxy.validate_target_schema("target", &matching_target)?;
+
+        let reordered_target = TableInfo::simple(
+            "default",
+            "target",
+            TableSchemaRefExt::create(vec![
+                TableField::new("b", TableDataType::Boolean),
+                TableField::new("a", TableDataType::String),
+            ]),
+        );
+        assert!(
+            proxy
+                .validate_target_schema("target", &reordered_target)
+                .is_err()
+        );
+
+        let different_type_target = TableInfo::simple(
+            "default",
+            "target",
+            TableSchemaRefExt::create(vec![
+                TableField::new("a", TableDataType::String),
+                TableField::new("b", TableDataType::String),
+            ]),
+        );
+        assert!(
+            proxy
+                .validate_target_schema("target", &different_type_target)
+                .is_err()
+        );
 
         Ok(())
     }

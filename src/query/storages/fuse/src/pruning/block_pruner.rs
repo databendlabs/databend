@@ -105,6 +105,7 @@ impl BlockPruner {
                             pruning_ctx,
                             prune_result,
                             block_meta.clone(),
+                            block_meta.row_count,
                             false,
                             true,
                         )
@@ -204,6 +205,7 @@ impl BlockPruner {
                 let mut prune_result =
                     BlockPruneResult::new(block_idx, block_meta.location.0.clone());
                 let block_meta = block_meta.clone();
+                let row_count = block_meta.row_count;
                 let range_input = RangeIndexInput::from_block_meta(block_meta.as_ref());
                 prune_result.keep = pruning_cost.measure(PruningCostKind::BlocksRange, || {
                     range_pruner.should_keep(&range_input, Some(&block_meta.col_metas))
@@ -226,6 +228,7 @@ impl BlockPruner {
                                 pruning_ctx,
                                 prune_result,
                                 block_meta,
+                                row_count,
                                 true,
                                 false,
                             )
@@ -298,6 +301,7 @@ impl BlockPruner {
         pruning_ctx: Arc<PruningContext>,
         mut prune_result: BlockPruneResult,
         block_meta: Arc<BlockMeta>,
+        row_count: u64,
         apply_page_pruner: bool,
         limit_before_bloom: bool,
     ) -> Result<BlockPruneResult> {
@@ -305,7 +309,6 @@ impl BlockPruner {
             return Ok(prune_result);
         }
 
-        let row_count = block_meta.row_count;
         let pruning_stats = pruning_ctx.pruning_stats.clone();
         let pruning_cost = pruning_ctx.pruning_cost.clone();
         let limit_pruner = pruning_ctx.limit_pruner.clone();
