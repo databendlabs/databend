@@ -23,15 +23,15 @@ create table spans_bloom(
 
 statement ok
 insert into spans_default values
-('trace_0', 'chat_0', 'default'),
-('trace_1', 'chat_0', 'default'),
-('trace_2', 'chat_0', 'default')
+('trace_0', 'chat_0', 'base0'),
+('trace_1', 'chat_0', 'base0'),
+('trace_2', 'chat_0', 'base0')
 
 statement ok
 insert into spans_default values
-('trace_0', 'chat_1', 'default'),
-('trace_1', 'chat_1', 'default'),
-('trace_2', 'chat_1', 'default')
+('trace_0', 'chat_1', 'base0'),
+('trace_1', 'chat_1', 'base0'),
+('trace_2', 'chat_1', 'base0')
 
 statement ok
 insert into spans_bloom values
@@ -70,7 +70,7 @@ select min(route), count()
 from spans_proxy
 where trace_id = 'trace_1'
 ----
-default 2
+base0 2
 
 statement ok
 set enable_proxy_bloom_pruning = 1
