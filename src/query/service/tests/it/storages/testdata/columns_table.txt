@@ -24,6 +24,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'bloom_index_size'                | 'system'             | 'tables_with_history'     | 'Nullable(UInt64)'    | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       | ''       |
 | 'branch'                          | 'system'             | 'columns'                 | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | ''       |
 | 'branch'                          | 'system'             | 'statistics'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | ''       |
+| 'branch'                          | 'system'             | 'virtual_columns'         | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       | ''       |
 | 'branch_id'                       | 'system'             | 'branches'                | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | ''       |
 | 'branch_id'                       | 'system'             | 'branches_with_history'   | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | ''       |
 | 'byte_size'                       | 'system'             | 'clustering_history'      | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       | ''       |
@@ -533,5 +534,4 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'webhook_options'                 | 'system'             | 'notifications'           | 'Nullable(Variant)'   | 'VARIANT'           | ''       | ''       | 'YES'    | ''       | ''       |
 | 'workload_groups'                 | 'system'             | 'users'                   | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       | ''       |
 +-----------------------------------+----------------------+---------------------------+-----------------------+---------------------+----------+----------+----------+----------+----------+
-
 

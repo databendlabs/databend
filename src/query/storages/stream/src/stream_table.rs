@@ -136,7 +136,7 @@ impl StreamTable {
         let desc = &source.get_table_info().desc;
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
-                "Base table {} dropped, cannot read from stream {}",
+                "Source table {} was dropped or recreated, cannot read from stream {}",
                 desc, self.info.desc,
             )));
         }
@@ -173,17 +173,17 @@ impl StreamTable {
                 ))
             })?;
 
-        let Some(batch_limit) = batch_limit else {
-            return Ok(source);
-        };
-
         let source_desc = &source.get_table_info().desc;
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
-                "Base table {} dropped, cannot read from stream {}",
+                "Source table {} was dropped or recreated, cannot read from stream {}",
                 source_desc, stream_desc,
             )));
         }
+
+        let Some(batch_limit) = batch_limit else {
+            return Ok(source);
+        };
 
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(source_desc, self.offset()?)?;

@@ -22740,20 +22740,22 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         with: None,
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    41..48,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+        src: Table(
+            CopyIntoLocationTableSource {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        41..48,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+                with_options: None,
             },
-            branch: None,
-            with_options: None,
-        },
+        ),
         dst: Stage(
             "my_stage/partitioned",
         ),
@@ -23320,20 +23322,22 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         with: None,
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    44..51,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+        src: Table(
+            CopyIntoLocationTableSource {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        44..51,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+                with_options: None,
             },
-            branch: None,
-            with_options: None,
-        },
+        ),
         dst: Uri(
             UriLocation {
                 protocol: "s3",
@@ -23384,20 +23388,22 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         with: None,
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    39..46,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+        src: Table(
+            CopyIntoLocationTableSource {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        39..46,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+                with_options: None,
             },
-            branch: None,
-            with_options: None,
-        },
+        ),
         dst: Stage(
             "my_stage/my data",
         ),
@@ -23433,20 +23439,22 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         with: None,
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    29..36,
-                ),
-                name: "mytable",
-                quote: None,
-                ident_type: None,
+        src: Table(
+            CopyIntoLocationTableSource {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        29..36,
+                    ),
+                    name: "mytable",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+                with_options: None,
             },
-            branch: None,
-            with_options: None,
-        },
+        ),
         dst: Stage(
             "my_stage",
         ),
@@ -29455,20 +29463,22 @@ CopyIntoLocation(
     CopyIntoLocationStmt {
         with: None,
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                span: Some(
-                    46..70,
-                ),
-                name: "canadian_city_population",
-                quote: None,
-                ident_type: None,
+        src: Table(
+            CopyIntoLocationTableSource {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    span: Some(
+                        46..70,
+                    ),
+                    name: "canadian_city_population",
+                    quote: None,
+                    ident_type: None,
+                },
+                branch: None,
+                with_options: None,
             },
-            branch: None,
-            with_options: None,
-        },
+        ),
         dst: Stage(
             "my_internal_stage/minimal.csv",
         ),

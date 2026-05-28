@@ -99,4 +99,38 @@ query error 2733.*Unknown branch
 SELECT a FROM s_dev
 
 statement ok
+ALTER TABLE t_new CREATE BRANCH dev
+
+query error 2733.*dropped or recreated
+SELECT a FROM s_dev
+
+statement ok
+CREATE TABLE ct_base(a INT)
+
+statement ok
+INSERT INTO ct_base VALUES (1)
+
+statement ok
+CREATE STREAM s_ct_base ON TABLE ct_base
+
+statement ok
+ALTER TABLE ct_base CREATE BRANCH dev
+
+statement ok
+CREATE STREAM s_ct_dev ON TABLE ct_base/dev
+
+query I
+SELECT count() FROM s_ct_dev
+----
+0
+
+statement ok
+INSERT INTO ct_base/dev VALUES (2)
+
+query ITB
+SELECT a, change$action, change$is_update FROM s_ct_dev ORDER BY a
+----
+2 INSERT 0
+
+statement ok
 DROP DATABASE test_branch_stream

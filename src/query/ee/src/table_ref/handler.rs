@@ -46,6 +46,8 @@ use databend_enterprise_table_ref_handler::TableRefHandlerWrapper;
 use databend_meta_client::types::MatchSeq;
 use databend_storages_common_table_meta::meta::is_uuid_v7;
 use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING;
+use databend_storages_common_table_meta::table::OPT_KEY_CHANGE_TRACKING_BEGIN_VER;
 use databend_storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use databend_storages_common_table_meta::table::OPT_KEY_LOCATION;
 use databend_storages_common_table_meta::table::OPT_KEY_REFERENCED_BRANCH_IDS;
@@ -99,6 +101,12 @@ impl TableRefHandler for RealTableRefHandler {
             statistics: TableStatistics::default(),
             ..table_info.meta.clone()
         };
+        // Branches have independent table ids/sequences; change tracking starts when a stream is
+        // created on the branch instead of inheriting the source table's tracking range.
+        branch_table_meta.options.remove(OPT_KEY_CHANGE_TRACKING);
+        branch_table_meta
+            .options
+            .remove(OPT_KEY_CHANGE_TRACKING_BEGIN_VER);
         Self::remove_physical_location_options(&mut branch_table_meta.options);
         branch_table_meta
             .options
