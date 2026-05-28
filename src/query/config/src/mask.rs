@@ -218,7 +218,6 @@ impl SpillConfig {
             sort_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio,
-            spill_buffer_pool_memory,
             spill_buffer_pool_workers,
         } = *self;
 
@@ -230,7 +229,6 @@ impl SpillConfig {
             sort_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio,
-            spill_buffer_pool_memory,
             spill_buffer_pool_workers,
         }
     }
@@ -388,7 +386,6 @@ mod tests {
             sort_spilling_disk_quota_ratio: 60,
             window_partition_spilling_disk_quota_ratio: 30,
             result_set_spilling_disk_quota_ratio: 0,
-            spill_buffer_pool_memory: 209715200,
             spill_buffer_pool_workers: 2,
             storage: Some(StorageConfig {
                 typ: "s3".to_string(),

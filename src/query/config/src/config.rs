@@ -1231,6 +1231,11 @@ pub struct OssStorageConfig {
     )]
     #[serde(rename = "server_side_encryption_key_id")]
     pub oss_server_side_encryption_key_id: String,
+
+    /// Role ARN for OSS storage (used for AssumeRole)
+    #[clap(long = "storage-oss-role-arn", value_name = "VALUE", default_value_t)]
+    #[serde(rename = "role_arn")]
+    pub oss_role_arn: String,
 }
 
 impl Default for OssStorageConfig {
@@ -1265,6 +1270,7 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
             oss_root: inner.root,
             oss_server_side_encryption: inner.server_side_encryption,
             oss_server_side_encryption_key_id: inner.server_side_encryption_key_id,
+            oss_role_arn: inner.role_arn,
         }
     }
 }
@@ -1280,6 +1286,7 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             access_key_id: self.oss_access_key_id,
             access_key_secret: self.oss_access_key_secret,
             root: self.oss_root,
+            role_arn: self.oss_role_arn,
             server_side_encryption: self.oss_server_side_encryption,
             server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
             network_config: None,
@@ -3482,10 +3489,6 @@ pub struct SpillConfig {
     #[clap(long, value_name = "PERCENT", default_value = "0")]
     pub result_set_spilling_disk_quota_ratio: u64,
 
-    /// Total memory for the spill buffer pool in bytes.
-    #[clap(long, value_name = "VALUE", default_value = "209715200")]
-    pub spill_buffer_pool_memory: u64,
-
     /// Number of worker tasks in the spill buffer pool.
     #[clap(long, value_name = "VALUE", default_value = "2")]
     pub spill_buffer_pool_workers: usize,
@@ -3602,7 +3605,6 @@ mod config_converters {
             window_partition_spilling_disk_quota_ratio: spill
                 .window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
-            buffer_pool_memory: spill.spill_buffer_pool_memory,
             buffer_pool_workers: spill.spill_buffer_pool_workers,
         })
     }
@@ -3626,7 +3628,6 @@ mod config_converters {
                 window_partition_spilling_disk_quota_ratio: value
                     .window_partition_spilling_disk_quota_ratio,
                 result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,
-                spill_buffer_pool_memory: value.buffer_pool_memory,
                 spill_buffer_pool_workers: value.buffer_pool_workers,
             }
         }

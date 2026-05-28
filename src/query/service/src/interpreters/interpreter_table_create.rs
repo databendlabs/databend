@@ -43,6 +43,7 @@ use databend_common_pipeline::core::ExecutionInfo;
 use databend_common_pipeline::core::always_callback;
 use databend_common_sql::DefaultExprBinder;
 use databend_common_sql::plans::CreateTablePlan;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
@@ -73,10 +74,14 @@ use crate::interpreters::common::table_option_validation::is_valid_bloom_index_c
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_change_tracking;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_bytes;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
 use crate::interpreters::common::table_option_validation::is_valid_random_seed;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
@@ -407,6 +412,13 @@ impl CreateTableInterpreter {
             self.plan.field_comments.clone()
         };
         let schema = TableSchemaRefExt::create(fields);
+        let field_stats_truncate_len = self
+            .plan
+            .field_stats_truncate_len
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt_len)| opt_len.map(|len| (schema.fields()[i].column_id(), len)))
+            .collect();
         let mut options = self.plan.options.clone();
 
         if self.plan.engine == Engine::Fuse {
@@ -426,9 +438,10 @@ impl CreateTableInterpreter {
                 );
             }
         }
-        if let Some(storage_format) = options.get(OPT_KEY_STORAGE_FORMAT) {
-            FuseStorageFormat::from_str(storage_format)?;
-        }
+        let storage_format = match options.get(OPT_KEY_STORAGE_FORMAT) {
+            Some(storage_format) => FuseStorageFormat::from_str(storage_format)?,
+            None => FuseStorageFormat::Parquet,
+        };
         if let Some(segment_format) = options.get(OPT_KEY_SEGMENT_FORMAT) {
             FuseSegmentFormat::from_str(segment_format)?;
         }
@@ -443,6 +456,7 @@ impl CreateTableInterpreter {
             options,
             engine_options: self.plan.engine_options.clone(),
             field_comments,
+            field_stats_truncate_len,
             drop_on: None,
             statistics: statistics.unwrap_or_default(),
             comment: comment.unwrap_or_default(),
@@ -453,6 +467,7 @@ impl CreateTableInterpreter {
 
         is_valid_block_per_segment(&table_meta.options)?;
         is_valid_row_per_block(&table_meta.options)?;
+        is_valid_recluster_depth(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema.clone())?;
         is_valid_bloom_index_type(&table_meta.options)?;
@@ -464,11 +479,19 @@ impl CreateTableInterpreter {
         is_valid_data_retention_period(&table_meta.options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&table_meta.options)?;
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&table_meta.options, storage_format)?;
+        is_valid_data_page_rows(&table_meta.options)?;
+        is_valid_data_page_bytes(&table_meta.options)?;
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
         // check enable auto analyze.
         is_valid_option_of_type::<u32>(&table_meta.options, FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE)?;
+        is_valid_option_of_type::<u64>(
+            &table_meta.options,
+            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+        )?;
 
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();

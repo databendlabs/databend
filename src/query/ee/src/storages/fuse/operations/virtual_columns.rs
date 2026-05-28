@@ -119,12 +119,10 @@ pub async fn prepare_refresh_virtual_column(
         ..table_schema.as_ref().clone()
     });
 
-    if !fuse_table.support_virtual_columns() {
-        return Err(ErrorCode::VirtualColumnError(format!(
-            "Table don't support virtual column, storage_format: {} read_only: {}",
-            fuse_table.get_storage_format(),
-            fuse_table.is_read_only()
-        )));
+    if !fuse_table.enable_virtual_column() {
+        return Err(ErrorCode::VirtualColumnError(
+            "Virtual column write is disabled for table, set table option enable_virtual_column=true first",
+        ));
     }
     let virtual_column_builder = VirtualColumnBuilder::try_create(ctx.clone(), source_schema)?;
 
@@ -464,7 +462,7 @@ pub async fn do_vacuum_virtual_column(
             )
         })?;
 
-        execute_complete_pipeline(ctx.clone(), build_res)?;
+        execute_complete_pipeline(ctx.clone(), build_res).await?;
     }
 
     // Unconditionally remove legacy virtual column files. Safe even if historical
@@ -690,7 +688,7 @@ mod tests {
     }
 }
 
-fn execute_complete_pipeline(
+async fn execute_complete_pipeline(
     ctx: Arc<dyn TableContext>,
     mut build_res: PipelineBuildResult,
 ) -> Result<()> {
@@ -707,7 +705,7 @@ fn execute_complete_pipeline(
         let executor_settings = ExecutorSettings::try_create(ctx)?;
         let complete_executor =
             PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-        complete_executor.execute()?;
+        complete_executor.execute().await?;
     }
 
     Ok(())

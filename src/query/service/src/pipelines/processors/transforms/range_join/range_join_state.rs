@@ -44,6 +44,7 @@ use crate::sessions::TableContextSettings;
 
 pub struct RangeJoinState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) function_context: FunctionContext,
     // The origin data for left/right table
     pub(crate) left_table: RwLock<Vec<DataBlock>>,
     pub(crate) right_table: RwLock<Vec<DataBlock>>,
@@ -76,7 +77,11 @@ pub struct RangeJoinState {
 }
 
 impl RangeJoinState {
-    pub fn new(ctx: Arc<QueryContext>, range_join: &RangeJoin) -> Self {
+    pub fn new(
+        ctx: Arc<QueryContext>,
+        range_join: &RangeJoin,
+        function_context: FunctionContext,
+    ) -> Self {
         let ie_join_state = if matches!(range_join.range_join_type, RangeJoinType::IEJoin) {
             Some(IEJoinState::new(range_join))
         } else {
@@ -84,6 +89,7 @@ impl RangeJoinState {
         };
         Self {
             ctx,
+            function_context,
             left_table: RwLock::new(vec![]),
             right_table: RwLock::new(vec![]),
             right_sorted_blocks: Default::default(),
@@ -111,7 +117,10 @@ impl RangeJoinState {
     pub(crate) fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
         let mut right_table = self.right_table.write();
-        let right_block = if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
+        let right_block = if matches!(
+            self.join_type,
+            JoinType::Left | JoinType::LeftAsof | JoinType::FullAsof
+        ) {
             let rows = block.num_rows();
             let nullable_right_columns = block
                 .take_columns()
@@ -129,7 +138,10 @@ impl RangeJoinState {
     pub(crate) fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
         let mut left_table = self.left_table.write();
-        let left_block = if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
+        let left_block = if matches!(
+            self.join_type,
+            JoinType::Right | JoinType::RightAsof | JoinType::FullAsof
+        ) {
             let rows = block.num_rows();
             let nullable_left_columns = block
                 .take_columns()
@@ -246,8 +258,8 @@ impl RangeJoinState {
             let mut columns = Vec::with_capacity(3);
             // Append join keys columns
             for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(left_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator =
+                    Evaluator::new(left_block, &self.function_context, &BUILTIN_FUNCTIONS);
                 let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
@@ -276,8 +288,8 @@ impl RangeJoinState {
             let mut columns = Vec::with_capacity(3);
             // Append join keys columns
             for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(right_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator =
+                    Evaluator::new(right_block, &self.function_context, &BUILTIN_FUNCTIONS);
                 let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
@@ -316,7 +328,10 @@ impl RangeJoinState {
         // Add Fill task
         left_offset = 0;
         right_offset = 0;
-        if matches!(self.join_type, JoinType::Left | JoinType::LeftAsof) {
+        if matches!(
+            self.join_type,
+            JoinType::Left | JoinType::LeftAsof | JoinType::FullAsof
+        ) {
             let mut left_match = self.left_match.write();
             for (left_idx, left_block) in left_sorted_blocks.iter().enumerate() {
                 row_offset.push((left_offset, 0));
@@ -325,7 +340,10 @@ impl RangeJoinState {
                 left_match.extend_constant(left_block.num_rows(), false);
             }
         }
-        if matches!(self.join_type, JoinType::Right | JoinType::RightAsof) {
+        if matches!(
+            self.join_type,
+            JoinType::Right | JoinType::RightAsof | JoinType::FullAsof
+        ) {
             let mut right_match = self.right_match.write();
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 row_offset.push((0, right_offset));
@@ -370,6 +388,7 @@ mod tests {
 
         let state = RangeJoinState {
             ctx,
+            function_context: FunctionContext::default(),
             left_table: RwLock::new(vec![left_block]),
             right_table: RwLock::new(vec![]),
             right_sorted_blocks: Default::default(),

@@ -30,7 +30,7 @@ use databend_common_meta_api::DatabaseApi;
 use databend_common_meta_api::DictionaryApi;
 use databend_common_meta_api::GarbageCollectionApi;
 use databend_common_meta_api::IndexApi;
-use databend_common_meta_api::LockApi;
+use databend_common_meta_api::LockApi2;
 use databend_common_meta_api::RefApi;
 use databend_common_meta_api::SecurityApi;
 use databend_common_meta_api::SequenceApi;
@@ -931,27 +931,27 @@ impl Catalog for MutableCatalog {
 
     #[async_backtrace::framed]
     async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
-        Ok(self.ctx.meta.list_lock_revisions(req).await?)
+        Ok(self.ctx.meta.list_lock_revisions_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
-        Ok(self.ctx.meta.create_lock_revision(req).await?)
+        Ok(self.ctx.meta.create_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
-        Ok(self.ctx.meta.extend_lock_revision(req).await?)
+        Ok(self.ctx.meta.extend_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
-        Ok(self.ctx.meta.delete_lock_revision(req).await?)
+        Ok(self.ctx.meta.delete_lock_revision_v2(req).await?)
     }
 
     #[async_backtrace::framed]
     async fn list_locks(&self, req: ListLocksReq) -> Result<Vec<LockInfo>> {
-        Ok(self.ctx.meta.list_locks(req).await?)
+        Ok(self.ctx.meta.list_locks_v2(req).await?)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {
@@ -965,7 +965,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence(
         &self,
         req: GetSequenceReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {
@@ -1008,7 +1008,7 @@ impl Catalog for MutableCatalog {
     async fn get_sequence_next_value(
         &self,
         req: GetSequenceNextValueReq,
-        visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         if let Some(vi) = visibility_checker {
             if !vi.check_seq_visibility(req.ident.name()) {

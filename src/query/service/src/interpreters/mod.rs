@@ -192,6 +192,7 @@ mod task {
     pub(crate) use interpreter_task_execute::ExecuteTaskInterpreter;
     pub(crate) use interpreter_tasks_show::ShowTasksInterpreter;
 }
+mod interpreter_show_public_keys;
 mod interpreter_txn_abort;
 mod interpreter_txn_begin;
 mod interpreter_txn_commit;
@@ -219,7 +220,7 @@ mod interpreter_view_describe;
 mod interpreter_view_drop;
 mod interpreter_virtual_column_refresh;
 mod interpreter_virtual_column_vacuum;
-mod util;
+pub(crate) mod util;
 
 pub use access::ManagementModeAccess;
 pub use common::InterpreterQueryLog;
@@ -283,6 +284,7 @@ pub use interpreter_sequence_create::CreateSequenceInterpreter;
 pub use interpreter_sequence_drop::DropSequenceInterpreter;
 pub use interpreter_set::SetInterpreter;
 pub use interpreter_set_priority::SetPriorityInterpreter;
+pub use interpreter_show_public_keys::ShowPublicKeysInterpreter;
 pub use interpreter_stream_create::CreateStreamInterpreter;
 pub use interpreter_stream_drop::DropStreamInterpreter;
 pub use interpreter_system_action::SystemActionInterpreter;

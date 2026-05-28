@@ -55,9 +55,9 @@ use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_app::tenant_key::errors::ExistError;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
 use databend_meta_client::kvapi::KvApiExt;
 use databend_meta_client::kvapi::ListOptions;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::ConditionResult;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
@@ -69,10 +69,10 @@ use log::debug;
 use log::warn;
 use seq_marked::SeqValue;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::fetch_id;
 use crate::kv_pb_api::KVPbApi;
 use crate::meta_txn_error::MetaTxnError;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::txn_backoff::txn_backoff;
 use crate::txn_condition_util::txn_cond_eq_keys_with_prefix;
 use crate::txn_condition_util::txn_cond_eq_seq;
@@ -271,7 +271,7 @@ where
     async fn get_tag(&self, name_ident: &TagNameIdent) -> Result<Option<GetTagReply>, MetaError> {
         debug!(name_ident :? =(name_ident); "SchemaApi: {}", func_name!());
 
-        match self.get_id_value(name_ident).await? {
+        match self.get_id_and_value(name_ident).await? {
             Some((id_seqv, meta_seqv)) => Ok(Some(GetTagReply {
                 tag_id: id_seqv,
                 meta: meta_seqv,

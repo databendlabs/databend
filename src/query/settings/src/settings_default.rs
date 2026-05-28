@@ -253,6 +253,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(1..=1024)),
                 }),
+                ("enable_group_by_column_first", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Resolve GROUP BY names to input columns before SELECT aliases. Disabled by default for compatibility.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("max_storage_io_requests", DefaultSettingValue {
                     value: UserSettingValue::UInt64(default_max_storage_io_requests),
                     desc: "Sets the maximum number of concurrent storage I/O requests.",
@@ -497,6 +504,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                }),
+                ("spill_writer_memory_pool_size_mb", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(20),
+                    desc: "Set the memory pool size (MB) for each spill writer.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("spilling_file_format", DefaultSettingValue {
                     value: UserSettingValue::String("parquet".to_string()),
@@ -923,7 +937,7 @@ impl DefaultSettings {
                 }),
                 ("auto_compaction_imperfect_blocks_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(25),
-                    desc: "Threshold for triggering auto compaction. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations.",
+                    desc: "Threshold for triggering auto compaction after write. This occurs when the number of imperfect blocks in a snapshot exceeds this value after write operations. Set to 0 to disable auto compaction.",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=u64::MAX)),
@@ -992,7 +1006,7 @@ impl DefaultSettings {
                     desc: "Sets the maximum byte size of blocks for recluster",
                     mode: SettingMode::Both,
                     scope: SettingScope::Both,
-                    range: Some(SettingRange::Numeric(0..=u64::MAX)),
+                    range: Some(SettingRange::Numeric(1..=u64::MAX)),
                 }),
                 ("compact_max_block_selection", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
@@ -1241,6 +1255,13 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_decimal_sum_widening", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Automatically widen SUM arguments from Decimal(19..38, scale) to Decimal(76, scale).",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Both,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
                 ("statement_queued_timeout_in_seconds", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The maximum waiting seconds in the queue. The default value is 0(no limit).",
@@ -1446,6 +1467,13 @@ impl DefaultSettings {
                     mode: SettingMode::Both,
                     scope: SettingScope::Global,
                     range: None,
+                }),
+                ("max_public_keys_per_user", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(10),
+                    desc: "Maximum number of public keys allowed per user for key-pair authentication",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Global,
+                    range: Some(SettingRange::Numeric(2..=100)),
                 }),
                 ("stream_consume_batch_size_hint", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
@@ -1756,7 +1784,7 @@ impl DefaultSettings {
     fn recluster_block_size(max_memory_usage: u64) -> u64 {
         // The sort merge consumes more than twice as much memory,
         // so the block size is set relatively conservatively here.
-        std::cmp::min(max_memory_usage * 30 / 100, 80 * 1024 * 1024 * 1024)
+        std::cmp::min(max_memory_usage * 18 / 100, 80 * 1024 * 1024 * 1024)
     }
 
     /// Converts and validates a setting value based on its key.

@@ -28,12 +28,11 @@ use databend_common_meta_app::schema::CreateLockRevReq;
 use databend_common_meta_app::schema::DeleteLockRevReq;
 use databend_common_meta_app::schema::ExtendLockRevReq;
 use databend_common_meta_app::schema::ListLockRevReq;
-use databend_common_meta_app::schema::TableLockIdent;
 use databend_common_metrics::lock::record_acquired_lock_nums;
 use databend_common_metrics::lock::record_created_lock_nums;
 use databend_common_storages_fuse::operations::set_backoff;
 use databend_common_users::UserApiProvider;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::protobuf::WatchRequest;
 use databend_meta_client::types::protobuf::watch_request::FilterType;
 use futures::future::Either;
@@ -70,7 +69,6 @@ impl LockHolder {
         let lock_key = req.lock_key.clone();
         let lock_type = lock_key.lock_type().to_string();
         let table_id = lock_key.get_table_id();
-        let tenant = lock_key.get_tenant();
 
         let revision = self.start(catalog.clone(), req).await?;
 
@@ -120,7 +118,7 @@ impl LockHolder {
             }
 
             let prev_revision = rev_list[position - 1].0;
-            let watch_delete_ident = TableLockIdent::new(tenant, table_id, prev_revision);
+            let watch_delete_ident = lock_key.gen_v2_key(prev_revision);
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest::new(watch_delete_ident.to_string_key(), None)

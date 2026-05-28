@@ -32,7 +32,6 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
@@ -52,6 +51,7 @@ use databend_common_expression::ORIGIN_BLOCK_ID_COL_NAME;
 use databend_common_expression::ORIGIN_BLOCK_ROW_NUM_COL_NAME;
 use databend_common_expression::ORIGIN_VERSION_COL_NAME;
 use databend_common_expression::RemoteExpr;
+use databend_common_expression::Scalar;
 use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::VECTOR_SCORE_COLUMN_ID;
@@ -117,9 +117,12 @@ use crate::DEFAULT_ROW_PER_PAGE;
 use crate::FUSE_OPT_KEY_ATTACH_COLUMN_IDS;
 use crate::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_DATA_PAGE_BYTES;
+use crate::FUSE_OPT_KEY_DATA_PAGE_ROWS;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_NUM_SNAPSHOTS_TO_KEEP;
 use crate::FUSE_OPT_KEY_DATA_RETENTION_PERIOD_IN_HOURS;
 use crate::FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY;
+use crate::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use crate::FUSE_OPT_KEY_FILE_SIZE;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
@@ -138,7 +141,7 @@ use crate::io::WriteSettings;
 use crate::operations::ChangesDesc;
 use crate::operations::SnapshotHint;
 use crate::operations::load_last_snapshot_hint;
-use crate::statistics::Trim;
+use crate::statistics::STATS_STRING_PREFIX_LEN;
 use crate::statistics::reduce_block_statistics;
 
 #[derive(Clone)]
@@ -338,6 +341,17 @@ impl FuseTable {
         let enable_parquet_dictionary_encoding =
             self.get_option(FUSE_OPT_KEY_ENABLE_PARQUET_DICTIONARY, true);
 
+        let data_page_rows = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_DATA_PAGE_ROWS)
+            .and_then(|v| v.parse::<usize>().ok());
+        let data_page_bytes = self
+            .table_info
+            .options()
+            .get(FUSE_OPT_KEY_DATA_PAGE_BYTES)
+            .and_then(|v| v.parse::<usize>().ok());
+
         WriteSettings {
             storage_format: self.storage_format,
             table_compression: self.table_compression,
@@ -345,7 +359,20 @@ impl FuseTable {
             max_page_size,
             block_per_seg,
             enable_parquet_dictionary: enable_parquet_dictionary_encoding,
+            data_page_rows,
+            data_page_bytes,
+            col_stats_truncate_lens: self
+                .table_info
+                .meta
+                .field_stats_truncate_len
+                .iter()
+                .map(|(&k, &v)| (k, v as usize))
+                .collect(),
         }
+    }
+
+    pub fn enable_virtual_column(&self) -> bool {
+        self.get_option(FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN, false)
     }
 
     /// Get max page size.
@@ -1170,16 +1197,29 @@ impl Table for FuseTable {
             ctx.set_status_info(&format!("processed {} segments", (idx + 1) * chunk_size));
         }
 
+        let col_stats_truncate_lens = &self.table_info.meta.field_stats_truncate_len;
         let r = reduced
             .into_iter()
             .map(|(k, v)| {
+                let truncate_len = col_stats_truncate_lens
+                    .get(&k)
+                    .map(|&n| n as usize)
+                    .unwrap_or(STATS_STRING_PREFIX_LEN);
+                let min_may_be_truncated = match &v.min {
+                    Scalar::String(s) => s.len() >= truncate_len,
+                    _ => false,
+                };
+                let max_may_be_truncated = match &v.max {
+                    Scalar::String(s) => s.len() >= truncate_len,
+                    _ => false,
+                };
                 (k, ColumnRange {
                     min: Bound {
-                        may_be_truncated: v.min.may_be_trimmed(),
+                        may_be_truncated: min_may_be_truncated,
                         value: v.min,
                     },
                     max: Bound {
-                        may_be_truncated: v.max.may_be_trimmed(),
+                        may_be_truncated: max_may_be_truncated,
                         value: v.max,
                     },
                 })
@@ -1287,16 +1327,6 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn recluster(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
-    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        self.do_recluster(ctx, push_downs, limit).await
-    }
-
-    #[async_backtrace::framed]
     async fn revert_to(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -1311,20 +1341,6 @@ impl Table for FuseTable {
 
     fn support_index(&self) -> bool {
         true
-    }
-
-    fn support_virtual_columns(&self) -> bool {
-        if matches!(self.storage_format, FuseStorageFormat::Parquet) && !self.is_read_only() {
-            // ignore persistent system tables {
-            if let Ok(database_name) = self.table_info.database_name() {
-                if database_name == "persistent_system" || database_name == "system_history" {
-                    return false;
-                }
-            }
-            true
-        } else {
-            false
-        }
     }
 
     fn result_can_be_cached(&self) -> bool {

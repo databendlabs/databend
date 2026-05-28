@@ -146,15 +146,13 @@ mod kvapi_impl {
 
     impl kvapi::Value for SequenceMeta {
         type KeyType = super::SequenceIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::schema::SequenceIdent;
     use crate::tenant::Tenant;
@@ -163,11 +161,7 @@ mod tests {
     fn test_sequence_ident() {
         let tenant = Tenant::new_literal("dummy");
         let ident = SequenceIdent::new_generic(tenant, "3".to_string());
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_sequence/dummy/3");
-
-        assert_eq!(ident, SequenceIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_sequence/dummy/3");
     }
 
     #[test]

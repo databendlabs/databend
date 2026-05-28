@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Rem;
+
 use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Scalar;
 use databend_common_expression::arithmetics_type::ResultTypeOfBinary;
 use databend_common_expression::arithmetics_type::ResultTypeOfUnary;
-use databend_common_expression::function_stat::ArgStat;
-use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::ArgStat;
+use databend_common_expression::stat_distribution::OwnedDistribution;
+use databend_common_expression::stat_distribution::ReturnStat;
+use databend_common_expression::stat_distribution::StatBinaryArg;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::AccessType;
@@ -31,12 +36,14 @@ use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberType;
 use databend_common_expression::types::SimpleDomain;
 use databend_common_expression::types::nullable::NullableDomain;
+use databend_common_expression::types::number::NumberScalar;
 use databend_common_expression::vectorize_2_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_expression::with_float_mapped_type;
 use databend_common_expression::with_integer_mapped_type;
 use num_traits::AsPrimitive;
 
+use crate::arithmetic_modulo::ModuloValue;
 use crate::arithmetic_modulo::RemScalar;
 use crate::arithmetic_modulo::vectorize_modulo;
 
@@ -45,6 +52,189 @@ type MinusResult<L, R> = <(L, R) as ResultTypeOfBinary>::Minus;
 type IntDivResult<L, R> = <(L, R) as ResultTypeOfBinary>::IntDiv;
 type ModuloResult<L, R> = <(L, R) as ResultTypeOfBinary>::Modulo;
 type LeastSuperResult<L, R> = <(L, R) as ResultTypeOfBinary>::LeastSuper;
+
+fn modulo_domain_with_cast<L, R, M, O>(
+    lhs: &SimpleDomain<L>,
+    rhs: &SimpleDomain<R>,
+) -> FunctionDomain<NumberType<O>>
+where
+    L: Number,
+    R: Number,
+    M: Number,
+    O: Number,
+{
+    if rhs.min <= R::default() && rhs.max >= R::default() {
+        return FunctionDomain::MayThrow;
+    }
+
+    if M::FLOATING || O::FLOATING {
+        return FunctionDomain::Full;
+    }
+
+    let (Some(lhs_min), Some(lhs_max), Some(rhs_min), Some(rhs_max)): (
+        Option<M>,
+        Option<M>,
+        Option<M>,
+        Option<M>,
+    ) = (
+        num_traits::cast::cast(lhs.min),
+        num_traits::cast::cast(lhs.max),
+        num_traits::cast::cast(rhs.min),
+        num_traits::cast::cast(rhs.max),
+    ) else {
+        // Mixed signed/unsigned overloads evaluate through `as` casts. If a
+        // range endpoint cannot be losslessly cast to the calculation type, the
+        // wrapped value range is not represented by the original endpoints.
+        return FunctionDomain::Full;
+    };
+
+    let Some(lhs_min) = number_to_i128(lhs_min) else {
+        return FunctionDomain::Full;
+    };
+    let Some(lhs_max) = number_to_i128(lhs_max) else {
+        return FunctionDomain::Full;
+    };
+    let Some(rhs_min) = number_to_i128(rhs_min) else {
+        return FunctionDomain::Full;
+    };
+    let Some(rhs_max) = number_to_i128(rhs_max) else {
+        return FunctionDomain::Full;
+    };
+
+    // Compute abs through unsigned space so signed minimum values widen safely.
+    let max_abs_rhs = rhs_min.unsigned_abs().max(rhs_max.unsigned_abs());
+    let Some(max_abs_remainder) = max_abs_rhs
+        .checked_sub(1)
+        .and_then(|value| i128::try_from(value).ok())
+    else {
+        return FunctionDomain::Full;
+    };
+    // The remainder keeps the dividend sign and cannot exceed either bound.
+    let min = lhs_min.min(0).max(-max_abs_remainder);
+    let max = lhs_max.max(0).min(max_abs_remainder);
+
+    let (Some(min), Some(max)): (Option<O>, Option<O>) =
+        (num_traits::cast::cast(min), num_traits::cast::cast(max))
+    else {
+        return FunctionDomain::Full;
+    };
+
+    FunctionDomain::Domain(SimpleDomain { min, max })
+}
+
+fn number_to_i128<N: Number>(value: N) -> Option<i128> {
+    let scalar = N::upcast_scalar(value);
+    match scalar {
+        NumberScalar::UInt8(value) => Some(value.into()),
+        NumberScalar::UInt16(value) => Some(value.into()),
+        NumberScalar::UInt32(value) => Some(value.into()),
+        NumberScalar::UInt64(value) => Some(value.into()),
+        NumberScalar::Int8(value) => Some(value.into()),
+        NumberScalar::Int16(value) => Some(value.into()),
+        NumberScalar::Int32(value) => Some(value.into()),
+        NumberScalar::Int64(value) => Some(value.into()),
+        NumberScalar::Float32(_) | NumberScalar::Float64(_) => None,
+    }
+}
+
+fn derive_modulo_stat<L, R, M, O>(stat: StatBinaryArg) -> Result<Option<ReturnStat>, String>
+where
+    L: Number,
+    R: Number,
+    M: Number,
+    O: Number,
+{
+    let Some(rhs) = stat.args[1].domain.as_singleton() else {
+        return Ok(None);
+    };
+    if rhs.is_null() {
+        return Ok(None);
+    }
+
+    derive_modulo_with_const::<L, R, M, O>(&rhs, &stat.args[0])
+}
+
+fn derive_modulo_with_const<L, R, M, O>(
+    rhs: &Scalar,
+    lhs: &ArgStat,
+) -> Result<Option<ReturnStat>, String>
+where
+    L: Number,
+    R: Number,
+    M: Number,
+    O: Number,
+{
+    if M::FLOATING || R::FLOATING || O::FLOATING {
+        return Ok(None);
+    }
+
+    let rhs = NumberType::<R>::try_downcast_scalar(&rhs.as_ref()).map_err(|e| e.to_string())?;
+    if rhs == R::default() {
+        return Ok(None);
+    }
+
+    if let Ok(NullableDomain { has_null, value }) =
+        NullableType::<NumberType<L>>::try_downcast_domain(&lhs.domain)
+    {
+        return Ok(Some(match value {
+            Some(domain) => {
+                let Some(domain) = modulo_domain_with_cast::<L, R, M, O>(&domain, &SimpleDomain {
+                    min: rhs,
+                    max: rhs,
+                })
+                .normalize() else {
+                    return Ok(None);
+                };
+                // A signed modulo range can contain both signs, so bound NDV by the
+                // derived output domain rather than by abs(divisor).
+                let Some(ndv_upper) =
+                    NumberType::<O>::upcast_domain(domain).finite_cardinality_upper()
+                else {
+                    return Ok(None);
+                };
+                ReturnStat {
+                    domain: NullableType::<NumberType<O>>::upcast_domain(NullableDomain {
+                        has_null,
+                        value: Some(Box::new(domain)),
+                    }),
+                    ndv: lhs.ndv.reduce(ndv_upper as f64),
+                    null_count: lhs.null_count,
+                    distribution: OwnedDistribution::Unknown,
+                }
+            }
+            None => ReturnStat {
+                domain: NullableType::<NumberType<O>>::upcast_domain(NullableDomain {
+                    has_null: true,
+                    value: None,
+                }),
+                ndv: StatEstimate::exact(0.0),
+                null_count: lhs.null_count,
+                distribution: OwnedDistribution::Unknown,
+            },
+        }));
+    }
+
+    let domain = NumberType::<L>::try_downcast_domain(&lhs.domain).map_err(|e| e.to_string())?;
+    let Some(domain) =
+        modulo_domain_with_cast::<L, R, M, O>(&domain, &SimpleDomain { min: rhs, max: rhs })
+            .normalize()
+    else {
+        return Ok(None);
+    };
+    let output_domain = NumberType::<O>::upcast_domain(domain);
+    // A signed modulo range can contain both signs, so bound NDV by the
+    // derived output domain rather than by abs(divisor).
+    let Some(ndv_upper) = output_domain.finite_cardinality_upper() else {
+        return Ok(None);
+    };
+
+    Ok(Some(ReturnStat {
+        domain: output_domain,
+        ndv: lhs.ndv.reduce(ndv_upper as f64),
+        null_count: lhs.null_count,
+        distribution: OwnedDistribution::Unknown,
+    }))
+}
 
 pub fn register_plus<L, R>(registry: &mut FunctionRegistry)
 where
@@ -124,7 +314,7 @@ where
                 }),
                 ndv: stat.ndv,
                 null_count: stat.null_count,
-                histogram: None,
+                distribution: OwnedDistribution::Unknown,
             }
         });
     }
@@ -138,7 +328,7 @@ where
             }),
             ndv: stat.ndv,
             null_count: stat.null_count,
-            histogram: None,
+            distribution: OwnedDistribution::Unknown,
         }
     })
 }
@@ -296,56 +486,29 @@ where
     (L, R): ResultTypeOfBinary,
     LeastSuperResult<L, R>: Number
         + AsPrimitive<ModuloResult<L, R>>
-        + std::ops::Rem<Output = LeastSuperResult<L, R>>
-        + RemScalar<ModuloResult<L, R>>,
+        + Rem<Output = LeastSuperResult<L, R>>
+        + RemScalar<L, R, ModuloResult<L, R>>
+        + ModuloValue,
     ModuloResult<L, R>: Number,
 {
-    let rtype = LeastSuperResult::<L, R>::data_type();
-    if !matches!(
-        rtype,
-        NumberDataType::UInt8
-            | NumberDataType::UInt16
-            | NumberDataType::UInt32
-            | NumberDataType::UInt64
-    ) {
-        registry.register_passthrough_nullable_2_arg::<
-            NumberType<L>,
-            NumberType<R>,
-            NumberType<ModuloResult<L, R>>,
-            _,
-            _,
-        >(
-            "modulo",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<
-                NumberType<L>,
-                NumberType<R>,
-                NumberType<ModuloResult<L, R>>,
-            >(|a, b, output, ctx| {
-                let b_value: F64 = b.as_();
-                if std::intrinsics::unlikely(b_value == 0.0) {
-                    ctx.set_error(output.len(), "divided by zero");
-                    output.push(ModuloResult::<L, R>::default());
-                } else {
-                    let lhs = AsPrimitive::<LeastSuperResult<L, R>>::as_(a);
-                    let rhs = AsPrimitive::<LeastSuperResult<L, R>>::as_(b);
-                    output.push(AsPrimitive::<ModuloResult<L, R>>::as_(lhs % rhs));
-                }
-            }),
-        );
-    } else {
-        registry.register_passthrough_nullable_2_arg::<
-            NumberType<L>,
-            NumberType<R>,
-            NumberType<ModuloResult<L, R>>,
-            _,
-            _,
-        >(
-            "modulo",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_modulo::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(),
-        );
-    }
+    registry
+        .scalar_builder("modulo")
+        .function()
+        .typed_2_arg::<NumberType<L>, NumberType<R>, NumberType<ModuloResult<L, R>>>()
+        .passthrough_nullable()
+        .calc_domain(|_, lhs, rhs| {
+            modulo_domain_with_cast::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(lhs, rhs)
+        })
+        .derive_stat(|stat, _| {
+            derive_modulo_stat::<L, R, LeastSuperResult<L, R>, ModuloResult<L, R>>(stat)
+        })
+        .vectorized(vectorize_modulo::<
+            L,
+            R,
+            LeastSuperResult<L, R>,
+            ModuloResult<L, R>,
+        >())
+        .register();
 }
 
 pub fn register_div_arithmetic(registry: &mut FunctionRegistry) {

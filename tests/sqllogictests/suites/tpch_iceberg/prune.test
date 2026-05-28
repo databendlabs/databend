@@ -41,11 +41,11 @@ explain select 1 from  ctl.tpch.lineitem where l_orderkey < 1 or l_commitdate < 
 EvalScalar
 ├── output columns: [1 (#16)]
 ├── expressions: [1]
-├── estimated rows: 120114.40
+├── estimated rows: 0.00
 └── Filter
     ├── output columns: []
     ├── filters: [lineitem.l_orderkey (#0) < 1 or lineitem.l_commitdate (#11) < '1992-01-31']
-    ├── estimated rows: 120114.40
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: ctl.tpch.lineitem
         ├── scan id: 0

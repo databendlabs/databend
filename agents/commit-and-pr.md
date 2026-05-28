@@ -7,6 +7,8 @@
 - Include formatting and linting updates in the same patch when they belong to the change.
 
 ## Pull Requests
+- Allowed PR title types are `rfc`, `feat`, `fix`, `refactor`, `ci`, `docs`, and `chore`; prefer `ci` for test-only or CI-only changes.
+- Optional PR title scopes may contain only lowercase letters, digits, and hyphens, such as `query` or `admin-status`.
 - Outline motivation, implementation notes, and validation commands.
 - Link issues or RFCs when relevant.
 - Follow `PULL_REQUEST_TEMPLATE.md`, including checkboxes, verification, and screenshots when needed.

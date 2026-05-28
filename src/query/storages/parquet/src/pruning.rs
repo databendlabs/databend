@@ -29,7 +29,7 @@ use databend_storages_common_table_meta::meta::StatisticsOfColumns;
 use parquet::arrow::arrow_reader::RowSelection;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::file::metadata::ParquetMetaData;
-use parquet::format::PageLocation;
+use parquet::file::page_index::offset_index::PageLocation;
 
 use super::statistics::collect_row_group_stats;
 use crate::statistics::convert_index_to_column_statistics;
@@ -61,7 +61,9 @@ impl ParquetPruner {
         partition_columns: Vec<String>,
     ) -> Result<Self> {
         // Build `RangePruner` by `filter`.
-        let filter = push_down.as_ref().and_then(|p| p.filters.as_ref());
+        let filter = push_down
+            .as_ref()
+            .and_then(|p| p.effective_filters(&BUILTIN_FUNCTIONS));
 
         let mut predicate_columns = vec![];
         let range_pruner =

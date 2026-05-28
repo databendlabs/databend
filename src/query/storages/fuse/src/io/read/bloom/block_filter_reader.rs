@@ -40,10 +40,8 @@ use databend_storages_common_table_meta::meta::SingleColumnMeta;
 use futures_util::future::try_join_all;
 use opendal::Operator;
 use parquet::arrow::ArrowSchemaConverter;
-use parquet::format::FileMetaData;
+use parquet::file::metadata::ParquetMetaDataReader;
 use parquet::schema::types::SchemaDescPtr;
-use parquet::thrift::TSerializable;
-use thrift::protocol::TCompactInputProtocol;
 
 use crate::index::filters::BlockBloomFilterIndexVersion;
 use crate::index::filters::BlockFilter;
@@ -280,10 +278,9 @@ fn load_index_meta_from_bytes(data: &Bytes) -> Result<BloomIndexMeta> {
     }
 
     let remaining = data.len() - footer_len as usize;
-    let mut prot = TCompactInputProtocol::new(&data[remaining..]);
-    let thrift_meta = FileMetaData::read_from_in_protocol(&mut prot)
+    let parquet_meta = ParquetMetaDataReader::decode_metadata(&data[remaining..])
         .map_err(|err| ErrorCode::StorageOther(format!("read bloom index meta failed, {err}")))?;
-    BloomIndexMeta::try_from(thrift_meta)
+    BloomIndexMeta::try_from(parquet_meta)
 }
 
 #[async_trait::async_trait]
@@ -311,11 +308,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::sync::OnceLock;
 
-    use databend_common_base::base::GlobalInstance;
-    use databend_common_base::runtime::GlobalIORuntime;
-    use databend_common_config::CacheConfig;
     use databend_common_exception::Result;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
@@ -326,7 +319,6 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_storages_common_blocks::blocks_to_parquet;
     use databend_storages_common_cache::CacheAccessor;
-    use databend_storages_common_cache::CacheManager;
     use databend_storages_common_cache::CachedObject;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
@@ -336,16 +328,7 @@ mod tests {
     use databend_storages_common_table_meta::table::TableCompression;
 
     use super::*;
-
-    fn init_test_globals() -> Result<()> {
-        static INIT: OnceLock<Result<()>> = OnceLock::new();
-        INIT.get_or_init(|| {
-            GlobalInstance::init_production();
-            GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
-        })
-        .clone()
-    }
+    use crate::test_utils::init_test_globals;
 
     fn write_bloom_index_bytes() -> Result<(Vec<u8>, String)> {
         let schema = TableSchema::new(vec![TableField::new(

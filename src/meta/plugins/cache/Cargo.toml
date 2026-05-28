@@ -24,7 +24,7 @@ databend-meta-runtime = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 sub-cache = { workspace = true }
-tonic = { workspace = true }
+tonic_013 = { package = "tonic", version = "0.13.1" }
 
 [dev-dependencies]
 anyhow = { workspace = true }

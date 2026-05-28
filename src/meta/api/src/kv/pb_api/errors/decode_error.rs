@@ -74,18 +74,24 @@ impl PbDecodeError {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
+fn prost_decode_error(message: impl Into<String>) -> prost::DecodeError {
+    prost::DecodeError::new(message.into())
+}
+
+#[cfg(test)]
 mod tests {
     use crate::kv_pb_api::errors::PbDecodeError;
 
     #[test]
     fn test_error_message() {
-        let e = PbDecodeError::from(prost::DecodeError::new("decode error"));
+        let e = PbDecodeError::from(super::prost_decode_error("decode error"));
         assert_eq!(
             "PbDecodeError: failed to decode Protobuf message: decode error",
             e.to_string()
         );
 
-        let e = PbDecodeError::from(prost::DecodeError::new("decode error")).with_context("ctx");
+        let e = PbDecodeError::from(super::prost_decode_error("decode error")).with_context("ctx");
         assert_eq!(
             "PbDecodeError: failed to decode Protobuf message: decode error; when:(ctx)",
             e.to_string()

@@ -25,15 +25,17 @@ use databend_common_meta_app::schema::catalog_id_ident::CatalogId;
 use databend_common_meta_app::schema::catalog_name_ident::CatalogNameIdentRaw;
 use databend_meta_client::kvapi;
 use databend_meta_client::kvapi::DirName;
-use databend_meta_client::kvapi::Key;
+use databend_meta_client::kvapi::StructKey;
 use databend_meta_client::types::MetaError;
 use databend_meta_client::types::SeqV;
 use fastrace::func_name;
 use log::debug;
 
-use super::name_id_value_api::NameIdValueApi;
 use crate::kv_app_error::KVAppError;
 use crate::kv_pb_api::KVPbApi;
+use crate::name_id_value_api::CreateIdValueMode;
+use crate::name_id_value_api::CreateIdValueResult;
+use crate::name_id_value_api::NameIdValueApi;
 use crate::serialize_struct;
 
 /// CatalogApi defines APIs for catalog management.
@@ -59,11 +61,11 @@ where
 
         let name_ident_raw = serialize_struct(&CatalogNameIdentRaw::from(name_ident))?;
 
-        let res = self
+        let res = match self
             .create_id_value(
                 name_ident,
                 meta,
-                false,
+                CreateIdValueMode::CreateOnly,
                 |id| {
                     vec![(
                         CatalogIdToNameIdent::new_generic(name_ident.tenant(), id).to_string_key(),
@@ -73,7 +75,11 @@ where
                 |_, _| Ok(vec![]),
                 |_, _| {},
             )
-            .await?;
+            .await?
+        {
+            CreateIdValueResult::Created(id) => Ok(id),
+            CreateIdValueResult::Existing(seq_id) => Err(seq_id),
+        };
 
         Ok(res)
     }

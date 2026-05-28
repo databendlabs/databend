@@ -1,0 +1,100 @@
+statement ok
+drop table if exists t_ndjson_schema_evolution
+
+statement ok
+drop stage if exists s_ndjson_schema_evolution
+
+statement ok
+create table t_ndjson_schema_evolution(a int)
+
+statement ok
+create stage s_ndjson_schema_evolution
+
+statement ok
+copy into @s_ndjson_schema_evolution from (select 1 as a, 2 as b, 3 as c) file_format=(type=ndjson)
+
+statement ok
+copy into @s_ndjson_schema_evolution from (select 4 as a, 6 as c) file_format=(type=ndjson)
+
+statement ok
+copy into t_ndjson_schema_evolution from @s_ndjson_schema_evolution/ file_format=(type=ndjson missing_field_as=field_default)
+
+query ?
+select * from t_ndjson_schema_evolution order by a;
+----
+1
+4
+
+statement ok
+truncate table t_ndjson_schema_evolution
+
+statement ok
+alter table t_ndjson_schema_evolution set options(enable_schema_evolution = true)
+
+statement ok
+copy into t_ndjson_schema_evolution
+from @s_ndjson_schema_evolution/
+file_format=(type=ndjson missing_field_as=field_default)
+force=true
+schema_evolution=(
+  sample_files=auto,
+  sample_records_per_file=auto,
+  sample_total_records=auto
+)
+
+query ???
+select * from t_ndjson_schema_evolution order by a;
+----
+1 2 3
+4 NULL 6
+
+query ?????
+desc t_ndjson_schema_evolution;
+----
+a INT YES NULL (empty)
+b BIGINT YES NULL (empty)
+c BIGINT YES NULL (empty)
+
+statement ok
+truncate table t_ndjson_schema_evolution
+
+statement ok
+copy into @s_ndjson_schema_evolution from (select 7 as a, 'new' as d) file_format=(type=ndjson)
+
+statement error 1046.*schema evolution sample did not include all columns.*Extra columns: d.*SAMPLE_FILES.*SAMPLE_RECORDS_PER_FILE.*SAMPLE_TOTAL_RECORDS
+copy into t_ndjson_schema_evolution
+from @s_ndjson_schema_evolution/
+file_format=(type=ndjson missing_field_as=field_default)
+force=true
+schema_evolution=(
+  sample_files=1,
+  sample_records_per_file=1,
+  sample_total_records=1
+)
+
+statement ok
+truncate table t_ndjson_schema_evolution
+
+statement ok
+copy into t_ndjson_schema_evolution
+from @s_ndjson_schema_evolution/
+file_format=(type=ndjson missing_field_as=field_default)
+force=true
+schema_evolution=(
+  sample_files=3,
+  sample_records_per_file=1,
+  sample_total_records=3
+)
+
+query ????
+select a, b, c, d from t_ndjson_schema_evolution order by a;
+----
+1 2 3 NULL
+4 NULL 6 NULL
+7 NULL NULL new
+
+statement ok
+drop table t_ndjson_schema_evolution
+
+statement ok
+drop stage s_ndjson_schema_evolution

@@ -16,9 +16,6 @@ statement ok
 set global enable_experimental_row_access_policy = 1;
 
 statement ok
-set global enable_planner_cache = 0;
-
-statement ok
 drop table if exists rap_multi_test;
 
 statement ok
@@ -1063,5 +1060,104 @@ DROP TABLE employees;
 statement ok
 DROP MASKING POLICY mask_ssn_conditional;
 
+## row access policy with active role hierarchy
 statement ok
-unset global enable_planner_cache;
+SET ROLE account_admin;
+
+statement ok
+SET SECONDARY ROLES ALL;
+
+statement ok
+DROP TABLE IF EXISTS rap_time_range_test;
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS rap_time_range;
+
+statement ok
+DROP ROLE IF EXISTS rap_role_7_day;
+
+statement ok
+DROP ROLE IF EXISTS rap_role_1_day;
+
+statement ok
+CREATE ROLE rap_role_7_day;
+
+statement ok
+CREATE ROLE rap_role_1_day;
+
+statement ok
+CREATE ROW ACCESS POLICY rap_time_range AS (start_time TIMESTAMP) RETURNS boolean ->
+  CASE
+    WHEN IS_ROLE_IN_SESSION('rap_role_7_day') THEN
+      start_time BETWEEN to_timestamp('2024-01-08 00:00:00') AND to_timestamp('2024-01-15 00:00:00')
+    WHEN IS_ROLE_IN_SESSION('rap_role_1_day') THEN
+      start_time BETWEEN to_timestamp('2024-01-14 00:00:00') AND to_timestamp('2024-01-15 00:00:00')
+    ELSE false
+  END;
+
+statement ok
+CREATE TABLE rap_time_range_test(id INT, start_time TIMESTAMP);
+
+statement ok
+INSERT INTO rap_time_range_test VALUES
+  (1, to_timestamp('2024-01-07 00:00:00')),
+  (2, to_timestamp('2024-01-09 00:00:00')),
+  (3, to_timestamp('2024-01-14 12:00:00')),
+  (4, to_timestamp('2024-01-15 00:00:00')),
+  (5, to_timestamp('2024-01-16 00:00:00'));
+
+statement ok
+ALTER TABLE rap_time_range_test ADD ROW ACCESS POLICY rap_time_range ON (start_time);
+
+statement ok
+SET ROLE rap_role_1_day;
+
+statement ok
+SET SECONDARY ROLES NONE;
+
+query I
+SELECT id FROM rap_time_range_test ORDER BY id;
+----
+3
+4
+
+statement ok
+SET SECONDARY ROLES rap_role_7_day;
+
+query I
+SELECT id FROM rap_time_range_test ORDER BY id;
+----
+2
+3
+4
+
+statement ok
+SET ROLE rap_role_7_day;
+
+statement ok
+SET SECONDARY ROLES NONE;
+
+query I
+SELECT id FROM rap_time_range_test ORDER BY id;
+----
+2
+3
+4
+
+statement ok
+SET ROLE account_admin;
+
+statement ok
+SET SECONDARY ROLES ALL;
+
+statement ok
+DROP TABLE rap_time_range_test;
+
+statement ok
+DROP ROW ACCESS POLICY rap_time_range;
+
+statement ok
+DROP ROLE rap_role_7_day;
+
+statement ok
+DROP ROLE rap_role_1_day;

@@ -26,9 +26,11 @@ use databend_common_meta_app::schema::UpsertTableOptionReq;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_sql::plans::SetOptionsPlan;
 use databend_common_storages_factory::Table;
+use databend_common_storages_fuse::FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_VACUUM;
 use databend_common_storages_fuse::FuseSegmentFormat;
+use databend_common_storages_fuse::FuseStorageFormat;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
 use databend_common_storages_fuse::io::read::RowOrientedSegmentReader;
@@ -56,9 +58,13 @@ use crate::interpreters::common::table_option_validation::is_valid_block_per_seg
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_columns;
 use crate::interpreters::common::table_option_validation::is_valid_bloom_index_type;
 use crate::interpreters::common::table_option_validation::is_valid_create_opt;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_bytes;
+use crate::interpreters::common::table_option_validation::is_valid_data_page_rows;
 use crate::interpreters::common::table_option_validation::is_valid_data_retention_period;
 use crate::interpreters::common::table_option_validation::is_valid_fuse_parquet_dictionary_opt;
+use crate::interpreters::common::table_option_validation::is_valid_fuse_virtual_column_opt;
 use crate::interpreters::common::table_option_validation::is_valid_option_of_type;
+use crate::interpreters::common::table_option_validation::is_valid_recluster_depth;
 use crate::interpreters::common::table_option_validation::is_valid_row_per_block;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::executor::ExecutorSettings;
@@ -97,10 +103,13 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check row_per_block
         is_valid_row_per_block(&self.plan.set_options)?;
+        is_valid_recluster_depth(&self.plan.set_options)?;
         // check data_retention_period
         is_valid_data_retention_period(&self.plan.set_options)?;
         // check enable_parquet_encoding
         is_valid_fuse_parquet_dictionary_opt(&self.plan.set_options)?;
+        is_valid_data_page_rows(&self.plan.set_options)?;
+        is_valid_data_page_bytes(&self.plan.set_options)?;
 
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
@@ -136,6 +145,10 @@ impl Interpreter for SetOptionsInterpreter {
 
         // Same as settings of FUSE_OPT_KEY_ENABLE_AUTO_VACUUM, expect value type is unsigned integer
         is_valid_option_of_type::<u32>(&self.plan.set_options, FUSE_OPT_KEY_ENABLE_AUTO_VACUUM)?;
+        is_valid_option_of_type::<u64>(
+            &self.plan.set_options,
+            FUSE_OPT_KEY_AUTO_COMPACTION_IMPERFECT_BLOCKS_THRESHOLD,
+        )?;
 
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let database = self.plan.database.as_str();
@@ -144,9 +157,9 @@ impl Interpreter for SetOptionsInterpreter {
             .get_table(&self.ctx.get_tenant(), database, table_name)
             .await?;
 
+        let engine = Engine::from(table.engine());
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
-            let engine = Engine::from(table.engine());
             if !is_valid_create_opt(&key, &engine) {
                 error!("{}", &error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
@@ -155,6 +168,13 @@ impl Interpreter for SetOptionsInterpreter {
             }
             options_map.insert(key, Some(table_option.1.clone()));
         }
+
+        let storage_format = match table.get_table_info().options().get(OPT_KEY_STORAGE_FORMAT) {
+            Some(storage_format) => FuseStorageFormat::from_str(storage_format)?,
+            None => FuseStorageFormat::Parquet,
+        };
+        // check enable_virtual_column
+        is_valid_fuse_virtual_column_opt(&self.plan.set_options, storage_format)?;
 
         let table = analyze_table(self.ctx.clone(), table, &self.plan.set_options).await?;
 
@@ -339,7 +359,7 @@ async fn analyze_table(
     let pipelines = vec![pipeline];
     let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
     ctx.set_executor(complete_executor.get_inner())?;
-    complete_executor.execute()?;
+    complete_executor.execute().await?;
     let table = table.refresh(ctx.as_ref()).await?;
     Ok(table)
 }

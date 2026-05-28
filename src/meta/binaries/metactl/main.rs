@@ -26,6 +26,7 @@ use databend_common_meta_control::admin::MetaAdminClient;
 use databend_common_meta_control::args::BenchArgs;
 use databend_common_meta_control::args::DumpRaftLogWalArgs;
 use databend_common_meta_control::args::ExportArgs;
+use databend_common_meta_control::args::FilterTenantArgs;
 use databend_common_meta_control::args::GetArgs;
 use databend_common_meta_control::args::GlobalArgs;
 use databend_common_meta_control::args::ImportArgs;
@@ -42,6 +43,7 @@ use databend_common_meta_control::args::UpsertArgs;
 use databend_common_meta_control::args::WatchArgs;
 use databend_common_meta_control::export_from_disk;
 use databend_common_meta_control::export_from_grpc;
+use databend_common_meta_control::filter_tenant;
 use databend_common_meta_control::import;
 use databend_common_meta_control::keys_layout_from_grpc;
 use databend_common_meta_control::lua_support;
@@ -213,6 +215,11 @@ impl App {
         Ok(())
     }
 
+    fn filter_tenant(&self, args: &FilterTenantArgs) -> anyhow::Result<()> {
+        filter_tenant::filter_tenant(args)?;
+        Ok(())
+    }
+
     async fn keys_layout(&self, args: &KeysLayoutArgs) -> anyhow::Result<()> {
         keys_layout_from_grpc::keys_layout_from_running_node(args).await?;
         Ok(())
@@ -376,6 +383,21 @@ enum CtlCommand {
     ///     --initial-cluster 1=localhost:28103 \
     ///     --initial-cluster 2=localhost:28203
     Import(ImportArgs),
+
+    #[command(verbatim_doc_comment)]
+    /// Filter an exported metadata dump and keep only one tenant.
+    ///
+    /// The command keeps the export header, skips all raft-log records, and filters
+    /// state-machine GenericKV/Expire records by traversing tenant roots and their
+    /// referenced database/table ids. Every state-machine record must receive an
+    /// explicit keep/drop mark; otherwise the command fails.
+    ///
+    /// Example:
+    ///   metactl filter-tenant --tenant tenant1 --input meta.db --output tenant1.db
+    ///
+    /// Example (stdin/stdout):
+    ///   cat meta.db | metactl filter-tenant --tenant tenant1 > tenant1.db
+    FilterTenant(FilterTenantArgs),
 
     #[command(verbatim_doc_comment)]
     /// Dump state machine keys grouped by prefix.
@@ -638,6 +660,9 @@ async fn main() -> anyhow::Result<()> {
             }
             CtlCommand::Import(args) => {
                 app.import(args).await?;
+            }
+            CtlCommand::FilterTenant(args) => {
+                app.filter_tenant(args)?;
             }
             CtlCommand::KeysLayout(args) => {
                 app.keys_layout(args).await?;

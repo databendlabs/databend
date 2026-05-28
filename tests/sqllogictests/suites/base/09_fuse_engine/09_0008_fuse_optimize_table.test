@@ -737,44 +737,6 @@ select * exclude(timestamp) from clustering_information('db_09_0008','t14')
 (a, b) linear {"average_depth":1.0,"average_overlaps":0.0,"block_depth_histogram":{"00001":1},"constant_block_count":0,"total_block_count":1}
 
 statement ok
-create table t15(a int, b int) cluster by(a) row_per_block=2
-
-statement ok
-insert into t15 values(1, 1), (2, 2);
-
-statement ok
-insert into t15 values(3, 9), (4, 10);
-
-statement ok
-insert into t15 values(5, 3), (6, 4);
-
-statement ok
-insert into t15 values(7, 5), (8, 6);
-
-statement ok
-alter table t15 cluster by(b);
-
-statement ok
-alter table t15 recluster final;
-
-query III
-select segment_count, block_count, row_count from fuse_snapshot('db_09_0008','t15') limit 2;
-----
-1 4 8
-4 4 8
-
-query TTI
-select min, max, level from clustering_statistics('db_09_0008','t15');
-----
-[1] [2] 0
-[3] [4] 0
-[5] [6] 0
-[9] [10] 0
-
-statement ok
-drop table t15 all
-
-statement ok
 create table t16(a int, b int) file_size = 100;
 
 statement ok

@@ -258,6 +258,11 @@ fn test_statement() {
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET WORKLOAD GROUP='W1'"#,
         r#"ALTER USER u1 WITH SET WORKLOAD GROUP = 'W1';"#,
         r#"ALTER USER u1 WITH UNSET WORKLOAD GROUP;"#,
+        r#"CREATE USER u1 IDENTIFIED WITH key_pair BY '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----'"#,
+        r#"ALTER USER u1 WITH ADD PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\ntest\n-----END PUBLIC KEY-----';"#,
+        r#"ALTER USER u1 WITH ADD PUBLIC_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A' LABEL = 'ci-pipeline';"#,
+        r#"ALTER USER u1 WITH REMOVE PUBLIC_KEY LABEL = 'ci-pipeline';"#,
+        r#"ALTER USER u1 WITH REMOVE PUBLIC_KEY FINGERPRINT = 'SHA256:abc123';"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH DEFAULT_ROLE='role123', TENANTSETTING"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH SET NETWORK POLICY='policy1'"#,
         r#"CREATE USER u1 IDENTIFIED BY '123456' WITH disabled=true"#,
@@ -598,6 +603,16 @@ SELECT * from s;"#,
         r#"
             COPY INTO mytable
                 FROM 'https://127.0.0.1:';
+        "#,
+        r#"
+            COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (type = NDJSON)
+                SCHEMA_EVOLUTION = (
+                    sample_files = 64,
+                    sample_records_per_file = AUTO,
+                    sample_total_records = 10000
+                );
         "#,
         r#"
             COPY INTO mytable

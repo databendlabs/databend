@@ -94,6 +94,42 @@ fn test_range_index() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_range_index_prunes_integer_column_eq_numeric_string_literal() {
+    fn n(n: i32) -> Scalar {
+        Scalar::Number(n.into())
+    }
+
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "a",
+        TableDataType::Number(NumberDataType::Int32),
+    )]));
+    let stats = create_stats(&[("a", n(-2), n(3))], &schema);
+    let expr = parse_expr("a = '4'", &[("a", Int32Type::data_type())]);
+    let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
+
+    assert!(!index.apply(&stats, None, |_| false).unwrap());
+}
+
+#[test]
+fn test_range_index_prunes_nullable_integer_column_eq_numeric_string_literal() {
+    fn n(n: i32) -> Scalar {
+        Scalar::Number(n.into())
+    }
+
+    let func_ctx = FunctionContext::default();
+    let schema = Arc::new(TableSchema::new(vec![TableField::new(
+        "a",
+        TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::Int32))),
+    )]));
+    let stats = create_stats(&[("a", n(-2), n(3))], &schema);
+    let expr = parse_expr("a = '4'", &[("a", Int32Type::data_type().wrap_nullable())]);
+    let index = RangeIndex::try_create(func_ctx, &expr, schema, Default::default()).unwrap();
+
+    assert!(!index.apply(&stats, None, |_| false).unwrap());
+}
+
+#[test]
 fn test_range_index_dates() -> anyhow::Result<()> {
     let mut mint = Mint::new("tests/it/testdata");
     let file = &mut mint.new_goldenfile("test_range_index_dates.txt").unwrap();
@@ -246,6 +282,30 @@ fn test_range_index_spatial() -> anyhow::Result<()> {
     run_text_spatial(
         file,
         "st_within(g, to_geometry('POINT(1 1)'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_covers(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_covers(g, to_geometry('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_coveredby(g, to_geometry('POLYGON((-1 -1, -1 12, 12 12, 12 -1, -1 -1))'))",
+        schema.clone(),
+        Some(spatial_stats.clone()),
+    );
+    run_text_spatial(
+        file,
+        "st_coveredby(g, to_geometry('POLYGON((1 1, 1 12, 12 12, 12 1, 1 1))'))",
         schema.clone(),
         Some(spatial_stats.clone()),
     );

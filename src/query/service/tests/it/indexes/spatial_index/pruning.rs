@@ -150,6 +150,7 @@ async fn test_spatial_index_pruning_geometry() -> anyhow::Result<()> {
         ]
         .into(),
         field_comments: vec![],
+        field_stats_truncate_len: vec![],
         as_select: None,
         cluster_key: None,
         table_indexes: Some(table_indexes),

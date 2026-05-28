@@ -84,7 +84,12 @@ fn gen_sample_block() -> (DataBlock, Vec<Column>, TableSchemaRef) {
 #[test]
 fn test_column_statistic() -> anyhow::Result<()> {
     let (sample_block, sample_cols, schema) = gen_sample_block();
-    let col_stats = gen_columns_statistics(&sample_block, None, &schema)?;
+    let col_stats = gen_columns_statistics(
+        &sample_block,
+        None,
+        &schema,
+        &std::collections::BTreeMap::new(),
+    )?;
 
     assert_eq!(5, col_stats.len());
 

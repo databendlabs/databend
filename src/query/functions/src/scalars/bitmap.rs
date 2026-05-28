@@ -346,13 +346,18 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Ok(rb) => {
                         let subset_start = offset;
                         let subset_length = length;
-                        if subset_start >= b.len() as u64 {
+                        let bitmap_len = rb.len();
+                        if subset_start >= bitmap_len {
                             let rb = HybridBitmap::new();
                             rb.serialize_into(&mut builder.data).unwrap();
                         } else {
-                            let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
-                            let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize..(subset_start + adjusted_length) as usize];
-                            let rb = HybridBitmap::from_iter(subset_bitmap.iter());
+                            let subset_end = subset_start.saturating_add(subset_length).min(bitmap_len);
+                            let subset_bitmap = (0_u64..)
+                                .zip(rb)
+                                .skip_while(|(index, _)| *index < subset_start)
+                                .take_while(|(index, _)| *index < subset_end)
+                                .map(|(_, value)| value);
+                            let rb = HybridBitmap::from_iter(subset_bitmap);
                             rb.serialize_into(&mut builder.data).unwrap();
                         }
                     }

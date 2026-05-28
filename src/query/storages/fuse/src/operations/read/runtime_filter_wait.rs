@@ -32,6 +32,23 @@ pub async fn wait_runtime_filters(
     abort_notify: Arc<WatchNotify>,
     runtime_filter_ready: &[Arc<RuntimeFilterReady>],
 ) -> Result<()> {
+    wait_runtime_filters_inner(scan_id, Some(output), abort_notify, runtime_filter_ready).await
+}
+
+pub async fn wait_runtime_filters_for_pruning(
+    scan_id: IndexType,
+    abort_notify: Arc<WatchNotify>,
+    runtime_filter_ready: &[Arc<RuntimeFilterReady>],
+) -> Result<()> {
+    wait_runtime_filters_inner(scan_id, None, abort_notify, runtime_filter_ready).await
+}
+
+async fn wait_runtime_filters_inner(
+    scan_id: IndexType,
+    output: Option<&Arc<OutputPort>>,
+    abort_notify: Arc<WatchNotify>,
+    runtime_filter_ready: &[Arc<RuntimeFilterReady>],
+) -> Result<()> {
     for runtime_filter_ready in runtime_filter_ready {
         let mut rx = runtime_filter_ready.runtime_filter_watcher.subscribe();
         if (*rx.borrow()).is_some() {
@@ -40,7 +57,7 @@ pub async fn wait_runtime_filters(
 
         let deadline = Instant::now() + RUNTIME_FILTER_WAIT_TIMEOUT;
         loop {
-            if output.is_finished() {
+            if output.is_some_and(|output| output.is_finished()) {
                 return Ok(());
             }
 
@@ -147,6 +164,29 @@ mod tests {
         tokio::time::timeout(
             Duration::from_millis(300),
             wait_runtime_filters(0, &output, abort_notify, &[ready]),
+        )
+        .await
+        .expect("runtime filter wait should stop after filter notification")
+        .expect("filter notification should not return an error");
+    }
+
+    #[tokio::test]
+    async fn test_wait_runtime_filters_for_pruning_returns_when_filter_notified() {
+        let ready = Arc::new(RuntimeFilterReady::default());
+        let abort_notify = Arc::new(WatchNotify::new());
+
+        let ready_cloned = ready.clone();
+        spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            ready_cloned
+                .runtime_filter_watcher
+                .send(Some(()))
+                .expect("watcher should stay open");
+        });
+
+        tokio::time::timeout(
+            Duration::from_millis(300),
+            wait_runtime_filters_for_pruning(0, abort_notify, &[ready]),
         )
         .await
         .expect("runtime filter wait should stop after filter notification")

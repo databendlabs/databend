@@ -13,6 +13,9 @@ DROP TABLE IF EXISTS t4
 statement ok
 DROP TABLE IF EXISTS issue_11031
 
+statement ok
+DROP TABLE IF EXISTS test_properties_as_ident
+
 statement error 1302
 CREATE TABLE IF NOT EXISTS t(c1 int) ENGINE = iceberg
 
@@ -82,6 +85,21 @@ SELECT radio, range, samples FROM issue_11031
 ----
 lte 10 1
 
+# PROPERTIES should be usable as an identifier (column name, table name)
+statement ok
+CREATE TABLE test_properties_as_ident (
+    properties STRING,
+    value INT32
+)
+
+statement ok
+INSERT INTO test_properties_as_ident (properties, value) VALUES ('key1', 100)
+
+query TI
+SELECT properties, value FROM test_properties_as_ident
+----
+key1 100
+
 statement ok
 DROP TABLE IF EXISTS t
 
@@ -96,6 +114,9 @@ DROP TABLE IF EXISTS t4
 
 statement ok
 DROP TABLE IF EXISTS issue_11031
+
+statement ok
+DROP TABLE IF EXISTS test_properties_as_ident
 
 statement ok
 DROP DATABASE IF EXISTS db1
@@ -362,6 +383,9 @@ create table t(a int) snapshot_location='xxx'
 statement error 1301
 create table t(a int) database_id='xxx'
 
+statement error 1301
+create table t(a int) row_avg_depth_threshold='0.001'
+
 statement error 1006
 create table t(a int) bloom_index_columns='b'
 
@@ -373,6 +397,9 @@ create table t(a int)
 
 statement error 1301
 alter table t set options(database_id = "22");
+
+statement error 1301
+alter table t set options(row_avg_depth_threshold = "0.001");
 
 statement ok
 drop table if exists t;

@@ -328,6 +328,9 @@ pub enum UserOptionItem {
     MustChangePassword(bool),
     SetWorkloadGroup(String),
     UnsetWorkloadGroup,
+    AddPublicKey(String, Option<String>), // (key, optional label)
+    RemovePublicKeyByLabel(String),
+    RemovePublicKeyByFingerprint(String),
 }
 
 impl Display for UserOptionItem {
@@ -345,6 +348,16 @@ impl Display for UserOptionItem {
             UserOptionItem::UnsetPasswordPolicy => write!(f, "UNSET PASSWORD POLICY"),
             UserOptionItem::Disabled(v) => write!(f, "DISABLED = {}", v),
             UserOptionItem::MustChangePassword(v) => write!(f, "MUST_CHANGE_PASSWORD = {}", v),
+            UserOptionItem::AddPublicKey(v, label) => match label {
+                Some(l) => write!(f, "ADD PUBLIC_KEY = '{}' LABEL = '{}'", v, l),
+                None => write!(f, "ADD PUBLIC_KEY = '{}'", v),
+            },
+            UserOptionItem::RemovePublicKeyByLabel(v) => {
+                write!(f, "REMOVE PUBLIC_KEY LABEL = '{}'", v)
+            }
+            UserOptionItem::RemovePublicKeyByFingerprint(v) => {
+                write!(f, "REMOVE PUBLIC_KEY FINGERPRINT = '{}'", v)
+            }
         }
     }
 }

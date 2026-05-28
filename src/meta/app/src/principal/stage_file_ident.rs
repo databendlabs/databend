@@ -60,15 +60,13 @@ mod kvapi_impl {
 
     impl kvapi::Value for StageFile {
         type KeyType = StageFileIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use crate::principal::StageIdent;
     use crate::principal::stage_file_ident::StageFileIdent;
@@ -79,10 +77,7 @@ mod tests {
         let tenant = Tenant::new_literal("tenant1");
         let stage = StageIdent::new(tenant, "stage1");
         let sfi = StageFileIdent::new(stage, "file1");
-
-        let key = sfi.to_string_key();
-        assert_eq!("__fd_stage_files/tenant1/stage1/file1", key,);
-        assert_eq!(sfi, StageFileIdent::from_str_key(&key).unwrap());
+        assert_round_trip(sfi, "__fd_stage_files/tenant1/stage1/file1");
     }
 
     #[test]

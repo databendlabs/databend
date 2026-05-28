@@ -79,11 +79,13 @@ fn test_variant() {
     test_array_flatten(file);
     test_array_indexof(file);
     test_array_remove(file);
+    test_array_concat(file);
     test_array_remove_first(file);
     test_array_remove_last(file);
     test_array_reverse(file);
     test_array_unique(file);
     test_array_contains(file);
+    test_array_approx_count_distinct(file);
     test_array_slice(file);
 }
 
@@ -2469,6 +2471,40 @@ fn test_array_remove(file: &mut impl Write) {
     ]);
 }
 
+fn test_array_concat(file: &mut impl Write) {
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, 2]'), parse_json('[3, 4]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, \"a\"]'), parse_json('[true, null]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('1'), parse_json('[2, 3]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_concat(parse_json('[1, 2]'), parse_json('3'))",
+        &[],
+    );
+    run_ast(file, "array_concat(null, parse_json('[1]'))", &[]);
+    run_ast(file, "array_concat(parse_json(c1), parse_json(c2))", &[
+        (
+            "c1",
+            StringType::from_data(vec!["[1, 2]", "[\"a\"]", "true"]),
+        ),
+        (
+            "c2",
+            StringType::from_data(vec!["[3, 4]", "[\"b\", \"c\"]", "[false]"]),
+        ),
+    ]);
+}
+
 fn test_array_remove_first(file: &mut impl Write) {
     // Test with simple arrays
     run_ast(file, "array_remove_first(parse_json('[1, 2, 3]'))", &[]);
@@ -2557,6 +2593,7 @@ fn test_array_unique(file: &mut impl Write) {
 fn test_array_contains(file: &mut impl Write) {
     // Test with simple arrays
     run_ast(file, "contains(parse_json('[1, 2, 3]'), 3)", &[]);
+    run_ast(file, "array_contains(parse_json('[1, 2, 3]'), 3)", &[]);
     run_ast(file, "contains(parse_json('[]'), 1)", &[]);
     run_ast(file, "contains(parse_json('[1, 2, 3]'), null)", &[]);
 
@@ -2577,6 +2614,30 @@ fn test_array_contains(file: &mut impl Write) {
         ),
         ("c2", StringType::from_data(vec!["a", "b", "c"])),
     ]);
+}
+
+fn test_array_approx_count_distinct(file: &mut impl Write) {
+    run_ast(
+        file,
+        "array_approx_count_distinct(parse_json('[1, 2, 2, 3, null]'))",
+        &[],
+    );
+    run_ast(
+        file,
+        "array_approx_count_distinct(parse_json('[\"a\", \"b\", \"a\", null]'))",
+        &[],
+    );
+    run_ast(file, "array_approx_count_distinct(parse_json('[]'))", &[]);
+    run_ast(file, "array_approx_count_distinct(parse_json('1'))", &[]);
+    run_ast(
+        file,
+        "array_approx_count_distinct(try_cast(NULL AS Variant))",
+        &[],
+    );
+    run_ast(file, "array_approx_count_distinct(parse_json(c1))", &[(
+        "c1",
+        StringType::from_data(vec!["[1, 1, 2, null]", "[\"a\", \"b\", \"a\"]", "[]"]),
+    )]);
 }
 
 fn test_array_slice(file: &mut impl Write) {

@@ -184,14 +184,14 @@ impl ExprVisitor<String> for SpatialPredicateVisitor<'_> {
         };
 
         let op = match func_name {
-            "st_contains" => {
+            "st_contains" | "st_covers" => {
                 if column_is_left {
                     SpatialPredicateOp::Contains
                 } else {
                     SpatialPredicateOp::Within
                 }
             }
-            "st_within" => {
+            "st_within" | "st_coveredby" => {
                 if column_is_left {
                     SpatialPredicateOp::Within
                 } else {

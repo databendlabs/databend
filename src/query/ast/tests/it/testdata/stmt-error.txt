@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, or `,`
+  | ------                               ^ unexpected `1`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, `STATS_TRUNCATE_LEN`, or `,`
   | |                                     
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -27,7 +27,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, or `,`
+  | ------                 ^ unexpected `(`, expecting `)`, `NULL`, `NOT`, `DEFAULT`, `GENERATED`, `AS`, `CHECK`, `AUTOINCREMENT`, `IDENTITY`, `COMMENT`, `STATS_TRUNCATE_LEN`, or `,`
   | |                       
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -41,7 +41,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^ unexpected `varch`, expecting `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `VECTOR`, `GEOGRAPHY`, `STAGE_LOCATION`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `NUMERIC`, `SMALLINT`, `DATETIME`, `INTERVAL`, `NULLABLE`, `TIMESTAMP_TZ`, `REAL`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `TEXT`, `JSON`, or `GEOMETRY`
   | |               |  
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -55,7 +55,7 @@ error:
   | ------          - ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `TIMESTAMP`, `TIMESTAMP_TZ`, `DATETIME`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, `STAGE_LOCATION`, <Ident>, <LiteralString>, or `IDENTIFIER`
   | |               | |      
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -70,7 +70,7 @@ error:
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -83,7 +83,7 @@ error:
 1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
   | ------         -- ^^^^^^^^ ambiguous NOT NULL constraint
   | |              |   
-  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
+  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`
   | while parsing `CREATE [OR REPLACE] TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -391,7 +391,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE 'role1';
-  |      ^^^^^ unexpected `GRANT`. it's reserved keyword, you may avoid using it, expecting `GRANTS`, `CREATE`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `TAGS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `WORKERS`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `FILE`, or `FULL`
+  |      ^^^^^ unexpected `GRANT`. it's reserved keyword, you may avoid using it, expecting `GRANTS`, `CREATE`, `VIRTUAL`, `NETWORK`, `CATALOGS`, `STREAMS`, `FUNCTIONS`, `DATABASES`, `CONNECTIONS`, `TABLE_FUNCTIONS`, `TAGS`, `DROP`, `TASKS`, `TABLE`, `ROLES`, `ONLINE`, `INDEXES`, `WORKERS`, `COLUMNS`, `WORKLOAD`, `PASSWORD`, `SEQUENCES`, `PROCEDURES`, `PROCESSLIST`, `STAGES`, `TABLES`, `DICTIONARIES`, `METRICS`, `ENGINES`, `SETTINGS`, `VARIABLES`, `WAREHOUSES`, `STATISTICS`, `USER`, `LOCKS`, `SCHEMAS`, `FIELDS`, `VIEWS`, `USERS`, `PUBLIC`, `FILE`, or `FULL`
 
 
 ---------- Input ----------
@@ -474,7 +474,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CONECTION= ();
-  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
+  |                                      ^^^^^^^^^ unexpected `CONECTION`, expecting `CONNECTION`, `ON_ERROR`, `SCHEMA_EVOLUTION`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `PATTERN`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `MAX_FILES`, `DISABLE_VARIANT_CHECK`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -484,7 +484,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CONNECTION = ();
-  |                                 ^^^^^^^^^^ unexpected `CONNECTION`. it's reserved keyword, you may avoid using it, expecting `ON_ERROR`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
+  |                                 ^^^^^^^^^^ unexpected `CONNECTION`. it's reserved keyword, you may avoid using it, expecting `ON_ERROR`, `SCHEMA_EVOLUTION`, `COLUMN_MATCH_MODE`, `RETURN_FAILED_ONLY`, `FORMAT`, `FORCE`, `FILES`, `PURGE`, `SIZE_LIMIT`, `FILE_FORMAT`, `DISABLE_VARIANT_CHECK`, `PATTERN`, `MAX_FILES`, `SPLIT_SIZE`, or `;`
 
 
 ---------- Input ----------
@@ -1185,7 +1185,7 @@ error:
   |             --------- ----- ^ unexpected `)`, expecting `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `REAL`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `TIMESTAMP`, `TIMESTAMP_TZ`, `DATETIME`, `INTERVAL`, `NUMERIC`, `BINARY`, `VARBINARY`, `LONGBLOB`, `MEDIUMBLOB`, `TINYBLOB`, `BLOB`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `VARIANT`, `JSON`, `GEOMETRY`, `GEOGRAPHY`, `NULLABLE`, `VECTOR`, `STAGE_LOCATION`, <Ident>, <LiteralString>, or `IDENTIFIER`
   |             |         |      
   |             |         while parsing type name
-  |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>']`
+  |             while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [CHECK (<expr>)] [COMMENT '<comment>'] [STATS_TRUNCATE_LEN <n>]`
 
 
 ---------- Input ----------

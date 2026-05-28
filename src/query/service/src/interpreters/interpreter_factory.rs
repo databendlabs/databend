@@ -48,6 +48,7 @@ use crate::interpreters::DropTagInterpreter;
 use crate::interpreters::DropUserInterpreter;
 use crate::interpreters::SetObjectTagsInterpreter;
 use crate::interpreters::SetRoleInterpreter;
+use crate::interpreters::ShowPublicKeysInterpreter;
 use crate::interpreters::UnsetObjectTagsInterpreter;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::access_log::AccessLogger;
@@ -576,6 +577,10 @@ impl InterpreterFactory {
             Plan::DescUser(desc_user) => Ok(Arc::new(DescUserInterpreter::try_create(
                 ctx,
                 *desc_user.clone(),
+            )?)),
+            Plan::ShowPublicKeys(plan) => Ok(Arc::new(ShowPublicKeysInterpreter::try_create(
+                ctx,
+                *plan.clone(),
             )?)),
 
             Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),

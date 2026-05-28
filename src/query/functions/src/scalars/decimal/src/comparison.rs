@@ -26,10 +26,23 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionFactory;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::FunctionSignature;
+use databend_common_expression::Scalar;
 use databend_common_expression::ScalarFunction;
 use databend_common_expression::ScalarFunctionDomain;
 use databend_common_expression::SimpleDomainCmp;
 use databend_common_expression::Value;
+use databend_common_expression::comparison::ConstantComparison;
+use databend_common_expression::comparison::ConstantComparisonAdapter;
+use databend_common_expression::comparison::GtOp;
+use databend_common_expression::comparison::GteOp;
+use databend_common_expression::comparison::LtOp;
+use databend_common_expression::comparison::LteOp;
+use databend_common_expression::comparison::StatComparisonOp;
+use databend_common_expression::comparison::null_comparison_stat;
+use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::function_stat::ScalarFunctionStat;
+use databend_common_expression::function_stat::StatArgs;
+use databend_common_expression::stat_distribution::StatBinaryArg;
 use databend_common_expression::types::compute_view::ComputeView;
 use databend_common_expression::types::decimal::*;
 use databend_common_expression::types::i256;
@@ -45,8 +58,11 @@ fn compare_multiplier(scale_a: u8, scale_b: u8) -> (u8, u8) {
     )
 }
 
-fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
-    let factory = FunctionFactory::Closure(Box::new(|_, args_type: &[DataType]| {
+fn register_decimal_compare_op<Op: CmpOp>(
+    registry: &mut FunctionRegistry,
+    derive_stat: impl ScalarFunctionStat + Clone + 'static,
+) {
+    let factory = FunctionFactory::Closure(Box::new(move |_, args_type: &[DataType]| {
         if args_type.len() != 2 {
             return None;
         }
@@ -76,11 +92,191 @@ fn register_decimal_compare_op<Op: CmpOp>(registry: &mut FunctionRegistry) {
             signature,
             DecimalComparisonDomain::<Op>::default(),
             eval,
-            None,
+            Some(Box::new(derive_stat.clone())),
             has_nullable,
         )))
     }));
     registry.register_function_factory(Op::NAME, factory);
+}
+
+#[derive(Default, Clone)]
+struct DecimalEqualityStat<Op> {
+    _op: PhantomData<Op>,
+}
+
+impl<Op: EqualityOp + Sync + Send> ScalarFunctionStat for DecimalEqualityStat<Op> {
+    fn stat_eval(
+        &self,
+        _: &FunctionContext,
+        args: StatArgs<'_>,
+    ) -> Result<Option<ReturnStat>, String> {
+        let stat = StatBinaryArg {
+            cardinality: args.cardinality,
+            args: args.args.as_array().unwrap(),
+        };
+        derive_decimal_equality_stat::<Op>(stat)
+    }
+}
+
+#[derive(Default, Clone)]
+struct DecimalRangeStat<Op> {
+    _op: PhantomData<Op>,
+}
+
+impl<Op: StatComparisonOp + CmpOp + Send + Sync> ScalarFunctionStat for DecimalRangeStat<Op> {
+    fn stat_eval(
+        &self,
+        _: &FunctionContext,
+        args: StatArgs<'_>,
+    ) -> Result<Option<ReturnStat>, String> {
+        let stat = StatBinaryArg {
+            cardinality: args.cardinality,
+            args: args.args.as_array().unwrap(),
+        };
+        derive_decimal_range_stat::<Op>(stat)
+    }
+}
+
+fn derive_decimal_equality_stat<Op: EqualityOp>(
+    stat: StatBinaryArg,
+) -> Result<Option<ReturnStat>, String> {
+    if let Some(stat) = null_comparison_stat(&stat) {
+        return Ok(Some(stat));
+    }
+
+    let Some((input, _)) = ConstantComparison::<DecimalComparisonStat>::from_args(&stat)? else {
+        return Ok(None);
+    };
+
+    let minmax_cmp = input
+        .domain
+        .as_ref()
+        .map(decimal_minmax)
+        .and_then(|(min, max)| {
+            Some((
+                input.constant.cmp_exact(&min)?,
+                input.constant.cmp_exact(&max)?,
+            ))
+        });
+    let true_count = input.equality_true_count(minmax_cmp, Op::NOT_EQ);
+    Ok(Some(input.boolean_stat(true_count)))
+}
+
+fn derive_decimal_range_stat<Op: StatComparisonOp>(
+    stat: StatBinaryArg,
+) -> Result<Option<ReturnStat>, String> {
+    if let Some(stat) = null_comparison_stat(&stat) {
+        return Ok(Some(stat));
+    }
+
+    let Some((input, reverse)) = ConstantComparison::<DecimalComparisonStat>::from_args(&stat)?
+    else {
+        return Ok(None);
+    };
+
+    let Some((min, max)) = input.domain.as_ref().map(decimal_minmax) else {
+        return Ok(None);
+    };
+    let (Some(cmp_min), Some(cmp_max)) = (
+        input.constant.cmp_exact(&min),
+        input.constant.cmp_exact(&max),
+    ) else {
+        return Ok(None);
+    };
+    Ok(if reverse {
+        Op::Reverse::range_true_count(input.stat.ndv, input.non_null_cardinality, cmp_min, cmp_max)
+    } else {
+        Op::range_true_count(input.stat.ndv, input.non_null_cardinality, cmp_min, cmp_max)
+    }
+    .map(|true_count| input.boolean_stat(true_count)))
+}
+
+#[derive(Clone, Copy)]
+struct DecimalComparisonStat;
+
+impl ConstantComparisonAdapter for DecimalComparisonStat {
+    type Value = DecimalStatValue;
+    type Domain = DecimalDomain;
+
+    fn constant(scalar: Scalar) -> Result<DecimalStatValue, String> {
+        let Scalar::Decimal(value) = scalar else {
+            return Err("decimal comparison constant downcast failed".to_string());
+        };
+        Ok(DecimalStatValue::from_scalar(value))
+    }
+
+    fn domain(domain: &Domain) -> Result<DecimalDomain, String> {
+        domain
+            .as_decimal()
+            .cloned()
+            .ok_or_else(|| "decimal comparison domain downcast failed".to_string())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DecimalStatValue {
+    value: i256,
+    scale: u8,
+}
+
+impl DecimalStatValue {
+    fn from_scalar(scalar: DecimalScalar) -> Self {
+        match scalar {
+            DecimalScalar::Decimal64(value, size) => Self {
+                value: value.into(),
+                scale: size.scale(),
+            },
+            DecimalScalar::Decimal128(value, size) => Self {
+                value: value.into(),
+                scale: size.scale(),
+            },
+            DecimalScalar::Decimal256(value, size) => Self {
+                value,
+                scale: size.scale(),
+            },
+        }
+    }
+
+    fn from_parts<T: Into<i256>>(value: T, size: DecimalSize) -> Self {
+        Self {
+            value: value.into(),
+            scale: size.scale(),
+        }
+    }
+
+    fn scaled_value(self, scale: u8) -> Option<i256> {
+        debug_assert!(scale >= self.scale);
+        self.value.checked_mul(i256::e(scale - self.scale))
+    }
+
+    fn cmp_exact(&self, other: &Self) -> Option<Ordering> {
+        if self.value.signum() != other.value.signum() {
+            return Some(self.value.cmp(&other.value));
+        }
+
+        let scale = self.scale.max(other.scale);
+        match (self.scaled_value(scale), other.scaled_value(scale)) {
+            (Some(left), Some(right)) => Some(left.cmp(&right)),
+            _ => None,
+        }
+    }
+}
+
+fn decimal_minmax(domain: &DecimalDomain) -> (DecimalStatValue, DecimalStatValue) {
+    match domain {
+        DecimalDomain::Decimal64(domain, size) => (
+            DecimalStatValue::from_parts(domain.min, *size),
+            DecimalStatValue::from_parts(domain.max, *size),
+        ),
+        DecimalDomain::Decimal128(domain, size) => (
+            DecimalStatValue::from_parts(domain.min, *size),
+            DecimalStatValue::from_parts(domain.max, *size),
+        ),
+        DecimalDomain::Decimal256(domain, size) => (
+            DecimalStatValue::from_parts(domain.min, *size),
+            DecimalStatValue::from_parts(domain.max, *size),
+        ),
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -203,8 +399,9 @@ where
     value.upcast()
 }
 
-trait CmpOp: 'static + Default {
+trait CmpOp: 'static + Default + Send + Sync + Clone {
     const NAME: &str;
+
     fn is(o: Ordering) -> bool;
     fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType>;
     fn compare<D>(a: D, b: D, f_a: D, f_b: D) -> bool
@@ -239,13 +436,38 @@ trait CmpOp: 'static + Default {
     }
 }
 
+trait EqualityOp: CmpOp + Send + Sync + Clone {
+    const NOT_EQ: bool;
+}
+
 macro_rules! define_cmp_op {
-    ($name:ident, $func_name:expr, $is_fn:ident, $domain_op:ident) => {
-        #[derive(Default)]
+    ($name:ident, $func_name:expr, $is_fn:ident, $domain_op:ident, $not_eq:expr) => {
+        #[derive(Default, Clone, Copy)]
         struct $name;
 
         impl CmpOp for $name {
             const NAME: &str = $func_name;
+
+            fn is(o: Ordering) -> bool {
+                o.$is_fn()
+            }
+
+            fn domain_op<T: SimpleDomainCmp>(a: &T, b: &T) -> FunctionDomain<BooleanType> {
+                a.$domain_op(b)
+            }
+        }
+
+        impl EqualityOp for $name {
+            const NOT_EQ: bool = $not_eq;
+        }
+    };
+}
+
+macro_rules! impl_range_cmp_op {
+    ($op:ty, $func_name:expr, $is_fn:ident, $domain_op:ident) => {
+        impl CmpOp for $op {
+            const NAME: &str = $func_name;
+
             fn is(o: Ordering) -> bool {
                 o.$is_fn()
             }
@@ -257,19 +479,66 @@ macro_rules! define_cmp_op {
     };
 }
 
+define_cmp_op!(Equal, "eq", is_eq, domain_eq, false);
+define_cmp_op!(NotEqual, "noteq", is_ne, domain_noteq, true);
+impl_range_cmp_op!(LtOp, "lt", is_lt, domain_lt);
+impl_range_cmp_op!(GtOp, "gt", is_gt, domain_gt);
+impl_range_cmp_op!(LteOp, "lte", is_le, domain_lte);
+impl_range_cmp_op!(GteOp, "gte", is_ge, domain_gte);
+
 pub fn register_decimal_compare(registry: &mut FunctionRegistry) {
-    define_cmp_op!(Equal, "eq", is_eq, domain_eq);
-    define_cmp_op!(NotEqual, "noteq", is_ne, domain_noteq);
-    define_cmp_op!(LessThan, "lt", is_lt, domain_lt);
-    define_cmp_op!(GreaterThan, "gt", is_gt, domain_gt);
-    define_cmp_op!(LessThanEqual, "lte", is_le, domain_lte);
-    define_cmp_op!(GreaterThanEqual, "gte", is_ge, domain_gte);
+    register_decimal_compare_op::<Equal>(registry, DecimalEqualityStat::<Equal>::default());
+    register_decimal_compare_op::<NotEqual>(registry, DecimalEqualityStat::<NotEqual>::default());
 
-    register_decimal_compare_op::<Equal>(registry);
-    register_decimal_compare_op::<NotEqual>(registry);
+    register_decimal_compare_op::<LtOp>(registry, DecimalRangeStat::<LtOp>::default());
+    register_decimal_compare_op::<GtOp>(registry, DecimalRangeStat::<GtOp>::default());
+    register_decimal_compare_op::<LteOp>(registry, DecimalRangeStat::<LteOp>::default());
+    register_decimal_compare_op::<GteOp>(registry, DecimalRangeStat::<GteOp>::default());
+}
 
-    register_decimal_compare_op::<LessThan>(registry);
-    register_decimal_compare_op::<GreaterThan>(registry);
-    register_decimal_compare_op::<LessThanEqual>(registry);
-    register_decimal_compare_op::<GreaterThanEqual>(registry);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decimal_stat_compare_keeps_large_adjacent_values_distinct() {
+        let size = DecimalSize::new(38, 0).unwrap();
+        let value = "10000000000000000000000000000000000000"
+            .parse::<i128>()
+            .unwrap();
+        let left = DecimalStatValue::from_scalar(DecimalScalar::Decimal128(value, size));
+        let right = DecimalStatValue::from_scalar(DecimalScalar::Decimal128(value + 1, size));
+
+        assert_eq!(left.value.as_f64(), right.value.as_f64());
+        assert_eq!(left.cmp_exact(&right), Some(Ordering::Less));
+    }
+
+    #[test]
+    fn decimal_stat_compare_aligns_scale_exactly() {
+        let one = DecimalStatValue::from_scalar(DecimalScalar::Decimal64(
+            1,
+            DecimalSize::new(1, 0).unwrap(),
+        ));
+        let one_scaled = DecimalStatValue::from_scalar(DecimalScalar::Decimal64(
+            100,
+            DecimalSize::new(3, 2).unwrap(),
+        ));
+
+        assert_eq!(one.cmp_exact(&one_scaled), Some(Ordering::Equal));
+    }
+
+    #[test]
+    fn decimal_stat_compare_returns_none_when_scale_alignment_overflows() {
+        let large = DecimalStatValue::from_scalar(DecimalScalar::Decimal256(
+            i256::DECIMAL_MAX,
+            DecimalSize::new(76, 0).unwrap(),
+        ));
+        let smaller = DecimalStatValue::from_scalar(DecimalScalar::Decimal256(
+            i256::DECIMAL_MAX,
+            DecimalSize::new(76, 1).unwrap(),
+        ));
+
+        assert!(large.scaled_value(1).is_none());
+        assert_eq!(large.cmp_exact(&smaller), None);
+    }
 }

@@ -22,6 +22,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_management::UserApi;
 use databend_common_management::errors::meta_service_error;
+use databend_common_meta_app::principal::AuthInfo;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::UserIdentity;
 use databend_common_meta_app::principal::UserInfo;
@@ -170,6 +171,7 @@ impl UserApiProvider {
         user_info: UserInfo,
         create_option: &CreateOption,
     ) -> Result<()> {
+        self.validate_key_pair_keys(&user_info.name, &user_info.auth_info)?;
         if let Some(name) = user_info.option.network_policy() {
             if self.get_network_policy(tenant, name).await.is_err() {
                 return Err(ErrorCode::UnknownNetworkPolicy(format!(
@@ -364,6 +366,7 @@ impl UserApiProvider {
 
     #[async_backtrace::framed]
     pub async fn alter_user(&self, tenant: &Tenant, user_info: &UserInfo, seq: u64) -> Result<u64> {
+        self.validate_key_pair_keys(&user_info.name, &user_info.auth_info)?;
         let user_option = &user_info.option;
         if let Some(name) = user_option.network_policy() {
             if self.get_network_policy(tenant, name).await.is_err() {
@@ -387,6 +390,24 @@ impl UserApiProvider {
             .upsert_user_info(user_info, seq)
             .await
             .map_err(|e| meta_service_error(e).add_message_back("(while alter user)."))??)
+    }
+
+    /// Validate all public keys in a KeyPair auth info are parseable.
+    /// Also rejects key-pair auth for the root user.
+    /// This is the persistence-level guard: no invalid key can be stored.
+    fn validate_key_pair_keys(&self, username: &str, auth_info: &AuthInfo) -> Result<()> {
+        if let AuthInfo::KeyPair { public_keys } = auth_info {
+            if username == "root" {
+                return Err(ErrorCode::InvalidArgument(
+                    "key-pair authentication is not supported for the root user",
+                ));
+            }
+            for entry in public_keys {
+                crate::validate_public_key_pem(&entry.key)
+                    .map_err(|e| ErrorCode::InvalidArgument(e.message()))?;
+            }
+        }
+        Ok(())
     }
 
     // Update an user's default role

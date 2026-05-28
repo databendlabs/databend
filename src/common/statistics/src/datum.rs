@@ -20,6 +20,14 @@ use databend_common_exception::ErrorCode;
 
 pub type F64 = OrderedFloat<f64>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatumKind {
+    Int,
+    UInt,
+    Float,
+    Bytes,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Datum {
     Bool(bool),
@@ -32,14 +40,6 @@ pub enum Datum {
 impl Datum {
     pub fn is_bytes(&self) -> bool {
         matches!(self, Datum::Bytes(_))
-    }
-
-    pub fn cast_float(self) -> Self {
-        match self {
-            Datum::Int(v) => Datum::Float(F64::from(v as f64)),
-            Datum::UInt(v) => Datum::Float(F64::from(v as f64)),
-            _ => self,
-        }
     }
 
     pub fn as_double(&self) -> Result<f64, ErrorCode> {
@@ -122,6 +122,104 @@ impl Datum {
         matches!(self, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
     }
 
+    pub fn kind(&self) -> Option<DatumKind> {
+        match self {
+            Datum::Int(_) => Some(DatumKind::Int),
+            Datum::UInt(_) => Some(DatumKind::UInt),
+            Datum::Float(_) => Some(DatumKind::Float),
+            Datum::Bytes(_) => Some(DatumKind::Bytes),
+            Datum::Bool(_) => None,
+        }
+    }
+
+    pub fn normalize_to_kind(&self, kind: DatumKind) -> Option<Datum> {
+        match kind {
+            DatumKind::Int => self.as_i64().map(Datum::Int),
+            DatumKind::UInt => self.as_u64().map(Datum::UInt),
+            DatumKind::Float => self.as_double().ok().map(F64::from).map(Datum::Float),
+            DatumKind::Bytes => match self {
+                Datum::Bytes(value) => Some(Datum::Bytes(value.clone())),
+                _ => None,
+            },
+        }
+    }
+
+    pub fn lower_bound_to_kind(&self, kind: DatumKind) -> Option<Datum> {
+        match kind {
+            DatumKind::Int => self.lower_bound_as_i64().map(Datum::Int),
+            DatumKind::UInt => self.lower_bound_as_u64().map(Datum::UInt),
+            _ => self.normalize_to_kind(kind),
+        }
+    }
+
+    pub fn upper_bound_to_kind(&self, kind: DatumKind) -> Option<Datum> {
+        match kind {
+            DatumKind::Int => self.upper_bound_as_i64().map(Datum::Int),
+            DatumKind::UInt => self.upper_bound_as_u64().map(Datum::UInt),
+            _ => self.normalize_to_kind(kind),
+        }
+    }
+
+    pub fn as_i64(&self) -> Option<i64> {
+        match self {
+            Datum::Int(value) => Some(*value),
+            Datum::UInt(value) => i64::try_from(*value).ok(),
+            Datum::Float(value) => {
+                let value = value.into_inner();
+                (value.is_finite()
+                    && value.fract() == 0.0
+                    && value >= i64::MIN as f64
+                    && value <= i64::MAX as f64)
+                    .then_some(value as i64)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn as_u64(&self) -> Option<u64> {
+        match self {
+            Datum::UInt(value) => Some(*value),
+            Datum::Int(value) => u64::try_from(*value).ok(),
+            Datum::Float(value) => {
+                let value = value.into_inner();
+                (value.is_finite()
+                    && value.fract() == 0.0
+                    && value >= 0.0
+                    && value <= u64::MAX as f64)
+                    .then_some(value as u64)
+            }
+            _ => None,
+        }
+    }
+
+    fn lower_bound_as_i64(&self) -> Option<i64> {
+        match self {
+            Datum::Float(value) => float_to_i64_bound(value.into_inner(), f64::ceil),
+            _ => self.as_i64(),
+        }
+    }
+
+    fn upper_bound_as_i64(&self) -> Option<i64> {
+        match self {
+            Datum::Float(value) => float_to_i64_bound(value.into_inner(), f64::floor),
+            _ => self.as_i64(),
+        }
+    }
+
+    fn lower_bound_as_u64(&self) -> Option<u64> {
+        match self {
+            Datum::Float(value) => float_to_u64_bound(value.into_inner(), f64::ceil),
+            _ => self.as_u64(),
+        }
+    }
+
+    fn upper_bound_as_u64(&self) -> Option<u64> {
+        match self {
+            Datum::Float(value) => float_to_u64_bound(value.into_inner(), f64::floor),
+            _ => self.as_u64(),
+        }
+    }
+
     pub fn type_name(&self) -> &'static str {
         match self {
             Datum::Bool(_) => "Boolean",
@@ -158,4 +256,15 @@ impl Datum {
             ))),
         }
     }
+}
+
+fn float_to_i64_bound(value: f64, round: fn(f64) -> f64) -> Option<i64> {
+    let value = round(value);
+    (value.is_finite() && value >= i64::MIN as f64 && value <= i64::MAX as f64)
+        .then_some(value as i64)
+}
+
+fn float_to_u64_bound(value: f64, round: fn(f64) -> f64) -> Option<u64> {
+    let value = round(value);
+    (value.is_finite() && value >= 0.0 && value <= u64::MAX as f64).then_some(value as u64)
 }

@@ -81,7 +81,7 @@ impl RuleFilterNulls {
             return None;
         }
 
-        if (column_stats.null_count as f64 / cardinality) >= NULL_THRESHOLD_RATIO {
+        if (column_stats.null_count.expected() / cardinality) >= NULL_THRESHOLD_RATIO {
             Some(join_key_null_filter(key_expr))
         } else {
             None

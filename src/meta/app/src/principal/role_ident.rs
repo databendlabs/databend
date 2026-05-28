@@ -54,10 +54,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for RoleInfo {
         type KeyType = RoleIdent;
-
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            []
-        }
     }
 
     // ExistError<Resource> is no longer produced: create_role returns bool.
@@ -72,7 +68,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::RoleIdent;
     use crate::tenant::Tenant;
@@ -81,10 +78,6 @@ mod tests {
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = RoleIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_roles/test/test1");
-
-        assert_eq!(ident, RoleIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_roles/test/test1");
     }
 }

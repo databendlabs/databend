@@ -180,8 +180,12 @@ impl RangeJoinState {
             blocks
         } else {
             if !self.left_match.read().is_empty() {
-                return Ok(vec![self.fill_outer(task_id, true)?]);
-            } else if !self.right_match.read().is_empty() {
+                let left_fill_end = partition_count + self.left_sorted_blocks.read().len();
+                if task_id < left_fill_end {
+                    return Ok(vec![self.fill_outer(task_id, true)?]);
+                }
+            }
+            if !self.right_match.read().is_empty() {
                 return Ok(vec![self.fill_outer(task_id, false)?]);
             }
             Ok(vec![DataBlock::empty()])
@@ -395,7 +399,7 @@ impl RangeJoinState {
             ));
         }
         for filter in self.other_conditions.iter() {
-            left_result_block = filter_block(left_result_block, filter)?;
+            left_result_block = filter_block(left_result_block, filter, &self.function_context)?;
         }
         if !left_match.is_empty() || !right_match.is_empty() {
             let column = &left_result_block

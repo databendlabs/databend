@@ -134,7 +134,7 @@ CommitSink
                     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
                     ├── push downs: [filters: [is_true(t1.b (#1) > 2)], limit: NONE]
                     ├── apply join filters: [#0]
-                    └── estimated rows: 3.00
+                    └── estimated rows: 3.50
 
 query T
 explain analyze partial update t1 set a = a + 1 where a in (select a from t2) and b > 2;
@@ -148,7 +148,7 @@ HashJoin: LEFT SEMI
 │   └── output rows: 2
 └── TableScan
     ├── table: default.default.t1
-    ├── estimated rows: 3.00
+    ├── estimated rows: 3.50
     └── output rows: 3
 
 query II
@@ -213,7 +213,7 @@ CommitSink
                 │   ├── filter id:0, build key:p.c_code (#9), probe targets:[c.c_code (#1)@scan0], filter type:bloom,inlist,min_max
                 │   ├── filter id:1, build key:p.id (#8), probe targets:[c.id (#0)@scan0], filter type:bloom,inlist,min_max
                 │   └── filter id:2, build key:p.me_id (#10), probe targets:[c.me_id (#2)@scan0], filter type:bloom,inlist,min_max
-                ├── estimated rows: 3.20
+                ├── estimated rows: 3.40
                 ├── TableScan(Build)
                 │   ├── table: default.default.t2
                 │   ├── scan id: 1

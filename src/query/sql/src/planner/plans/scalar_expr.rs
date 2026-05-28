@@ -1102,7 +1102,7 @@ pub struct CastExpr {
     pub target_type: Box<DataType>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum SubqueryType {
     Any,
     All,
@@ -1352,7 +1352,7 @@ impl AsyncFunctionCall {
         &self,
         tenant: Tenant,
         catalog: Arc<dyn Catalog>,
-        visibility_checker: Option<GrantObjectVisibilityChecker>,
+        visibility_checker: Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<Scalar> {
         match &self.func_arg {
             AsyncFunctionArgument::SequenceFunction(sequence_name) => {

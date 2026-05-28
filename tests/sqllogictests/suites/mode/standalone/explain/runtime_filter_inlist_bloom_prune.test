@@ -80,7 +80,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 100000
-    ├── read size: 167.25 KiB
+    ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
@@ -149,7 +149,7 @@ HashJoin
     ├── scan id: 0
     ├── output columns: [number (#0)]
     ├── read rows: 100000
-    ├── read size: 167.25 KiB
+    ├── read size: 180.86 KiB
     ├── partitions total: 99
     ├── partitions scanned: 99
     ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
@@ -248,3 +248,173 @@ drop table if exists test_a;
 
 statement ok
 drop table if exists test_b;
+
+# Runtime-filter bloom index comparison on the same UInt64 data layout:
+# xor8 keeps all probe blocks, while binary_fuse32 prunes most probe blocks.
+
+statement ok
+set max_threads = 1;
+
+statement ok
+set inlist_runtime_filter_threshold = 3001;
+
+statement ok
+set inlist_runtime_bloom_prune_threshold = 3001;
+
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+drop table if exists rf_build_3k;
+
+statement ok
+drop table if exists rf_probe_3k_xor8;
+
+statement ok
+drop table if exists rf_probe_3k_fuse32;
+
+statement ok
+create or replace table rf_build_3k(number UInt64 not null) row_per_block = 1000 as
+select (number % 1000) * 100 + (number DIV 1000) as number from numbers(3000);
+
+statement ok
+create or replace table rf_probe_3k_xor8(number UInt64 not null) bloom_index_columns = 'number' bloom_index_type = 'xor8' row_per_block = 1000 as
+select (number % 1000) * 100 + (number DIV 1000) as number from numbers(100000);
+
+statement ok
+create or replace table rf_probe_3k_fuse32(number UInt64 not null) bloom_index_columns = 'number' bloom_index_type = 'binary_fuse32' row_per_block = 1000 as
+select (number % 1000) * 100 + (number DIV 1000) as number from numbers(100000);
+
+query I
+select count() from rf_probe_3k_xor8 where number in (select number from rf_build_3k);
+----
+3000
+
+query I
+select count() from rf_probe_3k_fuse32 where number in (select number from rf_build_3k);
+----
+3000
+
+query T
+explain analyze select * from rf_probe_3k_xor8 where number in (select number from rf_build_3k);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [rf_probe_3k_xor8.number (#0)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [rf_probe_3k_xor8.number (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_1 (#1), probe targets:[rf_probe_3k_xor8.number (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: <slt:ignore>
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from remote: <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.default.rf_build_3k
+│   ├── scan id: 1
+│   ├── output columns: [number (#1)]
+│   ├── read rows: 3000
+│   ├── read size: <slt:ignore>
+│   ├── partitions total: 3
+│   ├── partitions scanned: 3
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3000.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.rf_probe_3k_xor8
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 100000
+    ├── read size: 180.86 KiB
+    ├── partitions total: 99
+    ├── partitions scanned: 99
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 100000.00
+
+query T
+explain analyze select * from rf_probe_3k_fuse32 where number in (select number from rf_build_3k);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [rf_probe_3k_fuse32.number (#0)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_1 (#1)]
+├── probe keys: [rf_probe_3k_fuse32.number (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_1 (#1), probe targets:[rf_probe_3k_fuse32.number (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: <slt:ignore>
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from remote: <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.default.rf_build_3k
+│   ├── scan id: 1
+│   ├── output columns: [number (#1)]
+│   ├── read rows: 3000
+│   ├── read size: <slt:ignore>
+│   ├── partitions total: 3
+│   ├── partitions scanned: 3
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 3 to 3 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 3000.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── parts pruned by runtime filter: 96
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.rf_probe_3k_fuse32
+    ├── scan id: 0
+    ├── output columns: [number (#0)]
+    ├── read rows: 100000
+    ├── read size: 180.86 KiB
+    ├── partitions total: 99
+    ├── partitions scanned: 99
+    ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 99 to 99 cost: <slt:ignore>>]
+    ├── push downs: [filters: [], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 100000.00
+
+statement ok
+drop table if exists rf_build_3k;
+
+statement ok
+drop table if exists rf_probe_3k_xor8;
+
+statement ok
+drop table if exists rf_probe_3k_fuse32;

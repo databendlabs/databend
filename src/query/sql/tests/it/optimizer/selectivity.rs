@@ -16,8 +16,13 @@ use std::io::Write;
 
 use databend_common_exception::Result;
 use databend_common_expression::RawExpr;
+use databend_common_expression::stat_distribution::StatCardinality;
+use databend_common_expression::stat_distribution::StatCount;
+use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ArgType;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::Int64Type;
+use databend_common_expression::types::UInt8Type;
 use databend_common_expression::types::UInt64Type;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::ColumnBindingBuilder;
@@ -26,7 +31,6 @@ use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
 use databend_common_sql::optimizer::ir::ColumnStatSet;
-use databend_common_sql::optimizer::ir::Ndv;
 use databend_common_sql::optimizer::ir::SelectivityEstimator;
 use databend_common_sql::plans::BoundColumnRef;
 use databend_common_sql::plans::CastExpr;
@@ -34,6 +38,9 @@ use databend_common_sql::plans::ConstantExpr;
 use databend_common_sql::plans::FunctionCall;
 use databend_common_sql_test_support::parse_raw_expr;
 use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
+use databend_common_statistics::TypedHistogram;
+use databend_common_statistics::TypedHistogramBucket;
 
 use crate::framework::golden::open_golden_file;
 use crate::framework::golden::write_case_title;
@@ -44,17 +51,41 @@ fn run_case(
     columns: &[(&str, DataType)],
     column_stats: ColumnStatSet,
 ) -> Result<()> {
-    writeln!(file, "expr          : {expr_text}")?;
+    run_case_with_predicates(
+        file,
+        &[expr_text],
+        columns,
+        column_stats,
+        StatCardinality::estimate(100.0),
+    )
+}
+
+fn run_case_with_predicates(
+    file: &mut impl Write,
+    expr_texts: &[&str],
+    columns: &[(&str, DataType)],
+    column_stats: ColumnStatSet,
+    cardinality: StatCardinality,
+) -> Result<()> {
+    writeln!(file, "expr          : {}", expr_texts.join(", "))?;
 
     let in_stats = column_stats_to_string(&column_stats);
-    let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
-    let expr = raw_expr_to_scalar(&raw_expr, columns);
-    let cardinality = 100.0;
+    let exprs = expr_texts
+        .iter()
+        .map(|expr_text| {
+            let raw_expr = parse_raw_expr(expr_text, columns, &BUILTIN_FUNCTIONS);
+            raw_expr_to_scalar(&raw_expr, columns)
+        })
+        .collect::<Vec<_>>();
     let mut estimator = SelectivityEstimator::new(column_stats, cardinality);
-    let estimated_rows = estimator.apply(&[expr])?;
+    let estimated_rows = estimator.apply(&exprs)?;
     let out_stats = estimator.column_stats();
 
-    writeln!(file, "cardinality   : {cardinality}")?;
+    writeln!(
+        file,
+        "cardinality   : {}",
+        cardinality_to_string(cardinality)
+    )?;
     writeln!(file, "estimated     : {estimated_rows}")?;
     writeln!(file, "in stats      :\n{in_stats}")?;
     writeln!(
@@ -65,6 +96,13 @@ fn run_case(
     writeln!(file)?;
 
     Ok(())
+}
+
+fn cardinality_to_string(cardinality: StatCardinality) -> String {
+    match cardinality {
+        StatCardinality::Exact(value) => format!("exact {value}"),
+        StatCardinality::Estimate(value) => value.to_string(),
+    }
 }
 
 fn column_stats_to_string(column_stats: &ColumnStatSet) -> String {
@@ -124,9 +162,8 @@ fn raw_expr_to_scalar(raw_expr: &RawExpr, columns: &[(&str, DataType)]) -> Scala
 }
 
 #[test]
-fn test_selectivity_estimator_outcomes() -> Result<()> {
-    let mut file = open_golden_file("optimizer", "selectivity.txt")?;
-
+fn test_selectivity_comparison_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_comparison.txt")?;
     write_case_title(
         &mut file,
         "comparison_predicates",
@@ -136,15 +173,15 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(10),
             max: Datum::UInt(20),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(10),
             max: Datum::UInt(20),
-            ndv: Ndv::Stat(10.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
@@ -186,6 +223,117 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
 
     write_case_title(
         &mut file,
+        "reversed_comparison_predicates",
+        "Comparison predicates should apply the same column constraint when the constant is on the left.",
+    )?;
+    for expr in ["15 = a", "17 < a", "17 <= a", "17 > a", "17 >= a"] {
+        run_case(
+            &mut file,
+            expr,
+            comparison_columns,
+            comparison_stats.clone(),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "typed_comparison_predicates",
+        "Typed comparison predicates should respect integer boundaries, nullable inputs, and histogram constants.",
+    )?;
+    let int_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in ["i < 5", "i > 5"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("i", Int64Type::data_type())],
+            int_stats.clone(),
+        )?;
+    }
+    let nullable_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(30),
+        histogram: None,
+    })]);
+    run_case(
+        &mut file,
+        "n > 5",
+        &[("n", Int64Type::data_type().wrap_nullable())],
+        nullable_stats,
+    )?;
+    let edge_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(1),
+        max: Datum::Int(10),
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::Int(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(1, 10, 100.0, 10.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    for expr in ["h >= 10", "h < 10"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("h", Int64Type::data_type())],
+            edge_histogram_stats.clone(),
+        )?;
+    }
+    let uint8_histogram_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(10),
+        ndv: StatEstimate::exact(11.0),
+        null_count: StatCount::exact(0),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: true,
+            buckets: vec![TypedHistogramBucket::new(0, 10, 100.0, 11.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case(
+        &mut file,
+        "u > 5",
+        &[("u", UInt8Type::data_type())],
+        uint8_histogram_stats,
+    )?;
+
+    write_case_title(
+        &mut file,
+        "string_comparison_predicates",
+        "String equality should use domain and function statistics without assuming unbounded strings are impossible.",
+    )?;
+    let string_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Bytes(b"b".to_vec()),
+        max: Datum::Bytes(b"d".to_vec()),
+        ndv: StatEstimate::exact(3.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in ["s = 'a'", "s = 'c'", "'c' = s", "s != 'c'"] {
+        run_case(
+            &mut file,
+            expr,
+            &[("s", DataType::String)],
+            string_stats.clone(),
+        )?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_logical_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_logical.txt")?;
+    write_case_title(
+        &mut file,
         "logical_predicates",
         "Logical predicate composition should combine selectivity estimates and null handling.",
     )?;
@@ -193,15 +341,15 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
@@ -226,7 +374,175 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         ],
         logical_stats.clone(),
     )?;
+    run_case_with_predicates(
+        &mut file,
+        &["a > 3", "a < 6"],
+        &[("a", UInt64Type::data_type())],
+        logical_stats.clone(),
+        StatCardinality::estimate(100.0),
+    )?;
 
+    write_case_title(
+        &mut file,
+        "constant_logical_predicates",
+        "Constant predicates should preserve Zero and All through logical composition.",
+    )?;
+    for expr in ["1", "0", "-1", "true", "false", "not(false)", "not(true)"] {
+        run_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[],
+            ColumnStatSet::new(),
+            StatCardinality::estimate(4.0),
+        )?;
+    }
+
+    let nested_constant_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(3),
+        ndv: StatEstimate::exact(4.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in [
+        "and_filters(a = 1, true)",
+        "and_filters(a = 1, false)",
+        "or_filters(a = 1, true)",
+        "or_filters(a = 1, false)",
+        "or_filters(and_filters(a = 1, true), and_filters(a = 2, false))",
+    ] {
+        run_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[("a", UInt64Type::data_type())],
+            nested_constant_stats.clone(),
+            StatCardinality::estimate(4.0),
+        )?;
+    }
+
+    write_case_title(
+        &mut file,
+        "domain_folded_logical_predicates",
+        "Domain-folded constants should still compose with remaining predicate selectivity.",
+    )?;
+    let domain_folded_stats = ColumnStatSet::from_iter([
+        (Symbol::new(0), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(0),
+            ndv: StatEstimate::exact(1.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(1), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(0),
+            ndv: StatEstimate::exact(1.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(2), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(4),
+            ndv: StatEstimate::exact(5.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+        (Symbol::new(3), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(4),
+            ndv: StatEstimate::exact(5.0),
+            null_count: StatCount::exact(0),
+            histogram: None,
+        }),
+    ]);
+    run_case_with_predicates(
+        &mut file,
+        &["or_filters(and_filters(a > 1, c > 2), and_filters(b < 3, d < 4))"],
+        &[
+            ("a", UInt64Type::data_type()),
+            ("b", UInt64Type::data_type()),
+            ("c", UInt64Type::data_type()),
+            ("d", UInt64Type::data_type()),
+        ],
+        domain_folded_stats,
+        StatCardinality::estimate(4.4),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_null_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_null.txt")?;
+    write_case_title(
+        &mut file,
+        "estimated_zero_predicates",
+        "Estimated zero selectivity should not be treated as a proven empty result.",
+    )?;
+    let estimated_zero_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: StatEstimate::exact(6.0),
+        null_count: StatCount::estimate(8.0, 8.0),
+        histogram: None,
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["is_not_null(n)"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        estimated_zero_stats,
+        StatCardinality::estimate(8.0),
+    )?;
+    let estimated_zero_cardinality_stats =
+        ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+            min: Datum::UInt(0),
+            max: Datum::UInt(5),
+            ndv: StatEstimate::exact(6.0),
+            null_count: StatCount::exact(2),
+            histogram: Some(Histogram::UInt(TypedHistogram {
+                accuracy: false,
+                buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+                avg_spacing: None,
+            })),
+        })]);
+    run_case_with_predicates(
+        &mut file,
+        &["is_not_null(n)"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        estimated_zero_cardinality_stats,
+        StatCardinality::estimate(0.0),
+    )?;
+
+    write_case_title(
+        &mut file,
+        "exact_null_predicates",
+        "Exact all-null input domains should fold is_not_null to an empty result and clear distributions.",
+    )?;
+    let exact_all_null_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::UInt(0),
+        max: Datum::UInt(5),
+        ndv: StatEstimate::exact(6.0),
+        null_count: StatCount::exact(8),
+        histogram: Some(Histogram::UInt(TypedHistogram {
+            accuracy: false,
+            buckets: vec![TypedHistogramBucket::new(0, 5, 6.0, 6.0)],
+            avg_spacing: None,
+        })),
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["is_not_null(n)"],
+        &[("n", UInt64Type::data_type().wrap_nullable())],
+        exact_all_null_stats,
+        StatCardinality::exact(8),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn test_selectivity_special_predicate_outcomes() -> Result<()> {
+    let mut file = open_golden_file("optimizer", "selectivity_special_predicate.txt")?;
     write_case_title(
         &mut file,
         "modulo_predicates",
@@ -236,26 +552,57 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
         (Symbol::new(0), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 0,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(0),
             histogram: None,
         }),
         (Symbol::new(1), ColumnStat {
             min: Datum::UInt(0),
             max: Datum::UInt(9),
-            ndv: Ndv::Stat(10.0),
-            null_count: 10,
+            ndv: StatEstimate::exact(10.0),
+            null_count: StatCount::exact(10),
             histogram: None,
         }),
     ]);
     for expr in ["a % 4 = 1", "a % 4 = 5"] {
-        run_case(
+        run_case_with_predicates(
             &mut file,
-            expr,
+            &[expr],
             &[("a", UInt64Type::data_type())],
             mod_stats.clone(),
+            StatCardinality::estimate(100.0),
         )?;
     }
+    let signed_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(-9),
+        max: Datum::Int(9),
+        ndv: StatEstimate::exact(19.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    for expr in ["i % 4 = -1", "i % 4 = 5", "i % -4 = -1", "i % -4 = 5"] {
+        run_case_with_predicates(
+            &mut file,
+            &[expr],
+            &[("i", Int64Type::data_type())],
+            signed_mod_stats.clone(),
+            StatCardinality::estimate(100.0),
+        )?;
+    }
+    let signed_min_mod_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
+        min: Datum::Int(i64::MIN),
+        max: Datum::Int(9),
+        ndv: StatEstimate::exact(10.0),
+        null_count: StatCount::exact(0),
+        histogram: None,
+    })]);
+    run_case_with_predicates(
+        &mut file,
+        &["i % -1 = 0"],
+        &[("i", Int64Type::data_type())],
+        signed_min_mod_stats,
+        StatCardinality::estimate(100.0),
+    )?;
 
     write_case_title(
         &mut file,
@@ -265,16 +612,17 @@ fn test_selectivity_estimator_outcomes() -> Result<()> {
     let like_stats = ColumnStatSet::from_iter([(Symbol::new(0), ColumnStat {
         min: Datum::Bytes("aa".as_bytes().to_vec()),
         max: Datum::Bytes("zz".as_bytes().to_vec()),
-        ndv: Ndv::Stat(52.0),
-        null_count: 0,
+        ndv: StatEstimate::exact(52.0),
+        null_count: StatCount::exact(0),
         histogram: None,
     })]);
     for expr in ["s like 'ab%'", "s like '%ab_'"] {
-        run_case(
+        run_case_with_predicates(
             &mut file,
-            expr,
+            &[expr],
             &[("s", DataType::String)],
             like_stats.clone(),
+            StatCardinality::estimate(100.0),
         )?;
     }
 

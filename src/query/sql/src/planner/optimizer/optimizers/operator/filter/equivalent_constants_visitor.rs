@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 
 use databend_common_exception::Result;
+use databend_common_expression::conversion::common_super_type_with_conversion;
 
 use crate::ScalarExpr;
 use crate::optimizer::optimizers::operator::filter::remove_trivial_type_cast;
@@ -126,6 +127,15 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                         ScalarExpr::BoundColumnRef(left_column),
                         ScalarExpr::BoundColumnRef(right_column),
                     ) => {
+                        if !common_super_type_with_conversion(
+                            left_column.column.data_type.as_ref(),
+                            right_column.column.data_type.as_ref(),
+                        )
+                        .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
+                        {
+                            return Ok(());
+                        }
+
                         match (
                             self.eq_constants.get(&left_column).cloned(),
                             self.eq_constants.get(&right_column).cloned(),
@@ -147,7 +157,13 @@ impl VisitorMut<'_> for EquivalentConstantsVisitorInner {
                     }
                     (ScalarExpr::BoundColumnRef(column), expr)
                     | (expr, ScalarExpr::BoundColumnRef(column)) => {
-                        if expr.used_columns().is_empty() {
+                        if expr.used_columns().is_empty()
+                            && common_super_type_with_conversion(
+                                column.column.data_type.as_ref(),
+                                expr.data_type()?,
+                            )
+                            .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
+                        {
                             self.eq_constants.insert(column, expr);
                         }
                     }

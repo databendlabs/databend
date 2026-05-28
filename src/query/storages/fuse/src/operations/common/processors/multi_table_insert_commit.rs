@@ -97,6 +97,7 @@ impl AsyncSink for CommitMultiTableInsert {
         let mut update_temp_tables = Vec::with_capacity(self.commit_metas.len());
         let mut snapshot_generators = HashMap::with_capacity(self.commit_metas.len());
         let mut hlls = HashMap::with_capacity(self.commit_metas.len());
+        let mut imperfect_counts = HashMap::with_capacity(self.commit_metas.len());
         let insert_rows = {
             let stats = self.ctx.mutation_state().multi_table_insert_status();
             let status = stats.lock().unwrap();
@@ -108,30 +109,29 @@ impl AsyncSink for CommitMultiTableInsert {
             snapshot_generator.set_conflict_resolve_context(commit_meta.conflict_resolve_context);
             let table = self.tables.get(&table_id).unwrap();
             if table.is_temp() {
-                update_temp_tables.push(
-                    build_update_temp_table_req(
-                        table.as_ref(),
-                        &snapshot_generator,
-                        self.ctx.txn_mgr(),
-                        *self.table_meta_timestampss.get(&table_id).unwrap(),
-                        &commit_meta.hll,
-                        insert_rows.get(&table_id).cloned().unwrap_or_default(),
-                    )
-                    .await?,
-                );
+                let (req, imperfect_count) = build_update_temp_table_req(
+                    table.as_ref(),
+                    &snapshot_generator,
+                    self.ctx.txn_mgr(),
+                    *self.table_meta_timestampss.get(&table_id).unwrap(),
+                    &commit_meta.hll,
+                    insert_rows.get(&table_id).cloned().unwrap_or_default(),
+                )
+                .await?;
+                update_temp_tables.push(req);
+                imperfect_counts.insert(table_id, imperfect_count);
             } else {
-                update_table_metas.push((
-                    build_update_table_meta_req(
-                        table.as_ref(),
-                        &snapshot_generator,
-                        self.ctx.txn_mgr(),
-                        *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
-                        &commit_meta.hll,
-                        insert_rows.get(&table_id).cloned().unwrap_or_default(),
-                    )
-                    .await?,
-                    table.get_table_info().clone(),
-                ));
+                let (req, imperfect_count) = build_update_table_meta_req(
+                    table.as_ref(),
+                    &snapshot_generator,
+                    self.ctx.txn_mgr(),
+                    *self.table_meta_timestampss.get(&table.get_id()).unwrap(),
+                    &commit_meta.hll,
+                    insert_rows.get(&table_id).cloned().unwrap_or_default(),
+                )
+                .await?;
+                update_table_metas.push((req, table.get_table_info().clone()));
+                imperfect_counts.insert(table_id, imperfect_count);
             }
             snapshot_generators.insert(table_id, snapshot_generator);
             hlls.insert(table_id, commit_meta.hll);
@@ -194,6 +194,15 @@ impl AsyncSink for CommitMultiTableInsert {
                     "update tables success (auto commit), tables updated {:?}, streams updated {:?}",
                     table_descriptions, stream_descriptions
                 );
+                for (table_id, imperfect_count) in imperfect_counts.iter() {
+                    if let Some(table) = self.tables.get(table_id) {
+                        set_compaction_num_block_hint(
+                            self.ctx.as_ref(),
+                            table.get_table_info(),
+                            *imperfect_count,
+                        );
+                    }
+                }
 
                 return Ok(());
             };
@@ -222,7 +231,7 @@ impl AsyncSink for CommitMultiTableInsert {
                             .await?;
                         for (req, _) in update_table_metas.iter_mut() {
                             if req.table_id == tid {
-                                *req = build_update_table_meta_req(
+                                let (new_req, imperfect_count) = build_update_table_meta_req(
                                     table.as_ref(),
                                     snapshot_generators.get(&tid).unwrap(),
                                     self.ctx.txn_mgr(),
@@ -231,6 +240,8 @@ impl AsyncSink for CommitMultiTableInsert {
                                     insert_rows.get(&tid).cloned().unwrap_or_default(),
                                 )
                                 .await?;
+                                *req = new_req;
+                                imperfect_counts.insert(tid, imperfect_count);
                                 break;
                             }
                         }
@@ -309,9 +320,9 @@ async fn build_update_temp_table_req(
     table_meta_timestamps: TableMetaTimestamps,
     insert_hll: &BlockHLL,
     insert_rows: u64,
-) -> Result<UpdateTempTableReq> {
+) -> Result<(UpdateTempTableReq, u64)> {
     let table_info = table.get_table_info();
-    let new_table_meta = write_new_snapshot_and_build_table_meta(
+    let (new_table_meta, imperfect_count) = write_new_snapshot_and_build_table_meta(
         table,
         snapshot_generator,
         txn_mgr,
@@ -321,12 +332,15 @@ async fn build_update_temp_table_req(
     )
     .await?;
 
-    Ok(UpdateTempTableReq {
-        table_id: table_info.ident.table_id,
-        new_table_meta,
-        copied_files: Default::default(),
-        desc: table_info.desc.clone(),
-    })
+    Ok((
+        UpdateTempTableReq {
+            table_id: table_info.ident.table_id,
+            new_table_meta,
+            copied_files: Default::default(),
+            desc: table_info.desc.clone(),
+        },
+        imperfect_count,
+    ))
 }
 
 async fn build_update_table_meta_req(
@@ -336,9 +350,9 @@ async fn build_update_table_meta_req(
     table_meta_timestamps: TableMetaTimestamps,
     insert_hll: &BlockHLL,
     insert_rows: u64,
-) -> Result<UpdateTableMetaReq> {
+) -> Result<(UpdateTableMetaReq, u64)> {
     let fuse_table = FuseTable::try_from_table(table)?;
-    let new_table_meta = write_new_snapshot_and_build_table_meta(
+    let (new_table_meta, imperfect_count) = write_new_snapshot_and_build_table_meta(
         table,
         snapshot_generator,
         txn_mgr,
@@ -357,7 +371,7 @@ async fn build_update_table_meta_req(
         base_snapshot_location: fuse_table.snapshot_loc(),
         lvt_check: None,
     };
-    Ok(req)
+    Ok((req, imperfect_count))
 }
 
 async fn write_new_snapshot_and_build_table_meta(
@@ -367,7 +381,7 @@ async fn write_new_snapshot_and_build_table_meta(
     table_meta_timestamps: TableMetaTimestamps,
     insert_hll: &BlockHLL,
     insert_rows: u64,
-) -> Result<TableMeta> {
+) -> Result<(TableMeta, u64)> {
     let fuse_table = FuseTable::try_from_table(table)?;
     let previous = fuse_table.read_table_snapshot().await?;
     let table_stats_gen = fuse_table
@@ -384,11 +398,7 @@ async fn write_new_snapshot_and_build_table_meta(
         table_stats_gen,
     )?;
     snapshot.ensure_segments_unique()?;
-    set_compaction_num_block_hint(
-        snapshot_generator.ctx.as_ref(),
-        table_info.name.as_str(),
-        &snapshot.summary,
-    );
+    let imperfect_count = snapshot.summary.block_count - snapshot.summary.perfect_block_count;
 
     let dal = fuse_table.get_operator();
     let location_generator = &fuse_table.meta_location_generator;
@@ -396,10 +406,9 @@ async fn write_new_snapshot_and_build_table_meta(
         location_generator.gen_snapshot_location(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
     dal.write(&location, snapshot.to_bytes()?).await?;
 
-    Ok(FuseTable::build_new_table_meta(
-        &fuse_table.table_info.meta,
-        &location,
-        &snapshot,
+    Ok((
+        FuseTable::build_new_table_meta(&fuse_table.table_info.meta, &location, &snapshot),
+        imperfect_count,
     ))
 }
 

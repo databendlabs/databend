@@ -27,7 +27,7 @@ use crate::meta::v1;
 use crate::meta::v2;
 use crate::meta::v3;
 
-#[frozen_api("446eb231")]
+#[frozen_api("d78e9c42")]
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, FrozenAPI)]
 pub struct TableSnapshotStatistics {
     /// format version of snapshot
@@ -36,6 +36,7 @@ pub struct TableSnapshotStatistics {
     pub snapshot_id: SnapshotId,
     pub row_count: u64,
     pub hll: HashMap<ColumnId, MetaHLL>,
+    #[serde(with = "crate::meta::histogram_serde")]
     pub histograms: HashMap<ColumnId, Histogram>,
 }
 

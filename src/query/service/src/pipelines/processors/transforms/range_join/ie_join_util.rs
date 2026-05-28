@@ -27,14 +27,16 @@ use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_sql::executor::cast_expr_to_non_null_boolean;
 
-pub fn filter_block(block: DataBlock, filter: &RemoteExpr) -> Result<DataBlock> {
+pub fn filter_block(
+    block: DataBlock,
+    filter: &RemoteExpr,
+    func_ctx: &FunctionContext,
+) -> Result<DataBlock> {
     let filter = filter.as_expr(&BUILTIN_FUNCTIONS);
     let other_predicate = cast_expr_to_non_null_boolean(filter)?;
     assert_eq!(other_predicate.data_type(), &DataType::Boolean);
 
-    let func_ctx = FunctionContext::default();
-
-    let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
     let predicate = evaluator
         .run(&other_predicate)?
         .try_downcast::<BooleanType>()

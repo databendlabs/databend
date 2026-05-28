@@ -335,9 +335,9 @@ impl Binder {
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "matched clause's condition can't contain subquery|window|aggregate|udf functions|async functions"
+                    "matched clause's condition can't contain subquery|window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -421,9 +421,9 @@ impl Binder {
     ) -> Result<UnmatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr)?;
-            if !self.check_allowed_scalar_expr(&scalar_expr)? {
+            if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                 return Err(ErrorCode::SemanticError(
-                    "unmatched clause's condition can't contain subquery|window|aggregate|udf functions"
+                    "unmatched clause's condition can't contain subquery|window|aggregate|async functions"
                         .to_string(),
                 )
                 .set_span(scalar_expr.span()));
@@ -471,9 +471,9 @@ impl Binder {
             }
             for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
                 let (mut scalar_expr, _) = scalar_binder.bind(expr)?;
-                if !self.check_allowed_scalar_expr(&scalar_expr)? {
+                if !self.check_allowed_scalar_expr_with_udf(&scalar_expr)? {
                     return Err(ErrorCode::SemanticError(
-                        "insert clause's can't contain subquery|window|aggregate|udf functions"
+                        "insert clause's can't contain subquery|window|aggregate|async functions"
                             .to_string(),
                     )
                     .set_span(scalar_expr.span()));

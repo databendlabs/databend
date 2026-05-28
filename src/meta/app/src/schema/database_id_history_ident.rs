@@ -37,9 +37,7 @@ impl DatabaseIdHistoryIdentRaw {
 mod kvapi_impl {
 
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
 
-    use crate::schema::DatabaseId;
     use crate::schema::DatabaseIdHistoryIdent;
     use crate::schema::DbIdList;
     use crate::tenant_key::resource::TenantResource;
@@ -54,11 +52,6 @@ mod kvapi_impl {
 
     impl kvapi::Value for DbIdList {
         type KeyType = DatabaseIdHistoryIdent;
-        fn dependency_keys(&self, _key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            self.id_list
-                .iter()
-                .map(|id| DatabaseId::new(*id).to_string_key())
-        }
     }
 
     // // Use these error types to replace usage of ErrorCode if possible.
@@ -68,7 +61,8 @@ mod kvapi_impl {
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::DatabaseIdHistoryIdent;
     use crate::tenant::Tenant;
@@ -77,10 +71,6 @@ mod tests {
     fn test_database_id_history_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = DatabaseIdHistoryIdent::new(tenant, "3");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_db_id_list/test/3");
-
-        assert_eq!(ident, DatabaseIdHistoryIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_db_id_list/test/3");
     }
 }

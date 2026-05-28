@@ -37,9 +37,7 @@ impl TIdentRaw<IndexName> {
 
 mod kvapi_impl {
     use databend_meta_client::kvapi;
-    use databend_meta_client::kvapi::Key;
 
-    use crate::KeyWithTenant;
     use crate::schema::IndexNameIdent;
     use crate::schema::index_id_ident::IndexId;
     use crate::tenant_key::resource::TenantResource;
@@ -53,16 +51,13 @@ mod kvapi_impl {
 
     impl kvapi::Value for IndexId {
         type KeyType = IndexNameIdent;
-        /// IndexId is id of the two level `name->id,id->value` mapping
-        fn dependency_keys(&self, key: &Self::KeyType) -> impl IntoIterator<Item = String> {
-            [self.into_t_ident(key.tenant()).to_string_key()]
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use databend_meta_client::kvapi::Key;
+
+    use databend_meta_client::kvapi::testing::assert_round_trip;
 
     use super::IndexNameIdent;
     use crate::tenant::Tenant;
@@ -71,10 +66,6 @@ mod tests {
     fn test_ident() {
         let tenant = Tenant::new_literal("test");
         let ident = IndexNameIdent::new(tenant, "test1");
-
-        let key = ident.to_string_key();
-        assert_eq!(key, "__fd_index/test/test1");
-
-        assert_eq!(ident, IndexNameIdent::from_str_key(&key).unwrap());
+        assert_round_trip(ident, "__fd_index/test/test1");
     }
 }

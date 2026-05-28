@@ -61,6 +61,7 @@ use databend_common_pipeline::sources::BlocksSource;
 use databend_common_sql::plans::CreateDatabasePlan;
 use databend_common_sql::plans::CreateTablePlan;
 use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_AUTO_ANALYZE;
+use databend_common_storages_fuse::FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN;
 use databend_common_tracing::set_panic_hook;
 use databend_common_version::BUILD_INFO;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
@@ -388,6 +389,7 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec!["number".to_string(), "tuple".to_string()],
+            field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
             table_indexes: None,
@@ -416,6 +418,7 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec!["number".to_string(), "tuple".to_string()],
+            field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
             table_indexes: None,
@@ -453,9 +456,14 @@ impl TestFixture {
             options: [
                 // database id is required for FUSE
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+                (
+                    FUSE_OPT_KEY_ENABLE_VIRTUAL_COLUMN.to_owned(),
+                    "true".to_owned(),
+                ),
             ]
             .into(),
             field_comments: vec![],
+            field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
             table_indexes: None,
@@ -494,6 +502,7 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec![],
+            field_stats_truncate_len: vec![],
             table_partition: None,
             as_select: None,
             cluster_key: None,
@@ -542,6 +551,7 @@ impl TestFixture {
             ]
             .into(),
             field_comments: vec![],
+            field_stats_truncate_len: vec![],
             as_select: None,
             cluster_key: None,
             table_indexes: None,
@@ -926,7 +936,7 @@ impl TestFixture {
                 .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
         }
 
-        execute_pipeline(ctx, build_res)
+        execute_pipeline(ctx, build_res).await
     }
 
     pub async fn execute_command(&self, query: &str) -> Result<()> {

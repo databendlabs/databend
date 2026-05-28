@@ -23,6 +23,77 @@ const NO_PASSWORD_STR: &str = "no_password";
 const SHA256_PASSWORD_STR: &str = "sha256_password";
 const DOUBLE_SHA1_PASSWORD_STR: &str = "double_sha1_password";
 const JWT_AUTH_STR: &str = "jwt";
+const KEY_PAIR_STR: &str = "key_pair";
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct PublicKeyEntry {
+    /// Base64-encoded public key body (no PEM headers/footers)
+    pub key: String,
+    /// User-provided label for identification
+    pub label: String,
+    /// ISO 8601 timestamp when the key was added
+    pub created_at: i64,
+}
+
+impl PublicKeyEntry {
+    pub fn fingerprint(&self) -> Result<String> {
+        sha256_fingerprint(&self.key)
+    }
+
+    /// Reconstruct full PEM from stored base64 body.
+    /// Wraps at 64 characters per line as required by PEM format.
+    pub fn to_pem(&self) -> String {
+        let mut lines = Vec::new();
+        let mut i = 0;
+        while i < self.key.len() {
+            let end = (i + 64).min(self.key.len());
+            lines.push(&self.key[i..end]);
+            i = end;
+        }
+        format!(
+            "-----BEGIN PUBLIC KEY-----\n{}\n-----END PUBLIC KEY-----",
+            lines.join("\n")
+        )
+    }
+}
+
+/// Normalize a public key input: accept full PEM or bare base64, return base64 body only.
+/// Validates that the result is valid base64 that decodes to non-empty bytes.
+pub fn normalize_public_key(input: &str) -> Result<String> {
+    use base64::Engine;
+    let trimmed = input.trim();
+    let body = if trimmed.starts_with("-----BEGIN") {
+        trimmed
+            .lines()
+            .filter(|line| !line.starts_with("-----"))
+            .collect::<Vec<_>>()
+            .join("")
+    } else {
+        trimmed.chars().filter(|c| !c.is_whitespace()).collect()
+    };
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(&body)
+        .map_err(|e| {
+            ErrorCode::AuthenticateFailure(format!("invalid public key: bad base64 encoding: {e}"))
+        })?;
+    if decoded.is_empty() {
+        return Err(ErrorCode::AuthenticateFailure(
+            "invalid public key: empty key data",
+        ));
+    }
+    Ok(body)
+}
+
+/// Compute fingerprint compatible with OpenSSH: SHA-256 of DER bytes, base64-encoded.
+pub fn sha256_fingerprint(key_base64: &str) -> Result<String> {
+    use base64::Engine;
+    let der_bytes = base64::engine::general_purpose::STANDARD
+        .decode(key_base64)
+        .map_err(|e| ErrorCode::AuthenticateFailure(format!("invalid public key base64: {e}")))?;
+    let digest = Sha256::digest(&der_bytes);
+    let encoded = base64::engine::general_purpose::STANDARD_NO_PAD.encode(digest);
+    Ok(format!("SHA256:{}", encoded))
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum AuthType {
@@ -30,6 +101,7 @@ pub enum AuthType {
     Sha256Password,
     DoubleSha1Password,
     JWT,
+    KeyPair,
 }
 
 impl FromStr for AuthType {
@@ -41,6 +113,7 @@ impl FromStr for AuthType {
             DOUBLE_SHA1_PASSWORD_STR => Ok(AuthType::DoubleSha1Password),
             NO_PASSWORD_STR => Ok(AuthType::NoPassword),
             JWT_AUTH_STR => Ok(AuthType::JWT),
+            KEY_PAIR_STR => Ok(AuthType::KeyPair),
             _ => Err(ErrorCode::AuthenticateFailure(AuthType::bad_auth_types(s))),
         }
     }
@@ -53,6 +126,7 @@ impl AuthType {
             AuthType::Sha256Password => SHA256_PASSWORD_STR,
             AuthType::DoubleSha1Password => DOUBLE_SHA1_PASSWORD_STR,
             AuthType::JWT => JWT_AUTH_STR,
+            AuthType::KeyPair => KEY_PAIR_STR,
         }
     }
 
@@ -62,6 +136,7 @@ impl AuthType {
             SHA256_PASSWORD_STR,
             DOUBLE_SHA1_PASSWORD_STR,
             JWT_AUTH_STR,
+            KEY_PAIR_STR,
         ];
         let all = all
             .iter()
@@ -87,6 +162,7 @@ impl From<databend_common_ast::ast::AuthType> for AuthType {
             databend_common_ast::ast::AuthType::Sha256Password => AuthType::Sha256Password,
             databend_common_ast::ast::AuthType::DoubleSha1Password => AuthType::DoubleSha1Password,
             databend_common_ast::ast::AuthType::JWT => AuthType::JWT,
+            databend_common_ast::ast::AuthType::KeyPair => AuthType::KeyPair,
         }
     }
 }
@@ -103,6 +179,9 @@ pub enum AuthInfo {
         need_change: bool,
     },
     JWT,
+    KeyPair {
+        public_keys: Vec<PublicKeyEntry>,
+    },
 }
 
 fn calc_sha1(v: &[u8]) -> [u8; 20] {
@@ -124,6 +203,21 @@ impl AuthInfo {
         match auth_type {
             AuthType::NoPassword => Ok(AuthInfo::None),
             AuthType::JWT => Ok(AuthInfo::JWT),
+            AuthType::KeyPair => match auth_string {
+                Some(key_input) => {
+                    let key = normalize_public_key(key_input)?;
+                    Ok(AuthInfo::KeyPair {
+                        public_keys: vec![PublicKeyEntry {
+                            key,
+                            label: String::new(),
+                            created_at: chrono::Utc::now().timestamp(),
+                        }],
+                    })
+                }
+                None => Err(ErrorCode::AuthenticateFailure(
+                    "need public key for key_pair authentication".to_string(),
+                )),
+            },
             AuthType::Sha256Password | AuthType::DoubleSha1Password => match auth_string {
                 Some(p) => {
                     let method = auth_type.get_password_type().unwrap();
@@ -204,6 +298,7 @@ impl AuthInfo {
         match self {
             AuthInfo::None => AuthType::NoPassword,
             AuthInfo::JWT => AuthType::JWT,
+            AuthInfo::KeyPair { .. } => AuthType::KeyPair,
             AuthInfo::Password { hash_method: t, .. } => match t {
                 PasswordHashMethod::Sha256 => AuthType::Sha256Password,
                 PasswordHashMethod::DoubleSha1 => AuthType::DoubleSha1Password,
@@ -215,6 +310,7 @@ impl AuthInfo {
         match self {
             AuthInfo::None => false,
             AuthInfo::JWT => false,
+            AuthInfo::KeyPair { .. } => false,
             AuthInfo::Password { need_change, .. } => *need_change,
         }
     }
@@ -226,7 +322,7 @@ impl AuthInfo {
                 hash_method: t,
                 ..
             } => t.to_string(p),
-            AuthInfo::None | AuthInfo::JWT => "".to_string(),
+            AuthInfo::None | AuthInfo::JWT | AuthInfo::KeyPair { .. } => "".to_string(),
         }
     }
 
@@ -285,10 +381,90 @@ impl AuthInfo {
                     "login with sha256_password user for mysql protocol not supported yet.",
                 )),
             },
+            AuthInfo::KeyPair { .. } => Err(ErrorCode::AuthenticateFailure(
+                "key-pair authentication is not supported over MySQL protocol, use HTTP instead.",
+            )),
             _ => Err(ErrorCode::AuthenticateFailure(format!(
                 "user require auth type {}",
                 self.get_type().to_str()
             ))),
+        }
+    }
+
+    pub fn get_public_keys(&self) -> &[PublicKeyEntry] {
+        match self {
+            AuthInfo::KeyPair { public_keys } => public_keys,
+            _ => &[],
+        }
+    }
+
+    pub fn add_public_key(&mut self, entry: PublicKeyEntry) -> Result<()> {
+        match self {
+            AuthInfo::KeyPair { public_keys } => {
+                // Reject duplicate fingerprints
+                let fp = entry.fingerprint()?;
+                if public_keys.iter().any(|k| k.fingerprint().ok() == Some(fp.clone())) {
+                    return Err(ErrorCode::AuthenticateFailure(format!(
+                        "public key with fingerprint '{}' already exists",
+                        fp
+                    )));
+                }
+                public_keys.push(entry);
+                Ok(())
+            }
+            _ => Err(ErrorCode::AuthenticateFailure(
+                "user is not configured for key-pair authentication, use IDENTIFIED WITH key_pair BY '<key>' first".to_string(),
+            )),
+        }
+    }
+
+    pub fn remove_public_key_by_label(&mut self, label: &str) -> Result<()> {
+        match self {
+            AuthInfo::KeyPair { public_keys } => {
+                let idx = public_keys.iter().position(|k| k.label == label);
+                match idx {
+                    None => Err(ErrorCode::AuthenticateFailure(format!(
+                        "public key with label '{}' not found",
+                        label
+                    ))),
+                    Some(_) if public_keys.len() == 1 => Err(ErrorCode::AuthenticateFailure(
+                        "cannot remove the last public key, user must have at least one key for key-pair authentication".to_string(),
+                    )),
+                    Some(i) => {
+                        public_keys.remove(i);
+                        Ok(())
+                    }
+                }
+            }
+            _ => Err(ErrorCode::AuthenticateFailure(
+                "user is not configured for key-pair authentication".to_string(),
+            )),
+        }
+    }
+
+    pub fn remove_public_key_by_fingerprint(&mut self, fingerprint: &str) -> Result<()> {
+        match self {
+            AuthInfo::KeyPair { public_keys } => {
+                let idx = public_keys
+                    .iter()
+                    .position(|k| k.fingerprint().ok().as_deref() == Some(fingerprint));
+                match idx {
+                    None => Err(ErrorCode::AuthenticateFailure(format!(
+                        "public key with fingerprint '{}' not found",
+                        fingerprint
+                    ))),
+                    Some(_) if public_keys.len() == 1 => Err(ErrorCode::AuthenticateFailure(
+                        "cannot remove the last public key, user must have at least one key for key-pair authentication".to_string(),
+                    )),
+                    Some(i) => {
+                        public_keys.remove(i);
+                        Ok(())
+                    }
+                }
+            }
+            _ => Err(ErrorCode::AuthenticateFailure(
+                "user is not configured for key-pair authentication".to_string(),
+            )),
         }
     }
 }

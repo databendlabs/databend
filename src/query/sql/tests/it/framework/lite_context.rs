@@ -67,6 +67,7 @@ use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
+use databend_common_expression::ROW_ID_COLUMN_ID;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableDataType;
 use databend_common_expression::TableField;
@@ -99,6 +100,7 @@ use databend_common_storage::StageFileInfo;
 use databend_common_users::GrantObjectVisibilityChecker;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_common_users::security_policy_cache::SecurityPolicyCacheManager;
 use databend_meta_client::RpcClientConf;
 use databend_meta_client::types::MetaId;
 use databend_meta_client::types::NodeInfo;
@@ -127,7 +129,7 @@ thread_local! {
         const { std::cell::OnceCell::new() };
 }
 
-fn init_testing_globals() {
+pub(crate) fn init_testing_globals() {
     #[cfg(debug_assertions)]
     {
         INIT_TESTING_GLOBALS.with(|init| {
@@ -137,6 +139,7 @@ fn init_testing_globals() {
                 GlobalConfig::init(&InnerConfig::default(), &TEST_BUILD_INFO)
                     .expect("init global config");
                 OssLicenseManager::init("default".to_string()).expect("init oss license manager");
+                SecurityPolicyCacheManager::init().unwrap();
             });
         });
     }
@@ -258,6 +261,11 @@ impl Table for FakeTable {
         } else {
             DistributionLevel::Local
         }
+    }
+
+    // for test MERGE INTO
+    fn supported_internal_column(&self, column_id: ColumnId) -> bool {
+        column_id == ROW_ID_COLUMN_ID
     }
 
     fn support_column_projection(&self) -> bool {
@@ -541,7 +549,7 @@ impl Catalog for DummyCatalog {
     async fn get_sequence(
         &self,
         _req: GetSequenceReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceReply> {
         unsupported("catalog::get_sequence")
     }
@@ -553,7 +561,7 @@ impl Catalog for DummyCatalog {
     async fn get_sequence_next_value(
         &self,
         _req: GetSequenceNextValueReq,
-        _visibility_checker: &Option<GrantObjectVisibilityChecker>,
+        _visibility_checker: &Option<Arc<GrantObjectVisibilityChecker>>,
     ) -> Result<GetSequenceNextValueReply> {
         unsupported("catalog::get_sequence_next_value")
     }
@@ -1167,8 +1175,12 @@ impl TableContextAuthorization for LiteTableContext {
         &self,
         _ignore_ownership: bool,
         _object: Object,
-    ) -> Result<GrantObjectVisibilityChecker> {
+    ) -> Result<Arc<GrantObjectVisibilityChecker>> {
         unsupported("table_ctx::get_visibility_checker")
+    }
+
+    async fn get_db_table_grant_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        unsupported("table_ctx::get_db_table_grant_checker")
     }
 }
 

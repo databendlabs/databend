@@ -13,10 +13,11 @@
 // limitations under the License.
 
 mod async_crash_me;
+mod billing_usage_daily;
 mod copy_history;
 mod fuse_vacuum2;
 #[cfg(feature = "storage-stage")]
-mod infer_schema;
+pub(crate) mod infer_schema;
 mod inspect_parquet;
 mod list_stage;
 mod numbers;
@@ -35,6 +36,7 @@ mod tag_references;
 mod temporary_tables_table;
 mod udf_table;
 
+pub use billing_usage_daily::BillingUsageDailyTable;
 pub use copy_history::CopyHistoryTable;
 pub use numbers::NumbersPartInfo;
 pub use numbers::NumbersTable;
