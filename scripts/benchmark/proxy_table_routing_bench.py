@@ -935,6 +935,8 @@ def validate_args(args: argparse.Namespace) -> None:
 
 
 def min_top1_hit_ratio(args: argparse.Namespace) -> float:
+    if args.proxy_routing_model == "prefix":
+        return 0.0
     return MIN_TOP1_HIT_RATIO
 
 

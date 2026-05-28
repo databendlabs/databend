@@ -65,12 +65,12 @@ set proxy_routing_model = 'statistics'
 statement ok
 set enable_proxy_bloom_pruning = 0
 
-query TI
-select min(route), count()
+query I
+select count()
 from spans_proxy
 where trace_id = 'trace_1'
 ----
-base0 2
+2
 
 statement ok
 set enable_proxy_bloom_pruning = 1

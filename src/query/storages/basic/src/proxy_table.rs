@@ -177,10 +177,18 @@ impl ProxyTable {
             return self.select_default_target(ctx, push_downs).await;
         }
 
-        if ProxyRoutingModel::from_setting(ctx.get_settings().get_proxy_routing_model()?)?
-            == ProxyRoutingModel::Prefix
-        {
-            return self.select_target_by_prefix(ctx, push_downs).await;
+        match ProxyRoutingModel::from_setting(ctx.get_settings().get_proxy_routing_model()?)? {
+            ProxyRoutingModel::Prefix => {
+                return self.select_target_by_prefix(ctx, push_downs).await;
+            }
+            ProxyRoutingModel::Statistics => {
+                self.ensure_statistics_routing_supported(ctx.clone())
+                    .await?;
+            }
+        }
+
+        if self.targets.len() == 1 {
+            return self.select_default_target(ctx, push_downs).await;
         }
 
         let mut selected: Option<RoutingCandidate> = None;
@@ -361,6 +369,23 @@ impl ProxyTable {
             statistics: candidate.statistics,
             reusable_pruned_metas: candidate.reusable_pruned_metas,
         }))
+    }
+
+    async fn ensure_statistics_routing_supported(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        for target in &self.targets {
+            let Some(table) = self.get_target_table(ctx.clone(), target).await? else {
+                continue;
+            };
+
+            if table.is_column_oriented() {
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "PROXY statistics routing currently does not support column-oriented target '{}'; use proxy_routing_model='prefix' or row-oriented targets",
+                    target
+                )));
+            }
+        }
+
+        Ok(())
     }
 
     async fn get_target_table(
