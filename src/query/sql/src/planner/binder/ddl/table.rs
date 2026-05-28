@@ -2382,9 +2382,6 @@ impl Binder {
                 let branch = branch
                     .as_ref()
                     .map(|branch| self.normalize_identifier(branch).name);
-                if branch.is_some() {
-                    check_table_ref_access(self.ctx.as_ref())?;
-                }
                 let table = self
                     .ctx
                     .get_table_with_branch(&catalog, &database, &table, branch.as_deref())

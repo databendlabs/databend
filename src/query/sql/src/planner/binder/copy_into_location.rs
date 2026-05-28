@@ -30,7 +30,6 @@ use opendal::ErrorKind;
 
 use crate::BindContext;
 use crate::binder::Binder;
-use crate::binder::check_table_ref_access;
 use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::wrap_cast;
@@ -57,9 +56,6 @@ impl Binder {
                     .branch
                     .as_ref()
                     .map(|branch| self.normalize_identifier(branch).name);
-                if branch_name.is_some() {
-                    check_table_ref_access(self.ctx.as_ref())?;
-                }
                 let with_options_str = source
                     .with_options
                     .as_ref()
