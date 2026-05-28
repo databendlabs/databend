@@ -474,7 +474,9 @@ impl FuseTable {
             dal.clone(),
         )?;
 
-        if pruning_mode == ReadPartitionsPruningMode::Normal {
+        let reusable_pruned_metas =
+            reusable_pruned_metas.filter(|_| pruning_mode == ReadPartitionsPruningMode::Normal);
+        let (block_metas, pruning_stats, pruning_log) =
             if let Some(reusable_pruned_metas) = reusable_pruned_metas {
                 let lightweight_block_metas = reusable_pruned_metas
                     .as_ref()
@@ -485,40 +487,20 @@ impl FuseTable {
                     .clone();
                 let block_metas = pruner.refine_pruned_blocks(lightweight_block_metas).await?;
                 let pruning_stats = pruner.pruning_stats();
-
-                info!(
-                    "refine lightweight snapshot block pruning result, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
-                    block_metas.len(),
-                    num_segments_to_prune,
-                    start.elapsed(),
-                    ctx.get_cluster().local_id,
-                );
-
-                let schema = self.schema_with_stream();
-                let pruned_block_metas = Self::attach_optional_block_meta_indexes(block_metas);
-                let result = self.read_partitions_with_metas(
-                    ctx.clone(),
-                    schema,
-                    push_downs,
-                    &pruned_block_metas,
-                    summary,
+                (
+                    block_metas,
                     pruning_stats,
-                )?;
-
-                if let Some(cache_key) = derterministic_cache_key {
-                    if let Some(cache) = CacheItem::cache() {
-                        cache.insert(cache_key, result.clone());
-                    }
-                }
-                return Ok((result.0, result.1, None));
-            }
-        }
-
-        let block_metas = pruner.read_pruning(segments_location).await?;
-        let pruning_stats = pruner.pruning_stats();
+                    "refine lightweight snapshot block pruning result",
+                )
+            } else {
+                let block_metas = pruner.read_pruning(segments_location).await?;
+                let pruning_stats = pruner.pruning_stats();
+                (block_metas, pruning_stats, "prune snapshot block end")
+            };
 
         info!(
-            "prune snapshot block end, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
+            "{}, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
+            pruning_log,
             block_metas.len(),
             num_segments_to_prune,
             start.elapsed(),
