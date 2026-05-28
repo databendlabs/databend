@@ -107,6 +107,10 @@ impl PhysicalPlanBuilder {
             RelOperator::Window(window) => {
                 self.build_window(s_expr, window, required, stat_info).await
             }
+            RelOperator::WindowGroup(window_group) => {
+                self.build_window_group(s_expr, window_group, required, stat_info)
+                    .await
+            }
             RelOperator::Sort(sort) => self.build_sort(s_expr, sort, required, stat_info).await,
             RelOperator::Limit(limit) => self.build_limit(s_expr, limit, required, stat_info).await,
             RelOperator::Exchange(exchange) => {
@@ -223,6 +227,30 @@ impl PhysicalPlanBuilder {
                 for item in &window.order_by {
                     req.extend(item.order_by_item.scalar.used_columns());
                     req.insert(item.order_by_item.index);
+                }
+            }
+            RelOperator::WindowGroup(window_group) => {
+                let req = &mut child_required[0];
+                for window in &window_group.windows {
+                    req.remove(&window.index);
+                }
+                for item in &window_group.scalar_items {
+                    req.extend(item.scalar.used_columns());
+                    req.insert(item.index);
+                }
+                for window in &window_group.windows {
+                    for item in &window.arguments {
+                        req.extend(item.scalar.used_columns());
+                        req.insert(item.index);
+                    }
+                    for item in &window.partition_by {
+                        req.extend(item.scalar.used_columns());
+                        req.insert(item.index);
+                    }
+                    for item in &window.order_by {
+                        req.extend(item.order_by_item.scalar.used_columns());
+                        req.insert(item.order_by_item.index);
+                    }
                 }
             }
             RelOperator::Sort(sort) => {

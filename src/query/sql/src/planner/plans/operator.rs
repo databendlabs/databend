@@ -52,6 +52,7 @@ use crate::plans::Sort;
 use crate::plans::Udf;
 use crate::plans::UnionAll;
 use crate::plans::Window;
+use crate::plans::WindowGroup;
 use crate::plans::r_cte_scan::RecursiveCteScan;
 use crate::plans::sequence::Sequence;
 
@@ -119,6 +120,7 @@ pub enum RelOp {
     UnionAll,
     DummyTableScan,
     Window,
+    WindowGroup,
     ProjectSet,
     ConstantTableScan,
     ExpressionScan,
@@ -156,6 +158,7 @@ pub enum RelOperator {
     UnionAll(UnionAll),
     DummyTableScan(DummyTableScan),
     Window(Window),
+    WindowGroup(WindowGroup),
     ProjectSet(ProjectSet),
     ConstantTableScan(ConstantTableScan),
     ExpressionScan(ExpressionScan),
@@ -260,6 +263,7 @@ impl_try_from_rel_operator! {
     UnionAll,
     DummyTableScan,
     Window,
+    WindowGroup,
     ProjectSet,
     ConstantTableScan,
     ExpressionScan,

@@ -100,6 +100,7 @@ macro_rules! impl_match_rel_op {
             RelOperator::UnionAll($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::DummyTableScan($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::Window($rel_op) => $rel_op.$method($($arg),*),
+            RelOperator::WindowGroup($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::ProjectSet($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::ConstantTableScan($rel_op) => $rel_op.$method($($arg),*),
             RelOperator::ExpressionScan($rel_op) => $rel_op.$method($($arg),*),

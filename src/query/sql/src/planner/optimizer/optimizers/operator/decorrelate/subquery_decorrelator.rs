@@ -234,6 +234,35 @@ impl SubqueryDecorrelatorOptimizer {
                 Ok(outer.build_unary(plan))
             }
 
+            RelOperator::WindowGroup(plan) => {
+                let mut plan = plan.clone();
+                let mut outer = self.optimize_sync(s_expr.unary_child())?;
+
+                for item in plan.scalar_items.iter_mut() {
+                    (item.scalar, outer) = self.try_rewrite_subquery(&item.scalar, outer, false)?;
+                }
+
+                for window in plan.windows.iter_mut() {
+                    for item in window.partition_by.iter_mut() {
+                        (item.scalar, outer) =
+                            self.try_rewrite_subquery(&item.scalar, outer, false)?;
+                    }
+
+                    for item in window.order_by.iter_mut() {
+                        (item.order_by_item.scalar, outer) =
+                            self.try_rewrite_subquery(&item.order_by_item.scalar, outer, false)?;
+                    }
+
+                    if let WindowFuncType::Aggregate(agg) = &mut window.function {
+                        for item in agg.exprs_mut() {
+                            (*item, outer) = self.try_rewrite_subquery(item, outer, false)?;
+                        }
+                    }
+                }
+
+                Ok(outer.build_unary(plan))
+            }
+
             RelOperator::Sort(sort) => {
                 let mut outer = self.optimize_sync(s_expr.unary_child())?;
 
