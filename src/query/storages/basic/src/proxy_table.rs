@@ -37,6 +37,9 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::RemoteExpr;
+use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
+use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::TableInfo;
 use databend_common_pipeline::core::Pipeline;
 use databend_common_pipeline::sources::EmptySource;
@@ -390,6 +393,8 @@ impl ProxyTable {
             )));
         }
         self.validate_target_schema(target, table.get_table_info())?;
+        self.validate_target_access(ctx, &target_ref, table.as_ref())
+            .await?;
         Ok(Some(table))
     }
 
@@ -401,7 +406,90 @@ impl ProxyTable {
             )));
         }
 
+        if target_table_info.meta.row_access_policy.is_some() {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "PROXY table target '{}' uses legacy row access policy metadata",
+                target
+            )));
+        }
+
+        let target_policy = &target_table_info.meta.row_access_policy_columns_ids;
+        let proxy_policy = &self.table_info.meta.row_access_policy_columns_ids;
+        // Row-access predicates are bound for the proxy scan during planning.
+        // If a target has its own policy, require the proxy to carry the same
+        // metadata so those secure filters protect the delegated target read.
+        if target_policy.is_some() && target_policy != proxy_policy {
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "PROXY table target '{}' row access policy must match proxy table '{}' row access policy",
+                target, self.table_info.name
+            )));
+        }
+
         Ok(())
+    }
+
+    async fn validate_target_access(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        target_ref: &RoutedTarget,
+        table: &dyn Table,
+    ) -> Result<()> {
+        let grant_by_name = GrantObject::Table(
+            target_ref.catalog.clone(),
+            target_ref.database.clone(),
+            target_ref.table.clone(),
+        );
+        match ctx
+            .validate_privilege(&grant_by_name, UserPrivilegeType::Select, false)
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(error) if error.code() == ErrorCode::PERMISSION_DENIED => {}
+            Err(error) => return Err(error),
+        }
+
+        let catalog = ctx.get_catalog(&target_ref.catalog).await?;
+        let database = catalog
+            .get_database(&ctx.get_tenant(), &target_ref.database)
+            .await?;
+        let db_id = database.get_db_info().database_id.db_id;
+        let table_id = table.get_id();
+
+        let ownership = OwnershipObject::Table {
+            catalog_name: target_ref.catalog.clone(),
+            db_id,
+            table_id,
+        };
+        if ctx.has_ownership(&ownership, false).await? {
+            return Ok(());
+        }
+
+        let grant_by_id = GrantObject::TableById(target_ref.catalog.clone(), db_id, table_id);
+        match ctx
+            .validate_privilege(&grant_by_id, UserPrivilegeType::Select, false)
+            .await
+        {
+            Ok(_) => return Ok(()),
+            Err(error) if error.code() == ErrorCode::PERMISSION_DENIED => {}
+            Err(error) => return Err(error),
+        }
+
+        let current_user = ctx.get_current_user()?;
+        let roles = ctx
+            .get_all_effective_roles()
+            .await?
+            .iter()
+            .map(|role| role.name.clone())
+            .collect::<Vec<_>>()
+            .join(",");
+        Err(ErrorCode::PermissionDenied(format!(
+            "Permission denied: privilege [Select] is required on PROXY target table '{}'.'{}'.'{}' for user {} with roles [{}]",
+            target_ref.catalog,
+            target_ref.database,
+            target_ref.table,
+            current_user.identity().display(),
+            roles
+        )))
     }
 
     async fn read_target_partitions_from_table(
