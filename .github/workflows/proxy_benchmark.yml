@@ -39,13 +39,31 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/build_linux
+      - uses: ./.github/actions/setup_build_tool
+        with:
+          target: x86_64-unknown-linux-gnu
+          bypass_env_vars: RUSTFLAGS,RUST_LOG,DATABEND_RELEASE_VERSION,DATABEND_ENTERPRISE_LICENSE_PUBLIC_KEY,DATABEND_ENTERPRISE_LICENSE_EMBEDDED,DATABEND_TELEMETRY_ENDPOINT,DATABEND_TELEMETRY_API_KEY,DATABEND_TELEMETRY_SOURCE,CARGO_PROFILE_RELEASE_OPT_LEVEL
+
+      - name: Set Build Flags
+        shell: bash
+        run: |
+          echo "RUSTFLAGS=-C target-feature=+sse4.2" >> $GITHUB_ENV
+          echo "BUILD_ARCH=x86_64" >> $GITHUB_ENV
+
+      - name: Build PROXY benchmark binaries
         timeout-minutes: 60
+        shell: bash
+        run: |
+          for artifact in meta query; do
+            echo "==> building databend-$artifact ..."
+            cargo build --target x86_64-unknown-linux-gnu --features default --profile dev --bin databend-$artifact
+            ls -lh ./target/x86_64-unknown-linux-gnu/debug/databend-$artifact
+          done
+
+      - uses: ./.github/actions/artifact_upload
         with:
           sha: ${{ github.sha }}
           target: x86_64-unknown-linux-gnu
-          artifacts: meta,query
-          trim_debug: "false"
 
   proxy-routing-benchmark:
     needs: build
