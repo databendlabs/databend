@@ -778,5 +778,32 @@ remove @vc_dropped_branch_stage;
 statement ok
 drop stage vc_dropped_branch_stage;
 
+## -------------------------------------------------------
+## SHOW VIRTUAL COLUMNS escapes quoted branch filters.
+## -------------------------------------------------------
+
+statement ok
+CREATE TABLE t_branch_show_quote (id INT, v VARIANT);
+
+statement ok
+INSERT INTO t_branch_show_quote VALUES (1, '{"k":"base"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_show_quote;
+
+statement ok
+ALTER TABLE t_branch_show_quote CREATE BRANCH `q'branch`
+
+statement ok
+INSERT INTO t_branch_show_quote/`q'branch` VALUES (2, '{"k":"branch"}');
+
+statement ok
+REFRESH VIRTUAL COLUMN FOR t_branch_show_quote/`q'branch`;
+
+query TTTITT
+SHOW VIRTUAL COLUMNS FROM t_branch_show_quote/`q'branch`
+----
+test_table_ref_virtual_column t_branch_show_quote v 3000000000 ['k'] String
+
 statement ok
 DROP DATABASE test_table_ref_virtual_column

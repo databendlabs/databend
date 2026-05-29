@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -60,6 +61,18 @@ pub struct AddTableColumnInterpreter {
 impl AddTableColumnInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: AddTableColumnPlan) -> Result<Self> {
         Ok(AddTableColumnInterpreter { ctx, plan })
+    }
+
+    fn table_ref(database: &str, table: &str, branch: Option<&str>) -> String {
+        let quote = '`';
+        let database = QuotedIdent(database, quote);
+        let table = QuotedIdent(table, quote);
+        if let Some(branch) = branch {
+            let branch = QuotedIdent(branch, quote);
+            format!("{database}.{table}/{branch}")
+        } else {
+            format!("{database}.{table}")
+        }
     }
 }
 
@@ -172,14 +185,11 @@ impl Interpreter for AddTableColumnInterpreter {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            let table_ref = if let Some(branch) = &self.plan.branch {
-                format!(
-                    "`{}`.`{}`/`{}`",
-                    self.plan.database, self.plan.table, branch
-                )
-            } else {
-                format!("`{}`.`{}`", self.plan.database, self.plan.table)
-            };
+            let table_ref = Self::table_ref(
+                self.plan.database.as_str(),
+                self.plan.table.as_str(),
+                self.plan.branch.as_deref(),
+            );
 
             let sql = format!("SELECT {} FROM {}", query_fields, table_ref);
             return build_select_insert_plan(
@@ -225,11 +235,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 tbl_name,
                 self.plan.branch.as_deref(),
             )?;
-            let table_ref = if let Some(branch) = &self.plan.branch {
-                format!("`{}`.`{}`/`{}`", db_name, tbl_name, branch)
-            } else {
-                format!("`{}`.`{}`", db_name, tbl_name)
-            };
+            let table_ref = Self::table_ref(db_name, tbl_name, self.plan.branch.as_deref());
             let query = format!(
                 "UPDATE {} SET `{}` = {};",
                 table_ref,

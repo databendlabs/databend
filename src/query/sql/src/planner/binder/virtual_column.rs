@@ -21,6 +21,7 @@ use databend_common_ast::ast::RefreshVirtualColumnStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
 use databend_common_ast::ast::VacuumVirtualColumnStmt;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
@@ -117,21 +118,27 @@ impl Binder {
             .with_column("virtual_column_name")
             .with_column("virtual_column_type");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!(
+            "database = {}",
+            QuotedString(database.as_str(), '\'')
+        ));
         if let Some(table) = table {
             let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("table = '{table}'"));
+            select_builder.with_filter(format!("table = {}", QuotedString(table.as_str(), '\'')));
         }
         if let Some(branch) = branch {
             check_table_ref_access(self.ctx.as_ref())?;
             let branch = normalize_identifier(branch, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("branch = '{branch}'"));
+            select_builder.with_filter(format!("branch = {}", QuotedString(branch.as_str(), '\'')));
         }
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("virtual_column_name LIKE '{pattern}'"));
+                select_builder.with_filter(format!(
+                    "virtual_column_name LIKE {}",
+                    QuotedString(pattern, '\'')
+                ));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

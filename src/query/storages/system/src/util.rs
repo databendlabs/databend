@@ -111,6 +111,22 @@ pub fn extract_push_down_string_filters(
     Ok(res)
 }
 
+pub fn push_down_filter_contains_column(
+    push_downs: &Option<PushDownInfo>,
+    column_name: &str,
+) -> bool {
+    push_downs
+        .as_ref()
+        .and_then(|push_downs| push_downs.filters.as_ref())
+        .is_some_and(|filters| {
+            filters
+                .filter
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .column_refs()
+                .contains_key(column_name)
+        })
+}
+
 // ============================================================================
 // Unified Table Visibility Collection
 // ============================================================================

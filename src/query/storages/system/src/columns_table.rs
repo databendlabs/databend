@@ -16,9 +16,12 @@ use std::sync::Arc;
 
 use databend_common_catalog::catalog::Catalog;
 use databend_common_catalog::catalog::CatalogManager;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::TableDataType;
@@ -47,6 +50,7 @@ use crate::table::AsyncSystemTable;
 use crate::util::collect_visible_tables;
 use crate::util::disable_catalog_refresh;
 use crate::util::extract_push_down_string_filters;
+use crate::util::push_down_filter_contains_column;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -288,6 +292,11 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
     catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<DumpedTable>)>> {
+    let branch_filter_present = push_down_filter_contains_column(&push_downs, "branch");
+    if branch_filter_present {
+        check_table_ref_access(ctx.as_ref())?;
+    }
+
     // For performance considerations, we do not require the most up-to-date table information here
     let catalog = disable_catalog_refresh(catalog.clone())?;
 
@@ -298,19 +307,18 @@ pub(crate) async fn dump_tables(
     let filtered_db_names = filters.remove(0);
     let filtered_table_names = filters.remove(0);
     let filtered_branch_names = filters.remove(0);
-
-    if filtered_branch_names
-        .iter()
-        .any(|branch_name| !branch_name.is_empty())
-    {
-        check_table_ref_access(ctx.as_ref())?;
-    }
+    // Empty branch filters normally mean "base table only". If a branch predicate
+    // exists but no equality branch names were extracted (e.g. `branch != ''` or
+    // `branch LIKE 'dev%'`), enumerate all branches and let the residual filter
+    // evaluate the predicate.
+    let branch_filter_needs_full_scan = branch_filter_present && filtered_branch_names.is_empty();
 
     // Use unified visibility collection from util.rs
     let db_with_tables =
         collect_visible_tables(ctx, &catalog, &filtered_db_names, &filtered_table_names).await?;
 
-    if filtered_branch_names.is_empty() {
+    // No branch predicate: expose only base table rows with `branch = ''`.
+    if filtered_branch_names.is_empty() && !branch_filter_present {
         return Ok(db_with_tables
             .into_iter()
             .map(|db| {
@@ -332,12 +340,26 @@ pub(crate) async fn dump_tables(
     }
 
     let tenant = ctx.get_tenant();
+    let meta_api = meta_store_client();
     let mut db_with_dumped_tables = Vec::new();
     for db in db_with_tables {
         let mut tables = Vec::new();
         for table in db.tables {
             let table_name = table.name().to_string();
-            for branch_name in &filtered_branch_names {
+            let branch_names = if branch_filter_needs_full_scan {
+                let branches = meta_api
+                    .list_table_branches(table.get_id())
+                    .await
+                    .map_err(ErrorCode::from)?;
+                let mut branch_names = Vec::with_capacity(branches.len() + 1);
+                branch_names.push(String::new());
+                branch_names.extend(branches.into_iter().map(|branch| branch.branch_name));
+                branch_names
+            } else {
+                filtered_branch_names.clone()
+            };
+
+            for branch_name in &branch_names {
                 if branch_name.is_empty() {
                     tables.push(DumpedTable {
                         table_name: table_name.clone(),
