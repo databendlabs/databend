@@ -927,6 +927,10 @@ fn has_filter(push_downs: &Option<PushDownInfo>) -> bool {
 fn lightweight_push_downs(push_downs: Option<PushDownInfo>) -> Option<PushDownInfo> {
     push_downs.map(|mut push_downs| {
         push_downs.read_partitions_pruning_mode = ReadPartitionsPruningMode::Lightweight;
+        // Lightweight routing results may be reused by the selected target's
+        // normal read. Do not let LIMIT truncate the reusable block metas
+        // before full pruning has a chance to run.
+        push_downs.limit = None;
         push_downs
     })
 }
@@ -1124,6 +1128,22 @@ mod tests {
             String::new(),
             id.to_string(),
         ))
+    }
+
+    #[test]
+    fn test_lightweight_push_downs_do_not_reuse_limit_truncated_metas() {
+        let push_downs = PushDownInfo {
+            limit: Some(1),
+            ..Default::default()
+        };
+
+        let lightweight = lightweight_push_downs(Some(push_downs)).unwrap();
+
+        assert_eq!(
+            lightweight.read_partitions_pruning_mode,
+            ReadPartitionsPruningMode::Lightweight
+        );
+        assert_eq!(lightweight.limit, None);
     }
 
     fn column(name: &str) -> RemoteExpr<String> {
