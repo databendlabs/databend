@@ -126,6 +126,12 @@ struct SnapshotReadInfo {
 type IndexedBlockMetas = Vec<(BlockMetaIndex, Arc<BlockMeta>)>;
 type PrunedBlockMetas = Vec<(Option<BlockMetaIndex>, Arc<BlockMeta>)>;
 
+#[derive(Clone)]
+struct ReusableFusePrunedMetas {
+    segment_locations: Vec<SegmentLocation>,
+    block_metas: IndexedBlockMetas,
+}
+
 impl SnapshotReadInfo {
     fn segment_count(&self) -> usize {
         self.segment_locations.len()
@@ -141,6 +147,15 @@ fn read_partitions_pruning_mode(push_downs: &Option<PushDownInfo>) -> ReadPartit
         .as_ref()
         .map(|push_downs| push_downs.read_partitions_pruning_mode)
         .unwrap_or_default()
+}
+
+fn same_segment_locations(left: &[SegmentLocation], right: &[SegmentLocation]) -> bool {
+    left.len() == right.len()
+        && left.iter().zip(right).all(|(left, right)| {
+            left.segment_idx == right.segment_idx
+                && left.location == right.location
+                && left.snapshot_loc == right.snapshot_loc
+        })
 }
 
 fn deterministic_prune_cache_key(
@@ -474,18 +489,25 @@ impl FuseTable {
             dal.clone(),
         )?;
 
+        let current_segment_locations = segments_location.clone();
         let reusable_pruned_metas =
             reusable_pruned_metas.filter(|_| pruning_mode == ReadPartitionsPruningMode::Normal);
-        let (block_metas, pruning_stats, pruning_log) =
-            if let Some(reusable_pruned_metas) = reusable_pruned_metas {
-                let lightweight_block_metas = reusable_pruned_metas
-                    .as_ref()
-                    .downcast_ref::<IndexedBlockMetas>()
-                    .ok_or_else(|| {
-                        ErrorCode::Internal("Invalid reusable pruned metas payload for FUSE table")
-                    })?
-                    .clone();
-                let block_metas = pruner.refine_pruned_blocks(lightweight_block_metas).await?;
+        let (block_metas, pruning_stats, pruning_log) = if let Some(reusable_pruned_metas) =
+            reusable_pruned_metas
+        {
+            let reusable_fuse_pruned_metas = reusable_pruned_metas
+                .as_ref()
+                .downcast_ref::<ReusableFusePrunedMetas>()
+                .ok_or_else(|| {
+                    ErrorCode::Internal("Invalid reusable pruned metas payload for FUSE table")
+                })?;
+            if same_segment_locations(
+                &reusable_fuse_pruned_metas.segment_locations,
+                &current_segment_locations,
+            ) {
+                let block_metas = pruner
+                    .refine_pruned_blocks(reusable_fuse_pruned_metas.block_metas.clone())
+                    .await?;
                 let pruning_stats = pruner.pruning_stats();
                 (
                     block_metas,
@@ -493,10 +515,18 @@ impl FuseTable {
                     "refine lightweight snapshot block pruning result",
                 )
             } else {
+                info!(
+                    "ignore reusable lightweight snapshot block pruning result because snapshot segments changed"
+                );
                 let block_metas = pruner.read_pruning(segments_location).await?;
                 let pruning_stats = pruner.pruning_stats();
                 (block_metas, pruning_stats, "prune snapshot block end")
-            };
+            }
+        } else {
+            let block_metas = pruner.read_pruning(segments_location).await?;
+            let pruning_stats = pruner.pruning_stats();
+            (block_metas, pruning_stats, "prune snapshot block end")
+        };
 
         info!(
             "{}, final block numbers:{}, out of {} segments, cost:{:?}, at node {}",
@@ -518,7 +548,10 @@ impl FuseTable {
                     pruning_stats,
                 )?,
                 Partitions::default(),
-                Some(Arc::new(block_metas) as ReusablePrunedMetas),
+                Some(Arc::new(ReusableFusePrunedMetas {
+                    segment_locations: current_segment_locations,
+                    block_metas,
+                }) as ReusablePrunedMetas),
             )
         } else {
             let schema = self.schema_with_stream();
@@ -1457,5 +1490,36 @@ impl FuseTable {
             block_meta_index.to_owned(),
             create_on,
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn segment_location(segment_idx: usize, location: &str, snapshot_loc: &str) -> SegmentLocation {
+        SegmentLocation {
+            segment_idx,
+            location: (location.to_string(), 1),
+            snapshot_loc: Some(snapshot_loc.to_string()),
+        }
+    }
+
+    #[test]
+    fn test_same_segment_locations_checks_snapshot_identity() {
+        let original = vec![
+            segment_location(0, "segment-a", "snapshot-a"),
+            segment_location(1, "segment-b", "snapshot-a"),
+        ];
+
+        assert!(same_segment_locations(&original, &original));
+
+        let mut changed_snapshot = original.clone();
+        changed_snapshot[0].snapshot_loc = Some("snapshot-b".to_string());
+        assert!(!same_segment_locations(&original, &changed_snapshot));
+
+        let mut changed_segment = original.clone();
+        changed_segment[1].location = ("segment-c".to_string(), 1);
+        assert!(!same_segment_locations(&original, &changed_segment));
     }
 }
