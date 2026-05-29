@@ -120,7 +120,7 @@ use jwt_simple::claims::JWTClaims;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-const LITE_VIRTUAL_COLUMN_LICENSE_KEY: &str = "lite-test-virtual-column";
+const LITE_COMMERCIAL_LICENSE_KEY: &str = "lite-test-commercial";
 
 static TEST_BUILD_INFO: BuildInfo = BuildInfo {
     semantic: Version::new(0, 0, 0),
@@ -176,7 +176,7 @@ impl LicenseManager for LiteLicenseManager {
     }
 
     fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
-        if license_key == LITE_VIRTUAL_COLUMN_LICENSE_KEY && feature == Feature::VirtualColumn {
+        if license_key == LITE_COMMERCIAL_LICENSE_KEY {
             return Ok(());
         }
 
@@ -882,8 +882,8 @@ impl LiteTableContext {
         Ok(ctx)
     }
 
-    pub fn enable_virtual_column_license_for_test(&self) {
-        *self.license_key.write() = LITE_VIRTUAL_COLUMN_LICENSE_KEY.to_string();
+    pub fn enable_commercial_license_for_test(&self) {
+        *self.license_key.write() = LITE_COMMERCIAL_LICENSE_KEY.to_string();
     }
 
     pub fn set_table_warehouse_distribution(&self, enabled: bool) {
@@ -1195,21 +1195,9 @@ impl TableContextSettings for LiteTableContext {
 
     fn get_settings(&self) -> Arc<Settings> {
         if self.shared_settings.is_changed() && self.shared_settings.query_level_change() {
-            let shared_settings = self.shared_settings.changes();
-            if self.settings.is_changed() {
-                for r in self.settings.changes().iter() {
-                    if !self.shared_settings.changes().contains_key(r.key()) {
-                        shared_settings.insert(r.key().clone(), r.value().clone());
-                    }
-                }
-            }
-            unsafe {
-                self.settings.unchecked_apply_changes(shared_settings);
-            }
-        } else {
             unsafe {
                 self.settings
-                    .unchecked_apply_changes(self.get_session_settings().changes());
+                    .unchecked_apply_changes(self.shared_settings.changes());
             }
         }
         self.settings.clone()

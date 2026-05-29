@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Query;
@@ -29,7 +29,6 @@ use crate::binder::CteContext;
 use crate::binder::CteInfo;
 use crate::binder::MaterializedCTEInfo;
 use crate::binder::Visibility;
-use crate::binder::virtual_column::MATERIALIZED_CTE_VIRTUAL_COLUMN_PREFIX;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
 use crate::plans::MaterializedCTE;
@@ -85,6 +84,11 @@ impl Binder {
 
             let cte_info = CteInfo {
                 columns_alias: column_name,
+                virtual_column_outputs: bind_context
+                    .cte_context
+                    .virtual_column_outputs
+                    .remove(&cte_name)
+                    .unwrap_or_default(),
                 query: *cte.query.clone(),
                 recursive: with.recursive,
                 logical_recursive_cte_id,
@@ -132,15 +136,12 @@ impl Binder {
             None => (table_name.to_string(), cte_info.columns_alias.clone()),
         };
 
+        let virtual_column_outputs = &cte_info.virtual_column_outputs;
         let user_output_len = cte_bind_context
             .columns
             .iter()
-            .position(|column| {
-                column
-                    .column_name
-                    .starts_with(MATERIALIZED_CTE_VIRTUAL_COLUMN_PREFIX)
-            })
-            .unwrap_or(cte_bind_context.columns.len());
+            .filter(|column| !virtual_column_outputs.contains(&column.column_name))
+            .count();
         if !column_alias.is_empty() && column_alias.len() != user_output_len {
             return Err(ErrorCode::SemanticError(format!(
                 "The CTE '{}' has {} columns ({:?}), but {} aliases ({:?}) were provided. Ensure the number of aliases matches the number of columns in the CTE.",
@@ -149,7 +150,7 @@ impl Binder {
                 cte_bind_context
                     .columns
                     .iter()
-                    .take(user_output_len)
+                    .filter(|column| !virtual_column_outputs.contains(&column.column_name))
                     .map(|c| &c.column_name)
                     .collect::<Vec<_>>(),
                 column_alias.len(),
@@ -161,11 +162,7 @@ impl Binder {
         for column in cte_output_columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(table_alias.clone());
-            column.table_index = None;
-            if column
-                .column_name
-                .starts_with(MATERIALIZED_CTE_VIRTUAL_COLUMN_PREFIX)
-            {
+            if virtual_column_outputs.contains(&column.column_name) {
                 column.visibility = Visibility::InVisible;
             }
         }
@@ -180,7 +177,7 @@ impl Binder {
             new_bind_context.add_column_binding(column.clone());
         }
 
-        let mut column_mapping = BTreeMap::new();
+        let mut column_mapping = HashMap::new();
         for (index_in_ref, index_in_producer) in cte_output_columns
             .iter()
             .zip(producer_column_bindings.iter())
@@ -222,6 +219,7 @@ impl Binder {
             cte_context: CteContext {
                 cte_name: Some(cte_name.to_string()),
                 cte_map: prev_cte_map,
+                virtual_column_outputs: HashMap::new(),
             },
             ..Default::default()
         };

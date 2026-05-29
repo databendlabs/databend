@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::fmt;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
@@ -32,13 +34,31 @@ use crate::optimizer::ir::StatInfo;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct MaterializedCTERef {
     pub cte_name: String,
     pub output_columns: Vec<Symbol>,
     pub def: SExpr,
-    pub column_mapping: BTreeMap<Symbol, Symbol>,
+    pub column_mapping: HashMap<Symbol, Symbol>,
     pub stat_info: Option<Arc<StatInfo>>,
+}
+
+impl fmt::Debug for MaterializedCTERef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let column_mapping = self
+            .column_mapping
+            .iter()
+            .map(|(from, to)| (*from, *to))
+            .collect::<BTreeMap<_, _>>();
+
+        f.debug_struct("MaterializedCTERef")
+            .field("cte_name", &self.cte_name)
+            .field("output_columns", &self.output_columns)
+            .field("def", &self.def)
+            .field("column_mapping", &column_mapping)
+            .field("stat_info", &self.stat_info)
+            .finish()
+    }
 }
 
 impl PartialEq for MaterializedCTERef {

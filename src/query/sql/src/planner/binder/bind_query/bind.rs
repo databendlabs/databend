@@ -80,34 +80,46 @@ impl Binder {
         bind_context: &mut BindContext,
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
-        let mut query = query.clone();
         let mut with = query.with.clone();
         bind_context.allow_virtual_column = self.is_virtual_column_rewrite_enabled();
         if self.ctx.get_settings().get_enable_auto_materialize_cte()? {
             if let Some(with) = &mut with {
                 if !with.recursive {
-                    self.auto_materialize_cte(with, &query)?;
+                    self.auto_materialize_cte(with, query)?;
                 }
             }
         }
-        if let Some(with) = &mut with {
-            self.rewrite_materialized_cte_virtual_columns(bind_context, with, &mut query.body);
-        }
+
+        bind_context.cte_context.virtual_column_outputs.clear();
+        let rewritten_body = if bind_context.allow_virtual_column {
+            if let Some(with) = &mut with {
+                let mut body = query.body.clone();
+                let virtual_column_outputs =
+                    self.rewrite_materialized_cte_virtual_columns(bind_context, with, &mut body);
+                bind_context.cte_context.virtual_column_outputs = virtual_column_outputs;
+                Some(body)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let body = rewritten_body.as_ref().unwrap_or(&query.body);
 
         self.init_cte(bind_context, &with)?;
 
         // Extract limit and offset from query.
-        let (limit, offset) = self.extract_limit_and_offset(&query)?;
+        let (limit, offset) = self.extract_limit_and_offset(query)?;
 
         // Bind query body.
         let (mut s_expr, mut bind_context) =
-            self.bind_set_expr(bind_context, &query.body, &query.order_by, limit, None)?;
+            self.bind_set_expr(bind_context, body, &query.order_by, limit, None)?;
 
         // Bind order by for `SetOperation` and `Values`.
-        s_expr = self.bind_query_order_by(&mut bind_context, &query, s_expr)?;
+        s_expr = self.bind_query_order_by(&mut bind_context, query, s_expr)?;
 
         // Bind limit.
-        s_expr = self.bind_query_limit(&query, s_expr, limit, offset);
+        s_expr = self.bind_query_limit(query, s_expr, limit, offset);
 
         if let Some(with) = &with {
             s_expr = self.bind_materialized_cte(with, s_expr, bind_context.cte_context.clone())?;

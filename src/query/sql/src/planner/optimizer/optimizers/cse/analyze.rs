@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -93,7 +93,7 @@ fn process_candidate_expressions(
             .iter()
             .copied()
             .zip(cte_def_columns.iter().copied())
-            .collect::<BTreeMap<_, _>>();
+            .collect::<HashMap<_, _>>();
         let cte_ref = MaterializedCTERef {
             cte_name: cte_name.clone(),
             output_columns: cte_ref_columns.iter().copied().collect(),

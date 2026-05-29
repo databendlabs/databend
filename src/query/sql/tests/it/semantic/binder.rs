@@ -72,9 +72,9 @@ async fn bind_case(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     Ok(outcome)
 }
 
-async fn bind_case_with_virtual_column_license(case: &SqlTestCase) -> Result<SqlTestOutcome> {
+async fn bind_case_with_commercial_license(case: &SqlTestCase) -> Result<SqlTestOutcome> {
     let ctx = setup_context(case).await?;
-    ctx.enable_virtual_column_license_for_test();
+    ctx.enable_commercial_license_for_test();
     let outcome = match ctx.bind_sql(case.sql).await {
         Ok(plan) => SqlTestOutcome::Plan(plan.format_indent(Default::default())?),
         Err(err) => SqlTestOutcome::Error {
@@ -97,7 +97,7 @@ async fn run_binder_cases(file_name: &str, cases: &[SqlTestCase]) -> Result<()> 
     Ok(())
 }
 
-async fn run_binder_cases_with_virtual_column_license(
+async fn run_binder_cases_with_commercial_license(
     file_name: &str,
     cases: &[SqlTestCase],
 ) -> Result<()> {
@@ -105,7 +105,7 @@ async fn run_binder_cases_with_virtual_column_license(
 
     for case in cases {
         write_case_header(&mut file, case)?;
-        let outcome = bind_case_with_virtual_column_license(case).await?;
+        let outcome = bind_case_with_commercial_license(case).await?;
         write_case_outcome(&mut file, &outcome)?;
     }
 
@@ -507,6 +507,8 @@ async fn test_materialized_cte_virtual_column_rewrite() -> Result<()> {
         "CREATE TABLE t(v JSON NULL) storage_format = 'parquet' enable_virtual_column = true";
     const CREATE_NON_VIRTUAL_COLUMN_TABLE: &str =
         "CREATE TABLE t_no_vc(v JSON NULL) storage_format = 'parquet'";
+    const CREATE_OTHER_MESSAGE_TABLE: &str =
+        "CREATE TABLE other_table(message JSON NULL) storage_format = 'parquet'";
 
     const SQL_WITH_CTE: &str = r#"
     settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1) 
@@ -539,7 +541,14 @@ async fn test_materialized_cte_virtual_column_rewrite() -> Result<()> {
     WITH logs AS (SELECT v['message'] AS message FROM t_no_vc)
         SELECT message['attribute']['user_id'] FROM logs
         UNION ALL SELECT message['attribute']['account_id'] FROM logs;
-"#;
+    "#;
+
+    const SQL_WITH_AMBIGUOUS_UNQUALIFIED_COLUMN: &str = r#"
+    settings (enable_experimental_virtual_column = 1, enable_auto_materialize_cte = 1)
+    WITH logs AS (SELECT v['message'] AS message FROM t)
+        SELECT message['attribute']['user_id'] FROM logs, other_table
+        UNION ALL SELECT message['attribute']['account_id'] FROM logs, other_table;
+    "#;
 
     let cases = [
         SqlTestCase {
@@ -566,11 +575,14 @@ async fn test_materialized_cte_virtual_column_rewrite() -> Result<()> {
             setup_sqls: &[CREATE_NON_VIRTUAL_COLUMN_TABLE],
             sql: SQL_WITHOUT_TABLE_VIRTUAL_COLUMNS,
         },
+        SqlTestCase {
+            name: "materialized_cte_unqualified_column_preserves_ambiguity",
+            description: "An unqualified materialized CTE output should not be rewritten before binder can reject an ambiguous column reference.",
+            setup_sqls: &[CREATE_VIRTUAL_COLUMN_TABLE, CREATE_OTHER_MESSAGE_TABLE],
+            sql: SQL_WITH_AMBIGUOUS_UNQUALIFIED_COLUMN,
+        },
     ];
 
-    run_binder_cases_with_virtual_column_license(
-        "binder_materialized_cte_virtual_column.txt",
-        &cases,
-    )
-    .await
+    run_binder_cases_with_commercial_license("binder_materialized_cte_virtual_column.txt", &cases)
+        .await
 }

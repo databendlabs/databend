@@ -135,7 +135,7 @@ impl Optimizer for SyncMaterializedCTERefOptimizer {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     use databend_common_expression::Scalar;
@@ -174,7 +174,7 @@ mod tests {
             cte_name: "cte".to_string(),
             output_columns: vec![],
             def: old_def.clone(),
-            column_mapping: BTreeMap::new(),
+            column_mapping: HashMap::new(),
             stat_info: None,
         }));
         let query = SExpr::create_unary(
@@ -210,7 +210,7 @@ mod tests {
             cte_name: "other_cte".to_string(),
             output_columns: vec![],
             def: old_def.clone(),
-            column_mapping: BTreeMap::new(),
+            column_mapping: HashMap::new(),
             stat_info: None,
         }));
         let root = SExpr::create_binary(Sequence, Arc::new(producer), Arc::new(consumer));

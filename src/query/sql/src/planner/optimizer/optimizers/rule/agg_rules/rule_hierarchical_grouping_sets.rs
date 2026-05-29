@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -660,7 +660,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
             output_cols
         };
 
-        let mut column_mapping = BTreeMap::new();
+        let mut column_mapping = HashMap::new();
         for &col_idx in &parent_output_columns {
             column_mapping.insert(col_idx, col_idx);
         }
@@ -728,7 +728,7 @@ impl RuleHierarchicalGroupingSetsToUnion {
         agg: &Aggregate,
         grouping_id_index: Symbol,
     ) -> Result<SExpr> {
-        let mut column_mapping = BTreeMap::new();
+        let mut column_mapping = HashMap::new();
 
         // Create modified output columns with proper types for count functions
         let mut modified_output_columns = Vec::new();
