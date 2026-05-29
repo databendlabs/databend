@@ -49,8 +49,21 @@ SELECT name FROM system.columns WHERE database = 'test_table_ref_slash_identifie
 ----
 a
 
+query TTTTT
+SHOW FIELDS FROM t
+----
+branch_col INT NO NULL (empty)
+
+query T
+SELECT name FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch = '' ORDER BY name
+----
+branch_col
+
 query error 1002.*Table ref is an experimental feature
 SELECT name, branch FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch = 'slash' ORDER BY name
+
+query error 1002.*Table ref is an experimental feature
+SELECT name, branch FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch != '' ORDER BY name
 
 statement ok
 set enable_experimental_table_ref=1
@@ -69,11 +82,6 @@ query I
 SELECT count() FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch LIKE 'sla%'
 ----
 1
-
-query I
-SELECT count() FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch LIKE '%'
-----
-2
 
 query TB
 SELECT name, ok FROM (

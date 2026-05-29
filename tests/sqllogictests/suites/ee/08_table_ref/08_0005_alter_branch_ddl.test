@@ -71,13 +71,13 @@ statement ok
 INSERT INTO t_default_quoted VALUES (1)
 
 statement ok
-ALTER TABLE t_default_quoted CREATE BRANCH `q``branch`
+ALTER TABLE t_default_quoted CREATE BRANCH `q'branch`
 
 statement ok
-ALTER TABLE t_default_quoted/`q``branch` ADD COLUMN ts TIMESTAMP DEFAULT now()
+ALTER TABLE t_default_quoted/`q'branch` ADD COLUMN ts TIMESTAMP DEFAULT now()
 
 query IB
-SELECT a, ts IS NOT NULL FROM t_default_quoted/`q``branch` ORDER BY a
+SELECT a, ts IS NOT NULL FROM t_default_quoted/`q'branch` ORDER BY a
 ----
 1 1
 

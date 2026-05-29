@@ -292,11 +292,6 @@ pub(crate) async fn dump_tables(
     push_downs: Option<PushDownInfo>,
     catalog: &Arc<dyn Catalog>,
 ) -> Result<Vec<(String, Vec<DumpedTable>)>> {
-    let branch_filter_present = push_down_filter_contains_column(&push_downs, "branch");
-    if branch_filter_present {
-        check_table_ref_access(ctx.as_ref())?;
-    }
-
     // For performance considerations, we do not require the most up-to-date table information here
     let catalog = disable_catalog_refresh(catalog.clone())?;
 
@@ -307,18 +302,26 @@ pub(crate) async fn dump_tables(
     let filtered_db_names = filters.remove(0);
     let filtered_table_names = filters.remove(0);
     let filtered_branch_names = filters.remove(0);
-    // Empty branch filters normally mean "base table only". If a branch predicate
-    // exists but no equality branch names were extracted (e.g. `branch != ''` or
-    // `branch LIKE 'dev%'`), enumerate all branches and let the residual filter
-    // evaluate the predicate.
+    let branch_filter_present = push_down_filter_contains_column(&push_downs, "branch");
+    let has_non_empty_branch_filter = filtered_branch_names
+        .iter()
+        .any(|branch_name| !branch_name.is_empty());
+    // If a branch predicate exists but no equality branch names were extracted
+    // (e.g. `branch != ''` or `branch LIKE 'dev%'`), enumerate all branches and
+    // let the residual filter evaluate the predicate.
     let branch_filter_needs_full_scan = branch_filter_present && filtered_branch_names.is_empty();
+
+    if has_non_empty_branch_filter || branch_filter_needs_full_scan {
+        check_table_ref_access(ctx.as_ref())?;
+    }
 
     // Use unified visibility collection from util.rs
     let db_with_tables =
         collect_visible_tables(ctx, &catalog, &filtered_db_names, &filtered_table_names).await?;
 
-    // No branch predicate: expose only base table rows with `branch = ''`.
-    if filtered_branch_names.is_empty() && !branch_filter_present {
+    // No branch access: expose only base table rows with `branch = ''`. This
+    // includes metadata rewrites that push down `branch = ''` for base tables.
+    if !has_non_empty_branch_filter && !branch_filter_needs_full_scan {
         return Ok(db_with_tables
             .into_iter()
             .map(|db| {
