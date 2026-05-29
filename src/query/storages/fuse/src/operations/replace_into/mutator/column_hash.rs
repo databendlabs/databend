@@ -43,6 +43,12 @@ impl RowScalarValue for Value<AnyType> {
     }
 }
 
+#[inline]
+fn write_bytes_with_len(hasher: &mut impl Hasher, bytes: &[u8]) {
+    hasher.write_u64(bytes.len() as u64);
+    hasher.write(bytes);
+}
+
 /// For row contains null value, None will be returned
 pub fn row_hash_of_columns(
     column_values: &[&Value<AnyType>],
@@ -69,8 +75,8 @@ pub fn row_hash_of_columns(
                 NumberScalar::Float64(v) => sip.write_u64(v.to_bits()),
             },
             ScalarRef::Timestamp(v) => sip.write_i64(v),
-            ScalarRef::String(v) => sip.write(v.as_bytes()),
-            ScalarRef::Bitmap(v) => sip.write(v),
+            ScalarRef::String(v) => write_bytes_with_len(&mut sip, v.as_bytes()),
+            ScalarRef::Bitmap(v) => write_bytes_with_len(&mut sip, v),
             ScalarRef::Decimal(v) => match v {
                 DecimalScalar::Decimal64(i, size) => {
                     sip.write_i64(i);
@@ -93,7 +99,7 @@ pub fn row_hash_of_columns(
             ScalarRef::Date(d) => sip.write_i32(d),
             _ => {
                 let string = value.to_string();
-                sip.write(string.as_bytes());
+                write_bytes_with_len(&mut sip, string.as_bytes());
             }
         }
     }
