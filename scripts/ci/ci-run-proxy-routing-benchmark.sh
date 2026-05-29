@@ -31,6 +31,8 @@ WARMUP_ROUNDS="${WARMUP_ROUNDS:-1}"
 MEASURE_ROUNDS="${MEASURE_ROUNDS:-2}"
 PROXY_ROUTING_MODEL="${PROXY_ROUTING_MODEL:-statistics}"
 ENABLE_PROXY_BLOOM_PRUNING="${ENABLE_PROXY_BLOOM_PRUNING:-0}"
+MIN_TOP1_HIT_RATIO="${MIN_TOP1_HIT_RATIO:-}"
+MIN_ACCEPTABLE_HIT_RATIO="${MIN_ACCEPTABLE_HIT_RATIO:-}"
 
 cleanup() {
 	kill "${QUERY_PID:-}" "${META_PID:-}" 2>/dev/null || true
@@ -75,6 +77,14 @@ benchmark_args=(
 
 if [[ "$ENABLE_PROXY_BLOOM_PRUNING" == "1" ]]; then
 	benchmark_args+=(--enable-proxy-bloom-pruning)
+fi
+
+if [[ -n "$MIN_TOP1_HIT_RATIO" ]]; then
+	benchmark_args+=(--min-top1-hit-ratio "$MIN_TOP1_HIT_RATIO")
+fi
+
+if [[ -n "$MIN_ACCEPTABLE_HIT_RATIO" ]]; then
+	benchmark_args+=(--min-acceptable-hit-ratio "$MIN_ACCEPTABLE_HIT_RATIO")
 fi
 
 scripts/benchmark/proxy_table_routing_bench.py "${benchmark_args[@]}"

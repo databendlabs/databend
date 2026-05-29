@@ -841,6 +841,7 @@ def print_summary(results: list[RouteResult]) -> None:
 def print_route_quality(
     results: list[RouteResult],
     required_top1_hit_ratio: float,
+    required_acceptable_hit_ratio: float,
 ) -> tuple[float, float]:
     total = len(results)
     top1_hits = sum(result.top1_match for result in results)
@@ -852,7 +853,8 @@ def print_route_quality(
     print(
         f"top1_hit_ratio={top1_hits}/{total}={top1_hit_ratio:.2%}, "
         f"required_top1_hit_ratio={required_top1_hit_ratio:.2%}, "
-        f"acceptable_hit_ratio={acceptable_hits}/{total}={acceptable_hit_ratio:.2%}"
+        f"acceptable_hit_ratio={acceptable_hits}/{total}={acceptable_hit_ratio:.2%}, "
+        f"required_acceptable_hit_ratio={required_acceptable_hit_ratio:.2%}"
     )
     return top1_hit_ratio, acceptable_hit_ratio
 
@@ -909,6 +911,18 @@ def parse_args() -> argparse.Namespace:
         default="statistics",
         help="PROXY routing model to benchmark.",
     )
+    parser.add_argument(
+        "--min-top1-hit-ratio",
+        type=float,
+        default=None,
+        help="Override the minimum top-1 route hit ratio required by this run.",
+    )
+    parser.add_argument(
+        "--min-acceptable-hit-ratio",
+        type=float,
+        default=None,
+        help="Override the minimum acceptable route hit ratio required by this run.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -932,15 +946,26 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--warmup-rounds cannot be negative")
     if args.measure_rounds < 1:
         raise ValueError("--measure-rounds must be positive")
+    if args.min_top1_hit_ratio is not None and not 0 <= args.min_top1_hit_ratio <= 1:
+        raise ValueError("--min-top1-hit-ratio must be between 0 and 1")
+    if (
+        args.min_acceptable_hit_ratio is not None
+        and not 0 <= args.min_acceptable_hit_ratio <= 1
+    ):
+        raise ValueError("--min-acceptable-hit-ratio must be between 0 and 1")
 
 
 def min_top1_hit_ratio(args: argparse.Namespace) -> float:
+    if args.min_top1_hit_ratio is not None:
+        return args.min_top1_hit_ratio
     if args.proxy_routing_model == "prefix":
         return 0.0
     return MIN_TOP1_HIT_RATIO
 
 
 def min_acceptable_hit_ratio(args: argparse.Namespace) -> float:
+    if args.min_acceptable_hit_ratio is not None:
+        return args.min_acceptable_hit_ratio
     if args.proxy_routing_model == "prefix":
         return PREFIX_MIN_ACCEPTABLE_HIT_RATIO
     return STATISTICS_MIN_ACCEPTABLE_HIT_RATIO
@@ -981,6 +1006,7 @@ def main() -> int:
         top1_hit_ratio, acceptable_hit_ratio = print_route_quality(
             results,
             required_top1_hit_ratio,
+            required_acceptable_hit_ratio,
         )
 
         failed = [result for result in results if not result.passed]

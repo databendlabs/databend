@@ -287,12 +287,18 @@ jobs:
         include:
           - name: statistics
             proxy_routing_model: statistics
+            min_top1_hit_ratio: "0.85"
+            min_acceptable_hit_ratio: "1.0"
           - name: prefix
             proxy_routing_model: prefix
+            min_top1_hit_ratio: "0.50"
+            min_acceptable_hit_ratio: "0.75"
     name: PROXY routing benchmark (${{ matrix.name }})
     env:
       ROWS: "50000"
       PROXY_ROUTING_MODEL: ${{ matrix.proxy_routing_model }}
+      MIN_TOP1_HIT_RATIO: ${{ matrix.min_top1_hit_ratio }}
+      MIN_ACCEPTABLE_HIT_RATIO: ${{ matrix.min_acceptable_hit_ratio }}
       PAYLOAD_BYTES: "16"
       WARMUP_ROUNDS: "0"
       MEASURE_ROUNDS: "1"
