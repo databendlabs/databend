@@ -382,6 +382,7 @@ impl InsertMultiTableInterpreter {
                 .cmp(&b.1.catalog)
                 .then(a.1.database.cmp(&b.1.database))
                 .then(a.1.table.cmp(&b.1.table))
+                .then(a.1.branch.cmp(&b.1.branch))
         });
 
         for (condition, into) in condition_intos {

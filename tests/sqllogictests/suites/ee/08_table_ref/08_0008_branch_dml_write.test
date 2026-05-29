@@ -285,6 +285,27 @@ SELECT * FROM multi_t/b1 ORDER BY id
 10 fanout
 
 statement ok
+INSERT ALL
+  INTO multi_t/b1
+  INTO multi_t/b2
+  INTO multi_t/b1
+SELECT 20, 'branch_repeat'
+
+query IT
+SELECT * FROM multi_t/b1 ORDER BY id
+----
+1 to_b1
+10 fanout
+20 branch_repeat
+20 branch_repeat
+
+query IT
+SELECT * FROM multi_t/b2 ORDER BY id
+----
+3 to_b2
+20 branch_repeat
+
+statement ok
 CREATE OR REPLACE TABLE trunc_t(id INT)
 
 statement ok
