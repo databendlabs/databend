@@ -12,12 +12,12 @@ status: error
 code: 1065
 message: function array_transform must have a lambda expression
 
-=== lambda_functions_cannot_be_nested ===
-description: Lambda functions should remain rejected while resolving another lambda body.
+=== lambda_functions_can_be_nested ===
+description: Lambda functions should be allowed inside another lambda body.
 sql: array_transform([number], x -> array_transform([x], y -> y))
-status: error
-code: 1065
-message: lambda functions can not be used in lambda function
+status: ok
+scalar: array_transform(array(number (#0)), ["x"] -> array_transform(array(x (#7)), ["y"] -> y (#8)))
+type: Array(Array(Int64 NULL))
 
 === lambda_function_requires_collection_argument ===
 description: Lambda functions should require an array or map input argument.
