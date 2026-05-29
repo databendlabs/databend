@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -80,16 +81,13 @@ impl AnalyzeTableInterpreter {
     }
 
     fn analyze_target(&self, quote: char) -> String {
+        let database = QuotedIdent(&self.plan.database, quote);
+        let table = QuotedIdent(&self.plan.table, quote);
         if let Some(branch) = &self.plan.branch {
-            format!(
-                "{quote}{}{quote}.{quote}{}{quote}/{quote}{branch}{quote}",
-                self.plan.database, self.plan.table
-            )
+            let branch = QuotedIdent(branch, quote);
+            format!("{database}.{table}/{branch}")
         } else {
-            format!(
-                "{quote}{}{quote}.{quote}{}{quote}",
-                self.plan.database, self.plan.table
-            )
+            format!("{database}.{table}")
         }
     }
 }
@@ -150,7 +148,7 @@ impl Interpreter for AnalyzeTableInterpreter {
                     .iter()
                     .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
                     .map(|f| {
-                        let col_name = format!("{quote}{}{quote}", f.name);
+                        let col_name = QuotedIdent(&f.name, quote);
                         (
                             format!(
                                 "SELECT quantile, \
