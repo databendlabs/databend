@@ -124,6 +124,12 @@ where A: super::TypeCheckAdapter
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         lambda_context.expr_context = ExprContext::InLambdaFunction;
 
+        // Remove existing columns with the same name as lambda parameters
+        // to implement parameter shadowing for nested lambdas.
+        for (lambda_column, _) in lambda_columns.iter() {
+            lambda_context.columns.retain(|col| col.column_name != *lambda_column);
+        }
+
         for (lambda_column, lambda_column_type) in lambda_columns.iter() {
             let column_index = lambda_context.next_column_index();
             lambda_context.add_column_binding(
@@ -192,16 +198,6 @@ where A: super::TypeCheckAdapter
         lambda_params: &[Identifier],
         lambda_expr: CoreExprId,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if matches!(
-            self.bind_context.expr_context,
-            ExprContext::InLambdaFunction
-        ) {
-            return Err(ErrorCode::SemanticError(
-                "lambda functions can not be used in lambda function".to_string(),
-            )
-            .set_span(span));
-        }
-
         if args.len() != 1 {
             return Err(ErrorCode::SemanticError(format!(
                 "invalid arguments for lambda function, {} expects 1 argument, but got {}",

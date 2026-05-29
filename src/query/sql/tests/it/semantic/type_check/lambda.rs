@@ -16,8 +16,8 @@ async fn test_type_check_lambda_functions() -> Result<()> {
             sql: "array_transform([number])",
         },
         SqlTestCase {
-            name: "lambda_functions_cannot_be_nested",
-            description: "Lambda functions should remain rejected while resolving another lambda body.",
+            name: "lambda_functions_can_be_nested",
+            description: "Lambda functions should be allowed inside another lambda body.",
             setup_sqls: &[],
             sql: "array_transform([number], x -> array_transform([x], y -> y))",
         },
