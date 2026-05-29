@@ -92,6 +92,7 @@ use databend_common_storage::check_operator;
 use databend_common_storage::init_operator;
 use databend_common_storages_basic::view_table::QUERY;
 use databend_common_storages_basic::view_table::VIEW_ENGINE;
+use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_CLUSTER_TYPE;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_ENGINE_META;
@@ -116,9 +117,8 @@ use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::ConstraintExprBinder;
+use crate::binder::StageResolver;
 use crate::binder::Visibility;
-use crate::binder::get_storage_params_from_options;
-use crate::binder::parse_storage_params_from_uri;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::util::legacy_table_ref_removed_error;
 use crate::optimizer::ir::SExpr;
@@ -557,6 +557,11 @@ impl Binder {
 
         // FUSE tables can inherit database connection defaults for external storage
         let engine = engine.unwrap_or(catalog.default_table_engine());
+        let stage_resolver = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?;
 
         // Construct a UriLocation from database defaults if table doesn't have explicit location
         let uri_location_to_use: Option<UriLocation> = if uri_location.is_none()
@@ -575,7 +580,7 @@ impl Binder {
                 if let (Some(connection_name), Some(path)) = (default_connection_name, default_path)
                 {
                     // Get the connection object to access its storage_params
-                    match self.ctx.get_connection(connection_name).await {
+                    match stage_resolver.resolve_connection(connection_name).await {
                         Ok(connection) => {
                             // Construct UriLocation using the database defaults
                             match UriLocation::from_uri(path.clone(), connection.storage_params) {
@@ -656,12 +661,12 @@ impl Binder {
                     path: uri.path.clone(),
                     connection: uri.connection.clone(),
                 };
-                let sp = parse_storage_params_from_uri(
-                    &mut uri,
-                    Some(self.ctx.as_ref()),
-                    "when create TABLE with external location",
-                )
-                .await?;
+                let sp = stage_resolver
+                    .resolve_storage_params_from_uri(
+                        &mut uri,
+                        "when create TABLE with external location",
+                    )
+                    .await?;
 
                 // create a temporary op to check if params is correct
                 let op = init_operator(&sp)?;
@@ -772,8 +777,9 @@ impl Binder {
                 };
                 match engine {
                     Engine::Iceberg => {
-                        let sp =
-                            get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
+                        let sp = stage_resolver
+                            .resolve_storage_params_from_options(&options)
+                            .await?;
                         let (table_schema, _) =
                             self.ctx.load_datalake_schema("iceberg", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
@@ -792,8 +798,9 @@ impl Binder {
                         )
                     }
                     Engine::Delta => {
-                        let sp =
-                            get_storage_params_from_options(self.ctx.as_ref(), &options).await?;
+                        let sp = stage_resolver
+                            .resolve_storage_params_from_options(&options)
+                            .await?;
                         let (table_schema, meta) =
                             self.ctx.load_datalake_schema("delta", &sp).await?;
                         // the first version of current iceberg table do not need to persist the storage_params,
@@ -980,9 +987,13 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let sp =
-            parse_storage_params_from_uri(&mut uri, Some(self.ctx.as_ref()), "when ATTACH TABLE")
-                .await?;
+        let sp = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_storage_params_from_uri(&mut uri, "when ATTACH TABLE")
+        .await?;
 
         // create a temporary op to check if params is correct
         let op = init_operator(&sp)?;

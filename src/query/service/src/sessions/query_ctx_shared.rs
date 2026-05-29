@@ -50,7 +50,6 @@ use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_pipeline::core::PlanProfile;
@@ -59,7 +58,6 @@ use databend_common_storage::DataOperator;
 use databend_common_storage::StorageMetrics;
 use databend_common_storages_stream::stream_table::StreamTable;
 use databend_common_users::GrantObjectVisibilityChecker;
-use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
@@ -675,12 +673,6 @@ impl QueryContextShared {
     pub fn get_status_info(&self) -> String {
         let status = self.status.read();
         status.clone()
-    }
-
-    pub async fn get_connection(&self, name: &str) -> Result<UserDefinedConnection> {
-        let user_mgr = UserApiProvider::instance();
-        let tenant = self.get_tenant();
-        user_mgr.get_connection(&tenant, name).await
     }
 
     pub fn get_query_cache_metrics(&self) -> &DataCacheMetrics {

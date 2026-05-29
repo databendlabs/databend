@@ -26,17 +26,20 @@ use databend_common_ast::ast::ShowDatabasesStmt;
 use databend_common_ast::ast::ShowDropDatabasesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
+use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRefExt;
 use databend_common_expression::types::DataType;
 use databend_common_meta_app::schema::DatabaseMeta;
+use databend_common_users::UserApiProvider;
 use log::debug;
 
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
+use crate::binder::StageResolver;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::AlterDatabasePlan;
 use crate::plans::CreateDatabasePlan;
@@ -405,6 +408,16 @@ impl Binder {
         }
         // For ALTER DATABASE: allow modifying single option (the other one already exists in database)
 
+        let stage_resolver = if has_connection {
+            Some(StageResolver::from_table_context(
+                self.ctx.clone(),
+                UserApiProvider::instance(),
+                GlobalConfig::instance().storage.allow_insecure,
+            )?)
+        } else {
+            None
+        };
+
         // Validate that the specified connection exists
         if let Some(connection_property) = options
             .iter()
@@ -412,8 +425,12 @@ impl Binder {
         {
             let connection_name = &connection_property.value;
 
-            // Check if the connection exists by trying to get it through the context
-            match self.ctx.get_connection(connection_name).await {
+            match stage_resolver
+                .as_ref()
+                .expect("stage resolver is initialized when connection option exists")
+                .resolve_connection(connection_name)
+                .await
+            {
                 Ok(_) => {
                     // Connection exists, continue
                 }
@@ -434,7 +451,11 @@ impl Binder {
             options.iter().find(|p| p.name == DEFAULT_STORAGE_PATH),
         ) {
             // Validate the storage path is accessible and matches the connection protocol
-            let connection = self.ctx.get_connection(&connection_prop.value).await?;
+            let connection = stage_resolver
+                .as_ref()
+                .expect("stage resolver is initialized when connection option exists")
+                .resolve_connection(&connection_prop.value)
+                .await?;
 
             let uri_for_scheme = databend_common_ast::ast::UriLocation::from_uri(
                 path_prop.value.clone(),
@@ -475,7 +496,6 @@ impl Binder {
             // This enforces that the path must end with '/' (directory requirement)
             let storage_params = crate::binder::parse_storage_params_from_uri(
                 &mut uri_location,
-                Some(&*self.ctx),
                 "when setting database DEFAULT_STORAGE_PATH",
             )
             .await
@@ -487,11 +507,7 @@ impl Binder {
             })?;
 
             // Check if storage is secure when required
-            if !storage_params.is_secure()
-                && !databend_common_config::GlobalConfig::instance()
-                    .storage
-                    .allow_insecure
-            {
+            if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 return Err(ErrorCode::StorageInsecure(
                     "Database default storage path points to insecure storage, which is not allowed",
                 ));

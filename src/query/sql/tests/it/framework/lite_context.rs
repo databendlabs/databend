@@ -1463,18 +1463,9 @@ impl TableContextCopy for LiteTableContext {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for LiteTableContext {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         None
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        unsupported("table_ctx::get_file_format")
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
-        unsupported("table_ctx::get_connection")
     }
 }
 

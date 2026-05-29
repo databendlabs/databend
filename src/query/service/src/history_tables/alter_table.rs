@@ -150,10 +150,7 @@ pub async fn should_reset(
         payload.capture_log_settings = Some(CaptureLogSettings::capture_off());
 
         let (new_storage_params, _) = payload
-            .tracking(parse_uri_location(
-                &mut uri_location,
-                Some(context.as_ref()),
-            ))
+            .tracking(parse_uri_location(&mut uri_location))
             .await?;
 
         // External1 -> External2
