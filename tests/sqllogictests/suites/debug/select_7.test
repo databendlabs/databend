@@ -296,13 +296,13 @@ select
 from numbers(16)
 
 statement ok
-create or replace stage synthetic_load_delta_stage_0 file_format = (type = parquet)
+create or replace stage synthetic_load_delta_stage_7 file_format = (type = parquet)
 
 statement ok
-remove @synthetic_load_delta_stage_0/enroll_delta
+remove @synthetic_load_delta_stage_7/enroll_delta
 
 statement ok
-copy into @synthetic_load_delta_stage_0/enroll_delta
+copy into @synthetic_load_delta_stage_7/enroll_delta
 from (
     select
         to_date('1991-01-01') + number % 1000 as birth_day,
@@ -326,7 +326,7 @@ file_format = (type = parquet)
 statement ok
 merge into synthetic_load_orig.enroll_info as target_table
 using (
-    select * from '@synthetic_load_delta_stage_0/enroll_delta/' (
+    select * from '@synthetic_load_delta_stage_7/enroll_delta/' (
         file_format => 'parquet',
         pattern => '.*[.]parquet'
     )
@@ -606,7 +606,7 @@ note_8
 note_9
 
 statement ok
-drop stage if exists synthetic_load_delta_stage_0
+drop stage if exists synthetic_load_delta_stage_7
 
 statement ok
 drop database if exists synthetic_load_src
