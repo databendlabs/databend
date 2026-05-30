@@ -220,6 +220,7 @@ pub async fn do_vacuum2(
         .chain(blocks_to_gc.into_iter())
         .chain(stats_to_gc.into_iter())
         .collect();
+
     let op = Files::create(ctx.clone(), fuse_table.get_operator());
 
     // order is important
