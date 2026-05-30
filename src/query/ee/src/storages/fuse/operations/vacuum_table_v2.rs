@@ -207,10 +207,20 @@ pub async fn do_vacuum2(
             .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
 
+    // Deduplicate index paths: different block files (e.g. with/without the vacuum2
+    // object-key prefix) may map to the same bloom index location. Passing duplicates
+    // to opendal's batch delete causes Deleter::close() to loop indefinitely because
+    // its internal HashSet-based buffer and the outer size counter diverge.
+    let len_before_dedup = indexes_to_gc.len();
+    indexes_to_gc.sort_unstable();
+    indexes_to_gc.dedup();
+
     ctx.set_status_info(&format!(
-        "Collected indexes_to_gc for table {}, elapsed: {:?}, indexes_to_gc: {:?}",
+        "Collected indexes_to_gc for table {}, elapsed: {:?}, indexes_to_gc(deduped {}/{}): {:?}",
         table_info.desc,
         start.elapsed(),
+        indexes_to_gc.len(),
+        len_before_dedup,
         slice_summary(&indexes_to_gc)
     ));
 
