@@ -263,6 +263,12 @@ jobs:
       matrix:
         tests:
           - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
+          - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
+          - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
+          - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
+          - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
+          - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
+          - { dirs: "debug", runner: "4c", parallel: "8", repeat: "8" }
         handler:
           - "hybrid"
           - "http"
