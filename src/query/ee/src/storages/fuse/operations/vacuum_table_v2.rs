@@ -22,17 +22,22 @@ use chrono::DateTime;
 use chrono::Utc;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
+use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_meta_app::schema::ListIndexesByIdReq;
 use databend_common_storages_fuse::FuseTable;
 use databend_common_storages_fuse::io::SegmentsIO;
+use databend_common_storages_fuse::io::SnapshotsIO;
 use databend_common_storages_fuse::io::TableMetaLocationGenerator;
 use databend_storages_common_cache::CacheAccessor;
 use databend_storages_common_cache::CacheManager;
 use databend_storages_common_io::Files;
 use databend_storages_common_table_meta::meta::CompactSegmentInfo;
 use databend_storages_common_table_meta::meta::Location;
+use databend_storages_common_table_meta::meta::SegmentInfo;
+use databend_storages_common_table_meta::meta::Versioned;
 use log::info;
+use log::warn;
 
 /// GC root context derived from the owner table before ref-aware cleanup starts.
 ///
@@ -43,6 +48,7 @@ struct GcRootSnapshotCtx {
     gc_root_timestamp: DateTime<Utc>,
     gc_root_meta_ts: DateTime<Utc>,
     protected_segments: HashSet<Location>,
+    protected_table_statistics: HashSet<String>,
     snapshots_to_gc: Vec<String>,
 }
 
@@ -68,6 +74,7 @@ pub async fn do_vacuum2(
         gc_root_timestamp,
         gc_root_meta_ts,
         protected_segments,
+        protected_table_statistics,
         snapshots_to_gc,
     }) = vacuum_base_snapshot_phase(fuse_table, &ctx, respect_flash_back).await?
     else {
@@ -183,19 +190,19 @@ pub async fn do_vacuum2(
         ))
         .await?;
     let inverted_indexes = &table_info.meta.indexes;
-    let mut indexes_to_gc = Vec::with_capacity(
-        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 1),
+    let mut indexes_to_gc = HashSet::with_capacity(
+        blocks_to_gc.len() * (table_agg_index_ids.len() + inverted_indexes.len() + 3),
     );
     for loc in &blocks_to_gc {
         for index_id in &table_agg_index_ids {
-            indexes_to_gc.push(
+            indexes_to_gc.insert(
                 TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
                     loc, *index_id,
                 ),
             );
         }
         for idx in inverted_indexes.values() {
-            indexes_to_gc.push(
+            indexes_to_gc.insert(
                 TableMetaLocationGenerator::gen_inverted_index_location_from_block_location(
                     loc,
                     idx.name.as_str(),
@@ -204,8 +211,17 @@ pub async fn do_vacuum2(
             );
         }
         indexes_to_gc
-            .push(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
+            .insert(TableMetaLocationGenerator::gen_bloom_index_location_from_block_location(loc));
     }
+
+    collect_block_meta_index_locations(
+        &segments_io,
+        &segments_to_gc,
+        &blocks_to_gc,
+        &mut indexes_to_gc,
+    )
+    .await?;
+    let indexes_to_gc = indexes_to_gc.into_iter().collect::<Vec<_>>();
 
     ctx.set_status_info(&format!(
         "Collected indexes_to_gc for table {}, elapsed: {:?}, indexes_to_gc: {:?}",
@@ -215,6 +231,9 @@ pub async fn do_vacuum2(
     ));
 
     let start = std::time::Instant::now();
+    let table_statistics_to_gc =
+        collect_table_statistics_to_gc(fuse_table, &snapshots_to_gc, &protected_table_statistics)
+            .await?;
     let subject_files_to_gc: Vec<_> = segments_to_gc
         .into_iter()
         .chain(blocks_to_gc.into_iter())
@@ -227,6 +246,14 @@ pub async fn do_vacuum2(
     // subject_files should be removed before snapshots, because gc of subject_files depend on gc root
     op.remove_file_in_batch(&indexes_to_gc).await?;
     op.remove_file_in_batch(&subject_files_to_gc).await?;
+    if let Some(snapshot_statistics_cache) =
+        CacheManager::instance().get_table_snapshot_statistics_cache()
+    {
+        for path in table_statistics_to_gc.iter() {
+            snapshot_statistics_cache.evict(path);
+        }
+    }
+    op.remove_file_in_batch(&table_statistics_to_gc).await?;
 
     // Evict snapshot caches from the local node.
     //
@@ -255,6 +282,7 @@ pub async fn do_vacuum2(
 
     let files_to_gc: Vec<_> = subject_files_to_gc
         .into_iter()
+        .chain(table_statistics_to_gc.into_iter())
         .chain(snapshots_to_gc.into_iter())
         .chain(indexes_to_gc.into_iter())
         .collect();
@@ -290,22 +318,113 @@ async fn vacuum_base_snapshot_phase(
         .iter()
         .cloned()
         .collect::<HashSet<_>>();
-    let _ = fuse_table
-        .process_tags_for_purge(
-            &catalog,
-            &selection.gc_root_path,
-            &mut selection.snapshots_to_gc,
-            &mut protected_segments,
-            false,
-        )
-        .await?;
+    let mut protected_table_statistics = selection
+        .gc_root
+        .table_statistics_location()
+        .into_iter()
+        .collect::<HashSet<_>>();
+    protected_table_statistics.extend(
+        fuse_table
+            .process_tags_for_purge(
+                &catalog,
+                &selection.gc_root_path,
+                &mut selection.snapshots_to_gc,
+                &mut protected_segments,
+                false,
+            )
+            .await?,
+    );
 
     Ok(Some(GcRootSnapshotCtx {
         gc_root_timestamp: selection.gc_root.timestamp.unwrap(),
         gc_root_meta_ts: selection.gc_root_meta_ts,
         protected_segments,
+        protected_table_statistics,
         snapshots_to_gc: selection.snapshots_to_gc,
     }))
+}
+
+#[async_backtrace::framed]
+async fn collect_block_meta_index_locations(
+    segments_io: &SegmentsIO,
+    segments_to_gc: &[String],
+    blocks_to_gc: &[String],
+    indexes_to_gc: &mut HashSet<String>,
+) -> Result<()> {
+    if segments_to_gc.is_empty() || blocks_to_gc.is_empty() {
+        return Ok(());
+    }
+
+    let blocks_to_gc = blocks_to_gc.iter().cloned().collect::<HashSet<_>>();
+    let segment_locations = segments_to_gc
+        .iter()
+        .map(|loc| (loc.clone(), segment_version_from_location(loc)))
+        .collect::<Vec<_>>();
+    let segments = segments_io
+        .read_segments::<Arc<CompactSegmentInfo>>(&segment_locations, false)
+        .await?;
+
+    for (idx, segment) in segments.into_iter().enumerate() {
+        let segment = match segment {
+            Ok(segment) => segment,
+            Err(e) if e.code() == ErrorCode::STORAGE_NOT_FOUND => {
+                warn!(
+                    "concurrent gc: segment of location {} already collected while collecting vacuum2 index locations",
+                    segment_locations[idx].0
+                );
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+
+        for block_meta in segment.block_metas()? {
+            if !blocks_to_gc.contains(&block_meta.location.0) {
+                continue;
+            }
+
+            if let Some(bloom_loc) = &block_meta.bloom_filter_index_location {
+                indexes_to_gc.insert(bloom_loc.0.clone());
+            }
+            if let Some(vector_loc) = &block_meta.vector_index_location {
+                indexes_to_gc.insert(vector_loc.0.clone());
+            }
+            if let Some(spatial_loc) = &block_meta.spatial_index_location {
+                indexes_to_gc.insert(spatial_loc.0.clone());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
+async fn collect_table_statistics_to_gc(
+    fuse_table: &FuseTable,
+    snapshots_to_gc: &[String],
+    protected_table_statistics: &HashSet<String>,
+) -> Result<Vec<String>> {
+    let mut table_statistics_to_gc = HashSet::new();
+    for snapshot_loc in snapshots_to_gc {
+        if let Some(snapshot) =
+            SnapshotsIO::read_snapshot_for_vacuum(fuse_table.get_operator(), snapshot_loc).await?
+        {
+            if let Some(stats_loc) = snapshot.table_statistics_location()
+                && !protected_table_statistics.contains(&stats_loc)
+            {
+                table_statistics_to_gc.insert(stats_loc);
+            }
+        }
+    }
+
+    Ok(table_statistics_to_gc.into_iter().collect())
+}
+
+fn segment_version_from_location(location: &str) -> u64 {
+    location
+        .rsplit_once("_v")
+        .and_then(|(_, suffix)| suffix.split('.').next())
+        .and_then(|version| version.parse().ok())
+        .unwrap_or(SegmentInfo::VERSION)
 }
 
 fn slice_summary<T: std::fmt::Debug>(s: &[T]) -> String {
