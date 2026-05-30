@@ -13,6 +13,10 @@ inputs:
     description: "logic test parallel"
     required: false
     default: ""
+  repeat:
+    description: "repeat count for the same sqllogic workload"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -26,4 +30,5 @@ runs:
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
+        TEST_REPEAT: ${{ inputs.repeat }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}
