@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::sync::Arc;
 
 use databend_common_catalog::BasicColumnStatistics;
 use databend_common_catalog::TableStatistics;
@@ -30,7 +29,6 @@ use databend_common_sql::Metadata;
 use databend_common_sql::Symbol;
 use databend_common_sql::Visibility;
 use databend_common_sql::optimizer::ir::ColumnStat;
-use databend_common_sql::optimizer::ir::RelExpr;
 use databend_common_sql::optimizer::ir::SExpr;
 use databend_common_sql::optimizer::ir::StatInfo;
 use databend_common_sql::optimizer::ir::Statistics;
@@ -106,7 +104,7 @@ fn column_statistics(stats: TableStats) -> HashMap<String, BasicColumnStatistics
     HashMap::from([("k".to_string(), BasicColumnStatistics {
         min: Some(Datum::Int(stats.min)),
         max: Some(Datum::Int(stats.max)),
-        ndv: Some(stats.ndv),
+        ndv: Some(NdvEstimate::exact(stats.ndv as f64)),
         null_count: 0,
         in_memory_size: stats.rows.saturating_mul(8),
     })])
@@ -238,13 +236,13 @@ fn collect_join_cardinalities(
     let mut joins = 0;
     if let RelOperator::Join(join) = expr.plan() {
         assert_eq!(join.join_type, expected_join_type);
-        let stat_info = RelExpr::with_s_expr(expr).derive_cardinality()?;
+        let stat_info = expr.derive_cardinality()?;
         writeln!(
             file,
             "join          : {:<11} cardinality={:.3}",
             join.join_type, stat_info.cardinality
         )?;
-        write_join_stat_info(file, metadata, &stat_info)?;
+        write_join_stat_info(file, metadata, stat_info)?;
         joins += 1;
     }
 
@@ -270,8 +268,8 @@ fn direct_column(column: usize, table: &str) -> ScalarExpr {
     .into()
 }
 
-fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
-    Ok(Arc::new(StatInfo {
+fn direct_stat_info(column: usize, stats: TableStats) -> Result<StatInfo> {
+    Ok(StatInfo {
         cardinality: stats.rows as f64,
         statistics: Statistics {
             precise_cardinality: None,
@@ -282,8 +280,9 @@ fn direct_stat_info(column: usize, stats: TableStats) -> Result<Arc<StatInfo>> {
                 null_count: StatCount::exact(0),
                 histogram: Some(histogram_from_json(stats.histogram_json)?),
             })]),
+            cluster_keys: Default::default(),
         },
-    }))
+    })
 }
 
 fn write_internal_right_single_case(file: &mut impl Write, case: &JoinTestCase) -> Result<()> {
@@ -299,10 +298,9 @@ fn write_internal_right_single_case(file: &mut impl Write, case: &JoinTestCase) 
         join_type,
         ..Default::default()
     };
-    let stat_info = join.derive_join_stats(
-        direct_stat_info(0, case.left)?,
-        direct_stat_info(1, case.right)?,
-    )?;
+    let left_stat_info = direct_stat_info(0, case.left)?;
+    let right_stat_info = direct_stat_info(1, case.right)?;
+    let stat_info = join.derive_join_stats(&left_stat_info, &right_stat_info)?;
 
     writeln!(file, "query         : internal_right_single")?;
     writeln!(

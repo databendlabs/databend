@@ -1,0 +1,196 @@
+=== k1_k2_prefix ===
+description: Full memo output when the clustered probe can first match a.k1.
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], cost: 850.000, previous best: -, probe factor: 0.850, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], cost: 1850.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], cost: 2000.000, previous best: 1850.000, probe factor: 1.000, selected: false
+
+Memo
+├── root group: #5
+├── estimated memory: 3.75 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 13000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#1, #2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 25000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #3]
+└── Group #5
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 26000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#4]
+
+
+=== k2_k1_prefix ===
+description: Full memo output when the clustered probe can first match a.k2.
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k2, k1)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, c], left: [a], right: [c], cost: 850.000, previous best: -, probe factor: 0.850, selected: true
+- parent: [a, b], left: [a], right: [b], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], cost: 2000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], cost: 1850.000, previous best: 2000.000, probe factor: 1.000, selected: true
+
+Memo
+├── root group: #5
+├── estimated memory: 3.75 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 13000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#1, #2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 25000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #3]
+└── Group #5
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 26000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#4]
+
+
+=== filter_preserves_cluster_keys ===
+description: Cluster keys still affect join order after a filter on the clustered table.
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM (SELECT * FROM a WHERE v >= 0) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], cost: 850.000, previous best: -, probe factor: 0.850, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], cost: 1850.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], cost: 2000.000, previous best: 1850.000, probe factor: 1.000, selected: false
+
+Memo
+├── root group: #6
+├── estimated memory: 4.38 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 14000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#2, #3]
+├── Group #5
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 26000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #4]
+└── Group #6
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 27000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#5]
+
+
+=== limit_and_join_preserve_cluster_keys ===
+description: Cluster keys still affect join order after a limit subquery and a partial join.
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM (SELECT * FROM a LIMIT 1000) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, c], left: [a], right: [c], cost: 1000000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], cost: 850000.000, previous best: -, probe factor: 0.850, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], cost: 1000850000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], cost: 851000000.000, previous best: 1000850000.000, probe factor: 0.850, selected: true
+
+Memo
+├── root group: #7
+├── estimated memory: 5.00 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 Limit [#0]
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 3000.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 15000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#2, #3]
+├── Group #5
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #6
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1026000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#4, #5]
+└── Group #7
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 1001026000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#6]
+
+

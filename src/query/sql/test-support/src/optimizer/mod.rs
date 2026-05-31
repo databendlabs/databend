@@ -43,6 +43,7 @@ use databend_common_sql::plans::Statistics;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
 use databend_common_statistics::HistogramBucket;
+use databend_common_statistics::NdvEstimate;
 use goldenfile::Mint;
 use serde::Deserialize;
 use serde::Serialize;
@@ -481,6 +482,7 @@ impl SExprVisitor for StatsApplier<'_> {
                     table_stats: Some(table_stats),
                     column_stats,
                     histograms,
+                    cluster_key_orders: Default::default(),
                 });
 
                 return Ok(VisitAction::Replace(
@@ -517,7 +519,7 @@ impl StatsApplier<'_> {
                                 .or_else(|| default_min_datum(&column.data_type())),
                             max: to_datum(&stats.max)
                                 .or_else(|| default_max_datum(&column.data_type())),
-                            ndv: stats.ndv,
+                            ndv: stats.ndv.map(|ndv| NdvEstimate::exact(ndv as f64)),
                             null_count: stats.null_count.unwrap_or(0),
                             in_memory_size: 0,
                         }),

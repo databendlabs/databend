@@ -95,6 +95,7 @@ use databend_common_sql::resolve_type_name;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::NdvEstimate;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -110,6 +111,7 @@ use databend_meta_runtime::DatabendRuntime;
 use databend_storages_common_session::SessionState;
 use databend_storages_common_session::TxnManager;
 use databend_storages_common_session::TxnManagerRef;
+use databend_storages_common_table_meta::meta::ClusterKey;
 use databend_storages_common_table_meta::meta::TableMetaTimestamps;
 use databend_storages_common_table_meta::meta::TableSnapshot;
 use databend_storages_common_table_meta::table::ChangeType;
@@ -306,6 +308,10 @@ impl Table for FakeTable {
 
     fn support_prewhere(&self) -> bool {
         true
+    }
+
+    fn cluster_key_meta(&self) -> Option<ClusterKey> {
+        self.table_info.cluster_key()
     }
 }
 
@@ -712,6 +718,7 @@ impl LiteTableContext {
         database: &str,
         table_name: &str,
         fields: Vec<TableField>,
+        cluster_key: Option<String>,
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
@@ -744,6 +751,7 @@ impl LiteTableContext {
                 name: table_name.to_string(),
                 meta: TableMeta {
                     schema,
+                    cluster_key_v2: cluster_key.map(|key| (0, key)),
                     ..Default::default()
                 },
                 catalog_info: self.default_catalog.info(),
@@ -911,10 +919,32 @@ impl LiteTableContext {
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
     ) -> Result<()> {
+        self.register_table_with_cluster_key_stats_and_histograms(
+            database,
+            table_name,
+            fields,
+            None,
+            table_stats,
+            column_stats,
+            histograms,
+        )
+    }
+
+    fn register_table_with_cluster_key_stats_and_histograms(
+        self: &Arc<Self>,
+        database: &str,
+        table_name: &str,
+        fields: Vec<TableField>,
+        cluster_key: Option<String>,
+        table_stats: Option<TableStatistics>,
+        column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
+    ) -> Result<()> {
         let table = self.build_fake_table(
             database,
             table_name,
             fields,
+            cluster_key,
             table_stats,
             column_stats,
             histograms,
@@ -1059,7 +1089,7 @@ impl LiteTableContext {
                                         BasicColumnStatistics {
                                             min: Some(Datum::UInt(0)),
                                             max: Some(Datum::UInt(num_rows.saturating_sub(1))),
-                                            ndv: Some(num_rows),
+                                            ndv: Some(NdvEstimate::exact(num_rows as f64)),
                                             null_count: 0,
                                             in_memory_size: num_rows.saturating_mul(8),
                                         },
@@ -1078,11 +1108,20 @@ impl LiteTableContext {
                         }
                     }
                 };
+                let cluster_key = stmt.cluster_by.as_ref().map(|cluster_by| {
+                    let cluster_exprs = cluster_by
+                        .cluster_exprs
+                        .iter()
+                        .map(|expr| format!("{expr:#}"))
+                        .collect::<Vec<_>>();
+                    format!("({})", cluster_exprs.join(", "))
+                });
 
-                self.register_table_with_stats_and_histograms(
+                self.register_table_with_cluster_key_stats_and_histograms(
                     &database,
                     &table_name,
                     fields,
+                    cluster_key,
                     table_stats,
                     column_stats,
                     histograms,
@@ -1109,6 +1148,10 @@ impl LiteTableContext {
     pub async fn optimize_plan(self: &Arc<Self>, plan: Plan) -> Result<Plan> {
         let metadata = match &plan {
             Plan::Query { metadata, .. } => metadata.clone(),
+            Plan::Explain { plan, .. } => match plan.as_ref() {
+                Plan::Query { metadata, .. } => metadata.clone(),
+                _ => Arc::new(RwLock::new(Metadata::default())),
+            },
             _ => Arc::new(RwLock::new(Metadata::default())),
         };
         let settings = self.get_settings();

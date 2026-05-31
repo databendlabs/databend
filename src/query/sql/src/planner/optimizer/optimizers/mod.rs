@@ -29,3 +29,5 @@ pub use eliminate_self_join::EliminateSelfJoinOptimizer;
 pub use hyper_dp::DPhpyOptimizer;
 pub use operator::CleanupUnusedCTEOptimizer;
 pub use sync_materialized_cte_ref::SyncMaterializedCTERefOptimizer;
+
+pub use crate::optimizer::statistics::CollectStatisticsOptimizer;
