@@ -628,7 +628,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct ParquetTableColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
     num_rows: u64,

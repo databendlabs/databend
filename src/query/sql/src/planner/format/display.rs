@@ -151,9 +151,9 @@ where
         if self.id_humanizer.options().verbose {
             let rel_expr = RelExpr::with_s_expr(s_expr);
             let prop = rel_expr.derive_relational_prop()?;
-            let stat = rel_expr.derive_cardinality()?;
+            let stat = s_expr.derive_cardinality()?;
             let properties = self.humanize_property(&prop);
-            let stats = self.humanize_stat(&stat)?;
+            let stats = self.humanize_stat(stat)?;
             tree.children.extend(properties);
             tree.children.extend(stats);
         }

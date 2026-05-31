@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -23,8 +24,8 @@ use databend_common_catalog::table::TableStatistics;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Expr;
 use databend_common_expression::TableSchemaRef;
-use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCardinality;
 use databend_common_expression::stat_distribution::StatCount;
 use databend_common_statistics::DEFAULT_HISTOGRAM_BUCKETS;
@@ -91,6 +92,8 @@ pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
+    // table index -> cluster-key expressions in that table's cluster-key order
+    pub cluster_key_orders: BTreeMap<IndexType, Vec<Expr<Symbol>>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -139,6 +142,20 @@ impl Scan {
             .map(|(col, hist)| (*col, hist.clone()))
             .collect();
 
+        let cluster_key_orders = self
+            .statistics
+            .cluster_key_orders
+            .iter()
+            .filter_map(|(table_index, cluster_key_order)| {
+                let cluster_key_order = cluster_key_order
+                    .iter()
+                    .filter(|expr| expr.column_refs().keys().any(|col| columns.contains(col)))
+                    .cloned()
+                    .collect::<Vec<_>>();
+                (!cluster_key_order.is_empty()).then_some((*table_index, cluster_key_order))
+            })
+            .collect();
+
         Scan {
             table_index: self.table_index,
             columns,
@@ -150,6 +167,7 @@ impl Scan {
                 table_stats: self.statistics.table_stats,
                 column_stats,
                 histograms,
+                cluster_key_orders,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -235,17 +253,6 @@ impl Scan {
     }
 }
 
-fn derive_scan_ndv(ndv: Option<u64>, null_count: u64, num_rows: Option<u64>) -> NdvEstimate {
-    let max_non_null_count = num_rows
-        .map(|num_rows| num_rows.saturating_sub(null_count) as f64)
-        .unwrap_or(u64::MAX as f64);
-
-    match ndv {
-        Some(ndv) => NdvEstimate::exact(ndv as f64),
-        None => NdvEstimate::upper_bound(max_non_null_count),
-    }
-}
-
 impl PartialEq for Scan {
     fn eq(&self, other: &Self) -> bool {
         self.table_index == other.table_index
@@ -324,7 +331,7 @@ impl Operator for Scan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
         let used_columns = self.used_columns();
 
         let num_rows = self
@@ -348,7 +355,7 @@ impl Operator for Scan {
                 };
 
                 let null_count = StatCount::exact(col_stat.null_count);
-                let ndv = derive_scan_ndv(col_stat.ndv, col_stat.null_count, num_rows);
+                let ndv = col_stat.ndv_estimate(num_rows);
 
                 let histogram = if let Some(histogram) = self.statistics.histograms.get(k)
                     && histogram.is_some()
@@ -360,7 +367,7 @@ impl Operator for Scan {
                         if num_rows == 0 {
                             return None;
                         }
-                        let ndv = col_stat.ndv?;
+                        let ndv = col_stat.ndv_for_synthetic_histogram()?;
                         HistogramBuilder::from_ndv(
                             ndv,
                             num_rows,
@@ -379,6 +386,24 @@ impl Operator for Scan {
                 });
             }
         }
+
+        let cluster_keys = self
+            .statistics
+            .cluster_key_orders
+            .iter()
+            .filter_map(|(table_index, cluster_key_order)| {
+                let cluster_key_order = cluster_key_order
+                    .iter()
+                    .filter(|expr| {
+                        expr.column_refs()
+                            .keys()
+                            .any(|col| used_columns.contains(col))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                (!cluster_key_order.is_empty()).then_some((*table_index, cluster_key_order))
+            })
+            .collect();
 
         let precise_cardinality = self
             .statistics
@@ -422,22 +447,24 @@ impl Operator for Scan {
                 }
                 _ => cardinality,
             };
-            return Ok(Arc::new(StatInfo {
+            return Ok(StatInfo {
                 cardinality,
                 statistics: OpStatistics {
                     precise_cardinality: None,
                     column_stats: Default::default(),
+                    cluster_keys,
                 },
-            }));
+            });
         }
 
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
+                cluster_keys,
             },
-        }))
+        })
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node
@@ -457,6 +484,7 @@ impl Operator for Scan {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::optimizer::ir::SExpr;
 
     #[test]
     fn test_derive_scan_preserves_bind_time_metadata() {
@@ -512,5 +540,49 @@ mod tests {
         assert!(derived.order_by.is_none());
         assert!(derived.prewhere.is_none());
         assert!(derived.agg_index.is_none());
+    }
+
+    #[test]
+    fn test_derive_scan_preserves_cluster_key_orders_in_stats() -> Result<()> {
+        let cluster_key_orders = [(42, vec![
+            column_ref(Symbol::new(3)),
+            column_ref(Symbol::new(1)),
+        ])]
+        .into_iter()
+        .collect();
+        let scan = Scan {
+            table_index: 42,
+            columns: [Symbol::new(1), Symbol::new(2), Symbol::new(3)]
+                .into_iter()
+                .collect(),
+            statistics: Arc::new(Statistics {
+                cluster_key_orders,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        let s_expr = SExpr::create_leaf(Arc::new(scan.into()));
+        let stat_info = s_expr.derive_cardinality()?;
+
+        assert_eq!(
+            stat_info.statistics.cluster_keys,
+            [(42, vec![
+                column_ref(Symbol::new(3)),
+                column_ref(Symbol::new(1))
+            ])]
+            .into_iter()
+            .collect()
+        );
+        Ok(())
+    }
+
+    fn column_ref(column: Symbol) -> Expr<Symbol> {
+        Expr::ColumnRef(databend_common_expression::ColumnRef {
+            span: None,
+            id: column,
+            data_type: databend_common_expression::types::DataType::Null,
+            display_name: column.to_string(),
+        })
     }
 }

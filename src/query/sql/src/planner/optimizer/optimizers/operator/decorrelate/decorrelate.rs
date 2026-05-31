@@ -274,8 +274,8 @@ impl SubqueryDecorrelatorOptimizer {
                 )?;
 
                 let join_type = if matches!(subquery.contain_agg, Some(true)) && {
-                    let rel_expr = RelExpr::with_s_expr(&subquery.subquery);
-                    rel_expr
+                    subquery
+                        .subquery
                         .derive_cardinality()?
                         .statistics
                         .precise_cardinality

@@ -539,7 +539,9 @@ impl fmt::Display for TableStatisticsContext {
                     f,
                     "| {} | {} | {} |",
                     col_name,
-                    stats.ndv.map_or("NULL".to_string(), |n| n.to_string()),
+                    stats
+                        .ndv_value()
+                        .map_or("NULL".to_string(), |n| n.to_string()),
                     stats.null_count
                 )?;
             }

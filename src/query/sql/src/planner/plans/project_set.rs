@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Deref;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
@@ -33,16 +32,6 @@ pub struct ProjectSet {
     pub srfs: Vec<ScalarItem>,
 }
 
-impl ProjectSet {
-    pub fn derive_project_set_stats(&self, input_stat: &mut StatInfo) -> Result<Arc<StatInfo>> {
-        // ProjectSet is set-returning functions, precise_cardinality set None
-        input_stat.statistics.precise_cardinality = None;
-        // We assume that the SRF function will expand by at least x3 per row.
-        input_stat.cardinality *= 3.0;
-        Ok(Arc::new(input_stat.clone()))
-    }
-}
-
 impl Operator for ProjectSet {
     fn rel_op(&self) -> RelOp {
         RelOp::ProjectSet
@@ -52,10 +41,7 @@ impl Operator for ProjectSet {
         Box::new(self.srfs.iter().map(|expr| &expr.scalar))
     }
 
-    fn derive_relational_prop(
-        &self,
-        rel_expr: &RelExpr,
-    ) -> databend_common_exception::Result<Arc<RelationalProperty>> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
 
         // Derive output columns
@@ -90,8 +76,12 @@ impl Operator for ProjectSet {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> databend_common_exception::Result<Arc<StatInfo>> {
-        let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
-        self.derive_project_set_stats(&mut input_stat)
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        let mut stat_info = rel_expr.derive_cardinality_child(0)?.clone();
+        // ProjectSet is set-returning functions, precise_cardinality set None
+        stat_info.statistics.precise_cardinality = None;
+        // We assume that the SRF function will expand by at least x3 per row.
+        stat_info.cardinality *= 3.0;
+        Ok(stat_info)
     }
 }

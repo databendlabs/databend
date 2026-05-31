@@ -163,7 +163,7 @@ impl FuseTable {
                     let maybe_col_stats =
                         col_stats_provider.column_statistics(key.table_field.column_id);
                     // Safe to unwrap: ndv in FuseTable's ColumnStatistics is not None.
-                    maybe_col_stats.map(|col_stats| (idx, col_stats.ndv.unwrap()))
+                    maybe_col_stats.map(|col_stats| (idx, col_stats.ndv_value().unwrap()))
                 }
             })
             .collect::<Vec<_>>();

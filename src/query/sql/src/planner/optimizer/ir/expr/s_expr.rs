@@ -61,7 +61,7 @@ pub struct SExpr {
     rel_prop: Arc<OnceLock<Arc<RelationalProperty>>>,
 
     #[educe(Hash(ignore), PartialEq(ignore))]
-    pub(crate) stat_info: Arc<OnceLock<Arc<StatInfo>>>,
+    pub(crate) stat_info: Arc<OnceLock<StatInfo>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -74,7 +74,7 @@ impl SExpr {
         children: Vec<Arc<SExpr>>,
         original_group: Option<IndexType>,
         rel_prop: Option<Arc<RelationalProperty>>,
-        stat_info: Option<Arc<StatInfo>>,
+        stat_info: Option<StatInfo>,
     ) -> Self {
         SExpr {
             plan: plan.into(),
@@ -380,6 +380,11 @@ impl SExpr {
         })?;
 
         Ok(rel_prop.clone())
+    }
+
+    pub fn derive_cardinality(&self) -> Result<&StatInfo> {
+        self.stat_info
+            .get_or_try_init(|| self.plan.derive_stats(&RelExpr::SExpr { expr: self }))
     }
 
     pub fn get_data_distribution(&self) -> Result<Option<Exchange>> {

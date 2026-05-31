@@ -148,7 +148,7 @@ impl StatEstimate {
 }
 
 #[must_use]
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NdvEstimate {
     pub expected: Option<f64>,
     pub upper: f64,

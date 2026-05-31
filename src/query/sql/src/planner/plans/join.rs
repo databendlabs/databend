@@ -466,9 +466,9 @@ impl Join {
 
     pub fn derive_join_stats(
         &self,
-        left_stat_info: Arc<StatInfo>,
-        right_stat_info: Arc<StatInfo>,
-    ) -> Result<Arc<StatInfo>> {
+        left_stat_info: &StatInfo,
+        right_stat_info: &StatInfo,
+    ) -> Result<StatInfo> {
         let (left_cardinality, mut left_statistics) = (
             left_stat_info.cardinality,
             left_stat_info.statistics.clone(),
@@ -510,6 +510,8 @@ impl Join {
         let inner_join_cardinality = join_estimation.join_card();
         let cardinality =
             self.join_cardinality(left_cardinality, right_cardinality, inner_join_cardinality);
+        let mut cluster_keys = left_statistics.cluster_keys.clone();
+        cluster_keys.extend(right_statistics.cluster_keys.clone());
         if let Some(columns) = join_estimation.updated_columns() {
             match self.join_type {
                 JoinType::LeftSemi => {
@@ -567,13 +569,14 @@ impl Join {
                 })
                 .collect()
         };
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                cluster_keys,
             },
-        }))
+        })
     }
 
     pub fn replace_column(&mut self, old: Symbol, new: Symbol) -> Result<()> {
@@ -717,7 +720,7 @@ impl Operator for Join {
         }
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         let stat_info = self.derive_join_stats(left_stat_info, right_stat_info)?;
@@ -1008,6 +1011,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1018,6 +1022,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1056,6 +1061,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1066,6 +1072,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 2.3333333333333335, true);
         let condition = JoinEquiCondition::new(
@@ -1104,6 +1111,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1114,6 +1122,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1152,6 +1161,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1162,6 +1172,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1190,7 +1201,7 @@ mod tests {
 
     #[test]
     fn test_left_join_stat_excludes_join_key_nulls_from_inner_cardinality() -> Result<()> {
-        let left_stat_info = Arc::new(StatInfo {
+        let left_stat_info = StatInfo {
             cardinality: 4.0,
             statistics: Statistics {
                 precise_cardinality: None,
@@ -1201,9 +1212,10 @@ mod tests {
                     null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
+                cluster_keys: Default::default(),
             },
-        });
-        let right_stat_info = Arc::new(StatInfo {
+        };
+        let right_stat_info = StatInfo {
             cardinality: 4.0,
             statistics: Statistics {
                 precise_cardinality: None,
@@ -1214,8 +1226,9 @@ mod tests {
                     null_count: StatCount::exact(1),
                     histogram: None,
                 })]),
+                cluster_keys: Default::default(),
             },
-        });
+        };
         let join = Join {
             equi_conditions: vec![JoinEquiCondition::new(
                 column(0, DataType::Number(NumberDataType::Int32)),
@@ -1226,7 +1239,7 @@ mod tests {
             ..Default::default()
         };
 
-        let stat_info = join.derive_join_stats(left_stat_info, right_stat_info)?;
+        let stat_info = join.derive_join_stats(&left_stat_info, &right_stat_info)?;
 
         assert_eq!(stat_info.cardinality, 4.0);
         assert_eq!(
@@ -1247,6 +1260,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1257,6 +1271,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1298,6 +1313,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let right_statistics = Statistics {
             precise_cardinality: None,
@@ -1308,6 +1324,7 @@ mod tests {
                 null_count: StatCount::exact(1),
                 histogram: None,
             })]),
+            cluster_keys: Default::default(),
         };
         let estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(

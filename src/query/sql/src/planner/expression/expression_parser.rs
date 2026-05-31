@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databend_common_ast::ast::Expr as AExpr;
@@ -25,6 +26,7 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::ColumnId;
+use databend_common_expression::ColumnIndex;
 use databend_common_expression::Constant;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Expr;
@@ -454,9 +456,39 @@ pub fn analyze_cluster_keys(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<(String, Vec<Expr<Symbol>>)> {
+) -> Result<(String, Vec<Expr<FieldIndex>>)> {
+    analyze_cluster_keys_impl(
+        ctx,
+        table_meta,
+        sql,
+        |_, column| Ok(column.as_field_index()),
+    )
+}
+
+pub fn analyze_cluster_key_order(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+    column_id_to_symbol: &HashMap<ColumnId, Symbol>,
+) -> Result<Vec<Expr<Symbol>>> {
+    let (_, exprs) = analyze_cluster_keys_impl(ctx, table_meta, sql, |column_id, _| {
+        column_id_to_symbol
+            .get(&column_id)
+            .copied()
+            .ok_or_else(|| ErrorCode::Internal("Cluster key column should exist in table metadata"))
+    })?;
+    Ok(exprs)
+}
+
+fn analyze_cluster_keys_impl<Index: ColumnIndex + Copy>(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+    mut project_column: impl FnMut(ColumnId, Symbol) -> Result<Index>,
+) -> Result<(String, Vec<Expr<Index>>)> {
     let ast_exprs = parse_cluster_key_exprs(sql)?;
     let (mut bind_context, metadata) = bind_table(table_meta)?;
+    let metadata_ref = metadata.clone();
     let name_resolution_ctx = NameResolutionContext::try_from(ctx.get_settings().as_ref())?;
     let mut type_checker = TypeChecker::try_create(
         &mut bind_context,
@@ -475,16 +507,33 @@ pub fn analyze_cluster_keys(
         sql_dialect: settings.get_sql_dialect()?,
     };
     let mut exprs = Vec::with_capacity(ast_exprs.len());
-    let mut cluster_keys = Vec::with_capacity(exprs.len());
+    let mut cluster_keys = Vec::with_capacity(ast_exprs.len());
     for ast in ast_exprs {
         let (scalar, _) = *type_checker.resolve(&ast)?;
-        if scalar.used_columns().len() != 1 || !scalar.evaluable() {
+        let used_columns = scalar.used_columns();
+        if used_columns.len() != 1 || !scalar.evaluable() {
             return Err(ErrorCode::InvalidClusterKeys(format!(
                 "Cluster by expression `{:#}` is invalid",
                 ast
             )));
         }
 
+        let column = *used_columns
+            .iter()
+            .next()
+            .expect("cluster key should use one column");
+        let column_id = {
+            let metadata = metadata_ref.read();
+            let ColumnEntry::BaseTableColumn(BaseTableColumn { column_id, .. }) =
+                metadata.column(column)
+            else {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Cluster by expression `{:#}` is invalid",
+                    ast
+                )));
+            };
+            *column_id
+        };
         let expr = scalar.as_symbol_expr()?;
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             return Err(ErrorCode::InvalidClusterKeys(format!(
@@ -501,6 +550,8 @@ pub fn analyze_cluster_keys(
             )));
         }
 
+        let target_column = project_column(column_id, column)?;
+        let expr = expr.project_column_ref(|_| Ok(target_column))?;
         exprs.push(expr);
 
         let mut cluster_by = ast.clone();

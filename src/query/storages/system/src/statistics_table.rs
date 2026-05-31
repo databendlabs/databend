@@ -222,7 +222,7 @@ impl StatisticsTable {
                         column_name: field.name().clone(),
                         stats_row_count,
                         actual_row_count,
-                        distinct_count: column_statistics.and_then(|v| v.ndv),
+                        distinct_count: column_statistics.and_then(|v| v.ndv_value()),
                         null_count: column_statistics.map(|v| v.null_count),
                         min: column_statistics
                             .and_then(|s| s.min.clone())
@@ -250,7 +250,7 @@ impl StatisticsTable {
                                 column_name,
                                 stats_row_count,
                                 actual_row_count,
-                                distinct_count: column_statistics.ndv,
+                                distinct_count: column_statistics.ndv_value(),
                                 null_count: Some(column_statistics.null_count),
                                 min: column_statistics
                                     .min

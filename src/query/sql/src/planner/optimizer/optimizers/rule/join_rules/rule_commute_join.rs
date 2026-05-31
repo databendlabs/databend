@@ -17,7 +17,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -68,8 +67,8 @@ impl Rule for RuleCommuteJoin {
             return Ok(());
         }
 
-        let left_child = s_expr.child(0)?;
-        let right_child = s_expr.child(1)?;
+        let left_child = s_expr.left_child();
+        let right_child = s_expr.right_child();
 
         if join.join_type == JoinType::Cross
             && (contains_recursive_cte(left_child) || contains_recursive_cte(right_child))
@@ -77,10 +76,8 @@ impl Rule for RuleCommuteJoin {
             return Ok(());
         }
 
-        let left_rel_expr = RelExpr::with_s_expr(left_child);
-        let right_rel_expr = RelExpr::with_s_expr(right_child);
-        let left_card = left_rel_expr.derive_cardinality()?.cardinality;
-        let right_card = right_rel_expr.derive_cardinality()?.cardinality;
+        let left_card = left_child.derive_cardinality()?.cardinality;
+        let right_card = right_child.derive_cardinality()?.cardinality;
 
         let need_commute = if left_card < right_card {
             matches!(

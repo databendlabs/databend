@@ -18,7 +18,6 @@ use std::sync::Arc;
 use databend_common_exception::Result;
 
 use crate::optimizer::Optimizer;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::StatInfo;
 use crate::optimizer::ir::Statistics;
@@ -26,7 +25,7 @@ use crate::plans::MaterializedCTERef;
 use crate::plans::RelOperator;
 
 pub struct SyncMaterializedCTERefOptimizer {
-    cte_stats: HashMap<String, Arc<StatInfo>>,
+    cte_stats: HashMap<String, StatInfo>,
 }
 
 impl Default for SyncMaterializedCTERefOptimizer {
@@ -52,8 +51,9 @@ impl SyncMaterializedCTERefOptimizer {
     #[recursive::recursive]
     fn collect_cte_stats(&mut self, s_expr: &SExpr) -> Result<()> {
         if let RelOperator::MaterializedCTE(cte) = s_expr.plan() {
-            let stat_info = RelExpr::with_s_expr(s_expr.child(0)?).derive_cardinality()?;
-            self.cte_stats.insert(cte.cte_name.clone(), stat_info);
+            let stat_info = s_expr.child(0)?.derive_cardinality()?;
+            self.cte_stats
+                .insert(cte.cte_name.clone(), stat_info.clone());
         }
 
         for child in s_expr.children() {
@@ -63,10 +63,7 @@ impl SyncMaterializedCTERefOptimizer {
         Ok(())
     }
 
-    fn remap_stat_info(
-        cte_ref: &MaterializedCTERef,
-        producer_stat_info: &Arc<StatInfo>,
-    ) -> Arc<StatInfo> {
+    fn remap_stat_info(cte_ref: &MaterializedCTERef, producer_stat_info: &StatInfo) -> StatInfo {
         let producer_to_ref = cte_ref
             .column_mapping
             .iter()
@@ -83,13 +80,14 @@ impl SyncMaterializedCTERefOptimizer {
             })
             .collect();
 
-        Arc::new(StatInfo {
+        StatInfo {
             cardinality: producer_stat_info.cardinality,
             statistics: Statistics {
                 precise_cardinality: producer_stat_info.statistics.precise_cardinality,
                 column_stats,
+                cluster_keys: Default::default(),
             },
-        })
+        }
     }
 
     #[recursive::recursive]

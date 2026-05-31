@@ -99,14 +99,15 @@ impl Operator for MutationSource {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+        Ok(StatInfo {
             cardinality: 0.0,
             statistics: OpStatistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
+                cluster_keys: Default::default(),
             },
-        }))
+        })
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node

@@ -90,13 +90,14 @@ impl Operator for ExpressionScan {
         }))
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+        Ok(StatInfo {
             cardinality: self.values.len() as f64,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
+                cluster_keys: Default::default(),
             },
-        }))
+        })
     }
 }

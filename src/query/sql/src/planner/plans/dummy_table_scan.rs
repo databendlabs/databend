@@ -137,14 +137,15 @@ impl Operator for DummyTableScan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+        Ok(StatInfo {
             cardinality: 1.0,
             statistics: Statistics {
                 precise_cardinality: Some(1),
                 column_stats: Default::default(),
+                cluster_keys: Default::default(),
             },
-        }))
+        })
     }
 
     fn compute_required_prop_child(

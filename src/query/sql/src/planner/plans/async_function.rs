@@ -91,8 +91,8 @@ impl Operator for AsyncFunction {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        rel_expr.derive_cardinality_child(0).cloned()
     }
 
     fn compute_required_prop_children(

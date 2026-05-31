@@ -103,7 +103,7 @@ impl Memo {
             _ => {
                 let rel_expr = RelExpr::with_s_expr(&s_expr);
                 let relational_prop = rel_expr.derive_relational_prop()?;
-                let stat_info = rel_expr.derive_cardinality()?;
+                let stat_info = Arc::new(s_expr.derive_cardinality()?.clone());
                 self.add_group(relational_prop, stat_info)
             }
         };

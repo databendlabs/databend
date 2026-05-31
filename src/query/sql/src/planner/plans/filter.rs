@@ -85,7 +85,7 @@ impl Operator for Filter {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         // Derive cardinality
         let input_cardinality = stat_info
@@ -102,12 +102,13 @@ impl Operator for Filter {
         } else {
             sb.into_column_stats()
         };
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                cluster_keys: stat_info.statistics.cluster_keys.clone(),
             },
-        }))
+        })
     }
 }

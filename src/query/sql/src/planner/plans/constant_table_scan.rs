@@ -160,7 +160,7 @@ impl Operator for ConstantTableScan {
         })
     }
 
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
         let mut column_stats: ColumnStatSet = Default::default();
         for (index, value) in self.columns.iter().zip(self.values.iter()) {
             let (mins, _) = eval_aggr(
@@ -230,13 +230,14 @@ impl Operator for ConstantTableScan {
             };
             column_stats.insert(*index, column_stat);
         }
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality: self.num_rows as f64,
             statistics: Statistics {
                 precise_cardinality: Some(self.num_rows as u64),
                 column_stats,
+                cluster_keys: Default::default(),
             },
-        }))
+        })
     }
 
     fn compute_required_prop_child(

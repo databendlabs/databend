@@ -79,8 +79,8 @@ pub trait Operator {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        Ok(Arc::new(StatInfo::default()))
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+        Ok(StatInfo::default())
     }
 
     /// Compute required property for child with index `child_index`
@@ -218,7 +218,7 @@ impl Operator for RelOperator {
         match_rel_op!(self, derive_physical_prop(rel_expr))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         match_rel_op!(self, derive_stats(rel_expr))
     }
 

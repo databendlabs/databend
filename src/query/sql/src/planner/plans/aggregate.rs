@@ -148,16 +148,17 @@ impl Aggregate {
         Ok(col_set)
     }
 
-    pub fn derive_agg_stats(&self, stat_info: Arc<StatInfo>) -> Result<Arc<StatInfo>> {
+    pub fn derive_agg_stats(&self, stat_info: &StatInfo) -> Result<StatInfo> {
         let column_stats = &stat_info.statistics.column_stats;
         if self.group_items.is_empty() {
-            return Ok(Arc::new(StatInfo {
+            return Ok(StatInfo {
                 cardinality: 1.0,
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
+                    cluster_keys: Default::default(),
                 },
-            }));
+            });
         }
 
         if self
@@ -168,13 +169,14 @@ impl Aggregate {
                 None => true,
             })
         {
-            return Ok(Arc::new(StatInfo {
+            return Ok(StatInfo {
                 cardinality: (stat_info.cardinality * DEFAULT_AGGREGATE_RATIO).max(1.0),
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
+                    cluster_keys: Default::default(),
                 },
-            }));
+            });
         }
 
         let groups_ndv = self
@@ -222,13 +224,14 @@ impl Aggregate {
             }
         }
 
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
+                cluster_keys: Default::default(),
             },
-        }))
+        })
     }
 }
 
@@ -352,9 +355,9 @@ impl Operator for Aggregate {
         }))
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         if self.mode == AggregateMode::Final {
-            return rel_expr.derive_cardinality_child(0);
+            return rel_expr.derive_cardinality_child(0).cloned();
         }
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         self.derive_agg_stats(stat_info)

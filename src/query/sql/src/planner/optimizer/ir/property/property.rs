@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_expression::Expr;
+
 use crate::ColumnSet;
+use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -45,6 +50,8 @@ pub struct Statistics {
     pub precise_cardinality: Option<u64>,
     /// Statistics of columns, column index -> column stat
     pub column_stats: ColumnStatSet,
+    /// Table index -> cluster-key expressions in that table's cluster-key order.
+    pub cluster_keys: BTreeMap<IndexType, Vec<Expr<Symbol>>>,
 }
 
 #[derive(Default, Clone, Debug)]

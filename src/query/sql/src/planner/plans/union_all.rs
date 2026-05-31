@@ -59,9 +59,9 @@ impl UnionAll {
 
     pub fn derive_union_stats(
         &self,
-        left_stat_info: Arc<StatInfo>,
-        right_stat_info: Arc<StatInfo>,
-    ) -> Result<Arc<StatInfo>> {
+        left_stat_info: &StatInfo,
+        right_stat_info: &StatInfo,
+    ) -> Result<StatInfo> {
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
 
         let precise_cardinality =
@@ -75,13 +75,14 @@ impl UnionAll {
                         .map(|right_cardinality| left_cardinality + right_cardinality)
                 });
 
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
+                cluster_keys: Default::default(),
             },
-        }))
+        })
     }
 }
 
@@ -138,7 +139,7 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         self.derive_union_stats(left_stat_info, right_stat_info)

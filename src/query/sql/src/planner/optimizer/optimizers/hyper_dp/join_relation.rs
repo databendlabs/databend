@@ -21,7 +21,6 @@ use databend_common_exception::Result;
 
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 
 pub struct JoinRelation {
@@ -44,8 +43,7 @@ impl JoinRelation {
         _ctx: Arc<dyn TableContext>,
         _metadata: MetadataRef,
     ) -> Result<f64> {
-        let rel_expr = RelExpr::with_s_expr(&self.s_expr);
-        let card = rel_expr.derive_cardinality()?.cardinality;
+        let card = self.s_expr.derive_cardinality()?.cardinality;
         Ok(card)
     }
 }

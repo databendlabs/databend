@@ -38,7 +38,7 @@ pub struct MaterializedCTERef {
     pub output_columns: Vec<Symbol>,
     pub def: SExpr,
     pub column_mapping: HashMap<Symbol, Symbol>,
-    pub stat_info: Option<Arc<StatInfo>>,
+    pub stat_info: Option<StatInfo>,
 }
 
 impl PartialEq for MaterializedCTERef {
@@ -69,11 +69,11 @@ impl Operator for MaterializedCTERef {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
         if let Some(stat_info) = &self.stat_info {
             return Ok(stat_info.clone());
         }
-        RelExpr::with_s_expr(&self.def).derive_cardinality()
+        self.def.derive_cardinality().cloned()
     }
 
     /// Derive relational property

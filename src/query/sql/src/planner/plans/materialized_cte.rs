@@ -65,8 +65,8 @@ impl Operator for MaterializedCTE {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(0)
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        rel_expr.derive_cardinality_child(0).cloned()
     }
 
     /// Compute required property for child with index `child_index`

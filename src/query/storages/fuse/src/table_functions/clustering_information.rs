@@ -180,10 +180,6 @@ impl<'a> ClusteringInformationImpl<'a> {
             (a, Some(b)) => {
                 let (cluster_key, exprs) =
                     analyze_cluster_keys(self.ctx.clone(), Arc::new(self.table.clone()), b)?;
-                let exprs = exprs
-                    .into_iter()
-                    .map(|expr| expr.project_column_ref(|index| Ok(index.as_usize())))
-                    .collect::<Result<Vec<_>>>()?;
                 if a.is_some() && a.unwrap() == cluster_key {
                     default_cluster_key_id = self.table.cluster_key_id();
                 }

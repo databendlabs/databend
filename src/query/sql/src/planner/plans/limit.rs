@@ -36,7 +36,7 @@ pub struct Limit {
 }
 
 impl Limit {
-    pub fn derive_limit_stats(&self, stat_info: Arc<StatInfo>) -> Result<Arc<StatInfo>> {
+    pub fn derive_limit_stats(&self, stat_info: &StatInfo) -> Result<StatInfo> {
         let cardinality = match self.limit {
             Some(limit) if (limit as f64) < stat_info.cardinality => limit as f64,
             _ => stat_info.cardinality,
@@ -48,13 +48,14 @@ impl Limit {
             _ => None,
         };
 
-        Ok(Arc::new(StatInfo {
+        Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
+                cluster_keys: stat_info.statistics.cluster_keys.clone(),
             },
-        }))
+        })
     }
 
     pub fn without_lazy_columns(&self) -> Limit {
@@ -99,7 +100,7 @@ impl Operator for Limit {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         self.derive_limit_stats(stat_info)
     }

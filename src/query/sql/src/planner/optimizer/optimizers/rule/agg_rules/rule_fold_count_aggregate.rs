@@ -20,7 +20,6 @@ use databend_common_expression::types::NumberScalar;
 use databend_common_statistics::StatCount;
 
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::rule::Rule;
 use crate::optimizer::optimizers::rule::RuleID;
@@ -66,8 +65,7 @@ impl Rule for RuleFoldCountAggregate {
             return Ok(());
         }
 
-        let rel_expr = RelExpr::with_s_expr(s_expr);
-        let input_stat_info = rel_expr.derive_cardinality_child(0)?;
+        let input_stat_info = s_expr.unary_child().derive_cardinality()?;
 
         let is_simple_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {

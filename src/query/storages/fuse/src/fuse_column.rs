@@ -18,6 +18,7 @@ use databend_common_catalog::statistics::BasicColumnStatistics;
 use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_expression::ColumnId;
 use databend_common_statistics::Histogram;
+use databend_common_statistics::NdvEstimate;
 use databend_storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 
 /// A column statistics provider for fuse table.
@@ -41,14 +42,18 @@ impl FuseTableColumnStatisticsProvider {
         let column_stats = column_stats
             .into_iter()
             .map(|(column_id, stat)| {
-                let ndv = distinct_map
-                    .and_then(|map| map.get(&column_id).cloned())
-                    .or(stat.distinct_of_values)
-                    .unwrap_or(row_count);
+                let ndv =
+                    if let Some(ndv) = distinct_map.and_then(|map| map.get(&column_id).cloned()) {
+                        Some(NdvEstimate::exact(ndv as f64))
+                    } else if let Some(ndv) = stat.distinct_of_values {
+                        Some(NdvEstimate::upper_bound(ndv as f64))
+                    } else {
+                        Some(NdvEstimate::upper_bound(row_count as f64))
+                    };
                 let stat = BasicColumnStatistics {
                     min: stat.min.to_datum(),
                     max: stat.max.to_datum(),
-                    ndv: Some(ndv),
+                    ndv,
                     null_count: stat.null_count,
                     in_memory_size: stat.in_memory_size,
                 };

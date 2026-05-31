@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 
 use crate::IndexType;
 use crate::ScalarExpr;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::optimizers::hyper_dp::JoinRelation;
 use crate::plans::Join;
@@ -50,8 +49,7 @@ impl JoinNode {
             self.s_expr.as_ref().unwrap()
         };
 
-        let rel_expr = RelExpr::with_s_expr(s_expr);
-        let card = rel_expr.derive_cardinality()?.cardinality;
+        let card = s_expr.derive_cardinality()?.cardinality;
         self.cardinality = Some(card);
         Ok(card)
     }

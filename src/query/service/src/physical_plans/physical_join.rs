@@ -63,7 +63,7 @@ fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_rel_expr = RelExpr::with_s_expr(s_expr.left_child());
     let right_rel_expr = RelExpr::with_s_expr(s_expr.right_child());
-    let right_stat_info = right_rel_expr.derive_cardinality()?;
+    let right_stat_info = s_expr.right_child().derive_cardinality()?;
 
     if !join.equi_conditions.is_empty() {
         // Contain equi condition, use hash join

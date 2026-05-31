@@ -18,7 +18,6 @@ use databend_common_exception::Result;
 
 use crate::ScalarExpr;
 use crate::optimizer::ir::Matcher;
-use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::SExpr;
 use crate::optimizer::ir::Statistics;
 use crate::optimizer::optimizers::rule::Rule;
@@ -108,11 +107,11 @@ impl Rule for RuleFilterNulls {
             state.add_result(s_expr.clone());
             return Ok(());
         }
-        let mut left_child = s_expr.child(0)?.clone();
-        let mut right_child = s_expr.child(1)?.clone();
 
-        let left_stat = RelExpr::with_s_expr(&left_child).derive_cardinality()?;
-        let right_stat = RelExpr::with_s_expr(&right_child).derive_cardinality()?;
+        let left_stat = s_expr.left_child().derive_cardinality()?;
+        let right_stat = s_expr.right_child().derive_cardinality()?;
+        let mut left_child = s_expr.left_child().clone();
+        let mut right_child = s_expr.right_child().clone();
         let mut left_null_predicates = vec![];
         let mut right_null_predicates = vec![];
         for join_key in join.equi_conditions.iter() {

@@ -55,8 +55,8 @@ impl Operator for Sequence {
     }
 
     /// Derive statistics information
-    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
-        rel_expr.derive_cardinality_child(1)
+    fn derive_stats(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+        rel_expr.derive_cardinality_child(1).cloned()
     }
 
     /// Compute required property for child with index `child_index`
