@@ -7,7 +7,6 @@ set -e
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../../.." || exit
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
-QUERY_CONFIG_DIR=${QUERY_CONFIG_DIR:-scripts/ci/deploy/config}
 
 # Caveat: has to kill query first.
 # `query` tries to remove its liveness record from meta before shutting down.
@@ -54,7 +53,7 @@ sleep 1
 echo 'Start databend-query cluster(7 nodes)...'
 for node in 1 2 3 4 5 6 7; do
 	echo "Start databend-query node-${node}"
-	nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c "${QUERY_CONFIG_DIR}/databend-query-node-${node}.toml" --internal-enable-sandbox-tenant >./.databend/query-${node}.out 2>&1 &
+	nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-${node}.toml --internal-enable-sandbox-tenant >./.databend/query-${node}.out 2>&1 &
 
 	echo "Waiting on node-${node}..."
 	python3 scripts/ci/wait_tcp.py --timeout 30 --port $((9090 + node))
