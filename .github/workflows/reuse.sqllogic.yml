@@ -69,6 +69,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        if: matrix.tests.dirs != 'tpch' && matrix.tests.dirs != 'tpcds'
+        timeout-minutes: 20
+        with:
+          dirs: ${{ matrix.tests.dirs }}
+          handlers: ${{ matrix.handler }}
+          parallel: ${{ matrix.tests.parallel }}
+          storage-format: all
+      - uses: ./.github/actions/test_sqllogic_standalone_linux_minio
+        if: matrix.tests.dirs == 'tpch' || matrix.tests.dirs == 'tpcds'
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.tests.dirs }}

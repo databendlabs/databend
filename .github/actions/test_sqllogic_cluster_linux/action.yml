@@ -21,9 +21,17 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
+    - uses: ./.github/actions/setup_minio
+      if: contains(inputs.dirs, 'tpch') || contains(inputs.dirs, 'tpcds')
+
     - name: Run sqllogic Tests with Cluster mode
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
         TEST_PARALLEL: ${{ inputs.parallel }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-cluster.sh ${{ inputs.dirs }}
+
+    - name: Force failure for TPCH/TPCDS log collection
+      if: always() && (contains(inputs.dirs, 'tpch') || contains(inputs.dirs, 'tpcds'))
+      shell: bash
+      run: exit 1

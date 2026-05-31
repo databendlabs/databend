@@ -9,6 +9,10 @@ inputs:
     description: "logic test handlers, mysql,http,hybrid"
     required: true
     default: ""
+  parallel:
+    description: "logic test parallel"
+    required: false
+    default: ""
   storage-format:
     description: "storage format for databend query to test"
     required: true
@@ -28,6 +32,7 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests-minio.sh ${{ inputs.dirs }}
 
     - name: Run native sqllogic Tests with Standalone mode
@@ -35,4 +40,11 @@ runs:
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_PARALLEL: ${{ inputs.parallel }}
+        TEST_EXT_ARGS: '--skip_file tpcds_spill_1.test,tpcds_spill_2.test,tpcds_spill_3.test'
       run: bash ./scripts/ci/ci-run-sqllogic-tests-native-minio.sh ${{ inputs.dirs }}
+
+    - name: Force failure for TPCH/TPCDS log collection
+      if: always() && (contains(inputs.dirs, 'tpch') || contains(inputs.dirs, 'tpcds'))
+      shell: bash
+      run: exit 1

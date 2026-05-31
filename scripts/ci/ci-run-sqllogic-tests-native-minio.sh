@@ -4,19 +4,10 @@
 
 set -e
 
-echo "*************************************"
-echo "* Setting STORAGE_TYPE to S3.       *"
-echo "*                                   *"
-echo "* Please make sure that S3 backend  *"
-echo "* is ready, and configured properly.*"
-echo "*************************************"
-export STORAGE_TYPE=s3
-export STORAGE_S3_BUCKET=testbucket
-export STORAGE_S3_ROOT=admin
-export STORAGE_S3_ENDPOINT_URL=http://127.0.0.1:9900
-export STORAGE_S3_ACCESS_KEY_ID=minioadmin
-export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
-export STORAGE_ALLOW_INSECURE=true
+source ./scripts/ci/ci-minio-common.sh
+
+setup_minio_storage_env
+append_minio_spill_config ./scripts/ci/deploy/config/databend-query-node-native.toml
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
 ./scripts/ci/deploy/databend-query-standalone-native.sh
@@ -32,4 +23,4 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,cluster,explain,tpch,ee --enable_sandbox --parallel ${TEST_PARALLEL}
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,cluster,explain,tpch,ee --enable_sandbox --parallel ${TEST_PARALLEL} ${TEST_EXT_ARGS}
