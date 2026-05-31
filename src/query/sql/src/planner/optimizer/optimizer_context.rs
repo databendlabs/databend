@@ -26,6 +26,12 @@ use crate::MetadataRef;
 use crate::optimizer::optimizers::rule::RuleID;
 use crate::planner::QueryExecutor;
 
+pub struct OptimizerTraceEvent {
+    pub optimizer: String,
+    pub event: String,
+    pub detail: String,
+}
+
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct OptimizerContext {
@@ -49,6 +55,8 @@ pub struct OptimizerContext {
     // Optimizer state flags
     #[educe(Debug(ignore))]
     flags: RwLock<HashMap<String, bool>>,
+    #[educe(Debug(ignore))]
+    optimizer_trace: RwLock<Vec<OptimizerTraceEvent>>,
 
     // Enable optimizer tracing
     #[educe(Debug(ignore))]
@@ -85,6 +93,7 @@ impl OptimizerContext {
             skip_list_str,
             grouping_sets_to_union,
             flags: RwLock::new(HashMap::new()),
+            optimizer_trace: RwLock::new(Vec::new()),
             enable_trace: RwLock::new(false),
         })
     }
@@ -162,6 +171,27 @@ impl OptimizerContext {
     pub fn get_flag(&self, name: &str) -> bool {
         let flags = self.flags.read();
         *flags.get(name).unwrap_or(&false)
+    }
+
+    pub fn add_optimizer_trace(
+        &self,
+        optimizer: impl Into<String>,
+        event: impl Into<String>,
+        detail: impl Into<String>,
+    ) {
+        self.optimizer_trace.write().push(OptimizerTraceEvent {
+            optimizer: optimizer.into(),
+            event: event.into(),
+            detail: detail.into(),
+        });
+    }
+
+    pub fn clear_optimizer_trace(&self) {
+        self.optimizer_trace.write().clear();
+    }
+
+    pub fn take_optimizer_trace(&self) -> Vec<OptimizerTraceEvent> {
+        std::mem::take(&mut *self.optimizer_trace.write())
     }
 
     pub fn get_enable_trace(&self) -> bool {

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -20,10 +21,13 @@ use databend_common_base::runtime::spawn;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
+use databend_common_expression::Expr;
 
 use crate::IndexType;
+use crate::Metadata;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::Symbol;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -42,6 +46,8 @@ use crate::plans::RelOperator;
 
 const EMIT_THRESHOLD: usize = 10000;
 const RELATION_THRESHOLD: usize = 10;
+const CLUSTERED_PROBE_COLUMN_FACTOR: f64 = 0.85;
+const CLUSTERED_PROBE_EXPRESSION_FACTOR: f64 = 0.95;
 
 /// The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 /// See the paper for more details.
@@ -79,6 +85,120 @@ impl DPhpyOptimizer {
 
     fn metadata(&self) -> MetadataRef {
         self.opt_ctx.get_metadata()
+    }
+
+    fn clustered_probe_join_cost_factor(
+        &self,
+        probe_node: &JoinNode,
+        join_conditions: &[(ScalarExpr, ScalarExpr)],
+    ) -> Result<f64> {
+        let probe_join_keys = {
+            let mut probe_join_keys = Vec::with_capacity(join_conditions.len());
+            for (probe_key, _) in join_conditions {
+                probe_join_keys.push(probe_key.as_symbol_expr()?);
+            }
+            probe_join_keys
+        };
+        if probe_join_keys.is_empty() {
+            return Ok(1.0);
+        }
+
+        let probe_expr = probe_node
+            .s_expr
+            .clone()
+            .unwrap_or_else(|| probe_node.s_expr(&self.join_relations));
+        let stat_info = probe_expr.derive_cardinality()?;
+        Ok(
+            Self::best_cluster_key_candidate(&stat_info.statistics.cluster_keys, &probe_join_keys)
+                .unwrap_or(1.0),
+        )
+    }
+
+    fn best_cluster_key_candidate(
+        cluster_keys: &BTreeMap<IndexType, Vec<Expr<Symbol>>>,
+        probe_join_keys: &[Expr<Symbol>],
+    ) -> Option<f64> {
+        cluster_keys
+            .iter()
+            .filter_map(|(_, cluster_key)| {
+                let factor = Self::cluster_key_prefix_cost_factor(cluster_key, probe_join_keys);
+                (factor < 1.0).then_some(factor)
+            })
+            .min_by(|left, right| left.total_cmp(right))
+    }
+
+    fn cluster_key_prefix_cost_factor(
+        cluster_key: &[Expr<Symbol>],
+        probe_join_keys: &[Expr<Symbol>],
+    ) -> f64 {
+        let mut matched_join_keys = vec![false; probe_join_keys.len()];
+        let mut factor = 1.0;
+
+        for cluster_key_expr in cluster_key {
+            let mut matched = false;
+            for (idx, join_key_expr) in probe_join_keys.iter().enumerate() {
+                if matched_join_keys[idx] {
+                    continue;
+                }
+                if let Some(key_factor) =
+                    Self::cluster_key_match_factor(cluster_key_expr, join_key_expr)
+                {
+                    factor *= key_factor;
+                    matched_join_keys[idx] = true;
+                    matched = true;
+                    break;
+                }
+            }
+            if !matched {
+                return factor;
+            }
+        }
+
+        factor
+    }
+
+    fn cluster_key_match_factor(
+        cluster_key_expr: &Expr<Symbol>,
+        join_key_expr: &Expr<Symbol>,
+    ) -> Option<f64> {
+        match cluster_key_expr {
+            Expr::ColumnRef(cluster_key)
+                if let Expr::ColumnRef(join_key) = join_key_expr
+                    && cluster_key.id == join_key.id =>
+            {
+                Some(CLUSTERED_PROBE_COLUMN_FACTOR)
+            }
+            _ if cluster_key_expr == join_key_expr => Some(CLUSTERED_PROBE_EXPRESSION_FACTOR),
+            _ => None,
+        }
+    }
+
+    fn relation_set_label(&self, relation_set: &[IndexType]) -> String {
+        let metadata = self.metadata();
+        let metadata = metadata.read();
+        let mut names = Vec::new();
+        for relation_idx in relation_set {
+            if let Some(relation) = self.join_relations.get(*relation_idx) {
+                Self::collect_scan_table_names(&metadata, &relation.s_expr(), &mut names);
+            }
+        }
+        names.sort();
+        if names.is_empty() {
+            format!("{relation_set:?}")
+        } else {
+            format!("[{}]", names.join(", "))
+        }
+    }
+
+    fn collect_scan_table_names(metadata: &Metadata, expr: &SExpr, names: &mut Vec<String>) {
+        if let RelOperator::Scan(scan) = expr.plan() {
+            names.push(metadata.table(scan.table_index).name().to_string());
+            return;
+        }
+
+        for child in expr.children() {
+            Self::collect_scan_table_names(metadata, child, names);
+        }
     }
 
     /// Process children of a node in parallel
@@ -807,7 +927,7 @@ impl DPhpyOptimizer {
         right_cardinality: f64,
         left_join: JoinNode,
         right_join: JoinNode,
-    ) -> Result<JoinNode> {
+    ) -> Result<(JoinNode, f64)> {
         let parent_set = union(left, right);
 
         if !join_conditions.is_empty() {
@@ -826,13 +946,18 @@ impl DPhpyOptimizer {
             };
 
             // Calculate cost for inner join
-            let cost = join_node.cardinality(&self.join_relations).await?
+            let probe_factor = self.clustered_probe_join_cost_factor(
+                &join_node.children[0],
+                join_node.join_conditions.as_ref(),
+            )?;
+            let cardinality = join_node.cardinality(&self.join_relations).await?;
+            let cost = cardinality * probe_factor
                 + join_node.children[0].cost
                 + join_node.children[1].cost;
 
             let mut result = join_node;
             result.set_cost(cost);
-            Ok(result)
+            Ok((result, probe_factor))
         } else {
             // Create cross join
             let join_node = JoinNode {
@@ -849,7 +974,7 @@ impl DPhpyOptimizer {
                 s_expr: None,
             };
 
-            Ok(join_node)
+            Ok((join_node, 1.0))
         }
     }
 
@@ -878,7 +1003,7 @@ impl DPhpyOptimizer {
         }
 
         // Create join node
-        let join_node = self
+        let (join_node, probe_factor) = self
             .create_join_node(
                 left,
                 right,
@@ -904,7 +1029,28 @@ impl DPhpyOptimizer {
         };
 
         // Update `dp_table` if we found a better plan
-        if parent_node.is_none() || parent_node.unwrap().cost > join_node.cost {
+        let selected = parent_node.is_none() || parent_node.unwrap().cost > join_node.cost;
+        if self.opt_ctx.get_flag("explain_memo") {
+            let previous_best = parent_node
+                .map(|node| format!("{:.3}", node.cost))
+                .unwrap_or_else(|| "-".to_string());
+            self.opt_ctx.add_optimizer_trace(
+                self.name(),
+                "join_order_candidate",
+                format!(
+                    "parent: {}, left: {}, right: {}, cost: {:.3}, previous best: {}, probe factor: {:.3}, selected: {}",
+                    self.relation_set_label(&parent_set),
+                    self.relation_set_label(left),
+                    self.relation_set_label(right),
+                    join_node.cost,
+                    previous_best,
+                    probe_factor,
+                    selected,
+                ),
+            );
+        }
+
+        if selected {
             self.dp_table.insert(parent_set, join_node);
         }
 
