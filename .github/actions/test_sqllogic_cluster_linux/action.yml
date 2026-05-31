@@ -25,8 +25,6 @@ runs:
       with:
         artifacts: sqllogictests,meta,query
 
-    - uses: ./.github/actions/setup_minio
-
     - name: Run sqllogic Tests with Cluster mode
       shell: bash
       env:
