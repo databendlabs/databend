@@ -906,11 +906,13 @@ impl PrivilegeAccess {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
         column: &str,
     ) -> Result<Option<u64>> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog).await?;
-        let table_obj = catalog.get_table(&tenant, database, table).await?;
+        let table_obj = self
+            .ctx
+            .get_table_with_branch(catalog, database, table, branch)
+            .await?;
         let schema = table_obj.schema();
         if let Some((_, field)) = schema.column_with_name(column) {
             if let Some(policy) = table_obj
@@ -1021,10 +1023,12 @@ impl PrivilegeAccess {
         catalog: &str,
         database: &str,
         table: &str,
+        branch: Option<&str>,
     ) -> Result<Option<u64>> {
-        let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(catalog).await?;
-        let table_obj = catalog.get_table(&tenant, database, table).await?;
+        let table_obj = self
+            .ctx
+            .get_table_with_branch(catalog, database, table, branch)
+            .await?;
         Ok(table_obj
             .get_table_info()
             .meta
@@ -1592,6 +1596,7 @@ impl AccessChecker for PrivilegeAccess {
                                 &plan.catalog,
                                 &plan.database,
                                 &plan.table,
+                                plan.branch.as_deref(),
                                 column,
                             )
                             .await?
@@ -1639,6 +1644,7 @@ impl AccessChecker for PrivilegeAccess {
                         &plan.catalog,
                         &plan.database,
                         &plan.table,
+                        plan.branch.as_deref(),
                     )
                     .await?
                 {

@@ -1488,6 +1488,12 @@ impl Binder {
             }))),
             AlterTableAction::FlashbackTo { point } => {
                 let point = self.resolve_data_travel_point(bind_context, point)?;
+                if branch.is_some() && matches!(&point, NavigationPoint::TableTag(_)) {
+                    return Err(ErrorCode::Unimplemented(format!(
+                        "Unsupported TAG navigation on branch reference `{catalog}.{database}.{table}/{}`",
+                        branch.as_ref().unwrap()
+                    )));
+                }
                 Ok(Plan::RevertTable(Box::new(RevertTablePlan {
                     tenant,
                     catalog,

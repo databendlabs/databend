@@ -157,9 +157,6 @@ query error 1118.*Unclustered table 'test_branch_alter'.'t1'/'dev'
 SELECT cluster_key, type FROM clustering_information('test_branch_alter', 't1/dev')
 
 statement ok
-DROP TABLE IF EXISTS t_flashback
-
-statement ok
 CREATE TABLE t_flashback(a INT)
 
 statement ok
@@ -188,7 +185,10 @@ SELECT count() FROM t_flashback
 1
 
 statement ok
-DROP TABLE IF EXISTS t_constraint
+ALTER TABLE t_flashback CREATE TAG base_tag
+
+statement error 1002
+ALTER TABLE t_flashback/dev FLASHBACK TO (TAG => base_tag)
 
 statement ok
 CREATE TABLE t_constraint(a INT)
@@ -218,9 +218,6 @@ query I
 SELECT count() FROM t_constraint/dev
 ----
 2
-
-statement ok
-DROP TABLE IF EXISTS t_constraint_branch_schema
 
 statement ok
 CREATE TABLE t_constraint_branch_schema(a INT, c INT)
@@ -267,10 +264,13 @@ SELECT count() FROM t_constraint_branch_schema/dev
 3
 
 statement ok
-set enable_experimental_row_access_policy=1;
+SET ROLE account_admin
 
 statement ok
-DROP TABLE IF EXISTS t2
+SET SECONDARY ROLES ALL
+
+statement ok
+set enable_experimental_row_access_policy=1;
 
 statement ok
 CREATE TABLE t2(id INT, sensitive INT)
@@ -279,29 +279,41 @@ statement ok
 INSERT INTO t2 VALUES (1, 10)
 
 statement ok
-ALTER TABLE t2 CREATE BRANCH dev
+DROP MASKING POLICY IF EXISTS mask_branch_const
 
 statement ok
-DROP MASKING POLICY IF EXISTS mask_branch_const
+DROP MASKING POLICY IF EXISTS mask_branch_dev
 
 statement ok
 CREATE MASKING POLICY mask_branch_const AS (val INT) RETURNS INT -> -1
 
 statement ok
-ALTER TABLE t2/dev MODIFY COLUMN sensitive SET MASKING POLICY mask_branch_const
+CREATE MASKING POLICY mask_branch_dev AS (val INT) RETURNS INT -> -2
+
+statement ok
+ALTER TABLE t2 MODIFY COLUMN sensitive SET MASKING POLICY mask_branch_const
+
+statement ok
+ALTER TABLE t2 CREATE BRANCH dev
+
+statement ok
+ALTER TABLE t2/dev MODIFY COLUMN sensitive UNSET MASKING POLICY
+
+statement ok
+ALTER TABLE t2/dev MODIFY COLUMN sensitive SET MASKING POLICY mask_branch_dev
 
 query II
 SELECT * FROM t2/dev ORDER BY id
 ----
-1 -1
+1 -2
 
 query II
 SELECT * FROM t2 ORDER BY id
 ----
-1 10
+1 -1
 
 query TT
-select ref_entity_name, ref_entity_domain from policy_references(POLICY_NAME => 'mask_branch_const') where ref_database_name = 'test_branch_alter'
+select ref_entity_name, ref_entity_domain from policy_references(POLICY_NAME => 'mask_branch_dev') where ref_database_name = 'test_branch_alter'
 ----
 t2/dev BRANCH
 
@@ -309,7 +321,7 @@ statement ok
 ALTER TABLE t2/dev MODIFY COLUMN sensitive UNSET MASKING POLICY
 
 query TT
-select ref_entity_name, ref_entity_domain from policy_references(POLICY_NAME => 'mask_branch_const') where ref_database_name = 'test_branch_alter'
+select ref_entity_name, ref_entity_domain from policy_references(POLICY_NAME => 'mask_branch_dev') where ref_database_name = 'test_branch_alter'
 ----
 
 statement ok
@@ -321,14 +333,34 @@ SELECT * FROM t2/dev ORDER BY id
 1 10
 2 20
 
+query II
+SELECT * FROM t2 ORDER BY id
+----
+1 -1
+
+statement ok
+ALTER TABLE t2 MODIFY COLUMN sensitive UNSET MASKING POLICY
+
+statement ok
+DROP MASKING POLICY mask_branch_dev
+
 statement ok
 DROP MASKING POLICY mask_branch_const
+
+statement ok
+DROP ROW ACCESS POLICY IF EXISTS rap_branch_base
 
 statement ok
 DROP ROW ACCESS POLICY IF EXISTS rap_branch_filter
 
 statement ok
+CREATE ROW ACCESS POLICY rap_branch_base AS (sensitive INT) RETURNS BOOLEAN -> sensitive >= 0
+
+statement ok
 CREATE ROW ACCESS POLICY rap_branch_filter AS (sensitive INT) RETURNS BOOLEAN -> sensitive > 10
+
+statement ok
+ALTER TABLE t2 ADD ROW ACCESS POLICY rap_branch_base ON (sensitive)
 
 statement ok
 ALTER TABLE t2/dev ADD ROW ACCESS POLICY rap_branch_filter ON (sensitive)
@@ -354,6 +386,12 @@ SELECT * FROM t2/dev ORDER BY id
 
 statement ok
 DROP ROW ACCESS POLICY rap_branch_filter
+
+statement ok
+ALTER TABLE t2 DROP ALL ROW ACCESS POLICIES
+
+statement ok
+DROP ROW ACCESS POLICY rap_branch_base
 
 statement ok
 DROP DATABASE test_branch_alter
