@@ -65,6 +65,7 @@ use databend_common_storages_basic::view_table::VIEW_ENGINE;
 use databend_common_storages_stream::stream_table::STREAM_ENGINE;
 use databend_common_users::Object;
 use databend_common_users::UserApiProvider;
+use databend_storages_common_table_meta::table::OPT_KEY_BASE_TABLE_ID;
 
 use crate::meta_service_error;
 use crate::sessions::TableContext;
@@ -270,7 +271,9 @@ async fn collect_tag_references(
             let table = catalog
                 .get_table_with_branch(&tenant, &db_name, &table_name, branch_name.as_deref())
                 .await?;
-            let table_id = table.get_table_info().ident.table_id;
+            let table_info = table.get_table_info();
+            let table_id = table_info.ident.table_id;
+            let visible_table_id = table_info.get_option(OPT_KEY_BASE_TABLE_ID, table_id);
             // Check table visibility
             let visibility_checker = ctx.get_visibility_checker(false, Object::All).await?;
             if !visibility_checker.check_table_visibility(
@@ -278,7 +281,7 @@ async fn collect_tag_references(
                 &db_name,
                 &table_name,
                 db_id,
-                table_id,
+                visible_table_id,
             ) {
                 return Err(ErrorCode::PermissionDenied(format!(
                     "Permission denied: No privilege on table '{}' for user '{}'",

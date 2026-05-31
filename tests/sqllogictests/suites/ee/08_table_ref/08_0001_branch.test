@@ -66,6 +66,13 @@ SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1/dev', 'TABLE')
 ----
 branch_object_tag dev test_branch t1/dev TABLE
 
+query B
+SELECT tr.object_id = b.branch_id
+FROM tag_references('test_branch.t1/dev', 'TABLE') AS tr, system.branches AS b
+WHERE b.database = 'test_branch' AND b.table = 't1' AND b.name = 'dev'
+----
+1
+
 query TTTTT
 SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1', 'TABLE') WHERE tag_name = 'branch_object_tag'
 ----
