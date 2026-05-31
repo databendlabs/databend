@@ -18,6 +18,28 @@ export STORAGE_S3_ACCESS_KEY_ID=minioadmin
 export STORAGE_S3_SECRET_ACCESS_KEY=minioadmin
 export STORAGE_ALLOW_INSECURE=true
 
+export SPILL_SPILL_LOCAL_DISK_PATH=''
+export QUERY_CONFIG_DIR="./.databend/sqllogic-cluster-configs"
+rm -rf "${QUERY_CONFIG_DIR}"
+mkdir -p "${QUERY_CONFIG_DIR}"
+
+for node in 1 2 3 4 5 6 7; do
+	cp "scripts/ci/deploy/config/databend-query-node-${node}.toml" "${QUERY_CONFIG_DIR}/"
+	cat >>"${QUERY_CONFIG_DIR}/databend-query-node-${node}.toml" <<'EOF'
+
+[spill.storage]
+type = "s3"
+
+[spill.storage.s3]
+bucket = "spillbucket"
+root = "admin"
+endpoint_url = "http://127.0.0.1:9900"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+allow_insecure = true
+EOF
+done
+
 echo "Starting Cluster databend-query"
 ./scripts/ci/deploy/databend-query-cluster-7-nodes.sh
 
