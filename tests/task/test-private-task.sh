@@ -11,21 +11,24 @@ echo "Cleaning up previous runs"
 killall -9 databend-query || true
 killall -9 databend-meta || true
 rm -rf .databend
+mkdir -p ./.databend/
 
 echo "Starting Databend Query cluster with 2 nodes enable private task"
 
 for node in 1 2; do
-    CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+    SOURCE_CONFIG_FILE="./scripts/ci/deploy/config/databend-query-node-${node}.toml"
+    CONFIG_FILE="./.databend/databend-query-node-${node}-private-task.toml"
 
-    echo "Appending history table config to node-${node}"
-    cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
+    echo "Creating private task config for node-${node}"
+    cp "$SOURCE_CONFIG_FILE" "$CONFIG_FILE"
     sed -i '/^cloud_control_grpc_server_address/d' $CONFIG_FILE
+    printf '\n' >> "$CONFIG_FILE"
+    cat ./tests/task/private_task.toml >> "$CONFIG_FILE"
+    printf '\n' >> "$CONFIG_FILE"
 done
 
 # Start meta cluster (3 nodes - needed for HA)
 echo 'Start Meta service HA cluster(3 nodes)...'
-
-mkdir -p ./.databend/
 
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml >./.databend/meta-1.out 2>&1 &
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
@@ -44,13 +47,13 @@ sleep 1
 
 # Start only 2 query nodes
 echo 'Start databend-query node-1'
-nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-1-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
 
 echo 'Start databend-query node-2'
-env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-2-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
@@ -71,10 +74,35 @@ check_response_error() {
     fi
 }
 
+license_sql=$(head -n 1 scripts/test-bend-tests/setup.sql)
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"$license_sql\"}")
+check_response_error "$response"
+echo "Set enterprise license for private task tests"
+
+expected_task_history_schema='["name","id","owner","comment","schedule","warehouse","state","definition","condition_text","run_id","query_id","exception_code","exception_text","attempt_number","completed_time","scheduled_time","root_task_id","session_parameters"]'
+
+check_task_history_schema() {
+    local response="$1"
+    local actual_schema=$(echo "$response" | jq -c '[.schema[].name]')
+
+    if [ "$actual_schema" != "$expected_task_history_schema" ]; then
+        echo "❌ TASK_HISTORY schema mismatch"
+        echo "Expected: $expected_task_history_schema"
+        echo "Actual  : $actual_schema"
+        exit 1
+    fi
+}
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE t_script (c1 int)\"}")
 check_response_error "$response"
 create_script_table_query_id=$(echo $response | jq -r '.id')
 echo "Create Script Table Query ID: $create_script_table_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE DATABASE task_session_db\"}")
+check_response_error "$response"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TABLE task_session_db.session_target (c1 int)\"}")
+check_response_error "$response"
 
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK task_missing_wh WAREHOUSE = 'missing_wh' SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 state=$(echo "$response" | jq -r '.state')
@@ -110,6 +138,33 @@ if [ "$actual" = "$expected" ]; then
     echo "✅ Private task executes multiple statements"
 else
     echo "❌ Expected private task script block to execute all statements"
+    echo "Expected: $expected"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK db_session_task DATABASE = 'task_session_db' AS insert into session_target values(42)\"}")
+check_response_error "$response"
+create_db_session_task_query_id=$(echo $response | jq -r '.id')
+echo "Create DB Session Task Query ID: $create_db_session_task_query_id"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"EXECUTE TASK db_session_task\"}")
+check_response_error "$response"
+execute_db_session_task_query_id=$(echo $response | jq -r '.id')
+echo "Execute DB Session Task Query ID: $execute_db_session_task_query_id"
+
+sleep 5
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM task_session_db.session_target ORDER BY c1\"}")
+check_response_error "$response"
+
+actual=$(echo "$response" | jq -c '.data')
+expected='[["42"]]'
+
+if [ "$actual" = "$expected" ]; then
+    echo "✅ Private task applies DATABASE session parameter"
+else
+    echo "❌ Expected private task DATABASE session parameter to resolve unqualified table"
     echo "Expected: $expected"
     echo "Actual  : $actual"
     exit 1
@@ -234,13 +289,13 @@ fi
 killall -9 databend-query || true
 
 echo 'Start databend-query node-1'
-nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-1.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
+nohup env RUST_BACKTRACE=1 target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-1-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-1.out 2>&1 &
 
 echo "Waiting on node-1..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9091
 
 echo 'Start databend-query node-2'
-env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c scripts/ci/deploy/config/databend-query-node-2.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
+env "RUST_BACKTRACE=1" nohup target/${BUILD_PROFILE}/databend-query -c ./.databend/databend-query-node-2-private-task.toml --internal-enable-sandbox-tenant >./.databend/query-2.out 2>&1 &
 
 echo "Waiting on node-2..."
 python3 scripts/ci/wait_tcp.py --timeout 30 --port 9092
@@ -294,6 +349,37 @@ if [ "$state" != "Succeeded" ]; then
 fi
 actual=$(echo "$response" | jq -c '.data')
 echo "\n\nSELECT * FROM system.task_history: $actual"
+
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT * FROM TASK_HISTORY(TASK_NAME => 'db_session_task', RESULT_LIMIT => 1)\"}")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+state=$(echo "$response" | jq -r '.data[0][6]')
+definition=$(echo "$response" | jq -r '.data[0][7]')
+scheduled_time=$(echo "$response" | jq -r '.data[0][15]')
+session_parameters=$(echo "$response" | jq -c '.data[0][17]')
+if [ "$name" = "db_session_task" ] &&
+    [ "$state" = "SUCCEEDED" ] &&
+    [[ "$definition" == *"session_target"* ]] &&
+    [ -n "$scheduled_time" ] &&
+    [[ "$session_parameters" == *"task_session_db"* ]]; then
+    echo "✅ TASK_HISTORY table function matches cloud-style schema and content"
+else
+    echo "❌ Expected TASK_HISTORY table function to return cloud-style db_session_task history"
+    echo "Name: $name"
+    echo "State: $state"
+    echo "Definition: $definition"
+    echo "Scheduled Time: $scheduled_time"
+    echo "Session Parameters: $session_parameters"
+    echo "Actual  : $actual"
+    exit 1
+fi
 
 # Drop Task
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"DROP TASK my_task_1\"}")
