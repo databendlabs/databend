@@ -4263,7 +4263,6 @@ dependencies = [
  "hex",
  "itertools 0.13.0",
  "jaq-core",
- "jaq-json",
  "jaq-std",
  "jiff",
  "jsonb",
@@ -9857,12 +9856,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hifijson"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9958ab3ce3170c061a27679916bd9b969eceeb5e8b120438e6751d0987655c42"
-
-[[package]]
 name = "hive_metastore"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10165,7 +10158,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.9",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -10839,9 +10832,9 @@ dependencies = [
 
 [[package]]
 name = "jaq-core"
-version = "2.2.1"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77526a72eb79412c29fd141767a6549bbfcb1cb40e00556fe16532d5e878e098"
+checksum = "dca0f164c8e9c55fc5aefe60b371df735c719b09930dac185878f2f8c7ab6b68"
 dependencies = [
  "dyn-clone",
  "once_cell",
@@ -10849,32 +10842,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "jaq-json"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01dbdbd07b076e8403abac68ce7744d93e2ecd953bbc44bf77bf00e1e81172bc"
-dependencies = [
- "foldhash 0.1.5",
- "hifijson",
- "indexmap 2.14.0",
- "jaq-core",
- "jaq-std",
- "serde_json",
-]
-
-[[package]]
 name = "jaq-std"
-version = "2.1.2"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c264fe397c981705976c71f1bfe020382b9eda52ae950e57fe885e147bdd67d"
+checksum = "2a11bb307027b20b3dc7b212ad687e7e410cbc43933eec5d498672ab2bc60666"
 dependencies = [
  "aho-corasick",
  "base64 0.22.1",
- "chrono",
+ "bstr",
  "jaq-core",
+ "jiff",
  "libm",
  "log",
- "regex-lite",
+ "regex-bites",
  "urlencoding",
 ]
 
@@ -10975,13 +10955,14 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb98fb29636087c40ad0d1274d9a30c0c1e83e03ae93f6e7e89247b37fcc6953"
+source = "git+https://github.com/b41sh/jsonb.git?rev=afecc07a8a8ffb4adebd62495029986ff4808b8d#afecc07a8a8ffb4adebd62495029986ff4808b8d"
 dependencies = [
  "byteorder",
  "ethnum",
  "fast-float2",
  "itoa",
+ "jaq-core",
+ "jaq-std",
  "jiff",
  "nom 8.0.0",
  "num-traits",
@@ -14963,6 +14944,12 @@ dependencies = [
  "memchr",
  "regex-syntax 0.8.5",
 ]
+
+[[package]]
+name = "regex-bites"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b6a15a2fa0bfda9361941c45550896ae87b15cc6c8c939ea350079670332e211"
 
 [[package]]
 name = "regex-lite"
