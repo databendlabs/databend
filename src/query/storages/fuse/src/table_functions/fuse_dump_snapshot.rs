@@ -17,6 +17,7 @@ use std::sync::Arc;
 use databend_common_catalog::catalog_kind::CATALOG_DEFAULT;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_ref_arg;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -75,14 +76,14 @@ impl SimpleTableFunc for FuseDumpSnapshotsFunc {
         ctx: &Arc<dyn TableContext>,
         plan: &DataSourcePlan,
     ) -> Result<Option<DataBlock>> {
-        let tenant_id = ctx.get_tenant();
+        let (table_name, branch_name) =
+            parse_table_ref_arg(self.args.table_name.as_str(), ctx.get_settings().as_ref())?;
         let tbl = ctx
-            .get_catalog(CATALOG_DEFAULT)
-            .await?
-            .get_table(
-                &tenant_id,
+            .get_table_with_branch(
+                CATALOG_DEFAULT,
                 self.args.database_name.as_str(),
-                self.args.table_name.as_str(),
+                &table_name,
+                branch_name.as_deref(),
             )
             .await?;
 

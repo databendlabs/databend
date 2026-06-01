@@ -1,0 +1,96 @@
+## Copyright 2026 Databend Cloud
+##
+## Licensed under the Elastic License, Version 2.0 (the "License");
+## you may not use this file except in compliance with the License.
+## You may obtain a copy of the License at
+##
+##     https://www.elastic.co/licensing/elastic-license
+##
+## Unless required by applicable law or agreed to in writing, software
+## distributed under the License is distributed on an "AS IS" BASIS,
+## WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+## See the License for the specific language governing permissions and
+## limitations under the License.
+
+statement ok
+DROP DATABASE IF EXISTS test_table_ref_slash_identifier
+
+statement ok
+CREATE DATABASE test_table_ref_slash_identifier
+
+statement ok
+USE test_table_ref_slash_identifier
+
+statement ok
+CREATE TABLE `t/slash`(a INT NOT NULL)
+
+statement ok
+INSERT INTO `t/slash` VALUES (1)
+
+statement ok
+set enable_experimental_table_ref=1
+
+statement ok
+CREATE TABLE t(branch_col INT NOT NULL)
+
+statement ok
+ALTER TABLE t CREATE BRANCH slash
+
+statement ok
+set enable_experimental_table_ref=0
+
+query TTTTT
+SHOW FIELDS FROM `t/slash`
+----
+a INT NO NULL (empty)
+
+query T
+SELECT name FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't/slash' ORDER BY name
+----
+a
+
+query TTTTT
+SHOW FIELDS FROM t
+----
+branch_col INT NO NULL (empty)
+
+query T
+SELECT name FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch = '' ORDER BY name
+----
+branch_col
+
+query error 1002.*Table ref is an experimental feature
+SELECT name, branch FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch = 'slash' ORDER BY name
+
+query error 1002.*Table ref is an experimental feature
+SELECT name, branch FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch != '' ORDER BY name
+
+statement ok
+set enable_experimental_table_ref=1
+
+query TT
+SELECT name, branch FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch = 'slash' ORDER BY name
+----
+branch_col slash
+
+query I
+SELECT count() FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch != ''
+----
+1
+
+query I
+SELECT count() FROM system.columns WHERE database = 'test_table_ref_slash_identifier' AND `table` = 't' AND branch LIKE 'sla%'
+----
+1
+
+query TB
+SELECT name, ok FROM (
+    SELECT 'fuse_block' AS name, count() = 1 AS ok FROM fuse_block('test_table_ref_slash_identifier', '`t/slash`')
+    UNION ALL SELECT 'fuse_snapshot', max(row_count) = 1 FROM fuse_snapshot('test_table_ref_slash_identifier', '`t/slash`')
+) ORDER BY name
+----
+fuse_block 1
+fuse_snapshot 1
+
+statement ok
+DROP DATABASE test_table_ref_slash_identifier

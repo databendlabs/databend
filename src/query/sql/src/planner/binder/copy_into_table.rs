@@ -75,6 +75,7 @@ use crate::binder::Binder;
 use crate::binder::bind_query::MaxColumnPosition;
 use crate::binder::insert::STAGE_PLACEHOLDER;
 use crate::binder::location::parse_uri_location;
+use crate::binder::util::TableIdentifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -152,13 +153,23 @@ impl Binder {
         location: &FileLocation,
         is_transform: bool,
     ) -> Result<CopyIntoTablePlan> {
-        let (catalog_name, database_name, table_name) =
-            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_identifier = TableIdentifier::new_with_ref(self, &stmt.table, &None);
+        let (catalog_name, database_name, table_name, branch_name) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+            table_identifier.branch_name(),
+        );
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
         let catalog_info = catalog.info();
         let table = self
             .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
+            .get_table_with_branch(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                branch_name.as_deref(),
+            )
             .await?;
         let dedup_full_path = table
             .get_table_info()
@@ -226,6 +237,7 @@ impl Binder {
             catalog_info,
             database_name,
             table_name,
+            branch: branch_name,
             validation_mode,
             is_transform,
             dedup_full_path,
@@ -376,6 +388,7 @@ impl Binder {
         catalog_name: String,
         database_name: String,
         table_name: String,
+        branch_name: Option<String>,
         required_values_schema: TableSchemaRef,
         values_str: &str,
         write_mode: CopyIntoTableMode,
@@ -392,6 +405,7 @@ impl Binder {
             catalog_name,
             database_name,
             table_name,
+            branch_name,
             required_values_schema,
             expr_or_placeholders,
             stage_info,
@@ -410,6 +424,7 @@ impl Binder {
         catalog_name: String,
         database_name: String,
         table_name: String,
+        branch_name: Option<String>,
         required_values_schema: TableSchemaRef,
         expr_or_placeholders: Option<Vec<Expr>>,
         stage_info: StageInfo,
@@ -446,6 +461,7 @@ impl Binder {
             catalog_info,
             database_name,
             table_name,
+            branch: branch_name,
             no_file_to_copy: false,
             from_attachment: true,
             required_source_schema: Arc::new(DataSchema::from(&required_source_schema)),

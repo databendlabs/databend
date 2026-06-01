@@ -74,7 +74,7 @@ impl Walk for CopyIntoTableStmt {
                 }
             }
         }
-        try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
+        try_walk!(self.table.walk(visitor));
         if let Some(dst_columns) = &self.dst_columns {
             for ident in dst_columns {
                 try_walk!(ident.walk(visitor));
@@ -138,7 +138,7 @@ impl WalkMut for CopyIntoTableStmt {
                 }
             }
         }
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
+        try_walk!(self.table.walk_mut(visitor));
         if let Some(dst_columns) = &mut self.dst_columns {
             for ident in dst_columns {
                 try_walk!(ident.walk_mut(visitor));
@@ -164,12 +164,12 @@ impl Walk for CopyIntoLocationStmt {
         }
         match &self.src {
             CopyIntoLocationSource::Query(query) => try_walk!(query.walk(visitor)),
-            CopyIntoLocationSource::Table {
-                catalog,
-                database,
-                table,
-                ..
-            } => try_walk!((catalog, database, table).walk(visitor)),
+            CopyIntoLocationSource::Table(source) => {
+                try_walk!(source.catalog.walk(visitor));
+                try_walk!(source.database.walk(visitor));
+                try_walk!(source.table.walk(visitor));
+                try_walk!(source.branch.walk(visitor));
+            }
         }
         if let Some(partition_by) = &self.partition_by {
             try_walk!(partition_by.walk(visitor));
@@ -191,12 +191,12 @@ impl WalkMut for CopyIntoLocationStmt {
         }
         match &mut self.src {
             CopyIntoLocationSource::Query(query) => try_walk!(query.walk_mut(visitor)),
-            CopyIntoLocationSource::Table {
-                catalog,
-                database,
-                table,
-                ..
-            } => try_walk!((catalog, database, table).walk_mut(visitor)),
+            CopyIntoLocationSource::Table(source) => {
+                try_walk!(source.catalog.walk_mut(visitor));
+                try_walk!(source.database.walk_mut(visitor));
+                try_walk!(source.table.walk_mut(visitor));
+                try_walk!(source.branch.walk_mut(visitor));
+            }
         }
         if let Some(partition_by) = &mut self.partition_by {
             try_walk!(partition_by.walk_mut(visitor));
@@ -253,7 +253,7 @@ impl Walk for MergeIntoStmt {
         if let Some(hint) = &self.hints {
             try_walk!(hint.walk(visitor));
         }
-        try_walk!((&self.catalog, &self.database, &self.table_ident).walk(visitor));
+        try_walk!(self.table.walk(visitor));
         try_walk!(self.source.walk(visitor));
         if let Some(alias) = &self.target_alias {
             try_walk!(alias.walk(visitor));
@@ -298,7 +298,7 @@ impl WalkMut for MergeIntoStmt {
         if let Some(hint) = &mut self.hints {
             try_walk!(hint.walk_mut(visitor));
         }
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table_ident).walk_mut(visitor));
+        try_walk!(self.table.walk_mut(visitor));
         try_walk!(self.source.walk_mut(visitor));
         if let Some(alias) = &mut self.target_alias {
             try_walk!(alias.walk_mut(visitor));

@@ -21,6 +21,7 @@ use databend_common_ast::ast::RefreshVirtualColumnStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
 use databend_common_ast::ast::VacuumVirtualColumnStmt;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
@@ -28,6 +29,8 @@ use log::debug;
 use crate::BindContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
+use crate::binder::check_table_ref_access;
+use crate::binder::util::TableIdentifier;
 use crate::normalize_identifier;
 use crate::plans::Plan;
 use crate::plans::RefreshSelection;
@@ -45,13 +48,13 @@ impl Binder {
             catalog,
             database,
             table,
+            branch,
             selection,
             limit,
             overwrite,
         } = stmt;
 
-        let (catalog, database, table) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new(self, catalog, database, table, branch, &None);
 
         let parsed_selection = if let Some(selection) = selection {
             Some(self.parse_refresh_virtual_column_selection(selection)?)
@@ -61,9 +64,10 @@ impl Binder {
 
         Ok(Plan::RefreshVirtualColumn(Box::new(
             RefreshVirtualColumnPlan {
-                catalog,
-                database,
-                table,
+                catalog: table_identifier.catalog_name(),
+                database: table_identifier.database_name(),
+                table: table_identifier.table_name(),
+                branch: table_identifier.branch_name(),
                 limit: *limit,
                 overwrite: *overwrite,
                 selection: parsed_selection,
@@ -81,6 +85,7 @@ impl Binder {
             catalog,
             database,
             table,
+            branch,
             limit,
         } = stmt;
 
@@ -113,16 +118,27 @@ impl Binder {
             .with_column("virtual_column_name")
             .with_column("virtual_column_type");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!(
+            "database = {}",
+            QuotedString(database.as_str(), '\'')
+        ));
         if let Some(table) = table {
             let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("table = '{table}'"));
+            select_builder.with_filter(format!("table = {}", QuotedString(table.as_str(), '\'')));
+        }
+        if let Some(branch) = branch {
+            check_table_ref_access(self.ctx.as_ref())?;
+            let branch = normalize_identifier(branch, &self.name_resolution_ctx).name;
+            select_builder.with_filter(format!("branch = {}", QuotedString(branch.as_str(), '\'')));
         }
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("virtual_column_name LIKE '{pattern}'"));
+                select_builder.with_filter(format!(
+                    "virtual_column_name LIKE {}",
+                    QuotedString(pattern, '\'')
+                ));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

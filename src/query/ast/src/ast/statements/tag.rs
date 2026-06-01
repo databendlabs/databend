@@ -141,6 +141,7 @@ pub enum AlterObjectTagTarget {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
+        branch: Option<Identifier>,
     },
     Stage {
         if_exists: bool,
@@ -200,6 +201,7 @@ impl Display for AlterObjectTagTarget {
                 catalog,
                 database,
                 table,
+                branch,
             } => {
                 write!(f, "TABLE ")?;
                 if *if_exists {
@@ -209,6 +211,9 @@ impl Display for AlterObjectTagTarget {
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
+                if let Some(branch) = branch {
+                    write!(f, "/{branch}")?;
+                }
             }
             AlterObjectTagTarget::Stage {
                 if_exists,

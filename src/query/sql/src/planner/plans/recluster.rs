@@ -40,6 +40,7 @@ pub struct ReclusterPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
 
     pub limit: Option<usize>,
     pub selection: Option<Expr>,

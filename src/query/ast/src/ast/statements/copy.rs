@@ -32,6 +32,7 @@ use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::SelectTarget;
+use crate::ast::TableRef;
 use crate::ast::With;
 use crate::ast::WithOptions;
 use crate::ast::quote::QuotedString;
@@ -52,9 +53,7 @@ use crate::ast::write_dot_separated_list;
 pub struct CopyIntoTableStmt {
     pub with: Option<With>,
     pub src: CopyIntoTableSource,
-    pub catalog: Option<Identifier>,
-    pub database: Option<Identifier>,
-    pub table: Identifier,
+    pub table: TableRef,
     pub dst_columns: Option<Vec<Identifier>>,
 
     pub hints: Option<Hint>,
@@ -104,13 +103,7 @@ impl Display for CopyIntoTableStmt {
         }
 
         write!(f, " INTO ")?;
-        write_dot_separated_list(
-            f,
-            self.catalog
-                .iter()
-                .chain(self.database.iter())
-                .chain(Some(&self.table)),
-        )?;
+        write!(f, "{}", self.table)?;
 
         if let Some(columns) = &self.dst_columns {
             write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))?;
@@ -397,12 +390,16 @@ impl Display for CopyIntoTableSource {
 pub enum CopyIntoLocationSource {
     Query(Box<Query>),
     /// it will be rewritten as `(SELECT * FROM table)`
-    Table {
-        catalog: Option<Identifier>,
-        database: Option<Identifier>,
-        table: Identifier,
-        with_options: Option<WithOptions>,
-    },
+    Table(Box<CopyIntoLocationTableSource>),
+}
+
+#[derive(Debug, Clone, PartialEq, Drive, DriveMut)]
+pub struct CopyIntoLocationTableSource {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub branch: Option<Identifier>,
+    pub with_options: Option<WithOptions>,
 }
 
 impl Display for CopyIntoLocationSource {
@@ -411,17 +408,19 @@ impl Display for CopyIntoLocationSource {
             CopyIntoLocationSource::Query(query) => {
                 write!(f, "({query})")
             }
-            CopyIntoLocationSource::Table {
-                catalog,
-                database,
-                table,
-                with_options,
-            } => {
+            CopyIntoLocationSource::Table(source) => {
                 write_dot_separated_list(
                     f,
-                    catalog.iter().chain(database.iter()).chain(Some(table)),
+                    source
+                        .catalog
+                        .iter()
+                        .chain(source.database.iter())
+                        .chain(Some(&source.table)),
                 )?;
-                if let Some(with_options) = with_options {
+                if let Some(branch) = &source.branch {
+                    write!(f, "/{branch}")?;
+                }
+                if let Some(with_options) = &source.with_options {
                     write!(f, " {with_options}")?;
                 }
                 Ok(())

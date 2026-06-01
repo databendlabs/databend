@@ -29,6 +29,7 @@ use databend_common_exception::Result;
 use crate::SelectBuilder;
 use crate::binder::BindContext;
 use crate::binder::Binder;
+use crate::binder::check_table_ref_access;
 use crate::planner::binder::ddl::procedure::generate_procedure_name_ident;
 use crate::planner::semantic::normalize_identifier;
 use crate::plans::ConnectionTagSetTarget;
@@ -198,14 +199,22 @@ impl Binder {
                 catalog,
                 database,
                 table,
+                branch,
             } => {
                 let (catalog, database, table) =
                     self.normalize_object_identifier_triple(catalog, database, table);
+                let branch = branch
+                    .as_ref()
+                    .map(|branch| normalize_identifier(branch, &self.name_resolution_ctx).name);
+                if branch.is_some() {
+                    check_table_ref_access(self.ctx.as_ref())?;
+                }
                 Ok(TagSetObject::Table(TableTagSetTarget {
                     if_exists: *if_exists,
                     catalog,
                     database,
                     table,
+                    branch,
                 }))
             }
             AlterObjectTagTarget::Stage {

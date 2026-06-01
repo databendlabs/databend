@@ -25,9 +25,6 @@ statement ok
 USE test_branch
 
 statement ok
-set data_retention_time_in_days = 0;
-
-statement ok
 CREATE OR REPLACE TABLE t1(a INT, b STRING)
 
 statement ok
@@ -42,6 +39,53 @@ SELECT * FROM t1 ORDER BY a
 
 statement ok
 ALTER TABLE t1 CREATE BRANCH dev
+
+query TBBB
+SELECT name, branch_id > 0, snapshot_location != '', expire_at IS NOT NULL FROM system.branches WHERE database = 'test_branch' AND table = 't1' AND name = 'dev'
+----
+dev 1 1 0
+
+query TITT
+SHOW BRANCHES FROM t1 LIKE 'dev'
+----
+dev <slt:ignore> <slt:ignore> NULL
+
+query TITT
+SHOW BRANCHES IN test_branch.t1 WHERE name = 'dev' LIMIT 1
+----
+dev <slt:ignore> <slt:ignore> NULL
+
+statement ok
+CREATE TAG branch_object_tag ALLOWED_VALUES = ('dev', 'prod')
+
+statement ok
+ALTER TABLE t1/dev SET TAG branch_object_tag = 'dev'
+
+query TTTTT
+SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1/dev', 'TABLE')
+----
+branch_object_tag dev test_branch t1/dev TABLE
+
+query B
+SELECT tr.object_id = b.branch_id
+FROM tag_references('test_branch.t1/dev', 'TABLE') AS tr, system.branches AS b
+WHERE b.database = 'test_branch' AND b.table = 't1' AND b.name = 'dev'
+----
+1
+
+query TTTTT
+SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1', 'TABLE') WHERE tag_name = 'branch_object_tag'
+----
+
+statement ok
+ALTER TABLE t1/dev UNSET TAG branch_object_tag
+
+query TTTTT
+SELECT * EXCLUDE(object_id) FROM tag_references('test_branch.t1/dev', 'TABLE')
+----
+
+statement ok
+DROP TAG branch_object_tag
 
 statement ok
 ALTER TABLE t1 CREATE TAG v1
@@ -155,11 +199,93 @@ SELECT * FROM t_schema_guard/old_schema_branch ORDER BY a
 ----
 1
 
+statement ok
+CREATE OR REPLACE TABLE t_like_branch LIKE t_schema_guard/old_schema_branch
+
+query TTTTT
+DESCRIBE t_like_branch
+----
+a INT YES NULL (empty)
+
 query error
 WITH t AS (SELECT * FROM t1) SELECT * FROM t/dev
 
 query error
 WITH t AS (SELECT * FROM t1) SELECT * FROM (SELECT * FROM t/dev) s
+
+statement ok
+CREATE OR REPLACE TABLE t_tf(id INT, val STRING) CLUSTER BY(id)
+
+statement ok
+INSERT INTO t_tf VALUES (1, 'base')
+
+statement ok
+ALTER TABLE t_tf CREATE BRANCH dev
+
+statement ok
+INSERT INTO t_tf/dev VALUES (2, 'branch')
+
+statement ok
+INSERT INTO t_tf VALUES (3, 'base_only')
+
+statement ok
+ANALYZE TABLE t_tf/dev
+
+query TB
+SELECT name, ok FROM (
+    SELECT 'clustering_statistics' AS name, count() > 0 AS ok FROM clustering_statistics('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_block', sum(row_count) = 2 FROM fuse_block('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_block_statistics', count() > 0 FROM fuse_block_statistics('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_column', sum(row_count) = 2 FROM fuse_column('test_branch', 't_tf/dev') WHERE column_name = 'id'
+    UNION ALL SELECT 'fuse_dump_snapshots', count() = 1 FROM fuse_dump_snapshots('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_encoding', count() = 4 FROM fuse_encoding('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_page', count() > 0 FROM fuse_page('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_segment', sum(row_count) = 2 FROM fuse_segment('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_snapshot', max(row_count) = 2 FROM fuse_snapshot('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_statistic', count() > 0 FROM fuse_statistic('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'fuse_virtual_column', count() = 0 FROM fuse_virtual_column('test_branch', 't_tf/dev')
+    UNION ALL SELECT 'table_statistics', count() = 1 FROM table_statistics('test_branch', 't_tf/dev')
+) ORDER BY name
+----
+clustering_statistics 1
+fuse_block 1
+fuse_block_statistics 1
+fuse_column 1
+fuse_dump_snapshots 1
+fuse_encoding 1
+fuse_page 1
+fuse_segment 1
+fuse_snapshot 1
+fuse_statistic 1
+fuse_virtual_column 1
+table_statistics 1
+
+statement ok
+set enable_analyze_histogram=1;
+
+statement ok
+set enable_table_snapshot_stats=1;
+
+statement ok
+CREATE OR REPLACE TABLE t_analyze_quote(`c"q` INT)
+
+statement ok
+INSERT INTO t_analyze_quote VALUES (1), (2)
+
+statement ok
+ALTER TABLE t_analyze_quote CREATE BRANCH `b"q`
+
+statement ok
+INSERT INTO t_analyze_quote/`b"q` VALUES (3)
+
+statement ok
+ANALYZE TABLE t_analyze_quote/`b"q`
+
+statement ok
+set enable_analyze_histogram=0;
+
+statement ok
+set enable_table_snapshot_stats=0;
 
 statement ok
 RENAME TABLE t1 to t2;

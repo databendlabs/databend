@@ -18,7 +18,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -70,8 +71,8 @@ impl FuseTable {
     ) -> Result<Option<Vec<String>>> {
         let mut counter = PurgeCounter::new();
 
-        let catalog = ctx.get_catalog(self.table_info.catalog()).await?;
-        let branches = catalog
+        let meta_api = meta_store_client();
+        let branches = meta_api
             .list_history_table_branches(ListHistoryTableBranchesReq {
                 table_id: self.get_id(),
                 retention_boundary: None,
@@ -85,6 +86,7 @@ impl FuseTable {
         let res = self
             .execute_purge(
                 ctx,
+                meta_api.as_ref(),
                 snapshot_files,
                 num_snapshot_limit,
                 &mut counter,
@@ -96,14 +98,18 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn execute_purge(
+    async fn execute_purge<M>(
         &self,
         ctx: &Arc<dyn TableContext>,
+        meta_api: &M,
         snapshot_files: Vec<String>,
         num_snapshot_limit: Option<usize>,
         counter: &mut PurgeCounter,
         dry_run: bool,
-    ) -> Result<Option<Vec<String>>> {
+    ) -> Result<Option<Vec<String>>>
+    where
+        M: RefApi + ?Sized,
+    {
         // 1. Read the root snapshot.
         let root_snapshot_location_op = self.snapshot_loc();
         if root_snapshot_location_op.is_none() {
@@ -135,7 +141,7 @@ impl FuseTable {
         let mut segments = HashSet::from_iter(root_snapshot.segments.iter().cloned());
         let protected_table_stats_locs = self
             .process_tags_for_purge(
-                &catalog,
+                meta_api,
                 &root_snapshot_location,
                 &mut snapshot_files,
                 &mut segments,
@@ -643,16 +649,19 @@ impl FuseTable {
     }
 
     /// Protect base segments referenced by tags and remove tagged snapshots from gc candidates.
-    pub async fn process_tags_for_purge(
+    pub async fn process_tags_for_purge<M>(
         &self,
-        catalog: &Arc<dyn Catalog>,
+        meta_api: &M,
         root_snapshot_location: &String,
         snapshot_files_to_gc: &mut Vec<String>,
         protected_segments: &mut HashSet<Location>,
         dry_run: bool,
-    ) -> Result<HashSet<String>> {
+    ) -> Result<HashSet<String>>
+    where
+        M: RefApi + ?Sized,
+    {
         let now = Utc::now();
-        let tags = catalog
+        let tags = meta_api
             .list_table_tags(ListTableTagsReq {
                 table_id: self.get_id(),
                 include_expired: true,
@@ -668,7 +677,7 @@ impl FuseTable {
                 .is_some_and(|expire_at| expire_at <= now)
             {
                 if !dry_run {
-                    if let Err(e) = catalog
+                    if let Err(e) = meta_api
                         .drop_table_tag(DropTableTagReq {
                             table_id: self.get_id(),
                             tag_name,

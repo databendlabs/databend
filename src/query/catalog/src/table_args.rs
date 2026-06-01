@@ -14,10 +14,13 @@
 
 use std::collections::HashMap;
 
+use databend_common_ast::ast::Identifier;
+use databend_common_ast::parser::parse_table_ref;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
 use databend_common_expression::types::NumberScalar;
+use databend_common_settings::Settings;
 use log::debug;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -224,5 +227,56 @@ pub fn parse_table_name(input: &str) -> Result<(String, Option<String>)> {
             }
             Ok((input.to_string(), None))
         }
+    }
+}
+
+pub fn parse_table_ref_arg(input: &str, settings: &Settings) -> Result<(String, Option<String>)> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Err(ErrorCode::BadArguments(
+            "Invalid table name format: table name is empty",
+        ));
+    }
+
+    let dialect = settings.get_sql_dialect().unwrap_or_default();
+    let should_parse = input.contains('/')
+        || input
+            .chars()
+            .next()
+            .map(|c| dialect.is_ident_quote(c))
+            .unwrap_or(false);
+    if !should_parse {
+        return Ok((input.to_string(), None));
+    }
+
+    let table_ref = parse_table_ref(input, dialect)
+        .map_err(|e| ErrorCode::BadArguments(format!("Invalid table name '{}': {}", input, e.1)))?;
+    if table_ref.catalog.is_some() || table_ref.database.is_some() {
+        return Err(ErrorCode::BadArguments(
+            "Invalid table name format: expected table[/branch]",
+        ));
+    }
+
+    let table = normalize_table_ref_identifier(&table_ref.table, settings)?;
+    let branch = table_ref
+        .branch
+        .as_ref()
+        .map(|branch| normalize_table_ref_identifier(branch, settings))
+        .transpose()?;
+
+    Ok((table, branch))
+}
+
+fn normalize_table_ref_identifier(ident: &Identifier, settings: &Settings) -> Result<String> {
+    let case_sensitive = if ident.is_quoted() {
+        settings.get_quoted_ident_case_sensitive()?
+    } else {
+        settings.get_unquoted_ident_case_sensitive()?
+    };
+
+    if case_sensitive {
+        Ok(ident.name.clone())
+    } else {
+        Ok(ident.name.to_lowercase())
     }
 }

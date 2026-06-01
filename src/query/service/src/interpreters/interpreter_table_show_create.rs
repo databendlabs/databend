@@ -358,16 +358,18 @@ impl ShowCreateTableInterpreter {
 
     async fn show_create_stream_query(catalog: &dyn Catalog, table: &dyn Table) -> Result<String> {
         let stream_table = StreamTable::try_from_table(table)?;
-        let source_database_name = stream_table.source_database_name(catalog).await?;
-        let source_table_name = stream_table.source_table_name(catalog).await?;
+        let source = stream_table.source_table_reference(catalog).await?;
         let mode = stream_table.mode();
 
         let mut create_sql = format!(
             "CREATE STREAM `{}` ON TABLE `{}`.`{}`",
             stream_table.name(),
-            source_database_name,
-            source_table_name
+            source.database,
+            source.table
         );
+        if let Some(branch) = source.branch {
+            create_sql.push_str(format!("/`{branch}`").as_str());
+        }
 
         if matches!(mode, StreamMode::Standard) {
             create_sql.push_str(" APPEND_ONLY = false");

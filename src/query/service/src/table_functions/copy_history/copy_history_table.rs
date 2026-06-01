@@ -22,6 +22,7 @@ use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_ref_arg;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
@@ -46,6 +47,7 @@ use databend_meta_client::types::MetaId;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::table_functions::TableFunction;
 
@@ -227,7 +229,16 @@ impl CopyHistorySource {
             (current_database, self.table_name.clone())
         };
 
-        let table = ctx.get_table(&current_catalog, &db_name, &tbl_name).await?;
+        let (base_table_name, branch_name) =
+            parse_table_ref_arg(&tbl_name, ctx.get_settings().as_ref())?;
+        let table = ctx
+            .get_table_with_branch(
+                &current_catalog,
+                &db_name,
+                &base_table_name,
+                branch_name.as_deref(),
+            )
+            .await?;
         let table_id = table.get_id();
         let catalog = ctx.get_default_catalog().unwrap();
         let copied_files = catalog

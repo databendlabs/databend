@@ -26,6 +26,7 @@ pub struct AddTableConstraintPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub constraint_name: String,
     pub constraint: Constraint,
 }
@@ -43,6 +44,7 @@ pub struct DropTableConstraintPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub branch: Option<String>,
     pub constraint_name: String,
 }
 

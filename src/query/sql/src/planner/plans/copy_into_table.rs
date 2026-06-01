@@ -121,6 +121,7 @@ pub struct CopyIntoTablePlan {
     pub catalog_info: Arc<CatalogInfo>,
     pub database_name: String,
     pub table_name: String,
+    pub branch: Option<String>,
     pub from_attachment: bool,
 
     // given SQL: ... into table (c1, c2, c3, c4) values (1, ?, 'a', ?)
@@ -233,6 +234,7 @@ impl CopyIntoTablePlan {
                     self.catalog_info.catalog_name(),
                     &self.database_name,
                     &self.table_name,
+                    self.branch.as_deref(),
                     &all_source_file_infos,
                     self.path_prefix.clone(),
                     max_files,
@@ -282,6 +284,7 @@ impl Debug for CopyIntoTablePlan {
             catalog_info,
             database_name,
             table_name,
+            branch,
             no_file_to_copy,
             validation_mode,
             stage_table_info,
@@ -293,6 +296,9 @@ impl Debug for CopyIntoTablePlan {
             "Copy into {:}.{database_name:}.{table_name:}",
             catalog_info.catalog_name()
         )?;
+        if let Some(branch) = branch {
+            write!(f, "/{branch}")?;
+        }
         write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;

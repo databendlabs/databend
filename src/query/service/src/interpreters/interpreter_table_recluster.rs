@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_catalog::lock::LockTableOption;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::plan::PushDownInfo;
@@ -207,6 +208,7 @@ impl ReclusterTableInterpreter {
             catalog,
             database,
             table,
+            branch,
             limit,
             ..
         } = &self.plan;
@@ -214,10 +216,13 @@ impl ReclusterTableInterpreter {
         let lock_guard = self
             .ctx
             .clone()
-            .acquire_table_lock(catalog, database, table, None, &self.lock_opt)
+            .acquire_table_lock(catalog, database, table, branch.as_deref(), &self.lock_opt)
             .await?;
 
-        let tbl = self.ctx.get_table(catalog, database, table).await?;
+        let tbl = self
+            .ctx
+            .get_table_with_branch(catalog, database, table, branch.as_deref())
+            .await?;
         // check mutability
         tbl.check_mutable()?;
         let Some(cluster_type) = tbl.cluster_type() else {
@@ -247,11 +252,12 @@ impl ReclusterTableInterpreter {
             let catalog = self.plan.catalog.clone();
             let database = self.plan.database.clone();
             let table = self.plan.table.clone();
+            let branch = self.plan.branch.clone();
             build_res.main_pipeline.set_on_finished(always_callback(
                 move |info: &ExecutionInfo| {
                     ctx.written_segment_locations().clear();
                     ctx.selected_segment_locations().clear();
-                    ctx.evict_table_from_cache(&catalog, &database, &table, None)?;
+                    ctx.evict_table_from_cache(&catalog, &database, &table, branch.as_deref())?;
 
                     ctx.unload_spill_meta();
                     hook_clear_m_cte_temp_table(&ctx)?;
@@ -585,6 +591,17 @@ impl ReclusterTableInterpreter {
         Ok(())
     }
 
+    fn branch_table_ref(&self, quote: char) -> String {
+        let database = QuotedIdent(&self.plan.database, quote);
+        let table = QuotedIdent(&self.plan.table, quote);
+        if let Some(branch) = &self.plan.branch {
+            let branch = QuotedIdent(branch, quote);
+            format!("{database}.{table}/{branch}")
+        } else {
+            format!("{database}.{table}")
+        }
+    }
+
     async fn build_hilbert_info(
         &self,
         tbl: &Arc<dyn Table>,
@@ -594,11 +611,12 @@ impl ReclusterTableInterpreter {
             return Ok(());
         }
 
-        let database = &self.plan.database;
         let table = &self.plan.table;
         let settings = self.ctx.get_settings();
         let sample_size = settings.get_hilbert_sample_size_per_block()?;
         let sql_dialect = settings.get_sql_dialect()?;
+        let quote = sql_dialect.default_ident_quote();
+        let table_ref = self.branch_table_ref(quote);
 
         let mut normalizer = ClusterKeyNormalizer {
             force_quoted_ident: false,
@@ -625,26 +643,25 @@ impl ReclusterTableInterpreter {
         }
         let hilbert_keys_str = hilbert_keys.join(", ");
 
-        let keys_bounds_query =
-            format!("SELECT {} FROM {database}.{table}", keys_bounds.join(", "));
+        let keys_bounds_query = format!("SELECT {} FROM {table_ref}", keys_bounds.join(", "));
         let keys_bound =
             plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &keys_bounds_query).await?;
 
         let index_bound_query = format!(
             "SELECT \
                 range_bound(1000, {sample_size})(hilbert_range_index({hilbert_keys_str})) \
-            FROM {database}.{table}"
+            FROM {table_ref}"
         );
         let index_bound =
             plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &index_bound_query).await?;
 
-        let quote = sql_dialect.default_ident_quote();
         let schema = tbl.schema_with_stream();
         let mut output_with_table = Vec::with_capacity(schema.fields.len());
+        let table_ident = QuotedIdent(table, quote);
         for field in &schema.fields {
             output_with_table.push(format!(
-                "{quote}{table}{quote}.{quote}{}{quote}",
-                field.name
+                "{table_ident}.{}",
+                QuotedIdent(field.name(), quote)
             ));
         }
         let output_with_table_str = output_with_table.join(", ");
@@ -652,7 +669,7 @@ impl ReclusterTableInterpreter {
             "SELECT \
                 {output_with_table_str}, \
                 range_partition_id(hilbert_range_index({hilbert_keys_str}), [])AS _predicate \
-            FROM {database}.{table}"
+            FROM {table_ref}"
         );
         let query = plan_hilbert_sql(self.ctx.clone(), MetadataRef::default(), &query).await?;
 

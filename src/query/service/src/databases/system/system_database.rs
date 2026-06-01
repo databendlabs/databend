@@ -22,6 +22,8 @@ use databend_common_meta_app::schema::DatabaseMeta;
 use databend_common_meta_app::schema::database_name_ident::DatabaseNameIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::BacktraceTable;
+use databend_common_storages_system::BranchesTableWithHistory;
+use databend_common_storages_system::BranchesTableWithoutHistory;
 use databend_common_storages_system::BuildOptionsTable;
 use databend_common_storages_system::CachesTable;
 use databend_common_storages_system::CatalogsTable;
@@ -128,6 +130,7 @@ impl SystemDatabase {
             ),
             SettingsTable::create(sys_db_meta.next_table_id()),
             TablesTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
+            BranchesTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
             ClustersTable::create(sys_db_meta.next_table_id()),
             DatabasesTableWithoutHistory::create(sys_db_meta.next_table_id(), ctl_name),
             FullStreamsTable::create(sys_db_meta.next_table_id(), ctl_name),
@@ -159,6 +162,7 @@ impl SystemDatabase {
         if let Some(config) = config {
             table_list.extend(vec![
                 TablesTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
+                BranchesTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
                 DatabasesTableWithHistory::create(sys_db_meta.next_table_id(), ctl_name),
                 BuildOptionsTable::create(
                     sys_db_meta.next_table_id(),

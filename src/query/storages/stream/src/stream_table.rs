@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Instant;
 
 use databend_common_catalog::catalog::Catalog;
+use databend_common_catalog::catalog::RefApi;
 use databend_common_catalog::catalog::StorageDescription;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
@@ -49,6 +52,7 @@ use databend_storages_common_table_meta::table::ChangeType;
 use databend_storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_MODE;
 use databend_storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
+use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_BASE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_DATABASE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_SOURCE_TABLE_ID;
 use databend_storages_common_table_meta::table::OPT_KEY_TABLE_VER;
@@ -60,6 +64,12 @@ pub const STREAM_ENGINE: &str = "STREAM";
 pub enum StreamStatus {
     MayHaveData,
     NoData,
+}
+
+pub struct StreamSourceRef {
+    pub database: String,
+    pub table: String,
+    pub branch: Option<String>,
 }
 
 pub struct StreamTable {
@@ -112,20 +122,21 @@ impl StreamTable {
             source.clone()
         } else {
             let catalog = ctx.get_catalog(self.info.catalog()).await?;
-            let source_table_name = self.source_table_name(catalog.as_ref()).await?;
-            let source_database_name = self.source_database_name(catalog.as_ref()).await?;
-            ctx.get_table(
-                self.info.catalog(),
-                &source_database_name,
-                &source_table_name,
-            )
-            .await?
+            let source = self.source_table_reference(catalog.as_ref()).await?;
+            catalog
+                .get_table_with_branch(
+                    &ctx.get_tenant(),
+                    &source.database,
+                    &source.table,
+                    source.branch.as_deref(),
+                )
+                .await?
         };
 
         let desc = &source.get_table_info().desc;
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
-                "Base table {} dropped, cannot read from stream {}",
+                "Source table {} was dropped or recreated, cannot read from stream {}",
                 desc, self.info.desc,
             )));
         }
@@ -141,34 +152,38 @@ impl StreamTable {
         tenant: &Tenant,
         source_db_name: &str,
         source_tb_name: &str,
+        source_branch_name: Option<&str>,
         batch_limit: Option<u64>,
         s3_storage_class: S3StorageClass,
     ) -> Result<Arc<dyn Table>> {
         let stream_desc = &self.info.desc;
         let source = catalog
-            .get_table(tenant, source_db_name, source_tb_name)
+            .get_table_with_branch(tenant, source_db_name, source_tb_name, source_branch_name)
             .await
             .map_err(|err| {
+                let source_name = source_branch_name
+                    .map(|branch| format!("{source_tb_name}'/'{branch}"))
+                    .unwrap_or_else(|| source_tb_name.to_string());
                 ErrorCode::IllegalStream(format!(
                     "Cannot get base table '{}'.'{}' from stream {}, cause: {}",
                     source_db_name,
-                    source_tb_name,
+                    source_name,
                     stream_desc,
                     err.message()
                 ))
             })?;
 
-        let Some(batch_limit) = batch_limit else {
-            return Ok(source);
-        };
-
         let source_desc = &source.get_table_info().desc;
         if source.get_table_info().ident.table_id != self.source_table_id()? {
             return Err(ErrorCode::IllegalStream(format!(
-                "Base table {} dropped, cannot read from stream {}",
+                "Source table {} was dropped or recreated, cannot read from stream {}",
                 source_desc, stream_desc,
             )));
         }
+
+        let Some(batch_limit) = batch_limit else {
+            return Ok(source);
+        };
 
         let fuse_table = FuseTable::try_from_table(source.as_ref())?;
         fuse_table.check_changes_valid(source_desc, self.offset()?)?;
@@ -231,57 +246,36 @@ impl StreamTable {
     }
 
     pub fn offset(&self) -> Result<u64> {
-        let table_version = self
-            .info
-            .options()
-            .get(OPT_KEY_TABLE_VER)
-            .ok_or_else(|| ErrorCode::Internal("table version must be set"))?
-            .parse::<u64>()?;
-        Ok(table_version)
+        self.get_option(OPT_KEY_TABLE_VER)
     }
 
     pub fn mode(&self) -> StreamMode {
-        self.info
-            .options()
-            .get(OPT_KEY_MODE)
-            .and_then(|s| s.parse::<StreamMode>().ok())
-            .unwrap_or(StreamMode::AppendOnly)
+        self.info.get_option(OPT_KEY_MODE, StreamMode::AppendOnly)
     }
 
     pub fn snapshot_loc(&self) -> Option<String> {
         self.info.options().get(OPT_KEY_SNAPSHOT_LOCATION).cloned()
     }
 
-    pub fn source_table_id(&self) -> Result<u64> {
-        let table_id = self
-            .info
+    fn get_option<T>(&self, opt_key: &str) -> Result<T>
+    where
+        T: FromStr,
+        T::Err: std::fmt::Display,
+    {
+        self.info
             .options()
-            .get(OPT_KEY_SOURCE_TABLE_ID)
-            .ok_or_else(|| ErrorCode::Internal("source table id must be set"))?
-            .parse::<u64>()?;
-        Ok(table_id)
+            .get(opt_key)
+            .ok_or_else(|| ErrorCode::Internal(format!("stream option '{}' must be set", opt_key)))?
+            .parse::<T>()
+            .map_err(|e| ErrorCode::Internal(format!("Invalid stream option '{}': {}", opt_key, e)))
     }
 
-    pub async fn source_table_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        let source_table_id = self.source_table_id()?;
-        catalog
-            .get_table_name_by_id(source_table_id)
-            .await
-            .and_then(|opt| {
-                opt.ok_or_else(|| {
-                    ErrorCode::UnknownTable(format!("Unknown table id: '{}'", source_table_id))
-                })
-            })
+    pub fn source_table_id(&self) -> Result<u64> {
+        self.get_option(OPT_KEY_SOURCE_TABLE_ID)
     }
 
     pub async fn source_database_id(&self, catalog: &dyn Catalog) -> Result<u64> {
-        let source_db_id_opt = self
-            .info
-            .options()
-            .get(OPT_KEY_SOURCE_DATABASE_ID)
-            .map(|s| s.parse::<u64>().map_err(|e| e.to_string()))
-            .transpose()?;
-
+        let source_db_id_opt = self.get_option(OPT_KEY_SOURCE_DATABASE_ID).ok();
         let source_db_id = match source_db_id_opt {
             Some(v) => v,
             None => {
@@ -306,25 +300,54 @@ impl StreamTable {
         Ok(source_db_id)
     }
 
-    pub async fn source_database_name(&self, catalog: &dyn Catalog) -> Result<String> {
-        let source_db_id = self.source_database_id(catalog).await?;
-        catalog.get_db_name_by_id(source_db_id).await
+    pub fn source_base_table_id(&self) -> Result<Option<u64>> {
+        self.info
+            .options()
+            .get(OPT_KEY_SOURCE_BASE_TABLE_ID)
+            .map(|base_table_id| {
+                base_table_id.parse::<u64>().map_err(|e| {
+                    ErrorCode::Internal(format!(
+                        "Invalid stream option '{}': {}",
+                        OPT_KEY_SOURCE_BASE_TABLE_ID, e
+                    ))
+                })
+            })
+            .transpose()
     }
 
-    #[async_backtrace::framed]
-    async fn do_read_partitions(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-    ) -> Result<(PartStatistics, Partitions)> {
-        let table = self.source_table(ctx.clone()).await?;
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let change_type = push_downs.as_ref().map_or(ChangeType::Append, |v| {
-            v.change_type.clone().unwrap_or(ChangeType::Append)
-        });
-        fuse_table
-            .do_read_changes_partitions(ctx, push_downs, change_type, &self.snapshot_loc())
-            .await
+    pub async fn source_table_reference(&self, catalog: &dyn Catalog) -> Result<StreamSourceRef> {
+        let source_db_id = self.source_database_id(catalog).await?;
+        let database = catalog.get_db_name_by_id(source_db_id).await?;
+
+        let source_table_id = self.source_table_id()?;
+        let source_base_table_id = self.source_base_table_id()?;
+
+        let table_id = source_base_table_id.unwrap_or(source_table_id);
+        let table = catalog
+            .get_table_name_by_id(table_id)
+            .await?
+            .ok_or_else(|| ErrorCode::UnknownTable(format!("Unknown table id: '{}'", table_id)))?;
+        let branch = if source_base_table_id.is_some() {
+            let branch = meta_store_client()
+                .get_branch_name_by_id(source_table_id)
+                .await
+                .map_err(|e| ErrorCode::MetaServiceError(e.to_string()))?
+                .ok_or_else(|| {
+                    ErrorCode::UnknownReference(format!(
+                        "Source branch id '{}' not found, cannot read from stream {}",
+                        source_table_id, self.info.desc
+                    ))
+                })?;
+            Some(branch)
+        } else {
+            None
+        };
+
+        Ok(StreamSourceRef {
+            database,
+            table,
+            branch,
+        })
     }
 
     #[fastrace::trace]
@@ -384,7 +407,14 @@ impl Table for StreamTable {
         push_downs: Option<PushDownInfo>,
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx, push_downs).await
+        let table = self.source_table(ctx.clone()).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let change_type = push_downs.as_ref().map_or(ChangeType::Append, |v| {
+            v.change_type.clone().unwrap_or(ChangeType::Append)
+        });
+        fuse_table
+            .do_read_changes_partitions(ctx, push_downs, change_type, &self.snapshot_loc())
+            .await
     }
 
     #[fastrace::trace]

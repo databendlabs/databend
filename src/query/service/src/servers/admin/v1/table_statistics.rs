@@ -59,5 +59,5 @@ async fn dump_columns(
         .get_table(&Tenant::new_literal(tenant), database, table)
         .await?;
 
-    StatisticsTable::dump_table_columns(&ctx, &catalog, database, &table).await
+    StatisticsTable::dump_table_columns(&ctx, &catalog, database, table.name(), "", &table).await
 }

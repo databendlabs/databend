@@ -480,6 +480,8 @@ pub enum TokenKind {
     BOTH,
     #[token("BRANCH", ignore(ascii_case))]
     BRANCH,
+    #[token("BRANCHES", ignore(ascii_case))]
+    BRANCHES,
     #[token("BY", ignore(ascii_case))]
     BY,
     #[token("BROTLI", ignore(ascii_case))]

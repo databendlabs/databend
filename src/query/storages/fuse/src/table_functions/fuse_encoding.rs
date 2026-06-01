@@ -20,6 +20,7 @@ use databend_common_catalog::plan::DataSourcePlan;
 use databend_common_catalog::plan::Filters;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table_args::TableArgs;
+use databend_common_catalog::table_args::parse_table_ref_arg;
 use databend_common_catalog::table_args::string_value;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -138,6 +139,34 @@ impl SimpleArgFunc for FuseEncoding {
         args: &Self::Args,
         plan: &DataSourcePlan,
     ) -> Result<DataBlock> {
+        let filters = plan.push_downs.as_ref().and_then(|x| x.filters.clone());
+        let mut table_name_filter = args.table_name.clone();
+        if let Some(table_name) = &args.table_name {
+            let (base_table_name, branch_name) =
+                parse_table_ref_arg(table_name, ctx.get_settings().as_ref())?;
+            table_name_filter = Some(base_table_name.clone());
+            if branch_name.is_some() {
+                let tbl = ctx
+                    .get_table_with_branch(
+                        CATALOG_DEFAULT,
+                        args.database_name.as_str(),
+                        &base_table_name,
+                        branch_name.as_deref(),
+                    )
+                    .await?;
+                let fuse_table = FuseTable::try_from_table(tbl.as_ref())?;
+                return FuseEncodingImpl::new(
+                    ctx.clone(),
+                    vec![fuse_table],
+                    filters,
+                    None,
+                    args.column_name.clone(),
+                )
+                .get_blocks()
+                .await;
+            }
+        }
+
         let tenant_id = ctx.get_tenant();
         let tbls = ctx
             .get_catalog(CATALOG_DEFAULT)
@@ -155,12 +184,11 @@ impl SimpleArgFunc for FuseEncoding {
             })
             .collect::<Vec<_>>();
 
-        let filters = plan.push_downs.as_ref().and_then(|x| x.filters.clone());
         FuseEncodingImpl::new(
             ctx.clone(),
             fuse_tables,
             filters,
-            args.table_name.clone(),
+            table_name_filter,
             args.column_name.clone(),
         )
         .get_blocks()

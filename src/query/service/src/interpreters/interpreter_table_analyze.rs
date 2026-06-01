@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use databend_common_ast::ast::quote::QuotedIdent;
 use databend_common_catalog::table::TableExt;
 use databend_common_exception::Result;
 use databend_common_pipeline::core::ProcessorPtr;
@@ -78,6 +79,17 @@ impl AnalyzeTableInterpreter {
         };
         Ok((select_plan, bind_context))
     }
+
+    fn analyze_target(&self, quote: char) -> String {
+        let database = QuotedIdent(&self.plan.database, quote);
+        let table = QuotedIdent(&self.plan.table, quote);
+        if let Some(branch) = &self.plan.branch {
+            let branch = QuotedIdent(branch, quote);
+            format!("{database}.{table}/{branch}")
+        } else {
+            format!("{database}.{table}")
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -95,7 +107,12 @@ impl Interpreter for AnalyzeTableInterpreter {
         let plan = &self.plan;
         let table = self
             .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+            .get_table_with_branch(
+                &plan.catalog,
+                &plan.database,
+                &plan.table,
+                plan.branch.as_deref(),
+            )
             .await?;
 
         // check mutability
@@ -124,13 +141,14 @@ impl Interpreter for AnalyzeTableInterpreter {
         if self.ctx.get_settings().get_enable_analyze_histogram()?
             && self.ctx.get_settings().get_enable_table_snapshot_stats()?
         {
+            let analyze_target = self.analyze_target(quote);
             let histogram_sqls = table
                     .schema()
                     .fields()
                     .iter()
                     .filter(|f| RangeIndex::supported_type(&f.data_type().into()))
                     .map(|f| {
-                        let col_name = format!("{quote}{}{quote}", f.name);
+                        let col_name = QuotedIdent(&f.name, quote);
                         (
                             format!(
                                 "SELECT quantile, \
@@ -140,10 +158,10 @@ impl Interpreter for AnalyzeTableInterpreter {
                                     COUNT() as count \
                                 FROM ( \
                                     SELECT {col_name}, NTILE({}) OVER (ORDER BY {col_name}) AS quantile \
-                                    FROM {}.{} WHERE {col_name} IS DISTINCT FROM NULL \
+                                    FROM {} WHERE {col_name} IS DISTINCT FROM NULL \
                                 ) \
                                 GROUP BY quantile ORDER BY quantile",
-                                DEFAULT_HISTOGRAM_BUCKETS, plan.database, plan.table,
+                                DEFAULT_HISTOGRAM_BUCKETS, analyze_target,
                             ),
                             f.column_id(),
                         )

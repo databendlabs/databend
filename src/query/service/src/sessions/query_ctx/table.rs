@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_storages_stream::stream_table::StreamTable;
+
 use super::*;
 
 impl TableContextTableFactory for QueryContext {
@@ -146,9 +148,8 @@ impl TableContextTableAccess for QueryContext {
             return Ok(None);
         }
 
-        let catalog = self.get_catalog(catalog_name).await?;
-        let tbl = catalog
-            .get_table_with_branch(&self.get_tenant(), db_name, tbl_name, branch)
+        let tbl = self
+            .get_table_with_branch(catalog_name, db_name, tbl_name, branch)
             .await?;
         if tbl.engine() != "FUSE" || tbl.is_read_only() || tbl.is_temp() {
             return Ok(None);
@@ -233,6 +234,7 @@ impl TableContextCopy for QueryContext {
         catalog_name: &str,
         database_name: &str,
         table_name: &str,
+        branch_name: Option<&str>,
         files: &[StageFileInfo],
         path_prefix: Option<String>,
         max_files: Option<usize>,
@@ -248,8 +250,8 @@ impl TableContextCopy for QueryContext {
 
         let tenant = self.get_tenant();
         let catalog = self.get_catalog(catalog_name).await?;
-        let table = catalog
-            .get_table(&tenant, database_name, table_name)
+        let table = self
+            .get_table_with_branch(catalog_name, database_name, table_name, branch_name)
             .await?;
         let table_id = table.get_id();
 

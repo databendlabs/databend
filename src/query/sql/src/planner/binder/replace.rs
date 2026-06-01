@@ -24,6 +24,7 @@ use databend_common_pipeline::core::SharedLockGuard;
 
 use crate::BindContext;
 use crate::binder::Binder;
+use crate::binder::util::TableIdentifier;
 use crate::normalize_identifier;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::InsertInputSource;
@@ -38,8 +39,6 @@ impl Binder {
         stmt: &ReplaceStmt,
     ) -> Result<Plan> {
         let ReplaceStmt {
-            catalog,
-            database,
             table,
             is_conflict: _,
             on_conflict_columns,
@@ -49,8 +48,13 @@ impl Binder {
             hints: _,
         } = stmt;
 
-        let (catalog_name, database_name, table_name) =
-            self.normalize_object_identifier_triple(catalog, database, table);
+        let table_identifier = TableIdentifier::new_with_ref(self, table, &None);
+        let (catalog_name, database_name, table_name, branch_name) = (
+            table_identifier.catalog_name(),
+            table_identifier.database_name(),
+            table_identifier.table_name(),
+            table_identifier.branch_name(),
+        );
 
         // Add table lock before execution.
         let lock_guard = self
@@ -60,7 +64,7 @@ impl Binder {
                 &catalog_name,
                 &database_name,
                 &table_name,
-                None,
+                branch_name.as_deref(),
                 &LockTableOption::LockWithRetry,
             )
             .await?
@@ -68,7 +72,12 @@ impl Binder {
 
         let table = self
             .ctx
-            .get_table(&catalog_name, &database_name, &table_name)
+            .get_table_with_branch(
+                &catalog_name,
+                &database_name,
+                &table_name,
+                branch_name.as_deref(),
+            )
             .await?;
         let table_id = table.get_id();
 
@@ -124,6 +133,7 @@ impl Binder {
                                 catalog_name.clone(),
                                 database_name.clone(),
                                 table_name.clone(),
+                                branch_name.clone(),
                                 required_values_schema.clone(),
                                 &values_str,
                                 CopyIntoTableMode::Replace,
@@ -151,6 +161,7 @@ impl Binder {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
+            branch: branch_name,
             table_id,
             on_conflict_fields,
             schema: required_values_schema,

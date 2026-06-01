@@ -57,7 +57,13 @@ impl Walk for CreateTableSource {
                 catalog,
                 database,
                 table,
-            } => try_walk!((catalog, database, table).walk(visitor)),
+                branch,
+            } => {
+                try_walk!(catalog.walk(visitor));
+                try_walk!(database.walk(visitor));
+                try_walk!(table.walk(visitor));
+                try_walk!(branch.walk(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -101,7 +107,13 @@ impl WalkMut for CreateTableSource {
                 catalog,
                 database,
                 table,
-            } => try_walk!((catalog, database, table).walk_mut(visitor)),
+                branch,
+            } => {
+                try_walk!(catalog.walk_mut(visitor));
+                try_walk!(database.walk_mut(visitor));
+                try_walk!(table.walk_mut(visitor));
+                try_walk!(branch.walk_mut(visitor));
+            }
         }
         Ok(VisitControl::Continue)
     }
@@ -209,6 +221,12 @@ impl Walk for AlterTableStmt {
             } => {
                 try_walk!(new_table.walk(visitor));
             }
+            AlterTableAction::UndropTableBranch {
+                target: UndropBranchTarget::Name(branch_name),
+                ..
+            } => {
+                try_walk!(branch_name.walk(visitor));
+            }
             AlterTableAction::AddColumn { column, option, .. } => {
                 try_walk!(column.walk(visitor));
                 if let AddColumnOption::After(ident) = option {
@@ -227,7 +245,11 @@ impl Walk for AlterTableStmt {
             | AlterTableAction::RefreshTableCache
             | AlterTableAction::SetOptions { .. }
             | AlterTableAction::ModifyConnection { .. }
-            | AlterTableAction::DropAllRowAccessPolicies => {}
+            | AlterTableAction::DropAllRowAccessPolicies
+            | AlterTableAction::UndropTableBranch {
+                target: UndropBranchTarget::Id(_),
+                ..
+            } => {}
             AlterTableAction::ModifyColumn { action } => match action {
                 ModifyColumnAction::SetMaskingPolicy(column, _, using_columns) => {
                     try_walk!(column.walk(visitor));
@@ -313,6 +335,16 @@ impl WalkMut for AlterTableStmt {
             } => {
                 try_walk!(new_table.walk_mut(visitor));
             }
+            AlterTableAction::UndropTableBranch {
+                target: UndropBranchTarget::Name(branch_name),
+                ..
+            } => {
+                try_walk!(branch_name.walk_mut(visitor));
+            }
+            AlterTableAction::UndropTableBranch {
+                target: UndropBranchTarget::Id(_),
+                ..
+            } => {}
             AlterTableAction::AddColumn { column, option, .. } => {
                 try_walk!(column.walk_mut(visitor));
                 if let AddColumnOption::After(ident) = option {
@@ -399,7 +431,7 @@ impl Walk for CreateTableIndexStmt {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         try_walk!(self.index_name.walk(visitor));
-        try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
+        try_walk!(self.table.walk(visitor));
         for column in &self.columns {
             try_walk!(column.walk(visitor));
         }
@@ -413,7 +445,7 @@ impl WalkMut for CreateTableIndexStmt {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         try_walk!(self.index_name.walk_mut(visitor));
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
+        try_walk!(self.table.walk_mut(visitor));
         for column in &mut self.columns {
             try_walk!(column.walk_mut(visitor));
         }
@@ -522,7 +554,7 @@ impl Walk for RefreshTableIndexStmt {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         try_walk!(self.index_name.walk(visitor));
-        try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
+        try_walk!(self.table.walk(visitor));
         Ok(VisitControl::Continue)
     }
 }
@@ -533,7 +565,7 @@ impl WalkMut for RefreshTableIndexStmt {
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
         try_walk!(self.index_name.walk_mut(visitor));
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
+        try_walk!(self.table.walk_mut(visitor));
         Ok(VisitControl::Continue)
     }
 }
@@ -543,7 +575,7 @@ impl Walk for OptimizeTableStmt {
         &self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!((&self.catalog, &self.database, &self.table).walk(visitor));
+        try_walk!(self.table_ref.walk(visitor));
         try_walk!(self.action.walk(visitor));
         Ok(VisitControl::Continue)
     }
@@ -554,7 +586,7 @@ impl WalkMut for OptimizeTableStmt {
         &mut self,
         visitor: &mut V,
     ) -> Result<VisitControl<V::Break>, V::Error> {
-        try_walk!((&mut self.catalog, &mut self.database, &mut self.table).walk_mut(visitor));
+        try_walk!(self.table_ref.walk_mut(visitor));
         try_walk!(self.action.walk_mut(visitor));
         Ok(VisitControl::Continue)
     }

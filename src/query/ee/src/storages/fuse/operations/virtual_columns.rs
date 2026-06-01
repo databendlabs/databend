@@ -22,6 +22,8 @@ use std::time::Instant;
 use chrono::Duration;
 use chrono::Utc;
 use databend_common_base::runtime::execute_futures_in_parallel;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::plan::Projection;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
@@ -61,7 +63,6 @@ use databend_common_storages_fuse::operations::MutationLogEntry;
 use databend_common_storages_fuse::operations::MutationLogs;
 use databend_common_storages_fuse::operations::TableMutationAggregator;
 use databend_common_storages_fuse::operations::VirtualSchemaMode;
-use databend_common_users::UserApiProvider;
 use databend_enterprise_virtual_column::VirtualColumnRefreshResult;
 use databend_query::pipelines::PipelineBuildResult;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -469,12 +470,9 @@ async fn vacuum_virtual_column_orphans(
     // in this set, we skip it instead of falling back to the current branch/base owner:
     // leaking an orphan virtual file is acceptable here, but deleting files under the wrong owner
     // is not.
-    let catalog = ctx
-        .get_catalog(fuse_table.get_table_info().catalog())
-        .await?;
     let retention_boundary =
         Utc::now() - Duration::days(ctx.get_settings().get_data_retention_time_in_days()? as i64);
-    let meta_api = UserApiProvider::instance().get_meta_store_client();
+    let meta_api = meta_store_client();
     meta_api
         .fetch_set_vacuum_timestamp(&ctx.get_tenant(), retention_boundary)
         .await
@@ -484,7 +482,7 @@ async fn vacuum_virtual_column_orphans(
                 e
             ))
         })?;
-    let retain_branches = catalog
+    let retain_branches = meta_api
         .list_history_table_branches(ListHistoryTableBranchesReq {
             table_id: fuse_table.get_id(),
             retention_boundary: Some(retention_boundary),

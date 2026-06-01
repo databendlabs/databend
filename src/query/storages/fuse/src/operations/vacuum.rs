@@ -21,6 +21,8 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
+use databend_common_catalog::catalog::RefApi;
+use databend_common_catalog::catalog::meta_store_client;
 use databend_common_catalog::table::TableExt;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -302,8 +304,8 @@ impl FuseTable {
         .await?;
 
         // Protect tags on base table as well.
-        let catalog = ctx.get_catalog(self.get_table_info().catalog()).await?;
-        let tags = catalog
+        let meta_api = meta_store_client();
+        let tags = meta_api
             .list_table_tags(ListTableTagsReq {
                 table_id: self.get_id(),
                 include_expired: false,
