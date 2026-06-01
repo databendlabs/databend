@@ -43,9 +43,15 @@ use crate::framework::golden::write_case_title;
 struct JoinMemoCase<'a> {
     name: &'a str,
     description: &'a str,
+    table_columns: &'a str,
     cluster_by: &'a str,
     sql: &'a str,
+    column_statistics: fn(u64) -> HashMap<String, BasicColumnStatistics>,
 }
+
+const KEY_TABLE_COLUMNS: &str = "(k1 BIGINT, k2 BIGINT, v BIGINT)";
+const TRACE_TABLE_COLUMNS: &str = "\
+    (k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING)";
 
 fn table_statistics(rows: u64) -> TableStatistics {
     TableStatistics {
@@ -78,6 +84,29 @@ fn column_statistics(rows: u64) -> HashMap<String, BasicColumnStatistics> {
         .collect()
 }
 
+fn trace_column_statistics(rows: u64) -> HashMap<String, BasicColumnStatistics> {
+    let mut stats = column_statistics(rows);
+    stats.insert("start_day".to_string(), BasicColumnStatistics {
+        min: Some(Datum::UInt(20240101)),
+        max: Some(Datum::UInt(20241231)),
+        ndv: Some(NdvEstimate::exact(365.0)),
+        null_count: 0,
+        in_memory_size: rows.saturating_mul(4),
+    });
+    stats.insert("trace_id".to_string(), BasicColumnStatistics {
+        min: Some(Datum::Bytes(
+            b"0000000000000000000000000000000000000000".to_vec(),
+        )),
+        max: Some(Datum::Bytes(
+            b"ffffffffffffffffffffffffffffffffffffffff".to_vec(),
+        )),
+        ndv: Some(NdvEstimate::exact(rows as f64)),
+        null_count: 0,
+        in_memory_size: rows.saturating_mul(40),
+    });
+    stats
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
     let mut file = open_golden_file("optimizer", "cluster_key_join_order.txt")?;
@@ -86,6 +115,7 @@ async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
         JoinMemoCase {
             name: "k1_k2_prefix",
             description: "Full memo output when the clustered probe can first match a.k1.",
+            table_columns: KEY_TABLE_COLUMNS,
             cluster_by: "CLUSTER BY (k1, k2)",
             sql: "
                     SELECT *
@@ -93,10 +123,12 @@ async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
                     JOIN b ON a.k1 = b.k1
                     JOIN c ON a.k2 = c.k2
                 ",
+            column_statistics,
         },
         JoinMemoCase {
             name: "k2_k1_prefix",
             description: "Full memo output when the clustered probe can first match a.k2.",
+            table_columns: KEY_TABLE_COLUMNS,
             cluster_by: "CLUSTER BY (k2, k1)",
             sql: "
                     SELECT *
@@ -104,10 +136,12 @@ async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
                     JOIN b ON a.k1 = b.k1
                     JOIN c ON a.k2 = c.k2
                 ",
+            column_statistics,
         },
         JoinMemoCase {
             name: "filter_preserves_cluster_keys",
             description: "Cluster keys still affect join order after a filter on the clustered table.",
+            table_columns: KEY_TABLE_COLUMNS,
             cluster_by: "CLUSTER BY (k1, k2)",
             sql: "
                     SELECT *
@@ -115,10 +149,12 @@ async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
                     JOIN b ON a.k1 = b.k1
                     JOIN c ON a.k2 = c.k2
                 ",
+            column_statistics,
         },
         JoinMemoCase {
             name: "limit_and_join_preserve_cluster_keys",
             description: "Cluster keys still affect join order after a limit subquery and a partial join.",
+            table_columns: KEY_TABLE_COLUMNS,
             cluster_by: "CLUSTER BY (k1, k2)",
             sql: "
                     SELECT *
@@ -126,6 +162,38 @@ async fn test_cluster_key_order_join_memo_golden() -> Result<()> {
                     JOIN b ON a.k1 = b.k1
                     JOIN c ON a.k2 = c.k2
                 ",
+            column_statistics,
+        },
+        JoinMemoCase {
+            name: "build_side_cluster_keys_do_not_propagate",
+            description: "Cluster keys from a build-side clustered table do not affect later join costs.",
+            table_columns: KEY_TABLE_COLUMNS,
+            cluster_by: "CLUSTER BY (k1, k2)",
+            sql: "
+                    SELECT *
+                    FROM b
+                    JOIN (SELECT * FROM a LIMIT 100) a ON b.k1 = a.k1
+                    JOIN (SELECT * FROM c LIMIT 10) c ON a.k2 = c.k2
+                ",
+            column_statistics,
+        },
+        JoinMemoCase {
+            name: "linear_expression_cluster_key",
+            description: "A LINEAR cluster key with to_yyyymmdd and substring expressions affects join costs.",
+            table_columns: TRACE_TABLE_COLUMNS,
+            cluster_by: "CLUSTER BY linear (
+                    to_yyyymmdd(start_time),
+                    SUBSTRING(trace_id FROM 1 FOR 40)
+                )",
+            sql: "
+                    SELECT *
+                    FROM a
+                    JOIN b
+                        ON to_yyyymmdd(a.start_time) = b.start_day
+                        AND SUBSTRING(a.trace_id FROM 1 FOR 40) = b.trace_id
+                    JOIN c ON a.k2 = c.k2
+                ",
+            column_statistics: trace_column_statistics,
         },
     ] {
         write_cluster_key_join_order_memo(&mut file, case).await?;
@@ -146,16 +214,19 @@ async fn write_cluster_key_join_order_memo(
     for table in ["a", "b", "c"] {
         let table_cluster_by = if table == "a" { case.cluster_by } else { "" };
         let setup_sql = match table_cluster_by {
-            "" => format!("CREATE TABLE {table}(k1 BIGINT, k2 BIGINT, v BIGINT)"),
+            "" => format!("CREATE TABLE {table}{}", case.table_columns),
             _ => {
-                format!("CREATE TABLE {table}(k1 BIGINT, k2 BIGINT, v BIGINT) {table_cluster_by}")
+                format!(
+                    "CREATE TABLE {table}{} {table_cluster_by}",
+                    case.table_columns
+                )
             }
         };
         writeln!(file, "setup: {setup_sql}")?;
         ctx.register_table_sql_with_stats(
             &setup_sql,
             Some(table_statistics(1000)),
-            column_statistics(1000),
+            (case.column_statistics)(1000),
         )
         .await?;
     }

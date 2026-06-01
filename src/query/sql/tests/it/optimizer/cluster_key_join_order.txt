@@ -194,3 +194,116 @@ Memo
     └── #0 EvalScalar [#6]
 
 
+=== build_side_cluster_keys_do_not_propagate ===
+description: Cluster keys from a build-side clustered table do not affect later join costs.
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM b
+JOIN (SELECT * FROM a LIMIT 100) a ON b.k1 = a.k1
+JOIN (SELECT * FROM c LIMIT 10) c ON a.k2 = c.k2
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b], left: [b], right: [a], cost: 100000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [b], right: [a, c], cost: 1001000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], cost: 1100000.000, previous best: 1001000.000, probe factor: 1.000, selected: false
+
+Memo
+├── root group: #9
+├── estimated memory: 6.25 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 Limit [#1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2100.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #5
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 Limit [#4]
+├── Group #6
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2010.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#5]
+├── Group #7
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 4310.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#3, #6]
+├── Group #8
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 16310.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #7]
+└── Group #9
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 1016310.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#8]
+
+
+=== linear_expression_cluster_key ===
+description: A LINEAR cluster key with to_yyyymmdd and substring expressions affects join costs.
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING) CLUSTER BY linear (
+                    to_yyyymmdd(start_time),
+                    SUBSTRING(trace_id FROM 1 FOR 40)
+                )
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING)
+sql: SELECT *
+FROM a
+JOIN b
+ON to_yyyymmdd(a.start_time) = b.start_day
+AND SUBSTRING(a.trace_id FROM 1 FOR 40) = b.trace_id
+JOIN c ON a.k2 = c.k2
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], cost: 902500.000, previous best: -, probe factor: 0.902, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], cost: 903500.000, previous best: -, probe factor: 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], cost: 1001000.000, previous best: 903500.000, probe factor: 1.000, selected: false
+
+Memo
+├── root group: #5
+├── estimated memory: 3.75 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 13000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1024000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#2, #3]
+└── Group #5
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 1025000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#4]
+
+

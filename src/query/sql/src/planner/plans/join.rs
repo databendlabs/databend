@@ -510,8 +510,10 @@ impl Join {
         let inner_join_cardinality = join_estimation.join_card();
         let cardinality =
             self.join_cardinality(left_cardinality, right_cardinality, inner_join_cardinality);
-        let mut cluster_keys = left_statistics.cluster_keys.clone();
-        cluster_keys.extend(right_statistics.cluster_keys.clone());
+        // Hash join output follows the probe side. Build-side clustering is not
+        // preserved by hash table lookups, even though build-side columns remain
+        // available in the joined rows.
+        let cluster_keys = left_statistics.cluster_keys.clone();
         if let Some(columns) = join_estimation.updated_columns() {
             match self.join_type {
                 JoinType::LeftSemi => {
