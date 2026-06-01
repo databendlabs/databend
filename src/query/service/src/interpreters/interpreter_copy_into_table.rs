@@ -88,6 +88,7 @@ use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;
 use crate::table_functions::infer_schema::InferSchemaSeparator;
+use crate::table_functions::infer_schema::InferredJsonSchema;
 use crate::table_functions::infer_schema::merge_schema;
 
 const NDJSON_SCHEMA_EVOLUTION_AUTO_SAMPLE_FILES: usize = 64;
@@ -95,6 +96,7 @@ const NDJSON_SCHEMA_EVOLUTION_AUTO_RECORDS_PER_FILE: usize = 1000;
 const NDJSON_SCHEMA_EVOLUTION_AUTO_TOTAL_RECORDS: usize = 10000;
 const NDJSON_SCHEMA_EVOLUTION_SAMPLE_BYTES_PER_FILE: usize = 32 * 1024 * 1024;
 const NDJSON_SCHEMA_EVOLUTION_COMPRESSED_READ_CHUNK_BYTES: usize = 1024 * 1024;
+const NDJSON_SCHEMA_EVOLUTION_JSON_MAX_DEPTH: usize = 1;
 
 #[derive(Clone, Copy)]
 struct NdJsonSchemaEvolutionOptions {
@@ -491,7 +493,11 @@ impl CopyIntoTableInterpreter {
                             return Ok(None);
                         }
                         let schema =
-                            InferSchemaSeparator::infer_ndjson_schema(bytes, Some(max_records))?;
+                            InferSchemaSeparator::infer_ndjson_schema_state_with_max_depth(
+                                bytes,
+                                Some(max_records),
+                                NDJSON_SCHEMA_EVOLUTION_JSON_MAX_DEPTH,
+                            )?;
                         Ok::<_, ErrorCode>(Some((path, max_records, schema)))
                     });
                 }
@@ -505,7 +511,7 @@ impl CopyIntoTableInterpreter {
                 )
                 .await?;
 
-                let mut inferred_schema: Option<TableSchema> = None;
+                let mut inferred_schema: Option<InferredJsonSchema> = None;
                 let mut sampled_records_limit = 0usize;
                 let mut sampled_file_count = 0usize;
                 for result in results {
@@ -516,13 +522,17 @@ impl CopyIntoTableInterpreter {
                     sampled_file_count += 1;
                     inferred_schema = Some(match inferred_schema {
                         None => schema,
-                        Some(existing) => merge_schema(existing, schema),
+                        Some(mut existing) => {
+                            existing.merge(schema);
+                            existing
+                        }
                     });
                 }
 
                 let Some(inferred_schema) = inferred_schema else {
                     return Ok(None);
                 };
+                let inferred_schema = inferred_schema.into_table_schema();
 
                 let case_sensitive = stage_table_info.copy_into_table_options.column_match_mode
                     == Some(ColumnMatchMode::CaseSensitive);
@@ -1087,6 +1097,27 @@ mod tests {
         assert_eq!(options.sample_files, 3);
         assert_eq!(options.sample_records_per_file, 10);
         assert_eq!(options.sample_total_records, 20);
+    }
+
+    #[test]
+    fn test_ndjson_schema_evolution_default_depth() -> Result<()> {
+        let schema = InferSchemaSeparator::infer_ndjson_schema_state_with_max_depth(
+            b"{\"a\":1,\"b\":{\"c\":2}}\n",
+            None,
+            NDJSON_SCHEMA_EVOLUTION_JSON_MAX_DEPTH,
+        )?
+        .into_table_schema();
+
+        assert_eq!(
+            schema.field_with_name("a")?.data_type(),
+            &TableDataType::Number(databend_common_expression::types::NumberDataType::Int64)
+                .wrap_nullable()
+        );
+        assert_eq!(
+            schema.field_with_name("b")?.data_type(),
+            &TableDataType::Variant.wrap_nullable()
+        );
+        Ok(())
     }
 
     #[test]
