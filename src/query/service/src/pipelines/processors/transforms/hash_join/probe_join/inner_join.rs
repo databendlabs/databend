@@ -19,11 +19,14 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::KeyAccessor;
+use databend_common_io::extract_bbox_from_ewkb;
+use databend_common_io::extract_point_xy_from_ewkb;
 
 use crate::pipelines::processors::transforms::ProcessState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::build_state::BuildBlockGenerationState;
+use crate::pipelines::processors::transforms::hash_join::build_state::SpatialBboxCache;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::probe_state::ProbeBlockGenerationState;
 use crate::pipelines::processors::transforms::hash_join_table::HashJoinHashtableLike;
@@ -175,7 +178,7 @@ impl HashJoinProbeState {
         }
 
         if matched_idx > 0 {
-            result_blocks.push(self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
+            let block = self.process_inner_join_block::<FROM_RIGHT_SINGLE>(
                 matched_idx,
                 &process_state.input,
                 probe_indexes,
@@ -183,7 +186,10 @@ impl HashJoinProbeState {
                 &mut probe_state.generation_state,
                 &build_state.generation_state,
                 &mut right_single_scan_map,
-            )?);
+            )?;
+            if block.num_rows() > 0 {
+                result_blocks.push(block);
+            }
         }
 
         if !next_process_state {
@@ -224,14 +230,36 @@ impl HashJoinProbeState {
             return Err(ErrorCode::aborting());
         }
 
+        let filtered = build_state.spatial_bbox_cache.as_ref().map(|cache| {
+            Self::spatial_bbox_filter_indexes(
+                input,
+                &probe_indexes[0..matched_idx],
+                &build_indexes[0..matched_idx],
+                cache,
+            )
+        });
+
+        let (pi, bi, effective_count) = match &filtered {
+            Some((fp, fb, cnt)) => (fp.as_slice(), fb.as_slice(), *cnt),
+            None => (
+                &probe_indexes[0..matched_idx],
+                &build_indexes[0..matched_idx],
+                matched_idx,
+            ),
+        };
+
+        if effective_count == 0 {
+            return Ok(DataBlock::new(vec![], 0));
+        }
+
         let probe_block = if probe_state.is_probe_projected {
-            Some(DataBlock::take(input, &probe_indexes[0..matched_idx])?)
+            Some(DataBlock::take(input, pi)?)
         } else {
             None
         };
         let build_block = if build_state.is_build_projected {
             Some(self.hash_join_state.gather(
-                &build_indexes[0..matched_idx],
+                bi,
                 &build_state.build_columns,
                 &build_state.build_columns_data_type,
                 &build_state.build_num_rows,
@@ -240,7 +268,7 @@ impl HashJoinProbeState {
             None
         };
 
-        let mut result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
+        let mut result_block = self.merge_eq_block(probe_block, build_block, effective_count);
 
         if !self.hash_join_state.probe_to_build.is_empty() {
             for (index, (is_probe_nullable, is_build_nullable)) in
@@ -260,11 +288,7 @@ impl HashJoinProbeState {
         }
 
         if FROM_RIGHT_SINGLE {
-            self.update_right_single_scan_map(
-                &build_indexes[0..matched_idx],
-                right_single_scan_map,
-                None,
-            )?;
+            self.update_right_single_scan_map(bi, right_single_scan_map, None)?;
         }
 
         Ok(result_block)
@@ -336,5 +360,85 @@ impl HashJoinProbeState {
         }
         process_state.next_idx = next_idx;
         Ok(true)
+    }
+
+    fn spatial_bbox_filter_indexes(
+        input: &DataBlock,
+        probe_indexes: &[u32],
+        build_indexes: &[RowPtr],
+        cache: &SpatialBboxCache,
+    ) -> (Vec<u32>, Vec<RowPtr>, usize) {
+        let probe_col = input.get_by_offset(cache.probe_geom_col_idx).to_column();
+
+        // Pre-compute probe SRIDs once per input block row (not per pair).
+        let num_probe_rows = input.num_rows();
+        let mut probe_srids: Vec<Option<i32>> = Vec::with_capacity(num_probe_rows);
+        for row_idx in 0..num_probe_rows {
+            let value = unsafe { probe_col.index_unchecked(row_idx) };
+            let srid = match value {
+                databend_common_expression::ScalarRef::Geometry(ewkb) => {
+                    databend_common_io::read_srid_from_bytes(ewkb)
+                }
+                _ => None,
+            };
+            probe_srids.push(srid);
+        }
+
+        let mut filtered_probe = Vec::with_capacity(probe_indexes.len());
+        let mut filtered_build = Vec::with_capacity(build_indexes.len());
+
+        for i in 0..probe_indexes.len() {
+            let build_bbox =
+                match cache.get_bbox(build_indexes[i].chunk_index, build_indexes[i].row_index) {
+                    Some(bb) => bb,
+                    None => {
+                        filtered_probe.push(probe_indexes[i]);
+                        filtered_build.push(build_indexes[i]);
+                        continue;
+                    }
+                };
+
+            let probe_idx = probe_indexes[i] as usize;
+
+            // Per-pair SRID check using pre-computed values.
+            let probe_srid = probe_srids[probe_idx].unwrap_or(0);
+            let build_srid = cache
+                .get_srid(build_indexes[i].chunk_index, build_indexes[i].row_index)
+                .unwrap_or(0);
+            if probe_srid != build_srid {
+                filtered_probe.push(probe_indexes[i]);
+                filtered_build.push(build_indexes[i]);
+                continue;
+            }
+
+            let probe_value = unsafe { probe_col.index_unchecked(probe_idx) };
+
+            let keep = match probe_value {
+                databend_common_expression::ScalarRef::Geometry(ewkb) => {
+                    if let Some((px, py)) = extract_point_xy_from_ewkb(ewkb) {
+                        px >= build_bbox.0
+                            && px <= build_bbox.2
+                            && py >= build_bbox.1
+                            && py <= build_bbox.3
+                    } else if let Some(probe_bbox) = extract_bbox_from_ewkb(ewkb) {
+                        probe_bbox.2 >= build_bbox.0
+                            && probe_bbox.0 <= build_bbox.2
+                            && probe_bbox.3 >= build_bbox.1
+                            && probe_bbox.1 <= build_bbox.3
+                    } else {
+                        true
+                    }
+                }
+                _ => true,
+            };
+
+            if keep {
+                filtered_probe.push(probe_indexes[i]);
+                filtered_build.push(build_indexes[i]);
+            }
+        }
+
+        let count = filtered_probe.len();
+        (filtered_probe, filtered_build, count)
     }
 }

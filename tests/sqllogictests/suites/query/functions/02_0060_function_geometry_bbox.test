@@ -1,0 +1,138 @@
+## Tests for spatial bbox pre-filter optimization correctness
+
+# -- SRID incompatibility must still raise error (not swallowed by bbox shortcut) --
+
+statement error Incompatible SRID
+SELECT ST_Intersects(
+    ST_SetSRID(TO_GEOMETRY('POINT(0 0)'), 4326),
+    ST_SetSRID(TO_GEOMETRY('POINT(1 1)'), 3857)
+);
+
+statement error Incompatible SRID
+SELECT ST_Contains(
+    ST_SetSRID(TO_GEOMETRY('POLYGON((0 0, 10 0, 10 10, 0 10, 0 0))'), 4326),
+    ST_SetSRID(TO_GEOMETRY('POINT(5 5)'), 3857)
+);
+
+statement error Incompatible SRID
+SELECT ST_DWithin(
+    ST_SetSRID(TO_GEOMETRY('POINT(0 0)'), 4326),
+    ST_SetSRID(TO_GEOMETRY('POINT(1 1)'), 3857),
+    100.0
+);
+
+# -- Bbox pre-filter correctness: non-intersecting bboxes return false --
+
+query B
+SELECT ST_Intersects(TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
+----
+0
+
+query B
+SELECT ST_Within(TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
+----
+0
+
+query B
+SELECT ST_Contains(TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'), TO_GEOMETRY('POINT(100 100)'));
+----
+0
+
+query B
+SELECT ST_DWithin(TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POINT(0 0)'), 1.0);
+----
+0
+
+# -- Bbox pre-filter correctness: intersecting bboxes still do precise check --
+
+query B
+SELECT ST_Intersects(TO_GEOMETRY('POINT(0.5 0.5)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
+----
+1
+
+query B
+SELECT ST_Within(TO_GEOMETRY('POINT(0.5 2)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
+----
+0
+
+# -- Spatial join: all pairs filtered by bbox --
+
+statement ok
+DROP TABLE IF EXISTS bbox_test_points
+
+statement ok
+DROP TABLE IF EXISTS bbox_test_polys
+
+statement ok
+CREATE TABLE bbox_test_points (id INT, geom GEOMETRY)
+
+statement ok
+CREATE TABLE bbox_test_polys (id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO bbox_test_points VALUES
+    (1, TO_GEOMETRY('POINT(100 100)')),
+    (2, TO_GEOMETRY('POINT(200 200)'))
+
+statement ok
+INSERT INTO bbox_test_polys VALUES
+    (1, TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))')),
+    (2, TO_GEOMETRY('POLYGON((2 2, 3 2, 3 3, 2 3, 2 2))'))
+
+query I
+SELECT COUNT(*) FROM bbox_test_points p JOIN bbox_test_polys g ON ST_Within(p.geom, g.geom);
+----
+0
+
+# -- Spatial join: some pairs pass bbox, some don't --
+
+statement ok
+INSERT INTO bbox_test_points VALUES (3, TO_GEOMETRY('POINT(0.5 0.5)'))
+
+query I
+SELECT COUNT(*) FROM bbox_test_points p JOIN bbox_test_polys g ON ST_Within(p.geom, g.geom);
+----
+1
+
+# -- Spatial join with ST_DWithin and distance expansion --
+
+query I
+SELECT COUNT(*) FROM bbox_test_points p JOIN bbox_test_polys g ON ST_DWithin(p.geom, g.geom, 0.1);
+----
+1
+
+query I
+SELECT COUNT(*) FROM bbox_test_points p JOIN bbox_test_polys g ON ST_DWithin(p.geom, g.geom, 200.0);
+----
+4
+
+# -- Spatial join: bbox cache must bind to the geometry used by the spatial predicate --
+
+statement ok
+DROP TABLE IF EXISTS bbox_test_multi_probe
+
+statement ok
+CREATE TABLE bbox_test_multi_probe (id INT, g1 GEOMETRY, g2 GEOMETRY)
+
+statement ok
+INSERT INTO bbox_test_multi_probe VALUES
+    (1, TO_GEOMETRY('POINT(100 100)'), TO_GEOMETRY('POINT(0.5 0.5)'))
+
+query I
+SELECT COUNT(*)
+FROM bbox_test_multi_probe p
+JOIN bbox_test_polys g
+    ON ST_Within(p.g2, g.geom) AND p.g1 IS NOT NULL;
+----
+1
+
+# -- Cleanup --
+
+statement ok
+DROP TABLE bbox_test_points
+
+statement ok
+DROP TABLE bbox_test_polys
+
+statement ok
+DROP TABLE bbox_test_multi_probe

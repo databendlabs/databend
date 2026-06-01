@@ -18,6 +18,7 @@ use databend_common_expression::EvalContext;
 use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::types::ArgType;
+use databend_common_expression::types::BooleanType;
 use databend_common_expression::types::GeographyType;
 use databend_common_expression::types::GeometryType;
 use databend_common_expression::types::Int32Type;
@@ -25,6 +26,8 @@ use databend_common_expression::types::NullableType;
 use databend_common_expression::vectorize_with_builder_1_arg;
 use databend_common_expression::vectorize_with_builder_2_arg;
 use databend_common_io::ewkb_to_geo;
+use databend_common_io::extract_bbox_from_ewkb;
+use databend_common_io::read_srid;
 use geo::Geometry;
 use geozero::ToGeo;
 use geozero::wkb::Ewkb;
@@ -126,6 +129,71 @@ pub(crate) fn geometry_binary_fn<O: ArgType>(
                     Err(e) => {
                         ctx.set_error(row, e.to_string());
                         O::push_default(builder);
+                    }
+                }
+            },
+        ),
+    );
+}
+
+/// Like `geometry_binary_fn` but with bbox pre-check for spatial predicates.
+/// If bboxes don't intersect, returns `false_value` immediately without full geometry parsing.
+/// SRID compatibility is checked before the bbox shortcut to preserve error semantics.
+pub(crate) fn geometry_binary_predicate_fn(
+    name: &str,
+    registry: &mut FunctionRegistry,
+    false_value: bool,
+    op: fn(Geometry, Geometry, Option<i32>) -> Result<bool>,
+) {
+    registry.register_passthrough_nullable_2_arg::<GeometryType, GeometryType, BooleanType, _, _>(
+        name,
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<GeometryType, GeometryType, BooleanType>(
+            move |l_ewkb, r_ewkb, builder, ctx| {
+                let row = builder.len();
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(row) {
+                        builder.push(false_value);
+                        return;
+                    }
+                }
+
+                // Check SRID compatibility before bbox shortcut.
+                let l_srid = read_srid(&mut Ewkb(l_ewkb));
+                let r_srid = read_srid(&mut Ewkb(r_ewkb));
+                if !check_incompatible_srid(l_srid, r_srid, row, ctx) {
+                    builder.push(false_value);
+                    return;
+                }
+
+                // Bbox pre-check: if bboxes don't intersect, spatial predicate is guaranteed false.
+                if let (Some(l_bbox), Some(r_bbox)) = (
+                    extract_bbox_from_ewkb(l_ewkb),
+                    extract_bbox_from_ewkb(r_ewkb),
+                ) {
+                    if l_bbox.2 < r_bbox.0
+                        || l_bbox.0 > r_bbox.2
+                        || l_bbox.3 < r_bbox.1
+                        || l_bbox.1 > r_bbox.3
+                    {
+                        builder.push(false_value);
+                        return;
+                    }
+                }
+
+                let result = match (
+                    ewkb_to_geo(&mut Ewkb(l_ewkb)),
+                    ewkb_to_geo(&mut Ewkb(r_ewkb)),
+                ) {
+                    (Ok((l_geo, _)), Ok((r_geo, _))) => op(l_geo, r_geo, l_srid),
+                    (Err(e), _) | (_, Err(e)) => Err(e),
+                };
+
+                match result {
+                    Ok(result) => builder.push(result),
+                    Err(e) => {
+                        ctx.set_error(row, e.to_string());
+                        builder.push(false_value);
                     }
                 }
             },

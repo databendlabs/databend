@@ -47,6 +47,10 @@ pub struct PhysicalRuntimeFilter {
     /// All probe targets in this list are in the same equivalence class
     pub probe_targets: Vec<(RemoteExpr<String>, usize)>,
 
+    /// Probe-side join expression paired with `build_key`.
+    #[serde(default)]
+    pub probe_key: Option<RemoteExpr>,
+
     pub build_table_rows: Option<u64>,
 
     /// Enable bloom filter for this runtime filter

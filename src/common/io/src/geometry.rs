@@ -244,6 +244,13 @@ pub fn rect_to_polygon(rect: Rect<f64>) -> Polygon<f64> {
     Polygon::new(exterior, vec![])
 }
 
+/// Read SRID from raw EWKB bytes without constructing a Geometry object.
+pub fn read_srid_from_bytes(ewkb: &[u8]) -> Option<i32> {
+    let mut srid_processor = SridProcessor::new();
+    Ewkb(ewkb).process_geom(&mut srid_processor).ok()?;
+    srid_processor.srid
+}
+
 /// Process EWKB input and return SRID.
 pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
     let mut srid_processor = SridProcessor::new();
@@ -448,4 +455,69 @@ pub fn point_to_geohash(ewkb: &[u8], precision: Option<i32>) -> Result<String> {
     let point = Point::try_from(geo).map_err(|e| ErrorCode::GeometryError(e.to_string()))?;
     encode(point.0, precision.map_or(12, |p| p as usize))
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
+}
+
+/// Extract bounding box from EWKB without constructing a full Geometry object.
+pub fn extract_bbox_from_ewkb(ewkb: &[u8]) -> Option<(f64, f64, f64, f64)> {
+    let mut processor = BboxProcessor::new();
+    Ewkb(ewkb).process_geom(&mut processor).ok()?;
+    processor.bbox()
+}
+
+/// Extract (x, y) from EWKB if it contains exactly one point.
+pub fn extract_point_xy_from_ewkb(ewkb: &[u8]) -> Option<(f64, f64)> {
+    let mut processor = BboxProcessor::new();
+    Ewkb(ewkb).process_geom(&mut processor).ok()?;
+    if processor.count == 1 {
+        Some((processor.min_x, processor.min_y))
+    } else {
+        None
+    }
+}
+
+struct BboxProcessor {
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+    count: usize,
+}
+
+impl BboxProcessor {
+    fn new() -> Self {
+        Self {
+            min_x: f64::INFINITY,
+            min_y: f64::INFINITY,
+            max_x: f64::NEG_INFINITY,
+            max_y: f64::NEG_INFINITY,
+            count: 0,
+        }
+    }
+
+    fn bbox(&self) -> Option<(f64, f64, f64, f64)> {
+        if self.count == 0 {
+            None
+        } else {
+            Some((self.min_x, self.min_y, self.max_x, self.max_y))
+        }
+    }
+}
+
+impl GeomProcessor for BboxProcessor {
+    fn xy(&mut self, x: f64, y: f64, _idx: usize) -> geozero::error::Result<()> {
+        if x < self.min_x {
+            self.min_x = x;
+        }
+        if x > self.max_x {
+            self.max_x = x;
+        }
+        if y < self.min_y {
+            self.min_y = y;
+        }
+        if y > self.max_y {
+            self.max_y = y;
+        }
+        self.count += 1;
+        Ok(())
+    }
 }

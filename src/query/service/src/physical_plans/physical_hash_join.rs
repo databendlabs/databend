@@ -91,6 +91,7 @@ type JoinConditionsResult = (
 type JoinNonEquiConditionsResult = (
     Vec<RemoteExpr>,
     Vec<RemoteExpr>,
+    Vec<RemoteExpr>,
     Vec<Option<(RemoteExpr<String>, usize, usize, Symbol, bool)>>,
     Vec<Option<IndexType>>,
     Vec<SpatialRuntimeFilterMode>,
@@ -1246,6 +1247,7 @@ impl PhysicalPlanBuilder {
         merged_schema: &DataSchemaRef,
     ) -> Result<JoinNonEquiConditionsResult> {
         let mut spatial_right_join_conditions = Vec::new();
+        let mut spatial_probe_join_conditions = Vec::new();
         let mut spatial_left_join_conditions_rt = Vec::new();
         let mut spatial_build_table_indexes = Vec::new();
         let mut spatial_modes = Vec::new();
@@ -1329,6 +1331,13 @@ impl PhysicalPlanBuilder {
                 ConstantFolder::fold(&build_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             spatial_right_join_conditions.push(build_expr.as_remote_expr());
 
+            let probe_join_expr = probe_arg
+                .type_check(probe_schema.as_ref())?
+                .project_column_ref(|index| probe_schema.index_of(&index.to_string()))?;
+            let (probe_join_expr, _) =
+                ConstantFolder::fold(&probe_join_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            spatial_probe_join_conditions.push(probe_join_expr.as_remote_expr());
+
             let probe_expr_for_runtime_filter = self.prepare_runtime_filter_expr(probe_arg)?;
             let probe_expr_for_runtime_filter =
                 probe_expr_for_runtime_filter.map(|(expr, scan_id, table_index, column_idx)| {
@@ -1375,6 +1384,7 @@ impl PhysicalPlanBuilder {
         Ok((
             non_equi_conditions,
             spatial_right_join_conditions,
+            spatial_probe_join_conditions,
             spatial_left_join_conditions_rt,
             spatial_build_table_indexes,
             spatial_modes,
@@ -1532,6 +1542,7 @@ impl PhysicalPlanBuilder {
         let (
             non_equi_conditions,
             spatial_right_join_conditions,
+            spatial_probe_join_conditions,
             spatial_left_join_conditions_rt,
             spatial_build_table_indexes,
             spatial_modes,
@@ -1541,6 +1552,9 @@ impl PhysicalPlanBuilder {
         runtime_filter_right_conditions.extend(spatial_right_join_conditions);
         let mut runtime_filter_left_conditions_rt = left_join_conditions_rt.clone();
         runtime_filter_left_conditions_rt.extend(spatial_left_join_conditions_rt);
+        let mut runtime_filter_probe_join_conditions = vec![None; right_join_conditions.len()];
+        runtime_filter_probe_join_conditions
+            .extend(spatial_probe_join_conditions.into_iter().map(Some));
         let mut runtime_filter_build_table_indexes = build_table_indexes.clone();
         runtime_filter_build_table_indexes.extend(spatial_build_table_indexes);
         let mut runtime_filter_spatial_modes = vec![None; right_join_conditions.len()];
@@ -1554,6 +1568,7 @@ impl PhysicalPlanBuilder {
             s_expr,
             &runtime_filter_right_conditions,
             runtime_filter_left_conditions_rt,
+            runtime_filter_probe_join_conditions,
             runtime_filter_build_table_indexes,
             runtime_filter_spatial_modes,
         )

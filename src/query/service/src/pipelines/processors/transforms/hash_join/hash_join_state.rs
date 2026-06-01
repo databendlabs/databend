@@ -282,6 +282,7 @@ impl HashJoinState {
         build_state.generation_state.build_num_rows = 0;
         build_state.generation_state.build_columns.clear();
         build_state.generation_state.build_columns_data_type.clear();
+        build_state.generation_state.spatial_bbox_cache = None;
         if self.need_outer_scan() {
             build_state.outer_scan_map.clear();
         }

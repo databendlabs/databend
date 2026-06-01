@@ -42,6 +42,7 @@ use databend_common_expression::RemoteExpr;
 use databend_common_expression::arrow::and_validities;
 use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
+use databend_common_io::extract_bbox_from_ewkb;
 use databend_common_pipeline_transforms::MemorySettings;
 use databend_common_sql::plans::JoinType;
 use ethnum::U256;
@@ -54,6 +55,7 @@ use tokio::sync::Barrier;
 use super::concat_buffer::ConcatBuffer;
 use super::desc::RuntimeFilterDesc;
 use super::runtime_filter::JoinRuntimeFilterPacket;
+use crate::physical_plans::SpatialRuntimeFilterMode;
 use crate::pipelines::memory_settings::MemorySettingsExt;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::transforms::UniqueFixedKeyHashJoinHashTable;
@@ -63,6 +65,7 @@ use crate::pipelines::processors::transforms::hash_join::FixedKeyHashJoinHashTab
 use crate::pipelines::processors::transforms::hash_join::HashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SerializerHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::SingleBinaryHashJoinHashTable;
+use crate::pipelines::processors::transforms::hash_join::build_state::SpatialBboxCache;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::transform_hash_join_build::HashTableType;
@@ -838,6 +841,8 @@ impl HashJoinBuildState {
                 .collect();
             build_state.generation_state.build_columns_data_type = columns_data_type;
             build_state.generation_state.build_columns = columns;
+
+            self.try_build_spatial_bbox_cache(build_state);
         }
     }
 
@@ -943,6 +948,116 @@ impl HashJoinBuildState {
             .filters
             .iter()
             .any(|rf| rf.enable_bloom_runtime_filter)
+    }
+
+    fn try_build_spatial_bbox_cache(&self, build_state: &mut super::build_state::BuildState) {
+        let spatial_filter = self
+            .hash_join_state
+            .hash_join_desc
+            .runtime_filter
+            .filters
+            .iter()
+            .find(|f| f.spatial_mode.is_some());
+
+        let spatial_filter = match spatial_filter {
+            Some(f) => f,
+            None => return,
+        };
+
+        let distance = match &spatial_filter.spatial_mode {
+            Some(SpatialRuntimeFilterMode::DistanceWithin(d)) => *d,
+            _ => 0.0,
+        };
+
+        let chunks = &build_state.generation_state.chunks;
+        if chunks.is_empty() {
+            return;
+        }
+
+        // Identify build-side geometry column from build_key expression.
+        let build_col_refs = spatial_filter.build_key.column_refs();
+        let build_schema_idx = match build_col_refs.keys().next() {
+            Some(&idx) => idx,
+            None => return,
+        };
+        // Map build schema index to chunk column position via build_projection.
+        let build_projection = &self.hash_join_state.hash_join_desc.build_projection;
+        let build_geom_col_idx = match build_projection.iter().position(|&i| i == build_schema_idx)
+        {
+            Some(pos) => pos,
+            None => return,
+        };
+
+        // Identify probe-side geometry column from the probe expression paired with this
+        // spatial runtime filter.
+        let probe_geom_col_idx = spatial_filter.probe_key.as_ref().and_then(|probe_key| {
+            let col_refs = probe_key.column_refs();
+            col_refs.into_iter().find_map(|(idx, dt)| {
+                if dt.remove_nullable() == DataType::Geometry {
+                    self.hash_join_state
+                        .hash_join_desc
+                        .probe_projection
+                        .iter()
+                        .position(|&i| i == idx)
+                } else {
+                    None
+                }
+            })
+        });
+
+        let probe_geom_col_idx = match probe_geom_col_idx {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        // Extract bbox and SRID for each build row.
+        let mut bboxes: Vec<Vec<Option<(f64, f64, f64, f64)>>> = Vec::with_capacity(chunks.len());
+        let mut srids: Vec<Vec<Option<i32>>> = Vec::with_capacity(chunks.len());
+        for chunk in chunks.iter() {
+            let col = chunk.get_by_offset(build_geom_col_idx).to_column();
+            let num_rows = chunk.num_rows();
+            let mut chunk_bboxes = Vec::with_capacity(num_rows);
+            let mut chunk_srids = Vec::with_capacity(num_rows);
+
+            for row_idx in 0..num_rows {
+                let value = unsafe { col.index_unchecked(row_idx) };
+                let (bbox, srid) = match value {
+                    databend_common_expression::ScalarRef::Geometry(ewkb) => {
+                        let srid = databend_common_io::read_srid_from_bytes(ewkb);
+                        let mut bb = extract_bbox_from_ewkb(ewkb);
+                        if distance > 0.0 {
+                            if let Some(ref mut b) = bb {
+                                b.0 -= distance;
+                                b.1 -= distance;
+                                b.2 += distance;
+                                b.3 += distance;
+                            }
+                        }
+                        (bb, srid)
+                    }
+                    _ => (None, None),
+                };
+                chunk_bboxes.push(bbox);
+                chunk_srids.push(srid);
+            }
+            bboxes.push(chunk_bboxes);
+            srids.push(chunk_srids);
+        }
+
+        info!(
+            "spatial bbox cache built: {} chunks, {} total rows, distance={}, build_col={}, probe_col={}",
+            bboxes.len(),
+            build_state.generation_state.build_num_rows,
+            distance,
+            build_geom_col_idx,
+            probe_geom_col_idx,
+        );
+
+        build_state.generation_state.spatial_bbox_cache = Some(SpatialBboxCache {
+            bboxes,
+            srids,
+            probe_geom_col_idx,
+        });
     }
 }
 

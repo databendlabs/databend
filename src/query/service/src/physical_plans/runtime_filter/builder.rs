@@ -93,6 +93,7 @@ pub async fn build_runtime_filter(
     s_expr: &SExpr,
     build_keys: &[RemoteExpr],
     probe_keys: ProbeKeysWithRuntimeFilter,
+    probe_join_keys: Vec<Option<RemoteExpr>>,
     build_table_indexes: Vec<Option<IndexType>>,
     spatial_modes: Vec<Option<SpatialRuntimeFilterMode>>,
 ) -> Result<PhysicalRuntimeFilters> {
@@ -130,14 +131,16 @@ pub async fn build_runtime_filter(
         _table_index,
         column_idx,
         is_null_equal,
+        probe_join_key,
         build_table_index,
         spatial_mode,
     ) in build_keys
         .iter()
         .zip(probe_keys.into_iter())
+        .zip(probe_join_keys.into_iter())
         .zip(build_table_indexes.into_iter())
         .zip(spatial_modes.into_iter())
-        .filter_map(|(((b, p), table_idx), spatial_mode)| {
+        .filter_map(|((((b, p), probe_join_key), table_idx), spatial_mode)| {
             p.map(|(p, scan_id, table_index, column_idx, is_null_equal)| {
                 (
                     b,
@@ -146,6 +149,7 @@ pub async fn build_runtime_filter(
                     table_index,
                     column_idx,
                     is_null_equal,
+                    probe_join_key,
                     table_idx,
                     spatial_mode,
                 )
@@ -189,6 +193,7 @@ pub async fn build_runtime_filter(
             id,
             build_key: build_key.clone(),
             probe_targets,
+            probe_key: probe_join_key,
             build_table_rows,
             enable_bloom_runtime_filter,
             enable_inlist_runtime_filter,
