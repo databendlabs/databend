@@ -20,6 +20,7 @@ mod native_data_source_deserializer;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_rows_fetcher;
+mod progressive_topk;
 mod raw_data_source;
 mod read_block_context;
 mod read_data_source;

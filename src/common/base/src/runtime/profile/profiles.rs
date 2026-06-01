@@ -63,6 +63,7 @@ pub enum ProfileStatisticsName {
     RuntimeFilterInlistMinMaxTime,
     RuntimeFilterSpatialTime,
     RuntimeFilterBuildTime,
+    ProgressiveTopKPruneParts,
     MemoryUsage,
     ExternalServerRetryCount,
     ExternalServerRequestCount,
@@ -353,6 +354,13 @@ pub fn get_statistics_desc() -> Arc<BTreeMap<ProfileStatisticsName, ProfileDesc>
                 desc: "Time spent on building runtime filters",
                 index: ProfileStatisticsName::RuntimeFilterBuildTime as usize,
                 unit: StatisticsUnit::NanoSeconds,
+                plain_statistics: true,
+            }),
+            (ProfileStatisticsName::ProgressiveTopKPruneParts, ProfileDesc {
+                display_name: "progressive topk pruned parts",
+                desc: "The number of parts pruned by progressive TopK scan",
+                index: ProfileStatisticsName::ProgressiveTopKPruneParts as usize,
+                unit: StatisticsUnit::Count,
                 plain_statistics: true,
             }),
             (ProfileStatisticsName::MemoryUsage, ProfileDesc {

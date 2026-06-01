@@ -43,6 +43,7 @@ use databend_common_expression::ColumnId;
 use databend_common_expression::Scalar;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
+use databend_common_expression::types::DataType;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_meta_app::schema::TableIndex;
 use databend_common_meta_app::schema::TableIndexType;
@@ -532,8 +533,8 @@ impl FuseTable {
 
         let top_k = push_down
             .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
             .and_then(|p| p.top_k(self.schema().as_ref()))
+            .filter(|top_k| self.is_native() || supports_fuse_parquet_topk(top_k))
             .map(|topk| {
                 DefaultExprBinder::try_new(ctx.clone())?
                     .get_scalar(&topk.field)
@@ -850,8 +851,8 @@ impl FuseTable {
 
         let top_k = push_downs
             .as_ref()
-            .filter(|_| self.is_native()) // Only native format supports topk push down.
             .and_then(|p| p.top_k(self.schema().as_ref()))
+            .filter(|top_k| self.is_native() || supports_fuse_parquet_topk(top_k))
             .map(|topk| {
                 DefaultExprBinder::try_new(ctx.clone())?
                     .get_scalar(&topk.field)
@@ -1224,4 +1225,11 @@ impl FuseTable {
             create_on,
         )
     }
+}
+
+fn supports_fuse_parquet_topk(top_k: &TopK) -> bool {
+    matches!(
+        DataType::from(top_k.field.data_type()),
+        DataType::Number(_) | DataType::Date | DataType::Timestamp
+    )
 }
