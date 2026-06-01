@@ -353,6 +353,7 @@ async fn analyze_table(
         &mut pipeline,
         HashMap::new(),
         false,
+        true,
     )?;
     pipeline.set_max_threads(ctx.get_settings().get_max_threads()? as usize);
     let executor_settings = ExecutorSettings::try_create(ctx.clone())?;

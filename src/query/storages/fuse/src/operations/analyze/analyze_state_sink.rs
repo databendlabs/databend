@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use async_channel::Receiver;
+use backoff::backoff::Backoff;
 use databend_common_catalog::plan::PartitionsShuffleKind;
 use databend_common_catalog::table::Table;
 use databend_common_catalog::table::TableExt;
@@ -52,6 +53,7 @@ use crate::FuseTable;
 use crate::io::SegmentsIO;
 use crate::operations::analyze::AnalyzeCollectNDVSource;
 use crate::operations::analyze::AnalyzeNDVMeta;
+use crate::operations::util::set_backoff;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
 use crate::statistics::reducers::reduce_virtual_column_statistics;
@@ -64,6 +66,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
         no_scan: bool,
+        retry_commit: bool,
     ) -> Result<()> {
         let mut parts = Vec::with_capacity(snapshot.segments.len());
         for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -94,6 +97,7 @@ impl FuseTable {
                 snapshot.snapshot_id,
                 input,
                 histogram_info_receivers.clone(),
+                retry_commit,
             )
         })?;
         Ok(())
@@ -121,6 +125,7 @@ struct SinkAnalyzeState {
     ndv_states: HashMap<ColumnId, MetaHLL>,
     histograms: HashMap<ColumnId, Vec<HistogramBucket>>,
     step: AnalyzeStep,
+    retry_commit: bool,
 }
 
 impl SinkAnalyzeState {
@@ -130,6 +135,7 @@ impl SinkAnalyzeState {
         snapshot_id: SnapshotId,
         input_port: Arc<InputPort>,
         histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
+        retry_commit: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(SinkAnalyzeState {
             ctx,
@@ -144,6 +150,7 @@ impl SinkAnalyzeState {
             ndv_states: Default::default(),
             histograms: Default::default(),
             step: AnalyzeStep::CollectNDV,
+            retry_commit,
         })))
     }
 
@@ -271,6 +278,35 @@ impl SinkAnalyzeState {
                 &table.operator,
             )
             .await
+    }
+
+    async fn commit_statistics_with_retry(&mut self) -> Result<()> {
+        if !self.retry_commit {
+            return self.commit_statistics().await;
+        }
+
+        let mut retries = 0;
+        let mut backoff = set_backoff(None, None, None);
+        loop {
+            match self.commit_statistics().await {
+                Ok(_) => return Ok(()),
+                Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
+                    let Some(duration) = backoff.next_backoff() else {
+                        return Err(ErrorCode::StorageOther(format!(
+                            "commit analyze statistics failed after {retries} retries"
+                        )));
+                    };
+                    retries += 1;
+                    log::warn!(
+                        "Retry analyze statistics commit after TableVersionMismatched, sleep {} ms, retrying {} times",
+                        duration.as_millis(),
+                        retries
+                    );
+                    tokio::time::sleep(duration).await;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     async fn regenerate_statistics(
@@ -438,18 +474,7 @@ impl Processor for SinkAnalyzeState {
                 }
             }
             AnalyzeStep::CommitStatistics => {
-                let mismatch_code = ErrorCode::TABLE_VERSION_MISMATCHED;
-                loop {
-                    if let Err(e) = self.commit_statistics().await {
-                        if e.code() == mismatch_code {
-                            log::warn!("Retry after got TableVersionMismatched");
-                            continue;
-                        } else {
-                            return Err(e);
-                        }
-                    }
-                    break;
-                }
+                self.commit_statistics_with_retry().await?;
                 self.committed = true;
             }
             _ => unreachable!(),
