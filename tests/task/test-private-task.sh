@@ -74,6 +74,13 @@ check_response_error() {
     fi
 }
 
+query_sql_with_auth() {
+    local auth="$1"
+    local sql="$2"
+
+    curl -s -u "$auth" -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "$(jq -nc --arg sql "$sql" '{sql: $sql}')"
+}
+
 license_sql=$(head -n 1 scripts/test-bend-tests/setup.sql)
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"$license_sql\"}")
 check_response_error "$response"
@@ -466,6 +473,100 @@ else
     echo "❌ Expected TASK_HISTORY to preserve millisecond schedule"
     echo "Name: $name"
     echo "Schedule: $schedule"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "CREATE ROLE task_history_role_a")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE ROLE task_history_role_b")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE USER task_history_user_a IDENTIFIED BY 'task_history_pwd' WITH DEFAULT_ROLE='task_history_role_a'")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "CREATE USER task_history_user_b IDENTIFIED BY 'task_history_pwd' WITH DEFAULT_ROLE='task_history_role_b'")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT ROLE task_history_role_a TO task_history_user_a")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT ROLE task_history_role_b TO task_history_user_b")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT ALL ON *.* TO ROLE task_history_role_a")
+check_response_error "$response"
+response=$(query_sql_with_auth "root:" "GRANT ALL ON *.* TO ROLE task_history_role_b")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "CREATE TASK role_a_history_task AS SELECT 1")
+check_response_error "$response"
+response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "EXECUTE TASK role_a_history_task")
+check_response_error "$response"
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "CREATE TASK role_b_history_task AS SELECT 1")
+check_response_error "$response"
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "EXECUTE TASK role_b_history_task")
+check_response_error "$response"
+
+sleep 5
+
+response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "SELECT * FROM TASK_HISTORY(TASK_NAME => 'role_a_history_task', RESULT_LIMIT => 1)")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+name=$(echo "$response" | jq -r '.data[0][0]')
+owner=$(echo "$response" | jq -r '.data[0][2]')
+state=$(echo "$response" | jq -r '.data[0][6]')
+definition=$(echo "$response" | jq -r '.data[0][7]')
+scheduled_time=$(echo "$response" | jq -r '.data[0][15]')
+if [ "$name" = "role_a_history_task" ] &&
+    [ "$owner" = "task_history_role_a" ] &&
+    [ "$state" = "SUCCEEDED" ] &&
+    [ "$definition" = "SELECT 1" ] &&
+    [ -n "$scheduled_time" ]; then
+    echo "✅ TASK_HISTORY returns history for an available owner role"
+else
+    echo "❌ Expected TASK_HISTORY to return role_a_history_task for task_history_role_a"
+    echo "Name: $name"
+    echo "Owner: $owner"
+    echo "State: $state"
+    echo "Definition: $definition"
+    echo "Scheduled Time: $scheduled_time"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "SELECT * FROM TASK_HISTORY(TASK_NAME => 'role_a_history_task', RESULT_LIMIT => 1)")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+check_task_history_schema "$response"
+actual=$(echo "$response" | jq -c '.data')
+if [ "$actual" = "[]" ]; then
+    echo "✅ TASK_HISTORY hides explicitly named tasks owned by unavailable roles"
+else
+    echo "❌ Expected TASK_HISTORY to hide role_a_history_task from task_history_role_b"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "task_history_user_b:task_history_pwd" "SELECT name, owner FROM TASK_HISTORY(RESULT_LIMIT => 100) WHERE name IN ('role_a_history_task', 'role_b_history_task') ORDER BY name")
+check_response_error "$response"
+state=$(echo "$response" | jq -r '.state')
+if [ "$state" != "Succeeded" ]; then
+    echo "❌ Failed"
+    exit 1
+fi
+actual=$(echo "$response" | jq -c '.data')
+expected='[["role_b_history_task","task_history_role_b"]]'
+if [ "$actual" = "$expected" ]; then
+    echo "✅ TASK_HISTORY filters unqualified history by available owner roles"
+else
+    echo "❌ Expected TASK_HISTORY without TASK_NAME to only return available owner roles"
+    echo "Expected: $expected"
     echo "Actual  : $actual"
     exit 1
 fi

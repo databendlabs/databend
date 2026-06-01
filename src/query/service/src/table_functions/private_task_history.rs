@@ -157,9 +157,15 @@ impl PrivateTaskHistorySource {
             .as_any()
             .downcast_ref::<QueryContext>()
             .ok_or_else(|| ErrorCode::Internal("Invalid context type"))?;
+        let owners = self
+            .ctx
+            .get_all_available_roles()
+            .await?
+            .into_iter()
+            .map(|role| role.identity().to_string());
         let executor = ServiceQueryExecutor::new(QueryContext::create_from(ctx));
         executor
-            .execute_query_with_sql_string(&self.args.to_sql())
+            .execute_query_with_sql_string(&self.args.to_sql(owners))
             .await
     }
 }
@@ -232,8 +238,10 @@ impl PrivateTaskHistoryArgs {
         Ok(parsed)
     }
 
-    fn to_sql(&self) -> String {
+    fn to_sql<I>(&self, owners: I) -> String
+    where I: IntoIterator<Item = String> {
         let mut filters = Vec::new();
+        push_owner_filter(&mut filters, owners);
         if let Some(task_name) = &self.task_name {
             filters.push(format!("task_name = {}", sql_string(task_name)));
         }
@@ -300,6 +308,23 @@ impl PrivateTaskHistoryArgs {
 
 fn sql_string(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
+}
+
+fn push_owner_filter<I>(filters: &mut Vec<String>, owners: I)
+where I: IntoIterator<Item = String> {
+    let mut owners = owners.into_iter();
+    let Some(first_owner) = owners.next() else {
+        filters.push("FALSE".to_string());
+        return;
+    };
+
+    let mut filter = format!("owner IN ({}", sql_string(&first_owner));
+    for owner in owners {
+        filter.push_str(", ");
+        filter.push_str(&sql_string(&owner));
+    }
+    filter.push(')');
+    filters.push(filter);
 }
 
 fn timestamp_expr(name: &str, value: &Scalar) -> Result<String> {
