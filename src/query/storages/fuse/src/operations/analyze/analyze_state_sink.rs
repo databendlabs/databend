@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 
 use async_channel::Receiver;
@@ -57,6 +58,8 @@ use crate::operations::util::set_backoff;
 use crate::statistics::reduce_block_statistics;
 use crate::statistics::reduce_cluster_statistics;
 use crate::statistics::reducers::reduce_virtual_column_statistics;
+
+const ANALYZE_COMMIT_MAX_RETRY_ELAPSED: Duration = Duration::from_secs(15 * 60);
 
 impl FuseTable {
     pub fn do_analyze(
@@ -109,6 +112,7 @@ enum AnalyzeStep {
     CollectNDV,
     CollectHistogram,
     CommitStatistics,
+    Finished,
 }
 
 struct SinkAnalyzeState {
@@ -119,7 +123,6 @@ struct SinkAnalyzeState {
     snapshot_id: SnapshotId,
     histogram_info_receivers: HashMap<u32, Receiver<DataBlock>>,
     input_data: Option<DataBlock>,
-    committed: bool,
     row_count: u64,
     unstats_rows: u64,
     ndv_states: HashMap<ColumnId, MetaHLL>,
@@ -144,7 +147,6 @@ impl SinkAnalyzeState {
             snapshot_id,
             histogram_info_receivers,
             input_data: None,
-            committed: false,
             row_count: 0,
             unstats_rows: 0,
             ndv_states: Default::default(),
@@ -286,7 +288,7 @@ impl SinkAnalyzeState {
         }
 
         let mut retries = 0;
-        let mut backoff = set_backoff(None, None, None);
+        let mut backoff = set_backoff(None, None, Some(ANALYZE_COMMIT_MAX_RETRY_ELAPSED));
         loop {
             match self.commit_statistics().await {
                 Ok(_) => return Ok(()),
@@ -411,11 +413,10 @@ impl Processor for SinkAnalyzeState {
                     return Ok(Event::Async);
                 }
                 AnalyzeStep::CommitStatistics => {
-                    if self.committed {
-                        return Ok(Event::Finished);
-                    } else {
-                        return Ok(Event::Async);
-                    }
+                    return Ok(Event::Async);
+                }
+                AnalyzeStep::Finished => {
+                    return Ok(Event::Finished);
                 }
             }
         }
@@ -475,7 +476,7 @@ impl Processor for SinkAnalyzeState {
             }
             AnalyzeStep::CommitStatistics => {
                 self.commit_statistics_with_retry().await?;
-                self.committed = true;
+                self.step = AnalyzeStep::Finished;
             }
             _ => unreachable!(),
         }
