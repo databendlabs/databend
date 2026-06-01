@@ -489,9 +489,9 @@ response=$(query_sql_with_auth "root:" "GRANT ROLE task_history_role_a TO task_h
 check_response_error "$response"
 response=$(query_sql_with_auth "root:" "GRANT ROLE task_history_role_b TO task_history_user_b")
 check_response_error "$response"
-response=$(query_sql_with_auth "root:" "GRANT ALL ON *.* TO ROLE task_history_role_a")
+response=$(query_sql_with_auth "root:" "GRANT SUPER ON *.* TO ROLE task_history_role_a")
 check_response_error "$response"
-response=$(query_sql_with_auth "root:" "GRANT ALL ON *.* TO ROLE task_history_role_b")
+response=$(query_sql_with_auth "root:" "GRANT SUPER ON *.* TO ROLE task_history_role_b")
 check_response_error "$response"
 
 response=$(query_sql_with_auth "task_history_user_a:task_history_pwd" "CREATE TASK role_a_history_task AS SELECT 1")

@@ -41,7 +41,7 @@ use databend_common_sql::QueryExecutor;
 use databend_common_sql::plans::task_run_schema;
 
 use crate::schedulers::ServiceQueryExecutor;
-use crate::sessions::QueryContext;
+use crate::task::TaskService;
 
 pub struct PrivateTaskHistoryTable {
     table_info: TableInfo,
@@ -152,18 +152,14 @@ impl PrivateTaskHistorySource {
     }
 
     async fn load_blocks(&self) -> Result<Vec<DataBlock>> {
-        let ctx = self
-            .ctx
-            .as_any()
-            .downcast_ref::<QueryContext>()
-            .ok_or_else(|| ErrorCode::Internal("Invalid context type"))?;
         let owners = self
             .ctx
             .get_all_available_roles()
             .await?
             .into_iter()
             .map(|role| role.identity().to_string());
-        let executor = ServiceQueryExecutor::new(QueryContext::create_from(ctx));
+        let ctx = TaskService::instance().create_context(None).await?;
+        let executor = ServiceQueryExecutor::new(ctx);
         executor
             .execute_query_with_sql_string(&self.args.to_sql(owners))
             .await
