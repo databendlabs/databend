@@ -182,6 +182,7 @@ impl Interpreter for AnalyzeTableInterpreter {
             &mut build_res.main_pipeline,
             histogram_info_receivers,
             self.plan.no_scan,
+            true,
         )?;
         Ok(build_res)
     }
