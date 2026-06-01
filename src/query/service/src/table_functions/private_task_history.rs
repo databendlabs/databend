@@ -254,6 +254,7 @@ impl PrivateTaskHistoryArgs {
             );
         }
         if let Some(root_task_id) = &self.root_task_id {
+            // TODO: private task runs do not yet propagate DAG root task IDs reliably.
             filters.push(format!(
                 "CAST(root_task_id AS STRING) = {}",
                 sql_string(root_task_id)
