@@ -547,12 +547,17 @@ impl TaskService {
 
     async fn spawn_task(task: Task, user: UserInfo) -> Result<()> {
         let task_service = TaskService::instance();
+        let context = task_service.create_task_context(user, &task).await?;
 
         match &task.task_sql {
             TaskSql::Sql(sql) => {
-                task_service.execute_sql(Some(user), sql).await?;
+                task_service.execute_sql_in_context(context, sql).await?;
             }
-            TaskSql::Script(sqls) => task_service.execute_script_sql(Some(user), sqls).await?,
+            TaskSql::Script(sqls) => {
+                task_service
+                    .execute_script_sql_in_context(context, sqls)
+                    .await?
+            }
         }
 
         Ok(())
@@ -566,8 +571,9 @@ impl TaskService {
         let Some(when_condition) = &task.when_condition else {
             return Ok(true);
         };
+        let context = task_service.create_task_context(user.clone(), task).await?;
         let result = task_service
-            .execute_sql(Some(user.clone()), &format!("SELECT {when_condition}"))
+            .execute_sql_in_context(context, &format!("SELECT {when_condition}"))
             .await?;
         Ok(result
             .first()
@@ -607,6 +613,28 @@ impl TaskService {
 
         let session = create_session(user, role).await?;
         session.create_query_context_with_cluster(dummy_cluster, &BUILD_INFO)
+    }
+
+    async fn create_task_context(&self, user: UserInfo, task: &Task) -> Result<Arc<QueryContext>> {
+        let context = self.create_context(Some(user)).await?;
+        Self::apply_task_session_params(&context, &task.session_params).await?;
+        Ok(context)
+    }
+
+    async fn apply_task_session_params(
+        context: &Arc<QueryContext>,
+        session_params: &BTreeMap<String, String>,
+    ) -> Result<()> {
+        for (key, value) in session_params {
+            if key.eq_ignore_ascii_case("database") {
+                context.set_current_database(value.clone()).await?;
+            } else {
+                context
+                    .get_settings()
+                    .set_setting(key.to_lowercase(), value.clone())?;
+            }
+        }
+        Ok(())
     }
 
     pub async fn lasted_task_run(&self, task_name: &str) -> Result<Option<TaskRun>> {
@@ -1128,7 +1156,14 @@ WHERE ta.task_name = '{task_name}'
 
     async fn execute_sql(&self, other_user: Option<UserInfo>, sql: &str) -> Result<Vec<DataBlock>> {
         let context = self.create_context(other_user).await?;
+        self.execute_sql_in_context(context, sql).await
+    }
 
+    async fn execute_sql_in_context(
+        &self,
+        context: Arc<QueryContext>,
+        sql: &str,
+    ) -> Result<Vec<DataBlock>> {
         let mut planner = Planner::new_with_query_executor(
             context.clone(),
             Arc::new(ServiceQueryExecutor::new(QueryContext::create_from(
@@ -1141,12 +1176,11 @@ WHERE ta.task_name = '{task_name}'
         stream.try_collect::<Vec<DataBlock>>().await
     }
 
-    async fn execute_script_sql(
+    async fn execute_script_sql_in_context(
         &self,
-        other_user: Option<UserInfo>,
+        context: Arc<QueryContext>,
         sqls: &[String],
     ) -> Result<()> {
-        let context = self.create_context(other_user).await?;
         let sql_dialect = context.get_settings().get_sql_dialect()?;
         let script = Self::script_sql_to_block(sqls);
         let tokens = tokenize_sql(&script)?;
