@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use databend_common_base::runtime::Runtime;
 use databend_common_catalog::plan::PushDownInfo;
+use databend_common_catalog::plan::ReadPartitionsPruningMode;
 use databend_common_catalog::query_kind::QueryKind;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
@@ -161,16 +162,25 @@ impl PruningContext {
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = BloomPrunerCreator::create(
-            func_ctx.clone(),
-            &table_schema,
-            dal.clone(),
-            ReadSettings::from_ctx(ctx)?,
-            filter_expr.as_ref(),
-            bloom_index_cols,
-            ngram_args,
-            bloom_index_builder,
-        )?;
+        let lightweight_pruning = push_down.as_ref().is_some_and(|push_down| {
+            push_down.read_partitions_pruning_mode == ReadPartitionsPruningMode::Lightweight
+        });
+        let enable_proxy_bloom_pruning = ctx.get_settings().get_enable_proxy_bloom_pruning()?;
+
+        let bloom_pruner = if lightweight_pruning && !enable_proxy_bloom_pruning {
+            None
+        } else {
+            BloomPrunerCreator::create(
+                func_ctx.clone(),
+                &table_schema,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+                filter_expr.as_ref(),
+                bloom_index_cols,
+                ngram_args,
+                bloom_index_builder,
+            )?
+        };
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
@@ -182,19 +192,31 @@ impl PruningContext {
         )?;
 
         // inverted index pruner, used to search matched rows in block
-        let inverted_index_pruner = InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?;
+        let inverted_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            InvertedIndexPruner::try_create(ctx, dal.clone(), push_down)?
+        };
 
         // virtual column pruner, used to read virtual column metas and ignore source columns.
-        let virtual_column_pruner = VirtualColumnPruner::try_create(dal.clone(), push_down)?;
+        let virtual_column_pruner = if lightweight_pruning {
+            None
+        } else {
+            VirtualColumnPruner::try_create(dal.clone(), push_down)?
+        };
 
-        let spatial_index_pruner = SpatialIndexPruner::create(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            &spatial_index_columns,
-            dal.clone(),
-            ReadSettings::from_ctx(ctx)?,
-        )?;
+        let spatial_index_pruner = if lightweight_pruning {
+            None
+        } else {
+            SpatialIndexPruner::create(
+                func_ctx.clone(),
+                &table_schema,
+                filter_expr.as_ref(),
+                &spatial_index_columns,
+                dal.clone(),
+                ReadSettings::from_ctx(ctx)?,
+            )?
+        };
 
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
@@ -256,7 +278,7 @@ impl FusePruner {
         spatial_index_columns: HashSet<ColumnId>,
         bloom_index_builder: Option<BloomIndexRebuilder>,
     ) -> Result<Self> {
-        Self::create_with_pages(
+        Self::create_with_pages_and_options(
             ctx,
             dal,
             table_schema,
@@ -272,6 +294,33 @@ impl FusePruner {
 
     // Create fuse pruner with pages.
     pub fn create_with_pages(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
+        ngram_args: Vec<NgramArgs>,
+        spatial_index_columns: HashSet<ColumnId>,
+        bloom_index_builder: Option<BloomIndexRebuilder>,
+    ) -> Result<Self> {
+        Self::create_with_pages_and_options(
+            ctx,
+            dal,
+            table_schema,
+            push_down,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+            ngram_args,
+            spatial_index_columns,
+            bloom_index_builder,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn create_with_pages_and_options(
         ctx: &Arc<dyn TableContext>,
         dal: Operator,
         table_schema: TableSchemaRef,
@@ -553,6 +602,17 @@ impl FusePruner {
             let res = worker?;
             metas.extend(res);
         }
+        let metas = self.topn_pruning(metas)?;
+        self.vector_pruning(metas).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn refine_pruned_blocks(
+        &self,
+        block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let block_pruner = BlockPruner::create(self.pruning_ctx.clone())?;
+        let metas = block_pruner.refine_pruning(block_metas).await?;
         let metas = self.topn_pruning(metas)?;
         self.vector_pruning(metas).await
     }

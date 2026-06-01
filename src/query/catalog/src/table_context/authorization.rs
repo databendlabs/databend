@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 use databend_common_meta_app::principal::GrantObject;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
@@ -38,6 +39,14 @@ pub trait TableContextAuthorization: Send + Sync {
         privilege: UserPrivilegeType,
         check_current_role_only: bool,
     ) -> Result<()>;
+
+    async fn has_ownership(
+        &self,
+        _object: &OwnershipObject,
+        _check_current_role_only: bool,
+    ) -> Result<bool> {
+        Ok(false)
+    }
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 

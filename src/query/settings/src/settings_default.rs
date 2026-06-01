@@ -1524,6 +1524,20 @@ impl DefaultSettings {
                     scope: SettingScope::Both,
                     range: Some(SettingRange::Numeric(0..=1)),
                 }),
+                ("enable_proxy_bloom_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable bloom index pruning during PROXY lightweight route estimation. Disabled by default to keep routing cheap.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: Some(SettingRange::Numeric(0..=1)),
+                }),
+                ("proxy_routing_model", DefaultSettingValue {
+                    value: UserSettingValue::String("statistics".to_string()),
+                    desc: "Controls how PROXY chooses a target table. 'statistics' estimates route cost with lightweight pruning; 'prefix' matches predicates against the target cluster key prefix.",
+                    mode: SettingMode::Both,
+                    scope: SettingScope::Session,
+                    range: Some(SettingRange::String(vec!["statistics".into(), "prefix".into()])),
+                }),
                 ("copy_dedup_full_path_by_default", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "The default value if table option `copy_dedup_full_path` is not set when creating table.",

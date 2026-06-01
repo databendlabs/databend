@@ -138,6 +138,14 @@ pub static CREATE_MEMORY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::ne
     r
 });
 
+pub static CREATE_PROXY_OPTIONS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
+    let mut r = HashSet::new();
+    r.insert(OPT_KEY_ENGINE);
+    r.insert("targets");
+    r.insert("default");
+    r
+});
+
 pub static UNSET_TABLE_OPTIONS_WHITE_LIST: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
@@ -166,6 +174,7 @@ pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S, engine: &Engine) -> bool {
         Engine::Iceberg | Engine::Delta => CREATE_LAKE_OPTIONS.contains(&opt_key),
         Engine::Random => CREATE_RANDOM_OPTIONS.contains(&opt_key),
         Engine::Memory => CREATE_MEMORY_OPTIONS.contains(&opt_key),
+        Engine::Proxy => CREATE_PROXY_OPTIONS.contains(&opt_key),
         Engine::Null | Engine::View => opt_key == OPT_KEY_ENGINE,
     }
 }
