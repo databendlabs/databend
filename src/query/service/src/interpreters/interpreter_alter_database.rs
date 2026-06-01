@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use databend_common_exception::Result;
+use databend_common_sql::binder::StageResolver;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_CONNECTION;
 use databend_common_sql::planner::binder::ddl::database::DEFAULT_STORAGE_PATH;
 use databend_common_sql::plans::AlterDatabasePlan;
@@ -25,7 +26,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextQueryIdentity;
-use crate::sessions::TableContextStage;
 use crate::sessions::TableContextTableAccess;
 
 #[derive(Debug)]
@@ -88,7 +88,16 @@ impl Interpreter for AlterDatabaseInterpreter {
         }
 
         let connection = if let Some(ref connection_name) = connection_value {
-            match self.ctx.get_connection(connection_name).await {
+            match StageResolver::from_table_context(
+                self.ctx.clone(),
+                databend_common_users::UserApiProvider::instance(),
+                databend_common_config::GlobalConfig::instance()
+                    .storage
+                    .allow_insecure,
+            )?
+            .resolve_connection(connection_name)
+            .await
+            {
                 Ok(conn) => Some(conn),
                 Err(_) => {
                     return Err(databend_common_exception::ErrorCode::BadArguments(format!(
@@ -135,7 +144,6 @@ impl Interpreter for AlterDatabaseInterpreter {
 
             let storage_params = databend_common_sql::binder::parse_storage_params_from_uri(
                 &mut uri_location,
-                Some(&*self.ctx),
                 "when setting database DEFAULT_STORAGE_PATH",
             )
             .await

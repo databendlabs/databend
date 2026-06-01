@@ -35,7 +35,6 @@ use databend_common_ast::ast::TypeName;
 use databend_common_ast::parser::parse_values;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_ast::visit::Walk;
-use databend_common_base::runtime::ThreadTracker;
 use databend_common_catalog::plan::StageTableInfo;
 use databend_common_catalog::plan::list_stage_files;
 use databend_common_catalog::table_context::StageAttachment;
@@ -62,8 +61,6 @@ use databend_common_storage::StageFilesInfo;
 use databend_common_users::UserApiProvider;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_COPY_DEDUP_FULL_PATH;
 use databend_storages_common_table_meta::table::OPT_KEY_ENABLE_SCHEMA_EVOLUTION;
-use log::LevelFilter;
-use log::debug;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -72,9 +69,8 @@ use crate::DefaultExprBinder;
 use crate::Metadata;
 use crate::NameResolutionContext;
 use crate::binder::Binder;
+use crate::binder::StageResolver;
 use crate::binder::bind_query::MaxColumnPosition;
-use crate::binder::insert::STAGE_PLACEHOLDER;
-use crate::binder::location::parse_uri_location;
 use crate::plans::CopyIntoTableMode;
 use crate::plans::CopyIntoTablePlan;
 use crate::plans::Plan;
@@ -171,7 +167,13 @@ impl Binder {
         let validation_mode = ValidationMode::from_str(stmt.options.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
 
-        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), location).await?;
+        let (mut stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_file_location(location)
+        .await?;
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;
         }
@@ -323,8 +325,13 @@ impl Binder {
         &mut self,
         attachment: StageAttachment,
     ) -> Result<(StageInfo, StageFilesInfo, CopyIntoTableOptions)> {
-        let (mut stage_info, path) =
-            resolve_stage_location(self.ctx.as_ref(), &attachment.location[1..]).await?;
+        let (mut stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            UserApiProvider::instance(),
+            GlobalConfig::instance().storage.allow_insecure,
+        )?
+        .resolve_stage_location(&attachment.location[1..])
+        .await?;
 
         if let Some(ref options) = attachment.file_format_options {
             let mut params = FileFormatParams::try_from_reader(
@@ -631,137 +638,5 @@ impl Binder {
             )
             .await?;
         Ok((Arc::new(TableSchema::new(attachment_fields)), const_values))
-    }
-}
-
-/// Named stage(start with `@`):
-///
-/// ```sql
-/// copy into mytable from @my_ext_stage
-///     file_format = (type = csv);
-/// ```
-/// location can be:
-/// - mystage
-/// - mystage/
-/// - mystage/abc
-/// - ~/abc
-///
-/// Returns the stage name and relative path towards the stage's root.
-///
-/// If input location is empty we will convert it to `/` means the root of stage
-///
-/// - mystage => (mystage, "/")
-///
-/// If input location is endswith `/`, it's a folder.
-///
-/// - mystage/ => (mystage, "/")
-///
-/// Otherwise, it's a file
-///
-/// - mystage/abc => (mystage, "abc")
-///
-/// - ~/abc => ("~", "abc")
-pub fn parse_stage_location(location: &str) -> Result<(String, String)> {
-    let location = location.trim_start_matches('@');
-    let names: Vec<&str> = location.splitn(2, '/').filter(|v| !v.is_empty()).collect();
-    if names.is_empty() {
-        return Err(ErrorCode::BadArguments(
-            "stage path must include a stage name".to_string(),
-        ));
-    }
-    if names[0] == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments(
-            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.",
-        ));
-    }
-
-    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
-    let path = if path.is_empty() { "/" } else { path };
-    Ok((names[0].to_string(), path.to_string()))
-}
-
-pub fn parse_stage_name(location: &str) -> Result<String> {
-    if !location.starts_with('@') {
-        return Err(ErrorCode::BadArguments(format!(
-            "stage path must start with @, but got {}",
-            location
-        )));
-    }
-    let stage_name = location.trim_start_matches('@');
-    if stage_name.is_empty() {
-        return Err(ErrorCode::BadArguments(
-            "stage path must include a stage name".to_string(),
-        ));
-    }
-    if stage_name == STAGE_PLACEHOLDER {
-        return Err(ErrorCode::BadArguments(
-            "placeholder @_databend_upload as location: should be used in streaming_load handler or replaced in client.".to_string(),
-        ));
-    }
-    if stage_name.contains('/') {
-        return Err(ErrorCode::BadArguments(format!(
-            "stage argument must be a stage name, but got {}",
-            location
-        )));
-    }
-    Ok(stage_name.to_string())
-}
-
-#[async_backtrace::framed]
-pub async fn resolve_stage_location(
-    ctx: &dyn TableContext,
-    location: &str,
-) -> Result<(StageInfo, String)> {
-    let (stage_name, path) = parse_stage_location(location)?;
-
-    let mut stage = if stage_name == "~" {
-        StageInfo::new_user_stage(&ctx.get_current_user()?.name)
-    } else {
-        UserApiProvider::instance()
-            .get_stage(&ctx.get_tenant(), &stage_name)
-            .await?
-    };
-    if ThreadTracker::capture_log_settings()
-        .is_some_and(|settings| settings.level == LevelFilter::Off)
-    {
-        // History log transform queries use the internal history stage.
-        // Enable credential chain at runtime since the flag is not persisted in meta.
-        stage.allow_credential_chain = true;
-    }
-
-    debug!("parsed stage: {stage:?}, path: {path}");
-    Ok((stage, path))
-}
-
-#[async_backtrace::framed]
-pub async fn resolve_stage_locations(
-    ctx: &dyn TableContext,
-    locations: &[String],
-) -> Result<Vec<(StageInfo, String)>> {
-    let mut results = Vec::with_capacity(locations.len());
-    for location in locations {
-        results.push(resolve_stage_location(ctx, location).await?);
-    }
-    Ok(results)
-}
-
-#[async_backtrace::framed]
-pub async fn resolve_file_location(
-    ctx: &dyn TableContext,
-    location: &FileLocation,
-) -> Result<(StageInfo, String)> {
-    match location.clone() {
-        FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
-        FileLocation::Uri(mut uri) => {
-            let (storage_params, path) = parse_uri_location(&mut uri, Some(ctx)).await?;
-            if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
-                Err(ErrorCode::StorageInsecure(
-                    "copy from insecure storage is not allowed",
-                ))
-            } else {
-                let stage_info = StageInfo::new_external_stage(storage_params, true);
-                Ok((stage_info, path))
-            }
-        }
     }
 }

@@ -43,7 +43,7 @@ use databend_common_meta_app::storage::StorageParams;
 
 use crate::BindContext;
 use crate::Binder;
-use crate::binder::parse_storage_params_from_uri;
+use crate::binder::StageResolver;
 use crate::normalize_identifier;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::DropCatalogPlan;
@@ -201,11 +201,14 @@ async fn parse_hive_catalog_url(
     };
 
     let mut location = UriLocation::from_uri(uri, options)?;
-    let sp = parse_storage_params_from_uri(
-        &mut location,
-        Some(ctx.as_ref()),
-        "when create Hive Catalog",
-    )
+    let sp = StageResolver::from_table_context(
+        ctx.clone(),
+        databend_common_users::UserApiProvider::instance(),
+        databend_common_config::GlobalConfig::instance()
+            .storage
+            .allow_insecure,
+    )?
+    .resolve_storage_params_from_uri(&mut location, "when create Hive Catalog")
     .await?;
 
     Ok(Some(sp))
