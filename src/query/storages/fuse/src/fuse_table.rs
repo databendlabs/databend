@@ -32,7 +32,6 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
@@ -1344,16 +1343,6 @@ impl Table for FuseTable {
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
         self.do_compact_blocks(ctx, limits).await
-    }
-
-    #[async_backtrace::framed]
-    async fn recluster(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
-    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        self.do_recluster(ctx, push_downs, limit).await
     }
 
     #[async_backtrace::framed]

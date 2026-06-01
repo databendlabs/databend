@@ -45,6 +45,7 @@ use databend_common_expression::TableField;
 use databend_common_expression::TableSchema;
 use databend_common_expression::TableSchemaRef;
 use databend_common_expression::Value;
+use databend_common_expression::conversion::classify_conversion;
 use databend_common_expression::converts::datavalues::scalar_to_datavalue;
 use databend_common_expression::eval_function;
 use databend_common_expression::expr::*;
@@ -81,7 +82,6 @@ use parquet::file::metadata::ParquetMetaData;
 use serde::Deserialize;
 use serde::Serialize;
 
-use super::eliminate_cast::is_injective_cast;
 use super::index_common::index_columns_from_parquet_meta;
 use crate::Index;
 use crate::eliminate_cast::cast_const;
@@ -1329,7 +1329,9 @@ impl EqVisitor for RewriteVisitor<'_> {
 
         // For any injective function y = f(x), the eq(column, inverse_f(const)) is a necessary condition for eq(f(column), const).
         // For example, the result of col = '+1'::int contains col::string = '+1'.
-        if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+        if !Xor8Filter::supported_type(src_type)
+            || !classify_conversion(src_type, dest_type).is_lossless_injective()
+        {
             return Ok(ControlFlow::Break(None));
         }
 
@@ -1461,7 +1463,9 @@ impl EqVisitor for ShortListVisitor {
             let Some((i, field)) = Self::found_field(&self.bloom_fields, id) else {
                 return Ok(ControlFlow::Break(None));
             };
-            if !Xor8Filter::supported_type(src_type) || !is_injective_cast(src_type, dest_type) {
+            if !Xor8Filter::supported_type(src_type)
+                || !classify_conversion(src_type, dest_type).is_lossless_injective()
+            {
                 return Ok(ControlFlow::Break(None));
             }
 

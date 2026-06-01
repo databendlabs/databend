@@ -1,0 +1,94 @@
+AggregateFinal
+├── output columns: [COUNT(*) (#8)]
+├── group by: []
+├── aggregate functions: [count()]
+├── estimated rows: 1.00
+└── Exchange
+    ├── output columns: [COUNT(*) (#8)]
+    ├── exchange type: Merge
+    └── AggregatePartial
+        ├── group by: []
+        ├── aggregate functions: [count()]
+        ├── estimated rows: 1.00
+        └── HashJoin
+            ├── output columns: []
+            ├── join type: INNER
+            ├── build keys: [orders.o_orderkey (#2)]
+            ├── probe keys: [lineitem.l_orderkey (#5)]
+            ├── keys is null equal: [false]
+            ├── filters: []
+            ├── build join filters:
+            │   └── filter id:2, build key:orders.o_orderkey (#2), probe targets:[lineitem.l_orderkey (#5)@scan2], filter type:bloom,inlist,min_max
+            ├── estimated rows: 105413.62
+            ├── Exchange(Build)
+            │   ├── output columns: [orders.o_orderkey (#2)]
+            │   ├── exchange type: Broadcast
+            │   └── HashJoin
+            │       ├── output columns: [orders.o_orderkey (#2)]
+            │       ├── join type: INNER
+            │       ├── build keys: [nation.n_nationkey (#7)]
+            │       ├── probe keys: [customer.c_nationkey (#1)]
+            │       ├── keys is null equal: [false]
+            │       ├── filters: []
+            │       ├── build join filters:
+            │       │   └── filter id:1, build key:nation.n_nationkey (#7), probe targets:[customer.c_nationkey (#1)@scan0], filter type:bloom,inlist,min_max
+            │       ├── estimated rows: 65914.00
+            │       ├── Exchange(Build)
+            │       │   ├── output columns: [nation.n_nationkey (#7)]
+            │       │   ├── exchange type: Broadcast
+            │       │   └── TableScan
+            │       │       ├── table: default.default.nation
+            │       │       ├── scan id: 3
+            │       │       ├── output columns: [n_nationkey (#7)]
+            │       │       ├── read rows: 0
+            │       │       ├── read size: 0
+            │       │       ├── partitions total: 0
+            │       │       ├── partitions scanned: 0
+            │       │       ├── push downs: [filters: [], limit: NONE]
+            │       │       └── estimated rows: 25.00
+            │       └── HashJoin(Probe)
+            │           ├── output columns: [customer.c_nationkey (#1), orders.o_orderkey (#2)]
+            │           ├── join type: INNER
+            │           ├── build keys: [orders.o_custkey (#3)]
+            │           ├── probe keys: [customer.c_custkey (#0)]
+            │           ├── keys is null equal: [false]
+            │           ├── filters: []
+            │           ├── build join filters:
+            │           │   └── filter id:0, build key:orders.o_custkey (#3), probe targets:[customer.c_custkey (#0)@scan0], filter type:bloom,inlist,min_max
+            │           ├── estimated rows: 65914.00
+            │           ├── Exchange(Build)
+            │           │   ├── output columns: [orders.o_orderkey (#2), orders.o_custkey (#3)]
+            │           │   ├── exchange type: Broadcast
+            │           │   └── TableScan
+            │           │       ├── table: default.default.orders
+            │           │       ├── scan id: 1
+            │           │       ├── output columns: [o_orderkey (#2), o_custkey (#3)]
+            │           │       ├── read rows: 0
+            │           │       ├── read size: 0
+            │           │       ├── partitions total: 0
+            │           │       ├── partitions scanned: 0
+            │           │       ├── push downs: [filters: [orders.o_orderdate (#4) >= '1993-10-01' and orders.o_orderdate (#4) < '1994-01-01'], limit: NONE]
+            │           │       └── estimated rows: 57356.61
+            │           └── TableScan(Probe)
+            │               ├── table: default.default.customer
+            │               ├── scan id: 0
+            │               ├── output columns: [c_custkey (#0), c_nationkey (#1)]
+            │               ├── read rows: 0
+            │               ├── read size: 0
+            │               ├── partitions total: 0
+            │               ├── partitions scanned: 0
+            │               ├── push downs: [filters: [], limit: NONE]
+            │               ├── apply join filters: [#1, #0]
+            │               └── estimated rows: 150000.00
+            └── TableScan(Probe)
+                ├── table: default.default.lineitem
+                ├── scan id: 2
+                ├── output columns: [l_orderkey (#5)]
+                ├── read rows: 0
+                ├── read size: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [lineitem.l_returnflag (#6) = 'R'], limit: NONE]
+                ├── apply join filters: [#2]
+                └── estimated rows: 2000405.00
+

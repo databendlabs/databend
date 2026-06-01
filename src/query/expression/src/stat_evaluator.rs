@@ -29,6 +29,7 @@ use super::Scalar;
 use super::function_stat::DeriveStat;
 use super::stat_distribution::ArgStat;
 use super::stat_distribution::BorrowedDistribution;
+use super::stat_distribution::NdvEstimate;
 use super::stat_distribution::OwnedDistribution;
 use super::stat_distribution::ReturnStat;
 use super::stat_distribution::StatArgs;
@@ -75,9 +76,9 @@ impl<'a> StatEvaluator<'a> {
             }) => Ok(Some({
                 let domain = scalar.as_ref().domain(data_type);
                 let (ndv, null_count) = if scalar.is_null() {
-                    (StatEstimate::exact(0.0), self.cardinality.as_null_count())
+                    (NdvEstimate::exact(0.0), self.cardinality.as_null_count())
                 } else {
-                    (StatEstimate::exact(1.0), StatCount::exact(0))
+                    (NdvEstimate::exact(1.0), StatCount::exact(0))
                 };
                 CowStat::Owned(ReturnStat {
                     domain,

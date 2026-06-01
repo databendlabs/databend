@@ -56,10 +56,33 @@ pub struct WarehouseOptions {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum TaskSql {
+    Sql(String),
+    Script(Vec<String>),
+}
+
+impl TaskSql {
+    pub fn query_text(&self) -> String {
+        match self {
+            TaskSql::Sql(sql) => sql.clone(),
+            TaskSql::Script(sqls) => {
+                let mut text = String::from("BEGIN\n");
+                for sql in sqls {
+                    text.push_str(sql);
+                    text.push_str(";\n");
+                }
+                text.push_str("END;");
+                text
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Task {
     pub task_id: u64,
     pub task_name: String,
-    pub query_text: String,
+    pub task_sql: TaskSql,
     pub when_condition: Option<String>,
     pub after: Vec<String>,
     pub comment: Option<String>,

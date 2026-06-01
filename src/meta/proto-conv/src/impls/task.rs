@@ -72,7 +72,11 @@ impl FromToProto for mt::Task {
         Ok(Self {
             task_id: p.task_id,
             task_name: p.task_name,
-            query_text: p.query_text,
+            task_sql: if p.script_sql.is_empty() {
+                mt::TaskSql::Sql(p.query_text)
+            } else {
+                mt::TaskSql::Script(p.script_sql)
+            },
             when_condition: p.when_condition.clone(),
             after: p.after,
             comment: p.comment,
@@ -97,7 +101,7 @@ impl FromToProto for mt::Task {
             min_reader_ver: MIN_READER_VER,
             task_id: self.task_id,
             task_name: self.task_name.clone(),
-            query_text: self.query_text.clone(),
+            query_text: self.task_sql.query_text(),
             comment: self.comment.clone(),
             owner: self.owner.clone(),
             schedule_options: self.schedule_options.as_ref().map(|s| pb::ScheduleOptions {
@@ -125,6 +129,10 @@ impl FromToProto for mt::Task {
             session_parameters: self.session_params.clone(),
             error_integration: self.error_integration.clone(),
             owner_user: self.owner_user.clone(),
+            script_sql: match &self.task_sql {
+                mt::TaskSql::Sql(_) => vec![],
+                mt::TaskSql::Script(sqls) => sqls.clone(),
+            },
         })
     }
 }

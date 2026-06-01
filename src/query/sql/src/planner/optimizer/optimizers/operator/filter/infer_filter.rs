@@ -18,9 +18,9 @@ use std::collections::HashSet;
 use databend_common_base::base::OrderedFloat;
 use databend_common_exception::Result;
 use databend_common_expression::Scalar;
+use databend_common_expression::conversion::common_super_type_with_conversion;
 use databend_common_expression::type_check::common_super_type;
 use databend_common_expression::types::DataType;
-use databend_common_expression::types::DecimalSize;
 use databend_common_expression::types::NumberDataType;
 use databend_common_expression::types::NumberScalar;
 use databend_common_functions::BUILTIN_FUNCTIONS;
@@ -191,7 +191,9 @@ impl<'a> InferFilterOptimizer<'a> {
         let Ok(right_ty) = right.data_type() else {
             return false;
         };
-        if !Self::check_equal_expr_type(&left_ty, &right_ty) {
+        if !common_super_type_with_conversion(left_ty, right_ty)
+            .is_some_and(|conversion| conversion.is_safe_for_equality_inference())
+        {
             return false;
         }
         match self.expr_index.get(left) {
@@ -205,146 +207,6 @@ impl<'a> InferFilterOptimizer<'a> {
         };
 
         true
-    }
-
-    // Equality inference needs a conversion target that preserves equivalence,
-    // not just a type combination that Databend can evaluate with `eq`.
-    fn check_equal_expr_type(left_ty: &DataType, right_ty: &DataType) -> bool {
-        let left = left_ty.remove_nullable();
-        let right = right_ty.remove_nullable();
-        let Some(common_ty) = Self::safe_common_type(left.clone(), right.clone()) else {
-            return false;
-        };
-
-        Self::is_injective_cast(&left, &common_ty) && Self::is_injective_cast(&right, &common_ty)
-    }
-
-    fn safe_common_type(left: DataType, right: DataType) -> Option<DataType> {
-        match (&left, &right) {
-            (DataType::Null, ty) | (ty, DataType::Null) => Some(ty.clone()),
-            (DataType::Nullable(left_ty), DataType::Nullable(right_ty)) => {
-                Some(DataType::Nullable(Box::new(Self::safe_common_type(
-                    *left_ty.clone(),
-                    *right_ty.clone(),
-                )?)))
-            }
-            (DataType::Nullable(left_ty), right_ty) => Some(DataType::Nullable(Box::new(
-                Self::safe_common_type(*left_ty.clone(), right_ty.clone())?,
-            ))),
-            (left_ty, DataType::Nullable(right_ty)) => Some(DataType::Nullable(Box::new(
-                Self::safe_common_type(left_ty.clone(), *right_ty.clone())?,
-            ))),
-            (DataType::EmptyArray, ty @ DataType::Array(_))
-            | (ty @ DataType::Array(_), DataType::EmptyArray) => Some(ty.clone()),
-            (DataType::Array(left_ty), DataType::Array(right_ty)) => Some(DataType::Array(
-                Box::new(Self::safe_common_type(*left_ty.clone(), *right_ty.clone())?),
-            )),
-            (DataType::Map(left_ty), DataType::Map(right_ty)) if left_ty == right_ty => {
-                Some(left.clone())
-            }
-            (DataType::Tuple(left_tys), DataType::Tuple(right_tys))
-                if left_tys.len() == right_tys.len() =>
-            {
-                Some(DataType::Tuple(
-                    left_tys
-                        .iter()
-                        .cloned()
-                        .zip(right_tys.iter().cloned())
-                        .map(|(left_ty, right_ty)| Self::safe_common_type(left_ty, right_ty))
-                        .collect::<Option<Vec<_>>>()?,
-                ))
-            }
-            (DataType::Number(left_num), DataType::Number(right_num))
-                if left_num.is_integer() && right_num.is_integer() =>
-            {
-                Some(DataType::Decimal(Self::merge_decimal_size(
-                    left_num.get_decimal_properties()?,
-                    right_num.get_decimal_properties()?,
-                )?))
-            }
-            (DataType::Number(left_num), DataType::Number(right_num))
-                if left_num.is_float() && right_num.is_float() =>
-            {
-                if left_num.bit_width() >= right_num.bit_width() {
-                    Some(left.clone())
-                } else {
-                    Some(right.clone())
-                }
-            }
-            (DataType::Number(num_ty), DataType::Decimal(decimal))
-            | (DataType::Decimal(decimal), DataType::Number(num_ty))
-                if num_ty.is_integer() =>
-            {
-                let num_decimal = num_ty.get_decimal_properties()?;
-                Some(DataType::Decimal(Self::merge_decimal_size(
-                    *decimal,
-                    num_decimal,
-                )?))
-            }
-            (DataType::Decimal(left_decimal), DataType::Decimal(right_decimal)) => Some(
-                DataType::Decimal(Self::merge_decimal_size(*left_decimal, *right_decimal)?),
-            ),
-            (DataType::Date, DataType::Timestamp) | (DataType::Timestamp, DataType::Date) => {
-                Some(DataType::Timestamp)
-            }
-            _ if left == right && Self::is_safe_same_type(&left) => Some(left),
-            _ => None,
-        }
-    }
-
-    fn is_safe_same_type(data_type: &DataType) -> bool {
-        matches!(
-            data_type,
-            DataType::Boolean
-                | DataType::String
-                | DataType::Number(_)
-                | DataType::Decimal(_)
-                | DataType::Timestamp
-                | DataType::TimestampTz
-                | DataType::Date
-                | DataType::Bitmap
-                | DataType::Variant
-                | DataType::Interval
-        )
-    }
-
-    fn merge_decimal_size(left: DecimalSize, right: DecimalSize) -> Option<DecimalSize> {
-        let scale = left.scale().max(right.scale());
-        let precision = left.leading_digits().max(right.leading_digits()) + scale;
-        DecimalSize::new(precision, scale).ok()
-    }
-
-    fn is_injective_cast(src: &DataType, dest: &DataType) -> bool {
-        if src == dest {
-            return true;
-        }
-
-        match (src, dest) {
-            (DataType::Nullable(src), DataType::Nullable(dest)) => {
-                Self::is_injective_cast(src, dest)
-            }
-            (DataType::Nullable(src), dest) => Self::is_injective_cast(src, dest),
-            (src, DataType::Nullable(dest)) => Self::is_injective_cast(src, dest),
-            (DataType::Null, _) => true,
-            (DataType::EmptyArray, DataType::Array(_)) => true,
-            (DataType::Number(src), DataType::Number(dest)) => {
-                (src.is_integer() && dest.is_integer()) || src.can_lossless_cast_to(*dest)
-            }
-            (DataType::Number(src), DataType::Decimal(_)) if src.is_integer() => true,
-            (DataType::Decimal(src), DataType::Decimal(dest)) => {
-                src.scale() <= dest.scale() && src.leading_digits() <= dest.leading_digits()
-            }
-            (DataType::Date, DataType::Timestamp) => true,
-            (DataType::Array(src), DataType::Array(dest)) => Self::is_injective_cast(src, dest),
-            (DataType::Tuple(src_tys), DataType::Tuple(dest_tys)) => {
-                src_tys.len() == dest_tys.len()
-                    && src_tys
-                        .iter()
-                        .zip(dest_tys)
-                        .all(|(src, dest)| Self::is_injective_cast(src, dest))
-            }
-            _ => false,
-        }
     }
 
     fn add_expr_predicate(&mut self, expr: &ScalarExpr, new_predicate: Predicate) -> Result<()> {

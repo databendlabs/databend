@@ -447,20 +447,17 @@ struct HistogramComparison<'a, T, Op> {
 
 impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> {
     fn true_count(&self) -> Result<StatEstimate, String> {
-        let selectivity = self.selectivity()?;
-        let expected = selectivity * self.non_null_cardinality;
-        Ok(if self.histogram.is_range_distorted() {
-            StatEstimate::new(0.0, expected, self.non_null_cardinality)
-        } else {
-            StatEstimate::exact(expected)
-        })
-    }
-
-    fn selectivity(&self) -> Result<f64, String> {
-        if self.histogram.num_values() == 0.0 {
-            return Ok(0.0);
+        let histogram_num_values = self.histogram.num_values();
+        if histogram_num_values == 0.0 {
+            return Ok(StatEstimate::exact(0.0));
         }
 
+        let selected_count = self.selected_count()?;
+        let factor = self.non_null_cardinality / histogram_num_values;
+        Ok(scale_estimate(selected_count, factor))
+    }
+
+    fn selected_count(&self) -> Result<StatEstimate, String> {
         match self.histogram {
             Histogram::Int(histogram) => {
                 let constant = self
@@ -470,10 +467,11 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
-                    selected: 0.0,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
                     _op: PhantomData,
                 }
-                .selectivity(HistogramBucketComparison::number_selectivity))
+                .selected_count(HistogramBucketComparison::number_selected_count))
             }
             Histogram::UInt(histogram) => {
                 let constant = self
@@ -483,10 +481,11 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
-                    selected: 0.0,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
                     _op: PhantomData,
                 }
-                .selectivity(HistogramBucketComparison::number_selectivity))
+                .selected_count(HistogramBucketComparison::number_selected_count))
             }
             Histogram::Float(histogram) => {
                 let constant = self
@@ -496,68 +495,95 @@ impl<T: HistogramConstant, Op: StatComparisonOp> HistogramComparison<'_, T, Op> 
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
-                    selected: 0.0,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
                     _op: PhantomData,
                 }
-                .selectivity(HistogramBucketComparison::number_selectivity))
+                .selected_count(HistogramBucketComparison::number_selected_count))
             }
             Histogram::Bytes(histogram) => {
-                let constant = match self.constant {
-                    value if value.histogram_bytes().is_some() => {
-                        value.histogram_bytes().unwrap().to_vec()
-                    }
-                    _ => return Err(unexpected_histogram_constant("Bytes", self.constant)),
+                let Some(constant) = self.constant.histogram_bytes() else {
+                    return Err(unexpected_histogram_constant("Bytes", self.constant));
                 };
+                let constant = constant.to_vec();
                 Ok(TypedHistogramScan::<_, Op> {
                     histogram,
                     constant: &constant,
-                    selected: 0.0,
+                    selected: StatEstimate::exact(0.0),
+                    row_scale: histogram.row_scale,
                     _op: PhantomData,
                 }
-                .selectivity(HistogramBucketComparison::bytes_selectivity))
+                .selected_count(HistogramBucketComparison::bytes_selected_count))
             }
         }
     }
 }
 
+fn add_estimate(left: StatEstimate, right: StatEstimate) -> StatEstimate {
+    StatEstimate::new(
+        left.lower + right.lower,
+        left.expected + right.expected,
+        left.upper + right.upper,
+    )
+}
+
+fn scale_estimate(estimate: StatEstimate, factor: f64) -> StatEstimate {
+    StatEstimate::new(
+        estimate.lower * factor,
+        estimate.expected * factor,
+        estimate.upper * factor,
+    )
+}
+
 struct TypedHistogramScan<'a, T, Op> {
     histogram: &'a TypedHistogram<T>,
     constant: &'a T,
-    selected: f64,
+    selected: StatEstimate,
+    row_scale: f64,
     _op: PhantomData<fn(Op)>,
 }
 
 impl<'a, T: Ord, Op: StatComparisonOp> TypedHistogramScan<'a, T, Op> {
-    fn selectivity(
+    fn selected_count(
         mut self,
-        estimate_partial_bucket: impl Fn(&HistogramBucketComparison<'a, T, Op>) -> f64,
-    ) -> f64 {
+        estimate_partial_bucket_count: impl Fn(&HistogramBucketComparison<'a, T, Op>) -> StatEstimate,
+    ) -> StatEstimate {
         for bucket in &self.histogram.buckets {
             let bucket = HistogramBucketComparison::<_, Op> {
                 bucket,
                 constant: self.constant,
+                row_scale: self.row_scale,
                 _op: PhantomData,
             };
             match bucket.overlap() {
                 HistogramBucketOverlap::None => {}
-                HistogramBucketOverlap::Complete => self.selected += bucket.bucket.num_values(),
+                HistogramBucketOverlap::Complete => {
+                    self.selected =
+                        add_estimate(self.selected, StatEstimate::exact(bucket.num_values()));
+                }
                 HistogramBucketOverlap::Partial => {
-                    self.selected += bucket.bucket.num_values() * estimate_partial_bucket(&bucket);
+                    self.selected =
+                        add_estimate(self.selected, estimate_partial_bucket_count(&bucket));
                 }
             }
         }
 
-        self.selected / self.histogram.num_values()
+        self.selected
     }
 }
 
 struct HistogramBucketComparison<'a, T, Op> {
     bucket: &'a TypedHistogramBucket<T>,
     constant: &'a T,
+    row_scale: f64,
     _op: PhantomData<fn(Op)>,
 }
 
 impl<T: Ord, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
+    fn num_values(&self) -> f64 {
+        self.bucket.num_values() * self.row_scale
+    }
+
     fn overlap(&self) -> HistogramBucketOverlap {
         let lower_cmp = self.constant.cmp(self.bucket.lower_bound());
         let upper_cmp = self.constant.cmp(self.bucket.upper_bound());
@@ -585,8 +611,8 @@ impl<T: Ord, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
 }
 
 impl<Op: StatComparisonOp> HistogramBucketComparison<'_, Vec<u8>, Op> {
-    fn bytes_selectivity(&self) -> f64 {
-        if Op::INCLUDE_EQUAL {
+    fn bytes_selected_count(&self) -> StatEstimate {
+        let selectivity = if Op::INCLUDE_EQUAL {
             // Bytes buckets only have a coarse partial-bucket model. For the
             // equality mass, a non-empty bucket still has at least one value.
             let ndv = if self.bucket.num_distinct() < 1.0 {
@@ -597,35 +623,50 @@ impl<Op: StatComparisonOp> HistogramBucketComparison<'_, Vec<u8>, Op> {
             if ndv <= 2.0 { 1.0 } else { 0.5 + 1.0 / ndv }
         } else {
             0.5
-        }
+        };
+        StatEstimate::exact(self.num_values() * selectivity)
     }
 }
 
 impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, Op> {
-    fn number_selectivity(&self) -> f64 {
-        let (strict_less, equality) = self.number_less_parts();
+    fn number_selected_count(&self) -> StatEstimate {
+        let parts = if let Some(parts) = T::partial_discrete_bucket_parts(
+            self.bucket.lower_bound(),
+            self.bucket.upper_bound(),
+            self.constant,
+        ) {
+            let selected_value_count = match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
+                (true, false) => parts.strict_less_count,
+                (true, true) => parts.strict_less_count + parts.equality_count,
+                (false, false) => parts.strict_greater_count,
+                (false, true) => parts.strict_greater_count + parts.equality_count,
+            };
+            return StatEstimate::exact(
+                selected_value_count * (self.num_values() / parts.value_count),
+            );
+        } else {
+            let (strict_less, equality) = self.number_less_parts();
+            HistogramBucketSelectivity {
+                strict_less,
+                equality,
+                strict_greater: 1.0 - strict_less - equality,
+            }
+        };
         let selectivity = match (Op::SELECT_LESS, Op::INCLUDE_EQUAL) {
-            (true, false) => strict_less,
-            (true, true) => strict_less + equality,
-            (false, false) => 1.0 - strict_less - equality,
-            (false, true) => 1.0 - strict_less,
+            (true, false) => parts.strict_less,
+            (true, true) => parts.strict_less + parts.equality,
+            (false, false) => parts.strict_greater,
+            (false, true) => parts.strict_greater + parts.equality,
         };
         debug_assert!(
             (0.0..=1.0).contains(&selectivity),
             "invalid numeric bucket selectivity: {selectivity:?}"
         );
-        selectivity
+        let expected = self.num_values() * selectivity;
+        StatEstimate::new(0.0, expected, self.num_values())
     }
 
     fn number_less_parts(&self) -> (f64, f64) {
-        if let Some(parts) = T::partial_discrete_bucket_less_parts(
-            self.bucket.lower_bound(),
-            self.bucket.upper_bound(),
-            self.constant,
-        ) {
-            return parts;
-        }
-
         // Scaled buckets can be fractional, but equality mass is based on a
         // count of possible values and must not use a denominator below one.
         let equality = if self.bucket.num_distinct() < 1.0 {
@@ -661,6 +702,21 @@ impl<T: StatNumberValue, Op: StatComparisonOp> HistogramBucketComparison<'_, T, 
 
         (strict_less, equality)
     }
+}
+
+#[derive(Clone, Copy)]
+struct HistogramBucketSelectivity {
+    strict_less: f64,
+    equality: f64,
+    strict_greater: f64,
+}
+
+#[derive(Clone, Copy)]
+struct DiscreteHistogramBucketParts {
+    value_count: f64,
+    strict_less_count: f64,
+    equality_count: f64,
+    strict_greater_count: f64,
 }
 
 enum IntegerRangeComparison<'s, 'a> {
@@ -787,11 +843,11 @@ enum HistogramBucketOverlap {
 trait StatNumberValue: Ord {
     fn to_f64(&self) -> f64;
 
-    fn partial_discrete_bucket_less_parts(
+    fn partial_discrete_bucket_parts(
         _lower_bound: &Self,
         _upper_bound: &Self,
         _constant: &Self,
-    ) -> Option<(f64, f64)> {
+    ) -> Option<DiscreteHistogramBucketParts> {
         None
     }
 }
@@ -801,11 +857,11 @@ impl StatNumberValue for i64 {
         *self as f64
     }
 
-    fn partial_discrete_bucket_less_parts(
+    fn partial_discrete_bucket_parts(
         lower_bound: &Self,
         upper_bound: &Self,
         constant: &Self,
-    ) -> Option<(f64, f64)> {
+    ) -> Option<DiscreteHistogramBucketParts> {
         let value_count = upper_bound.checked_sub(*lower_bound)?.checked_add(1)? as f64;
         let strict_less_count = if constant <= lower_bound {
             0.0
@@ -819,9 +875,11 @@ impl StatNumberValue for i64 {
         } else {
             0.0
         };
+        let strict_greater_count = value_count - strict_less_count - equality_count;
 
         let strict_less = strict_less_count / value_count;
         let equality = equality_count / value_count;
+        let strict_greater = strict_greater_count / value_count;
         debug_assert!(
             (0.0..=1.0).contains(&strict_less),
             "invalid i64 strict-less selectivity: {strict_less:?}"
@@ -830,7 +888,16 @@ impl StatNumberValue for i64 {
             (0.0..=1.0).contains(&equality),
             "invalid i64 equality selectivity: {equality:?}"
         );
-        Some((strict_less, equality))
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_greater),
+            "invalid i64 strict-greater selectivity: {strict_greater:?}"
+        );
+        Some(DiscreteHistogramBucketParts {
+            value_count,
+            strict_less_count,
+            equality_count,
+            strict_greater_count,
+        })
     }
 }
 
@@ -839,11 +906,11 @@ impl StatNumberValue for u64 {
         *self as f64
     }
 
-    fn partial_discrete_bucket_less_parts(
+    fn partial_discrete_bucket_parts(
         lower_bound: &Self,
         upper_bound: &Self,
         constant: &Self,
-    ) -> Option<(f64, f64)> {
+    ) -> Option<DiscreteHistogramBucketParts> {
         let value_count = upper_bound.checked_sub(*lower_bound)?.checked_add(1)? as f64;
         let strict_less_count = if constant <= lower_bound {
             0.0
@@ -857,9 +924,11 @@ impl StatNumberValue for u64 {
         } else {
             0.0
         };
+        let strict_greater_count = value_count - strict_less_count - equality_count;
 
         let strict_less = strict_less_count / value_count;
         let equality = equality_count / value_count;
+        let strict_greater = strict_greater_count / value_count;
         debug_assert!(
             (0.0..=1.0).contains(&strict_less),
             "invalid u64 strict-less selectivity: {strict_less:?}"
@@ -868,7 +937,16 @@ impl StatNumberValue for u64 {
             (0.0..=1.0).contains(&equality),
             "invalid u64 equality selectivity: {equality:?}"
         );
-        Some((strict_less, equality))
+        debug_assert!(
+            (0.0..=1.0).contains(&strict_greater),
+            "invalid u64 strict-greater selectivity: {strict_greater:?}"
+        );
+        Some(DiscreteHistogramBucketParts {
+            value_count,
+            strict_less_count,
+            equality_count,
+            strict_greater_count,
+        })
     }
 }
 
@@ -2202,6 +2280,7 @@ fn compare_bitmap_bytes(lhs: &[u8], rhs: &[u8], ctx: &mut EvalContext, row: usiz
 mod tests {
     use databend_common_expression::FunctionContext;
     use databend_common_expression::stat_distribution::BorrowedDistribution;
+    use databend_common_expression::stat_distribution::NdvEstimate;
     use databend_common_expression::stat_distribution::StatCardinality;
     use databend_common_expression::stat_distribution::StatCount;
     use databend_common_expression::stat_distribution::StatEstimate;
@@ -2221,18 +2300,21 @@ mod tests {
         let comparison = HistogramBucketComparison::<_, GtOp> {
             bucket: &bucket,
             constant: &constant,
+            row_scale: 1.0,
             _op: PhantomData,
         };
 
-        let selectivity = comparison.number_selectivity();
-        assert!((selectivity - 0.05).abs() < 1e-12);
+        let selected_count = comparison.number_selected_count();
+        assert_eq!(selected_count.lower, 0.0);
+        assert!((selected_count.expected - 0.5).abs() < 1e-12);
+        assert_eq!(selected_count.upper, 10.0);
     }
 
     #[test]
     fn test_null_constant_comparison_returns_all_null_stat() {
         let column_stat = ArgStat {
             domain: Domain::Number(NumberDomain::Int64(SimpleDomain { min: 1, max: 10 })),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2241,7 +2323,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2273,7 +2355,7 @@ mod tests {
                 min: "".to_string(),
                 max: None,
             }),
-            ndv: StatEstimate::exact(10.0),
+            ndv: NdvEstimate::exact(10.0),
             null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2282,7 +2364,7 @@ mod tests {
                 min: "x".to_string(),
                 max: Some("x".to_string()),
             }),
-            ndv: StatEstimate::exact(1.0),
+            ndv: NdvEstimate::exact(1.0),
             null_count: StatCount::exact(0),
             distribution: BorrowedDistribution::Unknown,
         };
@@ -2297,7 +2379,7 @@ mod tests {
             .unwrap();
         let true_count = output.boolean_distribution().unwrap().true_count;
 
-        assert_eq!(true_count, StatEstimate::exact(10.0));
+        assert_eq!(true_count, StatEstimate::new(0.0, 10.0, 100.0));
     }
 
     #[test]

@@ -94,6 +94,7 @@ use databend_common_sql::plans::Plan;
 use databend_common_sql::resolve_type_name;
 use databend_common_sql_test_support::configure_optimizer_settings;
 use databend_common_statistics::Datum;
+use databend_common_statistics::Histogram;
 use databend_common_storage::DataOperator;
 use databend_common_storage::FileStatus;
 use databend_common_storage::StageFileInfo;
@@ -165,6 +166,7 @@ fn unsupported<T>(name: &str) -> Result<T> {
 type TableKey = (String, String);
 type TableMap = HashMap<TableKey, Arc<dyn Table>>;
 type ColumnStatsMap = HashMap<String, BasicColumnStatistics>;
+type HistogramStatsMap = HashMap<String, Histogram>;
 
 #[derive(Clone)]
 struct DummyCatalog {
@@ -213,11 +215,13 @@ struct FakeTable {
     warehouse_distribution: bool,
     table_stats: Option<TableStatistics>,
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
+    histograms: HashMap<ColumnId, Histogram>,
 }
 
 #[derive(Debug, Clone)]
 struct FakeColumnStatisticsProvider {
     column_stats: HashMap<ColumnId, BasicColumnStatistics>,
+    histograms: HashMap<ColumnId, Histogram>,
     num_rows: Option<u64>,
 }
 
@@ -242,6 +246,10 @@ impl ColumnStatisticsProvider for FakeColumnStatisticsProvider {
         self.column_stats
             .get(&column_id)
             .map(|stats| stats.in_memory_size / num_rows)
+    }
+
+    fn histogram(&self, column_id: ColumnId) -> Option<Histogram> {
+        self.histograms.get(&column_id).cloned()
     }
 }
 
@@ -291,6 +299,7 @@ impl Table for FakeTable {
     ) -> Result<Box<dyn ColumnStatisticsProvider>> {
         Ok(Box::new(FakeColumnStatisticsProvider {
             column_stats: self.column_stats.clone(),
+            histograms: self.histograms.clone(),
             num_rows: self.table_stats.and_then(|stats| stats.num_rows),
         }))
     }
@@ -705,6 +714,7 @@ impl LiteTableContext {
         fields: Vec<TableField>,
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
     ) -> Result<Arc<dyn Table>> {
         let schema = Arc::new(TableSchema::new(fields));
         let column_stats = column_stats
@@ -713,6 +723,14 @@ impl LiteTableContext {
                 let index = schema.index_of(&name)?;
                 let column_id = schema.field(index).column_id();
                 Ok((column_id, stats))
+            })
+            .collect::<Result<HashMap<_, _>>>()?;
+        let histograms = histograms
+            .into_iter()
+            .map(|(name, histogram)| {
+                let index = schema.index_of(&name)?;
+                let column_id = schema.field(index).column_id();
+                Ok((column_id, histogram))
             })
             .collect::<Result<HashMap<_, _>>>()?;
 
@@ -734,6 +752,7 @@ impl LiteTableContext {
             warehouse_distribution,
             table_stats,
             column_stats,
+            histograms,
         }))
     }
 
@@ -873,8 +892,33 @@ impl LiteTableContext {
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
     ) -> Result<()> {
-        let table =
-            self.build_fake_table(database, table_name, fields, table_stats, column_stats)?;
+        self.register_table_with_stats_and_histograms(
+            database,
+            table_name,
+            fields,
+            table_stats,
+            column_stats,
+            HashMap::new(),
+        )
+    }
+
+    pub fn register_table_with_stats_and_histograms(
+        self: &Arc<Self>,
+        database: &str,
+        table_name: &str,
+        fields: Vec<TableField>,
+        table_stats: Option<TableStatistics>,
+        column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
+    ) -> Result<()> {
+        let table = self.build_fake_table(
+            database,
+            table_name,
+            fields,
+            table_stats,
+            column_stats,
+            histograms,
+        )?;
         self.default_catalog.insert_table(database, table);
         Ok(())
     }
@@ -930,6 +974,22 @@ impl LiteTableContext {
         sql: &str,
         table_stats: Option<TableStatistics>,
         column_stats: ColumnStatsMap,
+    ) -> Result<()> {
+        self.register_table_sql_with_stats_and_histograms(
+            sql,
+            table_stats,
+            column_stats,
+            HashMap::new(),
+        )
+        .await
+    }
+
+    pub async fn register_table_sql_with_stats_and_histograms(
+        self: &Arc<Self>,
+        sql: &str,
+        table_stats: Option<TableStatistics>,
+        column_stats: ColumnStatsMap,
+        histograms: HistogramStatsMap,
     ) -> Result<()> {
         let planner = Planner::new(self.clone());
         let extras = planner.parse_sql(sql)?;
@@ -1019,12 +1079,13 @@ impl LiteTableContext {
                     }
                 };
 
-                self.register_table_with_stats(
+                self.register_table_with_stats_and_histograms(
                     &database,
                     &table_name,
                     fields,
                     table_stats,
                     column_stats,
+                    histograms,
                 )
             }
             _ => unsupported("lite sql harness table registration from non-DDL SQL"),
@@ -1402,18 +1463,9 @@ impl TableContextCopy for LiteTableContext {
     }
 }
 
-#[async_trait::async_trait]
 impl TableContextStage for LiteTableContext {
     fn get_stage_attachment(&self) -> Option<StageAttachment> {
         None
-    }
-
-    async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
-        unsupported("table_ctx::get_file_format")
-    }
-
-    async fn get_connection(&self, _name: &str) -> Result<UserDefinedConnection> {
-        unsupported("table_ctx::get_connection")
     }
 }
 

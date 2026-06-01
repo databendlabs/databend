@@ -68,12 +68,12 @@ status: ok
 scalar: handler(CAST(text (#1) AS String))
 type: String
 
-=== python_script_udf_cloud_path_requires_global_enablement ===
-description: Python sandbox UDF should remain rejected when global sandbox config is disabled.
+=== python_script_udf_cloud_path_uses_adapter_config ===
+description: Python sandbox UDF should resolve through the adapter-provided cloud enablement.
 sql: cloud_udf(number)
-status: error
-code: 1002
-message: SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config
+status: ok
+scalar: handler(number (#0))
+type: String
 
 === udaf_script_loads_code ===
 description: UDAF script should build a runtime aggregate UDF call from script metadata.

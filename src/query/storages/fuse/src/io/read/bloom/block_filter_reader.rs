@@ -308,11 +308,7 @@ where
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::sync::OnceLock;
 
-    use databend_common_base::base::GlobalInstance;
-    use databend_common_base::runtime::GlobalIORuntime;
-    use databend_common_config::CacheConfig;
     use databend_common_exception::Result;
     use databend_common_expression::DataBlock;
     use databend_common_expression::FromData;
@@ -323,7 +319,6 @@ mod tests {
     use databend_common_expression::types::Int32Type;
     use databend_storages_common_blocks::blocks_to_parquet;
     use databend_storages_common_cache::CacheAccessor;
-    use databend_storages_common_cache::CacheManager;
     use databend_storages_common_cache::CachedObject;
     use databend_storages_common_index::BloomIndex;
     use databend_storages_common_index::BloomIndexBuilder;
@@ -333,16 +328,7 @@ mod tests {
     use databend_storages_common_table_meta::table::TableCompression;
 
     use super::*;
-
-    fn init_test_globals() -> Result<()> {
-        static INIT: OnceLock<Result<()>> = OnceLock::new();
-        INIT.get_or_init(|| {
-            GlobalInstance::init_production();
-            GlobalIORuntime::init(1)?;
-            CacheManager::init(&CacheConfig::default(), &(1024 * 1024), "test", false)
-        })
-        .clone()
-    }
+    use crate::test_utils::init_test_globals;
 
     fn write_bloom_index_bytes() -> Result<(Vec<u8>, String)> {
         let schema = TableSchema::new(vec![TableField::new(

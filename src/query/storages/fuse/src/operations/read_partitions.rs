@@ -102,6 +102,7 @@ use crate::pruning_pipeline::ExtractSegmentTransform;
 use crate::pruning_pipeline::LazySegmentReceiverSource;
 use crate::pruning_pipeline::PrunedColumnOrientedSegmentMeta;
 use crate::pruning_pipeline::PrunedCompactSegmentMeta;
+use crate::pruning_pipeline::RuntimeFilterPruneContext;
 use crate::pruning_pipeline::SampleBlockMetasTransform;
 use crate::pruning_pipeline::SegmentPruneTransform;
 use crate::pruning_pipeline::SendPartInfoSink;
@@ -402,6 +403,7 @@ impl FuseTable {
                     pruner.clone(),
                     &mut prune_pipeline,
                     ctx.clone(),
+                    plan.scan_id,
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
@@ -414,6 +416,7 @@ impl FuseTable {
                     pruner.clone(),
                     &mut prune_pipeline,
                     ctx.clone(),
+                    plan.scan_id,
                     segment_rx,
                     part_info_tx,
                     derterministic_cache_key.clone(),
@@ -596,6 +599,7 @@ impl FuseTable {
         pruner: Arc<FusePruner>,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
+        scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         derterministic_cache_key: Option<String>,
@@ -631,6 +635,12 @@ impl FuseTable {
             })?;
         }
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let runtime_filter_prune_context = RuntimeFilterPruneContext::try_create(
+            ctx.clone(),
+            scan_id,
+            pruner.table_schema.clone(),
+        )?;
+        let runtime_filter_prune_context_for_block = runtime_filter_prune_context.clone();
         if pruner.pruning_ctx.bloom_pruner.is_some()
             || pruner.pruning_ctx.inverted_index_pruner.is_some()
             || pruner.pruning_ctx.spatial_index_pruner.is_some()
@@ -638,7 +648,12 @@ impl FuseTable {
         {
             // async pruning with bloom index or inverted index.
             prune_pipeline.add_transform(|input, output| {
-                AsyncBlockPruneTransform::create(input, output, block_pruner.clone())
+                AsyncBlockPruneTransform::create(
+                    input,
+                    output,
+                    block_pruner.clone(),
+                    runtime_filter_prune_context_for_block.clone(),
+                )
             })?;
         } else {
             // sync pruning without a bloom index and inverted index.
@@ -711,7 +726,8 @@ impl FuseTable {
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filters.is_none() && p.secure_filters.is_none())
             .and_then(|p| p.limit);
-        let enable_prune_cache = ctx.get_settings().get_enable_prune_cache()?;
+        let enable_prune_cache =
+            ctx.get_settings().get_enable_prune_cache()? && runtime_filter_prune_context.is_none();
         let send_part_state = Arc::new(SendPartState::create(
             derterministic_cache_key,
             limit,
@@ -752,6 +768,7 @@ impl FuseTable {
         pruner: Arc<FusePruner>,
         prune_pipeline: &mut Pipeline,
         ctx: Arc<dyn TableContext>,
+        scan_id: usize,
         segment_rx: Receiver<SegmentLocation>,
         part_info_tx: Sender<Result<PartInfoPtr>>,
         _derterministic_cache_key: Option<String>,
@@ -760,6 +777,8 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let push_down = &pruner.push_down;
         let block_pruner = Arc::new(BlockPruner::create(pruner.pruning_ctx.clone())?);
+        let runtime_filter_prune_context =
+            RuntimeFilterPruneContext::try_create(ctx.clone(), scan_id, table_schema.clone())?;
 
         // Only the columns that are used in the push down will be read, cached and passed to the next pipeline.
         let projection_column_ids = {
@@ -799,13 +818,26 @@ impl FuseTable {
             }
             None => HashSet::new(),
         };
+        let mut block_prune_column_ids = projection_column_ids.clone();
+        for column_id in &filter_column_ids {
+            if !block_prune_column_ids.contains(column_id) {
+                block_prune_column_ids.push(*column_id);
+            }
+        }
+        if let Some(runtime_filter_prune_context) = &runtime_filter_prune_context {
+            for column_id in runtime_filter_prune_context.statistics_column_ids() {
+                if !block_prune_column_ids.contains(column_id) {
+                    block_prune_column_ids.push(*column_id);
+                }
+            }
+        }
 
         let mut segment_column_projection = HashSet::new();
         for column_id in projection_column_ids.iter() {
             segment_column_projection.insert(meta_name(*column_id));
         }
-        for column_id in filter_column_ids {
-            segment_column_projection.insert(stat_name(column_id));
+        for column_id in &block_prune_column_ids {
+            segment_column_projection.insert(stat_name(*column_id));
         }
         segment_column_projection.insert(ROW_COUNT.to_string());
         segment_column_projection.insert(BLOCK_SIZE.to_string());
@@ -842,7 +874,8 @@ impl FuseTable {
                 input,
                 block_pruner.clone(),
                 part_info_tx.clone(),
-                projection_column_ids.clone(),
+                block_prune_column_ids.clone(),
+                runtime_filter_prune_context.clone(),
             )
         })?;
         // TODO(Sky): populate prune cache , deal with topn prune

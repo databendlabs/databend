@@ -68,6 +68,15 @@ column_statistics:              # Inline column statistics (can be combined with
     ndv: 10                     # Number of distinct values
     null_count: 0               # Number of null values
 
+histogram_statistics:           # Optional inline histograms keyed by table.column
+  table_name.column_name:
+    accuracy: true              # Whether bucket distinct counts are exact ANALYZE facts
+    buckets:
+      - lower_bound: !Int 1990  # Min value for the bucket as an explicit Datum
+        upper_bound: !Int 2000  # Max value for the bucket as an explicit Datum
+        num_values: 1000        # Row count represented by the bucket
+        num_distinct: 10        # Distinct value count represented by the bucket
+
 good_plan: |                    # Optional expected good plan
   ...
 ```
@@ -91,6 +100,15 @@ column_statistics:
     ndv: 1823
     null_count: 0
   # ... other columns
+
+histogram_statistics:
+  catalog_sales.cs_sold_date_sk:
+    accuracy: true
+    buckets:
+      - lower_bound: !Int 2450815
+        upper_bound: !Int 2452921
+        num_values: 143997065
+        num_distinct: 1823
 ```
 
 Test cases can reference these files using the `statistics_file` field. The framework will automatically search for matching files (with or without numeric prefixes like `01_tpcds_100g.yaml`).

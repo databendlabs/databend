@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -164,14 +165,83 @@ pub struct RuntimeFilterReady {
     pub runtime_filter_watcher: Sender<Option<()>>,
     /// A dummy receiver to make runtime_filter_watcher channel open.
     pub _runtime_filter_dummy_receiver: Receiver<Option<()>>,
+    statistics_column_names: Vec<String>,
+}
+
+impl RuntimeFilterReady {
+    pub fn with_statistics_column_names(
+        column_names: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
+        let (watcher, dummy_receiver) = watch::channel(None);
+        let statistics_column_names = column_names
+            .into_iter()
+            .map(Into::into)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        Self {
+            runtime_filter_watcher: watcher,
+            _runtime_filter_dummy_receiver: dummy_receiver,
+            statistics_column_names,
+        }
+    }
+
+    pub fn for_statistics_probe_exprs<'a>(
+        enable_statistics_pruning: bool,
+        probe_exprs: impl IntoIterator<Item = &'a Expr<String>>,
+    ) -> Self {
+        if !enable_statistics_pruning {
+            return Self::default();
+        }
+
+        let statistics_column_names = probe_exprs
+            .into_iter()
+            .flat_map(|expr| expr.column_refs().into_keys())
+            .collect::<BTreeSet<_>>();
+        Self::with_statistics_column_names(statistics_column_names)
+    }
+
+    pub fn has_statistics_pruning(&self) -> bool {
+        !self.statistics_column_names.is_empty()
+    }
+
+    pub fn statistics_column_names(&self) -> &[String] {
+        &self.statistics_column_names
+    }
 }
 
 impl Default for RuntimeFilterReady {
     fn default() -> Self {
-        let (watcher, dummy_receiver) = watch::channel(None);
-        Self {
-            runtime_filter_watcher: watcher,
-            _runtime_filter_dummy_receiver: dummy_receiver,
-        }
+        Self::with_statistics_column_names(Vec::<String>::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use databend_common_expression::ColumnRef;
+    use databend_common_expression::Expr;
+    use databend_common_expression::types::DataType;
+    use databend_common_expression::types::NumberDataType;
+
+    use super::*;
+
+    #[test]
+    fn runtime_filter_ready_tracks_statistics_probe_columns() {
+        let probe_expr = Expr::ColumnRef(ColumnRef {
+            span: None,
+            id: "probe_col".to_string(),
+            data_type: DataType::Number(NumberDataType::Int32),
+            display_name: "probe_col".to_string(),
+        });
+
+        let ready =
+            RuntimeFilterReady::for_statistics_probe_exprs(true, [&probe_expr, &probe_expr]);
+        assert_eq!(ready.statistics_column_names(), ["probe_col"]);
+        assert!(ready.has_statistics_pruning());
+
+        let ready = RuntimeFilterReady::for_statistics_probe_exprs(false, [&probe_expr]);
+        assert!(ready.statistics_column_names().is_empty());
+        assert!(!ready.has_statistics_pruning());
     }
 }

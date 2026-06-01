@@ -27,6 +27,7 @@ mod runtime;
 mod runtime_tracker;
 mod thread;
 mod time_series;
+mod watchdog;
 pub mod workload_group;
 
 pub use backtrace::AsyncTaskItem;

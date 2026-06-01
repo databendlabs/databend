@@ -19,6 +19,7 @@ use crate::Scalar;
 use crate::property::Domain;
 use crate::stat_distribution::ArgStat;
 use crate::stat_distribution::BooleanDistribution;
+use crate::stat_distribution::NdvEstimate;
 use crate::stat_distribution::OwnedDistribution;
 use crate::stat_distribution::ReturnStat;
 use crate::stat_distribution::StatBinaryArg;
@@ -35,7 +36,7 @@ pub trait StatComparisonOp {
     const INCLUDE_EQUAL: bool;
 
     fn range_true_count(
-        ndv: StatEstimate,
+        ndv: NdvEstimate,
         cardinality: f64,
         cmp_min: Ordering,
         cmp_max: Ordering,
@@ -220,7 +221,7 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
         let possible_values = has_true as u8 + has_false as u8;
         ReturnStat {
             domain,
-            ndv: StatEstimate::exact(possible_values as f64),
+            ndv: NdvEstimate::exact(possible_values as f64),
             null_count: self.null_count,
             distribution: OwnedDistribution::Boolean(BooleanDistribution { true_count }),
         }
@@ -241,6 +242,13 @@ impl<'s, 'a, A: ConstantComparisonAdapter> ConstantComparison<'s, 'a, A> {
                 0.0
             });
         }
+        if cmp_min == Ordering::Equal && cmp_max == Ordering::Equal {
+            return StatEstimate::exact(if not_eq {
+                0.0
+            } else {
+                self.non_null_cardinality
+            });
+        }
 
         estimate_ndv_true_count(self.stat.ndv, not_eq, self.non_null_cardinality)
     }
@@ -257,7 +265,7 @@ pub fn null_comparison_stat(stat: &StatBinaryArg) -> Option<ReturnStat> {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: stat.cardinality.as_null_count(),
             distribution: OwnedDistribution::Unknown,
         })
@@ -266,7 +274,7 @@ pub fn null_comparison_stat(stat: &StatBinaryArg) -> Option<ReturnStat> {
     }
 }
 
-pub fn estimate_ndv_true_count(ndv: StatEstimate, not_eq: bool, cardinality: f64) -> StatEstimate {
+pub fn estimate_ndv_true_count(ndv: NdvEstimate, not_eq: bool, cardinality: f64) -> StatEstimate {
     debug_assert!(
         cardinality.is_finite() && cardinality >= 0.0,
         "invalid cardinality for ndv true count: {cardinality:?}"
@@ -275,27 +283,22 @@ pub fn estimate_ndv_true_count(ndv: StatEstimate, not_eq: bool, cardinality: f64
         return StatEstimate::exact(0.0);
     }
 
-    // Fractional NDV estimates may appear after scaling, but equality cannot
-    // divide by less than one possible non-null value.
-    let effective_upper_ndv = if ndv.upper < 1.0 { 1.0 } else { ndv.upper };
-    let effective_expected_ndv = if ndv.expected < 1.0 {
+    // Fractional NDV estimates may appear after scaling, but expected equality
+    // cannot divide by less than one possible non-null value.
+    let expected_ndv = ndv.expected.unwrap_or(ndv.upper);
+    let effective_expected_ndv = if expected_ndv < 1.0 {
         1.0
     } else {
-        ndv.expected
+        expected_ndv
     };
-    let effective_lower_ndv = if ndv.lower < 1.0 { 1.0 } else { ndv.lower };
     let eq_count = StatEstimate::new(
-        cardinality / effective_upper_ndv,
-        if ndv.expected == 0.0 {
+        0.0,
+        if expected_ndv == 0.0 {
             0.0
         } else {
             cardinality / effective_expected_ndv
         },
-        if ndv.lower == 0.0 {
-            cardinality
-        } else {
-            cardinality / effective_lower_ndv
-        },
+        cardinality,
     );
     if not_eq {
         let lower = cardinality - eq_count.upper;
@@ -354,7 +357,7 @@ mod tests {
                 has_true: true,
                 has_false: true,
             }),
-            ndv: StatEstimate::exact(2.0),
+            ndv: NdvEstimate::exact(2.0),
             null_count: StatCount::exact(0),
             distribution: crate::stat_distribution::BorrowedDistribution::Unknown,
         };
@@ -368,7 +371,7 @@ mod tests {
                 has_false: true,
             })
         );
-        assert_eq!(all_false.ndv, StatEstimate::exact(1.0));
+        assert_eq!(all_false.ndv, NdvEstimate::exact(1.0));
 
         let all_true = comparison.boolean_stat(StatEstimate::exact(100.0));
         assert_eq!(
@@ -378,7 +381,7 @@ mod tests {
                 has_false: false,
             })
         );
-        assert_eq!(all_true.ndv, StatEstimate::exact(1.0));
+        assert_eq!(all_true.ndv, NdvEstimate::exact(1.0));
 
         let uncertain = comparison.boolean_stat(StatEstimate::new(10.0, 10.0, 100.0));
         assert_eq!(
@@ -388,7 +391,7 @@ mod tests {
                 has_false: true,
             })
         );
-        assert_eq!(uncertain.ndv, StatEstimate::exact(2.0));
+        assert_eq!(uncertain.ndv, NdvEstimate::exact(2.0));
     }
 
     #[test]
@@ -398,7 +401,7 @@ mod tests {
                 has_null: true,
                 value: None,
             }),
-            ndv: StatEstimate::exact(0.0),
+            ndv: NdvEstimate::exact(0.0),
             null_count: StatCount::exact(10),
             distribution: crate::stat_distribution::BorrowedDistribution::Unknown,
         };
@@ -412,16 +415,16 @@ mod tests {
                 value: None,
             })
         );
-        assert_eq!(output.ndv, StatEstimate::exact(0.0));
+        assert_eq!(output.ndv, NdvEstimate::exact(0.0));
         output.check_consistency().unwrap();
     }
 
     #[test]
-    fn test_estimate_ndv_true_count_uses_max_ndv_bounds() {
-        let eq_count = estimate_ndv_true_count(StatEstimate::new(0.0, 10.0, 10.0), false, 100.0);
-        assert_eq!(eq_count, StatEstimate::new(10.0, 10.0, 100.0));
+    fn test_estimate_ndv_true_count_does_not_infer_ndv_lower() {
+        let eq_count = estimate_ndv_true_count(NdvEstimate::new(10.0, 10.0), false, 100.0);
+        assert_eq!(eq_count, StatEstimate::new(0.0, 10.0, 100.0));
 
-        let not_eq_count = estimate_ndv_true_count(StatEstimate::new(0.0, 10.0, 10.0), true, 100.0);
-        assert_eq!(not_eq_count, StatEstimate::new(0.0, 90.0, 90.0));
+        let not_eq_count = estimate_ndv_true_count(NdvEstimate::new(10.0, 10.0), true, 100.0);
+        assert_eq!(not_eq_count, StatEstimate::new(0.0, 90.0, 100.0));
     }
 }

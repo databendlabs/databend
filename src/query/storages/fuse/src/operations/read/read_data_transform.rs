@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use databend_common_catalog::plan::PartInfoPtr;
-use databend_common_catalog::runtime_filter_info::RuntimeFilterEntry;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -36,7 +35,6 @@ use crate::operations::read::block_partition_meta::BlockPartitionMeta;
 use crate::operations::read::data_source_with_meta::DataSourceWithMeta;
 use crate::pruning::ExprRuntimePruner;
 use crate::pruning::RuntimeFilterExpr;
-use crate::pruning::RuntimeFilterExprKind;
 use crate::pruning::SpatialRuntimePruner;
 
 pub struct ReadDataTransform {
@@ -74,29 +72,6 @@ impl ReadDataTransform {
         )))
     }
 
-    fn build_runtime_filter_exprs(entry: &RuntimeFilterEntry) -> Vec<RuntimeFilterExpr> {
-        let mut exprs = Vec::new();
-        if let Some(expr) = entry.inlist.clone() {
-            exprs.push(RuntimeFilterExpr {
-                filter_id: entry.id,
-                kind: RuntimeFilterExprKind::Inlist,
-                inlist_value_count: entry.inlist_value_count,
-                expr,
-                stats: entry.stats.clone(),
-            });
-        }
-        if let Some(expr) = entry.min_max.clone() {
-            exprs.push(RuntimeFilterExpr {
-                filter_id: entry.id,
-                kind: RuntimeFilterExprKind::MinMax,
-                inlist_value_count: 0,
-                expr,
-                stats: entry.stats.clone(),
-            });
-        }
-        exprs
-    }
-
     fn create_runtime_pruners(&self) -> Result<(ExprRuntimePruner, Option<SpatialRuntimePruner>)> {
         let read_settings = self.read_block_context.read_settings();
         let inlist_bloom_prune_threshold =
@@ -113,7 +88,7 @@ impl ReadDataTransform {
             inlist_bloom_prune_threshold,
             runtime_filters
                 .iter()
-                .flat_map(Self::build_runtime_filter_exprs)
+                .flat_map(RuntimeFilterExpr::from_entry)
                 .collect(),
         );
         let spatial_runtime_pruner = SpatialRuntimePruner::try_create(
