@@ -460,6 +460,56 @@ ORDER BY id, region;
 1 North 1 North 300.0 100.0 200.0
 2 South 2 South 350.0 150.0 250.0
 
+# Test PIVOT ANY with quoted identifiers in columns and source table names.
+statement ok
+CREATE OR REPLACE TABLE pivot_any_quoted_column (
+    "Employee ID" INT,
+    "Total Amount" INT,
+    "Quarter Name" VARCHAR
+);
+
+statement ok
+INSERT INTO pivot_any_quoted_column VALUES
+    (1, 100, 'Q1'),
+    (1, 200, 'Q2'),
+    (2, 300, 'Q1'),
+    (2, 400, 'Q2');
+
+query III
+SELECT *
+FROM pivot_any_quoted_column
+    PIVOT(SUM("Total Amount") FOR "Quarter Name" IN (ANY ORDER BY "Quarter Name"))
+ORDER BY "Employee ID";
+----
+1 100 200
+2 300 400
+
+statement ok
+CREATE DATABASE IF NOT EXISTS "pivot any quoted db";
+
+statement ok
+CREATE OR REPLACE TABLE "pivot any quoted db"."select" (
+    "Employee ID" INT,
+    "Total Amount" INT,
+    "Quarter" VARCHAR
+);
+
+statement ok
+INSERT INTO "pivot any quoted db"."select" VALUES
+    (1, 10, 'Q1'),
+    (1, 20, 'Q2'),
+    (2, 30, 'Q1'),
+    (2, 40, 'Q2');
+
+query III
+SELECT *
+FROM "pivot any quoted db"."select"
+    PIVOT(SUM("Total Amount") FOR "Quarter" IN (ANY ORDER BY "Quarter"))
+ORDER BY "Employee ID";
+----
+1 10 20
+2 30 40
+
 statement ok
 drop table monthly_sales;
 
@@ -480,3 +530,12 @@ drop table test_null_pivot;
 
 statement ok
 drop table test_string_pivot;
+
+statement ok
+drop table pivot_any_quoted_column;
+
+statement ok
+drop table "pivot any quoted db"."select";
+
+statement ok
+drop database "pivot any quoted db";

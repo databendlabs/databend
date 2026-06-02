@@ -733,7 +733,7 @@ impl SelectRewriter {
                     // Build a query to get all distinct values from the pivot column
                     let mut query_sql = format!(
                         "SELECT DISTINCT {} FROM ({}) AS pivot_source",
-                        pivot.value_column.name,
+                        pivot.value_column,
                         self.build_pivot_source_query(stmt)?
                     );
 
@@ -946,57 +946,9 @@ impl SelectRewriter {
                 if i > 0 {
                     source_query.push_str(", ");
                 }
-                // Remove pivot from the from clause
-                match from_item {
-                    TableReference::Table {
-                        span: _,
-                        table,
-                        alias,
-                        temporal,
-                        with_options,
-                        pivot: _,
-                        unpivot,
-                        sample,
-                    } => {
-                        if let Some(catalog) = &table.catalog {
-                            source_query.push_str(&catalog.name);
-                            source_query.push('.');
-                        }
-                        if let Some(database) = &table.database {
-                            source_query.push_str(&database.name);
-                            source_query.push('.');
-                        }
-                        source_query.push_str(&table.table.name);
-                        if let Some(branch) = &table.branch {
-                            source_query.push('/');
-                            source_query.push_str(&branch.name);
-                        }
-
-                        if let Some(temporal) = temporal {
-                            source_query.push(' ');
-                            source_query.push_str(&temporal.to_string());
-                        }
-                        if let Some(with_options) = with_options {
-                            source_query.push(' ');
-                            source_query.push_str(&with_options.to_string());
-                        }
-                        if let Some(alias) = alias {
-                            source_query.push_str(" AS ");
-                            source_query.push_str(&alias.to_string());
-                        }
-                        if let Some(unpivot) = unpivot {
-                            source_query.push(' ');
-                            source_query.push_str(&unpivot.to_string());
-                        }
-                        if let Some(sample) = sample {
-                            source_query.push(' ');
-                            source_query.push_str(&sample.to_string());
-                        }
-                    }
-                    _ => {
-                        source_query.push_str(&from_item.to_string());
-                    }
-                }
+                let mut from_item = from_item.clone();
+                Self::strip_pivot(&mut from_item);
+                source_query.push_str(&from_item.to_string());
             }
         } else {
             return Err(ErrorCode::SemanticError(
