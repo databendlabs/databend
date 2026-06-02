@@ -482,7 +482,7 @@ impl SExprVisitor for StatsApplier<'_> {
                     table_stats: Some(table_stats),
                     column_stats,
                     histograms,
-                    cluster_key_orders: Default::default(),
+                    cluster_keys: Default::default(),
                 });
 
                 return Ok(VisitAction::Replace(

@@ -280,7 +280,7 @@ fn direct_stat_info(column: usize, stats: TableStats) -> Result<StatInfo> {
                 null_count: StatCount::exact(0),
                 histogram: Some(histogram_from_json(stats.histogram_json)?),
             })]),
-            cluster_keys: Default::default(),
+            cluster_key_stats: Default::default(),
         },
     })
 }

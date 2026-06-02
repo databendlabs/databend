@@ -10,10 +10,10 @@ JOIN c ON a.k2 = c.k2
 memo:
 DPhpyOptimizer:
 join_order_candidate:
-- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b], left: [a], right: [b], cost: 850.000, previous best: -, probe factor: 0.850, selected: true
-- parent: [a, b, c], left: [a, b], right: [c], cost: 1850.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, c], right: [b], cost: 2000.000, previous best: 1850.000, probe factor: 1.000, selected: false
+- parent: [a, c], left: [a], right: [c], probe: [a], build: [c], cost: 2000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], probe: [a], build: [b], cost: 1850.000, previous best: -, probe factor: 0.850, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], probe: [c], build: [a, b], cost: 3850.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], probe: [b], build: [a, c], cost: 4000.000, previous best: 3850.000, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: false
 
 Memo
 ├── root group: #5
@@ -56,10 +56,10 @@ JOIN c ON a.k2 = c.k2
 memo:
 DPhpyOptimizer:
 join_order_candidate:
-- parent: [a, c], left: [a], right: [c], cost: 850.000, previous best: -, probe factor: 0.850, selected: true
-- parent: [a, b], left: [a], right: [b], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, b], right: [c], cost: 2000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, c], right: [b], cost: 1850.000, previous best: 2000.000, probe factor: 1.000, selected: true
+- parent: [a, c], left: [a], right: [c], probe: [a], build: [c], cost: 1850.000, previous best: -, probe factor: 0.850, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], probe: [a], build: [b], cost: 2000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], probe: [c], build: [a, b], cost: 4000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], probe: [b], build: [a, c], cost: 3850.000, previous best: 4000.000, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
 
 Memo
 ├── root group: #5
@@ -102,10 +102,10 @@ JOIN c ON a.k2 = c.k2
 memo:
 DPhpyOptimizer:
 join_order_candidate:
-- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b], left: [a], right: [b], cost: 850.000, previous best: -, probe factor: 0.850, selected: true
-- parent: [a, b, c], left: [a, b], right: [c], cost: 1850.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, c], right: [b], cost: 2000.000, previous best: 1850.000, probe factor: 1.000, selected: false
+- parent: [a, c], left: [a], right: [c], probe: [a], build: [c], cost: 2000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], probe: [a], build: [b], cost: 1850.000, previous best: -, probe factor: 0.850, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], probe: [c], build: [a, b], cost: 3850.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], probe: [b], build: [a, c], cost: 4000.000, previous best: 3850.000, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: false
 
 Memo
 ├── root group: #6
@@ -152,10 +152,10 @@ JOIN c ON a.k2 = c.k2
 memo:
 DPhpyOptimizer:
 join_order_candidate:
-- parent: [a, c], left: [a], right: [c], cost: 1000000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b], left: [a], right: [b], cost: 850000.000, previous best: -, probe factor: 0.850, selected: true
-- parent: [a, b, c], left: [a, b], right: [c], cost: 1000850000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, c], right: [b], cost: 851000000.000, previous best: 1000850000.000, probe factor: 0.850, selected: true
+- parent: [a, c], left: [a], right: [c], probe: [a], build: [c], cost: 1001000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], probe: [a], build: [b], cost: 851000.000, previous best: -, probe factor: 0.850, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], probe: [a, b], build: [c], cost: 1000852000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], probe: [a, c], build: [b], cost: 851002000.000, previous best: 1000852000.000, probe factor: 0.850, filter factors: left 1.000, right 1.000, selected: true
 
 Memo
 ├── root group: #7
@@ -206,10 +206,10 @@ JOIN (SELECT * FROM c LIMIT 10) c ON a.k2 = c.k2
 memo:
 DPhpyOptimizer:
 join_order_candidate:
-- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b], left: [b], right: [a], cost: 100000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [b], right: [a, c], cost: 1001000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, b], right: [c], cost: 1100000.000, previous best: 1001000.000, probe factor: 1.000, selected: false
+- parent: [a, c], left: [a], right: [c], probe: [a], build: [c], cost: 1010.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b], left: [b], right: [a], probe: [b], build: [a], cost: 100100.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [b], right: [a, c], probe: [b], build: [a, c], cost: 1002010.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], probe: [a, b], build: [c], cost: 1100110.000, previous best: 1002010.000, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: false
 
 Memo
 ├── root group: #9
@@ -256,6 +256,218 @@ Memo
     └── #0 EvalScalar [#8]
 
 
+=== clustered_filter_side_becomes_build ===
+description: A filter on the clustered column makes that side a better build input.
+setup: CREATE TABLE a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
+setup: CREATE TABLE b(join_key BIGINT, column_a STRING, column_b STRING)
+sql: SELECT *
+FROM a
+JOIN b ON a.join_key = b.join_key
+WHERE a.column_a = 'xxx'
+AND b.column_b = 'xxx'
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, b], left: [a], right: [b], probe: [b], build: [a], cost: 9.500, previous best: -, probe factor: 1.000, filter factors: left 0.850, right 1.000, selected: true
+
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 131.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== self_join_filter_on_clustered_alias_becomes_build ===
+description: A self-join filter only matches the alias whose filter references the clustered column.
+setup: CREATE TABLE t(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
+sql: SELECT *
+FROM t AS l
+JOIN t AS r ON l.join_key = r.join_key
+WHERE l.column_a = 'xxx'
+AND r.column_b = 'xxx'
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [t, t], left: [t], right: [t], probe: [t], build: [t], cost: 9.500, previous best: -, probe factor: 1.000, filter factors: left 0.850, right 1.000, selected: true
+
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 131.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== clustered_filter_discount_disabled ===
+description: The cluster-key cost factor setting can disable the join-order discount.
+setting: cost_factor_cluster_key=100
+setup: CREATE TABLE a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
+setup: CREATE TABLE b(join_key BIGINT, column_a STRING, column_b STRING)
+sql: SELECT *
+FROM a
+JOIN b ON a.join_key = b.join_key
+WHERE a.column_a = 'xxx'
+AND b.column_b = 'xxx'
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [a, b], left: [a], right: [b], probe: [a], build: [b], cost: 11.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 131.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== composite_cluster_key_filter_on_second_column ===
+description: A filter on column_b favors the table whose cluster key starts with column_b.
+setup: CREATE TABLE table_a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a, column_b)
+setup: CREATE TABLE table_b(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_b, column_a)
+sql: SELECT *
+FROM table_a AS a
+JOIN table_b AS b
+ON a.column_a = b.column_a
+AND a.column_b = b.column_b
+WHERE b.column_b = 'xxx'
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [table_a, table_b], left: [table_a], right: [table_b], probe: [table_a], build: [table_b], cost: 16.056, previous best: -, probe factor: 0.722, filter factors: left 1.000, right 0.850, selected: true
+
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 140.458, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== composite_cluster_key_filter_on_first_column ===
+description: A filter on column_a favors the table whose cluster key starts with column_a.
+setup: CREATE TABLE table_a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a, column_b)
+setup: CREATE TABLE table_b(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_b, column_a)
+sql: SELECT *
+FROM table_a AS a
+JOIN table_b AS b
+ON a.column_a = b.column_a
+AND a.column_b = b.column_b
+WHERE a.column_a = 'xxx'
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [table_a, table_b], left: [table_a], right: [table_b], probe: [table_b], build: [table_a], cost: 16.056, previous best: -, probe factor: 0.722, filter factors: left 0.850, right 1.000, selected: true
+
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 140.458, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== composite_cluster_key_later_column_is_not_prefix ===
+description: A later composite cluster-key column is not treated as a leading prefix.
+setup: CREATE TABLE table_a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a, column_b)
+setup: CREATE TABLE table_b(join_key BIGINT, column_a STRING, column_b STRING)
+sql: SELECT a.column_b, b.column_b
+FROM table_a AS a
+JOIN table_b AS b
+ON a.column_b = b.column_b
+WHERE a.column_b = 'xxx'
+memo:
+DPhpyOptimizer:
+join_order_candidate:
+- parent: [table_a, table_b], left: [table_a], right: [table_b], probe: [table_a], build: [table_b], cost: 110.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 230.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
 === linear_expression_cluster_key ===
 description: A LINEAR cluster key with to_yyyymmdd and substring expressions affects join costs.
 setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING) CLUSTER BY linear (
@@ -273,10 +485,10 @@ JOIN c ON a.k2 = c.k2
 memo:
 DPhpyOptimizer:
 join_order_candidate:
-- parent: [a, c], left: [a], right: [c], cost: 1000.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b], left: [a], right: [b], cost: 902500.000, previous best: -, probe factor: 0.902, selected: true
-- parent: [a, b, c], left: [a, b], right: [c], cost: 903500.000, previous best: -, probe factor: 1.000, selected: true
-- parent: [a, b, c], left: [a, c], right: [b], cost: 1001000.000, previous best: 903500.000, probe factor: 1.000, selected: false
+- parent: [a, c], left: [a], right: [c], probe: [a], build: [c], cost: 2000.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b], left: [a], right: [b], probe: [a], build: [b], cost: 723500.000, previous best: -, probe factor: 0.722, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, b], right: [c], probe: [a, b], build: [c], cost: 725500.000, previous best: -, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: true
+- parent: [a, b, c], left: [a, c], right: [b], probe: [b], build: [a, c], cost: 1003000.000, previous best: 725500.000, probe factor: 1.000, filter factors: left 1.000, right 1.000, selected: false
 
 Memo
 ├── root group: #5
