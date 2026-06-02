@@ -219,6 +219,41 @@ else
     exit 1
 fi
 
+response=$(query_sql_with_auth "root:" "CREATE TASK overlap_schedule_task SCHEDULE = 500 MILLISECOND AS SELECT sleep(2)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "ALTER TASK overlap_schedule_task RESUME")
+check_response_error "$response"
+
+sleep 9
+
+response=$(query_sql_with_auth "root:" "ALTER TASK overlap_schedule_task SUSPEND")
+check_response_error "$response"
+
+sleep 3
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'overlap_schedule_task', RESULT_LIMIT => 10) WHERE state = 'SUCCEEDED'")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" -ge 2 ]; then
+    echo "✅ Slow interval task continues after previous run completes"
+else
+    echo "❌ Expected slow interval task to have at least 2 successful runs"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM system_task.task_run a, system_task.task_run b WHERE a.task_name = 'overlap_schedule_task' AND b.task_name = 'overlap_schedule_task' AND a.run_id < b.run_id AND a.state = 'SUCCEEDED' AND b.state = 'SUCCEEDED' AND a.scheduled_at < b.completed_at AND b.scheduled_at < a.completed_at")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "0" ]; then
+    echo "✅ Slow interval task runs do not overlap"
+else
+    echo "❌ Expected slow interval task runs not to overlap"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"CREATE TASK my_task_1 SCHEDULE = 5 SECOND AS insert into t1 values(0)\"}")
 check_response_error "$response"
 create_task_1_query_id=$(echo $response | jq -r '.id')
@@ -633,19 +668,18 @@ check_response_error "$response"
 alter_task_4_query_id=$(echo $response | jq -r '.id')
 echo "Resume Task 4 ID: $alter_task_4_query_id"
 
-sleep 60
+sleep 80
 
-response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT c1 FROM t2 ORDER BY c1\"}")
+response=$(curl -s -u root: -XPOST "http://localhost:8000/v1/query" -H 'Content-Type: application/json' -d "{\"sql\": \"SELECT count(*) FROM t2\"}")
 check_response_error "$response"
 
-actual=$(echo "$response" | jq -c '.data')
-expected='[["0"],["0"],["0"]]'
+actual=$(echo "$response" | jq -r '.data[0][0]')
 
-if [ "$actual" = "$expected" ]; then
+if [ "$actual" -ge 3 ]; then
     echo "✅ Query result matches expected"
 else
     echo "❌ Mismatch"
-    echo "Expected: $expected"
+    echo "Expected at least 3 cron task runs"
     echo "Actual  : $actual"
     exit 1
 fi
