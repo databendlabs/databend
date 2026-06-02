@@ -395,7 +395,7 @@ mod tests {
             semaphore.clone(),
         );
 
-        let handle = tokio::spawn(async move { reader.read().await });
+        let handle = databend_common_base::runtime::spawn(async move { reader.read().await });
         entered_rx.await.expect("read operation must start");
 
         assert_eq!(semaphore.available_permits(), 0);
