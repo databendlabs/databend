@@ -41,6 +41,9 @@ mod config;
 pub use config::ShareTableConfig;
 pub use config::StorageConfig;
 
+mod concurrent_limit_layer;
+pub use concurrent_limit_layer::ConcurrentLimitLayer;
+
 mod http_client;
 pub use http_client::StorageHttpClient;
 
