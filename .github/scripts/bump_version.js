@@ -244,16 +244,24 @@ module.exports = async ({ github, context, core }) => {
       if (match) {
         const baseVersion = match[1];
         let found = false;
-        const releases = await github.rest.repos.listReleases({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-        });
-        for (const release of releases.data) {
-          if (release.tag_name === baseVersion || release.tag_name === `${baseVersion}-nightly`) {
-            core.setOutput("previous", release.tag_name);
-            core.info(`Custom release with previous release: ${release.tag_name}`);
-            found = true;
+        let page = 1;
+        while (!found) {
+          const releases = await github.rest.repos.listReleases({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            page,
+          });
+          if (releases.data.length === 0) {
             break;
+          }
+          page++;
+          for (const release of releases.data) {
+            if (release.tag_name === baseVersion || release.tag_name === `${baseVersion}-nightly`) {
+              core.setOutput("previous", release.tag_name);
+              core.info(`Custom release with previous release: ${release.tag_name}`);
+              found = true;
+              break;
+            }
           }
         }
         if (!found) {
