@@ -119,17 +119,16 @@ module.exports = async ({ github, context, core }) => {
     }
   }
 
-  // Determine the SHA to use: custom SHA if provided, otherwise context.sha
-  const targetSha = SHA || context.sha;
-
+  // Determine the SHA to use
   switch (TYPE) {
     case "":
     case "nightly": {
-      core.setOutput("sha", targetSha);
-      core.info(`Nightly release triggered by (${targetSha})${SHA ? " [custom SHA]" : ""}`);
       if (SHA) {
-        core.info(`Using custom SHA: ${SHA}`);
+        core.setFailed("Custom SHA is not supported for nightly release, please use 'custom' type instead");
+        return;
       }
+      core.setOutput("sha", context.sha);
+      core.info(`Nightly release triggered by (${context.sha})`);
 
       const previous = await getPreviousNightlyRelease(github, context);
       if (!previous) {
@@ -155,15 +154,16 @@ module.exports = async ({ github, context, core }) => {
     }
 
     case "stable": {
-      core.setOutput("sha", targetSha);
+      if (SHA) {
+        core.setFailed("Custom SHA is not supported for stable release, please use 'custom' type instead");
+        return;
+      }
       if (!TAG) {
         core.setFailed("Stable release must be triggered with a nightly tag");
         return;
       }
-      core.info(`Stable release triggered by ${TAG} (${targetSha})${SHA ? " [custom SHA]" : ""}`);
-      if (SHA) {
-        core.info(`Using custom SHA: ${SHA}`);
-      }
+      core.setOutput("sha", context.sha);
+      core.info(`Stable release triggered by ${TAG} (${context.sha})`);
       const nextTag = getNextStableRelease();
       if (!nextTag) {
         core.setFailed(`No stable release from ${TAG}`);
@@ -183,6 +183,10 @@ module.exports = async ({ github, context, core }) => {
     }
 
     case "patch": {
+      if (SHA) {
+        core.setFailed("Custom SHA is not supported for patch release, please use 'custom' type instead");
+        return;
+      }
       if (!TAG) {
         core.setFailed("Patch release must be triggered with a stable tag");
         return;
@@ -194,24 +198,14 @@ module.exports = async ({ github, context, core }) => {
         return;
       }
 
-      let patchSha;
-      if (SHA) {
-        // Use custom SHA if provided
-        patchSha = SHA;
-        core.info(`Using custom SHA: ${SHA}`);
-      } else {
-        // Otherwise use the backport branch SHA
-        const branch = await github.rest.repos.getBranch({
-          owner: context.repo.owner,
-          repo: context.repo.repo,
-          branch: `backport/${TAG}`,
-        });
-        patchSha = branch.data.commit.sha;
-      }
+      const branch = await github.rest.repos.getBranch({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        branch: `backport/${TAG}`,
+      });
+      const patchSha = branch.data.commit.sha;
       core.setOutput("sha", patchSha);
-      core.info(
-        `Patch release triggered by ${TAG} (${patchSha})${SHA ? " [custom SHA]" : ""}`
-      );
+      core.info(`Patch release triggered by ${TAG} (${patchSha})`);
 
       const previous = await getPreviousPatchRelease(github, context);
       if (!previous) {
@@ -228,6 +222,44 @@ module.exports = async ({ github, context, core }) => {
       }
       core.setOutput("tag", nextTag);
       core.info(`Patch release ${nextTag} from ${previous}`);
+      return;
+    }
+
+    case "custom": {
+      if (!TAG) {
+        core.setFailed("Custom release must be triggered with a tag");
+        return;
+      }
+      if (!SHA) {
+        core.setFailed("Custom release must be triggered with a SHA");
+        return;
+      }
+      core.setOutput("tag", TAG);
+      core.setOutput("sha", SHA);
+      core.info(`Custom release ${TAG} (${SHA})`);
+
+      // Best-effort: try to find a previous release for release notes
+      const RE_TAG_CUSTOM = /^(v\d+\.\d+\.\d+)-.+$/;
+      const match = RE_TAG_CUSTOM.exec(TAG);
+      if (match) {
+        const baseVersion = match[1];
+        let found = false;
+        const releases = await github.rest.repos.listReleases({
+          owner: context.repo.owner,
+          repo: context.repo.repo,
+        });
+        for (const release of releases.data) {
+          if (release.tag_name === baseVersion || release.tag_name === `${baseVersion}-nightly`) {
+            core.setOutput("previous", release.tag_name);
+            core.info(`Custom release with previous release: ${release.tag_name}`);
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          core.info(`No previous release found for base version ${baseVersion}, skipping release notes`);
+        }
+      }
       return;
     }
 
