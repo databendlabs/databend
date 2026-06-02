@@ -116,6 +116,25 @@ impl<'a> PhysicalFormat for WindowGroupFormatter<'a> {
 
     #[recursive::recursive]
     fn format(&self, ctx: &mut FormatContext<'_>) -> Result<FormatTreeNode<String>> {
+        if self.inner.windows.len() == 1 {
+            let mut node_children = format_window_spec_children(&self.inner.windows[0], ctx)?;
+            node_children.insert(
+                0,
+                FormatTreeNode::new(format!(
+                    "output columns: [{}]",
+                    format_output_columns(self.inner.output_schema()?, ctx.metadata, true)
+                )),
+            );
+
+            let input_formatter = self.inner.input.formatter()?;
+            node_children.push(input_formatter.dispatch(ctx)?);
+
+            return Ok(FormatTreeNode::with_children(
+                "Window".to_string(),
+                node_children,
+            ));
+        }
+
         let mut node_children = vec![FormatTreeNode::new(format!(
             "output columns: [{}]",
             format_output_columns(self.inner.output_schema()?, ctx.metadata, true)
@@ -149,6 +168,17 @@ fn format_window_spec(
     window: &WindowSpec,
     ctx: &mut FormatContext<'_>,
 ) -> Result<FormatTreeNode<String>> {
+    let node_children = format_window_spec_children(window, ctx)?;
+    Ok(FormatTreeNode::with_children(
+        "Window".to_string(),
+        node_children,
+    ))
+}
+
+fn format_window_spec_children(
+    window: &WindowSpec,
+    ctx: &mut FormatContext<'_>,
+) -> Result<Vec<FormatTreeNode<String>>> {
     let partition_by = window
         .partition_by
         .iter()
@@ -182,8 +212,5 @@ fn format_window_spec(
         node_children.push(FormatTreeNode::new(format!("top: [{}]", top)));
     }
 
-    Ok(FormatTreeNode::with_children(
-        "Window".to_string(),
-        node_children,
-    ))
+    Ok(node_children)
 }

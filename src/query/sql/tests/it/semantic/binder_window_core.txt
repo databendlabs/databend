@@ -178,27 +178,26 @@ EvalScalar
 
 
 === multiple_window_expressions_use_window_group ===
-description: Multiple distinct window expressions should bind as one flat WindowGroup instead of nested Window nodes.
+description: Multiple distinct window expressions should bind through WindowGroup instead of nested Window nodes.
 sql: SELECT row_number() OVER (ORDER BY number), rank() OVER (PARTITION BY number % 3 ORDER BY number) FROM t
 status: ok
 EvalScalar
 ├── scalars: [row_number() OVER (ORDER BY number) (#1) AS (#1), rank() OVER (PARTITION BY number % 3 ORDER BY number) (#3) AS (#3)]
-└── WindowGroup
-    ├── Window
-    │   ├── aggregate function: row_number
-    │   ├── partition items: []
-    │   ├── order by items: [t.number (#0) AS (#0)]
-    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    ├── Window
-    │   ├── aggregate function: rank
-    │   ├── partition items: [modulo(t.number (#0), 3) AS (#2)]
-    │   ├── order by items: [t.number (#0) AS (#0)]
-    │   └── frame: [Range: Preceding(None) ~ CurrentRow]
-    └── Scan
-        ├── table: default.t (#0)
-        ├── filters: []
-        ├── order by: []
-        └── limit: NONE
+└── Window
+    ├── aggregate function: row_number
+    ├── partition items: []
+    ├── order by items: [t.number (#0) AS (#0)]
+    ├── frame: [Range: Preceding(None) ~ CurrentRow]
+    └── Window
+        ├── aggregate function: rank
+        ├── partition items: [modulo(t.number (#0), 3) AS (#2)]
+        ├── order by items: [t.number (#0) AS (#0)]
+        ├── frame: [Range: Preceding(None) ~ CurrentRow]
+        └── Scan
+            ├── table: default.t (#0)
+            ├── filters: []
+            ├── order by: []
+            └── limit: NONE
 
 
 === laglead_window_from_sqllogictest_binds ===

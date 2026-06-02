@@ -297,6 +297,10 @@ fn window_group_to_format_tree<I: IdHumanizer>(
     id_humanizer: &I,
     op: &WindowGroup,
 ) -> FormatTreeNode {
+    if op.windows.len() == 1 {
+        return window_to_format_tree(id_humanizer, &op.windows[0]);
+    }
+
     let children = op
         .windows
         .iter()
