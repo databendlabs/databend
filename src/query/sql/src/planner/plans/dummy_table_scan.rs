@@ -143,7 +143,7 @@ impl Operator for DummyTableScan {
             statistics: Statistics {
                 precise_cardinality: Some(1),
                 column_stats: Default::default(),
-                cluster_keys: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         })
     }

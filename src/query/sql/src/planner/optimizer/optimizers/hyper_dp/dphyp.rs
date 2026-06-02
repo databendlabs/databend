@@ -18,14 +18,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use databend_common_base::runtime::spawn;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::Expr;
 
 use crate::IndexType;
 use crate::Metadata;
-use crate::MetadataRef;
 use crate::ScalarExpr;
 use crate::Symbol;
 use crate::optimizer::Optimizer;
@@ -46,8 +44,6 @@ use crate::plans::RelOperator;
 
 const EMIT_THRESHOLD: usize = 10000;
 const RELATION_THRESHOLD: usize = 10;
-const CLUSTERED_PROBE_COLUMN_FACTOR: f64 = 0.85;
-const CLUSTERED_PROBE_EXPRESSION_FACTOR: f64 = 0.95;
 
 /// The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 /// See the paper for more details.
@@ -56,13 +52,8 @@ pub struct DPhpyOptimizer {
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
-    dp_table: HashMap<Vec<IndexType>, JoinNode>,
-    query_graph: QueryGraph,
-    relation_set_tree: RelationSetTree,
     // non-equi conditions
     filters: HashSet<Filter>,
-    // The number of times emit_csg_cmp is called
-    emit_count: usize,
 }
 
 impl DPhpyOptimizer {
@@ -71,133 +62,7 @@ impl DPhpyOptimizer {
             opt_ctx,
             join_relations: vec![],
             table_index_map: Default::default(),
-            dp_table: Default::default(),
-            query_graph: QueryGraph::new(),
-            relation_set_tree: Default::default(),
             filters: HashSet::new(),
-            emit_count: 0,
-        }
-    }
-
-    fn table_ctx(&self) -> Arc<dyn TableContext> {
-        self.opt_ctx.get_table_ctx()
-    }
-
-    fn metadata(&self) -> MetadataRef {
-        self.opt_ctx.get_metadata()
-    }
-
-    fn clustered_probe_join_cost_factor(
-        &self,
-        probe_node: &JoinNode,
-        join_conditions: &[(ScalarExpr, ScalarExpr)],
-    ) -> Result<f64> {
-        let probe_join_keys = {
-            let mut probe_join_keys = Vec::with_capacity(join_conditions.len());
-            for (probe_key, _) in join_conditions {
-                probe_join_keys.push(probe_key.as_symbol_expr()?);
-            }
-            probe_join_keys
-        };
-        if probe_join_keys.is_empty() {
-            return Ok(1.0);
-        }
-
-        let probe_expr = probe_node
-            .s_expr
-            .clone()
-            .unwrap_or_else(|| probe_node.s_expr(&self.join_relations));
-        let stat_info = probe_expr.derive_cardinality()?;
-        Ok(
-            Self::best_cluster_key_candidate(&stat_info.statistics.cluster_keys, &probe_join_keys)
-                .unwrap_or(1.0),
-        )
-    }
-
-    fn best_cluster_key_candidate(
-        cluster_keys: &BTreeMap<IndexType, Vec<Expr<Symbol>>>,
-        probe_join_keys: &[Expr<Symbol>],
-    ) -> Option<f64> {
-        cluster_keys
-            .iter()
-            .filter_map(|(_, cluster_key)| {
-                let factor = Self::cluster_key_prefix_cost_factor(cluster_key, probe_join_keys);
-                (factor < 1.0).then_some(factor)
-            })
-            .min_by(|left, right| left.total_cmp(right))
-    }
-
-    fn cluster_key_prefix_cost_factor(
-        cluster_key: &[Expr<Symbol>],
-        probe_join_keys: &[Expr<Symbol>],
-    ) -> f64 {
-        let mut matched_join_keys = vec![false; probe_join_keys.len()];
-        let mut factor = 1.0;
-
-        for cluster_key_expr in cluster_key {
-            let mut matched = false;
-            for (idx, join_key_expr) in probe_join_keys.iter().enumerate() {
-                if matched_join_keys[idx] {
-                    continue;
-                }
-                if let Some(key_factor) =
-                    Self::cluster_key_match_factor(cluster_key_expr, join_key_expr)
-                {
-                    factor *= key_factor;
-                    matched_join_keys[idx] = true;
-                    matched = true;
-                    break;
-                }
-            }
-            if !matched {
-                return factor;
-            }
-        }
-
-        factor
-    }
-
-    fn cluster_key_match_factor(
-        cluster_key_expr: &Expr<Symbol>,
-        join_key_expr: &Expr<Symbol>,
-    ) -> Option<f64> {
-        match cluster_key_expr {
-            Expr::ColumnRef(cluster_key)
-                if let Expr::ColumnRef(join_key) = join_key_expr
-                    && cluster_key.id == join_key.id =>
-            {
-                Some(CLUSTERED_PROBE_COLUMN_FACTOR)
-            }
-            _ if cluster_key_expr == join_key_expr => Some(CLUSTERED_PROBE_EXPRESSION_FACTOR),
-            _ => None,
-        }
-    }
-
-    fn relation_set_label(&self, relation_set: &[IndexType]) -> String {
-        let metadata = self.metadata();
-        let metadata = metadata.read();
-        let mut names = Vec::new();
-        for relation_idx in relation_set {
-            if let Some(relation) = self.join_relations.get(*relation_idx) {
-                Self::collect_scan_table_names(&metadata, &relation.s_expr(), &mut names);
-            }
-        }
-        names.sort();
-        if names.is_empty() {
-            format!("{relation_set:?}")
-        } else {
-            format!("[{}]", names.join(", "))
-        }
-    }
-
-    fn collect_scan_table_names(metadata: &Metadata, expr: &SExpr, names: &mut Vec<String>) {
-        if let RelOperator::Scan(scan) = expr.plan() {
-            names.push(metadata.table(scan.table_index).name().to_string());
-            return;
-        }
-
-        for child in expr.children() {
-            Self::collect_scan_table_names(metadata, child, names);
         }
     }
 
@@ -545,30 +410,6 @@ impl DPhpyOptimizer {
         }
     }
 
-    /// Initialize the DP table with single relation plans
-    async fn initialize_dp_table(&mut self) -> Result<()> {
-        for (idx, relation) in self.join_relations.iter().enumerate() {
-            // Get nodes in `relation_set_tree`
-            let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
-            let cardinality = relation
-                .cardinality(self.table_ctx().clone(), self.metadata().clone())
-                .await?;
-
-            let join = JoinNode {
-                join_type: JoinType::Inner,
-                leaves: Arc::new(nodes.clone()),
-                children: Arc::new(vec![]),
-                join_conditions: Arc::new(vec![]),
-                cost: 0.0,
-                cardinality: Some(cardinality),
-                s_expr: None,
-            };
-
-            self.dp_table.insert(nodes, join);
-        }
-        Ok(())
-    }
-
     /// The input plan tree has been optimized by heuristic optimizer
     /// So filters have pushed down join and cross join has been converted to inner join as possible as we can
     /// The output plan will have optimal join order theoretically
@@ -594,27 +435,13 @@ impl DPhpyOptimizer {
             return Ok(s_expr.as_ref().clone());
         }
 
-        // Second, use `join_conditions` to create edges in `query_graph`
-        if !self.build_query_graph(&join_conditions)? {
-            self.opt_ctx.set_flag("dphyp_optimized", false);
-            return Ok(s_expr.as_ref().clone());
-        }
-
-        // Sort neighbors for deterministic behavior
-        for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {
-            neighbors.sort();
-        }
-
-        // Perform join reordering
-        self.join_reorder().await?;
-
-        // Get all join relations in `relation_set_tree`
-        let all_relations = self
-            .relation_set_tree
-            .get_relation_set(&(0..self.join_relations.len()).collect())?;
-
-        if let Some(final_plan) = self.dp_table.get(&all_relations) {
-            let (s_expr, optimized) = self.generate_final_plan(final_plan, &s_expr)?;
+        let mut search = JoinOrderSearch::new(
+            self.opt_ctx.clone(),
+            &self.join_relations,
+            &self.table_index_map,
+        )?;
+        if let Some(final_plan) = search.search(&join_conditions)? {
+            let (s_expr, optimized) = self.generate_final_plan(&final_plan, &s_expr)?;
             self.opt_ctx.set_flag("dphyp_optimized", optimized);
             Ok(s_expr.as_ref().clone())
         } else {
@@ -622,550 +449,6 @@ impl DPhpyOptimizer {
             self.opt_ctx.set_flag("dphyp_optimized", false);
             Ok(s_expr.as_ref().clone())
         }
-    }
-
-    /// Build the query graph from join conditions
-    fn build_query_graph(&mut self, join_conditions: &[(ScalarExpr, ScalarExpr)]) -> Result<bool> {
-        for (left_condition, right_condition) in join_conditions.iter() {
-            // Find the corresponding join relations in `join_conditions`
-            let mut left_relation_set = HashSet::new();
-            let mut right_relation_set = HashSet::new();
-
-            let left_used_tables = left_condition.used_tables()?;
-            for table in left_used_tables.iter() {
-                left_relation_set.insert(self.table_index_map[table]);
-            }
-
-            let right_used_tables = right_condition.used_tables()?;
-            for table in right_used_tables.iter() {
-                right_relation_set.insert(self.table_index_map[table]);
-            }
-
-            if !left_relation_set.is_empty() && !right_relation_set.is_empty() {
-                // Use `left_relation_set` and `right_relation_set` to initial RelationSetTree
-                let left_relation_set = self
-                    .relation_set_tree
-                    .get_relation_set(&left_relation_set)?;
-                let right_relation_set = self
-                    .relation_set_tree
-                    .get_relation_set(&right_relation_set)?;
-
-                // Try to create edges if `left_relation_set` and `right_relation_set` are not disjoint
-                if !intersect(&left_relation_set, &right_relation_set) {
-                    self.query_graph.create_edges(
-                        &left_relation_set,
-                        &right_relation_set,
-                        (left_condition.clone(), right_condition.clone()),
-                    )?;
-                    self.query_graph.create_edges(
-                        &right_relation_set,
-                        &left_relation_set,
-                        (right_condition.clone(), left_condition.clone()),
-                    )?;
-                }
-            } else {
-                // If one of `left_relation_set` and `right_relation_set` is empty, we need to forbid dphyp algo
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
-    /// Process a node as a starting point for enumeration
-    async fn process_node_as_start(&mut self, idx: usize) -> Result<bool> {
-        // Get node from `relation_set_tree`
-        let node = self.relation_set_tree.get_relation_set_by_index(idx)?;
-
-        // Emit node as subgraph
-        if !self.emit_csg(&node).await? {
-            return Ok(false);
-        }
-
-        // Create forbidden node set
-        // Forbid node idx will less than current idx
-        let forbidden_nodes = (0..idx).collect();
-
-        // Enlarge the subgraph recursively
-        if !self.enumerate_csg_rec(&node, &forbidden_nodes).await? {
-            return Ok(false);
-        }
-
-        Ok(true)
-    }
-
-    /// Join reorder by dynamic programming algorithm.
-    async fn join_reorder_by_dphyp(&mut self) -> Result<bool> {
-        // Choose all nodes as enumeration start node once (desc order)
-        for idx in (0..self.join_relations.len()).rev() {
-            if !self.process_node_as_start(idx).await? {
-                return Ok(false);
-            }
-        }
-        Ok(true)
-    }
-
-    /// Find the minimum cost pair of relations
-    async fn find_minimum_cost_pair(
-        &mut self,
-        join_relations: &[Vec<IndexType>],
-    ) -> Result<(f64, usize, usize, Vec<IndexType>)> {
-        let mut min_cost = f64::INFINITY;
-        let mut left_idx = 0;
-        let mut right_idx = 0;
-        let mut new_relations = vec![];
-
-        for i in 0..join_relations.len() {
-            let left_relation = &join_relations[i];
-
-            for (j, right_relation) in join_relations.iter().enumerate().skip(i + 1) {
-                // Check if left_relation set and right_relation set are connected, if connected, get join conditions.
-                let join_conditions = self
-                    .query_graph
-                    .is_connected(left_relation, right_relation)?;
-
-                if !join_conditions.is_empty() {
-                    // If left_relation set and right_relation set are connected, emit csg-cmp-pair and keep the
-                    // minimum cost pair in `dp_table`.
-                    let cost = self
-                        .emit_csg_cmp(left_relation, right_relation, join_conditions)
-                        .await?;
-
-                    // Update the minimum cost pair.
-                    if cost < min_cost {
-                        min_cost = cost;
-                        left_idx = i;
-                        right_idx = j;
-                        // Update the new relation set in this iteration.
-                        new_relations = union(left_relation, right_relation);
-                    }
-                }
-            }
-        }
-
-        Ok((min_cost, left_idx, right_idx, new_relations))
-    }
-
-    /// Handle the case when no connected relations exist
-    async fn handle_disconnected_relations(
-        &mut self,
-        join_relations: &[Vec<IndexType>],
-    ) -> Result<(usize, usize, Vec<IndexType>)> {
-        // Pick the pair of relation sets with the minimum cost and connect them with a cross product.
-        let mut lowest_cost = Vec::with_capacity(2);
-        let mut lowest_index = Vec::with_capacity(2);
-
-        for (i, relation) in join_relations.iter().enumerate().take(2) {
-            let mut join_node = self.dp_table.get(relation).unwrap().clone();
-            let cardinality = join_node.cardinality(&self.join_relations).await?;
-            lowest_cost.push(cardinality);
-            lowest_index.push(i);
-        }
-
-        if lowest_cost[1] < lowest_cost[0] {
-            lowest_cost.swap(0, 1);
-            lowest_index.swap(0, 1);
-        }
-
-        // Update the minimum cost relation set pair.
-        for (i, relation) in join_relations.iter().enumerate().skip(2) {
-            let mut join_node = self.dp_table.get(relation).unwrap().clone();
-            let cardinality = join_node.cardinality(&self.join_relations).await?;
-
-            if cardinality < lowest_cost[0] {
-                lowest_cost[1] = lowest_cost[0];
-                lowest_index[1] = lowest_index[0];
-                lowest_cost[0] = cardinality;
-                lowest_index[0] = i;
-            } else if cardinality < lowest_cost[1] {
-                lowest_cost[1] = cardinality;
-                lowest_index[1] = i;
-            }
-        }
-
-        // Update the minimum cost index pair.
-        let left_idx = lowest_index[0];
-        let right_idx = lowest_index[1];
-
-        // Store the new relation set in this iteration.
-        let new_relations = union(&join_relations[left_idx], &join_relations[right_idx]);
-
-        // Emit csg-cmp-pair and insert the cross product into `dp_table`.
-        self.emit_csg_cmp(
-            &join_relations[left_idx],
-            &join_relations[right_idx],
-            vec![],
-        )
-        .await?;
-
-        Ok((left_idx, right_idx, new_relations))
-    }
-
-    /// Join reorder by greedy algorithm.
-    async fn join_reorder_by_greedy(&mut self) -> Result<bool> {
-        // The Greedy Operator Ordering starts with a single relation and iteratively adds the relation that minimizes the cost of the join.
-        // the algorithm terminates when all relations have been added, the cost of a join is the sum of the cardinalities of the node involved
-        // in the tree, the algorithm is not guaranteed to find the optimal join tree, it is guaranteed to find it in polynomial time.
-        // Create join relations list, all relations have been inserted into dp_table in func `join_reorder`.
-        let mut join_relations = (0..self.join_relations.len())
-            .map(|idx| self.relation_set_tree.get_relation_set_by_index(idx))
-            .collect::<Result<Vec<_>>>()?;
-
-        // When all relations have been added, the algorithm terminates.
-        while join_relations.len() > 1 {
-            // Find the minimum cost pair of relations
-            let (min_cost, mut left_idx, mut right_idx, mut new_relations) =
-                self.find_minimum_cost_pair(&join_relations).await?;
-
-            // The minimum cost has no updates, which means there are no connected relation set pairs.
-            if min_cost == f64::INFINITY {
-                let (left, right, new_rel) =
-                    self.handle_disconnected_relations(&join_relations).await?;
-                left_idx = left;
-                right_idx = right;
-                new_relations = new_rel;
-            }
-
-            if left_idx > right_idx {
-                std::mem::swap(&mut left_idx, &mut right_idx);
-            }
-
-            // Update join_relations by removing the two relations and adding the new one
-            join_relations.remove(right_idx);
-            join_relations.remove(left_idx);
-            join_relations.push(new_relations);
-        }
-
-        Ok(true)
-    }
-
-    /// Adaptive Optimization:
-    /// If the if the query graph is simple enough, it uses dynamic programming to construct the optimal join tree,
-    /// if that is not possible within the given optimization budget, it switches to a greedy approach.
-    async fn join_reorder(&mut self) -> Result<()> {
-        // Initial `dp_table` with plan for single relation
-        self.initialize_dp_table().await?;
-
-        // First, try to use dynamic programming to find the optimal join order.
-        if !self.join_reorder_by_dphyp().await? {
-            // When DPhpy takes too much time during join ordering, it is necessary to exit the dynamic programming algorithm
-            // and switch to a greedy algorithm to minimizes the overall query time.
-            self.join_reorder_by_greedy().await?;
-        }
-
-        Ok(())
-    }
-
-    /// EmitCsg will take a non-empty subset of hyper_graph's nodes(V) which contains a connected subgraph.
-    /// Then it will possibly generate a connected complement which will combine `nodes` to be a csg-cmp-pair.
-    async fn emit_csg(&mut self, nodes: &[IndexType]) -> Result<bool> {
-        if nodes.len() == self.join_relations.len() {
-            return Ok(true);
-        }
-
-        let mut forbidden_nodes: HashSet<IndexType> = (0..(nodes[0])).collect();
-        forbidden_nodes.extend(nodes);
-
-        // Get neighbors of `nodes`
-        let neighbors = self.query_graph.neighbors(nodes, &forbidden_nodes)?;
-        if neighbors.is_empty() {
-            return Ok(true);
-        }
-
-        // Traverse all neighbors by desc
-        for neighbor in neighbors.iter().rev() {
-            let neighbor_relations = self
-                .relation_set_tree
-                .get_relation_set_by_index(*neighbor)?;
-
-            // Check if neighbor is connected with `nodes`
-            let join_conditions = self.query_graph.is_connected(nodes, &neighbor_relations)?;
-            if !join_conditions.is_empty()
-                && !self
-                    .try_emit_csg_cmp(nodes, &neighbor_relations, join_conditions)
-                    .await?
-            {
-                return Ok(false);
-            }
-
-            if !self
-                .enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)
-                .await?
-            {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
-    }
-
-    /// Check if we should stop optimization due to exceeding emit threshold
-    async fn try_emit_csg_cmp(
-        &mut self,
-        left: &[IndexType],
-        right: &[IndexType],
-        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
-    ) -> Result<bool> {
-        self.emit_count += 1;
-        // If `emit_count` is greater than `EMIT_THRESHOLD`, we need to stop dynamic programming,
-        // otherwise it will take too much time
-        match self.emit_count > EMIT_THRESHOLD {
-            false => {
-                self.emit_csg_cmp(left, right, join_conditions).await?;
-                Ok(true)
-            }
-            true => Ok(false),
-        }
-    }
-
-    /// Create a join node from left and right relations
-    async fn create_join_node(
-        &self,
-        left: &[IndexType],
-        right: &[IndexType],
-        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
-        left_cardinality: f64,
-        right_cardinality: f64,
-        left_join: JoinNode,
-        right_join: JoinNode,
-    ) -> Result<(JoinNode, f64)> {
-        let parent_set = union(left, right);
-
-        if !join_conditions.is_empty() {
-            let mut join_node = JoinNode {
-                join_type: JoinType::Inner,
-                leaves: Arc::new(parent_set.clone()),
-                children: if left_cardinality < right_cardinality {
-                    Arc::new(vec![right_join, left_join])
-                } else {
-                    Arc::new(vec![left_join, right_join])
-                },
-                cost: 0.0,
-                join_conditions: Arc::new(join_conditions),
-                cardinality: None,
-                s_expr: None,
-            };
-
-            // Calculate cost for inner join
-            let probe_factor = self.clustered_probe_join_cost_factor(
-                &join_node.children[0],
-                join_node.join_conditions.as_ref(),
-            )?;
-            let cardinality = join_node.cardinality(&self.join_relations).await?;
-            let cost = cardinality * probe_factor
-                + join_node.children[0].cost
-                + join_node.children[1].cost;
-
-            let mut result = join_node;
-            result.set_cost(cost);
-            Ok((result, probe_factor))
-        } else {
-            // Create cross join
-            let join_node = JoinNode {
-                join_type: JoinType::Cross,
-                leaves: Arc::new(parent_set.clone()),
-                children: if left_cardinality < right_cardinality {
-                    Arc::new(vec![right_join, left_join])
-                } else {
-                    Arc::new(vec![left_join, right_join])
-                },
-                cost: left_cardinality * right_cardinality,
-                join_conditions: Arc::new(vec![]),
-                cardinality: None,
-                s_expr: None,
-            };
-
-            Ok((join_node, 1.0))
-        }
-    }
-
-    /// EmitCsgCmp will join the optimal plan from left and right
-    async fn emit_csg_cmp(
-        &mut self,
-        left: &[IndexType],
-        right: &[IndexType],
-        mut join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
-    ) -> Result<f64> {
-        debug_assert!(self.dp_table.contains_key(left));
-        debug_assert!(self.dp_table.contains_key(right));
-
-        let parent_set = union(left, right);
-        let mut left_join = self.dp_table.get(left).unwrap().clone();
-        let mut right_join = self.dp_table.get(right).unwrap().clone();
-
-        let left_cardinality = left_join.cardinality(&self.join_relations).await?;
-        let right_cardinality = right_join.cardinality(&self.join_relations).await?;
-
-        // Swap join conditions if left cardinality is smaller
-        if left_cardinality < right_cardinality {
-            for join_condition in join_conditions.iter_mut() {
-                std::mem::swap(&mut join_condition.0, &mut join_condition.1);
-            }
-        }
-
-        // Create join node
-        let (join_node, probe_factor) = self
-            .create_join_node(
-                left,
-                right,
-                join_conditions,
-                left_cardinality,
-                right_cardinality,
-                left_join,
-                right_join,
-            )
-            .await?;
-
-        // Check if we already have a better plan
-        let parent_node = self.dp_table.get(&parent_set);
-        let cost = if parent_node.is_none() {
-            join_node.cost
-        } else {
-            let parent_node = parent_node.unwrap();
-            if parent_node.cost < join_node.cost {
-                parent_node.cost
-            } else {
-                join_node.cost
-            }
-        };
-
-        // Update `dp_table` if we found a better plan
-        let selected = parent_node.is_none() || parent_node.unwrap().cost > join_node.cost;
-        if self.opt_ctx.get_flag("explain_memo") {
-            let previous_best = parent_node
-                .map(|node| format!("{:.3}", node.cost))
-                .unwrap_or_else(|| "-".to_string());
-            self.opt_ctx.add_optimizer_trace(
-                self.name(),
-                "join_order_candidate",
-                format!(
-                    "parent: {}, left: {}, right: {}, cost: {:.3}, previous best: {}, probe factor: {:.3}, selected: {}",
-                    self.relation_set_label(&parent_set),
-                    self.relation_set_label(left),
-                    self.relation_set_label(right),
-                    join_node.cost,
-                    previous_best,
-                    probe_factor,
-                    selected,
-                ),
-            );
-        }
-
-        if selected {
-            self.dp_table.insert(parent_set, join_node);
-        }
-
-        Ok(cost)
-    }
-
-    /// The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
-    /// Therefore, it considers the neighborhood of right.
-    #[async_recursion::async_recursion(# [recursive::recursive])]
-    async fn enumerate_cmp_rec(
-        &mut self,
-        left: &[IndexType],
-        right: &[IndexType],
-        forbidden_nodes: &HashSet<IndexType>,
-    ) -> Result<bool> {
-        let neighbor_set = self.query_graph.neighbors(right, forbidden_nodes)?;
-        if neighbor_set.is_empty() {
-            return Ok(true);
-        }
-
-        let mut merged_sets = Vec::new();
-        for neighbor in neighbor_set.iter() {
-            let neighbor_relations = self
-                .relation_set_tree
-                .get_relation_set_by_index(*neighbor)?;
-
-            // Merge `right` with `neighbor_relations`
-            let merged_relation_set = union(right, &neighbor_relations);
-            let join_conditions = self.query_graph.is_connected(left, &merged_relation_set)?;
-
-            if merged_relation_set.len() > right.len()
-                && self.dp_table.contains_key(&merged_relation_set)
-                && !join_conditions.is_empty()
-                && !self
-                    .try_emit_csg_cmp(left, &merged_relation_set, join_conditions)
-                    .await?
-            {
-                return Ok(false);
-            }
-
-            merged_sets.push(merged_relation_set);
-        }
-
-        // Continue to enumerate cmp
-        let mut new_forbidden_nodes = forbidden_nodes.clone();
-        for (idx, neighbor) in neighbor_set.iter().enumerate() {
-            new_forbidden_nodes.insert(*neighbor);
-            if !self
-                .enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)
-                .await?
-            {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
-    }
-
-    /// EnumerateCsgRec will extend the given `nodes`.
-    /// It'll consider each non-empty, proper subset of the neighborhood of nodes that are not forbidden.
-    #[async_recursion::async_recursion(# [recursive::recursive])]
-    async fn enumerate_csg_rec(
-        &mut self,
-        nodes: &[IndexType],
-        forbidden_nodes: &HashSet<IndexType>,
-    ) -> Result<bool> {
-        let mut neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
-        if neighbors.is_empty() {
-            return Ok(true);
-        }
-
-        // Limit neighbors to consider for large relation sets
-        if self.join_relations.len() >= RELATION_THRESHOLD {
-            neighbors = neighbors
-                .iter()
-                .take(nodes.len())
-                .copied()
-                .collect::<Vec<IndexType>>();
-        }
-
-        let mut merged_sets = Vec::new();
-        for neighbor in neighbors.iter() {
-            let neighbor_relations = self
-                .relation_set_tree
-                .get_relation_set_by_index(*neighbor)?;
-
-            let merged_relation_set = union(nodes, &neighbor_relations);
-            if self.dp_table.contains_key(&merged_relation_set)
-                && merged_relation_set.len() > nodes.len()
-                && !self.emit_csg(&merged_relation_set).await?
-            {
-                return Ok(false);
-            }
-
-            merged_sets.push(merged_relation_set);
-        }
-
-        // Continue to enumerate csg
-        let mut new_forbidden_nodes = forbidden_nodes.clone();
-        for (idx, neighbor) in neighbors.iter().enumerate() {
-            // Only clone for small relation sets to improve performance
-            if self.join_relations.len() < RELATION_THRESHOLD {
-                new_forbidden_nodes = forbidden_nodes.clone();
-            }
-
-            new_forbidden_nodes.insert(*neighbor);
-            if !self
-                .enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)
-                .await?
-            {
-                return Ok(false);
-            }
-        }
-
-        Ok(true)
     }
 
     /// Apply filters to the optimized plan
@@ -1205,14 +488,13 @@ impl DPhpyOptimizer {
         s_expr: &SExpr,
     ) -> Result<(Arc<SExpr>, bool)> {
         // Convert `final_plan` to `SExpr`
-        let join_expr = final_plan.s_expr(&self.join_relations);
+        let join_expr = final_plan.s_expr();
         // Find first join node in `s_expr`, then replace it with `join_expr`
         let new_s_expr = self.replace_join_expr(&join_expr, s_expr)?;
         Ok((Arc::new(new_s_expr), true))
     }
 
     /// Replace the join expression in the plan tree
-    #[allow(clippy::only_used_in_recursion)]
     #[recursive::recursive]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         match s_expr.plan.as_ref() {
@@ -1294,5 +576,763 @@ impl Optimizer for DPhpyOptimizer {
 
     async fn optimize(&mut self, s_expr: &SExpr) -> Result<SExpr> {
         self.optimize_async(s_expr).await
+    }
+}
+
+struct JoinOrderSearch<'a> {
+    opt_ctx: Arc<OptimizerContext>,
+    join_relations: &'a [JoinRelation],
+    table_index_map: &'a HashMap<IndexType, IndexType>,
+    cluster_key_cost: ClusterKeyCostModel,
+    dp_table: HashMap<Vec<IndexType>, JoinNode>,
+    query_graph: QueryGraph,
+    relation_set_tree: RelationSetTree,
+    // The number of times emit_csg_cmp is called
+    emit_count: usize,
+}
+
+struct JoinCandidate<'a> {
+    node: JoinNode,
+    probe_relation_set: &'a [IndexType],
+    build_relation_set: &'a [IndexType],
+    probe_factor: f64,
+    left_filter_factor: f64,
+    right_filter_factor: f64,
+}
+
+struct ClusterKeyCostModel {
+    factor: f64,
+}
+
+impl ClusterKeyCostModel {
+    fn new(factor_percent: u64) -> Self {
+        Self {
+            factor: factor_percent as f64 / 100.0,
+        }
+    }
+
+    fn probe_join_factor(
+        &self,
+        probe_node: &JoinNode,
+        join_conditions: &[(ScalarExpr, ScalarExpr)],
+    ) -> Result<f64> {
+        let probe_join_keys = {
+            let mut probe_join_keys = Vec::with_capacity(join_conditions.len());
+            for (probe_key, _) in join_conditions {
+                probe_join_keys.push(probe_key.as_symbol_expr()?);
+            }
+            probe_join_keys
+        };
+        if probe_join_keys.is_empty() {
+            return Ok(1.0);
+        }
+
+        let probe_expr = probe_node.s_expr();
+        let stat_info = probe_expr.derive_cardinality()?;
+        Ok(self
+            .best_cluster_key_candidate(
+                &stat_info.statistics.cluster_key_stats.keys,
+                &probe_join_keys,
+            )
+            .unwrap_or(1.0))
+    }
+
+    fn filter_factor(&self, node: &JoinNode) -> Result<f64> {
+        let s_expr = node.s_expr();
+        let stat_info = s_expr.derive_cardinality()?;
+        let filter_keys = &stat_info.statistics.cluster_key_stats.filter_keys;
+        if filter_keys.is_empty() {
+            return Ok(1.0);
+        }
+
+        Ok(self
+            .best_cluster_key_candidate(&stat_info.statistics.cluster_key_stats.keys, filter_keys)
+            .unwrap_or(1.0))
+    }
+
+    fn best_cluster_key_candidate(
+        &self,
+        cluster_keys: &BTreeMap<IndexType, Vec<Expr<Symbol>>>,
+        candidate_keys: &[Expr<Symbol>],
+    ) -> Option<f64> {
+        cluster_keys
+            .iter()
+            .filter_map(|(_, cluster_key)| {
+                let factor = self.cluster_key_prefix_cost_factor(cluster_key, candidate_keys);
+                (factor < 1.0).then_some(factor)
+            })
+            .min_by(|left, right| left.total_cmp(right))
+    }
+
+    fn cluster_key_prefix_cost_factor(
+        &self,
+        cluster_key: &[Expr<Symbol>],
+        candidate_keys: &[Expr<Symbol>],
+    ) -> f64 {
+        let mut matched_join_keys = vec![false; candidate_keys.len()];
+        let mut factor = 1.0;
+
+        for cluster_key_expr in cluster_key {
+            let mut matched = false;
+            for (idx, join_key_expr) in candidate_keys.iter().enumerate() {
+                if matched_join_keys[idx] {
+                    continue;
+                }
+                if Self::cluster_key_matches(cluster_key_expr, join_key_expr) {
+                    factor *= self.factor;
+                    matched_join_keys[idx] = true;
+                    matched = true;
+                    break;
+                }
+            }
+            if !matched {
+                return factor;
+            }
+        }
+
+        factor
+    }
+
+    fn cluster_key_matches(cluster_key_expr: &Expr<Symbol>, join_key_expr: &Expr<Symbol>) -> bool {
+        match cluster_key_expr {
+            Expr::ColumnRef(cluster_key)
+                if let Expr::ColumnRef(join_key) = join_key_expr
+                    && cluster_key.id == join_key.id =>
+            {
+                true
+            }
+            _ => cluster_key_expr == join_key_expr,
+        }
+    }
+}
+
+impl<'a> JoinOrderSearch<'a> {
+    fn new(
+        opt_ctx: Arc<OptimizerContext>,
+        join_relations: &'a [JoinRelation],
+        table_index_map: &'a HashMap<IndexType, IndexType>,
+    ) -> Result<Self> {
+        let cluster_key_cost = ClusterKeyCostModel::new(
+            opt_ctx
+                .get_table_ctx()
+                .get_settings()
+                .get_cost_factor_cluster_key()?,
+        );
+        Ok(Self {
+            opt_ctx,
+            join_relations,
+            table_index_map,
+            cluster_key_cost,
+            dp_table: Default::default(),
+            query_graph: QueryGraph::new(),
+            relation_set_tree: Default::default(),
+            emit_count: 0,
+        })
+    }
+
+    fn relation_set_label(&self, relation_set: &[IndexType]) -> String {
+        let metadata = self.opt_ctx.get_metadata();
+        let metadata = metadata.read();
+        let mut names = Vec::new();
+        for relation_idx in relation_set {
+            if let Some(relation) = self.join_relations.get(*relation_idx) {
+                Self::collect_scan_table_names(&metadata, &relation.s_expr(), &mut names);
+            }
+        }
+        names.sort();
+        if names.is_empty() {
+            format!("{relation_set:?}")
+        } else {
+            format!("[{}]", names.join(", "))
+        }
+    }
+
+    fn collect_scan_table_names(metadata: &Metadata, expr: &SExpr, names: &mut Vec<String>) {
+        if let RelOperator::Scan(scan) = expr.plan() {
+            names.push(metadata.table(scan.table_index).name().to_string());
+            return;
+        }
+
+        for child in expr.children() {
+            Self::collect_scan_table_names(metadata, child, names);
+        }
+    }
+
+    fn search(&mut self, join_conditions: &[(ScalarExpr, ScalarExpr)]) -> Result<Option<JoinNode>> {
+        if !self.build_query_graph(join_conditions)? {
+            return Ok(None);
+        }
+
+        // Sort neighbors for deterministic behavior
+        for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {
+            neighbors.sort();
+        }
+
+        self.join_reorder()?;
+
+        let all_relations = self
+            .relation_set_tree
+            .get_relation_set(&(0..self.join_relations.len()).collect())?;
+
+        Ok(self.dp_table.get(&all_relations).cloned())
+    }
+
+    /// Initialize the DP table with single relation plans
+    fn initialize_dp_table(&mut self) -> Result<()> {
+        for (idx, relation) in self.join_relations.iter().enumerate() {
+            // Get nodes in `relation_set_tree`
+            let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            let cardinality = relation.cardinality()?;
+
+            let join = JoinNode {
+                join_type: JoinType::Inner,
+                children: None,
+                join_conditions: Arc::new(vec![]),
+                cost: 0.0,
+                cardinality: Some(cardinality),
+                s_expr: Some(relation.s_expr()),
+            };
+
+            self.dp_table.insert(nodes, join);
+        }
+        Ok(())
+    }
+
+    /// Build the query graph from join conditions
+    fn build_query_graph(&mut self, join_conditions: &[(ScalarExpr, ScalarExpr)]) -> Result<bool> {
+        for (left_condition, right_condition) in join_conditions.iter() {
+            // Find the corresponding join relations in `join_conditions`
+            let mut left_relation_set = HashSet::new();
+            let mut right_relation_set = HashSet::new();
+
+            let left_used_tables = left_condition.used_tables()?;
+            for table in left_used_tables.iter() {
+                left_relation_set.insert(self.table_index_map[table]);
+            }
+
+            let right_used_tables = right_condition.used_tables()?;
+            for table in right_used_tables.iter() {
+                right_relation_set.insert(self.table_index_map[table]);
+            }
+
+            if !left_relation_set.is_empty() && !right_relation_set.is_empty() {
+                // Use `left_relation_set` and `right_relation_set` to initial RelationSetTree
+                let left_relation_set = self
+                    .relation_set_tree
+                    .get_relation_set(&left_relation_set)?;
+                let right_relation_set = self
+                    .relation_set_tree
+                    .get_relation_set(&right_relation_set)?;
+
+                // Try to create edges if `left_relation_set` and `right_relation_set` are not disjoint
+                if !intersect(&left_relation_set, &right_relation_set) {
+                    self.query_graph.create_edges(
+                        &left_relation_set,
+                        &right_relation_set,
+                        (left_condition.clone(), right_condition.clone()),
+                    )?;
+                    self.query_graph.create_edges(
+                        &right_relation_set,
+                        &left_relation_set,
+                        (right_condition.clone(), left_condition.clone()),
+                    )?;
+                }
+            } else {
+                // If one of `left_relation_set` and `right_relation_set` is empty, we need to forbid dphyp algo
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Process a node as a starting point for enumeration
+    fn process_node_as_start(&mut self, idx: usize) -> Result<bool> {
+        // Get node from `relation_set_tree`
+        let node = self.relation_set_tree.get_relation_set_by_index(idx)?;
+
+        // Emit node as subgraph
+        if !self.emit_csg(&node)? {
+            return Ok(false);
+        }
+
+        // Create forbidden node set
+        // Forbid node idx will less than current idx
+        let forbidden_nodes = (0..idx).collect();
+
+        // Enlarge the subgraph recursively
+        if !self.enumerate_csg_rec(&node, &forbidden_nodes)? {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
+    /// Join reorder by dynamic programming algorithm.
+    fn join_reorder_by_dphyp(&mut self) -> Result<bool> {
+        // Choose all nodes as enumeration start node once (desc order)
+        for idx in (0..self.join_relations.len()).rev() {
+            if !self.process_node_as_start(idx)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    /// Find the minimum cost pair of relations
+    fn find_minimum_cost_pair(
+        &mut self,
+        join_relations: &[Vec<IndexType>],
+    ) -> Result<(f64, usize, usize, Vec<IndexType>)> {
+        let mut min_cost = f64::INFINITY;
+        let mut left_idx = 0;
+        let mut right_idx = 0;
+        let mut new_relations = vec![];
+
+        for i in 0..join_relations.len() {
+            let left_relation = &join_relations[i];
+
+            for (j, right_relation) in join_relations.iter().enumerate().skip(i + 1) {
+                // Check if left_relation set and right_relation set are connected, if connected, get join conditions.
+                let join_conditions = self
+                    .query_graph
+                    .is_connected(left_relation, right_relation)?;
+
+                if !join_conditions.is_empty() {
+                    // If left_relation set and right_relation set are connected, emit csg-cmp-pair and keep the
+                    // minimum cost pair in `dp_table`.
+                    let cost = self.emit_csg_cmp(left_relation, right_relation, join_conditions)?;
+
+                    // Update the minimum cost pair.
+                    if cost < min_cost {
+                        min_cost = cost;
+                        left_idx = i;
+                        right_idx = j;
+                        // Update the new relation set in this iteration.
+                        new_relations = union(left_relation, right_relation);
+                    }
+                }
+            }
+        }
+
+        Ok((min_cost, left_idx, right_idx, new_relations))
+    }
+
+    /// Handle the case when no connected relations exist
+    fn handle_disconnected_relations(
+        &mut self,
+        join_relations: &[Vec<IndexType>],
+    ) -> Result<(usize, usize, Vec<IndexType>)> {
+        // Pick the pair of relation sets with the minimum cost and connect them with a cross product.
+        let mut lowest_cost = Vec::with_capacity(2);
+        let mut lowest_index = Vec::with_capacity(2);
+
+        for (i, relation) in join_relations.iter().enumerate().take(2) {
+            let mut join_node = self.dp_table.get(relation).unwrap().clone();
+            let cardinality = join_node.cardinality()?;
+            lowest_cost.push(cardinality);
+            lowest_index.push(i);
+        }
+
+        if lowest_cost[1] < lowest_cost[0] {
+            lowest_cost.swap(0, 1);
+            lowest_index.swap(0, 1);
+        }
+
+        // Update the minimum cost relation set pair.
+        for (i, relation) in join_relations.iter().enumerate().skip(2) {
+            let mut join_node = self.dp_table.get(relation).unwrap().clone();
+            let cardinality = join_node.cardinality()?;
+
+            if cardinality < lowest_cost[0] {
+                lowest_cost[1] = lowest_cost[0];
+                lowest_index[1] = lowest_index[0];
+                lowest_cost[0] = cardinality;
+                lowest_index[0] = i;
+            } else if cardinality < lowest_cost[1] {
+                lowest_cost[1] = cardinality;
+                lowest_index[1] = i;
+            }
+        }
+
+        // Update the minimum cost index pair.
+        let left_idx = lowest_index[0];
+        let right_idx = lowest_index[1];
+
+        // Store the new relation set in this iteration.
+        let new_relations = union(&join_relations[left_idx], &join_relations[right_idx]);
+
+        // Emit csg-cmp-pair and insert the cross product into `dp_table`.
+        self.emit_csg_cmp(
+            &join_relations[left_idx],
+            &join_relations[right_idx],
+            vec![],
+        )?;
+
+        Ok((left_idx, right_idx, new_relations))
+    }
+
+    /// Join reorder by greedy algorithm.
+    fn join_reorder_by_greedy(&mut self) -> Result<bool> {
+        // The Greedy Operator Ordering starts with a single relation and iteratively adds the relation that minimizes the cost of the join.
+        // the algorithm terminates when all relations have been added, the cost of a join is the sum of the cardinalities of the node involved
+        // in the tree, the algorithm is not guaranteed to find the optimal join tree, it is guaranteed to find it in polynomial time.
+        // Create join relations list, all relations have been inserted into dp_table in func `join_reorder`.
+        let mut join_relations = (0..self.join_relations.len())
+            .map(|idx| self.relation_set_tree.get_relation_set_by_index(idx))
+            .collect::<Result<Vec<_>>>()?;
+
+        // When all relations have been added, the algorithm terminates.
+        while join_relations.len() > 1 {
+            // Find the minimum cost pair of relations
+            let (min_cost, mut left_idx, mut right_idx, mut new_relations) =
+                self.find_minimum_cost_pair(&join_relations)?;
+
+            // The minimum cost has no updates, which means there are no connected relation set pairs.
+            if min_cost == f64::INFINITY {
+                let (left, right, new_rel) = self.handle_disconnected_relations(&join_relations)?;
+                left_idx = left;
+                right_idx = right;
+                new_relations = new_rel;
+            }
+
+            if left_idx > right_idx {
+                std::mem::swap(&mut left_idx, &mut right_idx);
+            }
+
+            // Update join_relations by removing the two relations and adding the new one
+            join_relations.remove(right_idx);
+            join_relations.remove(left_idx);
+            join_relations.push(new_relations);
+        }
+
+        Ok(true)
+    }
+
+    /// Adaptive Optimization:
+    /// If the if the query graph is simple enough, it uses dynamic programming to construct the optimal join tree,
+    /// if that is not possible within the given optimization budget, it switches to a greedy approach.
+    fn join_reorder(&mut self) -> Result<()> {
+        // Initial `dp_table` with plan for single relation
+        self.initialize_dp_table()?;
+
+        // First, try to use dynamic programming to find the optimal join order.
+        if !self.join_reorder_by_dphyp()? {
+            // When DPhpy takes too much time during join ordering, it is necessary to exit the dynamic programming algorithm
+            // and switch to a greedy algorithm to minimizes the overall query time.
+            self.join_reorder_by_greedy()?;
+        }
+
+        Ok(())
+    }
+
+    /// EmitCsg will take a non-empty subset of hyper_graph's nodes(V) which contains a connected subgraph.
+    /// Then it will possibly generate a connected complement which will combine `nodes` to be a csg-cmp-pair.
+    fn emit_csg(&mut self, nodes: &[IndexType]) -> Result<bool> {
+        if nodes.len() == self.join_relations.len() {
+            return Ok(true);
+        }
+
+        let mut forbidden_nodes: HashSet<IndexType> = (0..(nodes[0])).collect();
+        forbidden_nodes.extend(nodes);
+
+        // Get neighbors of `nodes`
+        let neighbors = self.query_graph.neighbors(nodes, &forbidden_nodes)?;
+        if neighbors.is_empty() {
+            return Ok(true);
+        }
+
+        // Traverse all neighbors by desc
+        for neighbor in neighbors.iter().rev() {
+            let neighbor_relations = self
+                .relation_set_tree
+                .get_relation_set_by_index(*neighbor)?;
+
+            // Check if neighbor is connected with `nodes`
+            let join_conditions = self.query_graph.is_connected(nodes, &neighbor_relations)?;
+            if !join_conditions.is_empty()
+                && !self.try_emit_csg_cmp(nodes, &neighbor_relations, join_conditions)?
+            {
+                return Ok(false);
+            }
+
+            if !self.enumerate_cmp_rec(nodes, &neighbor_relations, &forbidden_nodes)? {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Check if we should stop optimization due to exceeding emit threshold
+    fn try_emit_csg_cmp(
+        &mut self,
+        left: &[IndexType],
+        right: &[IndexType],
+        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+    ) -> Result<bool> {
+        self.emit_count += 1;
+        // If `emit_count` is greater than `EMIT_THRESHOLD`, we need to stop dynamic programming,
+        // otherwise it will take too much time
+        match self.emit_count > EMIT_THRESHOLD {
+            false => {
+                self.emit_csg_cmp(left, right, join_conditions)?;
+                Ok(true)
+            }
+            true => Ok(false),
+        }
+    }
+
+    fn evaluate_join_candidate<'b>(
+        &self,
+        left: &'b [IndexType],
+        right: &'b [IndexType],
+        mut join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+    ) -> Result<JoinCandidate<'b>> {
+        debug_assert!(self.dp_table.contains_key(left));
+        debug_assert!(self.dp_table.contains_key(right));
+
+        let mut left_node = self.dp_table[left].clone();
+        let mut right_node = self.dp_table[right].clone();
+        let left_cardinality = left_node.cardinality()?;
+        let right_cardinality = right_node.cardinality()?;
+        let left_filter_factor = self.cluster_key_cost.filter_factor(&left_node)?;
+        let right_filter_factor = self.cluster_key_cost.filter_factor(&right_node)?;
+
+        let left_build_input_cost = left_cardinality * left_filter_factor;
+        let right_build_input_cost = right_cardinality * right_filter_factor;
+        let children_cost = left_node.cost + right_node.cost;
+
+        let (
+            children,
+            probe_relation_set,
+            build_relation_set,
+            probe_cardinality,
+            build_cardinality,
+            build_input_cost,
+        ) = if left_build_input_cost < right_build_input_cost {
+            for join_condition in join_conditions.iter_mut() {
+                std::mem::swap(&mut join_condition.0, &mut join_condition.1);
+            }
+            (
+                Arc::new([right_node, left_node]),
+                right,
+                left,
+                right_cardinality,
+                left_cardinality,
+                left_build_input_cost,
+            )
+        } else {
+            (
+                Arc::new([left_node, right_node]),
+                left,
+                right,
+                left_cardinality,
+                right_cardinality,
+                right_build_input_cost,
+            )
+        };
+
+        let (node, probe_factor) = if !join_conditions.is_empty() {
+            let probe_factor = self
+                .cluster_key_cost
+                .probe_join_factor(&children[0], &join_conditions)?;
+            let s_expr =
+                JoinNode::join_s_expr(JoinType::Inner, children.as_ref(), &join_conditions);
+            let cardinality = s_expr.derive_cardinality()?.cardinality;
+            let cost = cardinality * probe_factor + build_input_cost + children_cost;
+
+            (
+                JoinNode {
+                    join_type: JoinType::Inner,
+                    children: Some(children),
+                    cost,
+                    join_conditions: Arc::new(join_conditions),
+                    cardinality: Some(cardinality),
+                    s_expr: Some(s_expr),
+                },
+                probe_factor,
+            )
+        } else {
+            // Create cross join
+            let cost = probe_cardinality * build_cardinality;
+            (
+                JoinNode {
+                    join_type: JoinType::Cross,
+                    children: Some(children),
+                    cost,
+                    join_conditions: Arc::new(vec![]),
+                    cardinality: None,
+                    s_expr: None,
+                },
+                1.0,
+            )
+        };
+
+        Ok(JoinCandidate {
+            node,
+            probe_relation_set,
+            build_relation_set,
+            probe_factor,
+            left_filter_factor,
+            right_filter_factor,
+        })
+    }
+
+    /// EmitCsgCmp will join the optimal plan from left and right
+    fn emit_csg_cmp(
+        &mut self,
+        left: &[IndexType],
+        right: &[IndexType],
+        join_conditions: Vec<(ScalarExpr, ScalarExpr)>,
+    ) -> Result<f64> {
+        debug_assert!(self.dp_table.contains_key(left));
+        debug_assert!(self.dp_table.contains_key(right));
+
+        let parent_set = union(left, right);
+        let JoinCandidate {
+            node,
+            probe_relation_set,
+            build_relation_set,
+            probe_factor,
+            left_filter_factor,
+            right_filter_factor,
+        } = self.evaluate_join_candidate(left, right, join_conditions)?;
+
+        let parent_node = self.dp_table.get(&parent_set);
+        let (cost, selected) = match parent_node {
+            Some(parent_node) if parent_node.cost <= node.cost => (parent_node.cost, false),
+            _ => (node.cost, true),
+        };
+
+        if self.opt_ctx.get_flag("explain_memo") {
+            let candidate_cost = node.cost;
+            let previous_best = parent_node
+                .map(|node| format!("{:.3}", node.cost))
+                .unwrap_or_else(|| "-".to_string());
+            self.opt_ctx.add_optimizer_trace(
+                "DPhpyOptimizer",
+                "join_order_candidate",
+                format!(
+                    "parent: {}, left: {}, right: {}, probe: {}, build: {}, cost: {candidate_cost:.3}, previous best: {previous_best}, probe factor: {:.3}, filter factors: left {:.3}, right {:.3}, selected: {selected}",
+                    self.relation_set_label(&parent_set),
+                    self.relation_set_label(left),
+                    self.relation_set_label(right),
+                    self.relation_set_label(probe_relation_set),
+                    self.relation_set_label(build_relation_set),
+                    probe_factor,
+                    left_filter_factor,
+                    right_filter_factor,
+                ),
+            );
+        }
+
+        if selected {
+            self.dp_table.insert(parent_set, node);
+        }
+
+        Ok(cost)
+    }
+
+    /// The second parameter is a set which is connected and must be extended until a valid csg-cmp-pair is reached.
+    /// Therefore, it considers the neighborhood of right.
+    #[recursive::recursive]
+    fn enumerate_cmp_rec(
+        &mut self,
+        left: &[IndexType],
+        right: &[IndexType],
+        forbidden_nodes: &HashSet<IndexType>,
+    ) -> Result<bool> {
+        let neighbor_set = self.query_graph.neighbors(right, forbidden_nodes)?;
+        if neighbor_set.is_empty() {
+            return Ok(true);
+        }
+
+        let mut merged_sets = Vec::new();
+        for neighbor in neighbor_set.iter() {
+            let neighbor_relations = self
+                .relation_set_tree
+                .get_relation_set_by_index(*neighbor)?;
+
+            // Merge `right` with `neighbor_relations`
+            let merged_relation_set = union(right, &neighbor_relations);
+            let join_conditions = self.query_graph.is_connected(left, &merged_relation_set)?;
+
+            if merged_relation_set.len() > right.len()
+                && self.dp_table.contains_key(&merged_relation_set)
+                && !join_conditions.is_empty()
+                && !self.try_emit_csg_cmp(left, &merged_relation_set, join_conditions)?
+            {
+                return Ok(false);
+            }
+
+            merged_sets.push(merged_relation_set);
+        }
+
+        // Continue to enumerate cmp
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
+        for (idx, neighbor) in neighbor_set.iter().enumerate() {
+            new_forbidden_nodes.insert(*neighbor);
+            if !self.enumerate_cmp_rec(left, &merged_sets[idx], &new_forbidden_nodes)? {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// EnumerateCsgRec will extend the given `nodes`.
+    /// It'll consider each non-empty, proper subset of the neighborhood of nodes that are not forbidden.
+    #[recursive::recursive]
+    fn enumerate_csg_rec(
+        &mut self,
+        nodes: &[IndexType],
+        forbidden_nodes: &HashSet<IndexType>,
+    ) -> Result<bool> {
+        let mut neighbors = self.query_graph.neighbors(nodes, forbidden_nodes)?;
+        if neighbors.is_empty() {
+            return Ok(true);
+        }
+
+        // Limit neighbors to consider for large relation sets
+        if self.join_relations.len() >= RELATION_THRESHOLD {
+            neighbors = neighbors
+                .iter()
+                .take(nodes.len())
+                .copied()
+                .collect::<Vec<IndexType>>();
+        }
+
+        let mut merged_sets = Vec::new();
+        for neighbor in neighbors.iter() {
+            let neighbor_relations = self
+                .relation_set_tree
+                .get_relation_set_by_index(*neighbor)?;
+
+            let merged_relation_set = union(nodes, &neighbor_relations);
+            if self.dp_table.contains_key(&merged_relation_set)
+                && merged_relation_set.len() > nodes.len()
+                && !self.emit_csg(&merged_relation_set)?
+            {
+                return Ok(false);
+            }
+
+            merged_sets.push(merged_relation_set);
+        }
+
+        // Continue to enumerate csg
+        let mut new_forbidden_nodes = forbidden_nodes.clone();
+        for (idx, neighbor) in neighbors.iter().enumerate() {
+            // Only clone for small relation sets to improve performance
+            if self.join_relations.len() < RELATION_THRESHOLD {
+                new_forbidden_nodes = forbidden_nodes.clone();
+            }
+
+            new_forbidden_nodes.insert(*neighbor);
+            if !self.enumerate_csg_rec(&merged_sets[idx], &new_forbidden_nodes)? {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }

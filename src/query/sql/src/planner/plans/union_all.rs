@@ -80,7 +80,7 @@ impl UnionAll {
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
-                cluster_keys: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         })
     }

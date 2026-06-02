@@ -16,10 +16,8 @@ use std::sync::Arc;
 
 use databend_common_exception::Result;
 
-use crate::IndexType;
 use crate::ScalarExpr;
 use crate::optimizer::ir::SExpr;
-use crate::optimizer::optimizers::hyper_dp::JoinRelation;
 use crate::plans::Join;
 use crate::plans::JoinEquiCondition;
 use crate::plans::JoinType;
@@ -28,8 +26,7 @@ use crate::plans::RelOperator;
 #[derive(Clone)]
 pub struct JoinNode {
     pub join_type: JoinType,
-    pub leaves: Arc<Vec<IndexType>>,
-    pub children: Arc<Vec<JoinNode>>,
+    pub children: Option<Arc<[JoinNode; 2]>>,
     pub join_conditions: Arc<Vec<(ScalarExpr, ScalarExpr)>>,
     pub cost: f64,
     // Cache cardinality/s_expr after computing.
@@ -38,15 +35,14 @@ pub struct JoinNode {
 }
 
 impl JoinNode {
-    pub async fn cardinality(&mut self, relations: &[JoinRelation]) -> Result<f64> {
+    pub fn cardinality(&mut self) -> Result<f64> {
         if let Some(card) = self.cardinality {
             return Ok(card);
         }
         let s_expr = if let Some(s_expr) = &self.s_expr {
             s_expr
         } else {
-            self.s_expr = Some(self.s_expr(relations));
-            self.s_expr.as_ref().unwrap()
+            self.s_expr.insert(self.s_expr())
         };
 
         let card = s_expr.derive_cardinality()?.cardinality;
@@ -54,31 +50,13 @@ impl JoinNode {
         Ok(card)
     }
 
-    pub fn set_cost(&mut self, cost: f64) {
-        self.cost = cost;
-    }
-
-    pub fn s_expr(&self, join_relations: &[JoinRelation]) -> SExpr {
-        // Traverse JoinNode
-        if self.children.is_empty() {
-            // The node is leaf, get relation for `join_relations`
-            let idx = self.leaves[0];
-            let relation = join_relations[idx].s_expr();
-            return relation;
-        }
-
-        // The node is join
-        // Split `join_conditions` to `left_conditions` and `right_conditions`
-        let left_conditions = self
-            .join_conditions
-            .iter()
-            .map(|(l, _)| l.clone())
-            .collect();
-        let right_conditions = self
-            .join_conditions
-            .iter()
-            .map(|(_, r)| r.clone())
-            .collect();
+    pub fn join_s_expr(
+        join_type: JoinType,
+        children: &[JoinNode; 2],
+        join_conditions: &[(ScalarExpr, ScalarExpr)],
+    ) -> SExpr {
+        let left_conditions = join_conditions.iter().map(|(l, _)| l.clone()).collect();
+        let right_conditions = join_conditions.iter().map(|(_, r)| r.clone()).collect();
         let rel_op = RelOperator::Join(Join {
             equi_conditions: JoinEquiCondition::new_conditions(
                 left_conditions,
@@ -86,7 +64,7 @@ impl JoinNode {
                 vec![],
             ),
             non_equi_conditions: vec![],
-            join_type: self.join_type,
+            join_type,
             marker_index: None,
             from_correlated_subquery: false,
             need_hold_hash_table: false,
@@ -94,17 +72,31 @@ impl JoinNode {
             single_to_inner: None,
             build_side_cache_info: None,
         });
-        let children = self
-            .children
+        let children = children
             .iter()
             .map(|child| {
                 if let Some(s_expr) = &child.s_expr {
                     Arc::new(s_expr.clone())
                 } else {
-                    Arc::new(child.s_expr(join_relations))
+                    Arc::new(child.s_expr())
                 }
             })
             .collect::<Vec<_>>();
         SExpr::create(Arc::new(rel_op), children, None, None, None)
+    }
+
+    pub fn s_expr(&self) -> SExpr {
+        // Traverse JoinNode
+        match &self.children {
+            None => {
+                // Leaf nodes are initialized from `JoinRelation`, so they must carry their SExpr.
+                self.s_expr.as_ref().unwrap().clone()
+            }
+            Some(children) => Self::join_s_expr(
+                self.join_type,
+                children.as_ref(),
+                self.join_conditions.as_ref(),
+            ),
+        }
     }
 }

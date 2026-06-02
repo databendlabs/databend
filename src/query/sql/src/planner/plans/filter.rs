@@ -19,6 +19,7 @@ use databend_common_exception::Result;
 use databend_common_expression::stat_distribution::StatCardinality;
 
 use crate::ColumnSet;
+use crate::optimizer::ir::ClusterKeyStatistics;
 use crate::optimizer::ir::RelExpr;
 use crate::optimizer::ir::RelationalProperty;
 use crate::optimizer::ir::SelectivityEstimator;
@@ -102,12 +103,16 @@ impl Operator for Filter {
         } else {
             sb.into_column_stats()
         };
+        let mut cluster_key_stats = stat_info.statistics.cluster_key_stats.clone();
+        cluster_key_stats
+            .filter_keys
+            .extend(ClusterKeyStatistics::collect_filter_keys(&self.predicates)?);
         Ok(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
-                cluster_keys: stat_info.statistics.cluster_keys.clone(),
+                cluster_key_stats,
             },
         })
     }

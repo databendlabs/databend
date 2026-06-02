@@ -13,14 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashSet;
-use std::sync::Arc;
 
 use ahash::HashMap;
-use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 
 use crate::IndexType;
-use crate::MetadataRef;
 use crate::optimizer::ir::SExpr;
 
 pub struct JoinRelation {
@@ -38,11 +35,7 @@ impl JoinRelation {
         self.s_expr.clone()
     }
 
-    pub async fn cardinality(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _metadata: MetadataRef,
-    ) -> Result<f64> {
+    pub fn cardinality(&self) -> Result<f64> {
         let card = self.s_expr.derive_cardinality()?.cardinality;
         Ok(card)
     }

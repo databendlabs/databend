@@ -36,6 +36,7 @@ use super::ScalarItem;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::Symbol;
+use crate::optimizer::ir::ClusterKeyStatistics;
 use crate::optimizer::ir::ColumnStat;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::Distribution;
@@ -93,7 +94,7 @@ pub struct Statistics {
     pub column_stats: HashMap<Symbol, Option<BasicColumnStatistics>>,
     pub histograms: HashMap<Symbol, Option<Histogram>>,
     // table index -> cluster-key expressions in that table's cluster-key order
-    pub cluster_key_orders: BTreeMap<IndexType, Vec<Expr<Symbol>>>,
+    pub cluster_keys: BTreeMap<IndexType, Vec<Expr<Symbol>>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -142,17 +143,13 @@ impl Scan {
             .map(|(col, hist)| (*col, hist.clone()))
             .collect();
 
-        let cluster_key_orders = self
+        let cluster_keys = self
             .statistics
-            .cluster_key_orders
+            .cluster_keys
             .iter()
             .filter_map(|(table_index, cluster_key_order)| {
-                let cluster_key_order = cluster_key_order
-                    .iter()
-                    .filter(|expr| expr.column_refs().keys().any(|col| columns.contains(col)))
-                    .cloned()
-                    .collect::<Vec<_>>();
-                (!cluster_key_order.is_empty()).then_some((*table_index, cluster_key_order))
+                Self::cluster_key_order_refs_columns(cluster_key_order, &columns)
+                    .then_some((*table_index, cluster_key_order.clone()))
             })
             .collect();
 
@@ -167,7 +164,7 @@ impl Scan {
                 table_stats: self.statistics.table_stats,
                 column_stats,
                 histograms,
-                cluster_key_orders,
+                cluster_keys,
             }),
             prewhere,
             agg_index: self.agg_index.clone(),
@@ -250,6 +247,15 @@ impl Scan {
         secure_predicates
             .iter()
             .any(|secure_predicate| !prewhere.predicates.contains(secure_predicate))
+    }
+
+    fn cluster_key_order_refs_columns(
+        cluster_key_order: &[Expr<Symbol>],
+        columns: &ColumnSet,
+    ) -> bool {
+        cluster_key_order
+            .iter()
+            .any(|expr| expr.column_refs().keys().any(|col| columns.contains(col)))
     }
 }
 
@@ -389,19 +395,11 @@ impl Operator for Scan {
 
         let cluster_keys = self
             .statistics
-            .cluster_key_orders
+            .cluster_keys
             .iter()
             .filter_map(|(table_index, cluster_key_order)| {
-                let cluster_key_order = cluster_key_order
-                    .iter()
-                    .filter(|expr| {
-                        expr.column_refs()
-                            .keys()
-                            .any(|col| used_columns.contains(col))
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                (!cluster_key_order.is_empty()).then_some((*table_index, cluster_key_order))
+                Self::cluster_key_order_refs_columns(cluster_key_order, &used_columns)
+                    .then_some((*table_index, cluster_key_order.clone()))
             })
             .collect();
 
@@ -432,6 +430,16 @@ impl Operator for Scan {
         } else {
             None
         };
+        let cluster_key_stats = ClusterKeyStatistics {
+            keys: cluster_keys,
+            filter_keys: ClusterKeyStatistics::collect_filter_keys(
+                self.push_down_predicates.iter().flatten().chain(
+                    self.prewhere
+                        .iter()
+                        .flat_map(|prewhere| prewhere.predicates.iter()),
+                ),
+            )?,
+        };
 
         // SECURITY: When row access policy is active, apply selectivity from
         // secure predicates first (for reasonable cardinality estimation and
@@ -452,7 +460,7 @@ impl Operator for Scan {
                 statistics: OpStatistics {
                     precise_cardinality: None,
                     column_stats: Default::default(),
-                    cluster_keys,
+                    cluster_key_stats,
                 },
             });
         }
@@ -462,7 +470,7 @@ impl Operator for Scan {
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
-                cluster_keys,
+                cluster_key_stats,
             },
         })
     }
@@ -544,7 +552,7 @@ mod tests {
 
     #[test]
     fn test_derive_scan_preserves_cluster_key_orders_in_stats() -> Result<()> {
-        let cluster_key_orders = [(42, vec![
+        let cluster_keys = [(42, vec![
             column_ref(Symbol::new(3)),
             column_ref(Symbol::new(1)),
         ])]
@@ -556,7 +564,7 @@ mod tests {
                 .into_iter()
                 .collect(),
             statistics: Arc::new(Statistics {
-                cluster_key_orders,
+                cluster_keys,
                 ..Default::default()
             }),
             ..Default::default()
@@ -566,7 +574,7 @@ mod tests {
         let stat_info = s_expr.derive_cardinality()?;
 
         assert_eq!(
-            stat_info.statistics.cluster_keys,
+            stat_info.statistics.cluster_key_stats.keys,
             [(42, vec![
                 column_ref(Symbol::new(3)),
                 column_ref(Symbol::new(1))

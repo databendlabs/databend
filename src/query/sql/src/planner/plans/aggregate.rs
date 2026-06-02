@@ -156,7 +156,7 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: Some(1),
                     column_stats: column_stats.clone(),
-                    cluster_keys: Default::default(),
+                    cluster_key_stats: Default::default(),
                 },
             });
         }
@@ -174,7 +174,7 @@ impl Aggregate {
                 statistics: Statistics {
                     precise_cardinality: None,
                     column_stats: column_stats.clone(),
-                    cluster_keys: Default::default(),
+                    cluster_key_stats: Default::default(),
                 },
             });
         }
@@ -229,7 +229,7 @@ impl Aggregate {
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
-                cluster_keys: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         })
     }

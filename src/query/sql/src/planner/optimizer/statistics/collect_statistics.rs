@@ -103,7 +103,7 @@ impl CollectStatisticsOptimizer {
                 } else {
                     Default::default()
                 };
-                let cluster_key_orders = if cluster_key_order.is_empty() {
+                let cluster_keys = if cluster_key_order.is_empty() {
                     Default::default()
                 } else {
                     [(scan.table_index, cluster_key_order)]
@@ -116,7 +116,7 @@ impl CollectStatisticsOptimizer {
                     table_stats,
                     column_stats,
                     histograms,
-                    cluster_key_orders,
+                    cluster_keys,
                 });
                 let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan.clone())));
                 if let Some(sample) = &scan.sample {

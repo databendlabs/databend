@@ -85,7 +85,7 @@ impl SyncMaterializedCTERefOptimizer {
             statistics: Statistics {
                 precise_cardinality: producer_stat_info.statistics.precise_cardinality,
                 column_stats,
-                cluster_keys: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         }
     }
