@@ -46,6 +46,7 @@ use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::DataBlock;
 use databend_common_expression::ScalarRef;
+use databend_common_expression::display::scalar_ref_to_string;
 use databend_common_license::license::Feature;
 use databend_common_license::license_manager::LicenseManagerSwitch;
 use log::warn;
@@ -852,36 +853,29 @@ impl SelectRewriter {
                 .set_span(span));
             }
             let columns = block.columns();
-            // TODO: support more scalar into expr types
             for row in 0..block.num_rows() {
                 let s = columns[0].index(row).unwrap();
                 let data_type = columns[0].data_type();
+                let value = scalar_ref_to_string(&s);
                 match s {
-                    ScalarRef::String(s) => {
-                        let literal = Expr::Literal {
-                            span,
-                            value: Literal::String(s.to_string()),
-                        };
-                        values.push((literal, s.to_string()));
-                    }
                     ScalarRef::Null => {
                         let literal = Expr::Literal {
                             span,
                             value: Literal::Null,
                         };
-                        values.push((literal, "NULL".to_string()));
+                        values.push((literal, value));
                     }
-                    other => {
+                    _ => {
                         let e = Expr::Cast {
                             span,
                             expr: Box::new(Expr::Literal {
                                 span,
-                                value: Literal::String(other.to_string()),
+                                value: Literal::String(value.clone()),
                             }),
                             target_type: data_type.to_type_name()?,
                             pg_style: false,
                         };
-                        values.push((e, other.to_string()));
+                        values.push((e, value));
                     }
                 }
             }

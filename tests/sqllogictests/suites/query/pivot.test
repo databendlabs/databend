@@ -510,6 +510,50 @@ ORDER BY "Employee ID";
 1 10 20
 2 30 40
 
+# Test PIVOT ANY with non-string pivot values.
+statement ok
+CREATE OR REPLACE TABLE pivot_any_non_string (
+    id INT,
+    amount INT,
+    decimal_key DECIMAL(38, 18),
+    date_key DATE,
+    timestamp_key TIMESTAMP
+);
+
+statement ok
+INSERT INTO pivot_any_non_string VALUES
+    (1, 10, 1.230000000000000000, to_date('2024-01-01'), to_timestamp('2024-01-01 00:00:00.123456')),
+    (1, 20, 2.340000000000000000, to_date('2024-01-02'), to_timestamp('2024-01-01 00:00:01.654321')),
+    (2, 30, 1.230000000000000000, to_date('2024-01-01'), to_timestamp('2024-01-01 00:00:00.123456')),
+    (2, 40, 2.340000000000000000, to_date('2024-01-02'), to_timestamp('2024-01-01 00:00:01.654321'));
+
+query III
+SELECT *
+FROM (SELECT id, amount, decimal_key FROM pivot_any_non_string)
+    PIVOT(SUM(amount) FOR decimal_key IN (ANY ORDER BY decimal_key))
+ORDER BY id;
+----
+1 10 20
+2 30 40
+
+query III
+SELECT *
+FROM (SELECT id, amount, date_key FROM pivot_any_non_string)
+    PIVOT(SUM(amount) FOR date_key IN (ANY ORDER BY date_key))
+ORDER BY id;
+----
+1 10 20
+2 30 40
+
+query III
+SELECT *
+FROM (SELECT id, amount, timestamp_key FROM pivot_any_non_string)
+    PIVOT(SUM(amount) FOR timestamp_key IN (ANY ORDER BY timestamp_key))
+ORDER BY id;
+----
+1 10 20
+2 30 40
+
 statement ok
 drop table monthly_sales;
 
@@ -533,6 +577,9 @@ drop table test_string_pivot;
 
 statement ok
 drop table pivot_any_quoted_column;
+
+statement ok
+drop table pivot_any_non_string;
 
 statement ok
 drop table "pivot any quoted db"."select";
