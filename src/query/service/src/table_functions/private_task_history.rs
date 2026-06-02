@@ -43,6 +43,9 @@ use databend_common_sql::plans::task_run_schema;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::task::TaskService;
 
+const TASK_HISTORY_DEFAULT_RESULT_LIMIT: i64 = 100;
+const TASK_HISTORY_MAX_RESULT_LIMIT: i64 = 10_000;
+
 pub struct PrivateTaskHistoryTable {
     table_info: TableInfo,
     args_parsed: PrivateTaskHistoryArgs,
@@ -185,7 +188,7 @@ struct PrivateTaskHistoryArgs {
     task_name: Option<String>,
     scheduled_time_range_start: Option<String>,
     scheduled_time_range_end: Option<String>,
-    result_limit: Option<i32>,
+    result_limit: Option<i64>,
     error_only: Option<bool>,
     root_task_id: Option<String>,
 }
@@ -218,7 +221,7 @@ impl PrivateTaskHistoryArgs {
                             "unsupported data type for {}, only support integer",
                             k
                         ))
-                    })? as i32);
+                    })?);
                 }
                 "error_only" => parsed.error_only = v.as_boolean().cloned(),
                 "root_task_id" => parsed.root_task_id = v.as_string().cloned(),
@@ -266,10 +269,7 @@ impl PrivateTaskHistoryArgs {
         } else {
             format!(" WHERE {}", filters.join(" AND "))
         };
-        let limit_clause = match self.result_limit {
-            Some(limit) if limit > 0 => format!(" LIMIT {limit}"),
-            _ => String::new(),
-        };
+        let limit = self.effective_result_limit();
 
         format!(
             "SELECT
@@ -298,8 +298,15 @@ impl PrivateTaskHistoryArgs {
                 CAST(root_task_id AS STRING) AS root_task_id,
                 session_params AS session_parameters
             FROM system_task.task_run{where_clause}
-            ORDER BY scheduled_at DESC{limit_clause}"
+            ORDER BY scheduled_at DESC LIMIT {limit}"
         )
+    }
+
+    fn effective_result_limit(&self) -> i64 {
+        match self.result_limit {
+            Some(limit) if limit > 0 => limit.min(TASK_HISTORY_MAX_RESULT_LIMIT),
+            _ => TASK_HISTORY_DEFAULT_RESULT_LIMIT,
+        }
     }
 }
 

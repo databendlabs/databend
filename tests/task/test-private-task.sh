@@ -477,6 +477,31 @@ else
     exit 1
 fi
 
+response=$(query_sql_with_auth "root:" "INSERT INTO system_task.task_run (task_id, task_name, query_text, when_condition, after, comment, owner, owner_user, warehouse_name, using_warehouse_size, schedule_type, interval, interval_milliseconds, cron, time_zone, run_id, attempt_number, state, error_code, error_message, root_task_id, scheduled_at, completed_at, next_scheduled_at, error_integration, status, created_at, updated_at, session_params, last_suspended_at, suspend_task_after_num_failures) SELECT 900000 + number, 'limit_history_task', 'SELECT 1', NULL, NULL, NULL, 'account_admin', 'root', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 900000 + number, 0, 'SUCCEEDED', 0, NULL, 0, to_timestamp(1700000000 + number), to_timestamp(1700000000 + number), NULL, NULL, 'SUSPENDED', to_timestamp(1700000000 + number), to_timestamp(1700000000 + number), parse_json('{}'), NULL, NULL FROM numbers(101)")
+check_response_error "$response"
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'limit_history_task')")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "100" ]; then
+    echo "✅ TASK_HISTORY applies the default result limit"
+else
+    echo "❌ Expected TASK_HISTORY without RESULT_LIMIT to return 100 rows"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
+response=$(query_sql_with_auth "root:" "SELECT count(*) FROM TASK_HISTORY(TASK_NAME => 'limit_history_task', RESULT_LIMIT => 100000)")
+check_response_error "$response"
+actual=$(echo "$response" | jq -r '.data[0][0]')
+if [ "$actual" = "101" ]; then
+    echo "✅ TASK_HISTORY clamps explicit result limits without dropping valid rows"
+else
+    echo "❌ Expected TASK_HISTORY with large RESULT_LIMIT to return all 101 matching rows"
+    echo "Actual  : $actual"
+    exit 1
+fi
+
 response=$(query_sql_with_auth "root:" "CREATE ROLE task_history_role_a")
 check_response_error "$response"
 response=$(query_sql_with_auth "root:" "CREATE ROLE task_history_role_b")
