@@ -324,14 +324,14 @@ async fn write_sql_join_input(
     expected_join_type: JoinType,
 ) -> Result<()> {
     let ctx = LiteTableContext::create().await?;
-    ctx.register_table_sql_with_stats_and_histograms(
+    ctx.register_table_sql_with_stats(
         "CREATE TABLE l(k BIGINT, t BIGINT)",
         Some(table_statistics(case.left.rows)),
         column_statistics(case.left),
         histogram_statistics(case.left)?,
     )
     .await?;
-    ctx.register_table_sql_with_stats_and_histograms(
+    ctx.register_table_sql_with_stats(
         "CREATE TABLE r(k BIGINT, t BIGINT)",
         Some(table_statistics(case.right.rows)),
         column_statistics(case.right),

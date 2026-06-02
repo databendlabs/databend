@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::mem;
 use std::str::FromStr;
@@ -60,6 +61,7 @@ use crate::binder::util::illegal_ident_name;
 use crate::binder::wrap_cast;
 use crate::normalize_identifier;
 use crate::optimizer::ir::SExpr;
+use crate::optimizer::ir::ScanRequiredColumns;
 use crate::planner::QueryExecutor;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
@@ -1094,17 +1096,17 @@ impl Binder {
         Ok(finder.scalars().is_empty())
     }
 
-    pub(crate) fn add_internal_column_into_expr(
+    pub(crate) fn add_bound_columns_into_expr(
         &mut self,
         bind_context: &mut BindContext,
         s_expr: SExpr,
     ) -> Result<SExpr> {
-        if bind_context.bound_internal_columns.is_empty() {
+        if bind_context.bound_internal_columns.is_empty()
+            && bind_context.bound_virtual_columns.is_empty()
+        {
             return Ok(s_expr);
         }
         let bound_internal_columns = &bind_context.bound_internal_columns;
-        let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
-        let mut s_expr = s_expr;
 
         let mut has_score = false;
         let mut has_matched = false;
@@ -1121,43 +1123,38 @@ impl Binder {
                     .to_string(),
             ));
         }
-        let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
 
+        let mut required_columns = BTreeMap::<_, ScanRequiredColumns>::new();
         for ((table_index, _), column_index) in bound_internal_columns.iter() {
-            let inverted_index = inverted_index_map.shift_remove(table_index).map(|mut i| {
-                i.has_score = has_score;
-                i
-            });
-            let vector_index = vector_index_map.shift_remove(table_index);
-            s_expr = s_expr.add_column_index_to_scans(
-                *table_index,
-                *column_index,
-                &inverted_index,
-                &vector_index,
-            );
+            required_columns
+                .entry(*table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
         }
-        Ok(s_expr)
-    }
 
-    pub(crate) fn add_virtual_column_into_expr(
-        &mut self,
-        bind_context: &mut BindContext,
-        s_expr: SExpr,
-    ) -> Result<SExpr> {
-        if bind_context.bound_virtual_columns.is_empty() {
-            return Ok(s_expr);
+        if !required_columns.is_empty() {
+            let mut inverted_index_map = mem::take(&mut bind_context.inverted_index_map);
+            let mut vector_index_map = mem::take(&mut bind_context.vector_index_map);
+            for (table_index, required_columns) in required_columns.iter_mut() {
+                required_columns.inverted_index =
+                    inverted_index_map.shift_remove(table_index).map(|mut i| {
+                        i.has_score = has_score;
+                        i
+                    });
+                required_columns.vector_index = vector_index_map.shift_remove(table_index);
+            }
         }
+
         let bound_virtual_columns = &bind_context.bound_virtual_columns;
-
-        let mut s_expr = s_expr;
         for (virtual_column_name, (_, column_index)) in bound_virtual_columns.iter() {
-            s_expr = s_expr.add_column_index_to_scans(
-                virtual_column_name.table_index,
-                *column_index,
-                &None,
-                &None,
-            );
+            required_columns
+                .entry(virtual_column_name.table_index)
+                .or_default()
+                .columns
+                .insert(*column_index);
         }
-        Ok(s_expr)
+
+        Ok(s_expr.add_column_indexes_to_scans(&required_columns))
     }
 }
