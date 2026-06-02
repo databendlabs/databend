@@ -31,12 +31,17 @@
 
 // Ported from Apache OpenDAL 0.54.1 `src/layers/concurrent_limit.rs`.
 
+use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
+use databend_common_base::runtime::metrics::FamilyGauge;
+use databend_common_base::runtime::metrics::register_gauge_family;
 use opendal::Buffer;
 use opendal::Metadata;
 use opendal::Result;
+use opendal::layers::observe;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
@@ -53,7 +58,64 @@ use opendal::raw::RpRead;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
 use opendal::raw::oio;
+use prometheus_client::encoding::EncodeLabel;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::encoding::LabelSetEncoder;
 use tokio::sync::Semaphore;
+use tokio::sync::SemaphorePermit;
+use tokio::sync::TryAcquireError;
+
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+struct ConcurrentLimitLabels {
+    scheme: &'static str,
+    namespace: Arc<str>,
+}
+
+impl EncodeLabelSet for ConcurrentLimitLabels {
+    fn encode(&self, mut encoder: LabelSetEncoder) -> Result<(), fmt::Error> {
+        (observe::LABEL_SCHEME, self.scheme).encode(encoder.encode_label())?;
+        (observe::LABEL_NAMESPACE, self.namespace.as_ref()).encode(encoder.encode_label())?;
+        Ok(())
+    }
+}
+
+static CONCURRENT_LIMIT_QUEUED_OPERATIONS: LazyLock<FamilyGauge<ConcurrentLimitLabels>> =
+    LazyLock::new(|| register_gauge_family("storage_concurrent_limit_queued_operations"));
+
+struct QueuedOperationGuard {
+    labels: Arc<ConcurrentLimitLabels>,
+}
+
+impl QueuedOperationGuard {
+    fn new(labels: Arc<ConcurrentLimitLabels>) -> Self {
+        CONCURRENT_LIMIT_QUEUED_OPERATIONS
+            .get_or_create(labels.as_ref())
+            .inc();
+        Self { labels }
+    }
+}
+
+impl Drop for QueuedOperationGuard {
+    fn drop(&mut self) {
+        CONCURRENT_LIMIT_QUEUED_OPERATIONS
+            .get_or_create(self.labels.as_ref())
+            .dec();
+    }
+}
+
+async fn acquire_operation_permit<'a>(
+    semaphore: &'a Semaphore,
+    labels: &Arc<ConcurrentLimitLabels>,
+) -> SemaphorePermit<'a> {
+    match semaphore.try_acquire() {
+        Ok(permit) => permit,
+        Err(TryAcquireError::NoPermits) => {
+            let _queued = QueuedOperationGuard::new(labels.clone());
+            semaphore.acquire().await.expect("semaphore must be valid")
+        }
+        Err(TryAcquireError::Closed) => semaphore.acquire().await.expect("semaphore must be valid"),
+    }
+}
 
 /// Add concurrent request limit.
 ///
@@ -135,9 +197,14 @@ impl<A: Access> Layer<A> for ConcurrentLimitLayer {
     type LayeredAccess = ConcurrentLimitAccessor<A>;
 
     fn layer(&self, inner: A) -> Self::LayeredAccess {
+        let info = inner.info();
         ConcurrentLimitAccessor {
             inner,
             semaphore: self.operation_semaphore.clone(),
+            labels: Arc::new(ConcurrentLimitLabels {
+                scheme: info.scheme(),
+                namespace: info.name(),
+            }),
         }
     }
 }
@@ -146,6 +213,7 @@ impl<A: Access> Layer<A> for ConcurrentLimitLayer {
 pub struct ConcurrentLimitAccessor<A: Access> {
     inner: A,
     semaphore: Arc<Semaphore>,
+    labels: Arc<ConcurrentLimitLabels>,
 }
 
 impl<A: Access> LayeredAccess for ConcurrentLimitAccessor<A> {
@@ -160,75 +228,59 @@ impl<A: Access> LayeredAccess for ConcurrentLimitAccessor<A> {
     }
 
     async fn create_dir(&self, path: &str, args: OpCreateDir) -> Result<RpCreateDir> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.create_dir(path, args).await
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
-        self.inner
-            .read(path, args)
-            .await
-            .map(|(rp, r)| (rp, ConcurrentLimitWrapper::new(r, self.semaphore.clone())))
+        self.inner.read(path, args).await.map(|(rp, r)| {
+            (
+                rp,
+                ConcurrentLimitWrapper::new(r, self.semaphore.clone(), self.labels.clone()),
+            )
+        })
     }
 
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
-        self.inner
-            .write(path, args)
-            .await
-            .map(|(rp, w)| (rp, ConcurrentLimitWrapper::new(w, self.semaphore.clone())))
+        self.inner.write(path, args).await.map(|(rp, w)| {
+            (
+                rp,
+                ConcurrentLimitWrapper::new(w, self.semaphore.clone(), self.labels.clone()),
+            )
+        })
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.stat(path, args).await
     }
 
     async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
-        self.inner
-            .delete()
-            .await
-            .map(|(rp, w)| (rp, ConcurrentLimitWrapper::new(w, self.semaphore.clone())))
+        self.inner.delete().await.map(|(rp, w)| {
+            (
+                rp,
+                ConcurrentLimitWrapper::new(w, self.semaphore.clone(), self.labels.clone()),
+            )
+        })
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
-        self.inner
-            .list(path, args)
-            .await
-            .map(|(rp, s)| (rp, ConcurrentLimitWrapper::new(s, self.semaphore.clone())))
+        self.inner.list(path, args).await.map(|(rp, s)| {
+            (
+                rp,
+                ConcurrentLimitWrapper::new(s, self.semaphore.clone(), self.labels.clone()),
+            )
+        })
     }
 }
 
@@ -238,21 +290,22 @@ pub struct ConcurrentLimitWrapper<R> {
     // can live across scheduler rounds, so holding a permit here would make an
     // idle handle consume the global IO concurrency limit.
     semaphore: Arc<Semaphore>,
+    labels: Arc<ConcurrentLimitLabels>,
 }
 
 impl<R> ConcurrentLimitWrapper<R> {
-    fn new(inner: R, semaphore: Arc<Semaphore>) -> Self {
-        Self { inner, semaphore }
+    fn new(inner: R, semaphore: Arc<Semaphore>, labels: Arc<ConcurrentLimitLabels>) -> Self {
+        Self {
+            inner,
+            semaphore,
+            labels,
+        }
     }
 }
 
 impl<R: oio::Read> oio::Read for ConcurrentLimitWrapper<R> {
     async fn read(&mut self) -> Result<Buffer> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.read().await
     }
@@ -260,31 +313,19 @@ impl<R: oio::Read> oio::Read for ConcurrentLimitWrapper<R> {
 
 impl<R: oio::Write> oio::Write for ConcurrentLimitWrapper<R> {
     async fn write(&mut self, bs: Buffer) -> Result<()> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.write(bs).await
     }
 
     async fn close(&mut self) -> Result<Metadata> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.close().await
     }
 
     async fn abort(&mut self) -> Result<()> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.abort().await
     }
@@ -292,11 +333,7 @@ impl<R: oio::Write> oio::Write for ConcurrentLimitWrapper<R> {
 
 impl<R: oio::List> oio::List for ConcurrentLimitWrapper<R> {
     async fn next(&mut self) -> Result<Option<oio::Entry>> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.next().await
     }
@@ -308,11 +345,7 @@ impl<R: oio::Delete> oio::Delete for ConcurrentLimitWrapper<R> {
     }
 
     async fn flush(&mut self) -> Result<usize> {
-        let _permit = self
-            .semaphore
-            .acquire()
-            .await
-            .expect("semaphore must be valid");
+        let _permit = acquire_operation_permit(self.semaphore.as_ref(), &self.labels).await;
 
         self.inner.flush().await
     }
@@ -321,6 +354,7 @@ impl<R: oio::Delete> oio::Delete for ConcurrentLimitWrapper<R> {
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
+    use std::time::Duration;
 
     use opendal::Buffer;
     use opendal::Operator;
@@ -331,6 +365,8 @@ mod tests {
     use tokio::sync::Semaphore;
     use tokio::sync::oneshot;
 
+    use super::CONCURRENT_LIMIT_QUEUED_OPERATIONS;
+    use super::ConcurrentLimitLabels;
     use super::ConcurrentLimitLayer;
     use super::ConcurrentLimitWrapper;
 
@@ -393,6 +429,7 @@ mod tests {
                 release: Some(release_rx),
             },
             semaphore.clone(),
+            test_labels(),
         );
 
         let handle = databend_common_base::runtime::spawn(async move { reader.read().await });
@@ -406,6 +443,89 @@ mod tests {
         handle.await.expect("read task must not panic")?;
 
         assert_eq!(semaphore.available_permits(), 1);
+
+        Ok(())
+    }
+
+    fn test_labels() -> Arc<ConcurrentLimitLabels> {
+        Arc::new(ConcurrentLimitLabels {
+            scheme: "test",
+            namespace: Arc::from("test"),
+        })
+    }
+
+    fn queued_operations(labels: &ConcurrentLimitLabels) -> i64 {
+        CONCURRENT_LIMIT_QUEUED_OPERATIONS
+            .get(labels)
+            .map(|v| v.get())
+            .unwrap_or_default()
+    }
+
+    async fn wait_for_queued_operations(labels: &ConcurrentLimitLabels, expected: i64) {
+        for _ in 0..100 {
+            if queued_operations(labels) == expected {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+
+        assert_eq!(queued_operations(labels), expected);
+    }
+
+    #[tokio::test]
+    async fn test_queued_operation_gauge_tracks_waiting_permits() -> Result<()> {
+        let semaphore = Arc::new(Semaphore::new(1));
+        let labels = test_labels();
+        let baseline = queued_operations(labels.as_ref());
+        let (entered_tx, entered_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+
+        let mut first_reader = ConcurrentLimitWrapper::new(
+            BlockingReader {
+                entered: Some(entered_tx),
+                release: Some(release_rx),
+            },
+            semaphore.clone(),
+            labels.clone(),
+        );
+
+        let first_handle =
+            databend_common_base::runtime::spawn(async move { first_reader.read().await });
+        entered_rx.await.expect("first read operation must start");
+
+        let (entered_tx, entered_rx) = oneshot::channel();
+        let (release_tx2, release_rx) = oneshot::channel();
+        let mut second_reader = ConcurrentLimitWrapper::new(
+            BlockingReader {
+                entered: Some(entered_tx),
+                release: Some(release_rx),
+            },
+            semaphore.clone(),
+            labels.clone(),
+        );
+
+        let second_handle =
+            databend_common_base::runtime::spawn(async move { second_reader.read().await });
+        wait_for_queued_operations(labels.as_ref(), baseline + 1).await;
+
+        release_tx
+            .send(())
+            .expect("first read task must wait for release");
+        first_handle
+            .await
+            .expect("first read task must not panic")?;
+
+        entered_rx.await.expect("second read operation must start");
+        wait_for_queued_operations(labels.as_ref(), baseline).await;
+
+        release_tx2
+            .send(())
+            .expect("second read task must wait for release");
+        second_handle
+            .await
+            .expect("second read task must not panic")?;
+
+        assert_eq!(queued_operations(labels.as_ref()), baseline);
 
         Ok(())
     }
