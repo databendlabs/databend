@@ -423,10 +423,13 @@ jobs:
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
-              if (TYPE === 'stable') {
-                tags.push(`${repo}:latest`);
-              } else if (TYPE === 'nightly') {
-                tags.push(`${repo}:nightly`);
+              switch (TYPE) {
+                case 'stable':
+                  tags.push(`${repo}:latest`);
+                  break;
+                case 'nightly':
+                  tags.push(`${repo}:nightly`);
+                  break;
               }
             }
             core.setOutput('tags', tags.join(','));
@@ -510,10 +513,13 @@ jobs:
             let tags = [];
             for (const repo of repos) {
               tags.push(`${repo}:${VERSION}`);
-              if (TYPE === 'stable') {
-                tags.push(`${repo}:latest`);
-              } else if (TYPE === 'nightly') {
-                tags.push(`${repo}:nightly`);
+              switch (TYPE) {
+                case 'stable':
+                  tags.push(`${repo}:latest`);
+                  break;
+                case 'nightly':
+                  tags.push(`${repo}:nightly`);
+                  break;
               }
             }
             core.setOutput('tags', tags.join(','));
