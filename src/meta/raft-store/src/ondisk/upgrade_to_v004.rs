@@ -89,7 +89,9 @@ impl OnDisk {
                 })?;
 
                 let ent = RaftStoreEntry::deserialize(&k, &v)?;
-                let upgraded = ent.upgrade();
+                let Some(upgraded) = ent.upgrade() else {
+                    continue;
+                };
                 if let RaftStoreEntry::LogEntry(entry) = &upgraded {
                     if entry.log_id.index < first_log_index {
                         debug!(
@@ -116,7 +118,9 @@ impl OnDisk {
             for kv in kvs {
                 let ent = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
                 debug!("import V003 entry: {:?}", ent);
-                let upgraded = ent.upgrade();
+                let Some(upgraded) = ent.upgrade() else {
+                    continue;
+                };
                 importer.import_raft_store_entry(upgraded)?;
             }
         }

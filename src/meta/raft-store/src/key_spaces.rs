@@ -253,16 +253,16 @@ pub enum RaftStoreEntry {
 
 impl RaftStoreEntry {
     /// Upgrade V003 to V004
-    pub fn upgrade(self) -> Self {
+    pub fn upgrade(self) -> Option<Self> {
         match self.clone() {
-            Self::Logs { key: _, value } => Self::LogEntry(value),
+            Self::Logs { key: _, value } => Some(Self::LogEntry(value)),
             Self::RaftStateKV { key: _, value } => match value {
-                RaftStateValue::NodeId(node_id) => Self::NodeId(Some(node_id)),
-                RaftStateValue::HardState(vote) => Self::Vote(Some(vote)),
-                RaftStateValue::Committed(committed) => Self::Committed(committed),
-                RaftStateValue::StateMachineId(_) => self,
+                RaftStateValue::NodeId(node_id) => Some(Self::NodeId(Some(node_id))),
+                RaftStateValue::HardState(vote) => Some(Self::Vote(Some(vote))),
+                RaftStateValue::Committed(committed) => Some(Self::Committed(committed)),
+                RaftStateValue::StateMachineId(_) => None,
             },
-            Self::LogMeta { key: _, value } => Self::Purged(Some(value.log_id())),
+            Self::LogMeta { key: _, value } => Some(Self::Purged(Some(value.log_id()))),
 
             RaftStoreEntry::DataHeader { .. }
             | RaftStoreEntry::Nodes { .. }
@@ -275,7 +275,7 @@ impl RaftStoreEntry {
             | RaftStoreEntry::NodeId(_)
             | RaftStoreEntry::Vote(_)
             | RaftStoreEntry::Committed(_)
-            | RaftStoreEntry::Purged(_) => self,
+            | RaftStoreEntry::Purged(_) => Some(self),
         }
     }
 
