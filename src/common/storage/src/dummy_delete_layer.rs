@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use log::warn;
+use opendal::Error;
+use opendal::ErrorKind;
+use opendal::Result;
 use opendal::raw::Access;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccess;
@@ -25,9 +28,6 @@ use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
 use opendal::raw::oio;
-use opendal::Error;
-use opendal::ErrorKind;
-use opendal::Result;
 
 #[derive(Debug, Clone)]
 pub struct DummyDeleteLayer;

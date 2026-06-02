@@ -12,75 +12,211 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use databend_common_storage::dummy_delete_layer::DummyDeleteLayer;
-use opendal::services;
+//! End-to-end tests for the optional `DummyDeleteLayer` gating.
+//!
+//! These exercise the real `init_operator` production path (the same one query
+//! nodes use), so they require a reachable S3 endpoint. They default to the
+//! local MinIO setup used by CI (`scripts/ci/ci-setup-minio.sh`) and are skipped
+//! gracefully when that endpoint is not reachable, so plain `cargo test` runs
+//! without object storage do not fail.
+//!
+//! Connection parameters can be overridden via `DUMMY_DELETE_S3_ENDPOINT`,
+//! `DUMMY_DELETE_S3_BUCKET`, `DUMMY_DELETE_S3_ACCESS_KEY_ID` and
+//! `DUMMY_DELETE_S3_SECRET_ACCESS_KEY`.
+
+use std::net::TcpStream;
+use std::net::ToSocketAddrs;
+use std::sync::OnceLock;
+use std::time::Duration;
+
+use databend_common_base::base::GlobalInstance;
+use databend_common_base::runtime::GlobalIORuntime;
+use databend_common_meta_app::storage::StorageParams;
+use databend_common_meta_app::storage::StorageS3Config;
+use databend_common_storage::init_operator;
 use opendal::ErrorKind;
 use opendal::Operator;
+use opendal::services;
 
-fn build_s3_operator(with_dummy_delete: bool) -> Operator {
-    let bucket = std::env::var("S3_TEST_BUCKET").expect("S3_TEST_BUCKET must be set");
-    let region = std::env::var("S3_TEST_REGION").expect("S3_TEST_REGION must be set");
-    let access_key_id = std::env::var("S3_TEST_ACCESS_KEY_ID").expect("S3_TEST_ACCESS_KEY_ID must be set");
-    let secret_access_key = std::env::var("S3_TEST_SECRET_ACCESS_KEY").expect("S3_TEST_SECRET_ACCESS_KEY must be set");
+const DEFAULT_ENDPOINT: &str = "http://127.0.0.1:9900";
+const DEFAULT_BUCKET: &str = "testbucket";
+const DEFAULT_ACCESS_KEY: &str = "minioadmin";
+const DEFAULT_SECRET_KEY: &str = "minioadmin";
 
-    let builder = services::S3::default()
-        .bucket(&bucket)
-        .root("_dummy_delete_test")
-        .region(&region)
-        .access_key_id(&access_key_id)
-        .secret_access_key(&secret_access_key);
+/// Environment switch read by `build_operator` to install `DummyDeleteLayer`.
+const DISABLE_DELETE_ENV: &str = "_DATABEND_INTERNAL_DISABLE_DELETE";
 
-    let op = Operator::new(builder).unwrap().finish();
-    if with_dummy_delete {
-        op.layer(DummyDeleteLayer)
-    } else {
-        op
-    }
+fn env_or(key: &str, default: &str) -> String {
+    std::env::var(key).unwrap_or_else(|_| default.to_string())
 }
 
-#[tokio::test]
-async fn test_dummy_delete_layer_on_s3() {
-    let op = build_s3_operator(true);
-    let test_path = "test_dummy_delete.txt";
-    let test_content = b"hello dummy delete layer";
+fn endpoint() -> String {
+    env_or("DUMMY_DELETE_S3_ENDPOINT", DEFAULT_ENDPOINT)
+}
 
-    // 1. PUT — should succeed
-    let put_result = op.write(test_path, test_content.to_vec()).await;
-    assert!(put_result.is_ok(), "PUT should succeed, got: {:?}", put_result.err());
-    println!("PUT: OK");
+fn bucket() -> String {
+    env_or("DUMMY_DELETE_S3_BUCKET", DEFAULT_BUCKET)
+}
 
-    // 2. GET — should succeed, content should match
-    let data = op.read(test_path).await;
-    assert!(data.is_ok(), "GET should succeed, got: {:?}", data.err());
-    assert_eq!(data.unwrap().to_vec(), test_content.to_vec(), "GET content mismatch");
-    println!("GET: OK");
+fn access_key() -> String {
+    env_or("DUMMY_DELETE_S3_ACCESS_KEY_ID", DEFAULT_ACCESS_KEY)
+}
 
-    // 3. LIST — should succeed, should contain test file
-    let entries = op.list("/").await;
-    assert!(entries.is_ok(), "LIST should succeed, got: {:?}", entries.err());
-    let entries = entries.unwrap();
-    let found = entries.iter().any(|e| e.path().contains("test_dummy_delete"));
-    assert!(found, "LIST should contain test file, entries: {:?}", entries.iter().map(|e| e.path()).collect::<Vec<_>>());
-    println!("LIST: OK");
+fn secret_key() -> String {
+    env_or("DUMMY_DELETE_S3_SECRET_ACCESS_KEY", DEFAULT_SECRET_KEY)
+}
 
-    // 4. DELETE — should fail with Unsupported
-    let del_result = op.delete(test_path).await;
-    assert!(del_result.is_err(), "DELETE should fail, but it succeeded");
-    let err = del_result.unwrap_err();
-    assert_eq!(err.kind(), ErrorKind::Unsupported, "DELETE error should be Unsupported, got: {:?}", err.kind());
-    println!("DELETE correctly rejected: {}", err);
+/// Initialize the process-global registries that `build_operator` relies on.
+///
+/// `init_operator` ultimately installs a `RuntimeLayer` backed by
+/// `GlobalIORuntime::instance()`, which panics if the global registry has not
+/// been set up. Initialize it once for the whole test binary.
+fn init_globals() {
+    static INIT: OnceLock<()> = OnceLock::new();
+    INIT.get_or_init(|| {
+        GlobalInstance::init_production();
+        GlobalIORuntime::init(2).expect("init GlobalIORuntime");
+    });
+}
 
-    // 5. GET again — file should still exist
-    let data = op.read(test_path).await;
-    assert!(data.is_ok(), "GET after rejected DELETE should succeed, got: {:?}", data.err());
-    assert_eq!(data.unwrap().to_vec(), test_content.to_vec());
-    println!("GET after DELETE: OK — file still exists");
+/// Best-effort reachability probe for the configured S3 endpoint.
+///
+/// Returns `false` (and the caller skips the test) when the endpoint cannot be
+/// reached, so the suite stays green on machines without object storage.
+fn endpoint_reachable(endpoint: &str) -> bool {
+    let hostport = endpoint
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .trim_end_matches('/');
+    let hostport = match hostport.split_once('/') {
+        Some((hp, _)) => hp,
+        None => hostport,
+    };
 
-    // 6. Cleanup with a raw operator (no DummyDeleteLayer)
-    let raw_op = build_s3_operator(false);
-    let cleanup = raw_op.delete(test_path).await;
-    assert!(cleanup.is_ok(), "Cleanup DELETE should succeed, got: {:?}", cleanup.err());
-    println!("CLEANUP: OK");
+    let Ok(mut addrs) = hostport.to_socket_addrs() else {
+        return false;
+    };
+    addrs.any(|addr| TcpStream::connect_timeout(&addr, Duration::from_millis(800)).is_ok())
+}
 
-    println!("\nAll tests passed!");
+/// Build a `StorageParams::S3` pointing at the test bucket under `root`.
+fn s3_params(root: &str) -> StorageParams {
+    StorageParams::S3(StorageS3Config {
+        endpoint_url: endpoint(),
+        bucket: bucket(),
+        access_key_id: access_key(),
+        secret_access_key: secret_key(),
+        root: root.to_string(),
+        // Explicit credentials only; never reach out to the ambient chain.
+        allow_credential_chain: Some(false),
+        ..Default::default()
+    })
+}
+
+/// A raw operator (no databend layers) used purely for setup/teardown so that
+/// cleanup is never affected by the `DummyDeleteLayer` under test.
+fn raw_operator(root: &str) -> Operator {
+    let builder = services::S3::default()
+        .endpoint(&endpoint())
+        .bucket(&bucket())
+        .access_key_id(&access_key())
+        .secret_access_key(&secret_key())
+        .region("us-east-1")
+        .root(root)
+        .disable_config_load()
+        .disable_ec2_metadata();
+    Operator::new(builder).unwrap().finish()
+}
+
+/// By default (env var unset) deletes go through the normal path and succeed.
+///
+/// This is the core regression guard: `DummyDeleteLayer` must NOT be installed
+/// unless explicitly requested, so real deletes against S3 work.
+#[tokio::test(flavor = "multi_thread")]
+async fn delete_enabled_by_default_on_s3() {
+    let ep = endpoint();
+    if !endpoint_reachable(&ep) {
+        eprintln!("skipping: S3 endpoint {ep} not reachable");
+        return;
+    }
+    init_globals();
+
+    let root = "_dummy_delete_test/default";
+    let path = "delete_enabled.txt";
+    let content = b"delete should succeed by default".to_vec();
+
+    // Make sure the env var is unset for this path, then build via the real
+    // production operator path. The env var is read synchronously inside
+    // `init_operator`, so the sync `with_vars` wrapper is sufficient.
+    let op = temp_env::with_vars([(DISABLE_DELETE_ENV, None::<&str>)], || {
+        init_operator(&s3_params(root)).expect("init operator")
+    });
+
+    op.write(path, content.clone()).await.expect("PUT");
+    assert_eq!(op.read(path).await.expect("GET").to_vec(), content);
+
+    // The whole point: delete actually removes the object.
+    op.delete(path)
+        .await
+        .expect("DELETE should succeed by default");
+
+    // Confirm it is gone.
+    assert!(
+        !op.exists(path).await.expect("stat"),
+        "object should be deleted"
+    );
+}
+
+/// With the env var enabled, `DummyDeleteLayer` is installed and rejects deletes
+/// while leaving PUT/GET/LIST intact.
+#[tokio::test(flavor = "multi_thread")]
+async fn delete_disabled_when_env_set_on_s3() {
+    let ep = endpoint();
+    if !endpoint_reachable(&ep) {
+        eprintln!("skipping: S3 endpoint {ep} not reachable");
+        return;
+    }
+    init_globals();
+
+    // Distinct root so the operator cache key differs from the default-path test.
+    let root = "_dummy_delete_test/disabled";
+    let path = "delete_disabled.txt";
+    let content = b"delete should be rejected when disabled".to_vec();
+
+    // Pre-seed and guarantee teardown via a raw operator unaffected by the layer.
+    let cleanup_op = raw_operator(root);
+    let _ = cleanup_op.delete(path).await;
+
+    let op = temp_env::with_vars([(DISABLE_DELETE_ENV, Some("true"))], || {
+        init_operator(&s3_params(root)).expect("init operator")
+    });
+
+    // PUT / GET / LIST unaffected.
+    op.write(path, content.clone()).await.expect("PUT");
+    assert_eq!(op.read(path).await.expect("GET").to_vec(), content);
+    let listed = op.list("/").await.expect("LIST");
+    assert!(
+        listed.iter().any(|e| e.path().contains("delete_disabled")),
+        "LIST should contain the test object"
+    );
+
+    // DELETE is rejected with Unsupported.
+    let err = op
+        .delete(path)
+        .await
+        .expect_err("DELETE should be rejected");
+    assert_eq!(
+        err.kind(),
+        ErrorKind::Unsupported,
+        "expected Unsupported, got: {err}"
+    );
+
+    // Object still exists because the delete was blocked.
+    assert!(
+        op.exists(path).await.expect("stat"),
+        "object should still exist after a rejected delete"
+    );
+
+    // Teardown with the raw operator.
+    cleanup_op.delete(path).await.expect("cleanup DELETE");
 }

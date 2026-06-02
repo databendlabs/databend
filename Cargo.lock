@@ -4520,6 +4520,7 @@ dependencies = [
  "reqwest",
  "serde",
  "simple_hll",
+ "temp-env",
  "thiserror 1.0.69",
  "tokio",
  "url",

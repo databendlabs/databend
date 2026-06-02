@@ -62,10 +62,10 @@ use opendal::services;
 use crate::StorageConfig;
 use crate::StorageHttpClient;
 use crate::config::CredentialChainConfig;
+use crate::dummy_delete_layer::DummyDeleteLayer;
 use crate::http_client::get_storage_http_client;
 use crate::metrics_layer::METRICS_LAYER;
 use crate::operator_cache::get_operator_cache;
-use crate::dummy_delete_layer::DummyDeleteLayer;
 use crate::runtime_layer::RuntimeLayer;
 
 static METRIC_OPENDAL_RETRIES_COUNT: LazyLock<FamilyCounter<Vec<(&'static str, String)>>> =
@@ -235,9 +235,42 @@ fn build_operator<B: Builder>(builder: B, cfg: Option<&StorageNetworkParams>) ->
         }
     }
 
-    op = op.layer(DummyDeleteLayer);
+    // Optionally disable every delete operation for this process.
+    //
+    // By default deletes are allowed. When `dummy_delete_disabled()` returns
+    // true (driven by the `_DATABEND_INTERNAL_DISABLE_DELETE` environment
+    // variable), we install `DummyDeleteLayer`, which intercepts and rejects
+    // all delete requests at the OpenDAL layer level.
+    //
+    // This is intentionally a process-wide switch: operators are cached
+    // globally by `StorageParams`, so the toggle cannot be scoped per session.
+    if dummy_delete_disabled() {
+        op = op.layer(DummyDeleteLayer);
+    }
 
     Ok(op)
+}
+
+/// Whether delete operations should be disabled for this process by installing
+/// [`DummyDeleteLayer`].
+///
+/// Controlled by the `_DATABEND_INTERNAL_DISABLE_DELETE` environment variable.
+/// Defaults to `false` (deletes are allowed). Recognised truthy values are
+/// `1`, `true`, `on`, and `yes` (case-insensitive, surrounding whitespace
+/// ignored); any other value (including unset) leaves deletes enabled.
+fn dummy_delete_disabled() -> bool {
+    match env::var("_DATABEND_INTERNAL_DISABLE_DELETE") {
+        Ok(v) => is_env_truthy(&v),
+        Err(_) => false,
+    }
+}
+
+/// Parse a boolean-ish environment variable value.
+fn is_env_truthy(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "on" | "yes"
+    )
 }
 
 fn get_http_client(cfg: Option<&StorageNetworkParams>) -> StorageHttpClient {
@@ -949,5 +982,24 @@ mod tests {
                 .contains("s3.session-token requires s3.access-key-id and s3.secret-access-key"),
             "unexpected error: {err}"
         );
+    }
+
+    #[test]
+    fn dummy_delete_env_truthy_parsing() {
+        use super::is_env_truthy;
+
+        // Truthy values (case-insensitive, surrounding whitespace ignored).
+        for v in [
+            "1", "true", "TRUE", "True", "on", "ON", "yes", "YES", " 1 ", "\ttrue\n",
+        ] {
+            assert!(is_env_truthy(v), "expected `{v:?}` to be truthy");
+        }
+
+        // Everything else leaves deletes enabled.
+        for v in [
+            "", "0", "false", "off", "no", "2", "enabled", "disable", "y", "t",
+        ] {
+            assert!(!is_env_truthy(v), "expected `{v:?}` to be falsy");
+        }
     }
 }
