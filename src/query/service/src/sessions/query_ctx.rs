@@ -25,7 +25,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::future::Future;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -106,10 +105,9 @@ use databend_common_meta_app::principal::COPY_MAX_FILES_PER_COMMIT;
 use databend_common_meta_app::principal::FileFormatParams;
 use databend_common_meta_app::principal::GrantObject;
 use databend_common_meta_app::principal::OnErrorMode;
+use databend_common_meta_app::principal::OwnershipObject;
 use databend_common_meta_app::principal::RoleInfo;
-use databend_common_meta_app::principal::StageFileFormatType;
 use databend_common_meta_app::principal::StageInfo;
-use databend_common_meta_app::principal::UserDefinedConnection;
 use databend_common_meta_app::principal::UserInfo;
 use databend_common_meta_app::principal::UserPrivilegeType;
 use databend_common_meta_app::schema::CatalogType;
@@ -164,6 +162,7 @@ use crate::clusters::Cluster;
 use crate::clusters::ClusterHelper;
 use crate::locks::LockManager;
 use crate::pipelines::executor::PipelineExecutor;
+use crate::pipelines::processors::transforms::MaterializedCtePayload;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
 use crate::servers::flight::v1::packets::NodePerfCounters;
 use crate::servers::http::v1::ClientSessionManager;
@@ -176,7 +175,7 @@ use crate::sessions::SessionManager;
 use crate::sessions::query_affect::QueryAffect;
 use crate::sessions::query_ctx_shared::MemoryUpdater;
 use crate::spillers;
-use crate::sql::binder::get_storage_params_from_options;
+use crate::sql::binder::StageResolver;
 use crate::storages::Table;
 
 const MYSQL_VERSION: &str = "8.0.90";
@@ -635,22 +634,28 @@ impl QueryContext {
             .await?;
         // the better place to do this is in the QueryContextShared::get_table() method,
         // but there is no way to access dyn TableContext.
-        let table: Arc<dyn Table> = match table.engine() {
-            "ICEBERG" => {
-                let sp = get_storage_params_from_options(self, table.options()).await?;
+        Ok(match table.engine() {
+            engine @ ("ICEBERG" | "DELTA") => {
+                let sp = StageResolver::from_authorization_ref(
+                    self.get_tenant(),
+                    self.get_current_user()?.identity(),
+                    self.get_settings(),
+                    self,
+                    UserApiProvider::instance(),
+                    GlobalConfig::instance().storage.allow_insecure,
+                )?
+                .resolve_storage_params_from_options(table.options())
+                .await?;
                 let mut info = table.get_table_info().to_owned();
                 info.meta.storage_params = Some(sp);
-                IcebergTable::try_create(info.to_owned())?.into()
-            }
-            "DELTA" => {
-                let sp = get_storage_params_from_options(self, table.options()).await?;
-                let mut info = table.get_table_info().to_owned();
-                info.meta.storage_params = Some(sp);
-                DeltaTable::try_create(info.to_owned())?.into()
+                match engine {
+                    "ICEBERG" => IcebergTable::try_create(info)?.into(),
+                    "DELTA" => DeltaTable::try_create(info)?.into(),
+                    _ => unreachable!("engine is already matched"),
+                }
             }
             _ => table,
-        };
-        Ok(table)
+        })
     }
 
     pub fn mark_unload_callbacked(&self) -> bool {
@@ -929,7 +934,7 @@ impl QueryContext {
         cte_name: &str,
         cte_ref_count: usize,
         channel_size: Option<usize>,
-    ) -> Vec<Sender<DataBlock>> {
+    ) -> Vec<Sender<MaterializedCtePayload>> {
         let mut senders = vec![];
         let mut receivers = vec![];
         for _ in 0..cte_ref_count {
@@ -948,7 +953,10 @@ impl QueryContext {
         senders
     }
 
-    pub fn get_materialized_cte_receiver(&self, cte_name: &str) -> Receiver<DataBlock> {
+    pub fn get_materialized_cte_receiver(
+        &self,
+        cte_name: &str,
+    ) -> Receiver<MaterializedCtePayload> {
         let mut receivers = self.shared.materialized_cte_receivers.lock();
         let receivers = receivers.get_mut(cte_name).unwrap();
         receivers.pop().unwrap()

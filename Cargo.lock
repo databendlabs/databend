@@ -4928,6 +4928,7 @@ dependencies = [
  "arrow 58.1.0",
  "async-backtrace",
  "async-trait",
+ "databend-common-ast",
  "databend-common-base",
  "databend-common-catalog",
  "databend-common-exception",
@@ -13297,8 +13298,7 @@ dependencies = [
 [[package]]
 name = "parquet"
 version = "58.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d3f9f2205199603564127932b89695f52b62322f541d0fc7179d57c2e1c9877"
+source = "git+https://github.com/datafuse-extras/arrow-rs.git?rev=333ab8378#333ab8378186b485c18c607b818a4a946dabe634"
 dependencies = [
  "ahash 0.8.12",
  "arrow-array 58.1.0",

@@ -30,7 +30,7 @@ use opendal::ErrorKind;
 
 use crate::BindContext;
 use crate::binder::Binder;
-use crate::binder::copy_into_table::resolve_file_location;
+use crate::binder::StageResolver;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::wrap_cast;
 use crate::plans::CopyIntoLocationPlan;
@@ -109,7 +109,15 @@ impl Binder {
             }
         }
 
-        let (mut stage_info, path) = resolve_file_location(self.ctx.as_ref(), &stmt.dst).await?;
+        let (mut stage_info, path) = StageResolver::from_table_context(
+            self.ctx.clone(),
+            databend_common_users::UserApiProvider::instance(),
+            databend_common_config::GlobalConfig::instance()
+                .storage
+                .allow_insecure,
+        )?
+        .resolve_file_location(&stmt.dst)
+        .await?;
 
         if !stmt.file_format.is_empty() {
             stage_info.file_format_params = self.try_resolve_file_format(&stmt.file_format).await?;

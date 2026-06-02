@@ -1,0 +1,168 @@
+statement ok
+drop table if exists proxy_spans
+
+statement ok
+drop table if exists proxy_spans_by_trace
+
+statement ok
+drop table if exists proxy_spans_by_chat
+
+statement ok
+create table proxy_spans_by_trace(start_time timestamp, trace_id string, chat_id string, span_id string, payload variant) cluster by(trace_id)
+
+statement ok
+create table proxy_spans_by_chat(start_time timestamp, trace_id string, chat_id string, span_id string, payload variant) cluster by(chat_id)
+
+statement ok
+insert into proxy_spans_by_trace values
+    ('2024-01-01 00:00:00', 'trace-1', 'chat-1', 'span-1', parse_json('{"route":"trace"}')),
+    ('2024-01-01 00:00:01', 'trace-2', 'chat-2', 'span-2', parse_json('{"route":"trace"}'))
+
+statement ok
+insert into proxy_spans_by_chat values
+    ('2024-01-01 00:00:00', 'trace-1', 'chat-1', 'span-1', parse_json('{"route":"chat"}')),
+    ('2024-01-01 00:00:01', 'trace-2', 'chat-2', 'span-2', parse_json('{"route":"chat"}'))
+
+statement ok
+create table proxy_spans(start_time timestamp, trace_id string, chat_id string, span_id string, payload variant)
+engine = proxy targets='proxy_spans_by_trace,proxy_spans_by_chat' default='proxy_spans_by_trace'
+
+query TT
+select trace_id, span_id from proxy_spans where trace_id = 'trace-1'
+----
+trace-1 span-1
+
+query TT
+select chat_id, span_id from proxy_spans where chat_id = 'chat-2'
+----
+chat-2 span-2
+
+statement ok
+drop table if exists proxy_column_proxy
+
+statement ok
+drop table if exists proxy_column_target
+
+statement ok
+drop table if exists proxy_column_multi_proxy
+
+statement ok
+drop table if exists proxy_column_by_id
+
+statement ok
+drop table if exists proxy_column_by_grp
+
+statement ok
+set enable_prune_pipeline = 1
+
+statement ok
+set enable_distributed_pruning = 0
+
+statement ok
+set enable_prune_cache = 0
+
+statement ok
+set proxy_routing_model = 'prefix'
+
+statement ok
+create table proxy_column_target(id int, v string)
+row_per_block=1 block_per_segment=2 segment_format='column_oriented' storage_format='parquet'
+
+statement ok
+insert into proxy_column_target values
+    (1, 'a'),
+    (2, 'b'),
+    (3, 'c'),
+    (4, 'd')
+
+statement ok
+create table proxy_column_proxy(id int, v string)
+engine = proxy targets='proxy_column_target' default='proxy_column_target'
+
+query I
+select count(*) from proxy_column_proxy where id >= 2
+----
+3
+
+query IT
+select id, v from proxy_column_proxy where id = 3
+----
+3 c
+
+statement ok
+create table proxy_column_by_id(id int, grp int, route string)
+cluster by(id) row_per_block=2 block_per_segment=2 segment_format='column_oriented' storage_format='parquet'
+
+statement ok
+create table proxy_column_by_grp(id int, grp int, route string)
+cluster by(grp) row_per_block=2 block_per_segment=2 segment_format='column_oriented' storage_format='parquet'
+
+statement ok
+insert into proxy_column_by_id values
+    (1, 1, 'id'),
+    (2, 2, 'id'),
+    (3, 1, 'id'),
+    (4, 2, 'id')
+
+statement ok
+insert into proxy_column_by_grp values
+    (1, 1, 'grp'),
+    (3, 1, 'grp'),
+    (2, 2, 'grp'),
+    (4, 2, 'grp')
+
+statement ok
+create table proxy_column_multi_proxy(id int, grp int, route string)
+engine = proxy targets='proxy_column_by_id,proxy_column_by_grp' default='proxy_column_by_id'
+
+query TI
+select min(route), count(*) from proxy_column_multi_proxy where id = 2
+----
+id 1
+
+query TI
+select min(route), count(*) from proxy_column_multi_proxy where grp = 2
+----
+grp 2
+
+statement ok
+set proxy_routing_model = 'statistics'
+
+query error (?s).*PROXY statistics routing currently does not support column-oriented target 'proxy_column_by_id'.*
+select min(route), count(*) from proxy_column_multi_proxy where id = 2
+
+statement ok
+drop table proxy_column_multi_proxy
+
+statement ok
+drop table proxy_column_by_id
+
+statement ok
+drop table proxy_column_by_grp
+
+statement ok
+drop table proxy_column_proxy
+
+statement ok
+drop table proxy_column_target
+
+statement ok
+unset proxy_routing_model
+
+statement ok
+unset enable_prune_cache
+
+statement ok
+unset enable_distributed_pruning
+
+statement ok
+unset enable_prune_pipeline
+
+statement ok
+drop table proxy_spans
+
+statement ok
+drop table proxy_spans_by_trace
+
+statement ok
+drop table proxy_spans_by_chat

@@ -32,6 +32,8 @@ use databend_common_expression::expr::Expr;
 use databend_common_expression::expr::FunctionCall;
 use databend_common_expression::scalar_evaluator;
 use databend_common_expression::types::DataType;
+use databend_common_expression::types::NumberDataType;
+use databend_common_expression::types::NumberScalar;
 
 fn bool_column(id: usize, display_name: &str) -> Expr<usize> {
     Expr::ColumnRef(ColumnRef {
@@ -59,10 +61,46 @@ fn bool_condition(scalar: Scalar) -> Expr<usize> {
     })
 }
 
+fn uint_column(id: usize, display_name: &str) -> Expr<usize> {
+    Expr::ColumnRef(ColumnRef {
+        span: None,
+        id,
+        data_type: DataType::Number(NumberDataType::UInt64),
+        display_name: display_name.to_string(),
+    })
+}
+
+fn uint_constant(value: u64) -> Expr<usize> {
+    Expr::Constant(Constant {
+        span: None,
+        scalar: Scalar::Number(NumberScalar::UInt64(value)),
+        data_type: DataType::Number(NumberDataType::UInt64),
+    })
+}
+
 fn if_test_function(args_type: Vec<DataType>, return_type: DataType) -> Arc<Function> {
     Arc::new(Function {
         signature: FunctionSignature {
             name: "if".to_string(),
+            args_type,
+            return_type,
+        },
+        eval: FunctionEval::Scalar {
+            calc_domain: domain_evaluator(|_, _| FunctionDomain::Full),
+            eval: scalar_evaluator(|_, _| Value::Scalar(Scalar::Null)),
+            derive_stat: None,
+        },
+    })
+}
+
+fn scalar_test_function(
+    name: &str,
+    args_type: Vec<DataType>,
+    return_type: DataType,
+) -> Arc<Function> {
+    Arc::new(Function {
+        signature: FunctionSignature {
+            name: name.to_string(),
             args_type,
             return_type,
         },
@@ -97,6 +135,45 @@ fn if_test_registry() -> FunctionRegistry {
     registry
 }
 
+fn comparison_expr(name: &str, left: Expr<usize>, right: Expr<usize>) -> Expr<usize> {
+    Expr::FunctionCall(FunctionCall {
+        span: None,
+        id: Box::new(FunctionID::Builtin {
+            name: name.to_string(),
+            id: 0,
+        }),
+        function: scalar_test_function(
+            name,
+            vec![
+                DataType::Number(NumberDataType::UInt64),
+                DataType::Number(NumberDataType::UInt64),
+            ],
+            DataType::Boolean,
+        ),
+        generics: vec![],
+        args: vec![left, right],
+        return_type: DataType::Boolean,
+    })
+}
+
+fn and_filters_expr(args: Vec<Expr<usize>>) -> Expr<usize> {
+    Expr::FunctionCall(FunctionCall {
+        span: None,
+        id: Box::new(FunctionID::Builtin {
+            name: "and_filters".to_string(),
+            id: 0,
+        }),
+        function: scalar_test_function(
+            "and_filters",
+            vec![DataType::Boolean; args.len()],
+            DataType::Boolean,
+        ),
+        generics: vec![],
+        args,
+        return_type: DataType::Boolean,
+    })
+}
+
 fn if_expr(args: Vec<Expr<usize>>) -> Expr<usize> {
     Expr::FunctionCall(FunctionCall {
         span: None,
@@ -117,6 +194,28 @@ fn fold_with_registry(expr: &Expr<usize>, registry: &FunctionRegistry) -> Expr<u
 
 fn fold(expr: &Expr<usize>) -> Expr<usize> {
     fold_with_registry(expr, &if_test_registry())
+}
+
+#[test]
+fn test_fold_and_filters_combined_constraints_to_false() {
+    let column = uint_column(0, "a");
+    let folded = fold_with_registry(
+        &and_filters_expr(vec![
+            comparison_expr("noteq", column.clone(), uint_constant(5)),
+            comparison_expr("gte", column.clone(), uint_constant(5)),
+            comparison_expr("lte", column, uint_constant(5)),
+        ]),
+        &FunctionRegistry::empty(),
+    );
+
+    assert_eq!(
+        folded,
+        Expr::Constant(Constant {
+            span: None,
+            scalar: Scalar::Boolean(false),
+            data_type: DataType::Boolean,
+        })
+    );
 }
 
 #[test]

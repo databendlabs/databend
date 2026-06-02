@@ -21,6 +21,21 @@ use databend_common_exception::Result;
 use log::info;
 use opendal::Operator;
 
+/// Deduplicate a list of file locations in place.
+/// Returns (number_of_duplicates_removed, up_to_5_sample_duplicate_paths).
+pub fn dedup_file_locations(locations: &mut Vec<String>) -> (usize, Vec<String>) {
+    let len_before = locations.len();
+    locations.sort_unstable();
+    let dup_samples: Vec<String> = locations
+        .windows(2)
+        .filter(|w| w[0] == w[1])
+        .map(|w| w[0].clone())
+        .take(5)
+        .collect();
+    locations.dedup();
+    (len_before - locations.len(), dup_samples)
+}
+
 // File related operations.
 pub struct Files {
     ctx: Arc<dyn TableContext>,
@@ -40,10 +55,28 @@ impl Files {
         &self,
         file_locations: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> Result<()> {
-        let locations = Vec::from_iter(file_locations.into_iter().map(|v| v.as_ref().to_string()));
+        let mut locations: Vec<String> = file_locations
+            .into_iter()
+            .map(|v| v.as_ref().trim_start_matches('/').to_string())
+            .filter(|v| !v.is_empty())
+            .collect();
 
         if locations.is_empty() {
             return Ok(());
+        }
+
+        // Deduplicate: opendal's Deleter uses a HashSet internally but tracks size by
+        // insertion count. Duplicates cause cur_size to diverge from the buffer, making
+        // Deleter::close() loop forever.
+        let (duplicates, dup_samples) = dedup_file_locations(&mut locations);
+        if duplicates > 0 {
+            info!(
+                "remove_file_in_batch: deduplicated {} entries ({} -> {}), duplicate samples: {:?}",
+                duplicates,
+                duplicates + locations.len(),
+                locations.len(),
+                dup_samples
+            );
         }
 
         // adjusts batch_size according to the `max_threads` settings,
@@ -90,12 +123,6 @@ impl Files {
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
         let start = Instant::now();
-        // temporary fix for https://github.com/datafuselabs/databend/issues/13804
-        let locations = locations
-            .into_iter()
-            .map(|loc| loc.trim_start_matches('/').to_owned())
-            .filter(|loc| !loc.is_empty())
-            .collect::<Vec<_>>();
         info!("deleting files {:?}", &locations);
         let num_of_files = locations.len();
 

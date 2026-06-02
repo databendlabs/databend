@@ -86,6 +86,16 @@ impl TableContextAuthorization for QueryContext {
             .await
     }
 
+    async fn has_ownership(
+        &self,
+        object: &OwnershipObject,
+        check_current_role_only: bool,
+    ) -> Result<bool> {
+        self.get_current_session()
+            .has_ownership(object, check_current_role_only)
+            .await
+    }
+
     async fn get_visibility_checker(
         &self,
         ignore_ownership: bool,

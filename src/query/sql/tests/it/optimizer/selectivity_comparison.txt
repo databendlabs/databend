@@ -4,251 +4,201 @@ expr          : a = 5
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : a = 15
 cardinality   : 100
 estimated     : 10
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(15), max: UInt(15), ndv: 1.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 1.0, null_count: ~1.0, histogram: None }
 
 expr          : a != 5
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : a != 15
 cardinality   : 100
 estimated     : 90
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 9.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 9.0, null_count: ~9.0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~9.999999999[..10.0], null_count: 0, histogram: None }
 
 expr          : a > 5
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : a > 10
 cardinality   : 100
 estimated     : 90
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 9.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 9.0, null_count: ~9.0, histogram: None }
+0 ColumnStat { min: UInt(11), max: UInt(19), ndv: 9.0, null_count: 0, histogram: None }
 
-expr          : a > 17
+expr          : a > 16
 cardinality   : 100
-estimated     : 27.27272727272727
+estimated     : 30
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(17), max: UInt(20), ndv: 2.727272727272727, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 2.727272727272727, null_count: ~2.727272727272727, histogram: None }
+0 ColumnStat { min: UInt(17), max: UInt(19), ndv: 3.0, null_count: 0, histogram: None }
 
-expr          : a > 20
+expr          : a > 19
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : a > 25
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : a >= 5
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : a >= 10
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
-expr          : a >= 17
+expr          : a >= 16
 cardinality   : 100
-estimated     : 36.36363636363637
+estimated     : 40
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(17), max: UInt(20), ndv: 3.6363636363636367, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 3.6363636363636367, null_count: ~3.6363636363636367, histogram: None }
+0 ColumnStat { min: UInt(16), max: UInt(19), ndv: 4.0, null_count: 0, histogram: None }
 
-expr          : a >= 20
+expr          : a >= 19
 cardinality   : 100
 estimated     : 10
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(20), max: UInt(20), ndv: 1.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 1.0, null_count: ~1.0, histogram: None }
+0 ColumnStat { min: UInt(19), max: UInt(19), ndv: 1.0, null_count: 0, histogram: None }
 
 expr          : a >= 25
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : a < 5
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : a < 10
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
-expr          : a < 17
+expr          : a < 16
 cardinality   : 100
-estimated     : 63.63636363636363
+estimated     : 60
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(17), ndv: 6.363636363636363, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 6.363636363636363, null_count: ~6.363636363636363, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(15), ndv: 6.0, null_count: 0, histogram: None }
 
-expr          : a < 20
+expr          : a < 19
 cardinality   : 100
 estimated     : 90
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 9.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 9.0, null_count: ~9.0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(18), ndv: 9.0, null_count: 0, histogram: None }
 
 expr          : a < 25
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : a <= 5
 cardinality   : 100
 estimated     : 0
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 0.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 0.0, null_count: 0, histogram: None }
 
 expr          : a <= 10
 cardinality   : 100
 estimated     : 10
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(10), max: UInt(10), ndv: 1.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 1.0, null_count: ~1.0, histogram: None }
 
-expr          : a <= 17
+expr          : a <= 16
 cardinality   : 100
-estimated     : 72.72727272727273
+estimated     : 70
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(17), ndv: 7.272727272727273, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 7.272727272727273, null_count: ~7.272727272727273, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(16), ndv: 7.0, null_count: 0, histogram: None }
 
-expr          : a <= 20
+expr          : a <= 19
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : a <= 25
 cardinality   : 100
 estimated     : 100
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 
 expr          : a + 1 = 15
 cardinality   : 100
 estimated     : 10
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 1.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 1.0, null_count: ~1.0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: ~6.513215599[..10.0], null_count: 0, histogram: None }
 
 === reversed_comparison_predicates ===
 description: Comparison predicates should apply the same column constraint when the constant is on the left.
@@ -256,133 +206,39 @@ expr          : 15 = a
 cardinality   : 100
 estimated     : 10
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
 0 ColumnStat { min: UInt(15), max: UInt(15), ndv: 1.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 1.0, null_count: ~1.0, histogram: None }
 
-expr          : 17 < a
+expr          : 16 < a
 cardinality   : 100
-estimated     : 27.27272727272727
+estimated     : 30
 in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: UInt(17), max: UInt(20), ndv: 2.727272727272727, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 2.727272727272727, null_count: ~2.727272727272727, histogram: None }
+0 ColumnStat { min: UInt(17), max: UInt(19), ndv: 3.0, null_count: 0, histogram: None }
 
-expr          : 17 <= a
-cardinality   : 100
-estimated     : 36.36363636363637
-in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
-out stats     :
-0 ColumnStat { min: UInt(17), max: UInt(20), ndv: 3.6363636363636367, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 3.6363636363636367, null_count: ~3.6363636363636367, histogram: None }
-
-expr          : 17 > a
-cardinality   : 100
-estimated     : 63.63636363636363
-in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
-out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(17), ndv: 6.363636363636363, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 6.363636363636363, null_count: ~6.363636363636363, histogram: None }
-
-expr          : 17 >= a
-cardinality   : 100
-estimated     : 72.72727272727273
-in stats      :
-0 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 10.0, null_count: 10, histogram: None }
-out stats     :
-0 ColumnStat { min: UInt(10), max: UInt(17), ndv: 7.272727272727273, null_count: 0, histogram: None }
-1 ColumnStat { min: UInt(10), max: UInt(20), ndv: 7.272727272727273, null_count: ~7.272727272727273, histogram: None }
-
-=== typed_comparison_predicates ===
-description: Typed comparison predicates should respect integer boundaries, nullable inputs, and histogram constants.
-expr          : i < 5
+expr          : 16 <= a
 cardinality   : 100
 estimated     : 40
 in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(1), max: Int(5), ndv: 4.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(16), max: UInt(19), ndv: 4.0, null_count: 0, histogram: None }
 
-expr          : i > 5
+expr          : 16 > a
 cardinality   : 100
-estimated     : 50
+estimated     : 60
 in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(5), max: Int(10), ndv: 5.0, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(15), ndv: 6.0, null_count: 0, histogram: None }
 
-expr          : n > 5
+expr          : 16 >= a
 cardinality   : 100
-estimated     : 35
+estimated     : 70
 in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 30, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(19), ndv: 10.0, null_count: 0, histogram: None }
 out stats     :
-0 ColumnStat { min: Int(5), max: Int(10), ndv: 3.5, null_count: ~10.5, histogram: None }
-
-expr          : h >= 10
-cardinality   : 100
-estimated     : 9.999999999999998
-in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
-out stats     :
-0 ColumnStat { min: Int(10), max: Int(10), ndv: 0.9999999999999998, null_count: 0, histogram: None }
-
-expr          : h < 10
-cardinality   : 100
-estimated     : 90
-in stats      :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 10.0, null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
-out stats     :
-0 ColumnStat { min: Int(1), max: Int(10), ndv: 9.0, null_count: 0, histogram: Some(Int(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 1, upper_bound: 10, num_values: 100.0, num_distinct: 10.0 }], avg_spacing: None })) }
-
-expr          : u > 5
-cardinality   : 100
-estimated     : 45.454545454545446
-in stats      :
-0 ColumnStat { min: UInt(0), max: UInt(10), ndv: 11.0, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 10, num_values: 100.0, num_distinct: 11.0 }], avg_spacing: None })) }
-out stats     :
-0 ColumnStat { min: UInt(5), max: UInt(10), ndv: 4.999999999999999, null_count: 0, histogram: Some(UInt(TypedHistogram { accuracy: true, buckets: [TypedHistogramBucket { lower_bound: 0, upper_bound: 10, num_values: 100.0, num_distinct: 11.0 }], avg_spacing: None })) }
-
-=== string_comparison_predicates ===
-description: String equality should use domain and function statistics without assuming unbounded strings are impossible.
-expr          : s = 'a'
-cardinality   : 100
-estimated     : 0
-in stats      :
-0 ColumnStat { min: Bytes([98]), max: Bytes([100]), ndv: 3.0, null_count: 0, histogram: None }
-out stats     :
-0 ColumnStat { min: Bytes([98]), max: Bytes([100]), ndv: 0.0, null_count: 0, histogram: None }
-
-expr          : s = 'c'
-cardinality   : 100
-estimated     : 33.333333333333336
-in stats      :
-0 ColumnStat { min: Bytes([98]), max: Bytes([100]), ndv: 3.0, null_count: 0, histogram: None }
-out stats     :
-0 ColumnStat { min: Bytes([99]), max: Bytes([99]), ndv: 1.0, null_count: 0, histogram: None }
-
-expr          : 'c' = s
-cardinality   : 100
-estimated     : 33.333333333333336
-in stats      :
-0 ColumnStat { min: Bytes([98]), max: Bytes([100]), ndv: 3.0, null_count: 0, histogram: None }
-out stats     :
-0 ColumnStat { min: Bytes([99]), max: Bytes([99]), ndv: 1.0, null_count: 0, histogram: None }
-
-expr          : s != 'c'
-cardinality   : 100
-estimated     : 66.66666666666666
-in stats      :
-0 ColumnStat { min: Bytes([98]), max: Bytes([100]), ndv: 3.0, null_count: 0, histogram: None }
-out stats     :
-0 ColumnStat { min: Bytes([98]), max: Bytes([100]), ndv: 1.9999999999999996, null_count: 0, histogram: None }
+0 ColumnStat { min: UInt(10), max: UInt(16), ndv: 7.0, null_count: 0, histogram: None }
 

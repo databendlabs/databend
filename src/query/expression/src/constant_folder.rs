@@ -890,6 +890,10 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                 }
             }
+
+            if self.are_combined_constraints_mutually_exclusive(&constraints) {
+                return Some(true);
+            }
         }
 
         None // No conclusive mutual exclusion found
@@ -1015,6 +1019,43 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
         }
     }
 
+    fn are_combined_constraints_mutually_exclusive(
+        &self,
+        constraints: &[RangeConstraint<Index>],
+    ) -> bool {
+        let mut lower = None;
+        let mut upper = None;
+        let mut not_eq_constants = Vec::new();
+
+        for constraint in constraints {
+            match constraint.operator.as_str() {
+                "gt" => tighten_lower_bound(&mut lower, &constraint.constant, false),
+                "gte" => tighten_lower_bound(&mut lower, &constraint.constant, true),
+                "lt" => tighten_upper_bound(&mut upper, &constraint.constant, false),
+                "lte" => tighten_upper_bound(&mut upper, &constraint.constant, true),
+                "noteq" => not_eq_constants.push(&constraint.constant),
+                _ => {}
+            }
+        }
+
+        let (Some((lower, lower_inclusive)), Some((upper, upper_inclusive))) = (&lower, &upper)
+        else {
+            return false;
+        };
+
+        if lower > upper {
+            return true;
+        }
+        if lower != upper {
+            return false;
+        }
+        if !lower_inclusive || !upper_inclusive {
+            return true;
+        }
+
+        not_eq_constants.contains(&lower)
+    }
+
     #[cfg(test)]
     pub fn new_for_test(
         input_domains: &'a HashMap<Index, Domain>,
@@ -1026,6 +1067,24 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             func_ctx,
             fn_registry,
         }
+    }
+}
+
+fn tighten_lower_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
+        constant > current || (constant == current && !inclusive && *current_inclusive)
+    });
+    if should_update {
+        *bound = Some((constant.clone(), inclusive));
+    }
+}
+
+fn tighten_upper_bound(bound: &mut Option<(Scalar, bool)>, constant: &Scalar, inclusive: bool) {
+    let should_update = bound.as_ref().is_none_or(|(current, current_inclusive)| {
+        constant < current || (constant == current && !inclusive && *current_inclusive)
+    });
+    if should_update {
+        *bound = Some((constant.clone(), inclusive));
     }
 }
 

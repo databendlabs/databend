@@ -129,6 +129,45 @@ SELECT * FROM test order by c;
 statement ok
 DROP TABLE test;
 
+############################################################
+# variable-length on-conflict columns with ambiguous bytes #
+############################################################
+
+statement ok
+CREATE TABLE test(a string not null, b string not null, marker int not null);
+
+statement ok
+REPLACE INTO test ON(a,b) VALUES ('a', 'bc', 1), ('ab', 'c', 2);
+
+query TTI
+SELECT a, b, marker FROM test ORDER BY marker;
+----
+a bc 1
+ab c 2
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test(a string not null, b string not null, marker int not null);
+
+statement ok
+INSERT INTO test VALUES ('a', 'bc', 1), ('ab', 'z', 10), ('q', 'c', 11);
+
+statement ok
+REPLACE INTO test ON(a,b) VALUES ('ab', 'c', 2);
+
+query TTI
+SELECT a, b, marker FROM test ORDER BY marker;
+----
+a bc 1
+ab c 2
+ab z 10
+q c 11
+
+statement ok
+DROP TABLE test;
+
 
 ############################
 # on conflict (2nd column) #

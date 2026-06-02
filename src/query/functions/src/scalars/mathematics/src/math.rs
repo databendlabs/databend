@@ -22,9 +22,9 @@ use databend_common_expression::FunctionDomain;
 use databend_common_expression::FunctionRegistry;
 use databend_common_expression::Value;
 use databend_common_expression::function_stat::ReturnStat;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::OwnedDistribution;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::ALL_FLOAT_TYPES;
 use databend_common_expression::types::ALL_INTEGER_TYPES;
 use databend_common_expression::types::ALL_NUMERICS_TYPES;
@@ -174,7 +174,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
         .derive_stat(|_, _| {
             Ok(Some(ReturnStat {
-                ndv: StatEstimate::exact(1.0),
+                ndv: NdvEstimate::exact(1.0),
                 null_count: StatCount::exact(0),
                 domain: Float64Type::upcast_domain(SimpleDomain {
                     min: OrderedFloat(PI),

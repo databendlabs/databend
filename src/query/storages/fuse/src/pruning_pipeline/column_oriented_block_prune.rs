@@ -43,11 +43,13 @@ use tokio::sync::OwnedSemaphorePermit;
 use super::PrunedColumnOrientedSegmentMeta;
 use crate::FuseBlockPartInfo;
 use crate::pruning::BlockPruner;
+use crate::pruning_pipeline::RuntimeFilterPruneContext;
 
 pub struct ColumnOrientedBlockPruneSink {
     block_pruner: Arc<BlockPruner>,
     column_ids: Vec<ColumnId>,
     sender: Option<Sender<Result<PartInfoPtr>>>,
+    runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
 }
 
 impl ColumnOrientedBlockPruneSink {
@@ -56,6 +58,7 @@ impl ColumnOrientedBlockPruneSink {
         block_pruner: Arc<BlockPruner>,
         sender: Sender<Result<PartInfoPtr>>,
         column_ids: Vec<ColumnId>,
+        runtime_filter_prune_context: Option<RuntimeFilterPruneContext>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(AsyncSinker::create(
             input,
@@ -63,6 +66,7 @@ impl ColumnOrientedBlockPruneSink {
                 block_pruner,
                 column_ids,
                 sender: Some(sender),
+                runtime_filter_prune_context,
             },
         )))
     }
@@ -89,6 +93,10 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
 
         let range_pruner = &self.block_pruner.pruning_ctx.range_pruner;
         let bloom_pruner = &self.block_pruner.pruning_ctx.bloom_pruner;
+        let runtime_stats_pruner = match self.runtime_filter_prune_context.as_ref() {
+            Some(context) => context.runtime_stats_pruner().await?,
+            None => None,
+        };
 
         let block_num = segment.block_metas.num_rows();
         let location_path_col = segment.location_path_col();
@@ -132,6 +140,7 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
             let create_on_col = create_on_col.clone();
             let bloom_index_location_col = bloom_index_location_col.clone();
             let bloom_index_size_col = bloom_index_size_col.clone();
+            let runtime_stats_pruner = runtime_stats_pruner.clone();
 
             pruning_tasks.push(move |permit: OwnedSemaphorePermit| {
                 Box::pin(async move {
@@ -168,12 +177,18 @@ impl AsyncSink for ColumnOrientedBlockPruneSink {
                         }
                     }
 
+                    let row_count = row_count_col[block_idx];
                     let range_input = RangeIndexInput::from_columns(&columns_stat);
                     if !range_pruner.should_keep(&range_input, None) {
                         return Ok::<_, ()>(());
                     }
 
-                    let row_count = row_count_col[block_idx];
+                    if runtime_stats_pruner.as_ref().is_some_and(|pruner| {
+                        pruner.should_prune(Some(&columns_stat), row_count as usize)
+                    }) {
+                        return Ok(());
+                    }
+
                     let compression = Compression::from_u8(compression_col[block_idx]);
                     let block_size = block_size_col[block_idx];
                     let location_scalar = bloom_index_location_col.index(block_idx).unwrap();

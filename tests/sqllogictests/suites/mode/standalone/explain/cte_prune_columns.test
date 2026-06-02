@@ -42,11 +42,11 @@ Sequence
     ├── filters: []
     ├── build join filters:
     │   └── filter id:0, build key:y.a (#8), probe targets:[x.a (#4)@scan1], filter type:bloom,inlist,min_max
-    ├── estimated rows: 1.00
+    ├── estimated rows: 2.00
     ├── Filter(Build)
     │   ├── output columns: [cte_prune_t.a (#8), cte_prune_t.c (#10)]
     │   ├── filters: [is_true(y.a (#8) > 0)]
-    │   ├── estimated rows: 1.00
+    │   ├── estimated rows: 2.00
     │   └── MaterializeCTERef
     │       ├── cte_name: cte
     │       ├── cte_schema: [a (#8), c (#10)]
@@ -54,7 +54,7 @@ Sequence
     └── Filter(Probe)
         ├── output columns: [cte_prune_t.a (#4)]
         ├── filters: [is_true(x.a (#4) > 0)]
-        ├── estimated rows: 1.00
+        ├── estimated rows: 2.00
         └── MaterializeCTERef
             ├── cte_name: cte
             ├── cte_schema: [a (#4), c (#6)]
