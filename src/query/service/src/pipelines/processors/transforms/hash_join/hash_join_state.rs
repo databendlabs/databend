@@ -278,11 +278,7 @@ impl HashJoinState {
     // It's only called when spill is enable.
     pub(crate) fn reset(&self) {
         let build_state = unsafe { &mut *self.build_state.get() };
-        build_state.generation_state.chunks.clear();
-        build_state.generation_state.build_num_rows = 0;
-        build_state.generation_state.build_columns.clear();
-        build_state.generation_state.build_columns_data_type.clear();
-        build_state.generation_state.spatial_bbox_cache = None;
+        build_state.generation_state.reset();
         if self.need_outer_scan() {
             build_state.outer_scan_map.clear();
         }

@@ -370,7 +370,6 @@ impl HashJoinProbeState {
     ) -> (Vec<u32>, Vec<RowPtr>, usize) {
         let probe_col = input.get_by_offset(cache.probe_geom_col_idx).to_column();
 
-        // Pre-compute probe SRIDs once per input block row (not per pair).
         let num_probe_rows = input.num_rows();
         let mut probe_srids: Vec<Option<i32>> = Vec::with_capacity(num_probe_rows);
         for row_idx in 0..num_probe_rows {
@@ -400,7 +399,6 @@ impl HashJoinProbeState {
 
             let probe_idx = probe_indexes[i] as usize;
 
-            // Per-pair SRID check using pre-computed values.
             let probe_srid = probe_srids[probe_idx].unwrap_or(0);
             let build_srid = cache
                 .get_srid(build_indexes[i].chunk_index, build_indexes[i].row_index)

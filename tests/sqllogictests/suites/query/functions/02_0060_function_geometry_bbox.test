@@ -126,6 +126,27 @@ JOIN bbox_test_polys g
 ----
 1
 
+# -- Spatial join: predicate arguments can be reversed --
+
+query I
+SELECT COUNT(*)
+FROM bbox_test_polys g
+JOIN bbox_test_points p
+    ON ST_Contains(g.geom, p.geom);
+----
+1
+
+# -- Spatial join: multiple spatial predicates remain conservative --
+
+query I
+SELECT COUNT(*)
+FROM bbox_test_multi_probe p
+JOIN bbox_test_polys g
+    ON ST_Within(p.g2, g.geom)
+   AND ST_Intersects(p.g2, g.geom);
+----
+1
+
 # -- Cleanup --
 
 statement ok
@@ -136,3 +157,89 @@ DROP TABLE bbox_test_polys
 
 statement ok
 DROP TABLE bbox_test_multi_probe
+
+# -- Edge cases: st_dwithin with distance = 0 and negative --
+
+query B
+SELECT ST_DWithin(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'), 0.0);
+----
+0
+
+query B
+SELECT ST_DWithin(TO_GEOMETRY('POINT(0 0)'), TO_GEOMETRY('POINT(1 1)'), -1.0);
+----
+0
+
+# -- Edge case: NULL geometry --
+
+query T
+SELECT ST_Within(NULL::GEOMETRY, TO_GEOMETRY('POINT(1 1)'));
+----
+NULL
+
+# -- Edge case: touching bbox still evaluates precisely --
+
+query B
+SELECT ST_Intersects(TO_GEOMETRY('POINT(1 0)'), TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
+----
+1
+
+# -- Join-level SRID mismatch must still raise error --
+
+statement ok
+DROP TABLE IF EXISTS srid_a
+
+statement ok
+DROP TABLE IF EXISTS srid_b
+
+statement ok
+CREATE TABLE srid_a (geom GEOMETRY)
+
+statement ok
+CREATE TABLE srid_b (geom GEOMETRY)
+
+statement ok
+INSERT INTO srid_a VALUES (ST_SetSRID(TO_GEOMETRY('POINT(0 0)'), 4326))
+
+statement ok
+INSERT INTO srid_b VALUES (ST_SetSRID(TO_GEOMETRY('POINT(100 100)'), 3857))
+
+statement error Incompatible SRID
+SELECT * FROM srid_a JOIN srid_b ON ST_Within(srid_a.geom, srid_b.geom)
+
+statement ok
+DROP TABLE srid_a
+
+statement ok
+DROP TABLE srid_b
+
+# -- Join with NULL geometry: must not crash or drop valid rows --
+
+statement ok
+DROP TABLE IF EXISTS null_geom_a
+
+statement ok
+DROP TABLE IF EXISTS null_geom_b
+
+statement ok
+CREATE TABLE null_geom_a (id INT, geom GEOMETRY NULL)
+
+statement ok
+CREATE TABLE null_geom_b (id INT, geom GEOMETRY)
+
+statement ok
+INSERT INTO null_geom_a VALUES (1, TO_GEOMETRY('POINT(0.5 0.5)')), (2, NULL)
+
+statement ok
+INSERT INTO null_geom_b VALUES (1, TO_GEOMETRY('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'))
+
+query I
+SELECT a.id FROM null_geom_a a JOIN null_geom_b b ON ST_Within(a.geom, b.geom);
+----
+1
+
+statement ok
+DROP TABLE null_geom_a
+
+statement ok
+DROP TABLE null_geom_b

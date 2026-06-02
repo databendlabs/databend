@@ -136,9 +136,6 @@ pub(crate) fn geometry_binary_fn<O: ArgType>(
     );
 }
 
-/// Like `geometry_binary_fn` but with bbox pre-check for spatial predicates.
-/// If bboxes don't intersect, returns `false_value` immediately without full geometry parsing.
-/// SRID compatibility is checked before the bbox shortcut to preserve error semantics.
 pub(crate) fn geometry_binary_predicate_fn(
     name: &str,
     registry: &mut FunctionRegistry,
@@ -158,7 +155,6 @@ pub(crate) fn geometry_binary_predicate_fn(
                     }
                 }
 
-                // Check SRID compatibility before bbox shortcut.
                 let l_srid = read_srid(&mut Ewkb(l_ewkb));
                 let r_srid = read_srid(&mut Ewkb(r_ewkb));
                 if !check_incompatible_srid(l_srid, r_srid, row, ctx) {
@@ -166,7 +162,6 @@ pub(crate) fn geometry_binary_predicate_fn(
                     return;
                 }
 
-                // Bbox pre-check: if bboxes don't intersect, spatial predicate is guaranteed false.
                 if let (Some(l_bbox), Some(r_bbox)) = (
                     extract_bbox_from_ewkb(l_ewkb),
                     extract_bbox_from_ewkb(r_ewkb),

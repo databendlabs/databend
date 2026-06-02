@@ -974,13 +974,11 @@ impl HashJoinBuildState {
             return;
         }
 
-        // Identify build-side geometry column from build_key expression.
         let build_col_refs = spatial_filter.build_key.column_refs();
         let build_schema_idx = match build_col_refs.keys().next() {
             Some(&idx) => idx,
             None => return,
         };
-        // Map build schema index to chunk column position via build_projection.
         let build_projection = &self.hash_join_state.hash_join_desc.build_projection;
         let build_geom_col_idx = match build_projection.iter().position(|&i| i == build_schema_idx)
         {
@@ -988,8 +986,6 @@ impl HashJoinBuildState {
             None => return,
         };
 
-        // Identify probe-side geometry column from the probe expression paired with this
-        // spatial runtime filter.
         let probe_geom_col_idx = spatial_filter.probe_key.as_ref().and_then(|probe_key| {
             let col_refs = probe_key.column_refs();
             col_refs.into_iter().find_map(|(idx, dt)| {
@@ -1010,8 +1006,7 @@ impl HashJoinBuildState {
             None => return,
         };
 
-        // Extract bbox and SRID for each build row.
-        let mut bboxes: Vec<Vec<Option<(f64, f64, f64, f64)>>> = Vec::with_capacity(chunks.len());
+        let mut bboxes: Vec<Vec<Option<_>>> = Vec::with_capacity(chunks.len());
         let mut srids: Vec<Vec<Option<i32>>> = Vec::with_capacity(chunks.len());
         for chunk in chunks.iter() {
             let col = chunk.get_by_offset(build_geom_col_idx).to_column();
@@ -1045,7 +1040,7 @@ impl HashJoinBuildState {
         }
 
         info!(
-            "spatial bbox cache built: {} chunks, {} total rows, distance={}, build_col={}, probe_col={}",
+            "spatial bbox cache: {} chunks, {} rows, distance={}, build_col={}, probe_col={}",
             bboxes.len(),
             build_state.generation_state.build_num_rows,
             distance,

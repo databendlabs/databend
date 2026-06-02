@@ -251,7 +251,6 @@ pub fn read_srid_from_bytes(ewkb: &[u8]) -> Option<i32> {
     srid_processor.srid
 }
 
-/// Process EWKB input and return SRID.
 pub fn read_srid<B: AsRef<[u8]>>(ewkb: &mut Ewkb<B>) -> Option<i32> {
     let mut srid_processor = SridProcessor::new();
     ewkb.process_geom(&mut srid_processor).ok()?;
@@ -457,14 +456,13 @@ pub fn point_to_geohash(ewkb: &[u8], precision: Option<i32>) -> Result<String> {
         .map_err(|e| ErrorCode::GeometryError(e.to_string()))
 }
 
-/// Extract bounding box from EWKB without constructing a full Geometry object.
 pub fn extract_bbox_from_ewkb(ewkb: &[u8]) -> Option<(f64, f64, f64, f64)> {
     let mut processor = BboxProcessor::new();
     Ewkb(ewkb).process_geom(&mut processor).ok()?;
     processor.bbox()
 }
 
-/// Extract (x, y) from EWKB if it contains exactly one point.
+/// Returns Some only if the geometry is a single point.
 pub fn extract_point_xy_from_ewkb(ewkb: &[u8]) -> Option<(f64, f64)> {
     let mut processor = BboxProcessor::new();
     Ewkb(ewkb).process_geom(&mut processor).ok()?;

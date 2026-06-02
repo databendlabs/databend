@@ -660,7 +660,6 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
 
-                // Check SRID compatibility before bbox shortcut.
                 let l_srid = read_srid(&mut Ewkb(l_ewkb));
                 let r_srid = read_srid(&mut Ewkb(r_ewkb));
                 if !check_incompatible_srid(l_srid, r_srid, row, ctx) {

@@ -40,21 +40,17 @@ impl BuildState {
     }
 }
 
+type Bbox = (f64, f64, f64, f64);
+
 pub struct SpatialBboxCache {
-    /// Indexed by [chunk_index][row_index]. Already expanded by distance if applicable.
-    pub(crate) bboxes: Vec<Vec<Option<(f64, f64, f64, f64)>>>,
-    /// Per-row SRID for build-side geometry, indexed same as bboxes.
+    pub(crate) bboxes: Vec<Vec<Option<Bbox>>>,
     pub(crate) srids: Vec<Vec<Option<i32>>>,
     pub(crate) probe_geom_col_idx: usize,
 }
 
 impl SpatialBboxCache {
     #[inline(always)]
-    pub(crate) fn get_bbox(
-        &self,
-        chunk_index: u32,
-        row_index: u32,
-    ) -> Option<(f64, f64, f64, f64)> {
+    pub(crate) fn get_bbox(&self, chunk_index: u32, row_index: u32) -> Option<Bbox> {
         self.bboxes
             .get(chunk_index as usize)
             .and_then(|chunk| chunk.get(row_index as usize))
@@ -94,5 +90,14 @@ impl BuildBlockGenerationState {
             is_build_projected: true,
             spatial_bbox_cache: None,
         }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.build_num_rows = 0;
+        self.chunks.clear();
+        self.build_columns.clear();
+        self.build_columns_data_type.clear();
+        self.is_build_projected = true;
+        self.spatial_bbox_cache = None;
     }
 }
