@@ -425,7 +425,7 @@ jobs:
               tags.push(`${repo}:${VERSION}`);
               if (TYPE === 'stable') {
                 tags.push(`${repo}:latest`);
-              } else {
+              } else if (TYPE === 'nightly') {
                 tags.push(`${repo}:nightly`);
               }
             }
@@ -512,7 +512,7 @@ jobs:
               tags.push(`${repo}:${VERSION}`);
               if (TYPE === 'stable') {
                 tags.push(`${repo}:latest`);
-              } else {
+              } else if (TYPE === 'nightly') {
                 tags.push(`${repo}:nightly`);
               }
             }
