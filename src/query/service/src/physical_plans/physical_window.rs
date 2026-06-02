@@ -56,9 +56,6 @@ use super::NthValueFunctionDesc;
 use super::NtileFunctionDesc;
 use super::WindowFunction;
 use crate::physical_plans::PhysicalPlanBuilder;
-use crate::physical_plans::Sort;
-use crate::physical_plans::WindowPartition;
-use crate::physical_plans::WindowPartitionTopN;
 use crate::physical_plans::WindowPartitionTopNFunc;
 use crate::physical_plans::explain::PlanStatsInfo;
 use crate::physical_plans::format::PhysicalFormat;
@@ -67,7 +64,6 @@ use crate::physical_plans::format::WindowGroupFormatter;
 use crate::physical_plans::physical_plan::IPhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlan;
 use crate::physical_plans::physical_plan::PhysicalPlanMeta;
-use crate::physical_plans::physical_sort::SortStep;
 use crate::pipelines::PipelineBuilder;
 use crate::pipelines::builders::SortPipelineBuilder;
 use crate::pipelines::memory_settings::MemorySettingsExt;
@@ -186,10 +182,13 @@ impl IPhysicalPlan for WindowGroup {
         self.input.build_pipeline(builder)?;
 
         let mut schema = self.input.output_schema()?;
-        let mut previous_order = None;
+        let mut previous_order: Option<WindowOrder<'_>> = None;
         for window in &self.windows {
             let order = WindowOrder::from(window);
-            if previous_order.as_ref() != Some(&order) {
+            if previous_order
+                .as_ref()
+                .is_none_or(|previous| !previous.satisfies(&order))
+            {
                 apply_window_order(builder, &schema, window)?;
             }
             apply_window_transform(builder, &schema, window)?;
@@ -218,6 +217,13 @@ impl<'a> From<&'a WindowSpec> for WindowOrder<'a> {
             partition_by: &window.partition_by,
             order_by: &window.order_by,
         }
+    }
+}
+
+impl WindowOrder<'_> {
+    fn satisfies(&self, required: &WindowOrder) -> bool {
+        self.partition_by == required.partition_by
+            && (required.order_by.is_empty() || self.order_by == required.order_by)
     }
 }
 
@@ -559,34 +565,24 @@ impl PhysicalPlanBuilder {
             self.create_eval_scalar(&eval_scalar, projections, input, stat_info.clone())?
         };
 
-        let settings = self.ctx.get_settings();
-        let enable_fixed_rows = settings.get_enable_fixed_rows_sort()?;
-        let mut plan = input;
-        let mut schema = plan.output_schema()?;
+        let mut window_specs = Vec::with_capacity(window_group.windows.len());
+        let mut schema = input.output_schema()?;
         for window in &window_group.windows {
             let spec = self.create_window_spec(&schema, window)?;
-            let sort_input =
-                apply_window_sort_plan(plan, &spec, enable_fixed_rows, stat_info.clone())?;
-            plan = PhysicalPlan::new(Window {
-                input: sort_input,
-                index: spec.index,
-                func: spec.func.clone(),
-                partition_by: spec.partition_by.clone(),
-                order_by: spec.order_by.clone(),
-                window_frame: spec.window_frame.clone(),
-                limit: spec.limit,
-                top: spec.top,
-                meta: PhysicalPlanMeta::new("Window"),
-            });
             let mut fields = schema.fields().clone();
             fields.push(DataField::new(
                 &spec.index.to_string(),
                 spec.func.data_type()?,
             ));
             schema = DataSchemaRefExt::create(fields);
+            window_specs.push(spec);
         }
 
-        Ok(plan)
+        Ok(PhysicalPlan::new(WindowGroup {
+            meta: PhysicalPlanMeta::new("WindowGroup"),
+            input,
+            windows: window_specs,
+        }))
     }
 
     pub async fn build_window(
@@ -872,49 +868,4 @@ impl PhysicalPlanBuilder {
             WindowFuncType::CumeDist => Ok(WindowFunction::CumeDist),
         }
     }
-}
-
-fn apply_window_sort_plan(
-    input: PhysicalPlan,
-    window: &WindowSpec,
-    enable_fixed_rows: bool,
-    stat_info: PlanStatsInfo,
-) -> Result<PhysicalPlan> {
-    let mut order_by = Vec::with_capacity(window.partition_by.len() + window.order_by.len());
-    for index in &window.partition_by {
-        order_by.push(SortDesc {
-            asc: true,
-            nulls_first: false,
-            order_by: *index,
-            display_name: index.to_string(),
-        });
-    }
-    order_by.extend(window.order_by.clone());
-
-    if order_by.is_empty() {
-        return Ok(input);
-    }
-
-    if !window.partition_by.is_empty() {
-        return Ok(PhysicalPlan::new(WindowPartition {
-            meta: PhysicalPlanMeta::new("WindowPartition"),
-            input,
-            partition_by: window.partition_by.clone(),
-            order_by,
-            top_n: window_top_n(window).map(|(top, func)| WindowPartitionTopN { func, top }),
-            stat_info: Some(stat_info),
-        }));
-    }
-
-    Ok(PhysicalPlan::new(Sort {
-        meta: PhysicalPlanMeta::new("Sort"),
-        input,
-        order_by,
-        limit: None,
-        step: SortStep::Single,
-        pre_projection: None,
-        broadcast_id: None,
-        enable_fixed_rows,
-        stat_info: Some(stat_info),
-    }))
 }

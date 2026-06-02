@@ -292,7 +292,7 @@ async fn test_many_window_expressions_bind_as_flat_window_group() -> Result<()> 
 
     let window_count = 128;
     let select_items = (0..window_count)
-        .map(|i| format!("row_number() OVER (ORDER BY number + {i}) AS w{i}"))
+        .map(|i| format!("lead(number, {i}, number) OVER (ORDER BY number) AS w{i}"))
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!("SELECT {select_items} FROM t");
