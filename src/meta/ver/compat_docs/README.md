@@ -42,7 +42,7 @@ cargo run -p databend-meta-version --bin raft-compat > <compat_docs>/src/raft-pe
 | [scripts/extract_from_git.py](scripts/extract_from_git.py) | One-time. Extracts version constraints from git tags into [src/min_compatible_versions.txt](src/min_compatible_versions.txt). |
 | [scripts/resolve_versions.py](scripts/resolve_versions.py) | Resolves CalVer (e.g. `260205.0.0`) to repo tag versions. Writes [generated/resolved_min_compatibles.txt](generated/resolved_min_compatibles.txt). |
 | [scripts/find_compat.py](scripts/find_compat.py) | Prints compatible version range for a given query or metasrv version. |
-| [scripts/format_raft_compat.py](scripts/format_raft_compat.py) | Reformats [src/raft-peer-compatibles.txt](src/raft-peer-compatibles.txt) into [meta_to_meta.txt](meta_to_meta.txt). |
+| [scripts/format_raft_compat.py](scripts/format_raft_compat.py) | Re-keys [src/raft-peer-compatibles.txt](src/raft-peer-compatibles.txt) from databend-meta version to databend version (CalVer mapped via the `MetaService` column of [src/min_compatible_versions.txt](src/min_compatible_versions.txt)) into [meta_to_meta.txt](meta_to_meta.txt). |
 | [Makefile](Makefile) | Runs resolve, then generates the output tables. |
 
 ### Source Data (`src/`)

@@ -11,8 +11,9 @@ meta_to_query.txt: generated/resolved_min_compatibles.txt scripts/find_compat.py
 
 # Raft inter-node compatibility. The data originates from the databend-meta
 # `raft-compat` binary; refresh src/raft-peer-compatibles.txt from it (see README).
-meta_to_meta.txt: src/raft-peer-compatibles.txt scripts/format_raft_compat.py
-	python3 scripts/format_raft_compat.py < $< > $@
+# Re-keyed from databend-meta version to databend version via min_compatible_versions.txt.
+meta_to_meta.txt: src/raft-peer-compatibles.txt src/min_compatible_versions.txt scripts/format_raft_compat.py scripts/tsv.py
+	python3 scripts/format_raft_compat.py > $@
 
 update_lib_rs: generated/resolved_min_compatibles.txt scripts/update_lib_rs.py
 	python3 scripts/update_lib_rs.py
