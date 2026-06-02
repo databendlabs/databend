@@ -129,6 +129,8 @@ pub struct ProcessInfo {
     pub created_time: SystemTime,
     pub status_info: Option<String>,
     pub current_query_id: Option<String>,
+    pub query_hash: String,
+    pub query_parameterized_hash: String,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

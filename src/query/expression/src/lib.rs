@@ -56,6 +56,7 @@ mod block;
 pub mod aggregate;
 mod block_vec;
 mod constant_folder;
+pub mod conversion;
 pub mod converts;
 mod evaluator;
 mod expression;

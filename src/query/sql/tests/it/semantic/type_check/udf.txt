@@ -40,6 +40,20 @@ status: ok
 scalar: scalar_to_string(CAST(CAST(number (#0) AS Int32 NULL) AS String))
 type: String
 
+=== lambda_udf_definition_ignores_alias_scope ===
+description: Lambda UDF definition should resolve against its own parameters even when call-site aliases use the same names.
+sql: scope_probe(delta, [number])
+status: ok
+scalar: scope_probe(array_transform(delta (#3), array(number (#0)), ["y"] -> x (#0) + y (#2)))
+type: Array(Int64 NULL)
+
+=== lambda_udf_definition_registers_parameter_metadata ===
+description: Lambda UDF parameters should be present in the isolated metadata used while resolving the definition.
+sql: variant_probe((number, delta))
+status: ok
+scalar: variant_probe(CAST(tuple(number (#0), delta (#3)) AS Variant))
+type: Variant
+
 === server_udf_requires_config_enablement ===
 description: Server UDF should remain rejected when UDF server support is disabled.
 sql: server_udf(number)
@@ -54,12 +68,12 @@ status: ok
 scalar: handler(CAST(text (#1) AS String))
 type: String
 
-=== python_script_udf_cloud_path_requires_global_enablement ===
-description: Python sandbox UDF should remain rejected when global sandbox config is disabled.
+=== python_script_udf_cloud_path_uses_adapter_config ===
+description: Python sandbox UDF should resolve through the adapter-provided cloud enablement.
 sql: cloud_udf(number)
-status: error
-code: 1002
-message: SandboxUDF is not enabled, you can enable it by setting 'enable_udf_sandbox = true' in query node config
+status: ok
+scalar: handler(number (#0))
+type: String
 
 === udaf_script_loads_code ===
 description: UDAF script should build a runtime aggregate UDF call from script metadata.

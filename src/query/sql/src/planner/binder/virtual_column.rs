@@ -12,20 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use databend_common_ast::ast::BinaryOperator;
+use databend_common_ast::ast::CTE;
 use databend_common_ast::ast::ColumnID;
 use databend_common_ast::ast::ColumnRef;
 use databend_common_ast::ast::Expr;
+use databend_common_ast::ast::Identifier;
 use databend_common_ast::ast::Literal;
+use databend_common_ast::ast::MapAccessor;
 use databend_common_ast::ast::RefreshVirtualColumnStmt;
+use databend_common_ast::ast::SelectStmt;
+use databend_common_ast::ast::SelectTarget;
+use databend_common_ast::ast::SetExpr;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowVirtualColumnsStmt;
+use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::VacuumVirtualColumnStmt;
+use databend_common_ast::ast::With;
+use databend_common_ast::visit::VisitControl;
+use databend_common_ast::visit::Visitor;
+use databend_common_ast::visit::VisitorMut;
+use databend_common_ast::visit::Walk;
+use databend_common_ast::visit::WalkMut;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use log::debug;
 
 use crate::BindContext;
+use crate::NameResolutionContext;
 use crate::SelectBuilder;
 use crate::binder::Binder;
 use crate::normalize_identifier;
@@ -34,6 +52,8 @@ use crate::plans::RefreshSelection;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RewriteKind;
 use crate::plans::VacuumVirtualColumnPlan;
+
+const MATERIALIZED_CTE_VIRTUAL_COLUMN_PREFIX: &str = "__databend_virtual_column__";
 
 impl Binder {
     #[async_backtrace::framed]
@@ -220,5 +240,537 @@ impl Binder {
             "segment_location" => Ok(Some(RefreshSelection::SegmentLocation(literal_value))),
             _ => Ok(None),
         }
+    }
+
+    /// Rewrites JSON path accesses on materialized CTE outputs back into the CTE producer.
+    ///
+    /// Materializing a CTE can hide the original base-table variant column from later binding.
+    /// For example, after `logs` is materialized, the consumer only sees `message`:
+    ///
+    /// ```sql
+    /// WITH logs AS (
+    ///     SELECT v['message'] AS message
+    ///     FROM t
+    /// )
+    /// SELECT message['attribute']['user_id']
+    /// FROM logs;
+    /// ```
+    ///
+    /// Without this rewrite, the final access is bound against the materialized CTE output
+    /// `message`, so the virtual-column rewrite can no longer see the full source-table path
+    /// `v['message']['attribute']['user_id']`. This function rewrites the query shape to:
+    ///
+    /// ```sql
+    /// WITH logs AS (
+    ///     SELECT
+    ///         v['message'] AS message,
+    ///         v['message']['attribute']['user_id']
+    ///             AS __databend_virtual_column__0
+    ///     FROM t
+    /// )
+    /// SELECT __databend_virtual_column__0
+    /// FROM logs;
+    /// ```
+    ///
+    /// The rewrite runs in three steps:
+    /// 1. Collect auto-materialized CTEs whose producers can safely add hidden static JSON
+    ///    extraction outputs. This does not require source tables to have virtual columns enabled:
+    ///    the hidden expression is still evaluated earlier inside the CTE producer, and normal
+    ///    variant binding can push it to a Fuse virtual column when one exists.
+    /// 2. Visit downstream CTEs and the query body. When a consumer reads a static JSON path
+    ///    from a materialized CTE output, record the corresponding full producer expression and
+    ///    replace the consumer expression with a generated virtual-column output.
+    /// 3. Append all recorded hidden expressions to the producer CTE select list, so normal
+    ///    variant virtual-column binding can still resolve the full base-table path later.
+    pub(crate) fn rewrite_materialized_cte_virtual_columns(
+        &mut self,
+        bind_context: &BindContext,
+        with: &mut With,
+        body: &mut SetExpr,
+    ) -> HashMap<String, HashSet<String>> {
+        if !bind_context.allow_virtual_column || with.recursive {
+            return HashMap::new();
+        }
+
+        let mut materialized_ctes = Vec::new();
+        for (index, cte) in with.ctes.iter().enumerate() {
+            // Explicit `AS MATERIALIZED` currently creates a temporary table before the outer
+            // query is bound. Rewriting it here could leak hidden columns into that temp table
+            // schema, so only auto-materialized CTEs participate in this rewrite.
+            if cte.user_specified_materialized || !cte.materialized {
+                continue;
+            }
+            let cte_name = self.normalize_identifier(&cte.alias.name).name;
+            if let Some(outputs) = self.collect_materialized_cte_virtual_column_outputs(cte) {
+                materialized_ctes.push((index, cte_name, outputs));
+            }
+        }
+        if materialized_ctes.is_empty() {
+            return HashMap::new();
+        }
+
+        let mut rewriter = MaterializedCteVirtualColumnRewriter {
+            ctes: HashMap::new(),
+            table_aliases: HashMap::new(),
+            unqualified_cte_name: None,
+            requirements: HashMap::new(),
+            next_id: 0,
+            name_resolution_ctx: self.name_resolution_ctx.clone(),
+        };
+
+        for (consumer_index, consumer_cte) in with.ctes.iter_mut().enumerate() {
+            let visible_materialized_cte_count = materialized_ctes
+                .iter()
+                .position(|(index, _, _)| *index >= consumer_index)
+                .unwrap_or(materialized_ctes.len());
+            Self::rewrite_materialized_cte_consumer_with_visible_ctes(
+                &materialized_ctes[..visible_materialized_cte_count],
+                &mut rewriter,
+                &mut consumer_cte.query.body,
+                self.name_resolution_ctx.clone(),
+            );
+        }
+
+        Self::rewrite_materialized_cte_consumer_with_visible_ctes(
+            &materialized_ctes,
+            &mut rewriter,
+            body,
+            self.name_resolution_ctx.clone(),
+        );
+
+        if rewriter.requirements.is_empty() {
+            return HashMap::new();
+        }
+
+        let mut virtual_column_outputs = HashMap::new();
+        for cte in &mut with.ctes {
+            let cte_name = normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
+            let Some(requirements) = rewriter.requirements.remove(&cte_name) else {
+                continue;
+            };
+            let select = match &mut cte.query.body {
+                SetExpr::Select(select) => select.as_mut(),
+                _ => continue,
+            };
+            virtual_column_outputs.insert(
+                cte_name,
+                requirements
+                    .values()
+                    .map(|requirement| requirement.output_column.clone())
+                    .collect(),
+            );
+            for requirement in requirements.into_values() {
+                select.select_list.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(requirement.expr),
+                    alias: Some(Identifier::from_name(None, requirement.output_column)),
+                });
+            }
+        }
+        virtual_column_outputs
+    }
+
+    fn collect_materialized_cte_virtual_column_outputs(
+        &self,
+        cte: &CTE,
+    ) -> Option<HashMap<String, Expr>> {
+        let select = match &cte.query.body {
+            SetExpr::Select(select) => select.as_ref(),
+            _ => return None,
+        };
+        let mut source_checker = MaterializedCteSourceChecker { has_source: false };
+        if select.from.walk(&mut source_checker).is_err() {
+            return None;
+        }
+        if !source_checker.has_source {
+            return None;
+        }
+
+        let mut outputs = HashMap::new();
+        for (index, item) in select.select_list.iter().enumerate() {
+            let SelectTarget::AliasedExpr { expr, alias } = item else {
+                continue;
+            };
+            if extract_static_column_map_access(expr.as_ref()).is_none() {
+                continue;
+            }
+            let column = if !cte.alias.columns.is_empty() {
+                let Some(column) = cte.alias.columns.get(index) else {
+                    continue;
+                };
+                column
+            } else if let Some(alias) = alias {
+                alias
+            } else {
+                continue;
+            };
+            let output_name = self.normalize_identifier(column).name;
+            outputs.insert(output_name, expr.as_ref().clone());
+        }
+        if outputs.is_empty() {
+            None
+        } else {
+            Some(outputs)
+        }
+    }
+
+    fn rewrite_materialized_cte_consumer_with_visible_ctes(
+        visible_ctes: &[(usize, String, HashMap<String, Expr>)],
+        rewriter: &mut MaterializedCteVirtualColumnRewriter,
+        body: &mut SetExpr,
+        name_resolution_ctx: NameResolutionContext,
+    ) -> bool {
+        let ctes = visible_ctes
+            .iter()
+            .map(|(_, name, outputs)| (name.clone(), outputs.clone()))
+            .collect::<HashMap<_, _>>();
+        if ctes.is_empty() {
+            return false;
+        }
+        let cte_names = ctes.keys().cloned().collect();
+        Self::rewrite_materialized_cte_consumer(
+            rewriter,
+            ctes,
+            cte_names,
+            body,
+            name_resolution_ctx,
+        )
+    }
+
+    fn rewrite_materialized_cte_consumer(
+        rewriter: &mut MaterializedCteVirtualColumnRewriter,
+        ctes: HashMap<String, HashMap<String, Expr>>,
+        cte_names: HashSet<String>,
+        body: &mut SetExpr,
+        name_resolution_ctx: NameResolutionContext,
+    ) -> bool {
+        rewriter.ctes = ctes;
+        Self::rewrite_materialized_cte_set_expr(rewriter, &cte_names, body, name_resolution_ctx)
+    }
+
+    fn rewrite_materialized_cte_set_expr(
+        rewriter: &mut MaterializedCteVirtualColumnRewriter,
+        cte_names: &HashSet<String>,
+        body: &mut SetExpr,
+        name_resolution_ctx: NameResolutionContext,
+    ) -> bool {
+        match body {
+            SetExpr::Select(select) => Self::rewrite_materialized_cte_select(
+                rewriter,
+                cte_names,
+                select.as_mut(),
+                name_resolution_ctx,
+            ),
+            SetExpr::Query(query) => Self::rewrite_materialized_cte_set_expr(
+                rewriter,
+                cte_names,
+                &mut query.body,
+                name_resolution_ctx,
+            ),
+            SetExpr::SetOperation(set_op) => {
+                let left = Self::rewrite_materialized_cte_set_expr(
+                    rewriter,
+                    cte_names,
+                    &mut set_op.left,
+                    name_resolution_ctx.clone(),
+                );
+                let right = Self::rewrite_materialized_cte_set_expr(
+                    rewriter,
+                    cte_names,
+                    &mut set_op.right,
+                    name_resolution_ctx,
+                );
+                left || right
+            }
+            SetExpr::Values { .. } => false,
+        }
+    }
+
+    fn rewrite_materialized_cte_select(
+        rewriter: &mut MaterializedCteVirtualColumnRewriter,
+        cte_names: &HashSet<String>,
+        select: &mut SelectStmt,
+        name_resolution_ctx: NameResolutionContext,
+    ) -> bool {
+        let mut alias_collector = MaterializedCteAliasCollector {
+            cte_names,
+            aliases: HashMap::new(),
+            source_count: 0,
+            name_resolution_ctx,
+        };
+        if select.from.walk(&mut alias_collector).is_err() || alias_collector.aliases.is_empty() {
+            return false;
+        }
+
+        rewriter.unqualified_cte_name =
+            if alias_collector.source_count == 1 && alias_collector.aliases.len() == 1 {
+                alias_collector.aliases.values().next().cloned()
+            } else {
+                None
+            };
+        rewriter.table_aliases = alias_collector.aliases;
+        select.walk_mut(rewriter).is_ok()
+    }
+}
+
+/// Collects aliases that refer to visible materialized CTEs in a consumer query.
+///
+/// The rewriter uses this map to resolve both direct CTE references (`FROM logs`) and aliased
+/// references (`FROM logs AS l`) back to the producer CTE name.
+/// `source_count` tracks the current SELECT block only, so unqualified columns are rewritten only
+/// when binder would see a single source and therefore cannot report a cross-source ambiguity.
+struct MaterializedCteAliasCollector<'a> {
+    cte_names: &'a HashSet<String>,
+    aliases: HashMap<String, String>,
+    source_count: usize,
+    name_resolution_ctx: NameResolutionContext,
+}
+
+impl Visitor for MaterializedCteAliasCollector<'_> {
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &TableReference,
+    ) -> std::result::Result<VisitControl, !> {
+        match table_ref {
+            TableReference::Table { table, alias, .. } => {
+                self.source_count += 1;
+                let table_name = normalize_identifier(&table.table, &self.name_resolution_ctx).name;
+                if self.cte_names.contains(&table_name) {
+                    let alias_name = alias
+                        .as_ref()
+                        .map(|alias| {
+                            normalize_identifier(&alias.name, &self.name_resolution_ctx).name
+                        })
+                        .unwrap_or_else(|| table_name.clone());
+                    self.aliases.insert(alias_name, table_name);
+                }
+                return Ok(VisitControl::SkipChildren);
+            }
+            TableReference::Subquery { .. }
+            | TableReference::TableFunction { .. }
+            | TableReference::Location { .. } => {
+                self.source_count += 1;
+                return Ok(VisitControl::SkipChildren);
+            }
+            _ => {}
+        }
+        Ok(VisitControl::Continue)
+    }
+
+    fn visit_expr(&mut self, expr: &Expr) -> std::result::Result<VisitControl, !> {
+        if is_nested_query_expr(expr) {
+            return Ok(VisitControl::SkipChildren);
+        }
+        Ok(VisitControl::Continue)
+    }
+}
+
+struct MaterializedCteRequirement {
+    output_column: String,
+    expr: Expr,
+}
+
+/// Checks whether a materialized CTE producer can safely add hidden JSON extraction outputs.
+///
+/// This checker does not require the source table to have Fuse virtual columns enabled. If virtual
+/// columns exist, normal variant binding can still push the hidden expression to the scan; otherwise
+/// the hidden expression is evaluated inside the materialized CTE producer, reducing the size of
+/// data passed to later consumers.
+struct MaterializedCteSourceChecker {
+    has_source: bool,
+}
+
+impl Visitor for MaterializedCteSourceChecker {
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &TableReference,
+    ) -> std::result::Result<VisitControl, !> {
+        match table_ref {
+            TableReference::Table { .. } => {
+                self.has_source = true;
+            }
+            TableReference::TableFunction { .. } | TableReference::Location { .. } => {
+                self.has_source = false;
+                return Ok(VisitControl::Break(()));
+            }
+            _ => {}
+        }
+        Ok(VisitControl::Continue)
+    }
+}
+
+/// Rewrites static JSON path accesses on materialized CTE outputs into hidden CTE columns.
+///
+/// When a consumer reads `message['a']` from a materialized CTE output, this visitor records the
+/// full producer expression, assigns it a virtual-column output, and replaces the consumer
+/// expression with that output column. The caller later appends all recorded expressions to the
+/// producer CTE select list.
+struct MaterializedCteVirtualColumnRewriter {
+    ctes: HashMap<String, HashMap<String, Expr>>,
+    table_aliases: HashMap<String, String>,
+    unqualified_cte_name: Option<String>,
+    requirements: HashMap<String, BTreeMap<String, MaterializedCteRequirement>>,
+    next_id: usize,
+    name_resolution_ctx: NameResolutionContext,
+}
+
+impl VisitorMut for MaterializedCteVirtualColumnRewriter {
+    fn visit_expr(&mut self, expr: &mut Expr) -> std::result::Result<VisitControl, !> {
+        if is_nested_query_expr(expr) {
+            return Ok(VisitControl::SkipChildren);
+        }
+
+        let Some((column, accessors)) = extract_static_column_map_access(expr) else {
+            return Ok(VisitControl::Continue);
+        };
+
+        let column_name = normalize_column_id(&column.column, &self.name_resolution_ctx);
+        let Some(cte_name) = self.resolve_cte_name(&column, &column_name) else {
+            return Ok(VisitControl::Continue);
+        };
+        let Some(producer_outputs) = self.ctes.get(&cte_name) else {
+            return Ok(VisitControl::Continue);
+        };
+        let Some(producer_expr) = producer_outputs.get(&column_name) else {
+            return Ok(VisitControl::Continue);
+        };
+
+        // Rewrite a consumer JSON path back to the full producer JSON path and use
+        // `requirement_key` to deduplicate generated columns.
+        // For example, if the producer outputs `v['message'] AS message`,
+        // consumer `message['a']` becomes `v['message']['a']`.
+        let requirement_expr = Self::append_map_accessors(producer_expr.clone(), &accessors);
+        let requirement_key = requirement_expr.to_string();
+        if !self
+            .requirements
+            .get(&cte_name)
+            .is_some_and(|requirements| requirements.contains_key(&requirement_key))
+        {
+            let output_column = self.next_virtual_column_output(&cte_name);
+            self.requirements
+                .entry(cte_name.clone())
+                .or_default()
+                .insert(requirement_key.clone(), MaterializedCteRequirement {
+                    output_column,
+                    expr: requirement_expr,
+                });
+        }
+        let Some(output_column) = self
+            .requirements
+            .get(&cte_name)
+            .and_then(|requirements| requirements.get(&requirement_key))
+            .map(|requirement| requirement.output_column.clone())
+        else {
+            return Ok(VisitControl::Continue);
+        };
+
+        *expr = Expr::ColumnRef {
+            span: expr.span(),
+            column: ColumnRef {
+                database: None,
+                table: column.table.clone(),
+                column: ColumnID::Name(Identifier::from_name(None, output_column)),
+            },
+        };
+        Ok(VisitControl::SkipChildren)
+    }
+
+    fn visit_table_reference(
+        &mut self,
+        table_ref: &mut TableReference,
+    ) -> std::result::Result<VisitControl, !> {
+        if matches!(table_ref, TableReference::Subquery { .. }) {
+            return Ok(VisitControl::SkipChildren);
+        }
+        Ok(VisitControl::Continue)
+    }
+}
+
+impl MaterializedCteVirtualColumnRewriter {
+    fn next_virtual_column_output(&mut self, cte_name: &str) -> String {
+        loop {
+            let output_column = format!("{MATERIALIZED_CTE_VIRTUAL_COLUMN_PREFIX}{}", self.next_id);
+            self.next_id += 1;
+            // The generated output name must not collide with user-defined CTE outputs.
+            if self
+                .ctes
+                .get(cte_name)
+                .is_none_or(|outputs| !outputs.contains_key(&output_column))
+            {
+                return output_column;
+            }
+        }
+    }
+
+    fn append_map_accessors(mut expr: Expr, accessors: &[MapAccessor]) -> Expr {
+        for accessor in accessors {
+            expr = Expr::MapAccess {
+                span: None,
+                expr: Box::new(expr),
+                accessor: accessor.clone(),
+            };
+        }
+        expr
+    }
+
+    fn resolve_cte_name(&self, column: &ColumnRef, column_name: &str) -> Option<String> {
+        if let Some(table) = &column.table {
+            let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
+            return self.table_aliases.get(&table_name).cloned();
+        }
+
+        let cte_name = self.unqualified_cte_name.as_ref()?;
+        let outputs = self.ctes.get(cte_name)?;
+        outputs.contains_key(column_name).then(|| cte_name.clone())
+    }
+}
+
+fn normalize_column_id(
+    column_id: &ColumnID,
+    name_resolution_ctx: &NameResolutionContext,
+) -> String {
+    match column_id {
+        ColumnID::Name(ident) => normalize_identifier(ident, name_resolution_ctx).name,
+        ColumnID::Position(pos) => pos.name(),
+    }
+}
+
+fn is_nested_query_expr(expr: &Expr) -> bool {
+    matches!(
+        expr,
+        Expr::Exists { .. }
+            | Expr::Subquery { .. }
+            | Expr::InSubquery { .. }
+            | Expr::LikeSubquery { .. }
+    )
+}
+
+fn extract_static_column_map_access(expr: &Expr) -> Option<(ColumnRef, Vec<MapAccessor>)> {
+    if !matches!(expr, Expr::MapAccess { .. }) {
+        return None;
+    }
+
+    let mut accessors = Vec::new();
+    let mut current = expr;
+    while let Expr::MapAccess { expr, accessor, .. } = current {
+        match accessor {
+            MapAccessor::Bracket { key } => {
+                if !matches!(key.as_ref(), Expr::Literal {
+                    value: Literal::String(_) | Literal::UInt64(_),
+                    ..
+                }) {
+                    return None;
+                }
+            }
+            MapAccessor::DotNumber { .. } | MapAccessor::Colon { .. } => {}
+        }
+        accessors.push(accessor.clone());
+        current = expr;
+    }
+    accessors.reverse();
+
+    if let Expr::ColumnRef { column, .. } = current {
+        Some((column.clone(), accessors))
+    } else {
+        None
     }
 }

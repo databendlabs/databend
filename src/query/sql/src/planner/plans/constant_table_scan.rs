@@ -21,8 +21,8 @@ use databend_common_expression::Column;
 use databend_common_expression::ColumnBuilder;
 use databend_common_expression::DataField;
 use databend_common_expression::DataSchemaRef;
+use databend_common_expression::stat_distribution::NdvEstimate;
 use databend_common_expression::stat_distribution::StatCount;
-use databend_common_expression::stat_distribution::StatEstimate;
 use databend_common_expression::types::AccessType;
 use databend_common_expression::types::NumberType;
 use databend_common_functions::aggregates::eval_aggr;
@@ -224,7 +224,7 @@ impl Operator for ConstantTableScan {
             let column_stat = ColumnStat {
                 min,
                 max,
-                ndv: StatEstimate::exact(ndv as f64),
+                ndv: NdvEstimate::exact(ndv as f64),
                 null_count: StatCount::exact(null_count),
                 histogram,
             };

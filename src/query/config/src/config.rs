@@ -3478,6 +3478,11 @@ pub struct SpillConfig {
     #[clap(long, value_name = "PERCENT", default_value = "60")]
     pub sort_spilling_disk_quota_ratio: u64,
 
+    /// Maximum percentage of the global local spill quota that materialized
+    /// CTE execution may use for one query.
+    #[clap(long, value_name = "PERCENT", default_value = "60")]
+    pub materialized_cte_spilling_disk_quota_ratio: u64,
+
     /// Maximum percentage of the global local spill quota that window
     /// partitioners may use for one query.
     #[clap(long, value_name = "PERCENT", default_value = "60")]
@@ -3602,6 +3607,8 @@ mod config_converters {
             global_bytes_limit: spill.spill_local_disk_max_bytes,
             storage_params,
             sort_spilling_disk_quota_ratio: spill.sort_spilling_disk_quota_ratio,
+            materialized_cte_spilling_disk_quota_ratio: spill
+                .materialized_cte_spilling_disk_quota_ratio,
             window_partition_spilling_disk_quota_ratio: spill
                 .window_partition_spilling_disk_quota_ratio,
             result_set_spilling_disk_quota_ratio: spill.result_set_spilling_disk_quota_ratio,
@@ -3625,6 +3632,8 @@ mod config_converters {
                 spill_local_disk_max_bytes: value.global_bytes_limit,
                 storage,
                 sort_spilling_disk_quota_ratio: value.sort_spilling_disk_quota_ratio,
+                materialized_cte_spilling_disk_quota_ratio: value
+                    .materialized_cte_spilling_disk_quota_ratio,
                 window_partition_spilling_disk_quota_ratio: value
                     .window_partition_spilling_disk_quota_ratio,
                 result_set_spilling_disk_quota_ratio: value.result_set_spilling_disk_quota_ratio,

@@ -17,6 +17,7 @@ databend_common_tracing::register_module_tag!("[PRIVATE-TASKS]");
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -30,6 +31,12 @@ use chrono::Utc;
 use chrono_tz::Tz;
 use cron::Schedule;
 use databend_common_ast::ast::AlterTaskOptions;
+use databend_common_ast::ast::DeclareItem;
+use databend_common_ast::ast::ScriptStatement;
+use databend_common_ast::parser::ParseMode;
+use databend_common_ast::parser::run_parser;
+use databend_common_ast::parser::script::script_block;
+use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::base::GlobalInstance;
 use databend_common_base::runtime::Runtime;
 use databend_common_config::GlobalConfig;
@@ -50,9 +57,12 @@ use databend_common_meta_app::principal::WarehouseOptions;
 use databend_common_meta_app::principal::task::EMPTY_TASK_ID;
 use databend_common_meta_app::principal::task::TaskMessage;
 use databend_common_meta_app::principal::task::TaskMessageType;
+use databend_common_meta_app::principal::task::TaskSql;
 use databend_common_meta_app::principal::task_message_ident::TaskMessageIdent;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_meta_store::MetaStoreProvider;
+use databend_common_script::Executor;
+use databend_common_script::compile;
 use databend_common_sql::Planner;
 use databend_common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_common_users::UserApiProvider;
@@ -72,11 +82,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::clusters::ClusterDiscovery;
 use crate::interpreters::InterpreterFactory;
+use crate::interpreters::common::QueryFinishHooks;
+use crate::interpreters::util::ScriptClient;
 use crate::meta_client_error;
 use crate::meta_service_error;
 use crate::schedulers::ServiceQueryExecutor;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContextCluster;
+use crate::sessions::TableContextSettings;
 use crate::task::meta::TaskMetaHandle;
 use crate::task::session::create_session;
 use crate::task::session::get_task_user;
@@ -536,9 +549,12 @@ impl TaskService {
     async fn spawn_task(task: Task, user: UserInfo) -> Result<()> {
         let task_service = TaskService::instance();
 
-        task_service
-            .execute_sql(Some(user), &task.query_text)
-            .await?;
+        match &task.task_sql {
+            TaskSql::Sql(sql) => {
+                task_service.execute_sql(Some(user), sql).await?;
+            }
+            TaskSql::Script(sqls) => task_service.execute_script_sql(Some(user), sqls).await?,
+        }
 
         Ok(())
     }
@@ -834,7 +850,7 @@ WHERE ta.task_name = '{task_name}'
             );",
             task.task_id,
             task.task_name,
-            task.query_text.replace('\'', "''"),
+            task.task_sql.query_text().replace('\'', "''"),
             task.when_condition
                 .as_ref()
                 .map(|s| format!("'{}'", s.replace('\'', "''")))
@@ -1067,7 +1083,7 @@ WHERE ta.task_name = '{task_name}'
         let task = Task {
             task_id,
             task_name,
-            query_text,
+            task_sql: TaskSql::Sql(query_text),
             when_condition,
             after,
             comment,
@@ -1122,8 +1138,57 @@ WHERE ta.task_name = '{task_name}'
         );
         let (plan, _) = planner.plan_sql(sql).await?;
         let executor = InterpreterFactory::get(context.clone(), &plan).await?;
-        let stream = executor.execute(context).await?;
+        let stream = executor
+            .execute_with_hooks(context, QueryFinishHooks::nested_with_hooks())
+            .await?;
         stream.try_collect::<Vec<DataBlock>>().await
+    }
+
+    async fn execute_script_sql(
+        &self,
+        other_user: Option<UserInfo>,
+        sqls: &[String],
+    ) -> Result<()> {
+        let context = self.create_context(other_user).await?;
+        let sql_dialect = context.get_settings().get_sql_dialect()?;
+        let script = Self::script_sql_to_block(sqls);
+        let tokens = tokenize_sql(&script)?;
+        let mut ast = run_parser(
+            &tokens,
+            sql_dialect,
+            ParseMode::Template,
+            false,
+            script_block,
+        )?;
+
+        let mut src = vec![];
+        for declare in ast.declares {
+            match declare {
+                DeclareItem::Var(declare) => src.push(ScriptStatement::LetVar { declare }),
+                DeclareItem::Set(declare) => src.push(ScriptStatement::LetStatement { declare }),
+            }
+        }
+        src.append(&mut ast.body);
+        let compiled = compile(&src)?;
+
+        let client = ScriptClient {
+            ctx: context.clone(),
+        };
+        let mut executor = Executor::load(ast.span, client, compiled);
+        let settings = context.get_settings();
+        let script_max_steps = settings.get_script_max_steps()?;
+        executor.run(script_max_steps as usize).await?;
+
+        Ok(())
+    }
+
+    fn script_sql_to_block(sqls: &[String]) -> String {
+        let mut script = String::from("BEGIN\n");
+        for sql in sqls {
+            let _ = writeln!(script, "{};", sql);
+        }
+        script.push_str("END;");
+        script
     }
 
     fn make_run_id() -> u64 {

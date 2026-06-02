@@ -1,0 +1,205 @@
+statement ok
+set max_threads = 1;
+
+statement ok
+set enable_join_runtime_filter = 1;
+
+statement ok
+set enable_bloom_runtime_filter = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 0;
+
+statement ok
+set min_max_runtime_filter_threshold = 1000;
+
+statement ok
+set enable_prune_cache = 0;
+
+statement ok
+drop table if exists rf_min_max_build;
+
+statement ok
+drop table if exists rf_min_max_probe;
+
+statement ok
+create or replace table rf_min_max_build(k UInt64 not null) row_per_block = 1000 as
+select number + 5000 as k from numbers(10);
+
+statement ok
+create or replace table rf_min_max_probe(k UInt64 not null, tag String not null) bloom_index_columns = 'tag' row_per_block = 1000;
+
+statement ok
+insert into rf_min_max_probe select number, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 1000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 2000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 3000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 4000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 5000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 6000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 7000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 8000, 'keep' from numbers(1000);
+
+statement ok
+insert into rf_min_max_probe select number + 9000, 'keep' from numbers(1000);
+
+query I
+select count() from rf_min_max_probe where tag = 'keep' and k in (select k from rf_min_max_build);
+----
+10
+
+query T
+explain analyze select * from rf_min_max_probe where tag = 'keep' and k in (select k from rf_min_max_build);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [rf_min_max_probe.k (#0), rf_min_max_probe.tag (#1)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_2 (#2)]
+├── probe keys: [rf_min_max_probe.k (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_2 (#2), probe targets:[rf_min_max_probe.k (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 10.00
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from remote: <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.default.rf_min_max_build
+│   ├── scan id: 1
+│   ├── output columns: [k (#2)]
+│   ├── read rows: 10
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 10.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── parts pruned by runtime filter: 9
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.rf_min_max_probe
+    ├── scan id: 0
+    ├── output columns: [k (#0), tag (#1)]
+    ├── read rows: 1000
+    ├── read size: <slt:ignore>
+    ├── partitions total: 10
+    ├── partitions scanned: 1
+    ├── pruning stats: [segments: <range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>, bloom pruning: 1 to 1 cost: <slt:ignore>>]
+    ├── push downs: [filters: [rf_min_max_probe.tag (#1) = 'keep'], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 10000.00
+
+statement ok
+set min_max_runtime_filter_threshold = 0;
+
+statement ok
+set inlist_runtime_filter_threshold = 1000;
+
+statement ok
+set inlist_runtime_bloom_prune_threshold = 0;
+
+statement ok
+create or replace table rf_min_max_build(k UInt64 not null) row_per_block = 1000 as
+select 5000 as k union all select 9000;
+
+query I
+select count() from rf_min_max_probe where tag = 'keep' and k in (select k from rf_min_max_build);
+----
+2
+
+query T
+explain analyze select * from rf_min_max_probe where tag = 'keep' and k in (select k from rf_min_max_build);
+----
+HashJoin
+├── cpu time: <slt:ignore>
+├── wait time: <slt:ignore>
+├── output rows: <slt:ignore>
+├── output bytes: <slt:ignore>
+├── output columns: [rf_min_max_probe.k (#0), rf_min_max_probe.tag (#1)]
+├── join type: LEFT SEMI
+├── build keys: [subquery_2 (#2)]
+├── probe keys: [rf_min_max_probe.k (#0)]
+├── keys is null equal: [false]
+├── filters: []
+├── build join filters:
+│   └── filter id:0, build key:subquery_2 (#2), probe targets:[rf_min_max_probe.k (#0)@scan0], filter type:bloom,inlist,min_max
+├── estimated rows: 2.98
+├── TableScan(Build)
+│   ├── cpu time: <slt:ignore>
+│   ├── wait time: <slt:ignore>
+│   ├── output rows: <slt:ignore>
+│   ├── output bytes: <slt:ignore>
+│   ├── bytes scanned: <slt:ignore>
+│   ├── read from remote: <slt:ignore>
+│   ├── runtime filter bloom time: <slt:ignore>
+│   ├── runtime filter inlist/min-max time: <slt:ignore>
+│   ├── table: default.default.rf_min_max_build
+│   ├── scan id: 1
+│   ├── output columns: [k (#2)]
+│   ├── read rows: 2
+│   ├── read size: < 1 KiB
+│   ├── partitions total: 1
+│   ├── partitions scanned: 1
+│   ├── pruning stats: [segments: <range pruning: 1 to 1 cost: <slt:ignore>>, blocks: <range pruning: 1 to 1 cost: <slt:ignore>>]
+│   ├── push downs: [filters: [], limit: NONE]
+│   └── estimated rows: 2.00
+└── TableScan(Probe)
+    ├── cpu time: <slt:ignore>
+    ├── wait time: <slt:ignore>
+    ├── output rows: <slt:ignore>
+    ├── output bytes: <slt:ignore>
+    ├── bytes scanned: <slt:ignore>
+    ├── read from remote: <slt:ignore>
+    ├── parts pruned by runtime filter: 8
+    ├── runtime filter bloom time: <slt:ignore>
+    ├── runtime filter inlist/min-max time: <slt:ignore>
+    ├── table: default.default.rf_min_max_probe
+    ├── scan id: 0
+    ├── output columns: [k (#0), tag (#1)]
+    ├── read rows: 2000
+    ├── read size: <slt:ignore>
+    ├── partitions total: 10
+    ├── partitions scanned: 2
+    ├── pruning stats: [segments: <range pruning: 10 to 10 cost: <slt:ignore>>, blocks: <range pruning: 10 to 10 cost: <slt:ignore>, bloom pruning: 2 to 2 cost: <slt:ignore>>]
+    ├── push downs: [filters: [rf_min_max_probe.tag (#1) = 'keep'], limit: NONE]
+    ├── apply join filters: [#0]
+    └── estimated rows: 10000.00
+
+statement ok
+drop table if exists rf_min_max_build;
+
+statement ok
+drop table if exists rf_min_max_probe;

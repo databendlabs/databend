@@ -483,7 +483,7 @@ thiserror = { version = "1" }
 thrift = "0.17.0"
 tikv-jemalloc-ctl = { version = "0.6.0", features = ["use_std", "stats"] }
 tikv-jemalloc-sys = "0.6.0"
-tokio = { version = "1.35.0", features = ["full"] }
+tokio = { version = "1.52.3", features = ["full"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
 tokio-util = { version = "0.7.13" }
 toml = { version = "0.8", features = ["parse"] }
@@ -615,6 +615,15 @@ debug-assertions = true
 overflow-checks = true
 rpath = true
 
+[patch."https://github.com/datafuse-extras/arrow-rs.git"]
+arrow-array = { version = "=58.1.0" }
+arrow-buffer = { version = "=58.1.0" }
+arrow-cast = { version = "=58.1.0" }
+arrow-data = { version = "=58.1.0" }
+arrow-ipc = { version = "=58.1.0" }
+arrow-schema = { version = "=58.1.0" }
+arrow-select = { version = "=58.1.0" }
+
 [patch.crates-io]
 arrow-udf-runtime = { git = "https://github.com/datafuse-extras/arrow-udf.git", rev = "c1de708add62ecd1afa2721b2e5c639f29be1f9d" }
 async-backtrace = { git = "https://github.com/datafuse-extras/async-backtrace.git", rev = "dea4553" }
@@ -636,6 +645,7 @@ lance-table = { git = "https://github.com/datafuse-extras/lance", rev = "85f9401
 map-api = { git = "https://github.com/databendlabs/map-api", tag = "v0.4.2" }
 # Keep ORC on a patch while the upstream crate has not caught up with Arrow 58 yet.
 orc-rust = { git = "https://github.com/datafuse-extras/orc-rust", rev = "fc17101f1c96e1ea7c7a19e931110471a4bd7e21" }
+parquet = { git = "https://github.com/datafuse-extras/arrow-rs.git", rev = "333ab8378" }
 recursive = { git = "https://github.com/datafuse-extras/recursive.git", rev = "16e433a" }
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1" }
 state-machine-api = { git = "https://github.com/databendlabs/state-machine-api.git", tag = "v0.3.4" }

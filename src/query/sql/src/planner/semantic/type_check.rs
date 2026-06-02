@@ -25,7 +25,6 @@ use databend_common_ast::parser::Dialect;
 use databend_common_catalog::catalog::CatalogManager;
 use databend_common_catalog::table_context::TableContext;
 use databend_common_cloud_control::cloud_api::CloudControlApiProvider;
-use databend_common_config::InnerConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 use databend_common_expression::FunctionContext;
@@ -48,6 +47,7 @@ use super::name_resolution::NameResolutionContext;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::optimizer::ir::SExpr;
+use crate::planner::expression::UdfValidationConfig;
 use crate::plans::DictGetFunctionArgument;
 use crate::plans::ScalarExpr;
 
@@ -286,8 +286,8 @@ struct FullTypeCheckAdapterDependencies {
     license_manager: Arc<LicenseManagerSwitch>,
     catalog_manager: Arc<CatalogManager>,
     user_api_provider: Arc<UserApiProvider>,
+    storage_allow_insecure: bool,
     security_policy_cache_manager: Arc<SecurityPolicyCacheManager>,
-    global_config: Arc<InnerConfig>,
     cloud_control_api_provider: Option<Arc<CloudControlApiProvider>>,
 }
 
@@ -317,8 +317,10 @@ pub trait UdfAdapter: Clone {
         Err(missing_type_check_adapter_dependency("udf server folding"))
     }
 
-    fn enable_udf_sandbox(&self) -> Result<bool> {
-        Err(missing_type_check_adapter_dependency("udf sandbox setting"))
+    fn validation_config(&self) -> Result<UdfValidationConfig> {
+        Err(missing_type_check_adapter_dependency(
+            "udf validation config",
+        ))
     }
 
     fn apply_udf_cloud_script(
@@ -330,8 +332,6 @@ pub trait UdfAdapter: Clone {
     }
 }
 
-impl UdfAdapter for () {}
-
 pub trait TypeCheckAdapter: Clone + Sized {
     type UdfAdapter: UdfAdapter;
 
@@ -341,7 +341,7 @@ pub trait TypeCheckAdapter: Clone + Sized {
 
     fn aggregate_function_factory(&self) -> &'static AggregateFunctionFactory;
 
-    fn udf_adapter(&self) -> Self::UdfAdapter;
+    fn udf_adapter(&self) -> Result<Self::UdfAdapter>;
 
     fn check_core_expr_context(&self, _arena: &CoreExprArena<'_>) -> Result<()> {
         Ok(())

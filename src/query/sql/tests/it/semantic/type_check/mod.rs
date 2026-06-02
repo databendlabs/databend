@@ -48,6 +48,7 @@ use databend_common_sql::TypeCheckAdapter;
 use databend_common_sql::TypeCheckDictionary;
 use databend_common_sql::TypeChecker;
 use databend_common_sql::UdfAdapter;
+use databend_common_sql::UdfValidationConfig;
 use databend_common_sql::Visibility;
 use databend_common_sql::binder::ExprContext;
 use databend_common_sql::format_scalar;
@@ -104,7 +105,7 @@ impl TestTypeCheckAdapter {
 #[derive(Clone, Default)]
 struct TestUdfAdapter {
     definitions: Arc<HashMap<String, Option<UserDefinedFunction>>>,
-    enable_udf_sandbox: bool,
+    validation_config: UdfValidationConfig,
     definition_load_count: Arc<AtomicUsize>,
     code_load_count: Arc<AtomicUsize>,
     stage_load_count: Arc<AtomicUsize>,
@@ -125,7 +126,7 @@ impl TestUdfAdapter {
     }
 
     fn with_enable_udf_sandbox(mut self) -> Self {
-        self.enable_udf_sandbox = true;
+        self.validation_config.enable_udf_sandbox = true;
         self
     }
 
@@ -162,8 +163,8 @@ impl UdfAdapter for TestUdfAdapter {
         Ok(code.into_bytes())
     }
 
-    fn enable_udf_sandbox(&self) -> Result<bool> {
-        Ok(self.enable_udf_sandbox)
+    fn validation_config(&self) -> Result<UdfValidationConfig> {
+        Ok(self.validation_config.clone())
     }
 
     fn apply_udf_cloud_script(
@@ -208,8 +209,8 @@ impl TypeCheckAdapter for TestTypeCheckAdapter {
         AggregateFunctionFactory::instance()
     }
 
-    fn udf_adapter(&self) -> Self::UdfAdapter {
-        self.udf_adapter.clone()
+    fn udf_adapter(&self) -> Result<Self::UdfAdapter> {
+        Ok(self.udf_adapter.clone())
     }
 
     fn forbid_udf(&self) -> bool {
@@ -346,6 +347,15 @@ fn resolve_type_check_sql(
     adapter: TestTypeCheckAdapter,
     bind_context: &mut BindContext,
 ) -> Result<(ScalarExpr, DataType)> {
+    resolve_type_check_sql_with_aliases(sql, adapter, bind_context, &[])
+}
+
+fn resolve_type_check_sql_with_aliases(
+    sql: &str,
+    adapter: TestTypeCheckAdapter,
+    bind_context: &mut BindContext,
+    aliases: &[(String, ScalarExpr)],
+) -> Result<(ScalarExpr, DataType)> {
     init_testing_globals();
     let tokens = tokenize_sql(sql)?;
     let dialect = adapter.settings().get_sql_dialect()?;
@@ -358,7 +368,7 @@ fn resolve_type_check_sql(
         adapter,
         &name_resolution_ctx,
         metadata,
-        &[],
+        aliases,
     )?;
     type_checker.resolve(&expr).map(|resolved| *resolved)
 }
@@ -395,7 +405,6 @@ async fn type_check_case_with_settings(
     settings: Arc<Settings>,
     expr_context: ExprContext,
 ) -> Result<SqlTestOutcome> {
-    init_testing_globals();
     assert!(
         case.setup_sqls.is_empty(),
         "type_check tests use a dependency-only adapter and do not run setup SQL"

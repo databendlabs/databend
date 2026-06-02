@@ -28,5 +28,7 @@ pub trait TaskContext: Send + Sync {
 
     fn query_id(&self) -> String;
 
+    async fn validate_warehouse_exists(&self, warehouse: Option<&str>) -> Result<()>;
+
     async fn available_role_identities(&self) -> Result<Vec<String>>;
 }

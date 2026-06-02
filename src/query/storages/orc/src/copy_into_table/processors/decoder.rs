@@ -24,17 +24,11 @@ use databend_common_catalog::table_context::TableContext;
 use databend_common_exception::Result;
 use databend_common_expression::BlockEntry;
 use databend_common_expression::BlockMetaInfoDowncast;
-use databend_common_expression::Column;
-use databend_common_expression::ColumnBuilder;
-use databend_common_expression::ColumnRef;
 use databend_common_expression::DataBlock;
 use databend_common_expression::DataSchemaRef;
 use databend_common_expression::Evaluator;
 use databend_common_expression::Expr;
 use databend_common_expression::FunctionContext;
-use databend_common_expression::types::ArrayColumn;
-use databend_common_expression::types::DataType;
-use databend_common_expression::types::NullableColumn;
 use databend_common_functions::BUILTIN_FUNCTIONS;
 use databend_common_pipeline::core::Event;
 use databend_common_pipeline::core::InputPort;
@@ -103,66 +97,6 @@ impl StripeDecoderForCopy {
         let mut entries = Vec::with_capacity(projection.len());
         let num_rows = block.num_rows();
         for (field, expr) in self.output_schema.fields().iter().zip(projection.iter()) {
-            if let Expr::ColumnRef(ColumnRef {
-                display_name, id, ..
-            }) = expr
-            {
-                if let Some(display_name) = display_name.strip_prefix("#!") {
-                    let types = match field.data_type() {
-                        DataType::Nullable(box DataType::Array(box DataType::Nullable(
-                            box DataType::Tuple(v),
-                        ))) => v,
-                        _ => {
-                            log::error!("expect array of tuple, got {:?}", field);
-                            unreachable!("expect value: array of tuple")
-                        }
-                    };
-                    let positions = display_name
-                        .split(',')
-                        .map(|s| s.parse::<i32>().unwrap())
-                        .collect::<Vec<i32>>();
-                    let entry = block.get_by_offset(*id);
-                    if let Some(Column::Nullable(box NullableColumn {
-                        column: Column::Array(box array_column),
-                        validity,
-                    })) = entry.as_column()
-                    {
-                        let column = array_column.underlying_column();
-                        let offsets = array_column.underlying_offsets();
-
-                        if let Column::Nullable(box NullableColumn {
-                            column: Column::Tuple(ref v),
-                            validity: inner_validity,
-                        }) = column
-                        {
-                            let len = v[0].len();
-                            let mut v2 = Vec::with_capacity(v.len());
-                            for (i, p) in positions.iter().enumerate() {
-                                if *p < 0 {
-                                    v2.push(ColumnBuilder::repeat_default(&types[i], len).build());
-                                } else {
-                                    v2.push(v[*p as usize].clone());
-                                }
-                            }
-                            let new_tuple_column = Column::Nullable(Box::new(NullableColumn {
-                                column: Column::Tuple(v2),
-                                validity: inner_validity.clone(),
-                            }));
-
-                            let new_array_column = ArrayColumn::new(new_tuple_column, offsets);
-                            let column = Column::Nullable(Box::new(NullableColumn {
-                                column: Column::Array(Box::new(new_array_column)),
-                                validity: validity.clone(),
-                            }));
-
-                            entries.push(column.into());
-                            continue;
-                        }
-                    }
-                    log::error!("expect array of tuple, got {:?} {:?}", field, entry.value());
-                    unreachable!("expect value: array of tuple")
-                }
-            }
             let entry = BlockEntry::new(evaluator.run(expr)?, || {
                 (field.data_type().clone(), num_rows)
             });

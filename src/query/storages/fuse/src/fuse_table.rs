@@ -32,7 +32,6 @@ use databend_common_catalog::plan::PartInfoPtr;
 use databend_common_catalog::plan::PartStatistics;
 use databend_common_catalog::plan::Partitions;
 use databend_common_catalog::plan::PushDownInfo;
-use databend_common_catalog::plan::ReclusterParts;
 use databend_common_catalog::plan::StreamColumn;
 use databend_common_catalog::table::Bound;
 use databend_common_catalog::table::ColumnRange;
@@ -40,6 +39,7 @@ use databend_common_catalog::table::ColumnStatisticsProvider;
 use databend_common_catalog::table::CompactionLimits;
 use databend_common_catalog::table::DistributionLevel;
 use databend_common_catalog::table::NavigationDescriptor;
+use databend_common_catalog::table::ReusablePrunedMetas;
 use databend_common_catalog::table::TimeNavigation;
 use databend_common_catalog::table::is_temp_table_by_table_info;
 use databend_common_catalog::table_context::TableContext;
@@ -951,6 +951,24 @@ impl Table for FuseTable {
     }
 
     #[fastrace::trace]
+    #[async_backtrace::framed]
+    async fn read_partitions_with_reusable_pruned_metas(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        dry_run: bool,
+        reusable_pruned_metas: Option<ReusablePrunedMetas>,
+    ) -> Result<(PartStatistics, Partitions, Option<ReusablePrunedMetas>)> {
+        self.do_read_partitions_with_reusable_pruned_metas(
+            ctx,
+            push_downs,
+            dry_run,
+            reusable_pruned_metas,
+        )
+        .await
+    }
+
+    #[fastrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -1325,16 +1343,6 @@ impl Table for FuseTable {
         limits: CompactionLimits,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
         self.do_compact_blocks(ctx, limits).await
-    }
-
-    #[async_backtrace::framed]
-    async fn recluster(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
-        limit: Option<usize>,
-    ) -> Result<Option<(ReclusterParts, Arc<TableSnapshot>)>> {
-        self.do_recluster(ctx, push_downs, limit).await
     }
 
     #[async_backtrace::framed]
