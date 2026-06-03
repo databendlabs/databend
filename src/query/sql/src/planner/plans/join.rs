@@ -518,6 +518,10 @@ impl Join {
         let inner_join_cardinality = join_estimation.join_card();
         let cardinality =
             self.join_cardinality(left_cardinality, right_cardinality, inner_join_cardinality);
+        // Hash join output follows the probe side. Build-side clustering is not
+        // preserved by hash table lookups, even though build-side columns remain
+        // available in the joined rows.
+        let cluster_key_stats = left_statistics.cluster_key_stats.clone();
         if let Some(columns) = join_estimation.updated_columns() {
             match self.join_type {
                 JoinType::LeftSemi => {
@@ -582,6 +586,7 @@ impl Join {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                cluster_key_stats,
             },
         }))
     }
@@ -1194,6 +1199,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1206,6 +1212,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1246,6 +1253,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1258,6 +1266,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 2.3333333333333335, true);
         let condition = JoinEquiCondition::new(
@@ -1298,6 +1307,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1310,6 +1320,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(3.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1350,6 +1361,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1362,6 +1374,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1403,6 +1416,7 @@ mod tests {
                 })]),
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         });
         let right_stat_info = Arc::new(StatInfo {
@@ -1418,6 +1432,7 @@ mod tests {
                 })]),
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         });
         let join = Join {
@@ -1453,6 +1468,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut right_statistics = Statistics {
             precise_cardinality: None,
@@ -1465,6 +1481,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let mut estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(
@@ -1508,6 +1525,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let right_statistics = Statistics {
             precise_cardinality: None,
@@ -1520,6 +1538,7 @@ mod tests {
             })]),
             top_n: Default::default(),
             count_min_sketch: Default::default(),
+            cluster_key_stats: Default::default(),
         };
         let estimator = JoinStatsEstimator::new(4.0, 3.0, true);
         let condition = JoinEquiCondition::new(

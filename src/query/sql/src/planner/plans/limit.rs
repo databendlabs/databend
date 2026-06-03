@@ -55,6 +55,7 @@ impl Limit {
                 column_stats: Default::default(),
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                cluster_key_stats: stat_info.statistics.cluster_key_stats.clone(),
             },
         }))
     }

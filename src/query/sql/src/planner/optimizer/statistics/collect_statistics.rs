@@ -26,6 +26,7 @@ use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::analyze_cluster_key_order;
 use crate::optimizer::Optimizer;
 use crate::optimizer::OptimizerContext;
 use crate::optimizer::ir::SExpr;
@@ -76,6 +77,7 @@ impl CollectStatisticsOptimizer {
                 let mut top_n = HashMap::new();
                 let mut count_min_sketch = HashMap::new();
                 let collect_frequency_stats = scan.change_type.is_none();
+                let mut column_id_to_symbol = HashMap::new();
                 for column in columns.iter() {
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn {
                         column_index,
@@ -84,6 +86,7 @@ impl CollectStatisticsOptimizer {
                         ..
                     }) = column
                     {
+                        column_id_to_symbol.insert(*column_id, *column_index);
                         if virtual_expr.is_none() {
                             let col_stat = column_statistics_provider
                                 .column_statistics(*column_id as ColumnId);
@@ -106,6 +109,23 @@ impl CollectStatisticsOptimizer {
                         }
                     }
                 }
+                let cluster_key_order = if let Some((_, cluster_key)) = table.cluster_key_meta() {
+                    analyze_cluster_key_order(
+                        self.table_ctx.clone(),
+                        table.clone(),
+                        &cluster_key,
+                        &column_id_to_symbol,
+                    )?
+                } else {
+                    Default::default()
+                };
+                let cluster_keys = if cluster_key_order.is_empty() {
+                    Default::default()
+                } else {
+                    [(scan.table_index, cluster_key_order)]
+                        .into_iter()
+                        .collect()
+                };
 
                 let mut scan = scan.clone();
                 scan.statistics = Arc::new(Statistics {
@@ -114,6 +134,7 @@ impl CollectStatisticsOptimizer {
                     histograms,
                     top_n,
                     count_min_sketch,
+                    cluster_keys,
                 });
                 let mut s_expr = s_expr.replace_plan(Arc::new(RelOperator::Scan(scan.clone())));
                 if let Some(sample) = &scan.sample {

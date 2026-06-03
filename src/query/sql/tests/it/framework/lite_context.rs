@@ -768,6 +768,7 @@ impl LiteTableContext {
         column_stats: ColumnStatsMap,
         histograms: HistogramStatsMap,
         frequency_stats: FrequencyStatsMap,
+        cluster_key: Option<String>,
         options: BTreeMap<String, String>,
     ) -> Result<Arc<dyn Table>> {
         let schema = Arc::new(TableSchema::new(fields));
@@ -818,6 +819,7 @@ impl LiteTableContext {
                 name: table_name.to_string(),
                 meta: TableMeta {
                     schema,
+                    cluster_key_v2: cluster_key.map(|key| (0, key)),
                     options,
                     ..Default::default()
                 },
@@ -1008,6 +1010,7 @@ impl LiteTableContext {
             column_stats,
             histograms,
             frequency_stats,
+            None,
             options,
         )?;
         self.default_catalog.insert_table(database, table);
@@ -1154,16 +1157,28 @@ impl LiteTableContext {
                         }
                     }
                 };
+                let cluster_key = stmt.cluster_by.as_ref().map(|cluster_by| {
+                    let cluster_exprs = cluster_by
+                        .cluster_exprs
+                        .iter()
+                        .map(|expr| format!("{expr:#}"))
+                        .collect::<Vec<_>>();
+                    format!("({})", cluster_exprs.join(", "))
+                });
 
-                self.register_table_with_stats(
+                let table = self.build_fake_table(
                     &database,
                     &table_name,
                     fields,
                     table_stats,
                     column_stats,
                     histograms,
+                    Default::default(),
+                    cluster_key,
                     stmt.table_options,
-                )
+                )?;
+                self.default_catalog.insert_table(&database, table);
+                Ok(())
             }
             _ => unsupported("lite sql harness table registration from non-DDL SQL"),
         }

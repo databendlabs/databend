@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod collect_statistics;
+mod cluster_key_join_order;
 mod decorrelate_correlated_aliases;
 mod eager_aggregation;
 mod join_cardinality;

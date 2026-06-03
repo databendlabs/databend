@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use databend_common_exception::Result;
+use databend_common_expression::Expr;
+
 use crate::ColumnSet;
+use crate::IndexType;
+use crate::Symbol;
 use crate::optimizer::ir::ColumnStatSet;
 use crate::optimizer::ir::CountMinSketchSet;
 use crate::optimizer::ir::TopNSet;
@@ -41,6 +47,58 @@ impl Display for RequiredProperty {
 }
 
 #[derive(Default, Clone, Debug)]
+pub struct ClusterKeyStatistics {
+    /// Table index -> cluster-key expressions in that table's cluster-key order.
+    pub keys: BTreeMap<IndexType, Vec<Expr<Symbol>>>,
+    /// Expressions filtered by equality with constants.
+    pub filter_keys: Vec<Expr<Symbol>>,
+}
+
+impl ClusterKeyStatistics {
+    pub fn collect_filter_keys<'a>(
+        predicates: impl IntoIterator<Item = &'a ScalarExpr>,
+    ) -> Result<Vec<Expr<Symbol>>> {
+        let mut filter_keys = Vec::new();
+        for predicate in predicates {
+            Self::collect_equality_filter_key(predicate, &mut filter_keys)?;
+        }
+        Ok(filter_keys)
+    }
+
+    fn collect_equality_filter_key(
+        predicate: &ScalarExpr,
+        filter_keys: &mut Vec<Expr<Symbol>>,
+    ) -> Result<()> {
+        let mut stack = vec![predicate];
+        while let Some(predicate) = stack.pop() {
+            let ScalarExpr::FunctionCall(function) = predicate else {
+                continue;
+            };
+
+            match function.func_name.as_str() {
+                "and" | "and_filters" => {
+                    stack.extend(function.arguments.iter().rev());
+                }
+                "eq" if function.arguments.len() == 2 => {
+                    let left = &function.arguments[0];
+                    let right = &function.arguments[1];
+                    match (
+                        left.used_columns().is_empty(),
+                        right.used_columns().is_empty(),
+                    ) {
+                        (true, false) => filter_keys.push(right.as_symbol_expr()?),
+                        (false, true) => filter_keys.push(left.as_symbol_expr()?),
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default, Clone, Debug)]
 pub struct Statistics {
     // We can get the precise row count of a table in databend,
     // which information is useful to optimize some queries like `COUNT(*)`.
@@ -49,6 +107,7 @@ pub struct Statistics {
     pub column_stats: ColumnStatSet,
     pub top_n: TopNSet,
     pub count_min_sketch: CountMinSketchSet,
+    pub cluster_key_stats: ClusterKeyStatistics,
 }
 
 #[derive(Default, Clone, Debug)]

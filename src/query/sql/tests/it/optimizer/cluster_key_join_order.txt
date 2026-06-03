@@ -1,0 +1,465 @@
+=== k1_k2_prefix ===
+description: Full memo output when the clustered probe can first match a.k1.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+Memo
+├── root group: #5
+├── estimated memory: 3.75 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 13000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#1, #2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 25000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #3]
+└── Group #5
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 26000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#4]
+
+
+=== k2_k1_prefix ===
+description: Full memo output when the clustered probe can first match a.k2.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k2, k1)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+Memo
+├── root group: #5
+├── estimated memory: 3.75 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 13000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#1, #2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 25000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #3]
+└── Group #5
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 26000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#4]
+
+
+=== filter_preserves_cluster_keys ===
+description: Cluster keys still affect join order after a filter on the clustered table.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM (SELECT * FROM a WHERE v >= 0) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+Memo
+├── root group: #6
+├── estimated memory: 4.38 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 14000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#2, #3]
+├── Group #5
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 26000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #4]
+└── Group #6
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 27000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#5]
+
+
+=== limit_and_join_preserve_cluster_keys ===
+description: Cluster keys still affect join order after a limit subquery and a partial join.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM (SELECT * FROM a LIMIT 1000) a
+JOIN b ON a.k1 = b.k1
+JOIN c ON a.k2 = c.k2
+memo:
+Memo
+├── root group: #7
+├── estimated memory: 5.00 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 Limit [#0]
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 3000.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 15000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#2, #3]
+├── Group #5
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #6
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1026000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#4, #5]
+└── Group #7
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 1001026000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#6]
+
+
+=== build_side_cluster_keys_do_not_propagate ===
+description: Cluster keys from a build-side clustered table do not affect later join costs.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT) CLUSTER BY (k1, k2)
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT)
+sql: SELECT *
+FROM b
+JOIN (SELECT * FROM a LIMIT 100) a ON b.k1 = a.k1
+JOIN (SELECT * FROM c LIMIT 10) c ON a.k2 = c.k2
+memo:
+Memo
+├── root group: #9
+├── estimated memory: 6.25 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 Limit [#1]
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2100.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #5
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2000.000, children: [{ dist: Any }]
+│   └── #0 Limit [#4]
+├── Group #6
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 2010.000, children: [{ dist: Any }]
+│   └── #0 EvalScalar [#5]
+├── Group #7
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 4310.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#3, #6]
+├── Group #8
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 16310.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #7]
+└── Group #9
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 1016310.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#8]
+
+
+=== clustered_filter_side_becomes_build ===
+description: A filter on the clustered column makes that side a better build input.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
+setup: CREATE TABLE b(join_key BIGINT, column_a STRING, column_b STRING)
+sql: SELECT *
+FROM a
+JOIN b ON a.join_key = b.join_key
+WHERE a.column_a = 'xxx'
+AND b.column_b = 'xxx'
+memo:
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 131.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== self_join_filter_on_clustered_alias_becomes_build ===
+description: A self-join filter only matches the alias whose filter references the clustered column.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE t(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
+sql: SELECT *
+FROM t AS l
+JOIN t AS r ON l.join_key = r.join_key
+WHERE l.column_a = 'xxx'
+AND r.column_b = 'xxx'
+memo:
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 131.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== clustered_filter_discount_disabled ===
+description: The default cluster-key cost factor disables the join-order discount.
+setup: CREATE TABLE a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
+setup: CREATE TABLE b(join_key BIGINT, column_a STRING, column_b STRING)
+sql: SELECT *
+FROM a
+JOIN b ON a.join_key = b.join_key
+WHERE a.column_a = 'xxx'
+AND b.column_b = 'xxx'
+memo:
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 131.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== composite_cluster_key_filter_on_second_column ===
+description: A filter on column_b favors the table whose cluster key starts with column_b.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE table_a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a, column_b)
+setup: CREATE TABLE table_b(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_b, column_a)
+sql: SELECT *
+FROM table_a AS a
+JOIN table_b AS b
+ON a.column_a = b.column_a
+AND a.column_b = b.column_b
+WHERE b.column_b = 'xxx'
+memo:
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 140.458, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== composite_cluster_key_filter_on_first_column ===
+description: A filter on column_a favors the table whose cluster key starts with column_a.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE table_a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a, column_b)
+setup: CREATE TABLE table_b(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_b, column_a)
+sql: SELECT *
+FROM table_a AS a
+JOIN table_b AS b
+ON a.column_a = b.column_a
+AND a.column_b = b.column_b
+WHERE a.column_a = 'xxx'
+memo:
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 140.458, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== composite_cluster_key_later_column_is_not_prefix ===
+description: A later composite cluster-key column is not treated as a leading prefix.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE table_a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a, column_b)
+setup: CREATE TABLE table_b(join_key BIGINT, column_a STRING, column_b STRING)
+sql: SELECT a.column_b, b.column_b
+FROM table_a AS a
+JOIN table_b AS b
+ON a.column_b = b.column_b
+WHERE a.column_b = 'xxx'
+memo:
+Memo
+├── root group: #3
+├── estimated memory: 2.50 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 10.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 130.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #1]
+└── Group #3
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 230.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#2]
+
+
+=== linear_expression_cluster_key ===
+description: A LINEAR cluster key with to_yyyymmdd and substring expressions affects join costs.
+setting: cost_factor_cluster_key=85
+setup: CREATE TABLE a(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING) CLUSTER BY linear (
+                    to_yyyymmdd(start_time),
+                    SUBSTRING(trace_id FROM 1 FOR 40)
+                )
+setup: CREATE TABLE b(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING)
+setup: CREATE TABLE c(k1 BIGINT, k2 BIGINT, v BIGINT, start_time TIMESTAMP, start_day UInt32, trace_id STRING)
+sql: SELECT *
+FROM a
+JOIN b
+ON to_yyyymmdd(a.start_time) = b.start_day
+AND SUBSTRING(a.trace_id FROM 1 FOR 40) = b.trace_id
+JOIN c ON a.k2 = c.k2
+memo:
+Memo
+├── root group: #5
+├── estimated memory: 3.75 KiB
+├── Group #0
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #1
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #2
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 1000.000, children: []
+│   └── #0 Scan []
+├── Group #3
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 13000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#1, #2]
+├── Group #4
+│   ├── Best properties
+│   │   └── { dist: Any }: expr: #0, cost: 25000.000, children: [{ dist: Any }, { dist: Any }]
+│   └── #0 Join [#0, #3]
+└── Group #5
+    ├── Best properties
+    │   └── { dist: Any }: expr: #0, cost: 1025000.000, children: [{ dist: Any }]
+    └── #0 EvalScalar [#4]
+
+

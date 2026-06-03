@@ -32,6 +32,7 @@ pub use expr::VisitAction;
 pub use group::Group;
 pub use group::GroupState;
 pub use memo::Memo;
+pub use property::ClusterKeyStatistics;
 pub use property::Distribution;
 pub use property::DistributionEnforcer;
 pub use property::Enforcer;

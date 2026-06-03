@@ -483,6 +483,7 @@ impl SExprVisitor for StatsApplier<'_> {
                     histograms,
                     top_n: Default::default(),
                     count_min_sketch: Default::default(),
+                    cluster_keys: Default::default(),
                 });
 
                 return Ok(VisitAction::Replace(

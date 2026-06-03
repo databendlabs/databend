@@ -90,6 +90,7 @@ impl SyncMaterializedCTERefOptimizer {
                 column_stats,
                 top_n: Default::default(),
                 count_min_sketch: Default::default(),
+                cluster_key_stats: Default::default(),
             },
         })
     }
