@@ -342,7 +342,9 @@ async fn read_multi_part(
                 match file_format {
                     FileFormatParams::Parquet(_)
                     | FileFormatParams::Avro(_)
-                    | FileFormatParams::Orc(_) => {
+                    | FileFormatParams::Orc(_)
+                    | FileFormatParams::Arrow(_)
+                    | FileFormatParams::ArrowStream(_) => {
                         let mut data = Vec::new();
                         let mut buf = vec![0; input_read_buffer_size];
                         loop {
