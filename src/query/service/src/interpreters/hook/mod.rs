@@ -15,9 +15,39 @@
 pub(crate) mod analyze_hook;
 pub(crate) mod compact_hook;
 pub(crate) mod refresh_hook;
+pub(crate) mod table_hook_scheduler;
 pub(crate) mod vacuum_hook;
 
 #[allow(clippy::module_inception)]
 mod hook;
 
 pub use hook::HookOperator;
+pub use table_hook_scheduler::TableHookScheduler;
+
+pub(crate) fn table_id_matches_target(
+    hook_name: &str,
+    expected_table_id: Option<u64>,
+    actual_table_id: u64,
+    catalog: &str,
+    database: &str,
+    table: &str,
+) -> bool {
+    let Some(expected_table_id) = expected_table_id else {
+        return true;
+    };
+
+    if expected_table_id == actual_table_id {
+        return true;
+    }
+
+    log::warn!(
+        "Skip {} hook because table id mismatches target, expected_table_id={}, actual_table_id={}, catalog={}, database={}, table={}",
+        hook_name,
+        expected_table_id,
+        actual_table_id,
+        catalog,
+        database,
+        table,
+    );
+    false
+}
