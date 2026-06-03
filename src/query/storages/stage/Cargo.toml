@@ -9,6 +9,7 @@ edition = { workspace = true }
 [dependencies]
 apache-avro = { workspace = true }
 arrow-array = { workspace = true }
+arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = { workspace = true }
