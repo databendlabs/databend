@@ -60,6 +60,19 @@ fn test_like_escape_display_escapes_escape_literal() {
 }
 
 #[test]
+fn test_rewrite_statement_display_escapes_string_literals() {
+    for sql in [
+        r#"SHOW SETTINGS LIKE 'a''b%';"#,
+        r#"SHOW TABLES LIKE 'a''b%';"#,
+        r#"LIST @test_stage PATTERN = 'a''b.*';"#,
+        r#"REMOVE @test_stage PATTERN = 'a''b.*';"#,
+        r#"CALL admin$tenant_quota('a''b');"#,
+    ] {
+        test_stmt_display(sql);
+    }
+}
+
+#[test]
 fn test_parse_sql_nested_join_conditions_without_panic() {
     let cases = [
         r#"

@@ -59,6 +59,7 @@ use databend_common_ast::ast::UriLocation;
 use databend_common_ast::ast::VacuumDropTableStmt;
 use databend_common_ast::ast::VacuumTableStmt;
 use databend_common_ast::ast::VacuumTemporaryFiles;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::parser::parse_sql;
 use databend_common_ast::parser::tokenize_sql;
 use databend_common_base::runtime::GlobalIORuntime;
@@ -243,14 +244,14 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         select_builder.with_filter("table_type = 'BASE TABLE'".to_string());
 
-        select_builder.with_filter(format!("catalog = '{catalog_name}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&catalog_name, '\'')));
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {
@@ -357,14 +358,14 @@ impl Binder {
                 database
             }
         };
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
 
         if let ShowStatsTarget::Table(table) = target {
             let table_name = normalize_identifier(table, &self.name_resolution_ctx).name;
             catalog
                 .get_table(&self.ctx.get_tenant(), database.as_str(), &table_name)
                 .await?;
-            select_builder.with_filter(format!("table = '{table_name}'"));
+            select_builder.with_filter(format!("table = {}", QuotedString(table_name, '\'')));
         }
 
         select_builder
@@ -418,18 +419,26 @@ impl Binder {
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT {} FROM {}.system.tables WHERE database = '{}' ORDER BY Name",
-                select_cols, default_catalog, database
+                "SELECT {} FROM {}.system.tables WHERE database = {} ORDER BY Name",
+                select_cols,
+                default_catalog,
+                QuotedString(&database, '\'')
             ),
             Some(ShowLimit::Like { pattern }) => format!(
-                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
-            WHERE Name LIKE '{}' ORDER BY Name",
-                select_cols, default_catalog, database, pattern
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
+            WHERE Name LIKE {} ORDER BY Name",
+                select_cols,
+                default_catalog,
+                QuotedString(&database, '\''),
+                QuotedString(pattern, '\'')
             ),
             Some(ShowLimit::Where { selection }) => format!(
-                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = '{}') \
+                "SELECT * from (SELECT {} FROM {}.system.tables WHERE database = {}) \
             WHERE ({}) ORDER BY Name",
-                select_cols, default_catalog, database, selection
+                select_cols,
+                default_catalog,
+                QuotedString(&database, '\''),
+                selection
             ),
         };
 
@@ -472,13 +481,13 @@ impl Binder {
             .with_order_by("database")
             .with_order_by("name");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         select_builder.with_filter("dropped_on IS NOT NULL".to_string());
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

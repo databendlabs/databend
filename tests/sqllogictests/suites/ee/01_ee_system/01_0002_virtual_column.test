@@ -37,6 +37,12 @@ query TTTITT
 show virtual columns from t1
 ----
 
+# This EE fixture does not expose a creatable virtual-column name matching
+# a'b%; keep this empty result as rewrite escaping coverage.
+query TTTITT
+show virtual columns from t1 like 'a''b%'
+----
+
 statement ok
 insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
 
