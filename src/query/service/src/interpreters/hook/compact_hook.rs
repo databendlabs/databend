@@ -50,6 +50,7 @@ use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 
+#[derive(Clone)]
 pub struct CompactTargetTableDescription {
     pub catalog: String,
     pub database: String,
@@ -90,58 +91,12 @@ async fn do_hook_compact(
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            let op_name = &trace_ctx.operation_name;
-            metrics_inc_compact_hook_main_operation_time_ms(
-                op_name,
-                trace_ctx.start.elapsed().as_millis() as u64,
-            );
-            info!("Operation {op_name} completed successfully, starting table optimization job.");
-
-            let compact_start_at = Instant::now();
-            let compaction_num_block_hint =
-                ctx.get_compaction_num_block_hint(&compact_target.table);
-            info!(
-                "Table {} requires compaction of {} blocks",
-                compact_target.table, compaction_num_block_hint
-            );
-            if compaction_num_block_hint == 0 {
-                return Ok(());
-            }
-            let compaction_limits = CompactionLimits {
-                segment_limit: None,
-                block_limit: Some(compaction_num_block_hint as usize),
-            };
-
-            // keep the original progress value
-            let write_progress = ctx.get_write_progress();
-            let write_progress_value = write_progress.as_ref().get_values();
-            let scan_progress = ctx.get_scan_progress();
-            let scan_progress_value = scan_progress.as_ref().get_values();
-
-            match GlobalIORuntime::instance().block_on(compact_table(
+            let _ = GlobalIORuntime::instance().block_on(execute_compact_hook(
                 ctx,
                 compact_target,
-                compaction_limits,
+                trace_ctx,
                 lock_opt,
-            )) {
-                Ok(_) => {
-                    info!("Operation {op_name} and table optimization job completed successfully.");
-                }
-                Err(e) => {
-                    info!(
-                        "Operation {op_name} completed but table optimization job failed: {:?}",
-                        e
-                    );
-                }
-            }
-
-            // reset the progress value
-            write_progress.set(&write_progress_value);
-            scan_progress.set(&scan_progress_value);
-            metrics_inc_compact_hook_compact_time_ms(
-                &trace_ctx.operation_name,
-                compact_start_at.elapsed().as_millis() as u64,
-            );
+            ));
         }
 
         Ok(())
@@ -150,10 +105,84 @@ async fn do_hook_compact(
     Ok(())
 }
 
+pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
+    match ctx.get_settings().get_enable_compact_after_write() {
+        Ok(false) => {
+            info!("Auto compaction is disabled");
+            false
+        }
+        Err(e) => {
+            // swallow the exception, compaction hook should not prevent the main operation.
+            log::warn!(
+                "Failed to retrieve compaction settings, continuing without compaction: {}",
+                e
+            );
+            false
+        }
+        Ok(true) => true,
+    }
+}
+
+pub(crate) async fn execute_compact_hook(
+    ctx: Arc<QueryContext>,
+    compact_target: CompactTargetTableDescription,
+    trace_ctx: CompactHookTraceCtx,
+    lock_opt: LockTableOption,
+) -> Result<()> {
+    let op_name = &trace_ctx.operation_name;
+    metrics_inc_compact_hook_main_operation_time_ms(
+        op_name,
+        trace_ctx.start.elapsed().as_millis() as u64,
+    );
+    info!("Operation {op_name} completed successfully, starting table optimization job.");
+
+    let compact_start_at = Instant::now();
+    let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
+    info!(
+        "Table {} requires compaction of {} blocks",
+        compact_target.table, compaction_num_block_hint
+    );
+    if compaction_num_block_hint == 0 {
+        return Ok(());
+    }
+    let compaction_limits = CompactionLimits {
+        segment_limit: None,
+        block_limit: Some(compaction_num_block_hint as usize),
+    };
+
+    // keep the original progress value
+    let write_progress = ctx.get_write_progress();
+    let write_progress_value = write_progress.as_ref().get_values();
+    let scan_progress = ctx.get_scan_progress();
+    let scan_progress_value = scan_progress.as_ref().get_values();
+
+    match compact_table(ctx, compact_target, compaction_limits, lock_opt).await {
+        Ok(_) => {
+            info!("Operation {op_name} and table optimization job completed successfully.");
+        }
+        Err(e) => {
+            info!(
+                "Operation {op_name} completed but table optimization job failed: {:?}",
+                e
+            );
+        }
+    }
+
+    // reset the progress value
+    write_progress.set(&write_progress_value);
+    scan_progress.set(&scan_progress_value);
+    metrics_inc_compact_hook_compact_time_ms(
+        &trace_ctx.operation_name,
+        compact_start_at.elapsed().as_millis() as u64,
+    );
+
+    Ok(())
+}
+
 /// compact the target table, will do optimize table actions, including:
 ///  - compact blocks
 ///  - re-cluster if the cluster keys are defined
-async fn compact_table(
+pub(crate) async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
     compaction_limits: CompactionLimits,

@@ -48,26 +48,36 @@ pub async fn hook_analyze(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("Pipeline execution completed successfully, starting analyze job");
-            if !ctx.get_enable_auto_analyze() {
-                return Ok(());
-            }
-
-            match GlobalIORuntime::instance().block_on(do_analyze(ctx, desc)) {
-                Ok(_) => {
-                    info!("Analyze job completed successfully");
-                }
-                Err(e) => {
-                    info!("Analyze job failed: {:?}", e);
-                }
-            }
+            let _ = GlobalIORuntime::instance().block_on(execute_analyze_hook(ctx, desc));
         }
         Ok(())
     });
 }
 
+pub(crate) fn analyze_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
+    ctx.get_enable_auto_analyze()
+}
+
+pub(crate) async fn execute_analyze_hook(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
+    info!("Table hook starting analyze job");
+    if !analyze_after_write_enabled(&ctx) {
+        return Ok(());
+    }
+
+    match do_analyze(ctx, desc).await {
+        Ok(_) => {
+            info!("Analyze job completed successfully");
+        }
+        Err(e) => {
+            info!("Analyze job failed: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
+
 /// hook the analyze action with a on-finished callback.
-async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
+pub(crate) async fn do_analyze(ctx: Arc<QueryContext>, desc: AnalyzeDesc) -> Result<()> {
     // evict the table from cache
     ctx.evict_table_from_cache(&desc.catalog, &desc.database, &desc.table)?;
     ctx.clear_table_meta_timestamps_cache();

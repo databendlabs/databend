@@ -54,6 +54,7 @@ use crate::catalogs::DatabaseCatalog;
 use crate::catalogs::IcebergCreator;
 use crate::clusters::ClusterDiscovery;
 use crate::history_tables::GlobalHistoryLog;
+use crate::interpreters::TableHookScheduler;
 use crate::locks::LockManager;
 use crate::pipelines::executor::GlobalQueriesExecutor;
 use crate::servers::flight::v1::exchange::DataExchangeManager;
@@ -144,6 +145,7 @@ impl GlobalServices {
         DataExchangeManager::init()?;
         SessionManager::init(config)?;
         LockManager::init()?;
+        TableHookScheduler::init(config.query.common.table_hook_async_max_concurrency)?;
         AuthMgr::init(config, version)?;
 
         // Init user manager.
