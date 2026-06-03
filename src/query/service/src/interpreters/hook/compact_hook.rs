@@ -37,6 +37,8 @@ use crate::interpreters::OptimizeCompactBlockInterpreter;
 use crate::interpreters::ReclusterTableInterpreter;
 use crate::interpreters::common::metrics_inc_compact_hook_compact_time_ms;
 use crate::interpreters::common::metrics_inc_compact_hook_main_operation_time_ms;
+use crate::interpreters::hook::resolve_current_table_name_by_id;
+use crate::interpreters::hook::table_id_matches_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -50,10 +52,12 @@ use crate::sessions::TableContextSettings;
 use crate::sessions::TableContextTableAccess;
 use crate::sessions::TableContextTableManagement;
 
+#[derive(Clone)]
 pub struct CompactTargetTableDescription {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub table_id: Option<u64>,
 }
 
 pub struct CompactHookTraceCtx {
@@ -90,58 +94,12 @@ async fn do_hook_compact(
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            let op_name = &trace_ctx.operation_name;
-            metrics_inc_compact_hook_main_operation_time_ms(
-                op_name,
-                trace_ctx.start.elapsed().as_millis() as u64,
-            );
-            info!("Operation {op_name} completed successfully, starting table optimization job.");
-
-            let compact_start_at = Instant::now();
-            let compaction_num_block_hint =
-                ctx.get_compaction_num_block_hint(&compact_target.table);
-            info!(
-                "Table {} requires compaction of {} blocks",
-                compact_target.table, compaction_num_block_hint
-            );
-            if compaction_num_block_hint == 0 {
-                return Ok(());
-            }
-            let compaction_limits = CompactionLimits {
-                segment_limit: None,
-                block_limit: Some(compaction_num_block_hint as usize),
-            };
-
-            // keep the original progress value
-            let write_progress = ctx.get_write_progress();
-            let write_progress_value = write_progress.as_ref().get_values();
-            let scan_progress = ctx.get_scan_progress();
-            let scan_progress_value = scan_progress.as_ref().get_values();
-
-            match GlobalIORuntime::instance().block_on(compact_table(
+            let _ = GlobalIORuntime::instance().block_on(execute_compact_hook(
                 ctx,
                 compact_target,
-                compaction_limits,
+                trace_ctx,
                 lock_opt,
-            )) {
-                Ok(_) => {
-                    info!("Operation {op_name} and table optimization job completed successfully.");
-                }
-                Err(e) => {
-                    info!(
-                        "Operation {op_name} completed but table optimization job failed: {:?}",
-                        e
-                    );
-                }
-            }
-
-            // reset the progress value
-            write_progress.set(&write_progress_value);
-            scan_progress.set(&scan_progress_value);
-            metrics_inc_compact_hook_compact_time_ms(
-                &trace_ctx.operation_name,
-                compact_start_at.elapsed().as_millis() as u64,
-            );
+            ));
         }
 
         Ok(())
@@ -150,16 +108,97 @@ async fn do_hook_compact(
     Ok(())
 }
 
+pub(crate) fn compact_after_write_enabled(ctx: &Arc<QueryContext>) -> bool {
+    match ctx.get_settings().get_enable_compact_after_write() {
+        Ok(false) => {
+            info!("Auto compaction is disabled");
+            false
+        }
+        Err(e) => {
+            // swallow the exception, compaction hook should not prevent the main operation.
+            log::warn!(
+                "Failed to retrieve compaction settings, continuing without compaction: {}",
+                e
+            );
+            false
+        }
+        Ok(true) => true,
+    }
+}
+
+pub(crate) async fn execute_compact_hook(
+    ctx: Arc<QueryContext>,
+    compact_target: CompactTargetTableDescription,
+    trace_ctx: CompactHookTraceCtx,
+    lock_opt: LockTableOption,
+) -> Result<()> {
+    let op_name = &trace_ctx.operation_name;
+    let Some(compact_target) = resolve_compact_target(&ctx, compact_target).await? else {
+        return Ok(());
+    };
+
+    metrics_inc_compact_hook_main_operation_time_ms(
+        op_name,
+        trace_ctx.start.elapsed().as_millis() as u64,
+    );
+    info!("Operation {op_name} completed successfully, starting table optimization job.");
+
+    let compact_start_at = Instant::now();
+    let compaction_num_block_hint = ctx.get_compaction_num_block_hint(&compact_target.table);
+    info!(
+        "Table {} requires compaction of {} blocks",
+        compact_target.table, compaction_num_block_hint
+    );
+    if compaction_num_block_hint == 0 {
+        return Ok(());
+    }
+    let compaction_limits = CompactionLimits {
+        segment_limit: None,
+        block_limit: Some(compaction_num_block_hint as usize),
+    };
+
+    // keep the original progress value
+    let write_progress = ctx.get_write_progress();
+    let write_progress_value = write_progress.as_ref().get_values();
+    let scan_progress = ctx.get_scan_progress();
+    let scan_progress_value = scan_progress.as_ref().get_values();
+
+    match compact_table(ctx, compact_target, compaction_limits, lock_opt).await {
+        Ok(_) => {
+            info!("Operation {op_name} and table optimization job completed successfully.");
+        }
+        Err(e) => {
+            info!(
+                "Operation {op_name} completed but table optimization job failed: {:?}",
+                e
+            );
+        }
+    }
+
+    // reset the progress value
+    write_progress.set(&write_progress_value);
+    scan_progress.set(&scan_progress_value);
+    metrics_inc_compact_hook_compact_time_ms(
+        &trace_ctx.operation_name,
+        compact_start_at.elapsed().as_millis() as u64,
+    );
+
+    Ok(())
+}
+
 /// compact the target table, will do optimize table actions, including:
 ///  - compact blocks
 ///  - re-cluster if the cluster keys are defined
-async fn compact_table(
+pub(crate) async fn compact_table(
     ctx: Arc<QueryContext>,
     compact_target: CompactTargetTableDescription,
     compaction_limits: CompactionLimits,
     lock_opt: LockTableOption,
 ) -> Result<()> {
     let settings = ctx.get_settings();
+    let Some(compact_target) = resolve_compact_target(&ctx, compact_target).await? else {
+        return Ok(());
+    };
 
     // evict the table from cache
     ctx.evict_table_from_cache(
@@ -223,6 +262,9 @@ async fn compact_table(
                 &compact_target.table,
             )
             .await?;
+        if !resolved_table_id_matches(&compact_target, table.get_id()) {
+            return Ok(());
+        }
         // do recluster.
         if let Some(cluster_type) = table.cluster_type() {
             if cluster_type == ClusterType::Linear {
@@ -252,4 +294,81 @@ async fn compact_table(
     }
 
     Ok(())
+}
+
+async fn resolve_compact_target(
+    ctx: &Arc<QueryContext>,
+    mut compact_target: CompactTargetTableDescription,
+) -> Result<Option<CompactTargetTableDescription>> {
+    let Some((database, table)) = resolve_current_table_name_by_id(
+        ctx,
+        "compact",
+        &compact_target.catalog,
+        &compact_target.database,
+        &compact_target.table,
+        compact_target.table_id,
+    )
+    .await?
+    else {
+        return Ok(None);
+    };
+
+    move_compaction_hint_to_resolved_table(ctx, &compact_target.table, &table);
+    compact_target.database = database;
+    compact_target.table = table;
+    Ok(Some(compact_target))
+}
+
+fn move_compaction_hint_to_resolved_table(
+    ctx: &Arc<QueryContext>,
+    original_table: &str,
+    resolved_table: &str,
+) {
+    if original_table == resolved_table {
+        return;
+    }
+
+    let original_hint = ctx.get_compaction_num_block_hint(original_table);
+    if original_hint == 0 {
+        return;
+    }
+
+    let resolved_hint = ctx.get_compaction_num_block_hint(resolved_table);
+    ctx.set_compaction_num_block_hint(resolved_table, resolved_hint.saturating_add(original_hint));
+    ctx.set_compaction_num_block_hint(original_table, 0);
+}
+
+fn resolved_table_id_matches(
+    compact_target: &CompactTargetTableDescription,
+    actual_table_id: u64,
+) -> bool {
+    table_id_matches_target(
+        "compact",
+        compact_target.table_id,
+        actual_table_id,
+        &compact_target.catalog,
+        &compact_target.database,
+        &compact_target.table,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_kits::TestFixture;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_move_compaction_hint_to_resolved_table() -> Result<()> {
+        let fixture = TestFixture::setup().await?;
+        let ctx = fixture.new_query_ctx().await?;
+
+        ctx.set_compaction_num_block_hint("old_table", 7);
+        ctx.set_compaction_num_block_hint("new_table", 5);
+
+        move_compaction_hint_to_resolved_table(&ctx, "old_table", "new_table");
+
+        assert_eq!(ctx.get_compaction_num_block_hint("old_table"), 0);
+        assert_eq!(ctx.get_compaction_num_block_hint("new_table"), 12);
+        Ok(())
+    }
 }
