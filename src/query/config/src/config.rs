@@ -1879,6 +1879,14 @@ pub struct QueryConfig {
 
     #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_queries_executor: bool,
+
+    /// Controls how table hooks after write are executed. Supported values: sync, async.
+    #[clap(long, value_name = "VALUE", default_value = "sync")]
+    pub table_hook_mode: String,
+
+    /// Max number of async table hook jobs running concurrently.
+    #[clap(long, value_name = "VALUE", default_value = "2")]
+    pub table_hook_async_max_concurrency: usize,
 }
 
 impl Default for QueryConfig {
@@ -1900,6 +1908,18 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
     fn try_into(mut self) -> Result<InnerQueryConfig> {
         let upgrade_to_pb = self.enable_meta_data_upgrade_json_to_pb_from_v307;
 
+        self.table_hook_mode = self.table_hook_mode.to_lowercase();
+        if !matches!(self.table_hook_mode.as_str(), "sync" | "async") {
+            return Err(ErrorCode::InvalidConfig(format!(
+                "table_hook_mode must be sync or async, got {}",
+                self.table_hook_mode
+            )));
+        }
+        if self.table_hook_async_max_concurrency == 0 {
+            return Err(ErrorCode::InvalidConfig(
+                "table_hook_async_max_concurrency must be greater than 0",
+            ));
+        }
         if self.warehouse_id.is_empty() {
             self.warehouse_id = self.cluster_id.clone();
         }
