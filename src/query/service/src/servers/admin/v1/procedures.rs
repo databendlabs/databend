@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use databend_common_config::GlobalConfig;
 use databend_common_meta_app::tenant::Tenant;
 use databend_common_storages_system::ProceduresTable;
 use http::StatusCode;
@@ -58,6 +59,59 @@ pub async fn get_procedure_by_name(
 ) -> poem::Result<impl IntoResponse> {
     let args = params.get("args").map(|s| s.as_str()).unwrap_or("");
     match ProceduresTable::get_procedure(&Tenant::new_literal(&tenant), &name, args).await {
+        Ok(Some(procedure)) => Ok(Json(procedure)),
+        Ok(None) => Err(poem::Error::from_string(
+            format!("procedure not found: {}({})", name, args),
+            StatusCode::NOT_FOUND,
+        )),
+        Err(cause) => Err(poem::Error::from_string(
+            format!("failed to get procedure. cause: {:?}", cause),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn list_procedures_local() -> poem::Result<impl IntoResponse> {
+    let tenant = &GlobalConfig::instance().query.tenant_id;
+    match ProceduresTable::get_procedures(tenant).await {
+        Ok(procedures) => Ok(Json(procedures)),
+        Err(cause) => Err(poem::Error::from_string(
+            format!("failed to list procedures. cause: {:?}", cause),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn get_procedure_by_id_local(
+    Path(procedure_id): Path<u64>,
+) -> poem::Result<impl IntoResponse> {
+    let tenant = &GlobalConfig::instance().query.tenant_id;
+    match ProceduresTable::get_procedure_by_id(tenant, procedure_id).await {
+        Ok(Some(procedure)) => Ok(Json(procedure)),
+        Ok(None) => Err(poem::Error::from_string(
+            format!("procedure not found with id: {}", procedure_id),
+            StatusCode::NOT_FOUND,
+        )),
+        Err(cause) => Err(poem::Error::from_string(
+            format!("failed to get procedure. cause: {:?}", cause),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        )),
+    }
+}
+
+#[poem::handler]
+#[async_backtrace::framed]
+pub async fn get_procedure_by_name_local(
+    Path(name): Path<String>,
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> poem::Result<impl IntoResponse> {
+    let tenant = &GlobalConfig::instance().query.tenant_id;
+    let args = params.get("args").map(|s| s.as_str()).unwrap_or("");
+    match ProceduresTable::get_procedure(tenant, &name, args).await {
         Ok(Some(procedure)) => Ok(Json(procedure)),
         Ok(None) => Err(poem::Error::from_string(
             format!("procedure not found: {}({})", name, args),
