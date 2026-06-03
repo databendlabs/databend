@@ -186,7 +186,7 @@ impl IPhysicalPlan for WindowGroup {
         self.input.build_pipeline(builder)?;
 
         let mut schema = self.input.output_schema()?;
-        let mut previous_order: Option<WindowOrder<'_>> = None;
+        let mut previous_order = self.windows.first().map(WindowOrder::from);
         for window in &self.windows {
             let order = WindowOrder::from(window);
             if previous_order
@@ -603,6 +603,10 @@ impl PhysicalPlanBuilder {
                 meta: PhysicalPlanMeta::new("Window"),
             }));
         }
+
+        let settings = self.ctx.get_settings();
+        let enable_fixed_rows = settings.get_enable_fixed_rows_sort()?;
+        let input = apply_window_sort_plan(input, &window_specs[0], enable_fixed_rows, stat_info)?;
 
         Ok(PhysicalPlan::new(WindowGroup {
             meta: PhysicalPlanMeta::new("WindowGroup"),

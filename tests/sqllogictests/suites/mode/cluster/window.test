@@ -150,23 +150,27 @@ Exchange
     │   ├── partition by: [lead_part_0]
     │   ├── order by: [lead_order_0]
     │   └── frame: [Rows: Following(Some(Number(2_u64))) ~ Following(Some(Number(2_u64)))]
-    └── EvalScalar
+    └── WindowPartition
         ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3), lead_default_value (#5)]
-        ├── expressions: [0, numbers.number (#0) % 3, numbers.number (#0) + 1, 0]
+        ├── hash keys: [lead_part_0]
         ├── estimated rows: 50.00
-        └── Exchange
-            ├── output columns: [numbers.number (#0)]
-            ├── exchange type: Hash(numbers.number (#0) % 3)
-            └── TableScan
-                ├── table: default.system.numbers
-                ├── scan id: 0
-                ├── output columns: [number (#0)]
-                ├── read rows: 50
-                ├── read size: < 1 KiB
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 50.00
+        └── EvalScalar
+            ├── output columns: [numbers.number (#0), lead_default_value (#1), lead_part_0 (#2), lead_order_0 (#3), lead_default_value (#5)]
+            ├── expressions: [0, numbers.number (#0) % 3, numbers.number (#0) + 1, 0]
+            ├── estimated rows: 50.00
+            └── Exchange
+                ├── output columns: [numbers.number (#0)]
+                ├── exchange type: Hash(numbers.number (#0) % 3)
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── scan id: 0
+                    ├── output columns: [number (#0)]
+                    ├── read rows: 50
+                    ├── read size: < 1 KiB
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 50.00
 
 statement ok
 CREATE OR REPLACE TABLE sales (
