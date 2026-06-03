@@ -290,7 +290,7 @@ Memo
 
 
 === clustered_filter_discount_disabled ===
-description: The default cluster-key cost factor disables the join-order discount.
+description: The default cluster-key cost factor keeps the original join-order cost formula.
 setup: CREATE TABLE a(join_key BIGINT, column_a STRING, column_b STRING) CLUSTER BY (column_a)
 setup: CREATE TABLE b(join_key BIGINT, column_a STRING, column_b STRING)
 sql: SELECT *
