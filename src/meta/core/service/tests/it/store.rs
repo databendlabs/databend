@@ -195,8 +195,9 @@ async fn test_meta_store_restart() -> anyhow::Result<()> {
 
         assert_eq!(log_id(1, 2, 1), sto.log().clone().get_log_id(1).await?);
         assert_eq!(
-            Some(log_id(1, 2, 2)),
-            sto.log().clone().read_committed().await?
+            None,
+            sto.log().clone().read_committed().await?,
+            "committed is not flushed (reversion is acceptable), thus not persisted on restart"
         );
         assert_eq!(
             None,
