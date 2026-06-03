@@ -31,6 +31,9 @@ SHOW SETTINGS
 statement ok
 SHOW SETTINGS LIKE 'enable%'
 
+statement ok
+SHOW SETTINGS LIKE 'a''b%'
+
 query TTTTTTT
 SHOW SETTINGS LIKE 'max_block_size%' LIMIT 1
 ----

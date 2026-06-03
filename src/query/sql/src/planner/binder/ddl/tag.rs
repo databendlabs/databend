@@ -23,6 +23,7 @@ use databend_common_ast::ast::ProcedureIdentity as AstProcedureIdentity;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::ShowTagsStmt;
 use databend_common_ast::ast::TagSetItem;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
 
@@ -106,8 +107,10 @@ impl Binder {
 
         match &stmt.filter {
             Some(ShowLimit::Like { pattern }) => {
-                select_builder
-                    .with_filter(format!("LOWER(name) LIKE '{}'", pattern.to_lowercase()));
+                select_builder.with_filter(format!(
+                    "LOWER(name) LIKE {}",
+                    QuotedString(pattern.to_lowercase(), '\'')
+                ));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));

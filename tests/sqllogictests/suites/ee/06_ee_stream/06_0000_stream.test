@@ -49,6 +49,18 @@ statement ok
 create stream s1 on table t append_only = true
 
 statement ok
+create stream `s'quote` on table t append_only = true
+
+statement ok
+show streams like 'a''b%'
+
+statement ok
+desc stream `s'quote`
+
+statement ok
+drop stream `s'quote`
+
+statement ok
 insert into t values(3)
 
 statement ok

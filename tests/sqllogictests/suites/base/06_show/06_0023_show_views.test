@@ -40,6 +40,9 @@ v1
 v2
 v3
 
+statement ok
+SHOW VIEWS LIKE 'a''b%'
+
 query T
 SHOW VIEWS LIKE 'v2'
 ----
@@ -105,3 +108,24 @@ show views
 
 statement ok
 drop database `rust-lang`
+
+statement ok
+drop database if exists `show'view`
+
+statement ok
+create database `show'view`
+
+statement ok
+create table `show'view`.t(id int)
+
+statement ok
+create view `show'view`.v as select * from `show'view`.t
+
+statement ok
+use `show'view`
+
+statement ok
+show views
+
+statement ok
+drop database `show'view`

@@ -38,6 +38,9 @@ USE showtabstat
 statement ok
 SHOW TABLE STATUS LIKE 't'
 
+statement ok
+SHOW TABLE STATUS LIKE 'a''b%'
+
 # query TTITTTTTTTTTRTTTT
 # SHOW TABLE STATUS WHERE Name LIKE 't%'
 # ----

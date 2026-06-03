@@ -27,6 +27,7 @@ use databend_common_ast::ast::ShowGranteesOfRoleStmt;
 use databend_common_ast::ast::ShowObjectPrivilegesStmt;
 use databend_common_ast::ast::ShowOptions;
 use databend_common_ast::ast::UserOptionItem;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_base::base::GlobalInstance;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -635,15 +636,24 @@ impl Binder {
         let query = if let Some(principal) = principal {
             match principal {
                 AstPrincipalIdentity::User(user) => {
-                    format!("SELECT * FROM show_grants('user', '{}')", user.username)
+                    format!(
+                        "SELECT * FROM show_grants('user', {})",
+                        QuotedString(&user.username, '\'')
+                    )
                 }
                 AstPrincipalIdentity::Role(role) => {
-                    format!("SELECT * FROM show_grants('role', '{}')", role)
+                    format!(
+                        "SELECT * FROM show_grants('role', {})",
+                        QuotedString(role, '\'')
+                    )
                 }
             }
         } else {
             let name = self.ctx.get_current_user()?.name;
-            format!("SELECT * FROM show_grants('user', '{}')", name)
+            format!(
+                "SELECT * FROM show_grants('user', {})",
+                QuotedString(name, '\'')
+            )
         };
 
         let (show_limit, limit_str) =
@@ -661,8 +671,8 @@ impl Binder {
         stmt: &ShowGranteesOfRoleStmt,
     ) -> Result<Plan> {
         let query = format!(
-            "SELECT * FROM show_grants('role_grantee', '{}')",
-            &stmt.name
+            "SELECT * FROM show_grants('role_grantee', {})",
+            QuotedString(&stmt.name, '\'')
         );
 
         let (show_limit, limit_str) =
@@ -688,8 +698,9 @@ impl Binder {
         let query = match object {
             GrantObjectName::Database(db) => {
                 format!(
-                    "SELECT * FROM show_grants('database', '{}', '{}')",
-                    db, catalog
+                    "SELECT * FROM show_grants('database', {}, {})",
+                    QuotedString(db, '\''),
+                    QuotedString(&catalog, '\'')
                 )
             }
             GrantObjectName::Table(db, tb) => {
@@ -699,24 +710,41 @@ impl Binder {
                     self.ctx.get_current_database()
                 };
                 format!(
-                    "SELECT * FROM show_grants('table', '{}', '{}', '{}')",
-                    tb, catalog, db
+                    "SELECT * FROM show_grants('table', {}, {}, {})",
+                    QuotedString(tb, '\''),
+                    QuotedString(&catalog, '\''),
+                    QuotedString(&db, '\'')
                 )
             }
             GrantObjectName::UDF(name) => {
-                format!("SELECT * FROM show_grants('udf', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('udf', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Stage(name) => {
-                format!("SELECT * FROM show_grants('stage', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('stage', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Warehouse(name) => {
-                format!("SELECT * FROM show_grants('warehouse', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('warehouse', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Connection(name) => {
-                format!("SELECT * FROM show_grants('connection', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('connection', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Sequence(name) => {
-                format!("SELECT * FROM show_grants('sequence', '{}')", name)
+                format!(
+                    "SELECT * FROM show_grants('sequence', {})",
+                    QuotedString(name, '\'')
+                )
             }
             GrantObjectName::Procedure(p) => {
                 let procedure_ident = ProcedureIdentity::from(p.clone());
@@ -729,7 +757,10 @@ impl Binder {
                     .await
                     .map_err(meta_service_error)?;
                 if let Some(procedure) = procedure {
-                    format!("SELECT * FROM show_grants('procedure', '{}')", procedure.id)
+                    format!(
+                        "SELECT * FROM show_grants('procedure', {})",
+                        QuotedString(procedure.id.to_string(), '\'')
+                    )
                 } else {
                     return Err(ErrorCode::UnknownProcedure(format!(
                         "Unknown procedure {}",
@@ -740,15 +771,15 @@ impl Binder {
             GrantObjectName::MaskingPolicy(policy) => {
                 let policy_id = self.resolve_masking_policy_id(policy).await?;
                 format!(
-                    "SELECT * FROM show_grants('masking_policy', '{}')",
-                    policy_id
+                    "SELECT * FROM show_grants('masking_policy', {})",
+                    QuotedString(policy_id.to_string(), '\'')
                 )
             }
             GrantObjectName::RowAccessPolicy(policy) => {
                 let policy_id = self.resolve_row_access_policy_id(policy).await?;
                 format!(
-                    "SELECT * FROM show_grants('row_access_policy', '{}')",
-                    policy_id
+                    "SELECT * FROM show_grants('row_access_policy', {})",
+                    QuotedString(policy_id.to_string(), '\'')
                 )
             }
         };

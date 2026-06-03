@@ -77,3 +77,5 @@ BEGIN
 END;
 $$;
 
+statement ok
+call admin$tenant_quota('a''b')

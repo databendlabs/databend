@@ -4,6 +4,9 @@ CREATE OR REPLACE STAGE test_stage file_format=(type=csv field_delimiter='|')
 statement ok
 CREATE OR REPLACE STAGE test_stage_external url='s3://test-stage-bucket/demo/' connection=(aws_key_id='ak' aws_secret_key='my_secret_key' endpoint_url='https://s3.eu-central-1.amazonaws.com')
 
+statement ok
+DESC STAGE "test'stage"
+
 query TTTTTBBTTT?TT
 DESC STAGE test_stage_external
 ----

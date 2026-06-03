@@ -38,6 +38,9 @@ show virtual columns from t1
 ----
 
 statement ok
+show virtual columns from t1 like 'a''b%'
+
+statement ok
 insert into t1 values(4, '{"a":44,"b":4,"c":"value"}'), (5, '{"a":55,"b":5,"c":"bend"}'), (6, '6')
 
 query ITIT

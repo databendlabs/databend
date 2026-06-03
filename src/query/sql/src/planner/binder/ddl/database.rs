@@ -26,6 +26,7 @@ use databend_common_ast::ast::ShowDatabasesStmt;
 use databend_common_ast::ast::ShowDropDatabasesStmt;
 use databend_common_ast::ast::ShowLimit;
 use databend_common_ast::ast::UndropDatabaseStmt;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_config::GlobalConfig;
 use databend_common_exception::ErrorCode;
 use databend_common_exception::Result;
@@ -83,7 +84,7 @@ impl Binder {
         let mut select_builder =
             SelectBuilder::from(&format!("{}.system.databases", ctl.to_lowercase()));
 
-        select_builder.with_filter(format!("catalog = '{ctl}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&ctl, '\'')));
 
         if *full {
             select_builder.with_column("catalog AS Catalog");
@@ -95,7 +96,7 @@ impl Binder {
 
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));
@@ -129,7 +130,7 @@ impl Binder {
             self.ctx.get_current_catalog().to_string()
         };
 
-        select_builder.with_filter(format!("catalog = '{ctl}'"));
+        select_builder.with_filter(format!("catalog = {}", QuotedString(&ctl, '\'')));
 
         select_builder.with_column("catalog");
         select_builder.with_column("name");
@@ -141,7 +142,7 @@ impl Binder {
 
         match limit {
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("name LIKE '{pattern}'"));
+                select_builder.with_filter(format!("name LIKE {}", QuotedString(pattern, '\'')));
             }
             Some(ShowLimit::Where { selection }) => {
                 select_builder.with_filter(format!("({selection})"));

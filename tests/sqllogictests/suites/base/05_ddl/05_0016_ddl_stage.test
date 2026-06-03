@@ -20,6 +20,9 @@ statement ok
 LIST @test_stage_internal
 
 statement ok
+LIST @test_stage_internal PATTERN='a''b.*'
+
+statement ok
 desc stage test_stage_internal
 
 statement ok

@@ -60,6 +60,9 @@ statement ok
 SHOW TAGS LIKE 'env%'
 
 statement ok
+SHOW TAGS LIKE 'a''b%'
+
+statement ok
 SHOW TAGS WHERE name = 'owner_tag'
 
 ## SHOW TAGS with WHERE condition returning no results

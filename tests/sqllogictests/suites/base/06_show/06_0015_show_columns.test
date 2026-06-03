@@ -52,6 +52,9 @@ SHOW FULL COLUMNS IN t3 like '%1';
 ----
 c1 int YES 4 NULL NULL NULL NULL (empty)
 
+statement ok
+SHOW FULL COLUMNS IN t3 like 'a''b%'
+
 query TTTT??
 SHOW COLUMNS IN t3 where column_name like '%1';
 ----
@@ -81,6 +84,9 @@ SHOW COLUMNS IN columns from system like '%type%'
 ----
 data_type varchar(16382) NO (empty) NULL NULL
 type varchar(16382) NO (empty) NULL NULL
+
+statement ok
+SHOW COLUMNS IN columns from system like 'a''b%'
 
 query TTTT??
 SHOW COLUMNS IN columns from system where column_name != '%type%' and is_nullable!='YES'

@@ -33,6 +33,7 @@ use databend_common_ast::ast::ShowVirtualColumnsStmt;
 use databend_common_ast::ast::TableReference;
 use databend_common_ast::ast::VacuumVirtualColumnStmt;
 use databend_common_ast::ast::With;
+use databend_common_ast::ast::quote::QuotedString;
 use databend_common_ast::visit::VisitControl;
 use databend_common_ast::visit::Visitor;
 use databend_common_ast::visit::VisitorMut;
@@ -133,16 +134,19 @@ impl Binder {
             .with_column("virtual_column_name")
             .with_column("virtual_column_type");
 
-        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter(format!("database = {}", QuotedString(&database, '\'')));
         if let Some(table) = table {
             let table = normalize_identifier(table, &self.name_resolution_ctx).name;
-            select_builder.with_filter(format!("table = '{table}'"));
+            select_builder.with_filter(format!("table = {}", QuotedString(table, '\'')));
         }
 
         let query = match limit {
             None => select_builder.build(),
             Some(ShowLimit::Like { pattern }) => {
-                select_builder.with_filter(format!("virtual_column_name LIKE '{pattern}'"));
+                select_builder.with_filter(format!(
+                    "virtual_column_name LIKE {}",
+                    QuotedString(pattern, '\'')
+                ));
                 select_builder.build()
             }
             Some(ShowLimit::Where { selection }) => {

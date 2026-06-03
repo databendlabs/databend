@@ -42,6 +42,9 @@ show_dictionary d1 ["c1"] ["VARCHAR"] ["c2"] ["VARCHAR"] mysql(db=db1 host=local
 show_dictionary d2 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 show_dictionary d3 ["a"] ["INT"] ["b"] ["INT"] mysql(db=db1 host=localhost password=[hidden] port=3306 table=test_table username=root) (empty)
 
+statement ok
+show dictionaries from show_dictionary like 'a''b%'
+
 query TT????TT
 show dictionaries from show_dictionary WHERE name = 'd2' OR 1 = 1
 ----

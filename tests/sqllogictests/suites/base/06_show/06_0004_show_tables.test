@@ -30,6 +30,9 @@ t1
 t2
 t3
 
+statement ok
+SHOW TABLES LIKE 'a''b%'
+
 query T
 SHOW TABLES LIKE 't2'
 ----
@@ -95,3 +98,21 @@ show tables
 
 statement ok
 drop database `rust-lang`
+
+statement ok
+drop database if exists `show'table`
+
+statement ok
+create database `show'table`
+
+statement ok
+create table `show'table`.t(id int)
+
+statement ok
+use `show'table`
+
+statement ok
+show tables
+
+statement ok
+drop database `show'table`
