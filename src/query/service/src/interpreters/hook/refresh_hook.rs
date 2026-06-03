@@ -43,6 +43,7 @@ use parking_lot::RwLock;
 use crate::interpreters::Interpreter;
 use crate::interpreters::RefreshIndexInterpreter;
 use crate::interpreters::RefreshTableIndexInterpreter;
+use crate::interpreters::hook::table_id_matches_target;
 use crate::interpreters::hook::vacuum_hook::hook_clear_m_cte_temp_table;
 use crate::interpreters::hook::vacuum_hook::hook_disk_temp_dir;
 use crate::interpreters::hook::vacuum_hook::hook_vacuum_temp_files;
@@ -57,6 +58,7 @@ pub struct RefreshDesc {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub table_id: Option<u64>,
 }
 
 /// Hook refresh action with a on-finished callback.
@@ -68,25 +70,41 @@ pub async fn hook_refresh(ctx: Arc<QueryContext>, pipeline: &mut Pipeline, desc:
 
     pipeline.set_on_finished(move |info: &ExecutionInfo| {
         if info.res.is_ok() {
-            info!("Pipeline execution completed successfully, starting refresh job");
-            match GlobalIORuntime::instance().block_on(do_refresh(ctx, desc)) {
-                Ok(_) => {
-                    info!("Refresh job completed successfully");
-                }
-                Err(e) => {
-                    info!("Refresh job failed: {:?}", e);
-                }
-            }
+            let _ = GlobalIORuntime::instance().block_on(execute_refresh_hook(ctx, desc));
         }
         Ok(())
     });
 }
 
-async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+pub(crate) async fn execute_refresh_hook(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
+    info!("Table hook starting refresh job");
+    match do_refresh(ctx, desc).await {
+        Ok(_) => {
+            info!("Refresh job completed successfully");
+        }
+        Err(e) => {
+            info!("Refresh job failed: {:?}", e);
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) async fn do_refresh(ctx: Arc<QueryContext>, desc: RefreshDesc) -> Result<()> {
     let table = ctx
         .get_table(&desc.catalog, &desc.database, &desc.table)
         .await?;
     let table_id = table.get_id();
+    if !table_id_matches_target(
+        "refresh",
+        desc.table_id,
+        table_id,
+        &desc.catalog,
+        &desc.database,
+        &desc.table,
+    ) {
+        return Ok(());
+    }
 
     ctx.clear_table_meta_timestamps_cache();
 
