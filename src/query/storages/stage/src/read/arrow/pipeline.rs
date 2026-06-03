@@ -154,7 +154,7 @@ async fn infer_arrow_schema_from_file(
     let data = operator
         .reader_with(&file.path)
         .await?
-        .read(0..file.size as u64)
+        .read(0..file.size)
         .await?
         .to_vec();
     let schema = match mode {
@@ -252,7 +252,7 @@ impl ArrowBlockBuilder {
         let rebuild_projection = self
             .source_schema
             .as_ref()
-            .map_or(true, |schema| schema.as_ref() != source_schema.as_ref());
+            .is_none_or(|schema| schema.as_ref() != source_schema.as_ref());
         if rebuild_projection {
             let (projection, _) = project_columnar(
                 &source_schema,
